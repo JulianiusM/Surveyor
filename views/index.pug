@@ -1,5 +1,35 @@
 extends layout
 
+block meta
+    title Surveyor - Create and Participate in Surveys Easily
+    meta(name="description" content="Surveyor is a platform for creating and participating in custom surveys. Perfect for scheduling, decision-making, and collecting group opinions.")
+    meta(name="keywords" content="survey, online polls, scheduling, decision making, voting, group surveys, Surveyor")
+    meta(name="author" content="Surveyor Team")
+    meta(property="og:title" content="Surveyor - Custom Survey Platform")
+    meta(property="og:description" content="Join Surveyor to create and participate in tailored surveys for your scheduling and decision-making needs.")
+    meta(property="og:image" content="/img/logo.png")
+    meta(property="og:url" content="https://your-surveyor-site.com")
+    meta(name="twitter:card" content="summary_large_image")
+
+block title
+    h1(class="card-header text-center") Welcome to Surveyor
+
 block content
-  h1= title
-  p Welcome to #{title}
+    if user
+        p Hello, #{user.username}! Create your own survey or vote on existing ones.
+        a(class="btn btn-primary my-4", href="/survey/create")
+            i(class="bi bi-plus-circle me-2") &nbsp; Create Survey
+    else
+        p Welcome! Please log in or register to get started.
+        div(class="d-flex justify-content-center gap-3 my-4")
+            a(class="btn btn-success", href="/users/login")
+                i(class="bi bi-box-arrow-in-right me-2") &nbsp; Login
+            a(class="btn btn-outline-primary", href="/users/register")
+                i(class="bi bi-person-plus me-2") &nbsp; Register
+
+    h2.text-center.mb-4 How It Works
+    p Surveyor is your go-to platform for creating and participating in custom surveys. Whether you're scheduling a meeting, deciding on a group activity, or gathering opinions, Surveyor simplifies the process.
+    ol
+        li Create a survey with your custom options and invite participants.
+        li Participants vote on their preferred options.
+        li Collect and analyze the results to make informed decisions.

@@ -1,0 +1,106 @@
+extends layout
+
+block meta
+    title Vote on #{data.survey.title} | Surveyor
+
+block title
+    h1(class="card-header text-center") Vote on Survey "#{data.survey.title}"
+
+block content
+    -
+        var weekdays = {
+            'MO': 'Monday',
+            'DI': 'Tuesday',
+            'MI': 'Wednesday',
+            'DO': 'Thursday',
+            'FR': 'Friday',
+            'SA': 'Saturday',
+            'SO': 'Sunday'
+        }
+        if (user) {
+            var userResponse = data.responses['u_' + user.id];
+        } else {
+            var userResponse = data.responses['g_' + guest.id];
+        }
+
+    // Abstimmungsformular
+    h2.text-center.mb-4 Answers
+    form(action=`/survey/${data.survey.id}/submit` method="POST")
+        .table-responsive
+            table.table.table-bordered.table-striped.table-dark
+                thead
+                    tr
+                        th.sticky-col User
+                        each combination in data.combinations
+                            th.text-center #{combination.nth_week === 'LAST' ? 'Last (4./5.) ' : combination.nth_week + '. ' } #{weekdays[combination.weekday]} of the month
+                tbody
+                    tr
+                        if(user)
+                            td.sticky-col #{user.username}
+                        else if(guest)
+                            td.sticky-col #{guest.username}
+                        else
+                            td.sticky-col ERROR
+                        each combination in data.combinations
+                            td.text-center
+                                div.btn-group(role="group")
+                                    - if (userResponse) var own = userResponse.find((res) => res.combination_id === combination.id);
+
+                                    input.btn-check(type="radio" name=`${combination.id}` value="yes" id=`yes-${combination.id}` checked=(own && own.answer === "yes"))
+                                    label.btn.btn-outline-success(for=`yes-${combination.id}`) Yes
+                                    input.btn-check(type="radio" name=`${combination.id}` value="maybe" id=`maybe-${combination.id}` checked=(own && own.answer === "maybe"))
+                                    label.btn.btn-outline-warning(for=`maybe-${combination.id}`) Maybe
+                                    input.btn-check(type="radio" name=`${combination.id}` value="no" id=`no-${combination.id}` checked=(!own || own.answer === "no"))
+                                    label.btn.btn-outline-danger(for=`no-${combination.id}`) No
+        button.btn.btn-primary.mt-3(type="submit") Submit
+
+    // Gesammelte Antworten
+    h2.text-center.mt-5 All answers
+    if Object.keys(data.responses).length > 0
+        .table-responsive
+            table.table.table-bordered.table-striped.table-dark
+                thead
+                    tr
+                        th.sticky-col User
+                        each combination in data.combinations
+                            th.text-center #{combination.nth_week === 'LAST' ? 'Last (4./5.) ' : combination.nth_week + '. ' } #{weekdays[combination.weekday]} of the month
+                tbody
+                    each responses, res_id in data.responses
+                        tr
+                            td.sticky-col #{responses[0].username}
+                            each combination in data.combinations
+                                - var found = responses.find((res) => res.combination_id === combination.id)
+                                if(found)
+                                    td.text-center
+                                        input.btn-check(type="radio" id=`res-${found.id}` checked disabled)
+                                        label(class=`btn btn-outline-${found.answer === 'yes' ? 'success' : found.answer === 'no' ? 'danger' : 'warning'}`, for=`res-${found.id}`) #{found.answer}
+                                else
+                                    td.text-center
+                                        input.btn-check(type="radio" id=`def-${res_id}-${combination.id}` checked disabled)
+                                        label.btn.btn-outline-danger(for=`def-${res_id}-${combination.id}`) no
+    else
+        p.text-center No answers yet...
+
+    // Neue Kombination hinzufügen
+    h2.text-center.mt-5 Add new combination
+    form(action=`/survey/${data.survey.id}/add-combination` method="POST" class="row g-3")
+        .col-md-6
+            label.form-label(for="weekday") Weekday:
+            select.form-select.text-bg-dark(name="weekday" id="weekday" required)
+                option(value="MO") Monday
+                option(value="DI") Tuesday
+                option(value="MI") Wednesday
+                option(value="DO") Thursday
+                option(value="FR") Friday
+                option(value="SA") Saturday
+                option(value="SO") Sunday
+        .col-md-6
+            label.form-label(for="nth") Day in month:
+            select.form-select.text-bg-dark(name="nth" id="nth" required)
+                option(value="1") 1. day in month
+                option(value="2") 2. day in month
+                option(value="3") 3. day in month
+                option(value="4") 4. day in month
+                option(value="LAST") Last (4./5.) day in month
+        .col-12.text-center
+            button.btn.btn-outline-primary(type="submit") Add combination

@@ -1,0 +1,29 @@
+extend layout.pug
+
+block meta
+    title Register | Surveyor
+
+block scripts
+    //Include script for client side password validation
+    script(type="text/javascript", src="/js/verify_password.js")
+
+block title
+    h1(class="card-header text-center") Register
+
+block content
+    //Register form
+    form(action="/users/register", method="post", id="form")
+        div(class="form-group")
+            label(for="username") Username
+            input(type="text", class="form-control text-bg-dark", id="username", name="username", value=(data && data.username) ? data.username : "", required)
+        div.form-group
+            label(for="email") E-Mail
+            input(type="email", class="form-control text-bg-dark", id="email", name="email", required)
+        div(class="form-group")
+            label(for="password") Password
+            input(type="password", class="form-control text-bg-dark", id="password", name="password", required)
+            div(id="password-info")
+            label(for="password_repeat") Repeat password
+            input(type="password", class="form-control text-bg-dark" id="password_repeat", name="password_repeat", required)
+            div(id="password_repeat-info", class="invalid-feedback invisible") Passwords do not match!
+        button(type="submit", class="btn btn-primary mt-1") Register

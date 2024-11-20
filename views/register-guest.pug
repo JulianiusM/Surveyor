@@ -1,0 +1,18 @@
+extend layout.pug
+
+block meta
+    title Register for #{data.survey.title} | Surveyor
+
+block title
+    h1(class="card-header text-center") Register for survey #{data.survey.title}
+
+block content
+    //Register form
+    form(action=`/survey/${data.survey.id}/guest`, method="post", id="form")
+        div(class="form-group")
+            label(for="username") Username
+            input(type="text", class="form-control text-bg-dark", id="username", name="username", required)
+        div.form-group
+            label(for="email") E-Mail (optional)
+            input(type="email", class="form-control text-bg-dark", id="email", name="email")
+        button(type="submit", class="btn btn-primary mt-1") Register

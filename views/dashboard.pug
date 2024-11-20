@@ -1,0 +1,23 @@
+extends layout
+
+block meta
+
+
+block title
+    h1(class="card-header text-center") Welcome, #{user.username}!
+
+block content
+    p You can see all of your surveys here and create new ones.
+
+    h2.text-center.mt-1 Your surveys
+    if data.surveys && data.surveys.length > 0
+        div(class="list-group")
+            each survey in data.surveys
+                a(class="list-group-item list-group-item-action text-bg-dark", href=`/survey/${survey.id}`)
+                    i(class="bi bi-clipboard me-2") &nbsp; #{survey.title}
+    else
+        div(class="alert alert-info")
+            i(class="bi bi-info-circle me-2") &nbsp; You don't have any surveys yet.
+
+    a(class="btn btn-primary mt-4", href="/survey/create")
+        i(class="bi bi-plus-circle me-2") &nbsp; Create new survey

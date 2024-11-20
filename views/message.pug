@@ -1,0 +1,14 @@
+extend layout.pug
+
+block meta
+    title #{status.charAt(0).toUpperCase() + status.slice(1)} | ControlPanel
+
+block title
+    h1(class="card-header text-center") #{status.charAt(0).toUpperCase() + status.slice(1)}
+
+block alert
+    //- Move alert block
+
+block content
+    include modules/module_alert
+    a(class="btn btn-primary mr-1" href="/" role="button") Home
