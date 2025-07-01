@@ -1,4 +1,4 @@
-create or replace table combinations
+create or replace table survey_combinations
 (
     id         int auto_increment
         primary key,

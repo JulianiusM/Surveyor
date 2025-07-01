@@ -5,135 +5,71 @@ const {isAuthenticated, generateUniqueToken} = require("../modules/util");
 const renderer = require("../modules/renderer");
 const mailer = require("../modules/email");
 const settings = require("../modules/settings");
+const {createGuestFlowRouter} = require("../modules/guestFlowFactory");
 
-app.get('/create', isAuthenticated, (req, res) => {
-    renderer.render(res, 'survey-create');
-});
+/* ================================================================
+   1) GENERISCHER GUEST-FLOW (create / guest / token / view)
+   ================================================================ */
+const core = createGuestFlowRouter({
+    entityType: 'survey',
 
-// POST: Umfrage erstellen
-app.post('/create', isAuthenticated, async (req, res) => {
-    const {title, combinations} = req.body;
+    /* ---- DB-Routinen ------------------------------------------- */
+    db: {
+        getById: db.getSurveyById,
+        registerGuest: db.registerGuest,          // (entity, id, username, email)
+        getGuestInternal: db.getGuestInternal,
+        getGuestByToken: db.getGuestByToken,
+    },
 
-    // Validierung
-    if (!title || !combinations || combinations.length === 0) {
-        renderer.renderWithErrorData(res, 'survey-create', "Title and combinations must be selected", {
-            title,
-            combinations
-        });
-    }
+    /* ---- Templates --------------------------------------------- */
+    templates: {
+        create: 'surveyor/survey-create',
+        guest: 'users/register-guest',
+        view: 'surveyor/survey-vote',
+    },
 
-    try {
-        // Umfrage erstellen
-        const surveyId = await db.createSurvey(req.session.user.id, title, combinations);
+    /* ---- Redirect-Helfer --------------------------------------- */
+    buildRedirect: id => `/survey/${id}`,
 
-        // Erfolgsnachricht oder Weiterleitung
-        req.flash('success', 'Survey successfully created');
-        res.redirect(`/survey/${surveyId}`);
-    } catch (error) {
-        renderer.renderWithErrorData(res, 'survey-create', error.message, {title, combinations});
-    }
-});
-
-app.get('/:id/guest', async (req, res) => {
-    const surveyId = req.params.id;
-
-    // Hole Umfrage aus der Datenbank
-    const survey = await db.getSurveyById(surveyId);
-    if (!survey) {
-        return renderer.renderError(res, 'Survey not found')
-    }
-
-    renderer.renderWithData(res, 'register-guest', {survey});
-})
-
-// Route für die Gastanmeldung
-app.post('/:id/guest', async (req, res) => {
-    const surveyId = req.params.id;
-
-    // Hole Umfrage aus der Datenbank
-    const survey = await db.getSurveyById(surveyId);
-    if (!survey) {
-        return renderer.renderError(res, 'Survey not found');
-    }
-
-    const {username, email} = req.body;
-    if (!username) {
-        req.flash('error', 'Username is required.');
-        return renderer.renderWithData(res, 'register-guest', {survey});
-    }
-
-    // Generiere einen einzigartigen Token für den Link
-    const token = generateUniqueToken();
-
-    // Füge den Gast in die Datenbank ein
-    const gid = await db.addGuest(surveyId, username, email, token);
-    req.session.guest = await db.getGuest(gid);
-
-    // Erstelle den Link zum Bearbeiten der Antworten
-    const editLink = `${settings.rootUrl}/survey/${surveyId}/edit/${token}`;
-    if (email) {
-        // E-Mail versenden
-        await mailer.sendSurveyLinkEmail(email, editLink);
-    }
-
-    req.flash('success', `Login as guest successful. Use ${editLink} to edit your answers later.`);
-    res.redirect(`/survey/${surveyId}`);
-});
-
-// Route zum Bearbeiten der Antworten
-app.get('/:id/edit/:token', async (req, res) => {
-    const surveyId = req.params.id;
-    const token = req.params.token;
-
-    // Hole Gast und Kombinationen aus der Datenbank
-    const guest = await db.getGuestByToken(token);
-    if (!guest) return renderer.renderError(res, 'Invalid token');
-
-    // Logout user
-    req.session.user = undefined;
-    req.session.guest = guest;
-    req.flash('info', 'switched to guest edit (logged out)');
-    res.redirect(`/survey/${surveyId}`);
-});
-
-// ---------- SAFE ZONE ----------
-// ---------- MUST STAY LAST ----------
-app.use('/:id', async (req, res, next) => {
-    const surveyId = req.params.id;
-
-    // Wenn der Benutzer nicht eingeloggt ist und kein Gast ist, leite zur Gastanmeldung um
-    if (!req.session.user) {
-        if (!req.session.guest) {
-            req.flash('Register as a guest to answer this survey');
-            return res.redirect(`/survey/${surveyId}/guest`);
+    /* ---- Body-Parsing + Validierung ----------------------------- */
+    preprocessCreate(body) {
+        const title = body.title?.trim();
+        const combinations = Array.isArray(body.combinations)
+            ? body.combinations.filter(Boolean)
+            : [];
+        if (!title || combinations.length === 0) {
+            return {
+                error: {
+                    msg: 'Title and combinations must be selected',
+                    data: {title, combinations},
+                }
+            };
         }
+        return {title, combinations};
+    },
 
-        const gid = await db.getSurveyByGuestId(req.session.guest.id);
-        if (!gid || surveyId !== gid.id) {
-            req.flash('Register as a guest to answer this survey');
-            return res.redirect(`/survey/${surveyId}/guest`);
-        }
-    }
+    /* ---- Entität anlegen --------------------------------------- */
+    async createEntity(ownerId, p) {
+        return db.createSurvey(ownerId, p.title, p.combinations); // gibt surveyId
+    },
 
-    next(); // Wenn der Benutzer als Gast angemeldet ist, fahre mit der Umfrage fort
+    /* nach Anlage: keine extra Items nötig */
+    afterCreateItems: async () => {
+    },
+
+    /* ---- Daten für View ---------------------------------------- */
+    async fetchForView(id, session) {
+        const survey = await db.getSurveyById(id);
+        if (!survey) return null;
+
+        const combinations = await db.getCombinationsBySurveyId(id);
+        const responses = await db.getResponsesSorted(id);
+
+        return {survey, combinations, responses};
+    },
 });
 
-// Route für die Anzeige der Umfrage-Seite nach der Gastanmeldung
-app.get('/:id', async (req, res) => {
-    const surveyId = req.params.id;
-
-    // Hole Umfrage aus der Datenbank
-    const survey = await db.getSurveyById(surveyId);
-    if (!survey) return renderer.renderError(res, 'Survey not found');
-
-    // Hole Kombinationen der Umfrage
-    let combinations = await db.getCombinationsBySurveyId(surveyId);
-
-    let responses = await db.getResponsesSorted(surveyId);
-
-    // Umfrage-Seite anzeigen, wenn der Gast angemeldet ist
-    renderer.renderWithData(res, 'survey-vote', {survey, combinations, responses});
-});
+app.use("/", core);
 
 // Kombination hinzufügen (Ändern von Woche auf n-te Wochentag)
 app.post('/:id/add-combination', async (req, res) => {

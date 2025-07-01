@@ -1,0 +1,109 @@
+//- views/packing/packing-create.pug  – überarbeitetes „Create“-Formular
+extends ../layout
+
+block meta
+    title Create Packing List | PackMaster
+
+block title
+    h1.card-header.text-center
+        i.bi.bi-bag-plus.me-2
+        | Create packing list
+
+block content
+    form#packingForm(action="/packing/create" method="POST")
+        // Titel
+        .mb-3
+            label.form-label(for="title")
+                i.bi.bi-tag.me-1
+                | Title *
+            input#title.form-control.text-bg-dark(
+                type="text" name="title" required
+            placeholder="e.g. Weekend Trip")
+
+        // Optionen
+        .row.mb-3
+            .col-md-6
+                .form-check
+                    input#allowAdd.form-check-input(type="checkbox" name="allowGuestAdd")
+                    label.form-check-label(for="allowAdd")
+                        i.bi.bi-plus-circle.me-1
+                        | Guests can add items
+            .col-md-6
+                .form-check
+                    input#guestManage.form-check-input(type="checkbox" name="guestManage")
+                    label.form-check-label(for="guestManage")
+                        i.bi.bi-exclamation-triangle.me-1
+                        | Guests may manage list
+                        span.badge.bg-danger.ms-1 DANGER
+
+        // Item-Tabelle
+        .mb-3
+            label.form-label
+                i.bi.bi-list-ul.me-1
+                | Items to pack
+            .table-responsive
+                table.table.table-dark.table-striped.table-bordered.align-middle
+                    thead
+                        tr
+                            th.text-center.w-25 Item
+                            th.text-center.w-50 Description
+                            th.text-center.w-15 Max #
+                            th.text-center.w-10 Action
+                    tbody#itemTable
+
+        // Buttons
+        .d-flex.justify-content-between.align-items-center
+            button#addItemBtn.btn.btn-outline-info(type="button")
+                i.bi.bi-plus-circle.me-1
+                | Add row
+            button.btn.btn-success(type="submit")
+                i.bi.bi-check-lg.me-1
+                | Create list
+        input(type="hidden" name="items" id="itemsJson")
+
+block scripts
+    script(type="text/javascript", src="/js/packing.js")
+    script.
+        // kleine Hilfs-lib bleibt inline
+        $(function () {
+            let idx = 0;
+
+            function addRow() {
+                $('#itemTable').append(`
+                    <tr>
+                    <td><input class="form-control text-bg-dark" name="t_${idx}" required></td>
+                    <td><input class="form-control text-bg-dark" name="d_${idx}"></td>
+                    <td style="width:110px">
+                    <input class="form-control text-bg-dark" type="number"
+                    name="m_${idx}" min="1" value="1" required>
+                    </td>
+                    <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-outline-danger rm-btn">
+                    <i class="bi bi-x-lg"></i>
+                    </button>
+                    </td>
+                    </tr>`);
+                idx++;
+            }
+
+            addRow();
+            $('#addItemBtn').on('click', addRow);
+
+            $(document).on('click', '.rm-btn', function () {
+                $(this).closest('tr').remove();
+            });
+
+            $('#packingForm').on('submit', function () {
+                const items = [];
+                $('#itemTable tr').each(function () {
+                    const t = $(this).find('input[name^="t_"]').val();
+                    if (!t) return;
+                    items.push({
+                        title: t,
+                        description: $(this).find('input[name^="d_"]').val(),
+                        maxAssignees: $(this).find('input[name^="m_"]').val()
+                    });
+                });
+                $('#itemsJson').val(JSON.stringify(items));
+            });
+        });

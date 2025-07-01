@@ -13,23 +13,29 @@ app.get('/', function (req, res, next) {
 
 // Registrierung von Benutzern
 app.get('/register', (req, res) => {
-    renderer.render(res, 'register');  // Zeige das Registrierungsformular an
+    renderer.render(res, 'users/register');  // Zeige das Registrierungsformular an
 });
 
 app.post('/register', async (req, res) => {
     const {username, password, password_repeat, email} = req.body;
 
     if (!username || !password || !password_repeat || !email) {
-        return renderer.renderWithErrorData(res, 'register', 'Not all fields were filled out.', {username, email});
+        return renderer.renderWithErrorData(res, 'users/register', 'Not all fields were filled out.', {
+            username,
+            email
+        });
     }
 
     if (password !== password_repeat) {
-        return renderer.renderWithErrorData(res, 'register', 'Passwords do not match.', {username, email});
+        return renderer.renderWithErrorData(res, 'users/register', 'Passwords do not match.', {username, email});
     }
 
     const existingUser = await db.getUserByUsername(username);
     if (existingUser) {
-        return renderer.renderWithErrorData(res, 'register', 'This username is already taken.', {username, email});
+        return renderer.renderWithErrorData(res, 'users/register', 'This username is already taken.', {
+            username,
+            email
+        });
     }
 
     // Benutzer registrieren
@@ -46,28 +52,28 @@ app.post('/register', async (req, res) => {
 
 // Login-Funktionalität
 app.get('/login', (req, res) => {
-    renderer.render(res, 'login');  // Zeige das Login-Formular an
+    renderer.render(res, 'users/login');  // Zeige das Login-Formular an
 });
 
 app.post('/login', async (req, res) => {
     const {username, password} = req.body;
 
     if (!username || !password) {
-        return renderer.renderWithErrorData(res, 'login', 'Invalid username or password', {username});
+        return renderer.renderWithErrorData(res, 'users/login', 'Invalid username or password', {username});
     }
 
     const user = await db.getUserByUsername(username);
     if (!user) {
-        return renderer.renderWithErrorData(res, 'login', 'Invalid username or password', {username});
+        return renderer.renderWithErrorData(res, 'users/login', 'Invalid username or password', {username});
     }
 
     const isValidPassword = await db.verifyPassword(user.id, password);
     if (!isValidPassword) {
-        return renderer.renderWithErrorData(res, 'login', 'Invalid username or password', {username});
+        return renderer.renderWithErrorData(res, 'users/login', 'Invalid username or password', {username});
     }
 
     if (!user.is_active) {
-        return renderer.renderWithErrorData(res, 'login', 'User not activated.', {username});
+        return renderer.renderWithErrorData(res, 'users/login', 'User not activated.', {username});
     }
 
     req.session.user = user;
@@ -83,7 +89,8 @@ app.get('/dashboard', async (req, res) => {
     }
 
     const surveys = await db.getSurveysByUserId(req.session.user.id);
-    renderer.renderWithData(res, 'dashboard', {surveys});
+    const packlists = await db.getPackingListByUserId(req.session.user.id);
+    renderer.renderWithData(res, 'users/dashboard', {surveys: surveys, packlists: packlists});
 });
 
 // Logout
@@ -95,7 +102,7 @@ app.get('/logout', (req, res) => {
 
 // Passwort zurücksetzen: E-Mail mit Link senden
 app.get('/forgot-password', (req, res) => {
-    renderer.render(res, 'forgot-password.pug');  // Zeige das Formular zum Zurücksetzen des Passworts
+    renderer.render(res, 'users/forgot-password.pug');  // Zeige das Formular zum Zurücksetzen des Passworts
 });
 
 app.post('/forgot-password', async (req, res) => {
@@ -128,7 +135,7 @@ app.get('/reset-password/:token', async (req, res) => {
         return renderer.renderError(res, 'Invalid or expired token');
     }
 
-    renderer.renderWithData(res, 'reset-password', {token});  // Zeige das Passwort-Reset-Formular an
+    renderer.renderWithData(res, 'users/reset-password', {token});  // Zeige das Passwort-Reset-Formular an
 });
 
 // Passwort zurücksetzen: Neues Passwort speichern

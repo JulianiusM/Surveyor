@@ -1,0 +1,9 @@
+CREATE OR REPLACE TABLE guests
+(
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    username   VARCHAR(100)                        NOT NULL,
+    email      VARCHAR(100)                        NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+        ON UPDATE CURRENT_TIMESTAMP
+);

@@ -1,0 +1,47 @@
+//- views/users/register-guest.pug  – aufgefrischtes Guest-Register-Formular
+//- Erwartet in locals:  entityType, entityId, title
+extends ../layout
+
+block meta
+    title Join «#{title}»
+
+block title
+    h1.card-header.text-center
+        i.bi.bi-door-open-fill.me-2
+        | Join «#{title}»
+
+block content
+    p.lead.text-center.mb-4
+        | Enter a name (and optional e-mail) to participate.
+
+    form#guestForm.row.gy-3.gx-2.justify-content-center(
+        method="post"
+        action=`/${entityType}/${entityId}/guest`)
+        // Username
+        .col-md-6
+            label.form-label.mb-1(for="username")
+                i.bi.bi-person-circle.me-1
+                | Display name&nbsp;*
+            input#username.form-control.text-bg-dark(
+                type="text"
+                name="username"
+                maxlength="100"
+                placeholder="Your name"
+                required)
+
+        // E-Mail (optional)
+        .col-md-6
+            label.form-label.mb-1(for="email")
+                i.bi.bi-envelope-at.me-1
+                | E-mail&nbsp;(optional)
+            input#email.form-control.text-bg-dark(
+                type="email"
+                name="email"
+                maxlength="100"
+                placeholder="for edit-link")
+
+        // Submit-Button – volle Zeilenbreite auf Mobiles
+        .col-12.d-grid.mt-2
+            button.btn.btn-success(type="submit")
+                i.bi.bi-check-lg.me-1
+                | Register

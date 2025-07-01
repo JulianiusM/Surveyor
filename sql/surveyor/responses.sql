@@ -1,4 +1,4 @@
-create or replace table responses
+create or replace table survey_responses
 (
     id             int auto_increment
         primary key,
@@ -16,7 +16,7 @@ create or replace table responses
         foreign key (guest_id) references guests (id)
             on update cascade on delete cascade,
     constraint responses_ibfk_3
-        foreign key (combination_id) references combinations (id)
+        foreign key (combination_id) references survey_combinations (id)
             on update cascade on delete cascade,
     constraint responses_surveys_id_fk
         foreign key (survey_id) references surveys (id)

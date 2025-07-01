@@ -53,9 +53,9 @@ async function sendPasswordResetEmail(userEmail, resetLink) {
     await sendEmail(userEmail, subject, text);
 }
 
-async function sendSurveyLinkEmail(userEmail, surveyLink) {
+async function sendLinkEmail(userEmail, surveyLink) {
     const subject = 'Ihr persönlicher Bearbeitungslink';
-    const text = `Sie können Ihre Umfrageantworten bearbeiten, indem Sie auf den folgenden Link klicken:\n\n${surveyLink}`;
+    const text = `Sie können Ihre Antworten bearbeiten, indem Sie auf den folgenden Link klicken:\n\n${surveyLink}`;
 
     await sendEmail(userEmail, subject, text);
 }
@@ -64,5 +64,5 @@ module.exports = {
     sendEmail,
     sendActivationEmail,
     sendPasswordResetEmail,
-    sendSurveyLinkEmail
+    sendLinkEmail
 };

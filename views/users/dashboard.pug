@@ -1,0 +1,57 @@
+//- views/dashboard.pug  – überarbeitetes User-Dashboard
+extends ../layout
+
+block meta
+    title My Dashboard | Surveyor
+
+block title
+    h1.card-header.text-center
+        i.bi.bi-house-door-fill.me-2
+        | Welcome, #{user.username}!
+
+block content
+    //── Surveys ­───────────────────────────────────────────────
+    h2.text-center.mt-2
+        i.bi.bi-clipboard-data.me-2
+        | Your surveys
+    if data.surveys && data.surveys.length
+        .list-group.mb-4
+            each survey in data.surveys
+                a.list-group-item.list-group-item-action.text-bg-dark(
+                    href=`/survey/${survey.id}`)
+                    i.bi.bi-clipboard-check.me-2
+                    | #{survey.title}
+    else
+        .alert.alert-info
+            i.bi.bi-info-circle.me-2
+            | You don’t have any surveys yet.
+
+    a.btn.btn-primary.mt-2(href="/survey/create")
+        i.bi.bi-plus-circle.me-1
+        | Create new survey
+
+    hr.my-4.border-secondary-subtle
+
+    //── Packing Lists ­────────────────────────────────────────
+    h2.text-center.mt-2
+        i.bi.bi-box-seam.me-2
+        | Your packing lists
+    if data.packlists && data.packlists.length
+        .list-group.mb-4
+            each list in data.packlists
+                a.list-group-item.list-group-item-action.text-bg-dark(
+                    href=`/packing/${list.id}`)
+                    i.bi.bi-bag-check.me-2
+                    | #{list.title}
+                    if list.allow_guest_add
+                        span.badge.bg-info-subtle.text-info-emphasis.float-end.ms-2 Add&nbsp;enabled
+                    if list.guest_manage
+                        span.badge.bg-warning-subtle.text-warning-emphasis.float-end Guests&nbsp;manage
+    else
+        .alert.alert-info
+            i.bi.bi-info-circle.me-2
+            | You don’t have any packing lists yet.
+
+    a.btn.btn-success(href="/packing/create")
+        i.bi.bi-plus-circle.me-1
+        | Create new packing list
