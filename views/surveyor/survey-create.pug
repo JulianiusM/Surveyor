@@ -11,6 +11,9 @@ block title
 
 block scripts
     script(src="/js/survey-create.js")
+    if data && data.isDuplicate
+        script.
+            window.PREFILLED_COMBINATIONS = !{JSON.stringify(data.items)};
 
 block content
     form#surveyForm.row.gy-4.justify-content-center(action="/survey/create" method="POST")
@@ -22,8 +25,8 @@ block content
             input#title.form-control.text-bg-dark(
                 type="text"
                 name="title"
-                placeholder="Enter survey title"
-                required)
+                required
+                value= data && data.title ? data.title : '')
 
         //── Combinations Table ────────────────────────────────
         .col-12

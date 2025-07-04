@@ -73,6 +73,7 @@ const core = createGuestFlowRouter({
                 title: it.title,
                 description: it.description || '',
                 maxAssignees: Number(it.maxAssignees) || 1,
+                requiredByAll: Boolean(it.requiredByAll),
                 position: i,
             }))
         );
@@ -95,6 +96,27 @@ const core = createGuestFlowRouter({
         const assigneeLists = await db.getItemAssignees(id);
         return {list, items, assignments, assigneeLists};
     },
+
+    fetchForDuplicate: async (id, session) => {
+        const list = await db.getPackingListById(id);
+        if (!list) return null;
+        const items = await db.getPackingItems(id);
+        return {owner_id: list.owner_id, entity: list, items: items}
+    },
+
+    deleteEntity: async (id, session) => {
+        const list = await db.getPackingListById(id);
+        if (!list) return null;
+        if (list.owner_id !== session.user.id)
+            return {success: false, msg: "Not allowed"}
+
+        try {
+            await db.deletePackingList(list.id);
+            return {success: true, msg: `Successfully deleted ${list.title}`};
+        } catch (err) {
+            return {success: false, msg: `Failed to delete: ${err.message}`};
+        }
+    }
 });
 
 app.use("/", core);
@@ -257,5 +279,18 @@ app.post('/:id/settings', async (req, res) => {
     renderer.respondWithSuccessJson(res, 'Settings saved');
 });
 
+app.post('/:id/item/:itemId/delete', async (req, res) => {
+    const listId = req.params.id;
+    const itemId = req.params.itemId;
+
+    const list = await db.getPackingListById(listId);
+    if (!list) return renderer.respondWithErrorJson(res, 'List not found');
+
+    if (!hasManageRight(req, list))
+        return renderer.respondWithErrorJson(res, 'Not allowed');
+
+    await db.deletePackingItem(itemId);
+    renderer.respondWithSuccessJson(res, 'Item deleted');
+});
 
 module.exports = app;

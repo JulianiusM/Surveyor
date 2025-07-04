@@ -67,6 +67,29 @@ const core = createGuestFlowRouter({
 
         return {survey, combinations, responses};
     },
+
+    /* ---- Daten für Duplicate ---------------------------------------- */
+    async fetchForDuplicate(id, session) {
+        const survey = await db.getSurveyById(id);
+        if (!survey) return null;
+
+        const combinations = await db.getCombinationsBySurveyId(id);
+        return {owner_id: survey.creator_id, entity: survey, items: combinations};
+    },
+
+    async deleteEntity(id, session) {
+        const survey = await db.getSurveyById(id);
+        if (!survey) return null;
+        if (survey.creator_id !== session.user.id)
+            return {success: false, msg: "Not allowed"}
+
+        try {
+            await db.deleteSurvey(survey.id);
+            return {success: true, msg: `Successfully deleted ${survey.title}`};
+        } catch (err) {
+            return {success: false, msg: `Failed to delete: ${err.message}`};
+        }
+    }
 });
 
 app.use("/", core);
@@ -138,5 +161,6 @@ app.post('/:id/submit', async (req, res) => {
 
     res.redirect(`/survey/${surveyId}`);
 });
+
 
 module.exports = app;

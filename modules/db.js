@@ -321,10 +321,10 @@ async function createPackingListTx(ownerId, title, allowGuestAdd, guestManage, i
 
         if (items.length) {
             const values = items.map(it => [
-                it.id, listId, it.title, it.description, it.maxAssignees, it.position,
+                it.id, listId, it.title, it.description, it.maxAssignees, it.requiredByAll, it.position,
             ]);
             await conn.query(
-                'INSERT INTO packing_items (id, list_id, title, description, max_assignees, position) VALUES ?',
+                'INSERT INTO packing_items (id, list_id, title, description, max_assignees, required_by_all, position) VALUES ?',
                 [values]
             );
         }
@@ -575,6 +575,12 @@ async function updatePackingFlags(listId, allowAdd, guestManage) {
     );
 }
 
+/* --- Survey & Packing-List hard delete (cascades via FK) -------- */
+async function deleteSurvey(id) {
+    init();
+    await db.execute('DELETE FROM surveys WHERE id = ?', [id]);
+}
+
 /* ─── Export ergänzen ───────────────────────────────────────────────── */
 
 module.exports = {
@@ -630,4 +636,5 @@ module.exports = {
     getPackingListByUserId,
     toggleRequiredByAll,
     updatePackingFlags,
+    deleteSurvey,
 };

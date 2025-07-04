@@ -60,9 +60,9 @@ block content
                     th.text-center.w-5 Packed?
                     th.text-center.w-25 Assignees
                     th.text-center.w-25 Item
-                    th.text-center.w-25 Description
+                    th.text-center.w-20 Description
                     th.text-center.w-10 Assigned&nbsp;/&nbsp;Max
-                    th.text-center.w-10 Action
+                    th.text-center.w-15 Action
             tbody(data-reorderable=manage ? true : null)
                 each item in data.items
                     - const my     = data.assignments.includes(item.id)
@@ -125,7 +125,7 @@ block content
                         td.text-center
                             if manage
                                 // Toggle-Schalter für „Everyone“
-                                .form-check.form-switch.d-inline-flex.align-items-center.me-2
+                                .form-check.form-switch.d-flex.align-items-center.justify-content-center.me-2
                                     input.form-check-input(
                                         type="checkbox"
                                         role="switch"
@@ -144,6 +144,12 @@ block content
                                 span.badge.bg-info.ms-1 Everyone
                             else
                                 span.badge.bg-secondary Full
+                            if manage
+                                button.btn.btn-sm.btn-outline-danger.ms-1(
+                                    data-delete-item
+                                    data-itemid=item.id
+                                    aria-label="Delete item")
+                                    i.bi.bi-trash
 
 
     // Sichtbar für Owner oder bei erlaubtem Gast-Add

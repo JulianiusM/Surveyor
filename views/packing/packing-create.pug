@@ -9,6 +9,12 @@ block title
         i.bi.bi-bag-plus.me-2
         | Create packing list
 
+block scripts
+    script(type="text/javascript", src="/js/packing-create.js")
+    if data && data.isDuplicate
+        script.
+            window.PREFILLED_ITEMS = !{JSON.stringify(data.items)};
+
 block content
     form#packingForm(action="/packing/create" method="POST")
         // Titel
@@ -17,20 +23,22 @@ block content
                 i.bi.bi-tag.me-1
                 | Title *
             input#title.form-control.text-bg-dark(
-                type="text" name="title" required
-            placeholder="e.g. Weekend Trip")
+                type="text"
+                name="title"
+                required
+                value=data && data.title ? data.title : '')
 
         // Optionen
         .row.mb-3
             .col-md-6
                 .form-check
-                    input#allowAdd.form-check-input(type="checkbox" name="allowGuestAdd")
+                    input#allowAdd.form-check-input(type="checkbox" name="allowGuestAdd" checked=data && data.entity && data.entity.allow_guest_add == 1)
                     label.form-check-label(for="allowAdd")
                         i.bi.bi-plus-circle.me-1
                         | Guests can add items
             .col-md-6
                 .form-check
-                    input#guestManage.form-check-input(type="checkbox" name="guestManage")
+                    input#guestManage.form-check-input(type="checkbox" name="guestManage" checked=data && data.entity && data.entity.guest_manage == 1)
                     label.form-check-label(for="guestManage")
                         i.bi.bi-exclamation-triangle.me-1
                         | Guests may manage list
@@ -60,50 +68,3 @@ block content
                 i.bi.bi-check-lg.me-1
                 | Create list
         input(type="hidden" name="items" id="itemsJson")
-
-block scripts
-    script(type="text/javascript", src="/js/packing.js")
-    script.
-        // kleine Hilfs-lib bleibt inline
-        $(function () {
-            let idx = 0;
-
-            function addRow() {
-                $('#itemTable').append(`
-                    <tr>
-                    <td><input class="form-control text-bg-dark" name="t_${idx}" required></td>
-                    <td><input class="form-control text-bg-dark" name="d_${idx}"></td>
-                    <td style="width:110px">
-                    <input class="form-control text-bg-dark" type="number"
-                    name="m_${idx}" min="1" value="1" required>
-                    </td>
-                    <td class="text-center">
-                    <button type="button" class="btn btn-sm btn-outline-danger rm-btn">
-                    <i class="bi bi-x-lg"></i>
-                    </button>
-                    </td>
-                    </tr>`);
-                idx++;
-            }
-
-            addRow();
-            $('#addItemBtn').on('click', addRow);
-
-            $(document).on('click', '.rm-btn', function () {
-                $(this).closest('tr').remove();
-            });
-
-            $('#packingForm').on('submit', function () {
-                const items = [];
-                $('#itemTable tr').each(function () {
-                    const t = $(this).find('input[name^="t_"]').val();
-                    if (!t) return;
-                    items.push({
-                        title: t,
-                        description: $(this).find('input[name^="d_"]').val(),
-                        maxAssignees: $(this).find('input[name^="m_"]').val()
-                    });
-                });
-                $('#itemsJson').val(JSON.stringify(items));
-            });
-        });

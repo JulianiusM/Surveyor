@@ -22,7 +22,7 @@ function initButtons() {
     const weeks = ['1', '2', '3', '4', 'LAST'];
 
     // Build one <tr> with two selects and a remove button
-    function addCombinationRow() {
+    function addCombinationRow(weekday = undefined, week = undefined) {
         const id = counter++;
         const tr = document.createElement('tr');
         tr.id = `row-${id}`;
@@ -39,6 +39,9 @@ function initButtons() {
             opt.textContent = label;
             selDay.appendChild(opt);
         });
+        if (weekday) {
+            selDay.value = weekday;
+        }
         tdDay.appendChild(selDay);
 
         // Week-of-month cell
@@ -53,6 +56,9 @@ function initButtons() {
             opt.textContent = val === 'LAST' ? 'Last' : val;
             selWeek.appendChild(opt);
         });
+        if (week) {
+            selWeek.value = week;
+        }
         tdWeek.appendChild(selWeek);
 
         // Remove-button cell
@@ -70,8 +76,12 @@ function initButtons() {
         tableBody.appendChild(tr);
     }
 
-    // Add the first row
-    addCombinationRow();
+    if (window.PREFILLED_COMBINATIONS) {
+        window.PREFILLED_COMBINATIONS.forEach(c => addCombinationRow(c.weekday, c.nth_week));
+    } else {
+        // Add the first row
+        addCombinationRow();
+    }
 
     // Add new row on button click
     addBtn.addEventListener('click', addCombinationRow);

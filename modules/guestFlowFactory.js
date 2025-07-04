@@ -30,6 +30,8 @@ function buildGuestLink(entityType, entityId, token) {
  *   createEntity      fn(ownerId, parsedBody) → Promise<entityId>
  *   afterCreateItems  fn(entityId, parsedBody) → Promise<void>
  *   fetchForView      fn(id) → Promise<{ entity, items, assignments }>
+ *   fetchForDuplicate fn(id) -> Promise<{owner_id, entity, items}>
+ *   deleteEntity      fn(entityId, session) -> Promise<{success: boolean, msg}>
  */
 function createGuestFlowRouter(cfg) {
     let app = cfg.app;
@@ -106,6 +108,34 @@ function createGuestFlowRouter(cfg) {
         req.session.guest = {id: link.id, username: link.username, email: link.email};
         req.flash('info', 'Switched to guest edit');
         res.redirect(cfg.buildRedirect(entityId));
+    });
+
+    app.get('/:id/duplicate', isAuthenticated, async (req, res) => {
+        const data = await cfg.fetchForDuplicate(req.params.id, req.session);
+        if (!data) return renderer.renderError(res, `${cfg.entityType} not found`);
+
+        if (data.owner_id !== req.session.user.id)
+            return renderer.renderError(res, 'Not allowed');
+
+        renderer.renderWithData(
+            res,
+            t.create,
+            {
+                title: `Copy of ${data.entity.title}`,
+                entity: data.entity,
+                items: data.items,
+                isDuplicate: true
+            }
+        );
+    });
+
+    app.post('/:id/delete', isAuthenticated, async (req, res) => {
+        const resp = await cfg.deleteEntity(req.params.id, req.session);
+        if (!resp) return renderer.renderError(res, `${cfg.entityType} not found`);
+        if (!resp.success) return renderer.renderError(res, resp.msg);
+
+        req.flash('success', resp.msg);
+        res.redirect('/users/dashboard');
     });
 
     /* ───── SAFE‑ZONE + View ───── */

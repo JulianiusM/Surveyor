@@ -358,6 +358,25 @@ function initPackedToggle() {
     }
 }
 
+/* -------- owner deletes item ----------------------------------- */
+function initOwnerDeleteItem() {
+    document.addEventListener('click', async e => {
+        const btn = e.target.closest('[data-delete-item]');
+        if (!btn) return;
+
+        if (!confirm('Delete this item permanently?')) return;
+
+        const itemId = btn.dataset.itemid;
+        try {
+            await post(`/packing/${window.PACK_LIST_ID}/item/${itemId}/delete`, {});
+            showInlineAlert('success', 'Item deleted');
+            setTimeout(() => location.reload(), 100);
+        } catch (err) {
+            showInlineAlert('error', err.message);
+        }
+    });
+}
+
 
 function init() {
     setCurrentNavLocation();
@@ -371,5 +390,6 @@ function init() {
         initOwnerRemove();
         initMarkEveryone();
         initOwnerFlags();
+        initOwnerDeleteItem();
     }
 }
