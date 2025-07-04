@@ -1,6 +1,29 @@
+//- views/error.pug – überarbeitete Fehlerseite
 extends layout
 
+block meta
+    title Error | Surveyor
+
+block title
+    h1.card-header.text-center.bg-danger.text-light
+        i.bi.bi-exclamation-triangle-fill.me-2
+        | Oops! Something went wrong
+
 block content
-  h1= message
-  h2= error.status
-  pre #{error.stack}
+    //── Error Message ────────────────────────────────────
+    .alert.alert-danger.d-flex.align-items-center
+        i.bi.bi-x-circle-fill.me-2.fs-3
+        div
+            strong= message
+            if error && error.status
+                |  (Status #{error.status})
+
+    //── Stack Trace (nur in Entwicklung) ─────────────────
+    if error && error.stack
+        details.mb-0
+            summary.text-warning
+                i.bi.bi-code-slash.me-1
+                | View stack trace
+            pre.bg-black.text-light.p-2.rounded
+                code= error.stack
+

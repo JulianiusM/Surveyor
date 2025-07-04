@@ -103,7 +103,7 @@ function initAssignButtons() {
 
             showInlineAlert('success',
                 `Item ${action === 'assign' ? 'assigned' : 'unassigned'}`);
-            setTimeout(() => location.reload(), 500);
+            setTimeout(() => location.reload(), 100);
         } catch (e) {
             showInlineAlert('error', e.message);
         }
@@ -237,7 +237,7 @@ function initQuickAdd() {
             try {
                 await post(`/packing/${window.PACK_LIST_ID}/items`, data);
                 showInlineAlert('success', 'Added');
-                setTimeout(() => location.reload(), 500);
+                setTimeout(() => location.reload(), 100);
             } catch (err) {
                 showInlineAlert('error', err.message);
             }
@@ -254,20 +254,122 @@ function initOwnerRemove() {
         try {
             await post(`/packing/${window.PACK_LIST_ID}/assignment/${assignId}/delete`, {});
             showInlineAlert('success', 'Removed');
-            setTimeout(() => location.reload(), 500);
+            setTimeout(() => location.reload(), 100);
         } catch (err) {
             showInlineAlert('error', err.message);
         }
     });
 }
 
+function initMarkEveryone() {
+    /* Toggle „everyone brings“ --------------------------------------- */
+    document.addEventListener('change', async e => {
+        const sw = e.target.closest('[data-required-toggle]');
+        if (!sw) return;
+        const itemId = sw.dataset.itemid;
+        try {
+            await post(`/packing/${window.PACK_LIST_ID}/item/${itemId}/required`,
+                {flag: sw.checked});
+            // Visuelle Hervorhebung an/aus
+            const row = document.querySelector(`tr[data-itemid="${itemId}"]`);
+            if (row) row.classList.toggle('table-info', sw.checked);
+            reorderRequiredRows()
+            showInlineAlert('success', 'Updated');
+            setTimeout(() => location.reload(), 100);
+        } catch (err) {
+            sw.checked = !sw.checked;                  // rollback
+            showInlineAlert('error', err.message);
+        }
+    });
+
+}
+
+/* ─── Sortiert Rows: „Everyone“ zuerst, danach original position —— */
+function reorderRequiredRows() {
+    // Tabelle mit „data-assignable“ suchen
+    const table = document.querySelector('table[data-assignable]');
+    if (!table) return;
+
+    // Tbody ist immer das erste Kind der Tabelle
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+
+    const rows = Array.from(tbody.children);
+    rows.sort((a, b) => {
+        const aReq = a.classList.contains('table-info') ? 0 : 1;
+        const bReq = b.classList.contains('table-info') ? 0 : 1;
+        if (aReq !== bReq) return aReq - bReq;              // Required zuerst
+        return Number(a.dataset.pos) - Number(b.dataset.pos); // Original‐Reihenfolge
+    });
+    rows.forEach(r => tbody.appendChild(r));               // neue Reihenfolge anwenden
+}
+
+/* ---- Owner toggles list flags ------------------------------------ */
+function initOwnerFlags() {
+    const form = document.getElementById('flagForm');
+    if (!form) return;
+
+    form.addEventListener('change', async () => {
+        const payload = {
+            allowAdd: document.getElementById('allowAddSwitch').checked,
+            guestManage: document.getElementById('guestManageSwitch').checked,
+        };
+        try {
+            await post(`/packing/${window.PACK_LIST_ID}/settings`, payload);
+            showInlineAlert('success', 'Settings updated');
+            setTimeout(() => location.reload(), 100);
+        } catch (err) {
+            showInlineAlert('error', err.message);
+            /* Reload to force consistent switches */
+            setTimeout(() => location.reload(), 800);
+        }
+    });
+}
+
+/* ============ Packed-Status (lokal) ========================== */
+function initPackedToggle() {
+    const prefix = `packed_${window.PACK_LIST_ID}_`;
+
+    document.querySelectorAll('[data-packed]').forEach(cb => {
+        const itemId = cb.dataset.itemid;
+        const row = cb.closest('tr');
+        const stored = localStorage.getItem(prefix + itemId) === '1';
+
+        if (stored) markPacked(row, cb, true);
+
+        cb.addEventListener('change', () => {
+            markPacked(row, cb, cb.checked);
+        });
+    });
+
+    function markPacked(row, cb, packed) {
+        const required = row.dataset.required == 'true';
+        cb.checked = packed;
+
+        if (packed) {
+            localStorage.setItem(prefix + row.dataset.itemid, '1');
+            row.classList.add('table-success');      // grün
+            row.classList.remove('table-info');      // blau ggf. entfernen
+        } else {
+            localStorage.removeItem(prefix + row.dataset.itemid);
+            row.classList.remove('table-success');
+            if (required) row.classList.add('table-info'); // ursprüngl. Farbe zurück
+        }
+    }
+}
+
+
 function init() {
     setCurrentNavLocation();
+    reorderRequiredRows();
     if (window.PACK_LIST_ID) {
+        initPackedToggle();
         initAssignButtons();
         initReorder();          // nur aktiv, wenn tbody[data-reorderable] existiert
         initInlineEdit();
         initQuickAdd();
-        initOwnerRemove()
+        initOwnerRemove();
+        initMarkEveryone();
+        initOwnerFlags();
     }
 }

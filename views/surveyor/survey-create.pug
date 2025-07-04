@@ -1,71 +1,50 @@
+//- views/survey/survey-create.pug  – Facelifted Create Survey Page
 extends ../layout
 
+block meta
+    title Create Survey | Surveyor
+
 block title
-    h1(class="card-header text-center") Create Survey
+    h1.card-header.text-center
+        i.bi.bi-clipboard-plus-fill.me-2
+        | Create Survey
+
+block scripts
+    script(src="/js/survey-create.js")
 
 block content
-    form#surveyForm(action="/survey/create" method="POST")
-        .mb-3
-            label.form-label(for="title") Title
-            input#title.form-control.text-bg-dark(type="text" name="title" placeholder="Enter title..." required)
+    form#surveyForm.row.gy-4.justify-content-center(action="/survey/create" method="POST")
+        //── Survey Title ─────────────────────────────────────
+        .col-md-12
+            label.form-label.mb-1(for="title")
+                i.bi.bi-card-text.me-1
+                | Survey Title *
+            input#title.form-control.text-bg-dark(
+                type="text"
+                name="title"
+                placeholder="Enter survey title"
+                required)
 
-        .mb-3
-            label.form-label Select combinations
-            table.table.table-bordered.table-dark.table-striped
-                thead
-                    tr
-                        th.text-center Weekday
-                        th.text-center Day in month
-                        th.text-center Action
-                tbody#combinationTable
-                    //- Dynamisch generierte Zeilen werden hier eingefügt
+        //── Combinations Table ────────────────────────────────
+        .col-12
+            label.form-label.mb-2
+                i.bi.bi-calendar4-week.me-1
+                | Select date combinations
+            .table-responsive
+                table.table.table-dark.table-hover.table-bordered.align-middle
+                    thead
+                        tr
+                            th.text-center.w-50 Weekday
+                            th.text-center.w-40 Week of month
+                            th.text-center.w-10 Action
+                    tbody#combinationTable
 
-        button#addCombinationBtn.btn.btn-outline-primary.ml-auto(type="button") Add combination
-
-        button.btn.btn-primary.mx-1(type="submit") Umfrage erstellen
-
-    script.
-        $(document).ready(function () {
-            // Zähler für die Kombinationen
-            let combinationCounter = 0;
-
-            // Optionen für Wochentage und Wochen im Monat
-            const weekdays = [["Monday", "MO"], ["Tuesday", "DI"], ["Wednesday", "MI"], ["Thursday", "DO"], ["Friday", "FR"], ["Saturday", "SA"], ["Sunday", "SO"]];
-            const weeks = ["1", "2", "3", "4", "LAST"];
-
-            // Funktion zum Hinzufügen einer Kombination
-            function addCombinationRow() {
-                const rowId = combinationCounter++;
-                const rowHtml = `
-                    <tr id="${rowId}">
-                      <td>
-                        <select class="form-select text-bg-dark" name="combinations[${rowId}][weekday]" required>
-                          ${weekdays.map(day => `<option value="${day[1]}">${day[0]}</option>`).join("")}
-                        </select>
-                      </td>
-                      <td>
-                        <select class="form-select text-bg-dark" name="combinations[${rowId}][week]" required>
-                          ${weeks.map(week => `<option value="${week}">${week}</option>`).join("")}
-                        </select>
-                      </td>
-                      <td>
-                        <button type="button" class="btn btn-danger btn-sm remove-combination-btn">Remove</button>
-                      </td>
-                    </tr>`;
-                $('#combinationTable').append(rowHtml);
-            }
-
-            // Hinzufügen der ersten Kombination beim Laden
-            addCombinationRow();
-
-            // Event: Neue Kombination hinzufügen
-            $('#addCombinationBtn').on('click', function () {
-                addCombinationRow();
-            });
-
-            // Event: Kombination entfernen
-            $(document).on('click', '.remove-combination-btn', function () {
-                $(this).closest('tr').remove();
-            });
-        });
+        // Buttons
+        .d-flex.justify-content-between.align-items-center
+            button#addCombinationBtn.btn.btn-outline-info(type="button")
+                i.bi.bi-plus-circle.me-1
+                | Add combination
+            button.btn.btn-success(type="submit")
+                i.bi.bi-check-lg.me-1
+                | Create Survey
 

@@ -557,6 +557,24 @@ async function deleteAssignment(assignId) {
     await db.execute('DELETE FROM packing_assignments WHERE id = ?', [assignId]);
 }
 
+/* Flag umschalten --------------------------------------------------- */
+async function toggleRequiredByAll(itemId, flag) {
+    init();
+    await db.execute(
+        'UPDATE packing_items SET required_by_all = ? WHERE id = ?',
+        [flag ? 1 : 0, itemId]
+    );
+}
+
+/* Owner kann Flags nachträglich ändern ------------------------------ */
+async function updatePackingFlags(listId, allowAdd, guestManage) {
+    init();
+    await db.execute(
+        'UPDATE packing_lists SET allow_guest_add = ?, guest_manage = ? WHERE id = ?',
+        [allowAdd ? 1 : 0, guestManage ? 1 : 0, listId]
+    );
+}
+
 /* ─── Export ergänzen ───────────────────────────────────────────────── */
 
 module.exports = {
@@ -610,4 +628,6 @@ module.exports = {
     getItemAssignees,
     deleteAssignment,
     getPackingListByUserId,
+    toggleRequiredByAll,
+    updatePackingFlags,
 };

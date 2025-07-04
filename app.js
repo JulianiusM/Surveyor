@@ -15,6 +15,9 @@ const settings = require('./modules/settings');
 
 const app = express();
 
+// Version aus package.json lesen
+const {version} = require('./package.json');
+
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'pug');
@@ -40,6 +43,7 @@ app.use(flash());
 app.use(function (req, res, next) {
     res.locals.user = req.session.user;
     res.locals.guest = req.session.guest;
+    res.locals.version = version;
     next();
 });
 

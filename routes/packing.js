@@ -227,4 +227,35 @@ app.post('/:id/assignment/:assignId/delete', async (req, res) => {
     renderer.respondWithSuccessJson(res, 'Assignment removed');
 });
 
+/* Owner / guest-manager darf Flag umschalten ----------------------- */
+app.post('/:id/item/:itemId/required', async (req, res) => {
+    const {id: listId, itemId} = req.params;
+    const {flag} = req.body;                    // true / false
+
+    const list = await db.getPackingListById(listId);
+    if (!list) return renderer.respondWithErrorJson(res, 'List not found');
+
+    if (!hasManageRight(req, list))
+        return renderer.respondWithErrorJson(res, 'Not allowed');
+
+    await db.toggleRequiredByAll(itemId, flag);
+    renderer.respondWithSuccessJson(res, 'Updated');
+});
+
+/* Owner-Settings ändern (AJAX) -------------------------------------- */
+app.post('/:id/settings', async (req, res) => {
+    const listId = req.params.id;
+    const list = await db.getPackingListById(listId);
+    if (!list) return renderer.respondWithErrorJson(res, 'List not found');
+
+    /* Nur Owner darf Flags ändern */
+    if (!req.session.user || req.session.user.id !== list.owner_id)
+        return renderer.respondWithErrorJson(res, 'Not allowed');
+
+    const {allowAdd, guestManage} = req.body;
+    await db.updatePackingFlags(listId, allowAdd, guestManage);
+    renderer.respondWithSuccessJson(res, 'Settings saved');
+});
+
+
 module.exports = app;

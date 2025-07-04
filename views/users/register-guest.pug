@@ -3,12 +3,12 @@
 extends ../layout
 
 block meta
-    title Join «#{title}»
+    title Join «#{data.title}»
 
 block title
     h1.card-header.text-center
         i.bi.bi-door-open-fill.me-2
-        | Join «#{title}»
+        | Join «#{data.title}»
 
 block content
     p.lead.text-center.mb-4
@@ -16,7 +16,7 @@ block content
 
     form#guestForm.row.gy-3.gx-2.justify-content-center(
         method="post"
-        action=`/${entityType}/${entityId}/guest`)
+        action=`/${data.entityType}/${data.entityId}/guest`)
         // Username
         .col-md-6
             label.form-label.mb-1(for="username")

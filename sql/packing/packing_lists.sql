@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS packing_lists
 (
-    id              CHAR(36) PRIMARY KEY,
+    id              CHAR(36) PRIMARY KEY  DEFAULT UUID(),
     owner_id        INT          NOT NULL,
     title           VARCHAR(255) NOT NULL,
     allow_guest_add TINYINT(1)   NOT NULL DEFAULT 0,

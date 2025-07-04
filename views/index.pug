@@ -1,35 +1,68 @@
+//- views/index.pug – Facelifted Landing Page
 extends layout
 
 block meta
-    title Surveyor - Create and Participate in Surveys Easily
+    title Surveyor – Create and Participate in Surveys Easily
     meta(name="description" content="Surveyor is a platform for creating and participating in custom surveys. Perfect for scheduling, decision-making, and collecting group opinions.")
     meta(name="keywords" content="survey, online polls, scheduling, decision making, voting, group surveys, Surveyor")
     meta(name="author" content="Surveyor Team")
-    meta(property="og:title" content="Surveyor - Custom Survey Platform")
+    meta(property="og:title" content="Surveyor – Custom Survey Platform")
     meta(property="og:description" content="Join Surveyor to create and participate in tailored surveys for your scheduling and decision-making needs.")
     meta(property="og:image" content="/img/logo.png")
     meta(property="og:url" content="https://your-surveyor-site.com")
     meta(name="twitter:card" content="summary_large_image")
 
 block title
-    h1(class="card-header text-center") Welcome to Surveyor
+    h1.card-header.text-center
+        i.bi.bi-bar-chart-fill.me-2
+        | Welcome to Surveyor
 
 block content
+    //── Call to Action ─────────────────────────────────────
     if user
-        p Hello, #{user.username}! Create your own survey or vote on existing ones.
-        a(class="btn btn-primary my-4", href="/survey/create")
-            i(class="bi bi-plus-circle me-2") &nbsp; Create Survey
+        p.lead.text-center.mt-3
+            | Hello, #{user.username}! What would you like to create today?
+        .d-flex.justify-content-center.gap-3.my-4
+            a.btn.btn-success.btn-lg(href="/survey/create")
+                i.bi.bi-plus-circle.me-2
+                | Create Survey
+            a.btn.btn-success.btn-lg(href="/packing/create")
+                i.bi.bi-bag-plus.me-2
+                | Create Packing List
+            a.btn.btn-outline-info.btn-lg(href="/users/dashboard")
+                i.bi.bi-speedometer2.me-2
+                | Your Dashboard
     else
-        p Welcome! Please log in or register to get started.
-        div(class="d-flex justify-content-center gap-3 my-4")
-            a(class="btn btn-success", href="/users/login")
-                i(class="bi bi-box-arrow-in-right me-2") &nbsp; Login
-            a(class="btn btn-outline-primary", href="/users/register")
-                i(class="bi bi-person-plus me-2") &nbsp; Register
+        p.lead.text-center.mt-3
+            | Welcome! Log in or register to start creating surveys or packing lists.
+        .d-flex.justify-content-center.gap-3.my-4
+            a.btn.btn-primary.btn-lg(href="/users/login")
+                i.bi.bi-box-arrow-in-right.me-2
+                | Login
+            a.btn.btn-outline-primary.btn-lg(href="/users/register")
+                i.bi.bi-person-plus.me-2
+                | Register
 
-    h2.text-center.mb-4 How It Works
-    p Surveyor is your go-to platform for creating and participating in custom surveys. Whether you're scheduling a meeting, deciding on a group activity, or gathering opinions, Surveyor simplifies the process.
-    ol
-        li Create a survey with your custom options and invite participants.
-        li Participants vote on their preferred options.
-        li Collect and analyze the results to make informed decisions.
+    hr.my-5.border-secondary-subtle
+
+    //── How It Works ────────────────────────────────────────
+    h2.text-center.mb-4
+        i.bi.bi-lightbulb-fill.me-2
+        | How It Works
+
+    .row.text-center
+        .col-md-4.mb-4
+            i.bi.bi-pencil-square.display-4.mb-2
+            h5 Create Surveys
+            p
+                | Define custom surveys with options or dates to match your needs.
+        .col-md-4.mb-4
+            i.bi.bi-bag-fill.display-4.mb-2
+            h5 Create Packing Lists
+            p
+                | Build lists of items to bring, assign participants or guests.
+        .col-md-4.mb-4
+            i.bi.bi-bar-chart-fill.display-4.mb-2
+            h5 Collaborate & Decide
+            p
+                | Invite participants, vote or assign items, and analyze results in real time.

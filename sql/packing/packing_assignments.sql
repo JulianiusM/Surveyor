@@ -11,9 +11,9 @@ CREATE TABLE IF NOT EXISTS packing_assignments
 
     -- 1) Referenzen
     FOREIGN KEY (user_id) REFERENCES users (id)
-        ON UPDATE CASCADE ON DELETE CASCADE,
+        ON UPDATE RESTRICT ON DELETE CASCADE,
     FOREIGN KEY (guest_id) REFERENCES guests (id)
-        ON UPDATE CASCADE ON DELETE CASCADE,
+        ON UPDATE RESTRICT ON DELETE CASCADE,
     FOREIGN KEY (item_id) REFERENCES packing_items (id)
         ON UPDATE CASCADE ON DELETE CASCADE,
     FOREIGN KEY (list_id) REFERENCES packing_lists (id)

@@ -31,31 +31,30 @@ async function sendEmail(to, subject, text) {
 
     try {
         const info = await transporter.sendMail(mailOptions);
-        console.log('E-Mail gesendet: ', info);
     } catch (error) {
-        console.error('Fehler beim Senden der E-Mail:', error);
+        console.error('Error sending E-Mail:', error);
     }
 }
 
 // Funktion zum Senden einer Aktivierungs-E-Mail
 async function sendActivationEmail(userEmail, activationLink) {
-    const subject = 'Aktivierung Ihres Kontos';
-    const text = `Klicken Sie auf den folgenden Link, um Ihr Konto zu aktivieren:\n\n${activationLink}`;
+    const subject = 'Activate your account';
+    const text = `Hi! Welcome to Surveyor!\n\nTo activate your account, please follow this link:\n\n${activationLink}\n\nNote: This link will expire in 1 hour.\n\nYour Surveyor Team.`;
 
     await sendEmail(userEmail, subject, text);
 }
 
 // Funktion zum Senden einer E-Mail für das Passwort zurücksetzen
 async function sendPasswordResetEmail(userEmail, resetLink) {
-    const subject = 'Passwort zurücksetzen';
-    const text = `Klicken Sie auf den folgenden Link, um Ihr Passwort zurückzusetzen:\n\n${resetLink}`;
+    const subject = 'Reset your password';
+    const text = `Hi!\n\nYou requested to reset your password.\n\nTo set a new one, please follow this link:\n\n${resetLink}\n\nNote: This link will expire in 1 hour.\n\nYour Surveyor Team.`;
 
     await sendEmail(userEmail, subject, text);
 }
 
 async function sendLinkEmail(userEmail, surveyLink) {
-    const subject = 'Ihr persönlicher Bearbeitungslink';
-    const text = `Sie können Ihre Antworten bearbeiten, indem Sie auf den folgenden Link klicken:\n\n${surveyLink}`;
+    const subject = 'Your personal editing link';
+    const text = `Hi! Thank you for using Surveyor!\n\nThis is your personal link to editor your answers:\n\n${surveyLink}\n\nNote: Please do not share this link with anybody.\n\nYour Surveyor Team.`;
 
     await sendEmail(userEmail, subject, text);
 }

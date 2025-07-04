@@ -4,7 +4,9 @@ block meta
     title Vote on #{data.survey.title} | Surveyor
 
 block title
-    h1(class="card-header text-center") Vote on Survey "#{data.survey.title}"
+    h1(class="card-header text-center")
+        i.bi.bi-clipboard-check.me-2
+        | Vote on “#{data.survey.title}”
 
 block content
     -
@@ -24,13 +26,18 @@ block content
         }
 
     // Abstimmungsformular
-    h2.text-center.mb-4 Answers
+    //── Your Response ────────────────────────────────────────
+    h2.text-center.mb-4
+        i.bi.bi-pencil-fill.me-2
+        | Your response
     form(action=`/survey/${data.survey.id}/submit` method="POST")
         .table-responsive
-            table.table.table-bordered.table-striped.table-dark
+            table.table.table-bordered.table-striped.table-dark.table-hover.align-middle
                 thead
                     tr
-                        th.sticky-col User
+                        th.sticky-col
+                            i.bi.bi-person-lines-fill.me-1
+                            | You
                         each combination in data.combinations
                             th.text-center #{combination.nth_week === 'LAST' ? 'Last (4./5.) ' : combination.nth_week + '. ' } #{weekdays[combination.weekday]} of the month
                 tbody
@@ -40,7 +47,7 @@ block content
                         else if(guest)
                             td.sticky-col #{guest.username}
                         else
-                            td.sticky-col ERROR
+                            td.sticky-col.text-danger ERROR
                         each combination in data.combinations
                             td.text-center
                                 div.btn-group(role="group")
@@ -52,16 +59,24 @@ block content
                                     label.btn.btn-outline-warning(for=`maybe-${combination.id}`) Maybe
                                     input.btn-check(type="radio" name=`${combination.id}` value="no" id=`no-${combination.id}` checked=(!own || own.answer === "no"))
                                     label.btn.btn-outline-danger(for=`no-${combination.id}`) No
-        button.btn.btn-primary.mt-3(type="submit") Submit
+        .d-grid.mt-3
+            button.btn.btn-success(type="submit")
+                i.bi.bi-check-lg.me-1
+                | Submit
 
     // Gesammelte Antworten
-    h2.text-center.mt-5 All answers
+    //── All Responses ─────────────────────────────────────────
+    h2.text-center.mt-5.mb-3
+        i.bi.bi-people-fill.me-2
+        | All answers
     if Object.keys(data.responses).length > 0
         .table-responsive
-            table.table.table-bordered.table-striped.table-dark
+            table.table.table-bordered.table-striped.table-dark.table-hover.align-middle
                 thead
                     tr
-                        th.sticky-col User
+                        th.sticky-col
+                            i.bi.bi-person-lines-fill.me-1
+                            | User
                         each combination in data.combinations
                             th.text-center #{combination.nth_week === 'LAST' ? 'Last (4./5.) ' : combination.nth_week + '. ' } #{weekdays[combination.weekday]} of the month
                 tbody
@@ -79,11 +94,16 @@ block content
                                         input.btn-check(type="radio" id=`def-${res_id}-${combination.id}` checked disabled)
                                         label.btn.btn-outline-danger(for=`def-${res_id}-${combination.id}`) no
     else
-        p.text-center No answers yet...
+        .alert.alert-info.text-center
+            i.bi.bi-info-circle.me-1
+            | No answers yet…
 
     // Neue Kombination hinzufügen
-    h2.text-center.mt-5 Add new combination
-    form(action=`/survey/${data.survey.id}/add-combination` method="POST" class="row g-3")
+    //── Add Combination ───────────────────────────────────────
+    h2.text-center.mt-5.mb-3
+        i.bi.bi-calendar-plus-fill.me-2
+        | Add new combination
+    form(action=`/survey/${data.survey.id}/add-combination` method="POST" class="row g-3 justify-content.center")
         .col-md-6
             label.form-label(for="weekday") Weekday:
             select.form-select.text-bg-dark(name="weekday" id="weekday" required)
@@ -102,5 +122,7 @@ block content
                 option(value="3") 3. day in month
                 option(value="4") 4. day in month
                 option(value="LAST") Last (4./5.) day in month
-        .col-12.text-center
-            button.btn.btn-outline-primary(type="submit") Add combination
+        .col-12.text-center.d-grid.mt-3
+            button.btn.btn-outline-primary(type="submit")
+                i.bi.bi-plus-lg.me-1
+                | Add
