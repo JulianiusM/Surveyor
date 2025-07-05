@@ -94,7 +94,28 @@ const core = createGuestFlowRouter({
                 : [];
 
         const assigneeLists = await db.getItemAssignees(id);
-        return {list, items, assignments, assigneeLists};
+        // Teilnehmer- und Offene-Zähler (ohne required_by_all-Items)
+        const participantSet = new Set();
+        let openCount = 0;
+        let emptyCount = 0;
+
+        items.forEach(it => {
+            if (it.required_by_all) return;                      // überspringen
+            const arr = assigneeLists[it.id] || [];
+            arr.forEach(a => participantSet.add(a.id ?? a.name)); // id, fallback name
+            if (it.assigned_count === 0) emptyCount++;
+            if (it.assigned_count < it.max_assignees) openCount++;
+        });
+
+        const participantCount = participantSet.size;
+
+        return {
+            list,
+            items,
+            assignments,
+            assigneeLists,
+            counters: {participants: participantCount, open: openCount, empty: emptyCount}
+        };
     },
 
     fetchForDuplicate: async (id, session) => {
