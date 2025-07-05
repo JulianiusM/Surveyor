@@ -102,7 +102,15 @@ const core = createGuestFlowRouter({
         items.forEach(it => {
             if (it.required_by_all) return;                      // überspringen
             const arr = assigneeLists[it.id] || [];
-            arr.forEach(a => participantSet.add(a.id ?? a.name)); // id, fallback name
+            arr.forEach(a => {
+                let id;
+                if (a.user_id) {
+                    id = `u_${a.user_id}`;
+                } else {
+                    id = `g_${a.guest_id}`;
+                }
+                participantSet.add(id);
+            }); // id, fallback name
             if (it.assigned_count === 0) emptyCount++;
             if (it.assigned_count < it.max_assignees) openCount++;
         });

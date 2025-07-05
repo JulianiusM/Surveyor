@@ -532,7 +532,9 @@ async function getItemAssignees(listId) {
         `SELECT pa.id      AS assign_id,
                 pa.item_id,
                 u.username AS uname,
-                g.username AS gname
+                pa.user_id,
+                g.username AS gname,
+                pa.guest_id
          FROM packing_assignments pa
                   LEFT JOIN users u ON u.id = pa.user_id
                   LEFT JOIN guests g ON g.id = pa.guest_id
