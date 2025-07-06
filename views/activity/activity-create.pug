@@ -1,0 +1,67 @@
+extends ../layout
+
+block meta
+    title Create Activity Plan | Surveyor
+
+block title
+    h1.card-header.text-center
+        i.bi.bi-calendar-plus.me-2
+        | Create activity plan
+
+block content
+    form#planForm(action="/activity/create" method="post")
+        .row.g-3.mb-3
+            .col-md-6
+                label.form-label(for="title") Title *
+                input#title.form-control.text-bg-dark(
+                    type="text" name="title" required
+                value=(data && data.entity ? `Copy of ${data.entity.title}` : ''))
+            .col-md-3
+                label.form-label(for="start") Start date *
+                input#start.form-control.text-bg-dark(
+                    type="date" name="start" required
+                value=(data && data.entity ? data.entity.start_date : ''))
+            .col-md-3
+                label.form-label(for="end") End date *
+                input#end.form-control.text-bg-dark(
+                    type="date" name="end" required
+                value=(data && data.entity ? data.entity.end_date : ''))
+
+        // Options (like packing list)
+        .row.g-3.mb-3
+            .col-md-6.d-flex.align-items-end
+                .form-check
+                    input#allowAdd.form-check-input(
+                        type="checkbox" name="allowGuestAdd"
+                        checked=data && data.entity && data.entity.allow_guest_add)
+                    label.form-check-label(for="allowAdd")
+                        i.bi.bi-plus-circle.me-1
+                        | Guests can add slots
+            .col-md-6.d-flex.align-items-end
+                .form-check
+                    input#guestManage.form-check-input(
+                        type="checkbox" name="guestManage"
+                        checked=data && data.entity && data.entity.guest_manage)
+                    label.form-check-label(for="guestManage")
+                        i.bi.bi-tools.me-1
+                        | Guests may manage
+                        span.badge.bg-danger.ms-1 DANGER
+
+        hr
+
+        // dynamic slot area
+        #slotArea
+
+        // hidden json payload
+        input(type="hidden" id="slotsJson" name="slots")
+
+        .d-grid.mt-4
+            button.btn.btn-success(type="submit")
+                i.bi.bi-check-lg.me-1
+                | Create plan
+
+block scripts
+    script(src="/js/activity-create.js")
+    if data && data.isDuplicate
+        script.
+            window.PREFILLED_SLOTS = !{JSON.stringify(data.items)};

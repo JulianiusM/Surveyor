@@ -9,7 +9,7 @@ block meta
     meta(property="og:title" content="Surveyor – Custom Survey Platform")
     meta(property="og:description" content="Join Surveyor to create and participate in tailored surveys for your scheduling and decision-making needs.")
     meta(property="og:image" content="/img/logo.png")
-    meta(property="og:url" content="https://your-surveyor-site.com")
+    meta(property="og:url" content="https://surveyor.jundm100.de")
     meta(name="twitter:card" content="summary_large_image")
 
 block title
@@ -23,18 +23,21 @@ block content
         p.lead.text-center.mt-3
             | Hello, #{user.username}! What would you like to create today?
         .d-flex.justify-content-center.gap-3.my-4
-            a.btn.btn-success.btn-lg(href="/survey/create")
-                i.bi.bi-plus-circle.me-2
-                | Create Survey
-            a.btn.btn-success.btn-lg(href="/packing/create")
-                i.bi.bi-bag-plus.me-2
-                | Create Packing List
-            a.btn.btn-outline-info.btn-lg(href="/users/dashboard")
+            a.btn.btn-primary.btn-lg(href="/users/dashboard")
                 i.bi.bi-speedometer2.me-2
                 | Your Dashboard
+            a.btn.btn-secondary.btn-lg(href="/survey/create")
+                i.bi.bi-plus-circle.me-2
+                | Create Survey
+            a.btn.btn-secondary.btn-lg(href="/packing/create")
+                i.bi.bi-bag-plus.me-2
+                | Create Packing List
+            a.btn.btn-secondary.btn-lg(href="/activity/create")
+                i.bi.bi-calendar-plus.me-2
+                | Create Activity Plan
     else
         p.lead.text-center.mt-3
-            | Welcome! Log in or register to start creating surveys or packing lists.
+            | Welcome! Log in or register to start creating surveys, packing lists and much more.
         .d-flex.justify-content-center.gap-3.my-4
             a.btn.btn-primary.btn-lg(href="/users/login")
                 i.bi.bi-box-arrow-in-right.me-2
@@ -51,17 +54,22 @@ block content
         | How It Works
 
     .row.text-center
-        .col-md-4.mb-4
+        .col-md-3.mb-4
             i.bi.bi-pencil-square.display-4.mb-2
             h5 Create Surveys
             p
                 | Define custom surveys with options or dates to match your needs.
-        .col-md-4.mb-4
+        .col-md-3.mb-4
             i.bi.bi-bag-fill.display-4.mb-2
             h5 Create Packing Lists
             p
                 | Build lists of items to bring, assign participants or guests.
-        .col-md-4.mb-4
+        .col-md-3.mb-4
+            i.bi.bi-calendar-event.display-4.mb-2
+            h5 Create Activity Plans
+            p
+                | Plan your trips using our activity plans. Define slots, order them and let your users assign themselves!
+        .col-md-3.mb-4
             i.bi.bi-bar-chart-fill.display-4.mb-2
             h5 Collaborate & Decide
             p

@@ -1,10 +1,7 @@
 const express = require('express');
 const app = express.Router();
 const db = require("../modules/db");
-const {isAuthenticated, generateUniqueToken} = require("../modules/util");
 const renderer = require("../modules/renderer");
-const mailer = require("../modules/email");
-const settings = require("../modules/settings");
 const {createGuestFlowRouter} = require("../modules/guestFlowFactory");
 
 /* ================================================================
@@ -19,6 +16,8 @@ const core = createGuestFlowRouter({
         registerGuest: db.registerGuest,          // (entity, id, username, email)
         getGuestInternal: db.getGuestInternal,
         getGuestByToken: db.getGuestByToken,
+        getGuestLinkToken: db.getGuestLinkToken,
+        createGuestLinkToken: db.createGuestLink,
     },
 
     /* ---- Templates --------------------------------------------- */
@@ -152,7 +151,7 @@ app.post('/:id/submit', async (req, res) => {
 
         // Speichere die neuen Antworten
         for (const [combinationId, answer] of Object.entries(answers)) {
-            await db.saveResponse(surveyId, guest.id, combinationId, answer);
+            await db.saveResponseGuest(surveyId, guest.id, combinationId, answer);
         }
         req.flash('success', 'Answers updated');
     } else {

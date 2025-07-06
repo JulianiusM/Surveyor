@@ -10,6 +10,7 @@ const indexRouter = require('./routes/index');
 const usersRouter = require('./routes/users');
 const surveyRouter = require('./routes/survey');
 const packingRouter = require('./routes/packing');
+const activityRouter = require('./routes/activity');
 
 const settings = require('./modules/settings');
 
@@ -51,6 +52,7 @@ app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/survey', surveyRouter);
 app.use('/packing', packingRouter);
+app.use('/activity', activityRouter);
 
 // catch 404 and forward to error handler
 app.use(function (req, res, next) {

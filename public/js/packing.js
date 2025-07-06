@@ -7,43 +7,6 @@
        • jQuery (Bootstrap-Bundle bindet es ohnehin ein)
    ──────────────────────────────────────────────────────────────── */
 
-/* ========== Helper =========================================== */
-async function post(url, payload) {
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(payload),
-    });
-
-    let data = {};
-    try {
-        data = await res.json();
-    } catch {
-    }
-
-    if (!res.ok || data.status === 'error') {
-        throw new Error(data.message || 'Request failed');
-    }
-    return data;          // { status:'success', message:'…' }
-}
-
-
-function showInlineAlert(status, message) {
-    const alertBox = document.getElementById('liveAlerts')
-    if (!alertBox) return;
-    const cls = {
-        success: 'alert-success',
-        info: 'alert-info',
-        error: 'alert-danger',
-    }[status] || 'alert-info';
-
-    alertBox.innerHTML = `
-      <div class="alert ${cls} alert-dismissible fade show" role="alert">
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-      </div>`;
-}
-
 /* ========== Assign / Unassign ================================ */
 function initAssignButtons() {
     const table = document.querySelector('table[data-assignable]');
@@ -158,6 +121,8 @@ function initInlineEdit() {
                         td.textContent = val;
 
                     showInlineAlert('success', 'Updated');
+                    if (field === 'maxAssignees')
+                        setTimeout(() => location.reload(), 100);
                 } catch (e) {
                     restore();
                     showInlineAlert('error', e.message);

@@ -1,11 +1,39 @@
 .table-responsive
-    .sticky-col
-      position: sticky
-      left: 0
-      z-index: 1 // Sicherstellen, dass die Spalte über anderen Zellen bleibt
-      //background-color: #fff; // Hintergrundfarbe festlegen, um überlappende Inhalte zu vermeiden
-      box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1) // Schatten hinzufügen, um den sticky Effekt hervorzuheben
+  .sticky-col
+    position: sticky
+    left: 0
+    z-index: 1
+    // Sicherstellen, dass die Spalte über anderen Zellen bleibt
+    //background-color: #fff; // Hintergrundfarbe festlegen, um überlappende Inhalte zu vermeiden
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1)
+    // Schatten hinzufügen, um den sticky Effekt hervorzuheben
 
-      // Optional: Hervorhebung für Benutzer
-      font-weight: bold
-      text-align: left
+    // Optional: Hervorhebung für Benutzer
+    font-weight: bold
+    text-align: left
+
+/* pointer & tighter paddings */
+.activity-table
+  .slot
+    [data-edit]
+      user-select: text
+      cursor: text
+    user-select: none
+    cursor: move
+
+  input
+    user-select: text
+    cursor: text
+
+  .slot-container
+    min-width: 150px
+
+/* mobile tweaks for activity tables */
+@media (max-width: 576px)
+  .activity-table
+    thead th
+      font-size: 0.75rem
+      padding: .25rem .3rem
+
+    .slot
+      padding: .25rem !important

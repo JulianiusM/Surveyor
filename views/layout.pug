@@ -38,6 +38,10 @@ html(lang="en")
                                 a.nav-link(href="/packing/create")
                                     i.bi.bi-bag-plus-fill.me-1
                                     | Create Packing List
+                            li.nav-item
+                                a.nav-link(href="/activity/create")
+                                    i.bi.bi-calendar-plus-fill.me-1
+                                    | Create Activity Plan
                         ul.navbar-nav.ms-auto
                             if user
                                 li.nav-item.dropdown
@@ -90,3 +94,4 @@ html(lang="en")
         script(src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js")
         script(src="/js/module_functions.js")
         block scripts
+            script(src="/js/stub.js")

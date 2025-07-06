@@ -2,10 +2,7 @@ const express = require('express');
 const app = express.Router();
 
 const db = require('../modules/db');
-const {
-    isAuthenticated,
-    generateUniqueId,
-} = require('../modules/util');
+const {generateUniqueId} = require('../modules/util');
 const renderer = require('../modules/renderer');
 const {createGuestFlowRouter} = require("../modules/guestFlowFactory");
 
@@ -26,6 +23,8 @@ const core = createGuestFlowRouter({
         registerGuest: db.registerGuest,      // (entity, id, username, email)
         getGuestInternal: db.getGuestInternal,
         getGuestByToken: db.getGuestByToken,
+        getGuestLinkToken: db.getGuestLinkToken,
+        createGuestLinkToken: db.createGuestLink,
     },
 
     /* ---- Templates --------------------------------------------- */
@@ -88,12 +87,12 @@ const core = createGuestFlowRouter({
         const items = await db.getPackingItems(id);
 
         const assignments = session.user
-            ? await db.getAssignmentsForUser(id, session.user.id)
+            ? await db.getPackingAssignmentsForUser(id, session.user.id)
             : session.guest
-                ? await db.getAssignmentsForGuest(id, session.guest.id)
+                ? await db.getPackingAssignmentsForGuest(id, session.guest.id)
                 : [];
 
-        const assigneeLists = await db.getItemAssignees(id);
+        const assigneeLists = await db.getPackingItemAssignees(id);
         // Teilnehmer- und Offene-Zähler (ohne required_by_all-Items)
         const participantSet = new Set();
         let openCount = 0;
@@ -106,8 +105,10 @@ const core = createGuestFlowRouter({
                 let id;
                 if (a.user_id) {
                     id = `u_${a.user_id}`;
-                } else {
+                } else if (a.guest_id) {
                     id = `g_${a.guest_id}`;
+                } else {
+                    id = a.name;
                 }
                 participantSet.add(id);
             }); // id, fallback name
@@ -157,8 +158,8 @@ app.post('/:id/assign', async (req, res) => {
     const {itemId} = req.body;
 
     try {
-        if (req.session.user) await db.assignItemToUser(itemId, req.session.user.id);
-        else if (req.session.guest) await db.assignItemToGuest(itemId, req.session.guest.id);
+        if (req.session.user) await db.assignPackingItemToUser(itemId, req.session.user.id);
+        else if (req.session.guest) await db.assignPackingItemToGuest(itemId, req.session.guest.id);
         else throw new Error('Session expired');
 
         renderer.respondWithSuccessJson(res, 'Item assigned');
@@ -172,8 +173,8 @@ app.post('/:id/unassign', async (req, res) => {
     const {itemId} = req.body;
 
     try {
-        if (req.session.user) await db.unassignItemUser(itemId, req.session.user.id);
-        else if (req.session.guest) await db.unassignItemGuest(itemId, req.session.guest.id);
+        if (req.session.user) await db.unassignPackingItemUser(itemId, req.session.user.id);
+        else if (req.session.guest) await db.unassignPackingItemGuest(itemId, req.session.guest.id);
         else throw new Error('Session expired');
 
         renderer.respondWithSuccessJson(res, 'Item unassigned');
@@ -210,8 +211,7 @@ app.post('/:id/items', async (req, res) => {
     const list = await db.getPackingListById(listId);
     if (!list) return renderer.respondWithErrorJson(res, 'List not found');
 
-    const isOwner = req.session.user && req.session.user.id === list.owner_id;
-    if (!isOwner && !list.allow_guest_add)
+    if (!hasManageRight(req, list) && !list.allow_guest_add)
         return renderer.respondWithErrorJson(res, 'Adding disabled');
 
     const {title, description, max} = req.body;
@@ -274,7 +274,7 @@ app.post('/:id/assignment/:assignId/delete', async (req, res) => {
     if (!hasManageRight(req, list))
         return renderer.respondWithErrorJson(res, 'Only owner may delete');
 
-    await db.deleteAssignment(assignId);
+    await db.deletePackingAssignment(assignId);
     renderer.respondWithSuccessJson(res, 'Assignment removed');
 });
 
@@ -289,7 +289,7 @@ app.post('/:id/item/:itemId/required', async (req, res) => {
     if (!hasManageRight(req, list))
         return renderer.respondWithErrorJson(res, 'Not allowed');
 
-    await db.toggleRequiredByAll(itemId, flag);
+    await db.togglePackingItemRequiredByAll(itemId, flag);
     renderer.respondWithSuccessJson(res, 'Updated');
 });
 

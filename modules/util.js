@@ -19,8 +19,23 @@ function generateUniqueId() {
     return uuidv4();
 }
 
+// Returns 'YYYY-MM-DD' in the server's local time zone
+function toLocalISO(dateObj) {
+    const y = dateObj.getUTCFullYear();
+    const m = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(dateObj.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function fromISOtoLocal(isoDate) {
+    const [y, m, day] = isoDate.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, day));
+}
+
 module.exports = {
     isAuthenticated,
     generateUniqueToken,
-    generateUniqueId
+    generateUniqueId,
+    toLocalISO,
+    fromISOtoLocal,
 }

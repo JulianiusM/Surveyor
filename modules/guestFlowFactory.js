@@ -10,10 +10,9 @@
 // -----------------------------------------------------------
 const express = require('express');
 const renderer = require('../modules/renderer');
-const {isAuthenticated, generateUniqueId, generateUniqueToken} = require('../modules/util');
+const {isAuthenticated} = require('../modules/util');
 const mailer = require('../modules/email');
 const settings = require('../modules/settings');
-const db = require("./db");
 
 function buildGuestLink(entityType, entityId, token) {
     return `${settings.rootUrl}/${entityType}/${entityId}/edit/${token}`;
@@ -150,11 +149,11 @@ function createGuestFlowRouter(cfg) {
             const guest = req.session.guest;
 
             // Hat der Gast bereits einen Token für diese Pack-Liste?
-            let token = await db.getGuestLinkToken(cfg.entityType, entityId, guest.id);
+            let token = await cfg.db.getGuestLinkToken(cfg.entityType, entityId, guest.id);
 
             // Falls nicht: neuen Link generieren + optional Mail senden
             if (!token) {
-                token = await db.createGuestLink(cfg.entityType, entityId, guest.id);
+                token = await cfg.db.createGuestLink(cfg.entityType, entityId, guest.id);
 
                 const link = buildGuestLink(cfg.entityType, entityId, token);
                 req.flash('success', `Login successful. Use ${link} to edit later.`);
