@@ -32,7 +32,7 @@ async function createPackingListTx(ownerId, title, allowGuestAdd, guestManage, i
             await conn.query(
                 `INSERT INTO packing_items
                  (id, list_id, title, description,
-                  max_assignees, required_by_all, position)
+                  max_assignees, required_by_all, pos)
                  VALUES ?`,
                 [vals]
             );
@@ -114,7 +114,7 @@ async function createPackingItem(listId, item) {
     init();
     await db().execute(
         `INSERT INTO packing_items
-             (id, list_id, title, description, max_assignees, position)
+             (id, list_id, title, description, max_assignees, pos)
          VALUES (?, ?, ?, ?, ?, ?)`,
         [item.id, listId, item.title, item.description, item.maxAssignees, item.position]
     );
@@ -128,7 +128,7 @@ async function addPackingItems(listId, items) {
     ]);
     await db().query(
         `INSERT INTO packing_items
-             (id, list_id, title, description, max_assignees, position)
+             (id, list_id, title, description, max_assignees, pos)
          VALUES ?`,
         [vals]
     );
@@ -173,7 +173,7 @@ async function reorderPackingItems(listId, orders) {
     await Promise.all(orders.map(o =>
         db().execute(
             `UPDATE packing_items
-             SET position = ?
+             SET pos = ?
              WHERE id = ?
                AND list_id = ?`,
             [o.position, o.itemId, listId]
@@ -192,7 +192,7 @@ async function getPackingItems(listId) {
                              WHERE list_id = ?
                              GROUP BY item_id) ac ON ac.item_id = pi.id
          WHERE pi.list_id = ?
-         ORDER BY pi.position`,
+         ORDER BY pi.pos`,
         [listId, listId]
     );
     return rows;

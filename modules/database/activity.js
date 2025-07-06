@@ -30,7 +30,7 @@ async function createActivityPlanTx(ownerId, title, start_date, end_date, allowG
             const vals = slots.map(it => [generateUniqueId(), id, it.title, it.description, it.date, it.position, it.maxAssignees]);
             await conn.query(
                 `INSERT INTO activity_slots
-                     (id, plan_id, title, description, date, position, max_assignees)
+                     (id, plan_id, title, description, day, pos, max_assignees)
                  VALUES ?`,
                 [vals]
             );
@@ -90,7 +90,7 @@ async function addActivitySlot(planId, slot) {
     init();
     await db().query(
         `INSERT INTO activity_slots
-             (id, plan_id, title, description, date, position, max_assignees)
+             (id, plan_id, title, description, day, pos, max_assignees)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [slot.id, planId, slot.title, slot.description, slot.date, slot.position, slot.maxAssignees]
     );
@@ -104,7 +104,7 @@ async function addActivitySlots(planId, slots) {
     ]);
     await db().query(
         `INSERT INTO activity_slots
-             (id, plan_id, title, description, date, position, max_assignees)
+             (id, plan_id, title, description, day, pos, max_assignees)
          VALUES ?`,
         [values]
     );
@@ -121,8 +121,13 @@ async function getActivitySlots(planId) {
                              WHERE plan_id = ?
                              GROUP BY slot_id) ac ON ac.slot_id = s.id
          WHERE s.plan_id = ?
-         ORDER BY s.position`,
+         ORDER BY s.pos`,
         [planId, planId]);
+
+    rows.forEach((row) => {
+        row.date = row.day;
+        row.position = row.pos;
+    });
 
     // Group by date
     return Object.groupBy(rows, (res) => res.date);
@@ -135,7 +140,7 @@ async function updateActivitySlot(slotId, fields) {
         title: fields.title,
         description: fields.description,
         max_assignees: fields.maxAssignees,
-        position: fields.position
+        pos: fields.position
     })) {
         if (val !== undefined) {
             sets.push(`${col} = ?`);
@@ -168,7 +173,7 @@ async function reorderActivitySlots(planId, order) {
     await Promise.all(order.map(o =>
         db().execute(
             `UPDATE activity_slots
-             SET position = ?
+             SET pos = ?
              WHERE id = ?
                AND plan_id = ?`,
             [o.position, o.slotId, planId]
@@ -179,10 +184,10 @@ async function reorderActivitySlots(planId, order) {
 async function getLastActivitySlotNumber(planId, date) {
     init();
     const [rows] = await db().execute(
-        `SELECT MAX(position)
+        `SELECT MAX(pos)
          FROM activity_slots
          WHERE plan_id = ?
-           AND date = ?`,
+           AND day = ?`,
         [planId, date]
     );
     return rows[0];

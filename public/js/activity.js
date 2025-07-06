@@ -38,17 +38,32 @@ function initInlineEdit() {
     });
 }
 
+function disableDnD() {
+    const draggables = document.getElementsByClassName('activity-draggable');
+    for (let elem of draggables) {
+        elem.draggable = false;
+    }
+}
+
+function enableDnD() {
+    if (!window.IS_MANAGE) return;
+    const draggables = document.getElementsByClassName('activity-draggable');
+    for (let elem of draggables) {
+        elem.draggable = true;
+    }
+}
 
 function startInlineEdit(span) {
     if (!span || span.querySelector('input')) return;
+
+    disableDnD();
 
     const field = span.dataset.edit;           // title | description | max
     const slotId = span.dataset.slotid;         // from template
     const old = span.textContent.trim();
 
-
     const inp = document.createElement('input');
-    inp.className = 'form-control form-control-sm text-bg-dark';
+    inp.className = 'form-control form-control-sm text-bg-dark draggable-false';
     inp.type = field === 'maxAssignees' ? 'number' : 'text';
     inp.value = old;
     span.textContent = '';
@@ -59,6 +74,7 @@ function startInlineEdit(span) {
         const val = inp.value.trim();
         if (val === old) {
             span.textContent = old;
+            enableDnD();
             return;
         }
         const url = `/activity/${window.ACT_PLAN_ID}/slot/${slotId}/${field === 'description' ? 'description' : 'attr'}`;
@@ -68,14 +84,20 @@ function startInlineEdit(span) {
                 field === 'description' ? {description: val}
                     : {field, value: val});
             span.textContent = val;
+            enableDnD();
             showInlineAlert('success', 'Updated');
             if (field === 'maxAssignees') {
                 setTimeout(() => location.reload(), 100);
             }
         } catch (err) {
-            span.textContent = old;
+            rollback();
             showInlineAlert('error', err.message);
         }
+    }
+
+    async function rollback() {
+        span.textContent = old;
+        enableDnD();
     }
 
     inp.addEventListener('blur', save);
@@ -84,9 +106,10 @@ function startInlineEdit(span) {
             ev.preventDefault();
             save();
         }
-        if (ev.key === 'Escape') span.textContent = old;
+        if (ev.key === 'Escape') rollback();
     });
 }
+
 
 /* ---------- delete-slot ------------------------------------- */
 function initDelete() {
@@ -175,7 +198,7 @@ function initDnD() {
 
     /* start */
     document.addEventListener('dragstart', e => {
-        if (e.target.closest('button')) return;             // ignore buttons
+        if (e.target.closest('button') || e.target.closest('input')) return;             // ignore buttons
 
         const card = e.target.closest('.slot');
         if (!card) return;
@@ -262,7 +285,7 @@ function initOwnerRemove() {
 function initDates() {
     document.querySelectorAll('th[data-date]').forEach(th => {
         const [y, m, day] = th.dataset.date.split('-').map(Number);
-        const d = new Date(Date.UTC(y, m, day));
+        const d = new Date(Date.UTC(y, m - 1, day));
         th.querySelector('.day').textContent =
             d.toLocaleDateString(undefined, {weekday: 'short'});
         th.querySelector('.date').textContent =

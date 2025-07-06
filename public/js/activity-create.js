@@ -78,7 +78,7 @@ function buildSlotRow(dateISO, pos, infoClb, pref = {}) {
     wrap.className = 'd-grid gap-1 mb-2 slot border border-secondary-subtle rounded p-2';
     wrap.dataset.slotDate = dateISO;
     wrap.dataset.slotId = id;                             //  ← wichtig
-    wrap.draggable = true;
+    wrap.draggable = false; //true;
 
     const title = Object.assign(
         document.createElement('input'),
@@ -269,11 +269,27 @@ function initSubmitHandler() {
     });
 }
 
+function disableDnD() {
+    const draggables = document.getElementsByClassName('activity-draggable');
+    for (let elem of draggables) {
+        elem.draggable = false;
+    }
+}
+
+function enableDnD() {
+    if (!window.IS_MANAGE) return;
+    const draggables = document.getElementsByClassName('activity-draggable');
+    for (let elem of draggables) {
+        elem.draggable = true;
+    }
+}
+
 /* ========  DRAG-&-DROP ORDERING  ================================= */
 function initSlotDnD() {
     let dragSrc = null;
 
     document.addEventListener('dragstart', e => {
+        if (e.target.closest('button') || e.target.closest('input')) return;
         const slot = e.target.closest('.slot');
         if (!slot) return;
         dragSrc = slot;
@@ -319,11 +335,10 @@ function init() {
     setCurrentNavLocation()
     initListeners();
     initSubmitHandler();
-    initSlotDnD();
+    //initSlotDnD();
 
     if (window.PREFILLED_SLOTS) {
         Object.assign(slotsMap, window.PREFILLED_SLOTS);
-        console.log(window.PREFILLED_SLOTS, slotsMap);
         maybeGenerate();
     }
 }

@@ -122,13 +122,13 @@ block content
                                 if daySlots.length > 0
                                     each slot, idx in daySlots
                                         - const my = data.assignments.includes(slot.id)
-                                        .slot.border.rounded.p-2.mb-2.d-grid.gap-1(data-slotid=slot.id draggable=manage ? 'true' : null)
+                                        .slot.border.rounded.p-2.mb-2.d-grid.gap-1.activity-draggable(data-slotid=slot.id draggable=manage ? 'true' : null)
 
                                             // editable title
-                                            span.fw-semibold(data-edit="title" data-slotid=slot.id)= slot.title
+                                            span.fw-bold(data-edit="title" data-slotid=slot.id)= slot.title
 
                                             // editable description
-                                            small(data-edit="description" data-slotid=slot.id)= slot.description || ''
+                                            span.fw-5(data-edit="description" data-slotid=slot.id)= slot.description || ''
 
                                             // badge + editable max
                                             span.badge.bg-secondary.w-100.text-center
@@ -184,3 +184,4 @@ block scripts
     script(src="/js/activity.js")
     script.
         window.ACT_PLAN_ID = "#{data.plan.id}";
+        window.IS_MANAGE = #{manage};

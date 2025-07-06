@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS packing_items
     description     VARCHAR(255),
     required_by_all TINYINT(1)                            NOT NULL DEFAULT 0,
     max_assignees   INT       DEFAULT 1,
-    position        INT       DEFAULT 0,
+    pos             INT       DEFAULT 0,
     created_at      timestamp default current_timestamp() not null,
     updated_at      timestamp default current_timestamp() not null on update current_timestamp(),
     FOREIGN KEY (list_id) REFERENCES packing_lists (id)
