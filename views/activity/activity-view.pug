@@ -34,8 +34,32 @@ block content
             monday.setDate(monday.getDate() + 7);
         }
 
-        const owner = user && user.id === data.plan.owner_id
-        const manage = owner || (data.plan.guest_manage && (guest || user))
+        const owner = !!(user && user.id === data.plan.owner_id);
+        const manage = !!(owner || (data.plan.guest_manage && (guest || user)));
+        const add = !!(manage || data.plan.allow_guest_add);
+
+    // ─── Description (editable) ──────────────────────────────
+    if add
+        // manager sees pointer
+        p#planDesc.mt-2(
+            style="cursor:pointer"
+            data-edit="planDescription"
+        )
+            if data.plan.description
+                - const lines = data.plan.description.split('\n')
+                each line, i in lines
+                    | #{line}
+                    if i < lines.length - 1
+                        br
+            else
+                em.text-secondary double-click to add description
+    else if data.plan.description
+        p#planDesc.mb-0.mt-2
+            - const lines = data.plan.description.split('\n')
+            each line, i in lines
+                | #{line}
+                if i < lines.length - 1
+                    br
 
     // Owner settings toggles
     if owner
@@ -95,6 +119,7 @@ block content
     each week in weeks
         h4.mt-4.mb-2 Week of #{fmtISO(week)}
         .table-responsive
+            small.text-info.fst-italic.fw-light Double click to edit, drag to reorder
             table.table.table-dark.table-bordered.activity-table
                 thead
                     tr
@@ -122,19 +147,19 @@ block content
                                 if daySlots.length > 0
                                     each slot, idx in daySlots
                                         - const my = data.assignments.includes(slot.id)
-                                        .slot.border.rounded.p-2.mb-2.d-grid.gap-1.activity-draggable(data-slotid=slot.id draggable=manage ? 'true' : null)
+                                        .slot.border.rounded.p-2.mb-2.d-grid.gap-1.draggable(data-slotid=slot.id draggable=manage ? 'true' : null)
 
                                             // editable title
-                                            span.fw-bold(data-edit="title" data-slotid=slot.id)= slot.title
+                                            span.fw-bold(data-edit="title" data-id=slot.id)= slot.title
 
                                             // editable description
-                                            span.fw-5(data-edit="description" data-slotid=slot.id)= slot.description || ''
+                                            span.fw-5(data-edit="description" data-id=slot.id)= slot.description || ''
 
                                             // badge + editable max
                                             span.badge.bg-secondary.w-100.text-center
                                                 span(data-count)= slot.assigned_count
                                                 |  /&nbsp;
-                                                span(data-edit="maxAssignees" data-slotid=slot.id data-max)= slot.max_assignees
+                                                span(data-edit="maxAssignees" data-id=slot.id data-max)= slot.max_assignees
 
                                             // assignees
                                             ul.list-unstyled.mb-0
@@ -169,16 +194,17 @@ block content
                     - }
                     // @formatter:on
                 // ★ add-slot buttons row
-                tfoot
-                    tr
-                        // @formatter:off
-                        - for(let i=0;i<7;i++){
-                        - const cur=new Date(week);cur.setDate(cur.getDate() + i)
-                        - if(cur<start||cur>end) continue;
-                            td.text-center
-                                button.btn.btn-sm.btn-outline-info.w-100(data-add-slot data-date=fmtISO(cur)) + Slot
-                        - }
-                        // @formatter:on
+                if add
+                    tfoot
+                        tr
+                            // @formatter:off
+                            - for(let i=0;i<7;i++){
+                            - const cur=new Date(week);cur.setDate(cur.getDate() + i)
+                            - if(cur<start||cur>end) continue;
+                                td.text-center
+                                    button.btn.btn-sm.btn-outline-info.w-100(data-add-slot data-date=fmtISO(cur)) + Slot
+                            - }
+                            // @formatter:on
 
 block scripts
     script(src="/js/activity.js")

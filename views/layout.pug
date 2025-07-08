@@ -17,6 +17,16 @@ html(lang="en")
         link(rel="stylesheet" href="/style/style.css")
         block link
 
+        //Scripts
+        // Handle DnD on touch devices
+        script(src="https://unpkg.com/mobile-drag-drop@3.0.0-rc.0/index.min.js")
+        script(src="https://unpkg.com/mobile-drag-drop@3.0.0-rc.0/scroll-behaviour.min.js")
+        script.
+            // optional: styled drag image fix for iOS
+            MobileDragDrop.polyfill({
+                dragImageTranslateOverride: MobileDragDrop.scrollBehaviourDragImageTranslateOverride
+            });
+
     body(class="d-flex flex-column min-vh-100 bg-secondary" onload="init()")
 
         //── Navbar ────────────────────────────────────────────────────

@@ -14,9 +14,9 @@ block content
     .alert.alert-danger.d-flex.align-items-center
         i.bi.bi-x-circle-fill.me-2.fs-3
         div
-            strong= message
-            if error && error.status
-                |  (Status #{error.status})
+            strong= message || 'An internal server error has occurred!'
+            if code
+                |  (Status #{code})
 
     //── Stack Trace (nur in Entwicklung) ─────────────────
     if error && error.stack

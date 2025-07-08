@@ -141,7 +141,7 @@ function padNumber(num) {
 }
 
 async function post(url, payload) {
-    const res = await fetch(url, {
+    const res = await fetch('/api' + url, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload),
@@ -174,4 +174,134 @@ function showInlineAlert(status, message) {
         ${message}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
       </div>`;
+}
+
+function disableDnD() {
+    const draggables = document.getElementsByClassName('draggable');
+    for (let elem of draggables) {
+        elem.draggable = false;
+    }
+}
+
+function enableDnD() {
+    if (!window.IS_MANAGE) return;
+    const draggables = document.getElementsByClassName('draggable');
+    for (let elem of draggables) {
+        elem.draggable = true;
+    }
+}
+
+function startInlineEditArea(desc, url) {
+    if (!desc || desc.querySelector('textarea')) return;
+
+    const old = desc.innerText.trim();
+
+    const ta = document.createElement('textarea');
+    ta.className = 'form-control text-bg-dark';
+    ta.style.minHeight = '6rem';
+    ta.value = old === 'double-click to add description' ? '' : old;
+    ta.maxLength = 1999;
+
+    desc.innerHTML = '';
+    desc.appendChild(ta);
+    ta.focus();
+
+    function restore(val) {
+        if (val === 'double-click to add description') val = '';
+        desc.innerHTML = val
+            ? val.replace(/\n/g, '<br>')
+            : '<em class="text-secondary">double-click to add description</em>';
+    }
+
+    async function save() {
+        const val = ta.value.trim();
+        try {
+            await post(url, {description: val});
+            restore(val);
+            showInlineAlert('success', 'Description updated');
+        } catch (err) {
+            restore(old);
+            showInlineAlert('error', err.message);
+        }
+    }
+
+    ta.addEventListener('blur', save);
+    ta.addEventListener('keydown', ev => {
+        if (ev.key === 'Enter' && ev.ctrlKey) {
+            ev.preventDefault();
+            save();
+        }
+        if (ev.key === 'Escape') {
+            restore(old);
+            ta.blur();
+        }
+    });
+}
+
+function startInlineEdit(elem, baseUrl) {
+    if (!elem || elem.querySelector('input')) return;
+
+    disableDnD();
+
+    const field = elem.dataset.edit;           // title | description | max
+    const id = elem.dataset.id;         // from template
+    const isTd = elem.nodeName === 'TD';
+
+    let old, countTxt;
+    if (isTd && field === 'maxAssignees') {
+        // Special handling: whole td field is selected
+        const cntSpan = elem.querySelector('[data-count]');
+        countTxt = cntSpan.textContent.trim();
+        old = elem.querySelector('[data-max]').textContent.trim();
+    } else {
+        old = elem.textContent.trim();
+    }
+
+    const inp = document.createElement('input');
+    inp.className = 'form-control form-control-sm text-bg-dark draggable-false';
+    inp.type = field === 'maxAssignees' ? 'number' : 'text';
+    inp.value = old;
+    elem.textContent = '';
+    elem.appendChild(inp);
+    inp.focus();
+
+    async function save() {
+        const val = inp.value.trim();
+        if (val === old) {
+            rollback(old);
+            return;
+        }
+        const url = `${baseUrl}/${id}/${field === 'description' ? 'description' : 'attr'}`;
+
+        try {
+            await post(url,
+                field === 'description' ? {description: val}
+                    : {field, value: val});
+            rollback(val);
+            showInlineAlert('success', 'Updated');
+            if (field === 'maxAssignees') {
+                setTimeout(() => location.reload(), 100);
+            }
+        } catch (err) {
+            rollback(old);
+            showInlineAlert('error', err.message);
+        }
+    }
+
+    async function rollback(val) {
+        if (isTd && field === 'maxAssignees')
+            elem.innerHTML = `<span data-count>${countTxt}</span> / <span data-max>${val}</span>`;
+        else
+            elem.textContent = val;
+        enableDnD();
+    }
+
+    inp.addEventListener('blur', save);
+    inp.addEventListener('keydown', ev => {
+        if (ev.key === 'Enter') {
+            ev.preventDefault();
+            save();
+        }
+        if (ev.key === 'Escape') rollback(old);
+    });
 }

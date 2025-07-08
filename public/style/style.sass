@@ -18,6 +18,10 @@
     [data-edit]
       user-select: text
       cursor: text
+
+      &:empty::before
+        display: inline-block
+        content: "-"
     user-select: none
     cursor: move
 

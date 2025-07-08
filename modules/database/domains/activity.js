@@ -1,20 +1,20 @@
-const {generateUniqueId} = require('../util');
-const {init, db} = require('./db');
+const {generateUniqueId} = require('../../lib/util');
+const {init, db} = require('../pool');
 
 /* ---------- Activity Planner ---------------------------------- */
 
 // Plan
-async function createActivityPlan(id, ownerId, title, start_date, end_date, allowGuestAdd, guestManage) {
+async function createActivityPlan(id, ownerId, title, desc, start_date, end_date, allowGuestAdd, guestManage) {
     init();
     await db().execute(
         `INSERT INTO activity_plans
-         (id, owner_id, title, start_date, end_date, allow_guest_add, guest_manage)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [id, ownerId, title, start_date, end_date, allowGuestAdd ? 1 : 0, guestManage ? 1 : 0]
+         (id, owner_id, title, description, start_date, end_date, allow_guest_add, guest_manage)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, ownerId, title, desc, start_date, end_date, allowGuestAdd ? 1 : 0, guestManage ? 1 : 0]
     );
 }
 
-async function createActivityPlanTx(ownerId, title, start_date, end_date, allowGuestAdd, guestManage, slots) {
+async function createActivityPlanTx(ownerId, title, desc, start_date, end_date, allowGuestAdd, guestManage, slots) {
     init();
     const conn = await db().getConnection();
     try {
@@ -22,9 +22,9 @@ async function createActivityPlanTx(ownerId, title, start_date, end_date, allowG
         const id = generateUniqueId();
         await conn.execute(
             `INSERT INTO activity_plans
-             (id, owner_id, title, start_date, end_date, allow_guest_add, guest_manage)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [id, ownerId, title, start_date, end_date, allowGuestAdd ? 1 : 0, guestManage ? 1 : 0]
+             (id, owner_id, title, description, start_date, end_date, allow_guest_add, guest_manage)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, ownerId, title, desc, start_date, end_date, allowGuestAdd ? 1 : 0, guestManage ? 1 : 0]
         );
         if (slots.length) {
             const vals = slots.map(it => [generateUniqueId(), id, it.title, it.description, it.date, it.position, it.maxAssignees]);
@@ -83,6 +83,15 @@ async function getActivityPlansByUserId(userId) {
     return rows;
 }
 
+async function updateActivityPlanDescription(planId, description) {
+    init();
+    await db().execute(
+        `UPDATE activity_plans
+         SET description = ?
+         WHERE id = ?`,
+        [description, planId]
+    )
+}
 
 // Slots
 async function addActivitySlot(planId, slot) {
@@ -303,6 +312,7 @@ module.exports = {
     deleteActivityPlan,
     updateActivityPlanFlags,
     getActivityPlansByUserId,
+    updateActivityPlanDescription,
 
     getActivitySlots,
     addActivitySlot,

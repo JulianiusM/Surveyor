@@ -4,16 +4,37 @@ block meta
     title #{data.list.title} | Surveyor
 
 block title
-    h1.card-header.text-center #{data.list.title}
-
-block scripts
-    script(src="/js/packing.js")
-    script.
-        window.PACK_LIST_ID = "#{data.list.id}";
+    h1.card-header.text-center
+        i.bi.bi-bag-check.me-2
+        | #{data.list.title}
 
 block content
     - const owner = user && user.id === data.list.owner_id
-    - const manage = owner || (data.list.guest_manage && (guest || user))
+    - const manage = !!(owner || (data.list.guest_manage && (guest || user)))
+    - const add = !!(manage || data.list.allow_guest_add);
+
+    // ─── Description (editable) ──────────────────────────────
+    if add
+        // manager sees pointer
+        p#planDesc.mt-2(
+            style="cursor:pointer"
+            data-edit="planDescription"
+        )
+            if data.list.description
+                - const lines = data.list.description.split('\n')
+                each line, i in lines
+                    | #{line}
+                    if i < lines.length - 1
+                        br
+            else
+                em.text-secondary double-click to add description
+    else if data.list.description
+        p#planDesc.mb-0.mt-2
+            - const lines = data.list.description.split('\n')
+            each line, i in lines
+                | #{line}
+                if i < lines.length - 1
+                    br
 
     // Owner settings toggles
     if owner
@@ -72,6 +93,7 @@ block content
 
     //Tabelle
     .table-responsive
+        small.text-info.fst-italic.fw-light Double click to edit, drag to reorder
         table.table.table-dark.table-hover.table-bordered.align-middle(data-assignable)
             thead
                 tr
@@ -86,7 +108,7 @@ block content
                     - const my     = data.assignments.includes(item.id)
                     - const isFull = item.assigned_count >= item.max_assignees
                     - const all = item.required_by_all == 1
-                    tr(data-itemid=item.id data-pos=item.position data-required=all ? 'true' : '' class=all ? 'table-info' : '')
+                    tr.draggable(data-itemid=item.id data-pos=item.position data-required=all ? 'true' : '' class=all ? 'table-info' : '')
                         // ----- neue Checkbox-Spalte ------------------------
                         td.text-center
                             input.form-check-input(
@@ -114,13 +136,13 @@ block content
 
                         // Title
                         if manage
-                            td(data-edit="title" data-itemid=item.id)= item.title
+                            td(data-edit="title" data-id=item.id)= item.title
                         else
                             td= item.title
 
                         // Description
                         if manage || data.list.allow_guest_add
-                            td(data-edit="description" data-itemid=item.id)= item.description
+                            td(data-edit="description" data-id=item.id)= item.description
                         else
                             td= item.description
 
@@ -128,7 +150,7 @@ block content
                         if manage
                             td.text-center(
                                 data-edit="maxAssignees"
-                                data-itemid=item.id
+                                data-id=item.id
                             )
                                 span(data-count)= item.assigned_count
                                 |  /&nbsp;
@@ -206,4 +228,8 @@ block content
                         i.bi.bi-check-lg.me-1
                         | Add
 
-
+block scripts
+    script(src="/js/packing.js")
+    script.
+        window.PACK_LIST_ID = "#{data.list.id}";
+        window.IS_MANAGE = #{manage};

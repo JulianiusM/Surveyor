@@ -1,22 +1,29 @@
-const mysql = require('mysql2');
-const settings = require('../settings');
+const fs = require('fs');
+const path = require('path');
 
-let db;
+const domainsDir = path.join(__dirname, 'domains');
+// load each module under its folder-name
+const modules = fs
+    .readdirSync(domainsDir)
+    .filter(f => f.endsWith('.js'))
+    .filter(f => f !== 'db.js')
+    .reduce((acc, file) => {
+        const name = path.basename(file, '.js');
+        acc[name] = require(path.join(domainsDir, file));
+        return acc;
+    }, {});
 
-function init() {
-    if (db) return;
-    const pool = mysql.createPool({
-        host: settings.mysqlHost,
-        user: settings.mysqlUser,
-        password: settings.mysqlPassword,
-        database: settings.mysqlDatabase,
-        waitForConnections: true,
-        connectionLimit: 10,
-        queueLimit: 0,
-        timezone: 'Z',              // treat TIMESTAMP / DATETIME as UTC
-        dateStrings: ['DATE']       // A & B: return DATE as **string**
-    });
-    db = pool.promise();
-}
-
-module.exports = {init, db: () => db};
+module.exports = new Proxy({}, {
+    get(_, fnName) {
+        // first look for an exact export match in any module
+        for (const mod of Object.values(modules)) {
+            if (fnName in mod) return mod[fnName];
+        }
+        // or fall back to nested lookup (api.users.registerUser, etc.)
+        const [domain, method] = fnName.split('.');
+        if (modules[domain] && modules[domain][method]) {
+            return modules[domain][method];
+        }
+        return undefined;
+    }
+});

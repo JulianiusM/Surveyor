@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
-const {generateUniqueToken} = require('../util');
-const {init, db} = require('./db');
+const {generateUniqueToken} = require('../../lib/util');
+const {init, db} = require('../pool');
 
 async function registerUser(username, password, email) {
     init();

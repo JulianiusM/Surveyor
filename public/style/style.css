@@ -18,6 +18,11 @@
     cursor: text;
 }
 
+.activity-table .slot [data-edit]:empty::before {
+    display: inline-block;
+    content: "-";
+}
+
 .activity-table input {
     user-select: text;
     cursor: text;

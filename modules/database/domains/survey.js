@@ -1,5 +1,5 @@
-const {generateUniqueId} = require('../util');
-const {init, db} = require('./db');
+const {generateUniqueId} = require('../../lib/util');
+const {init, db} = require('../pool');
 
 // Surveys
 async function getSurveyById(id) {
@@ -25,16 +25,16 @@ async function getCombinationsBySurveyId(surveyId) {
     return rows;
 }
 
-async function createSurvey(userId, title, combinations) {
+async function createSurvey(userId, title, desc, combinations) {
     init();
     const conn = await db().getConnection();
     try {
         await conn.beginTransaction();
         const surveyId = generateUniqueId();
         await conn.query(
-            `INSERT INTO surveys (id, creator_id, title)
-             VALUES (?, ?, ?)`,
-            [surveyId, userId || null, title]
+            `INSERT INTO surveys (id, owner_id, title, description)
+             VALUES (?, ?, ?, ?)`,
+            [surveyId, userId, title, desc]
         );
         for (const c of combinations) {
             await conn.query(
@@ -68,7 +68,7 @@ async function getSurveysByUserId(userId) {
     const [rows] = await db().execute(
         `SELECT *
          FROM surveys
-         WHERE creator_id = ?`,
+         WHERE owner_id = ?`,
         [userId]
     );
     return rows;

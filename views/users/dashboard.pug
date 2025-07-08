@@ -25,7 +25,7 @@ block content
                         | #{survey.title}
 
                     // Duplicate-Button nur für Owner
-                    if survey.creator_id === user.id
+                    if survey.owner_id === user.id
                         a.btn.btn-sm.btn-outline-info.ms-2(href=`/survey/${survey.id}/duplicate`)
                             i.bi.bi-files.me-1
                             | Duplicate

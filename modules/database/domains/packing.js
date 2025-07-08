@@ -1,18 +1,18 @@
-const {generateUniqueId} = require('../util');
-const {init, db} = require('./db');
+const {generateUniqueId} = require('../../lib/util');
+const {init, db} = require('../pool');
 
 // Packing Lists
-async function createPackingList(listId, ownerId, title, allowGuestAdd, guestManage) {
+async function createPackingList(listId, ownerId, title, desc, allowGuestAdd, guestManage) {
     init();
     await db().execute(
         `INSERT INTO packing_lists
-             (id, owner_id, title, allow_guest_add, guest_manage)
-         VALUES (?, ?, ?, ?, ?)`,
-        [listId, ownerId, title, allowGuestAdd ? 1 : 0, guestManage ? 1 : 0]
+             (id, owner_id, title, description, allow_guest_add, guest_manage)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [listId, ownerId, title, desc, allowGuestAdd ? 1 : 0, guestManage ? 1 : 0]
     );
 }
 
-async function createPackingListTx(ownerId, title, allowGuestAdd, guestManage, items) {
+async function createPackingListTx(ownerId, title, desc, allowGuestAdd, guestManage, items) {
     init();
     const conn = await db().getConnection();
     try {
@@ -20,9 +20,9 @@ async function createPackingListTx(ownerId, title, allowGuestAdd, guestManage, i
         const listId = generateUniqueId();
         await conn.execute(
             `INSERT INTO packing_lists
-                 (id, owner_id, title, allow_guest_add, guest_manage)
-             VALUES (?, ?, ?, ?, ?)`,
-            [listId, ownerId, title, allowGuestAdd ? 1 : 0, guestManage ? 1 : 0]
+                 (id, owner_id, title, description, allow_guest_add, guest_manage)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [listId, ownerId, title, desc, allowGuestAdd ? 1 : 0, guestManage ? 1 : 0]
         );
         if (items.length) {
             const vals = items.map(it => [
@@ -109,6 +109,16 @@ async function updatePackingListGuestManage(listId, flag) {
     );
 }
 
+async function updatePackingListDescription(listId, description) {
+    init();
+    await db().execute(
+        `UPDATE packing_lists
+         SET description = ?
+         WHERE id = ?`,
+        [description, listId]
+    )
+}
+
 // Packing Items
 async function createPackingItem(listId, item) {
     init();
@@ -150,12 +160,13 @@ async function updatePackingItem(itemId, fields) {
     }
     if (!sets.length) return;
     vals.push(itemId);
-    await db().execute(
+    const res = await db().execute(
         `UPDATE packing_items
          SET ${sets.join(', ')}
          WHERE id = ?`,
         vals
     );
+    return res[0].affectedRows === 1;
 }
 
 async function deletePackingItem(itemId) {
@@ -211,6 +222,17 @@ async function getPackingAssignmentCounts(listId) {
         m[r.item_id] = r.cnt;
         return m;
     }, {});
+}
+
+async function getLastPackingItemNumber(listId) {
+    init();
+    const [rows] = await db().execute(
+        `SELECT MAX(pos)
+         FROM packing_items
+         WHERE list_id = ?`,
+        [listId]
+    );
+    return rows[0];
 }
 
 // Assignments
@@ -350,6 +372,7 @@ module.exports = {
     getPackingListByUserId,
     updatePackingListAllow,
     updatePackingListGuestManage,
+    updatePackingListDescription,
 
     createPackingItem,
     addPackingItems,
@@ -358,6 +381,7 @@ module.exports = {
     reorderPackingItems,
     getPackingItems,
     getPackingAssignmentCounts,
+    getLastPackingItemNumber,
 
     assignPackingItemToUser,
     unassignPackingItemUser,

@@ -269,21 +269,6 @@ function initSubmitHandler() {
     });
 }
 
-function disableDnD() {
-    const draggables = document.getElementsByClassName('activity-draggable');
-    for (let elem of draggables) {
-        elem.draggable = false;
-    }
-}
-
-function enableDnD() {
-    if (!window.IS_MANAGE) return;
-    const draggables = document.getElementsByClassName('activity-draggable');
-    for (let elem of draggables) {
-        elem.draggable = true;
-    }
-}
-
 /* ========  DRAG-&-DROP ORDERING  ================================= */
 function initSlotDnD() {
     let dragSrc = null;

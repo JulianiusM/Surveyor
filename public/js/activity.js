@@ -22,6 +22,9 @@ function initAssign() {
 
 function initInlineEdit() {
     document.addEventListener('dblclick', e => {
+        const desc = e.target.closest('[data-edit="planDescription"]');
+        if (desc) return startInlineEditArea(desc, `/activity/${ACT_PLAN_ID}/description`);
+
         const card = e.target.closest('.slot');          // NEW
         if (!card || e.target.closest('button')) return;
 
@@ -34,79 +37,7 @@ function initInlineEdit() {
         if (!span)
             span = card.querySelector('[data-edit="title"]');
 
-        startInlineEdit(span);
-    });
-}
-
-function disableDnD() {
-    const draggables = document.getElementsByClassName('activity-draggable');
-    for (let elem of draggables) {
-        elem.draggable = false;
-    }
-}
-
-function enableDnD() {
-    if (!window.IS_MANAGE) return;
-    const draggables = document.getElementsByClassName('activity-draggable');
-    for (let elem of draggables) {
-        elem.draggable = true;
-    }
-}
-
-function startInlineEdit(span) {
-    if (!span || span.querySelector('input')) return;
-
-    disableDnD();
-
-    const field = span.dataset.edit;           // title | description | max
-    const slotId = span.dataset.slotid;         // from template
-    const old = span.textContent.trim();
-
-    const inp = document.createElement('input');
-    inp.className = 'form-control form-control-sm text-bg-dark draggable-false';
-    inp.type = field === 'maxAssignees' ? 'number' : 'text';
-    inp.value = old;
-    span.textContent = '';
-    span.appendChild(inp);
-    inp.focus();
-
-    async function save() {
-        const val = inp.value.trim();
-        if (val === old) {
-            span.textContent = old;
-            enableDnD();
-            return;
-        }
-        const url = `/activity/${window.ACT_PLAN_ID}/slot/${slotId}/${field === 'description' ? 'description' : 'attr'}`;
-
-        try {
-            await post(url,
-                field === 'description' ? {description: val}
-                    : {field, value: val});
-            span.textContent = val;
-            enableDnD();
-            showInlineAlert('success', 'Updated');
-            if (field === 'maxAssignees') {
-                setTimeout(() => location.reload(), 100);
-            }
-        } catch (err) {
-            rollback();
-            showInlineAlert('error', err.message);
-        }
-    }
-
-    async function rollback() {
-        span.textContent = old;
-        enableDnD();
-    }
-
-    inp.addEventListener('blur', save);
-    inp.addEventListener('keydown', ev => {
-        if (ev.key === 'Enter') {
-            ev.preventDefault();
-            save();
-        }
-        if (ev.key === 'Escape') rollback();
+        startInlineEdit(span, `/activity/${window.ACT_PLAN_ID}/slot`);
     });
 }
 

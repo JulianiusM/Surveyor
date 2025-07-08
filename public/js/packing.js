@@ -77,77 +77,15 @@ function initAssignButtons() {
 function initInlineEdit() {
     document.querySelectorAll('td[data-edit]').forEach(td => {
         td.addEventListener('dblclick', () => {
-            if (td.querySelector('input')) return;                 // schon Editing
-
-            const field = td.dataset.edit;                        // title | description | maxAssignees
-            const itemId = td.dataset.itemid;
-
-            /* ---------- alter Wert auslesen --------------------------- */
-            let old, countTxt;
-            if (field === 'maxAssignees') {
-                const cntSpan = td.querySelector('[data-count]');
-                countTxt = cntSpan.textContent.trim();
-                old = td.querySelector('[data-max]').textContent.trim();
-            } else {
-                old = td.textContent.trim();
-            }
-
-            const type = field === 'maxAssignees' ? 'number' : 'text';
-            td.innerHTML =
-                `<input class="form-control form-control-sm text-bg-dark" type="${type}" value="${old}">`;
-            const inp = td.firstChild;
-            inp.focus();
-            inp.select();
-
-            const save = async () => {
-                const val = inp.value.trim();
-                if (val === old) {
-                    restore();
-                    return;
-                }
-
-                const url = field === 'description'
-                    ? `/packing/${window.PACK_LIST_ID}/item/${itemId}/description`
-                    : `/packing/${window.PACK_LIST_ID}/item/${itemId}/attr`;
-
-                try {
-                    await post(url,
-                        field === 'description' ? {description: val}
-                            : {field, value: val});
-
-                    if (field === 'maxAssignees')
-                        td.innerHTML = `<span data-count>${countTxt}</span> / <span data-max>${val}</span>`;
-                    else
-                        td.textContent = val;
-
-                    showInlineAlert('success', 'Updated');
-                    if (field === 'maxAssignees')
-                        setTimeout(() => location.reload(), 100);
-                } catch (e) {
-                    restore();
-                    showInlineAlert('error', e.message);
-                }
-            };
-
-            function restore() {
-                if (field === 'maxAssignees')
-                    td.innerHTML = `<span data-count>${countTxt}</span> / <span data-max>${old}</span>`;
-                else
-                    td.textContent = old;
-            }
-
-            inp.addEventListener('blur', save);
-            inp.addEventListener('keydown', e => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    inp.blur();
-                }
-                if (e.key === 'Escape') {
-                    restore();
-                }
-            });
+            startInlineEdit(td, `/packing/${window.PACK_LIST_ID}/item`);
         });
     });
+
+    document.querySelectorAll('[data-edit="planDescription"]').forEach(elem => {
+        elem.addEventListener('dblclick', () => {
+            startInlineEditArea(elem, `/packing/${window.PACK_LIST_ID}/description`);
+        })
+    })
 }
 
 /* ========== Reorder (Owner) ================================== */
@@ -157,11 +95,17 @@ function initReorder() {
     let dragSrc;
 
     tbody.addEventListener('dragstart', e => {
+        if (e.target.closest('button') || e.target.closest('input')) return;
+
         dragSrc = e.target.closest('tr');
+        if (!dragSrc) return;
+
         e.dataTransfer.effectAllowed = 'move';
     });
 
     tbody.addEventListener('dragover', e => {
+        if (!dragSrc) return;
+
         e.preventDefault();
         const tr = e.target.closest('tr');
         if (!tr || tr === dragSrc) return;
@@ -173,6 +117,8 @@ function initReorder() {
     });
 
     tbody.addEventListener('dragend', async () => {
+        if (!dragSrc) return;
+
         const orders = Array.from(tbody.children).map((tr, i) => ({
             itemId: tr.dataset.itemid,
             position: i,
@@ -308,7 +254,7 @@ function initPackedToggle() {
     });
 
     function markPacked(row, cb, packed) {
-        const required = row.dataset.required == 'true';
+        const required = row.dataset.required;
         cb.checked = packed;
 
         if (packed) {

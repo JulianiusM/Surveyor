@@ -3,6 +3,7 @@ CREATE TABLE activity_plans
     id              CHAR(36) PRIMARY KEY,
     owner_id        INT          NOT NULL,
     title           VARCHAR(255) NOT NULL,
+    description     TEXT         NULL,
     start_date      DATE         NOT NULL,
     end_date        DATE         NOT NULL,
     allow_guest_add TINYINT(1)   NOT NULL DEFAULT 0,

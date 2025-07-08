@@ -7,12 +7,14 @@ const session = require('express-session');
 const flash = require('express-flash');
 
 const indexRouter = require('./routes/index');
+const apiRouter = require('./routes/api');
 const usersRouter = require('./routes/users');
 const surveyRouter = require('./routes/survey');
 const packingRouter = require('./routes/packing');
 const activityRouter = require('./routes/activity');
 
 const settings = require('./modules/settings');
+const genericErrorHandler = require('./middleware/genericErrorHandler');
 
 const app = express();
 
@@ -49,6 +51,7 @@ app.use(function (req, res, next) {
 });
 
 app.use('/', indexRouter);
+app.use('/api', apiRouter);
 app.use('/users', usersRouter);
 app.use('/survey', surveyRouter);
 app.use('/packing', packingRouter);
@@ -60,14 +63,6 @@ app.use(function (req, res, next) {
 });
 
 // error handler
-app.use(function (err, req, res, next) {
-    // set locals, only providing error in development
-    res.locals.message = err.message;
-    res.locals.error = req.app.get('env') === 'development' ? err : {};
-
-    // render the error page
-    res.status(err.status || 500);
-    res.render('error');
-});
+app.use(genericErrorHandler);
 
 module.exports = app;

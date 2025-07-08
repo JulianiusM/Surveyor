@@ -9,13 +9,26 @@ block title
         i.bi.bi-bag-plus.me-2
         | Create packing list
 
-block scripts
-    script(type="text/javascript", src="/js/packing-create.js")
-    if data && data.isDuplicate
-        script.
-            window.PREFILLED_ITEMS = !{JSON.stringify(data.items)};
-
 block content
+    -
+        let parsed, parsedData;
+        if (data) {
+            if (data.entity) {
+                parsed = data.entity;
+            } else {
+                parsed = {
+                    description: data.description,
+                    allow_guest_add: data.allowGuestAdd,
+                    guest_manage: data.guestManage,
+                }
+            }
+            if (data.data) {
+                parsedData = data.data;
+            } else {
+                parsedData = data.items;
+            }
+        }
+
     form#packingForm(action="/packing/create" method="POST")
         // Titel
         .mb-3
@@ -32,17 +45,25 @@ block content
         .row.mb-3
             .col-md-6
                 .form-check
-                    input#allowAdd.form-check-input(type="checkbox" name="allowGuestAdd" checked=data && data.entity && data.entity.allow_guest_add == 1)
+                    input#allowAdd.form-check-input(type="checkbox" name="allowGuestAdd" checked=parsed.allow_guest_add == 1)
                     label.form-check-label(for="allowAdd")
                         i.bi.bi-plus-circle.me-1
                         | Guests can add items
             .col-md-6
                 .form-check
-                    input#guestManage.form-check-input(type="checkbox" name="guestManage" checked=data && data.entity && data.entity.guest_manage == 1)
+                    input#guestManage.form-check-input(type="checkbox" name="guestManage" checked=parsed.guest_manage == 1)
                     label.form-check-label(for="guestManage")
                         i.bi.bi-exclamation-triangle.me-1
                         | Guests may manage list
                         span.badge.bg-danger.ms-1 DANGER
+
+        .row.mb-3
+            .col-md-12
+                label.form-label(for="desc")
+                    i.bi.bi-pencil-square.me-1
+                    | Description
+                textarea#desc.form-control.text-bg-dark(name="description"
+                    value=(parsed.description ? parsed.description : ''))
 
         // Item-Tabelle
         .mb-3
@@ -68,3 +89,10 @@ block content
                 i.bi.bi-check-lg.me-1
                 | Create list
         input(type="hidden" name="items" id="itemsJson")
+
+block scripts
+    script(type="text/javascript", src="/js/packing-create.js")
+    if data && data.isDuplicate
+        script.
+            window.PREFILLED_ITEMS = !{JSON.stringify(parsedData)};
+            window.IS_MANAGE = true;

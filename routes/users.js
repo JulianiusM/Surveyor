@@ -1,8 +1,9 @@
 const express = require('express');
-const db = require("../modules/db");
+const db = require("../modules/database/db");
 const mailer = require("../modules/email");
 const renderer = require("../modules/renderer");
 const settings = require("../modules/settings");
+const {isAuthenticated} = require("../middleware/permissionMiddleware");
 
 const app = express.Router();
 
@@ -83,11 +84,7 @@ app.post('/login', async (req, res) => {
 });
 
 // Dashboard nach dem Login
-app.get('/dashboard', async (req, res) => {
-    if (!req.session.user) {
-        return res.redirect('/users/login');  // Umleitung, falls der Benutzer nicht eingeloggt ist
-    }
-
+app.get('/dashboard', isAuthenticated, async (req, res) => {
     const surveys = await db.getSurveysByUserId(req.session.user.id);
     const packlists = await db.getPackingListByUserId(req.session.user.id);
     const activityplans = await db.getActivityPlansByUserId(req.session.user.id);
@@ -111,7 +108,7 @@ app.post('/forgot-password', async (req, res) => {
 
     const user = await db.getUserByUsername(username);
     if (!user) {
-        return renderer.renderSuccess('A link has been sent to the email corresponding to this account (if present).')
+        return renderer.renderSuccess(res, 'A link has been sent to the email corresponding to this account (if present).')
     }
 
     // Generiere ein Passwort-Zurücksetzungs-Token und speichere es in der Datenbank
@@ -123,7 +120,7 @@ app.post('/forgot-password', async (req, res) => {
     // Sende eine E-Mail mit dem Zurücksetzungs-Link
     await mailer.sendPasswordResetEmail(user.email, resetLink);
 
-    renderer.renderSuccess('A link has been sent to the email corresponding to this account (if present).')
+    renderer.renderSuccess(res, 'A link has been sent to the email corresponding to this account (if present).')
 });
 
 // Passwort zurücksetzen: Formular anzeigen
@@ -157,7 +154,7 @@ app.post('/reset-password/:token', async (req, res) => {
 
     // Setze das Passwort zurück
     await db.resetPassword(user.username, password);
-    renderer.renderSuccess('Your password has been successfully reset')
+    renderer.renderSuccess(res, 'Your password has been successfully reset')
 });
 
 // Aktivierungs-Link

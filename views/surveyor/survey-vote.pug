@@ -25,6 +25,14 @@ block content
             var userResponse = data.responses['g_' + guest.id];
         }
 
+    if data.survey.description
+        p#planDesc.mb-0.mt-2
+            - const lines = data.survey.description.split('\n')
+            each line, i in lines
+                | #{line}
+                if i < lines.length - 1
+                    br
+
     // Abstimmungsformular
     //── Your Response ────────────────────────────────────────
     h2.text-center.mb-4
