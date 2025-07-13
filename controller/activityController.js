@@ -110,19 +110,17 @@ async function fetchForView(plan, session) {
         : session.guest
             ? db.getActivitySlotAssignmentsForGuest(plan.id, session.guest.id)
             : Promise.resolve([]);
-    const [assignments, assigneeLists] = await Promise.all([
+    const [assignments, assigneeLists, participantList, allRoles, slotRoles] = await Promise.all([
         assignPromise,
-        db.getActivitySlotAssignees(plan.id)
+        db.getActivitySlotAssignees(plan.id),
+        db.getActivityPlanParticipants(plan.id),
+        db.getAllRoles(),
+        db.getActivitySlotRoles(plan.id)
     ]);
 
-    const participants = new Set();
     let empty = 0, open = 0;
 
     for (const slot of slotList) {
-        (assigneeLists[slot.id] || []).forEach(a => {
-            const key = a.user_id ? `u_${a.user_id}` : a.guest_id ? `g_${a.guest_id}` : a.name;
-            participants.add(key);
-        });
         if (slot.assigned_count === 0) empty++;
         if (slot.assigned_count < slot.max_assignees) open++;
     }
@@ -132,7 +130,9 @@ async function fetchForView(plan, session) {
         slots: slotsByDate,
         assignments,
         assigneeLists,
-        counters: {participants: participants.size, open, empty}
+        participantList,
+        roles: {allRoles, slotRoles},
+        counters: {participants: participantList.length, open, empty}
     };
 }
 
@@ -221,12 +221,31 @@ async function deleteSlot(slotId) {
     return 'Slot deleted';
 }
 
+async function addSlotRole(slotId, body) {
+    const {roles} = body;
+    if (!roles || !Array.isArray(roles) || roles.length < 1) {
+        throw new APIError('Invalid roles', body, 400);
+    }
+
+    await db.addActivitySlotRoles(slotId, roles);
+    return 'Roles added';
+}
+
 function getAssignmentAccessMapping() {
     return {
         assignToUser: (body, user) => db.assignActivitySlotToUser(body.slotId, user),
         assignToGuest: (body, user) => db.assignActivitySlotToGuest(body.slotId, user),
         unassignFromUser: (body, user) => db.unassignActivitySlotUser(body.slotId, user),
         unassignFromGuest: (body, user) => db.unassignActivitySlotGuest(body.slotId, user),
+    }
+}
+
+function getRoleAccessMapping() {
+    return {
+        assignToUser: (body, user) => db.assignActivityAssignmentRoleToUser(body.slotId, user, body.role),
+        assignToGuest: (body, user) => db.assignActivityAssignmentRoleToGuest(body.slotId, user, body.role),
+        unassignFromUser: (body, user) => db.unassignActivityAssignmentRoleFromUser(body.slotId, user, body.role),
+        unassignFromGuest: (body, user) => db.unassignActivityAssignmentRoleFromGuest(body.slotId, user, body.role),
     }
 }
 
@@ -246,6 +265,8 @@ module.exports = {
     deleteAssignment,
     updateSettings,
     deleteSlot,
+    addSlotRole,
 
     getAssignmentAccessMapping,
+    getRoleAccessMapping,
 };

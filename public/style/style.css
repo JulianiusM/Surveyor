@@ -1,47 +1,50 @@
 .table-responsive .sticky-col {
-    position: sticky;
-    left: 0;
-    z-index: 1;
-    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
-    font-weight: bold;
-    text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+  font-weight: bold;
+  text-align: left;
 }
 
 /* pointer & tighter paddings */
 .activity-table .slot {
-    user-select: none;
-    cursor: move;
+  user-select: none;
+  cursor: move;
 }
-
 .activity-table .slot [data-edit] {
-    user-select: text;
-    cursor: text;
+  user-select: text;
+  cursor: text;
 }
-
 .activity-table .slot [data-edit]:empty::before {
-    display: inline-block;
-    content: "-";
+  display: inline-block;
+  content: "-";
 }
-
 .activity-table input {
-    user-select: text;
-    cursor: text;
+  user-select: text;
+  cursor: text;
+}
+.activity-table .slot-container {
+  min-width: 150px;
 }
 
-.activity-table .slot-container {
-    min-width: 150px;
+.select2-search__field::placeholder {
+  color: white !important;
+}
+
+.select2-selection__choice {
+  background-color: transparent !important;
 }
 
 /* mobile tweaks for activity tables */
 @media (max-width: 576px) {
-    .activity-table thead th {
-        font-size: 0.75rem;
-        padding: 0.25rem 0.3rem;
-    }
-
-    .activity-table .slot {
-        padding: 0.25rem !important;
-    }
+  .activity-table thead th {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.3rem;
+  }
+  .activity-table .slot {
+    padding: 0.25rem !important;
+  }
 }
 
 /*# sourceMappingURL=style.css.map */

@@ -1,0 +1,26 @@
+mixin roleAssignmentAddon(dataId, roleName, roleDisplayName, assignees, user, guest)
+    -
+        let assignee = (assignees || []).find(a => Array.isArray(a.roles) && a.roles.includes(roleName));
+        let my = assignee ? user ? assignee.user_id === user.id : guest ? assignee.guest_id === guest.id : false : false;
+    .role-assignment.d-flex.align-items-center.gap-2.mt-1
+        i.bi.bi-person-badge
+        if assignee
+            span.flex-grow-1 #{roleDisplayName}: #{assignee.name}
+            if my
+                button.btn.btn-sm.btn-outline-warning(
+                    data-action="leave-role"
+                    data-role=roleName
+                    data-id=dataId) Leave
+        else
+            span.flex-grow-1.fw-5 No #{roleDisplayName} assigned
+            button.btn.btn-sm.btn-outline-primary(
+                data-action="take-role"
+                data-role=roleName
+                data-id=dataId) Take
+
+mixin roleAssignmentSlotCreator(dataId, roles)
+    .role-assignment.d-flex.align-items-center.gap-2.mt-1
+        select.multiSelect(multiple size=1 data-id=dataId)
+            for role in roles
+                option.text-bg-dark(value=role.id) #{role.name}
+        button.btn.btn-sm.btn-outline-success(data-addRoles, data-id=dataId) +

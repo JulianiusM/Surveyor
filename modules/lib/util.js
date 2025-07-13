@@ -1,5 +1,6 @@
 const {v4: uuidv4} = require('uuid');
 const crypto = require('crypto');
+const {APIError} = require("./errors");
 
 // Funktion zur Generierung eines einzigartigen Tokens
 function generateUniqueToken() {
@@ -23,9 +24,18 @@ function fromISOtoLocal(isoDate) {
     return new Date(Date.UTC(y, m - 1, day));
 }
 
+async function performAPIAction(req, {actionUser, actionGuest}) {
+    const userId = req.session.user?.id;
+    const guestId = req.session.guest?.id;
+    if (userId) await actionUser(req.body, userId);
+    else if (guestId) await actionGuest(req.body, guestId);
+    else throw new APIError('Unknown user', {}, 401);
+}
+
 module.exports = {
     generateUniqueToken,
     generateUniqueId,
     toLocalISO,
     fromISOtoLocal,
+    performAPIAction,
 }

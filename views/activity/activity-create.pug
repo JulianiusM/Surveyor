@@ -28,6 +28,9 @@ block content
             } else {
                 parsedData = data.slots;
             }
+        } else {
+            parsed = {};
+            parsedData = [];
         }
 
     form#planForm(action="/activity/create" method="post")

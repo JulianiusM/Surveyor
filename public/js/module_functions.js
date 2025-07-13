@@ -305,3 +305,20 @@ function startInlineEdit(elem, baseUrl) {
         if (ev.key === 'Escape') rollback(old);
     });
 }
+
+// Return an array of the selected option values in the control.
+// Select is an HTML select element.
+function getSelectValues(select) {
+    let result = [];
+    let options = select && select.options;
+    let opt;
+
+    for (let i = 0, iLen = options.length; i < iLen; i++) {
+        opt = options[i];
+
+        if (opt.selected) {
+            result.push(opt.value || opt.text);
+        }
+    }
+    return result;
+}

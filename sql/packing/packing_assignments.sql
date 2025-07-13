@@ -27,5 +27,6 @@ CREATE TABLE IF NOT EXISTS packing_assignments
             ),
 
     -- 3) Jeder User/Gast darf ein Item nur einmal übernehmen
-    UNIQUE KEY uk_unique_assignment (item_id, user_id, guest_id)
+    UNIQUE KEY uk_packing_assignment_user (item_id, user_id),
+    UNIQUE KEY uk_packing_assignment_guest (item_id, guest_id)
 );

@@ -182,6 +182,15 @@ async function getGuestLinkToken(entityType, entityId, guestId) {
     return rows[0]?.token || null;
 }
 
+async function getAllRoles() {
+    init();
+    const [rows] = await db().execute(
+        `SELECT *
+         FROM roles`
+    );
+    return rows;
+}
+
 module.exports = {
     registerUser,
     getUserByUsername,
@@ -199,4 +208,6 @@ module.exports = {
     getGuestByToken,
     getGuestInternal,
     getGuestLinkToken,
+
+    getAllRoles,
 };

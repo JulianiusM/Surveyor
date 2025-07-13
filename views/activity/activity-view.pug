@@ -155,6 +155,12 @@ block content
                                             // editable description
                                             span.fw-5(data-edit="description" data-id=slot.id)= slot.description || ''
 
+                                            - const slotRoles = (data.roles.slotRoles ? data.roles.slotRoles[slot.id] || [] : []);
+                                            - console.log(data.roles.slotRoles);
+                                            if slotRoles.length > 0
+                                                for slotRole in slotRoles
+                                                    +roleAssignmentAddon(slot.id, slotRole.name, slotRole.description || slotRole.name, data.assigneeLists[slot.id], user, guest)
+
                                             // badge + editable max
                                             span.badge.bg-secondary.w-100.text-center
                                                 span(data-count)= slot.assigned_count
@@ -187,6 +193,8 @@ block content
                                                         data-delete-slot data-slotid=slot.id
                                                         draggable="false")
                                                         i.bi.bi-trash
+                                            if manage
+                                                +roleAssignmentSlotCreator(slot.id, data.roles.allRoles)
                                 else
                                     span.badge.w-100.text-center
                                         i.bi.bi-info-circle.me-2
@@ -205,6 +213,26 @@ block content
                                     button.btn.btn-sm.btn-outline-info.w-100(data-add-slot data-date=fmtISO(cur)) + Slot
                             - }
                             // @formatter:on
+    if data.participantList && data.participantList.length > 0
+        hr
+        h4.mt-2 Participants
+        .table-responsive
+            table.table.table-dark.table-bordered
+                thead
+                    tr
+                        th.text-center Name
+                        th.text-center # Assigned
+                        th.text-center Roles
+                tbody
+                    for part in data.participantList
+                        tr
+                            td.text-center #{part.name}
+                            td.text-center #{part.count}
+                            td.text-center
+                                for role in part.roles
+                                    if role !== 'default'
+                                        p.my-1 #{role}
+
 
 block scripts
     script(src="/js/activity.js")

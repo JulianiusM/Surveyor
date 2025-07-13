@@ -6,6 +6,7 @@ CREATE TABLE activity_assignments
     user_id    INT      NULL,
     guest_id   INT      NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (slot_id) REFERENCES activity_slots (id) ON UPDATE CASCADE ON DELETE CASCADE,
     FOREIGN KEY (plan_id) REFERENCES activity_plans (id) ON UPDATE CASCADE ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
@@ -13,5 +14,6 @@ CREATE TABLE activity_assignments
     CONSTRAINT chk_activity_assign_user_or_guest
         CHECK ( (user_id IS NOT NULL AND guest_id IS NULL)
             OR (user_id IS NULL AND guest_id IS NOT NULL) ),
-    UNIQUE KEY uk_unique_activity_assignment (slot_id, user_id, guest_id)
+    UNIQUE KEY uk_activity_assign_user (slot_id, user_id),
+    UNIQUE KEY uk_activity_assign_guest (slot_id, guest_id)
 );

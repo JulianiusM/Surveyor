@@ -10,8 +10,40 @@ function initAssign() {
         if (!slotId) return;
 
         const act = btn.dataset.action;
+        const role = btn.dataset.role;
         try {
-            await post(`/activity/${ACT_PLAN_ID}/${act}`, {slotId});
+            await post(`/activity/${ACT_PLAN_ID}/${act}`, {slotId, role});
+            showInlineAlert('success', 'Updated');
+            setTimeout(() => location.reload(), 120);
+        } catch (err) {
+            showInlineAlert('error', err.message);
+        }
+    });
+}
+
+function initSelectBox() {
+    $('.multiSelect').select2({
+        placeholder: 'Add Roles',
+        width: '100%',
+        selectionCssClass: 'text-bg-dark',
+        dropdownCssClass: 'text-bg-dark',
+    });
+
+    document.addEventListener('click', async e => {
+        const btn = e.target.closest('[data-addRoles]');
+        if (!btn) return;
+
+        const div = btn.closest('.role-assignment')
+        if (!div) return;
+
+        const sel = div.querySelector('select');
+        if (!sel) return;
+
+        const slot = sel.dataset.id;
+        const vals = getSelectValues(sel);
+
+        try {
+            await post(`/activity/${ACT_PLAN_ID}/slot/${slot}/addRole`, {roles: vals});
             showInlineAlert('success', 'Updated');
             setTimeout(() => location.reload(), 120);
         } catch (err) {
@@ -227,6 +259,7 @@ function initDates() {
 function init() {
     setCurrentNavLocation();
     initDates();
+    initSelectBox();
     if (window.ACT_PLAN_ID) {
         initAssign();
         initInlineEdit();

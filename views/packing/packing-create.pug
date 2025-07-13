@@ -27,6 +27,9 @@ block content
             } else {
                 parsedData = data.items;
             }
+        } else {
+            parsed = {};
+            parsedData = [];
         }
 
     form#packingForm(action="/packing/create" method="POST")

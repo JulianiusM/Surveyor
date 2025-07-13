@@ -8,6 +8,7 @@ const renderer = require('../../modules/renderer');
 const {apiParamHandler} = require("../../middleware/paramHandler");
 const {requireManageRight, requireAddRight, requireOwner} = require('../../middleware/permissionMiddleware');
 const attachAssignRoutes = require('../../middleware/assignFlowFactory');
+const attachAssignRoleRoutes = require('../../middleware/assignRoleFlowFactory');
 const controller = require('../../controller/activityController');
 
 apiParamHandler('id', app, db.getActivityPlanById, 'activity');
@@ -21,6 +22,7 @@ app.post('/:id/description', requireAddRight(req => req.entity), async (req, res
 /* ───────────────── ASSIGN / UNASSIGN (JSON) ───────────────── */
 
 attachAssignRoutes(app, controller.getAssignmentAccessMapping());
+attachAssignRoleRoutes(app, controller.getRoleAccessMapping());
 
 /* ───────────────── REORDER (Owner) ────────────────────────── */
 
@@ -63,5 +65,10 @@ app.post('/:id/slot/:slotId/delete', requireManageRight(req => req.entity), asyn
     const msg = await controller.deleteSlot(req.params.slotId);
     renderer.respondWithSuccessJson(res, msg);
 }));
+
+app.post('/:id/slot/:slotId/addRole', requireManageRight(req => req.entity), asyncHandler(async (req, res) => {
+    const msg = await controller.addSlotRole(req.params.slotId, req.body);
+    renderer.respondWithSuccessJson(res, msg);
+}))
 
 module.exports = app;
