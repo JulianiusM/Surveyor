@@ -88,7 +88,8 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     const surveys = await db.getSurveysByUserId(req.session.user.id);
     const packlists = await db.getPackingListByUserId(req.session.user.id);
     const activityplans = await db.getActivityPlansByUserId(req.session.user.id);
-    renderer.renderWithData(res, 'users/dashboard', {surveys, packlists, activityplans});
+    const driverslists = await db.getDriversListByUserId(req.session.user.id);
+    renderer.renderWithData(res, 'users/dashboard', {surveys, packlists, activityplans, driverslists});
 });
 
 // Logout

@@ -70,13 +70,13 @@ async function assignRole(conn, assignmentId, roleName) {
     );
 
     // Ensure that default role is always set
-    if (roleName !== 'default') {
+    /*if (roleName !== 'default') {
         conn.execute(
             `INSERT IGNORE INTO activity_assignment_roles (assignment_id, role_id)
              VALUES (?, ?)`,
             [assignmentId, await ensureRoleId(conn, 'default')]
         );
-    }
+    }*/
 }
 
 async function doUnassignRole(conn, assRow, roleName) {

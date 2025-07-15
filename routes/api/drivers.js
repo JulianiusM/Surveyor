@@ -8,13 +8,17 @@ const renderer = require('../../modules/renderer');
 const {apiParamHandler} = require("../../middleware/paramHandler");
 const {requireManageRight, requireAddRight, requireOwner} = require('../../middleware/permissionMiddleware');
 const attachAssignRoutes = require('../../middleware/assignFlowFactory');
-const attachAssignRoleRoutes = require('../../middleware/assignRoleFlowFactory');
-const controller = require('../../controller/activityController');
-const {getResource} = require("../../modules/lib/util");
 
-const entityName = 'activity';
+const controller = require("../../controller/driversController");
+const {getResource, getAdditional} = require("../../modules/lib/util");
+
+const entityName = 'drivers';
+const entityItemName = 'driversItem';
 const resFct = (req) => getResource(req, entityName);
-apiParamHandler('id', app, db.getActivityPlanById, entityName);
+const resFctItems = (req) => getAdditional(req, entityItemName);
+
+apiParamHandler('id', app, db.getDriversListById, entityName);
+apiParamHandler('itemId', app, db.getDriversItemById, entityItemName);
 
 app.post('/:id/description', requireAddRight(resFct), async (req, res) => {
     const msg = await controller.updateDescription(resFct(req).id, req.body);
@@ -25,31 +29,30 @@ app.post('/:id/description', requireAddRight(resFct), async (req, res) => {
 /* ───────────────── ASSIGN / UNASSIGN (JSON) ───────────────── */
 
 attachAssignRoutes(app, controller.getAssignmentAccessMapping());
-attachAssignRoleRoutes(app, controller.getRoleAccessMapping());
 
 /* ───────────────── REORDER (Owner) ────────────────────────── */
 
 /* ----------- REORDER (nur Owner, JSON-Antwort) ---------------- */
-app.post('/:id/slot/reorder', requireManageRight(resFct), asyncHandler(async (req, res) => {
-    const msg = await controller.reorderSlots(resFct(req).id, req.body.order);
+app.post('/:id/reorder', requireManageRight(resFct), asyncHandler(async (req, res) => {
+    const msg = await controller.reorderItems(resFct(req).id, req.body.orders);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 /* ───────────────── QUICK-ADD ──────────────────────────────── */
 
-app.post('/:id/slot/add', requireAddRight(resFct), asyncHandler(async (req, res) => {
-    const msg = await controller.quickAddSlot(resFct(req), req.body);
+app.post('/:id/items', requireAddRight(resFct), asyncHandler(async (req, res) => {
+    const msg = await controller.quickAddItem(resFct(req), req.body, req.session);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
-app.post('/:id/slot/:slotId/description', requireAddRight(resFct), asyncHandler(async (req, res) => {
-    const msg = await controller.updateSlotDescription(req.params.slotId, req.body);
+app.post('/:id/item/:itemId/description', requireAddRight(resFct, resFctItems), asyncHandler(async (req, res) => {
+    const msg = await controller.updateItemDescription(req.params.itemId, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 /* ---------- PATCH einzelnes Attribut -------------------------------- */
-app.post('/:id/slot/:slotId/attr', requireManageRight(resFct), asyncHandler(async (req, res) => {
-    const msg = await controller.updateSlotAttr(req.params.slotId, req.body);
+app.post('/:id/item/:itemId/attr', requireManageRight(resFct, resFctItems), asyncHandler(async (req, res) => {
+    const msg = await controller.updateItemAttr(req.params.itemId, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
@@ -64,14 +67,9 @@ app.post('/:id/settings', requireOwner(resFct), asyncHandler(async (req, res) =>
     renderer.respondWithSuccessJson(res, msg);
 }));
 
-app.post('/:id/slot/:slotId/delete', requireManageRight(resFct), asyncHandler(async (req, res) => {
-    const msg = await controller.deleteSlot(req.params.slotId);
+app.post('/:id/item/:itemId/delete', requireManageRight(resFct, resFctItems), asyncHandler(async (req, res) => {
+    const msg = await controller.deleteItem(req.params.itemId);
     renderer.respondWithSuccessJson(res, msg);
 }));
-
-app.post('/:id/slot/:slotId/addRole', requireManageRight(resFct), asyncHandler(async (req, res) => {
-    const msg = await controller.addSlotRole(req.params.slotId, req.body);
-    renderer.respondWithSuccessJson(res, msg);
-}))
 
 module.exports = app;

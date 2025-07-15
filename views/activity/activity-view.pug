@@ -41,7 +41,8 @@ block content
     // ─── Description (editable) ──────────────────────────────
     if add
         // manager sees pointer
-        p#planDesc.mt-2(
+        small.text-info.fst-italic.fw-light Double click to edit
+        p#planDesc.border.border-secondary.rounded.p-1(
             style="cursor:pointer"
             data-edit="planDescription"
         )
@@ -53,6 +54,7 @@ block content
                         br
             else
                 em.text-secondary double-click to add description
+        hr.mb-1.mt-0
     else if data.plan.description
         p#planDesc.mb-0.mt-2
             - const lines = data.plan.description.split('\n')
@@ -60,6 +62,7 @@ block content
                 | #{line}
                 if i < lines.length - 1
                     br
+        hr.mb-1.mt-0
 
     // Owner settings toggles
     if owner
@@ -150,10 +153,14 @@ block content
                                         .slot.border.rounded.p-2.mb-2.d-grid.gap-1.draggable(data-slotid=slot.id draggable=manage ? 'true' : null)
 
                                             // editable title
-                                            span.fw-bold(data-edit="title" data-id=slot.id)= slot.title
+                                            span.fw-bold.text-center(data-edit="title" data-id=slot.id)= slot.title
+                                            hr.m-0
 
                                             // editable description
-                                            span.fw-5(data-edit="description" data-id=slot.id)= slot.description || ''
+                                            if add
+                                                span.border.border-secondary.rounded.p-1.fw-5(data-edit="description" data-id=slot.id)= slot.description || ''
+                                            else
+                                                span.fw-5(data-edit="description" data-id=slot.id)= slot.description || ''
 
                                             - const slotRoles = (data.roles.slotRoles ? data.roles.slotRoles[slot.id] || [] : []);
                                             - console.log(data.roles.slotRoles);

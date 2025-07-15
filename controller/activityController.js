@@ -39,7 +39,7 @@ function preprocessCreate(body) {
         end: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
         allowGuestAdd: Joi.allow('').allow('on'),
         guestManage: Joi.allow('').allow('on'),
-        description: Joi.string().max(2000).required(),
+        description: Joi.string().max(2000).allow('').required(),
         slots: Joi.object().pattern(
             /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/, Joi.array().items(slotSchema).min(1)
         ).min(1).required()

@@ -113,3 +113,39 @@ block content
     a.btn.btn-primary(href="/activity/create")
         i.bi.bi-calendar-plus.me-1
         | Create new activity plan
+
+    hr.my-4.border-secondary-subtle
+
+    //── Activity Plans ────────────────────────────────────────
+    h2.text-center.mt-2
+        i.bi.bi-car-front.me-2
+        | Your drivers lists
+    if data.driverslists && data.driverslists.length
+        .list-group.mb-4
+            each list in data.driverslists
+                .list-group-item.list-group-item-action.d-flex.justify-content-between.align-items-center.text-bg-dark
+                    a.text-decoration-none.text-white.flex-grow-1(
+                        href=`/drivers/${list.id}`)
+                        i.bi.bi-car-front.me-2
+                        | #{list.title}
+                        if list.allow_guest_add
+                            span.badge.bg-info-subtle.text-info-emphasis.float-end.ms-2 Add&nbsp;enabled
+                        if list.guest_manage
+                            span.badge.bg-warning-subtle.text-warning-emphasis.float-end Guests&nbsp;manage
+                    // Duplicate-Button nur für Owner
+                    if list.owner_id === user.id
+                        a.btn.btn-sm.btn-outline-info.ms-2(href=`/drivers/${list.id}/duplicate`)
+                            i.bi.bi-files.me-1
+                            | Duplicate
+                        form.d-inline(method="post" action=`/drivers/${list.id}/delete` onsubmit="return confirm('Delete this list?');")
+                            button.btn.btn-sm.btn-outline-danger.ms-2(type="submit")
+                                i.bi.bi-trash.me-1
+                                | Delete
+    else
+        .alert.alert-info
+            i.bi.bi-info-circle.me-2
+            | You don’t have any drivers lists yet.
+
+    a.btn.btn-primary(href="/drivers/create")
+        i.bi.bi-plus-circle.me-1
+        | Create new drivers list

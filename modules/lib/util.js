@@ -32,10 +32,21 @@ async function performAPIAction(req, {actionUser, actionGuest}) {
     else throw new APIError('Unknown user', {}, 401);
 }
 
+function getResource(req, entityName) {
+    return req.resource[entityName];
+}
+
+function getAdditional(req, entityName, appendList = []) {
+    appendList.push(req.resource[entityName]);
+    return appendList;
+}
+
 module.exports = {
     generateUniqueToken,
     generateUniqueId,
     toLocalISO,
     fromISOtoLocal,
     performAPIAction,
+    getResource,
+    getAdditional,
 }

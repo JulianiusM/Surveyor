@@ -7,11 +7,15 @@ const {asyncHandler} = require("../modules/lib/asyncHandler");
 const {createGuestFlowRouter} = require("../middleware/guestFlowFactory");
 
 const controller = require("../controller/surveyController");
+const {getResource} = require("../modules/lib/util");
+
+const entityName = 'survey';
+resFct = (req) => getResource(req, entityName);
 
 // Helper to DRY up flash + redirect logic
 function handleAction(actionFn, successMsg) {
     return asyncHandler(async (req, res) => {
-        const surveyId = req.entity.id;
+        const surveyId = resFct(req).id;
         try {
             // Execute the provided controller action
             await actionFn(req);
@@ -24,7 +28,7 @@ function handleAction(actionFn, successMsg) {
 }
 
 app.use('/', createGuestFlowRouter({
-    entityType: 'survey',
+    entityType: entityName,
     db: {
         getById: db.getSurveyById,
     },
@@ -48,7 +52,7 @@ app.use('/', createGuestFlowRouter({
 app.post(
     '/:id/add-combination',
     handleAction(
-        req => controller.addCombination(req.entity, req.body.weekday, req.body.nth),
+        req => controller.addCombination(resFct(req), req.body.weekday, req.body.nth),
         'Combination successfully added'
     )
 );
@@ -60,7 +64,7 @@ app.post(
 app.post(
     '/:id/submit',
     handleAction(
-        req => controller.submitResponses(req.entity, req.session, req.body),
+        req => controller.submitResponses(resFct(req), req.session, req.body),
         'Answers updated'
     )
 );

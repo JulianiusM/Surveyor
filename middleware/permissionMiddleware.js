@@ -4,10 +4,10 @@
 const {APIError} = require("../modules/lib/errors");
 
 // Require guest_manage or owner
-function requireManageRight(getResource = req => req.resource) {
+function requireManageRight(getResource = req => req.resource, getAdditional = req => req.additional) {
     return (req, res, next) => {
         const resource = getResource(req);
-        const own = req.session.user && req.session.user.id === resource.owner_id;
+        const own = isOwner(req, resource, getAdditional(req));
         const guestAllow = resource.guest_manage && (req.session.guest || req.session.user);
         if (!own && !guestAllow) throw new APIError('Not allowed', {}, 403);
         next();
@@ -15,10 +15,10 @@ function requireManageRight(getResource = req => req.resource) {
 }
 
 // Require allow_guest_add, guest_manage or owner
-function requireAddRight(getResource = req => req.resource) {
+function requireAddRight(getResource = req => req.resource, getAdditional = req => req.additional) {
     return (req, res, next) => {
         const resource = getResource(req);
-        const own = req.session.user && req.session.user.id === resource.owner_id;
+        const own = isOwner(req, resource, getAdditional(req));
         const identified = req.session.guest || req.session.user;
         const guestManage = resource.guest_manage && identified;
         const allowAdd = resource.allow_guest_add && identified;
@@ -28,13 +28,23 @@ function requireAddRight(getResource = req => req.resource) {
 }
 
 // Require owner
-function requireOwner(getResource = req => req.resource) {
+function requireOwner(getResource = req => req.resource, getAdditional = req => req.additional) {
     return (req, res, next) => {
         const resource = getResource(req);
-        const own = req.session.user && req.session.user.id === resource.owner_id;
+        const own = isOwner(req, resource, getAdditional(req));
         if (!own) throw new APIError('Not allowed', {}, 403);
         next();
     }
+}
+
+function isOwner(req, resource, additional = []) {
+    const own = req.session.user && req.session.user.id === resource.owner_id;
+    let itemOwner = false;
+    for (let item of additional) {
+        itemOwner |= (req.session.user && req.session.user.id === item.user_id) ||
+            (req.session.guest && req.session.guest.id === item.guest_id);
+    }
+    return own || itemOwner;
 }
 
 // Middleware für Authentifizierung
