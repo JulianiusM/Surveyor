@@ -73,22 +73,29 @@ function initButtons() {
         tr.appendChild(tdDay);
         tr.appendChild(tdWeek);
         tr.appendChild(tdAction);
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         tableBody.appendChild(tr);
     }
 
+    // @ts-expect-error TS(2339): Property 'PREFILLED_COMBINATIONS' does not exist o... Remove this comment to see the full error message
     if (window.PREFILLED_COMBINATIONS) {
-        window.PREFILLED_COMBINATIONS.forEach(c => addCombinationRow(c.weekday, c.nth_week));
+        // @ts-expect-error TS(2339): Property 'PREFILLED_COMBINATIONS' does not exist o... Remove this comment to see the full error message
+        window.PREFILLED_COMBINATIONS.forEach((c: any) => addCombinationRow(c.weekday, c.nth_week));
     } else {
         // Add the first row
         addCombinationRow();
     }
 
     // Add new row on button click
+    // @ts-expect-error TS(2531): Object is possibly 'null'.
     addBtn.addEventListener('click', addCombinationRow);
 
     // Delegate removal to tbody
+    // @ts-expect-error TS(2531): Object is possibly 'null'.
     tableBody.addEventListener('click', function (e) {
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         if (e.target.matches('.remove-combination-btn')) {
+            // @ts-expect-error TS(2531): Object is possibly 'null'.
             const row = e.target.closest('tr');
             if (row) row.remove();
         }

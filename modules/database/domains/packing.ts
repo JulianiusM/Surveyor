@@ -1,8 +1,10 @@
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'generateUn... Remove this comment to see the full error message
 const {generateUniqueId} = require('../../lib/util');
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'init'.
 const {init, db} = require('../pool');
 
 // Packing Lists
-async function createPackingList(listId, ownerId, title, desc, allowGuestAdd, guestManage) {
+async function createPackingList(listId: any, ownerId: any, title: any, desc: any, allowGuestAdd: any, guestManage: any) {
     init();
     await db().execute(
         `INSERT INTO packing_lists
@@ -12,7 +14,7 @@ async function createPackingList(listId, ownerId, title, desc, allowGuestAdd, gu
     );
 }
 
-async function createPackingListTx(ownerId, title, desc, allowGuestAdd, guestManage, items) {
+async function createPackingListTx(ownerId: any, title: any, desc: any, allowGuestAdd: any, guestManage: any, items: any) {
     init();
     const conn = await db().getConnection();
     try {
@@ -25,7 +27,7 @@ async function createPackingListTx(ownerId, title, desc, allowGuestAdd, guestMan
             [listId, ownerId, title, desc, allowGuestAdd ? 1 : 0, guestManage ? 1 : 0]
         );
         if (items.length) {
-            const vals = items.map(it => [
+            const vals = items.map((it: any) => [
                 it.id, listId, it.title, it.description,
                 it.maxAssignees, it.requiredByAll, it.position
             ]);
@@ -47,7 +49,7 @@ async function createPackingListTx(ownerId, title, desc, allowGuestAdd, guestMan
     }
 }
 
-async function updatePackingListTitle(listId, title) {
+async function updatePackingListTitle(listId: any, title: any) {
     init();
     await db().execute(
         `UPDATE packing_lists
@@ -57,7 +59,7 @@ async function updatePackingListTitle(listId, title) {
     );
 }
 
-async function deletePackingList(listId) {
+async function deletePackingList(listId: any) {
     init();
     await db().execute(
         `DELETE
@@ -67,7 +69,7 @@ async function deletePackingList(listId) {
     );
 }
 
-async function getPackingListById(listId) {
+async function getPackingListById(listId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT *
@@ -78,7 +80,7 @@ async function getPackingListById(listId) {
     return rows[0] || null;
 }
 
-async function getPackingListByUserId(userId) {
+async function getPackingListByUserId(userId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT *
@@ -89,7 +91,7 @@ async function getPackingListByUserId(userId) {
     return rows;
 }
 
-async function updatePackingListAllow(listId, allow) {
+async function updatePackingListAllow(listId: any, allow: any) {
     init();
     await db().execute(
         `UPDATE packing_lists
@@ -99,7 +101,7 @@ async function updatePackingListAllow(listId, allow) {
     );
 }
 
-async function updatePackingListGuestManage(listId, flag) {
+async function updatePackingListGuestManage(listId: any, flag: any) {
     init();
     await db().execute(
         `UPDATE packing_lists
@@ -109,7 +111,7 @@ async function updatePackingListGuestManage(listId, flag) {
     );
 }
 
-async function updatePackingListDescription(listId, description) {
+async function updatePackingListDescription(listId: any, description: any) {
     init();
     await db().execute(
         `UPDATE packing_lists
@@ -120,7 +122,7 @@ async function updatePackingListDescription(listId, description) {
 }
 
 // Packing Items
-async function createPackingItem(listId, item) {
+async function createPackingItem(listId: any, item: any) {
     init();
     await db().execute(
         `INSERT INTO packing_items
@@ -130,10 +132,10 @@ async function createPackingItem(listId, item) {
     );
 }
 
-async function addPackingItems(listId, items) {
+async function addPackingItems(listId: any, items: any) {
     init();
     if (!items.length) return;
-    const vals = items.map(it => [
+    const vals = items.map((it: any) => [
         it.id, listId, it.title, it.description, it.maxAssignees, it.position
     ]);
     await db().query(
@@ -144,9 +146,10 @@ async function addPackingItems(listId, items) {
     );
 }
 
-async function updatePackingItem(itemId, fields) {
+async function updatePackingItem(itemId: any, fields: any) {
     init();
     const sets = [], vals = [];
+    // @ts-expect-error TS(2550): Property 'entries' does not exist on type 'ObjectC... Remove this comment to see the full error message
     for (const [col, val] of Object.entries({
         title: fields.title,
         description: fields.description,
@@ -169,7 +172,7 @@ async function updatePackingItem(itemId, fields) {
     return res[0].affectedRows === 1;
 }
 
-async function deletePackingItem(itemId) {
+async function deletePackingItem(itemId: any) {
     init();
     await db().execute(
         `DELETE
@@ -179,20 +182,19 @@ async function deletePackingItem(itemId) {
     );
 }
 
-async function reorderPackingItems(listId, orders) {
+async function reorderPackingItems(listId: any, orders: any) {
     init();
-    await Promise.all(orders.map(o =>
-        db().execute(
-            `UPDATE packing_items
-             SET pos = ?
-             WHERE id = ?
-               AND list_id = ?`,
-            [o.position, o.itemId, listId]
-        )
+    await Promise.all(orders.map((o: any) => db().execute(
+        `UPDATE packing_items
+         SET pos = ?
+         WHERE id = ?
+           AND list_id = ?`,
+        [o.position, o.itemId, listId]
+    )
     ));
 }
 
-async function getPackingItems(listId) {
+async function getPackingItems(listId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT pi.*,
@@ -209,7 +211,7 @@ async function getPackingItems(listId) {
     return rows;
 }
 
-async function getPackingAssignmentCounts(listId) {
+async function getPackingAssignmentCounts(listId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT item_id, COUNT(*) AS cnt
@@ -218,13 +220,13 @@ async function getPackingAssignmentCounts(listId) {
          GROUP BY item_id`,
         [listId]
     );
-    return rows.reduce((m, r) => {
+    return rows.reduce((m: any, r: any) => {
         m[r.item_id] = r.cnt;
         return m;
     }, {});
 }
 
-async function getLastPackingItemNumber(listId) {
+async function getLastPackingItemNumber(listId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT MAX(pos)
@@ -236,7 +238,7 @@ async function getLastPackingItemNumber(listId) {
 }
 
 // Assignments
-async function assignPackingItemToUser(itemId, userId) {
+async function assignPackingItemToUser(itemId: any, userId: any) {
     init();
     await db().execute(
         `INSERT IGNORE INTO packing_assignments (item_id, user_id, list_id)
@@ -247,7 +249,7 @@ async function assignPackingItemToUser(itemId, userId) {
     );
 }
 
-async function unassignPackingItemUser(itemId, userId) {
+async function unassignPackingItemUser(itemId: any, userId: any) {
     init();
     await db().execute(
         `DELETE
@@ -258,7 +260,7 @@ async function unassignPackingItemUser(itemId, userId) {
     );
 }
 
-async function assignPackingItemToGuest(itemId, guestId) {
+async function assignPackingItemToGuest(itemId: any, guestId: any) {
     init();
     await db().execute(
         `INSERT IGNORE INTO packing_assignments (item_id, guest_id, list_id)
@@ -269,7 +271,7 @@ async function assignPackingItemToGuest(itemId, guestId) {
     );
 }
 
-async function unassignPackingItemGuest(itemId, guestId) {
+async function unassignPackingItemGuest(itemId: any, guestId: any) {
     init();
     await db().execute(
         `DELETE
@@ -280,7 +282,7 @@ async function unassignPackingItemGuest(itemId, guestId) {
     );
 }
 
-async function getPackingAssignmentsForUser(listId, userId) {
+async function getPackingAssignmentsForUser(listId: any, userId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT item_id
@@ -289,10 +291,10 @@ async function getPackingAssignmentsForUser(listId, userId) {
            AND user_id = ?`,
         [listId, userId]
     );
-    return rows.map(r => r.item_id);
+    return rows.map((r: any) => r.item_id);
 }
 
-async function getPackingAssignmentsForGuest(listId, guestId) {
+async function getPackingAssignmentsForGuest(listId: any, guestId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT item_id
@@ -301,10 +303,10 @@ async function getPackingAssignmentsForGuest(listId, guestId) {
            AND guest_id = ?`,
         [listId, guestId]
     );
-    return rows.map(r => r.item_id);
+    return rows.map((r: any) => r.item_id);
 }
 
-async function getPackingItemAssignees(listId) {
+async function getPackingItemAssignees(listId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT pa.id      AS assign_id,
@@ -320,8 +322,10 @@ async function getPackingItemAssignees(listId) {
         [listId]
     );
     const map = {};
-    rows.forEach(r => {
+    rows.forEach((r: any) => {
+        // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
         map[r.item_id] = map[r.item_id] || [];
+        // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
         map[r.item_id].push({
             id: r.assign_id,
             user_id: r.user_id,
@@ -332,7 +336,7 @@ async function getPackingItemAssignees(listId) {
     return map;
 }
 
-async function deletePackingAssignment(assignId) {
+async function deletePackingAssignment(assignId: any) {
     init();
     await db().execute(
         `DELETE
@@ -342,7 +346,7 @@ async function deletePackingAssignment(assignId) {
     );
 }
 
-async function togglePackingItemRequiredByAll(itemId, flag) {
+async function togglePackingItemRequiredByAll(itemId: any, flag: any) {
     init();
     await db().execute(
         `UPDATE packing_items
@@ -352,7 +356,7 @@ async function togglePackingItemRequiredByAll(itemId, flag) {
     );
 }
 
-async function updatePackingFlags(listId, allowAdd, guestManage) {
+async function updatePackingFlags(listId: any, allowAdd: any, guestManage: any) {
     init();
     await db().execute(
         `UPDATE packing_lists
@@ -363,6 +367,7 @@ async function updatePackingFlags(listId, allowAdd, guestManage) {
     );
 }
 
+// @ts-expect-error TS(2552): Cannot find name 'module'. Did you mean 'modules'?
 module.exports = {
     createPackingList,
     createPackingListTx,

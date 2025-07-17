@@ -1,8 +1,10 @@
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'generateUn... Remove this comment to see the full error message
 const {generateUniqueId} = require('../../lib/util');
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'init'.
 const {init, db} = require('../pool');
 
 // Surveys
-async function getSurveyById(id) {
+async function getSurveyById(id: any) {
     init();
     const [rows] = await db().execute(
         `SELECT *
@@ -13,7 +15,7 @@ async function getSurveyById(id) {
     return rows[0] || null;
 }
 
-async function getCombinationsBySurveyId(surveyId) {
+async function getCombinationsBySurveyId(surveyId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT *
@@ -25,7 +27,7 @@ async function getCombinationsBySurveyId(surveyId) {
     return rows;
 }
 
-async function createSurvey(userId, title, desc, combinations) {
+async function createSurvey(userId: any, title: any, desc: any, combinations: any) {
     init();
     const conn = await db().getConnection();
     try {
@@ -53,7 +55,7 @@ async function createSurvey(userId, title, desc, combinations) {
     }
 }
 
-async function addCombination(surveyId, weekday, nthWeek) {
+async function addCombination(surveyId: any, weekday: any, nthWeek: any) {
     init();
     const [res] = await db().execute(
         `INSERT INTO survey_combinations (survey_id, weekday, nth_week)
@@ -63,7 +65,7 @@ async function addCombination(surveyId, weekday, nthWeek) {
     return res.insertId;
 }
 
-async function getSurveysByUserId(userId) {
+async function getSurveysByUserId(userId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT *
@@ -74,7 +76,7 @@ async function getSurveysByUserId(userId) {
     return rows;
 }
 
-async function deleteSurvey(id) {
+async function deleteSurvey(id: any) {
     init();
     await db().execute(
         `DELETE
@@ -87,20 +89,20 @@ async function deleteSurvey(id) {
 // Responses
 // 5. Speichere eine Antwort für einen Gast
 
-async function saveResponseGuest(surveyId, guestId, combinationId, answer) {
+async function saveResponseGuest(surveyId: any, guestId: any, combinationId: any, answer: any) {
     init();
     await db().execute(`INSERT INTO survey_responses (survey_id, guest_id, combination_id, answer)
                         VALUES (?, ?, ?, ?)`, [surveyId, guestId, combinationId, answer || 'no']);
 }
 
 // 5. Speichere eine Antwort für einen Gast
-async function saveResponseUser(surveyId, userId, combinationId, answer) {
+async function saveResponseUser(surveyId: any, userId: any, combinationId: any, answer: any) {
     init();
     await db().execute(`INSERT INTO survey_responses (survey_id, user_id, combination_id, answer)
                         VALUES (?, ?, ?, ?)`, [surveyId, userId, combinationId, answer || 'no']);
 }
 
-async function deleteResponsesByGuestId(guestId, surveyId) {
+async function deleteResponsesByGuestId(guestId: any, surveyId: any) {
     init();
     await db().execute(
         `DELETE
@@ -111,7 +113,7 @@ async function deleteResponsesByGuestId(guestId, surveyId) {
     );
 }
 
-async function deleteResponsesByUserId(userId, surveyId) {
+async function deleteResponsesByUserId(userId: any, surveyId: any) {
     init();
     await db().execute(
         `DELETE
@@ -122,7 +124,7 @@ async function deleteResponsesByUserId(userId, surveyId) {
     );
 }
 
-async function getResponsesByGuestId(guestId) {
+async function getResponsesByGuestId(guestId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT *
@@ -134,7 +136,7 @@ async function getResponsesByGuestId(guestId) {
     return rows;
 }
 
-async function getSurveyByGuestId(guestId) {
+async function getSurveyByGuestId(guestId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT s.*
@@ -146,7 +148,7 @@ async function getSurveyByGuestId(guestId) {
     return rows[0] || null;
 }
 
-async function getResponsesSorted(surveyId) {
+async function getResponsesSorted(surveyId: any) {
     init();
     const [rows] = await db().execute(
         `(SELECT r.*, g.username
@@ -162,7 +164,8 @@ async function getResponsesSorted(surveyId) {
         [surveyId, surveyId]
     );
 
-    return Object.groupBy(rows, (res) => {
+    // @ts-expect-error TS(2339): Property 'groupBy' does not exist on type 'ObjectC... Remove this comment to see the full error message
+    return Object.groupBy(rows, (res: any) => {
         if (res.user_id) {
             return 'u_' + res.user_id;
         } else if (res.guest_id) {
@@ -171,6 +174,7 @@ async function getResponsesSorted(surveyId) {
     });
 }
 
+// @ts-expect-error TS(2552): Cannot find name 'module'. Did you mean 'modules'?
 module.exports = {
     getSurveyById,
     getCombinationsBySurveyId,

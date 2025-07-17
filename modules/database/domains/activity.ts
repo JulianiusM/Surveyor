@@ -1,4 +1,6 @@
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'generateUn... Remove this comment to see the full error message
 const {generateUniqueId} = require('../../lib/util');
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'init'.
 const {init, db} = require('../pool');
 
 /* ------------------------------------------------------------------ *
@@ -13,7 +15,7 @@ const {init, db} = require('../pool');
  * @param {string} roleName  – e.g. "default", "chef", "moderator"
  * @returns {Promise<number>} role_id
  */
-async function ensureRoleId(conn, roleName = 'default') {
+async function ensureRoleId(conn: any, roleName = 'default') {
     const [[row]] = await conn.execute(
         'SELECT id FROM roles WHERE name = ? LIMIT 1',
         [roleName]
@@ -40,7 +42,7 @@ async function ensureRoleId(conn, roleName = 'default') {
  * @param {number}  guestId   – pass null for users, nullish for guests
  * @returns {Promise<number>} assignment_id
  */
-async function ensureAssignment(conn, slotId, userId = null, guestId = null) {
+async function ensureAssignment(conn: any, slotId: any, userId = null, guestId = null) {
     if (!slotId) throw new Error('slotId is required');
 
     const isUser = userId !== null && userId !== undefined;
@@ -63,7 +65,7 @@ async function ensureAssignment(conn, slotId, userId = null, guestId = null) {
     return res.insertId; // existing id if row already present
 }
 
-async function assignRole(conn, assignmentId, roleName) {
+async function assignRole(conn: any, assignmentId: any, roleName: any) {
     await conn.execute(
         'INSERT IGNORE INTO activity_assignment_roles (assignment_id, role_id) VALUES (?, ?)',
         [assignmentId, await ensureRoleId(conn, roleName)]
@@ -79,7 +81,7 @@ async function assignRole(conn, assignmentId, roleName) {
     }*/
 }
 
-async function doUnassignRole(conn, assRow, roleName) {
+async function doUnassignRole(conn: any, assRow: any, roleName: any) {
     if (!assRow) {
         await conn.rollback();
         return false; // nothing to delete
@@ -114,7 +116,7 @@ async function doUnassignRole(conn, assRow, roleName) {
 /* ---------- Activity Planner ---------------------------------- */
 
 // Plan
-async function createActivityPlan(id, ownerId, title, desc, start_date, end_date, allowGuestAdd, guestManage) {
+async function createActivityPlan(id: any, ownerId: any, title: any, desc: any, start_date: any, end_date: any, allowGuestAdd: any, guestManage: any) {
     init();
     await db().execute(
         `INSERT INTO activity_plans
@@ -124,7 +126,7 @@ async function createActivityPlan(id, ownerId, title, desc, start_date, end_date
     );
 }
 
-async function createActivityPlanTx(ownerId, title, desc, start_date, end_date, allowGuestAdd, guestManage, slots) {
+async function createActivityPlanTx(ownerId: any, title: any, desc: any, start_date: any, end_date: any, allowGuestAdd: any, guestManage: any, slots: any) {
     init();
     const conn = await db().getConnection();
     try {
@@ -137,7 +139,7 @@ async function createActivityPlanTx(ownerId, title, desc, start_date, end_date, 
             [id, ownerId, title, desc, start_date, end_date, allowGuestAdd ? 1 : 0, guestManage ? 1 : 0]
         );
         if (slots.length) {
-            const vals = slots.map(it => [generateUniqueId(), id, it.title, it.description, it.date, it.position, it.maxAssignees]);
+            const vals = slots.map((it: any) => [generateUniqueId(), id, it.title, it.description, it.date, it.position, it.maxAssignees]);
             await conn.query(
                 `INSERT INTO activity_slots
                      (id, plan_id, title, description, day, pos, max_assignees)
@@ -155,13 +157,13 @@ async function createActivityPlanTx(ownerId, title, desc, start_date, end_date, 
     }
 }
 
-async function getActivityPlanById(id) {
+async function getActivityPlanById(id: any) {
     init();
     const [rows] = await db().execute('SELECT * FROM activity_plans WHERE id = ?', [id]);
     return rows[0];
 }
 
-async function deleteActivityPlan(id) {
+async function deleteActivityPlan(id: any) {
     init();
     await db().execute(
         `DELETE
@@ -171,7 +173,7 @@ async function deleteActivityPlan(id) {
     );
 }
 
-async function updateActivityPlanFlags(planId, allowAdd, guestManage) {
+async function updateActivityPlanFlags(planId: any, allowAdd: any, guestManage: any) {
     init();
     await db().execute(
         `UPDATE activity_plans
@@ -182,7 +184,7 @@ async function updateActivityPlanFlags(planId, allowAdd, guestManage) {
     );
 }
 
-async function getActivityPlansByUserId(userId) {
+async function getActivityPlansByUserId(userId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT *
@@ -193,7 +195,7 @@ async function getActivityPlansByUserId(userId) {
     return rows;
 }
 
-async function updateActivityPlanDescription(planId, description) {
+async function updateActivityPlanDescription(planId: any, description: any) {
     init();
     await db().execute(
         `UPDATE activity_plans
@@ -204,7 +206,7 @@ async function updateActivityPlanDescription(planId, description) {
 }
 
 // Slots
-async function addActivitySlot(planId, slot) {
+async function addActivitySlot(planId: any, slot: any) {
     /* slot = { id, planId, date, pos, title, description } */
     init();
     await db().query(
@@ -215,10 +217,10 @@ async function addActivitySlot(planId, slot) {
     );
 }
 
-async function addActivitySlots(planId, slots) {
+async function addActivitySlots(planId: any, slots: any) {
     /* slot = { id, planId, date, pos, title, description } */
     init();
-    const values = slots.map(s => [
+    const values = slots.map((s: any) => [
         s.id, planId, s.date, s.position, s.title, s.description || '', s.maxAssignees
     ]);
     await db().query(
@@ -229,7 +231,7 @@ async function addActivitySlots(planId, slots) {
     );
 }
 
-async function getActivitySlots(planId) {
+async function getActivitySlots(planId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT s.*,
@@ -243,18 +245,20 @@ async function getActivitySlots(planId) {
          ORDER BY s.pos`,
         [planId, planId]);
 
-    rows.forEach((row) => {
+    rows.forEach((row: any) => {
         row.date = row.day;
         row.position = row.pos;
     });
 
     // Group by date
-    return Object.groupBy(rows, (res) => res.date);
+    // @ts-expect-error TS(2339): Property 'groupBy' does not exist on type 'ObjectC... Remove this comment to see the full error message
+    return Object.groupBy(rows, (res: any) => res.date);
 }
 
-async function updateActivitySlot(slotId, fields) {
+async function updateActivitySlot(slotId: any, fields: any) {
     init();
     const sets = [], vals = [];
+    // @ts-expect-error TS(2550): Property 'entries' does not exist on type 'ObjectC... Remove this comment to see the full error message
     for (const [col, val] of Object.entries({
         title: fields.title,
         description: fields.description,
@@ -277,7 +281,7 @@ async function updateActivitySlot(slotId, fields) {
     return res[0].affectedRows === 1;
 }
 
-async function deleteActivitySlot(slotId) {
+async function deleteActivitySlot(slotId: any) {
     init();
     await db().execute(
         `DELETE
@@ -287,20 +291,19 @@ async function deleteActivitySlot(slotId) {
     );
 }
 
-async function reorderActivitySlots(planId, order) {
+async function reorderActivitySlots(planId: any, order: any) {
     init();
-    await Promise.all(order.map(o =>
-        db().execute(
-            `UPDATE activity_slots
-             SET pos = ?
-             WHERE id = ?
-               AND plan_id = ?`,
-            [o.position, o.slotId, planId]
-        )
+    await Promise.all(order.map((o: any) => db().execute(
+        `UPDATE activity_slots
+         SET pos = ?
+         WHERE id = ?
+           AND plan_id = ?`,
+        [o.position, o.slotId, planId]
+    )
     ));
 }
 
-async function getLastActivitySlotNumber(planId, date) {
+async function getLastActivitySlotNumber(planId: any, date: any) {
     init();
     const [rows] = await db().execute(
         `SELECT MAX(pos)
@@ -321,7 +324,7 @@ async function getLastActivitySlotNumber(planId, date) {
  * multiple roles.  Safe‑idempotent if the (assignment_id, role_id) pair
  * already exists thanks to INSERT IGNORE.
  */
-async function assignActivityAssignmentRoleToUser(slotId, userId, roleName = 'default') {
+async function assignActivityAssignmentRoleToUser(slotId: any, userId: any, roleName = 'default') {
     init();
     const conn = await db().getConnection();
     try {
@@ -343,7 +346,7 @@ async function assignActivityAssignmentRoleToUser(slotId, userId, roleName = 'de
 /**
  * Assign a role to a *guest* on a slot.  Logic mirrors assignRoleToUser.
  */
-async function assignActivityAssignmentRoleToGuest(slotId, guestId, roleName = 'default') {
+async function assignActivityAssignmentRoleToGuest(slotId: any, guestId: any, roleName = 'default') {
     init();
     const conn = await db().getConnection();
     try {
@@ -366,7 +369,7 @@ async function assignActivityAssignmentRoleToGuest(slotId, guestId, roleName = '
  * roles afterwards, the base activity_assignments row is deleted too so
  * that max_assignees counts stay correct.
  */
-async function unassignActivityAssignmentRoleFromUser(slotId, userId, roleName = 'default') {
+async function unassignActivityAssignmentRoleFromUser(slotId: any, userId: any, roleName = 'default') {
     init();
     const conn = await db().getConnection();
     try {
@@ -393,7 +396,7 @@ async function unassignActivityAssignmentRoleFromUser(slotId, userId, roleName =
 /**
  * Guest‑flavoured variant of unassignRoleFromUser.
  */
-async function unassignActivityAssignmentRoleFromGuest(slotId, guestId, roleName = 'default') {
+async function unassignActivityAssignmentRoleFromGuest(slotId: any, guestId: any, roleName = 'default') {
     init();
     const conn = await db().getConnection();
     try {
@@ -422,23 +425,23 @@ async function unassignActivityAssignmentRoleFromGuest(slotId, guestId, roleName
 
 // Backwards‑compat versions behave like the old functions by merely
 // calling the new role‑aware helpers with role = 'default'.
-async function assignActivitySlotToUser(slotId, userId) {
+async function assignActivitySlotToUser(slotId: any, userId: any) {
     return assignActivityAssignmentRoleToUser(slotId, userId, 'default');
 }
 
-async function unassignActivitySlotUser(slotId, userId) {
+async function unassignActivitySlotUser(slotId: any, userId: any) {
     return unassignActivityAssignmentRoleFromUser(slotId, userId, 'default');
 }
 
-async function assignActivitySlotToGuest(slotId, guestId) {
+async function assignActivitySlotToGuest(slotId: any, guestId: any) {
     return assignActivityAssignmentRoleToGuest(slotId, guestId, 'default');
 }
 
-async function unassignActivitySlotGuest(slotId, guestId) {
+async function unassignActivitySlotGuest(slotId: any, guestId: any) {
     return unassignActivityAssignmentRoleFromGuest(slotId, guestId, 'default');
 }
 
-async function getActivitySlotAssignmentsForUser(planId, userId) {
+async function getActivitySlotAssignmentsForUser(planId: any, userId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT slot_id
@@ -447,10 +450,10 @@ async function getActivitySlotAssignmentsForUser(planId, userId) {
            AND user_id = ?`,
         [planId, userId]
     );
-    return rows.map(r => r.slot_id);
+    return rows.map((r: any) => r.slot_id);
 }
 
-async function getActivitySlotAssignmentsForGuest(planId, guestId) {
+async function getActivitySlotAssignmentsForGuest(planId: any, guestId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT slot_id
@@ -459,7 +462,7 @@ async function getActivitySlotAssignmentsForGuest(planId, guestId) {
            AND guest_id = ?`,
         [planId, guestId]
     );
-    return rows.map(r => r.slot_id);
+    return rows.map((r: any) => r.slot_id);
 }
 
 /* ------------------------------------------------------------------ *
@@ -470,7 +473,7 @@ async function getActivitySlotAssignmentsForGuest(planId, guestId) {
  * Returns a map { slot_id → [ { user_id, guest_id, name, roles[] } ] }
  * Roles is an array, *not* a single string.  Useful for display layers.
  */
-async function getActivitySlotAssignees(planId) {
+async function getActivitySlotAssignees(planId: any) {
     init();
 
     const [rows] = await db().execute(
@@ -492,9 +495,11 @@ async function getActivitySlotAssignees(planId) {
     );
 
     const map = {};
-    rows.forEach(r => {
+    rows.forEach((r: any) => {
         const slot = r.slot_id;
+        // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
         map[slot] = map[slot] || [];
+        // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
         map[slot].push({
             id: r.assignment_id,
             user_id: r.user_id,
@@ -510,7 +515,7 @@ async function getActivitySlotAssignees(planId) {
  * Participant overview – counts distinct assignment_ids (not roles),
  * then aggregates role list per person for richer UI summaries.
  */
-async function getActivityPlanParticipants(planId) {
+async function getActivityPlanParticipants(planId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT name,
@@ -528,11 +533,11 @@ async function getActivityPlanParticipants(planId) {
          GROUP BY name`,
         [planId]
     );
-    rows.forEach(r => r.roles = r.roles ? r.roles.split(',') || [] : []);
+    rows.forEach((r: any) => r.roles = r.roles ? r.roles.split(',') || [] : []);
     return rows;
 }
 
-async function deleteActivitySlotAssignment(assignId) {
+async function deleteActivitySlotAssignment(assignId: any) {
     init();
     await db().execute(
         `DELETE
@@ -542,7 +547,7 @@ async function deleteActivitySlotAssignment(assignId) {
     );
 }
 
-async function getActivitySlotRoles(planId) {
+async function getActivitySlotRoles(planId: any) {
     init();
 
     const [rows] = await db().execute(
@@ -557,9 +562,11 @@ async function getActivitySlotRoles(planId) {
     );
 
     const map = {};
-    rows.forEach(r => {
+    rows.forEach((r: any) => {
         const slot = r.slot_id;
+        // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
         map[slot] = map[slot] || [];
+        // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
         map[slot].push({
             id: r.role_id,
             name: r.role_name
@@ -568,9 +575,9 @@ async function getActivitySlotRoles(planId) {
     return map;
 }
 
-async function addActivitySlotRoles(slotId, roles) {
+async function addActivitySlotRoles(slotId: any, roles: any) {
     init();
-    const values = roles.map(r => [slotId, r, 1]);
+    const values = roles.map((r: any) => [slotId, r, 1]);
     await db().query(
         `INSERT INTO activity_slot_role (slot_id, role_id, max_qty)
          VALUES ?`,
@@ -578,6 +585,7 @@ async function addActivitySlotRoles(slotId, roles) {
     );
 }
 
+// @ts-expect-error TS(2552): Cannot find name 'module'. Did you mean 'modules'?
 module.exports = {
     createActivityPlan,
     createActivityPlanTx,

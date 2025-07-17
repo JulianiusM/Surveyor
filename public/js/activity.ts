@@ -1,6 +1,7 @@
 /* ---------- assign / unassign ------------------------------- */
 function initAssign() {
     document.addEventListener('click', async e => {
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         const btn = e.target.closest('[data-action]');
         if (!btn) return;
 
@@ -12,16 +13,19 @@ function initAssign() {
         const act = btn.dataset.action;
         const role = btn.dataset.role;
         try {
+            // @ts-expect-error TS(2304): Cannot find name 'ACT_PLAN_ID'.
             await post(`/activity/${ACT_PLAN_ID}/${act}`, {slotId, role});
             showInlineAlert('success', 'Updated');
             setTimeout(() => location.reload(), 120);
         } catch (err) {
+            // @ts-expect-error TS(2571): Object is of type 'unknown'.
             showInlineAlert('error', err.message);
         }
     });
 }
 
 function initSelectBox() {
+    // @ts-expect-error TS(2581): Cannot find name '$'. Do you need to install type ... Remove this comment to see the full error message
     $('.multiSelect').select2({
         placeholder: 'Add Roles',
         width: '100%',
@@ -30,6 +34,7 @@ function initSelectBox() {
     });
 
     document.addEventListener('click', async e => {
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         const btn = e.target.closest('[data-addRoles]');
         if (!btn) return;
 
@@ -43,32 +48,43 @@ function initSelectBox() {
         const vals = getSelectValues(sel);
 
         try {
+            // @ts-expect-error TS(2304): Cannot find name 'ACT_PLAN_ID'.
             await post(`/activity/${ACT_PLAN_ID}/slot/${slot}/addRole`, {roles: vals});
             showInlineAlert('success', 'Updated');
             setTimeout(() => location.reload(), 120);
         } catch (err) {
+            // @ts-expect-error TS(2571): Object is of type 'unknown'.
             showInlineAlert('error', err.message);
         }
     });
 }
 
+// @ts-expect-error TS(2393): Duplicate function implementation.
 function initInlineEdit() {
     document.addEventListener('dblclick', e => {
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         const desc = e.target.closest('[data-edit="planDescription"]');
+        // @ts-expect-error TS(2304): Cannot find name 'ACT_PLAN_ID'.
         if (desc) return startInlineEditArea(desc, `/activity/${ACT_PLAN_ID}/description`);
 
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         const card = e.target.closest('.slot');          // NEW
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         if (!card || e.target.closest('button')) return;
 
         /* choose editable span */
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         let span = e.target.closest('[data-edit]');
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         if (!span && e.target.closest('.badge'))
             span = card.querySelector('[data-edit="maxAssignees"]');
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         if (!span && e.target.closest('small'))
             span = card.querySelector('[data-edit="description"]');
         if (!span)
             span = card.querySelector('[data-edit="title"]');
 
+        // @ts-expect-error TS(2339): Property 'ACT_PLAN_ID' does not exist on type 'Win... Remove this comment to see the full error message
         startInlineEdit(span, `/activity/${window.ACT_PLAN_ID}/slot`);
     });
 }
@@ -77,15 +93,18 @@ function initInlineEdit() {
 /* ---------- delete-slot ------------------------------------- */
 function initDelete() {
     document.addEventListener('click', async e => {
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         const btn = e.target.closest('[data-delete-slot]');
         if (!btn) return;
         if (!confirm('Delete this slot?')) return;
         const id = btn.dataset.slotid;
         try {
+            // @ts-expect-error TS(2339): Property 'ACT_PLAN_ID' does not exist on type 'Win... Remove this comment to see the full error message
             await post(`/activity/${window.ACT_PLAN_ID}/slot/${id}/delete`, {});
             showInlineAlert('success', 'Deleted');
             setTimeout(() => location.reload(), 100);
         } catch (err) {
+            // @ts-expect-error TS(2571): Object is of type 'unknown'.
             showInlineAlert('error', err.message);
         }
     });
@@ -94,6 +113,7 @@ function initDelete() {
 /* ---------- add-slot (empty row) ----------------------------- */
 function initAddSlot() {
     document.addEventListener('click', e => {
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         const btn = e.target.closest('[data-add-slot]');
         if (!btn) return;
 
@@ -139,6 +159,7 @@ function initAddSlot() {
 
         save.onclick = async () => {
             try {
+                // @ts-expect-error TS(2339): Property 'ACT_PLAN_ID' does not exist on type 'Win... Remove this comment to see the full error message
                 await post(`/activity/${window.ACT_PLAN_ID}/slot/add`, {
                     date: dateISO,
                     title: title.value.trim(),
@@ -148,6 +169,7 @@ function initAddSlot() {
                 showInlineAlert('success', 'Added');
                 setTimeout(() => location.reload(), 100);
             } catch (err) {
+                // @ts-expect-error TS(2571): Object is of type 'unknown'.
                 showInlineAlert('error', err.message);
             }
         };
@@ -156,19 +178,23 @@ function initAddSlot() {
 
 /* ---------- DRAG & DROP (column-local) ------------------------ */
 function initDnD() {
-    let dragCard = null;          // the .slot being dragged
-    let dragParent = null;        // its .slot-container
+    let dragCard: any = null;          // the .slot being dragged
+    let dragParent: any = null;        // its .slot-container
 
     /* start */
     document.addEventListener('dragstart', e => {
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         if (e.target.closest('button') || e.target.closest('input')) return;             // ignore buttons
 
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         const card = e.target.closest('.slot');
         if (!card) return;
 
         dragCard = card;
         dragParent = card.parentElement;                    // .slot-container
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         e.dataTransfer.setData('text/plain', '');
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         e.dataTransfer.effectAllowed = 'move';
     });
 
@@ -176,6 +202,7 @@ function initDnD() {
     document.addEventListener('dragover', e => {
         if (!dragCard) return;
 
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         const overCard = e.target.closest('.slot');
         if (!overCard || overCard === dragCard) return;
         if (overCard.parentElement !== dragParent) return;  // stay in column
@@ -197,9 +224,11 @@ function initDnD() {
             .map((el, i) => ({slotId: el.dataset.slotid, position: i}));
 
         try {
+            // @ts-expect-error TS(2339): Property 'ACT_PLAN_ID' does not exist on type 'Win... Remove this comment to see the full error message
             await post(`/activity/${window.ACT_PLAN_ID}/slot/reorder`, {order});
             showInlineAlert('success', 'Reordered');
         } catch (err) {
+            // @ts-expect-error TS(2571): Object is of type 'unknown'.
             showInlineAlert('error', err.message);
         }
         dragCard = dragParent = null;
@@ -208,20 +237,25 @@ function initDnD() {
 
 
 /* ---- Owner toggles list flags ------------------------------------ */
+// @ts-expect-error TS(2393): Duplicate function implementation.
 function initOwnerFlags() {
     const form = document.getElementById('flagForm');
     if (!form) return;
 
     form.addEventListener('change', async () => {
         const payload = {
+            // @ts-expect-error TS(2531): Object is possibly 'null'.
             allowAdd: document.getElementById('allowAddSwitch').checked,
+            // @ts-expect-error TS(2531): Object is possibly 'null'.
             guestManage: document.getElementById('guestManageSwitch').checked,
         };
         try {
+            // @ts-expect-error TS(2339): Property 'ACT_PLAN_ID' does not exist on type 'Win... Remove this comment to see the full error message
             await post(`/activity/${window.ACT_PLAN_ID}/settings`, payload);
             showInlineAlert('success', 'Settings updated');
             setTimeout(() => location.reload(), 100);
         } catch (err) {
+            // @ts-expect-error TS(2571): Object is of type 'unknown'.
             showInlineAlert('error', err.message);
             /* Reload to force consistent switches */
             setTimeout(() => location.reload(), 800);
@@ -230,16 +264,20 @@ function initOwnerFlags() {
 }
 
 /* -------- Owner entfernt Assignee ----------------------------------- */
+// @ts-expect-error TS(2393): Duplicate function implementation.
 function initOwnerRemove() {
     document.addEventListener('click', async e => {
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         const btn = e.target.closest('button[data-owner-remove]');
         if (!btn) return;
         const assignId = btn.dataset.assignid;
         try {
+            // @ts-expect-error TS(2339): Property 'ACT_PLAN_ID' does not exist on type 'Win... Remove this comment to see the full error message
             await post(`/activity/${window.ACT_PLAN_ID}/assignment/${assignId}/delete`, {});
             showInlineAlert('success', 'Removed');
             setTimeout(() => location.reload(), 100);
         } catch (err) {
+            // @ts-expect-error TS(2571): Object is of type 'unknown'.
             showInlineAlert('error', err.message);
         }
     });
@@ -247,10 +285,13 @@ function initOwnerRemove() {
 
 function initDates() {
     document.querySelectorAll('th[data-date]').forEach(th => {
+        // @ts-expect-error TS(2339): Property 'dataset' does not exist on type 'Element... Remove this comment to see the full error message
         const [y, m, day] = th.dataset.date.split('-').map(Number);
         const d = new Date(Date.UTC(y, m - 1, day));
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         th.querySelector('.day').textContent =
             d.toLocaleDateString(undefined, {weekday: 'short'});
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         th.querySelector('.date').textContent =
             d.toLocaleDateString();
     });
@@ -260,6 +301,7 @@ function init() {
     setCurrentNavLocation();
     initDates();
     initSelectBox();
+    // @ts-expect-error TS(2339): Property 'ACT_PLAN_ID' does not exist on type 'Win... Remove this comment to see the full error message
     if (window.ACT_PLAN_ID) {
         initAssign();
         initInlineEdit();

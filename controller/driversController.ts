@@ -1,13 +1,18 @@
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'Joi'.
 const Joi = require('joi');
 
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'db'.
 const db = require('../modules/database/db');
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'generateUn... Remove this comment to see the full error message
 const {generateUniqueId} = require("../modules/lib/util");
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'Validation... Remove this comment to see the full error message
 const {ValidationError, APIError} = require('../modules/lib/errors');
 
 // Template constant for create errors
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'CREATE_TEM... Remove this comment to see the full error message
 const CREATE_TEMPLATE = 'drivers/drivers-create';
 
-function preprocessCreate(body) {
+function preprocessCreate(body: any) {
     let items;
     try {
         items = JSON.parse(body.items || '[]');
@@ -39,7 +44,7 @@ function preprocessCreate(body) {
         {abortEarly: false, allowUnknown: true}
     );
     if (error) {
-        const msg = error.details.map(d => d.message).join(', ');
+        const msg = error.details.map((d: any) => d.message).join(', ');
         throw new ValidationError(CREATE_TEMPLATE, msg, {body});
     }
 
@@ -53,28 +58,30 @@ function preprocessCreate(body) {
 }
 
 /*  ---- NEU: alles in einer Transaktion ---- */
-async function createEntity(ownerId, listData) {
+async function createEntity(ownerId: any, listData: any) {
     return await db.createDriversListTx(
         ownerId,
         listData.title,
         listData.description,
         listData.allow,
         listData.guestManage,
+        // @ts-expect-error TS(7006): Parameter 'it' implicitly has an 'any' type.
         listData.items.map((it, i) => ({
             id: generateUniqueId(),
             title: it.title,
             description: it.description || '',
             maxAssignees: Number(it.maxAssignees) || 1,
-            position: i,
+            position: i
         }))
     );
 }
 
 // No-op since slots handled in transaction
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'afterCreat... Remove this comment to see the full error message
 async function afterCreateItems() {
 }
 
-async function fetchForView(list, session) {
+async function fetchForView(list: any, session: any) {
     const items = await db.getDriversItems(list.id);
 
     const assignments = session.user
@@ -89,9 +96,9 @@ async function fetchForView(list, session) {
     let openCount = 0;
     let emptyCount = 0;
 
-    items.forEach(it => {                 // überspringen
+    items.forEach((it: any) => {                 // überspringen
         const arr = assigneeLists[it.id] || [];
-        arr.forEach(a => {
+        arr.forEach((a: any) => {
             let id;
             if (a.user_id) {
                 id = `u_${a.user_id}`;
@@ -117,17 +124,17 @@ async function fetchForView(list, session) {
     };
 }
 
-async function fetchForDuplicate(list, session) {
+async function fetchForDuplicate(list: any, session: any) {
     return await db.getDriversItems(list.id);
 }
 
-async function deleteEntity(list, session) {
+async function deleteEntity(list: any, session: any) {
     return await db.deleteDriversList(list.id);
 }
 
 // ---------- API ----------
 // API-specific controllers
-async function updateDescription(id, body) {
+async function updateDescription(id: any, body: any) {
     const {description} = body;
     if (description.length > 2000)
         throw new APIError('Description to long', body, 400)
@@ -135,12 +142,14 @@ async function updateDescription(id, body) {
     return 'Description updated';
 }
 
-async function reorderItems(id, order) {
+// @ts-expect-error TS(2393): Duplicate function implementation.
+async function reorderItems(id: any, order: any) {
     await db.reorderDriversItems(id, order);
     return 'Order saved';
 }
 
-async function quickAddItem(list, body, session) {
+// @ts-expect-error TS(2393): Duplicate function implementation.
+async function quickAddItem(list: any, body: any, session: any) {
     const {title = '', description = '', max = 1} = body;
     if (!title) throw new APIError('Title required', body, 400);
 
@@ -164,49 +173,54 @@ async function quickAddItem(list, body, session) {
     return 'Item added';
 }
 
-async function updateItemDescription(itemId, body) {
-    if (!await db.updateDriversItem(itemId, {description: body.description})) {
+// @ts-expect-error TS(2393): Duplicate function implementation.
+async function updateItemDescription(itemId: any, body: any) {
+    if (!(await db.updateDriversItem(itemId, {description: body.description}))) {
         throw new APIError('Unknown error while saving', body, 500);
     }
     return 'Description updated';
 }
 
-async function updateItemAttr(itemId, body) {
+// @ts-expect-error TS(2393): Duplicate function implementation.
+async function updateItemAttr(itemId: any, body: any) {
     const {field, value} = body;
     const allowed = {title: 1, description: 1, maxAssignees: 1};
+    // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
     if (!allowed[field]) throw new APIError('Invalid field', body, 400);
 
-    if (!await db.updateDriversItem(itemId, {[field]: value})) {
+    if (!(await db.updateDriversItem(itemId, {[field]: value}))) {
         throw new APIError('Unknown error while saving', body, 500);
     }
     return 'Item updated';
 }
 
-async function deleteAssignment(assignId) {
+async function deleteAssignment(assignId: any) {
     await db.deleteDriversAssignment(assignId);
     return 'Assignment removed';
 }
 
-async function updateSettings(id, body) {
+async function updateSettings(id: any, body: any) {
     const {allowAdd, guestManage} = body;
     await db.updateDriversFlags(id, allowAdd, guestManage);
     return 'Settings saved';
 }
 
-async function deleteItem(itemId) {
+// @ts-expect-error TS(2393): Duplicate function implementation.
+async function deleteItem(itemId: any) {
     await db.deleteDriversItem(itemId);
     return 'Item deleted';
 }
 
 function getAssignmentAccessMapping() {
     return {
-        assignToUser: (body, user) => db.assignDriversItemToUser(body.itemId, user),
-        assignToGuest: (body, user) => db.assignDriversItemToGuest(body.itemId, user),
-        unassignFromUser: (body, user) => db.unassignDriversItemUser(body.itemId, user),
-        unassignFromGuest: (body, user) => db.unassignDriversItemGuest(body.itemId, user),
-    }
+        assignToUser: (body: any, user: any) => db.assignDriversItemToUser(body.itemId, user),
+        assignToGuest: (body: any, user: any) => db.assignDriversItemToGuest(body.itemId, user),
+        unassignFromUser: (body: any, user: any) => db.unassignDriversItemUser(body.itemId, user),
+        unassignFromGuest: (body: any, user: any) => db.unassignDriversItemGuest(body.itemId, user),
+    };
 }
 
+// @ts-expect-error TS(2552): Cannot find name 'module'. Did you mean 'modules'?
 module.exports = {
     preprocessCreate,
     createEntity,

@@ -1,4 +1,5 @@
 //Wrapper for rendering pages
+// @ts-expect-error TS(2552): Cannot find name 'module'. Did you mean 'modules'?
 module.exports = {
     //Default rendering
     render,
@@ -43,41 +44,41 @@ module.exports = {
 
 /*-----------[ERROR]----------*/
 
-function renderError(res, message) {
+function renderError(res: any, message: any) {
     renderErrorData(res, message, undefined);
 }
 
-function renderErrorData(res, message, data) {
+function renderErrorData(res: any, message: any, data: any) {
     renderMessageData(res, "error", message, data);
 }
 
 /*-----------[INFO]----------*/
 
-function renderInfo(res, message) {
+function renderInfo(res: any, message: any) {
     renderInfoData(res, message, undefined);
 }
 
-function renderInfoData(res, message, data) {
+function renderInfoData(res: any, message: any, data: any) {
     renderMessageData(res, "info", message, data);
 }
 
 /*-----------[SUCCESS]----------*/
 
-function renderSuccess(res, message) {
+function renderSuccess(res: any, message: any) {
     renderSuccessData(res, message, undefined);
 }
 
-function renderSuccessData(res, message, data) {
+function renderSuccessData(res: any, message: any, data: any) {
     renderMessageData(res, "success", message, data);
 }
 
 /*-----------[GENERIC]----------*/
 
-function renderMessage(res, status, message) {
+function renderMessage(res: any, status: any, message: any) {
     renderMessageData(res, status, message, undefined);
 }
 
-function renderMessageData(res, status, message, data) {
+function renderMessageData(res: any, status: any, message: any, data: any) {
     renderWithMessageData(res, "message", status, message, data);
 }
 
@@ -88,49 +89,49 @@ function renderMessageData(res, status, message, data) {
 
 /*-----------[ERROR]----------*/
 
-function renderWithError(res, page, message) {
+function renderWithError(res: any, page: any, message: any) {
     renderWithErrorData(res, page, message, undefined);
 }
 
-function renderWithErrorData(res, page, message, data) {
+function renderWithErrorData(res: any, page: any, message: any, data: any) {
     renderWithMessageData(res, page, "error", message, data);
 }
 
 /*-----------[INFO]----------*/
 
-function renderWithInfo(res, page, message) {
+function renderWithInfo(res: any, page: any, message: any) {
     renderWithInfoData(res, page, message, undefined);
 }
 
-function renderWithInfoData(res, page, message, data) {
+function renderWithInfoData(res: any, page: any, message: any, data: any) {
     renderWithMessageData(res, page, "info", message, data);
 }
 
 /*-----------[SUCCESS]----------*/
 
-function renderWithSuccess(res, page, message) {
+function renderWithSuccess(res: any, page: any, message: any) {
     renderWithSuccessData(res, page, message, undefined);
 }
 
-function renderWithSuccessData(res, page, message, data) {
+function renderWithSuccessData(res: any, page: any, message: any, data: any) {
     renderWithMessageData(res, page, "success", message, data);
 }
 
 /*-----------[GENERIC]----------*/
 
-function render(res, page) {
+function render(res: any, page: any) {
     renderWithData(res, page, undefined);
 }
 
-function renderWithData(res, page, data) {
+function renderWithData(res: any, page: any, data: any) {
     renderWithMessageData(res, page, undefined, undefined, data);
 }
 
-function renderWithMessage(res, page, status, message) {
+function renderWithMessage(res: any, page: any, status: any, message: any) {
     renderWithMessageData(res, page, status, message, undefined);
 }
 
-function renderWithMessageData(res, page, status, message, data) {
+function renderWithMessageData(res: any, page: any, status: any, message: any, data: any) {
     res.render(page, {
         status: status,
         message: message,
@@ -145,37 +146,37 @@ function renderWithMessageData(res, page, status, message, data) {
 
 /*-----------[ERROR]----------*/
 
-function respondWithErrorJson(res, message) {
+function respondWithErrorJson(res: any, message: any) {
     respondWithErrorDataJson(res, message, null);
 }
 
-function respondWithErrorDataJson(res, message, data) {
+function respondWithErrorDataJson(res: any, message: any, data: any) {
     respondStructuredJson(res, "error", message, data);
 }
 
 /*-----------[INFO]----------*/
 
-function respondWithInfoJson(res, message) {
+function respondWithInfoJson(res: any, message: any) {
     respondWithInfoDataJson(res, message, null);
 }
 
-function respondWithInfoDataJson(res, message, data) {
+function respondWithInfoDataJson(res: any, message: any, data: any) {
     respondStructuredJson(res, "info", message, data);
 }
 
 /*-----------[SUCCESS]----------*/
 
-function respondWithSuccessJson(res, message) {
+function respondWithSuccessJson(res: any, message: any) {
     respondWithSuccessDataJson(res, message, null);
 }
 
-function respondWithSuccessDataJson(res, message, data) {
+function respondWithSuccessDataJson(res: any, message: any, data: any) {
     respondStructuredJson(res, "success", message, data);
 }
 
 /*-----------[GENERIC]----------*/
 
-function respondStructuredJson(res, status, message, data) {
+function respondStructuredJson(res: any, status: any, message: any, data: any) {
     respondWithJson(res, {
         status: status,
         message: message,
@@ -183,12 +184,12 @@ function respondStructuredJson(res, status, message, data) {
     });
 }
 
-function respondWithJson(res, data) {
+function respondWithJson(res: any, data: any) {
     res.header("Content-Type", 'application/json');
     respond(res, JSON.stringify(data));
 }
 
-function respond(res, data) {
+function respond(res: any, data: any) {
     res.end(data);
 }
 

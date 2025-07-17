@@ -1,20 +1,26 @@
 // controllers/activityController.js
 // Business logic for the Activity routes
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'Joi'.
 const Joi = require('joi');
 
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'db'.
 const db = require('../modules/database/db');
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'fromISOtoL... Remove this comment to see the full error message
 const {fromISOtoLocal, generateUniqueId} = require('../modules/lib/util');
 
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'Validation... Remove this comment to see the full error message
 const {ValidationError, APIError} = require('../modules/lib/errors');
 
 // Template constant for create errors
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'CREATE_TEM... Remove this comment to see the full error message
 const CREATE_TEMPLATE = 'activity/activity-create';
 
 /**
  * Validate and sanitize creation payload.
  * Throws ValidationError on failure; returns sanitized plan data on success.
  */
-function preprocessCreate(body) {
+// @ts-expect-error TS(2393): Duplicate function implementation.
+function preprocessCreate(body: any) {
     // Parse JSON slots object
     let slotsByDate;
     try {
@@ -51,11 +57,12 @@ function preprocessCreate(body) {
         {abortEarly: false, allowUnknown: true}
     );
     if (error) {
-        const msg = error.details.map(d => d.message).join(', ');
+        const msg = error.details.map((d: any) => d.message).join(', ');
         throw new ValidationError(CREATE_TEMPLATE, msg, {body});
     }
 
     // Flatten slots arrays and return sanitized data
+    // @ts-expect-error TS(2550): Property 'values' does not exist on type 'ObjectCo... Remove this comment to see the full error message
     const flattenedSlots = Object.values(value.slots).flat();
     // Ensure each slot date is within the start/end range
     const startDate = fromISOtoLocal(value.start);
@@ -81,7 +88,8 @@ function preprocessCreate(body) {
  * Create activity plan and slots in a transaction.
  * @returns {Promise<number>} plan ID
  */
-async function createEntity(ownerId, planData) {
+// @ts-expect-error TS(2393): Duplicate function implementation.
+async function createEntity(ownerId: any, planData: any) {
     return await db.createActivityPlanTx(
         ownerId,
         planData.title,
@@ -95,14 +103,17 @@ async function createEntity(ownerId, planData) {
 }
 
 // No-op since slots handled in transaction
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'afterCreat... Remove this comment to see the full error message
 const afterCreateItems = async () => {
 };
 
 /**
  * Assemble data for the view.
  */
-async function fetchForView(plan, session) {
+// @ts-expect-error TS(2393): Duplicate function implementation.
+async function fetchForView(plan: any, session: any) {
     const slotsByDate = await db.getActivitySlots(plan.id);
+    // @ts-expect-error TS(2550): Property 'values' does not exist on type 'ObjectCo... Remove this comment to see the full error message
     const slotList = Object.values(slotsByDate).flat();
 
     const assignPromise = session.user
@@ -139,20 +150,23 @@ async function fetchForView(plan, session) {
 /**
  * Provide data for duplication form.
  */
-async function fetchForDuplicate(plan, session) {
+// @ts-expect-error TS(2393): Duplicate function implementation.
+async function fetchForDuplicate(plan: any, session: any) {
     return await db.getActivitySlots(plan.id);
 }
 
 /**
  * Delete plan if owned by current user.
  */
-async function deleteEntity(plan, session) {
+// @ts-expect-error TS(2393): Duplicate function implementation.
+async function deleteEntity(plan: any, session: any) {
     return await db.deleteActivityPlan(plan.id);
 }
 
 // ---------- API ----------
 // API-specific controllers
-async function updateDescription(planId, body) {
+// @ts-expect-error TS(2393): Duplicate function implementation.
+async function updateDescription(planId: any, body: any) {
     const {description} = body;
     if (description.length > 2000)
         throw new APIError('Description to long', body, 400)
@@ -160,12 +174,12 @@ async function updateDescription(planId, body) {
     return 'Description updated';
 }
 
-async function reorderSlots(id, order) {
+async function reorderSlots(id: any, order: any) {
     await db.reorderActivitySlots(id, order);
     return 'Order saved';
 }
 
-async function quickAddSlot(plan, body) {
+async function quickAddSlot(plan: any, body: any) {
     const {date, title = '', description = '', maxAssignees = 1} = body;
     const d = fromISOtoLocal(date);
     if (d < fromISOtoLocal(plan.start_date) || d > fromISOtoLocal(plan.end_date))
@@ -187,41 +201,44 @@ async function quickAddSlot(plan, body) {
     return 'Slot added';
 }
 
-async function updateSlotDescription(slotId, body) {
-    if (!await db.updateActivitySlot(slotId, {description: body.description})) {
+async function updateSlotDescription(slotId: any, body: any) {
+    if (!(await db.updateActivitySlot(slotId, {description: body.description}))) {
         throw new APIError('Unknown error while saving', body, 500);
     }
     return 'Description updated';
 }
 
-async function updateSlotAttr(slotId, body) {
+async function updateSlotAttr(slotId: any, body: any) {
     const {field, value} = body;
     const allowed = {title: 1, description: 1, maxAssignees: 1};
+    // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
     if (!allowed[field]) throw new APIError('Invalid field', body, 400);
 
-    if (!await db.updateActivitySlot(slotId, {[field]: value})) {
+    if (!(await db.updateActivitySlot(slotId, {[field]: value}))) {
         throw new APIError('Unknown error while saving', body, 500);
     }
     return 'Slot updated';
 }
 
-async function deleteAssignment(assignId) {
+// @ts-expect-error TS(2393): Duplicate function implementation.
+async function deleteAssignment(assignId: any) {
     await db.deleteActivitySlotAssignment(assignId);
     return 'Assignment removed';
 }
 
-async function updateSettings(id, body) {
+// @ts-expect-error TS(2393): Duplicate function implementation.
+async function updateSettings(id: any, body: any) {
     const {allowAdd, guestManage} = body;
     await db.updateActivityPlanFlags(id, allowAdd, guestManage);
     return 'Settings saved';
 }
 
-async function deleteSlot(slotId) {
+async function deleteSlot(slotId: any) {
     await db.deleteActivitySlot(slotId);
     return 'Slot deleted';
 }
 
-async function addSlotRole(slotId, body) {
+async function addSlotRole(slotId: any, body: any) {
     const {roles} = body;
     if (!roles || !Array.isArray(roles) || roles.length < 1) {
         throw new APIError('Invalid roles', body, 400);
@@ -231,24 +248,26 @@ async function addSlotRole(slotId, body) {
     return 'Roles added';
 }
 
+// @ts-expect-error TS(2393): Duplicate function implementation.
 function getAssignmentAccessMapping() {
     return {
-        assignToUser: (body, user) => db.assignActivitySlotToUser(body.slotId, user),
-        assignToGuest: (body, user) => db.assignActivitySlotToGuest(body.slotId, user),
-        unassignFromUser: (body, user) => db.unassignActivitySlotUser(body.slotId, user),
-        unassignFromGuest: (body, user) => db.unassignActivitySlotGuest(body.slotId, user),
-    }
+        assignToUser: (body: any, user: any) => db.assignActivitySlotToUser(body.slotId, user),
+        assignToGuest: (body: any, user: any) => db.assignActivitySlotToGuest(body.slotId, user),
+        unassignFromUser: (body: any, user: any) => db.unassignActivitySlotUser(body.slotId, user),
+        unassignFromGuest: (body: any, user: any) => db.unassignActivitySlotGuest(body.slotId, user),
+    };
 }
 
 function getRoleAccessMapping() {
     return {
-        assignToUser: (body, user) => db.assignActivityAssignmentRoleToUser(body.slotId, user, body.role),
-        assignToGuest: (body, user) => db.assignActivityAssignmentRoleToGuest(body.slotId, user, body.role),
-        unassignFromUser: (body, user) => db.unassignActivityAssignmentRoleFromUser(body.slotId, user, body.role),
-        unassignFromGuest: (body, user) => db.unassignActivityAssignmentRoleFromGuest(body.slotId, user, body.role),
-    }
+        assignToUser: (body: any, user: any) => db.assignActivityAssignmentRoleToUser(body.slotId, user, body.role),
+        assignToGuest: (body: any, user: any) => db.assignActivityAssignmentRoleToGuest(body.slotId, user, body.role),
+        unassignFromUser: (body: any, user: any) => db.unassignActivityAssignmentRoleFromUser(body.slotId, user, body.role),
+        unassignFromGuest: (body: any, user: any) => db.unassignActivityAssignmentRoleFromGuest(body.slotId, user, body.role),
+    };
 }
 
+// @ts-expect-error TS(2552): Cannot find name 'module'. Did you mean 'modules'?
 module.exports = {
     preprocessCreate,
     createEntity,

@@ -1,5 +1,5 @@
 //Custom conditional class switch
-function refreshState(object, validated, validatedClass, invalidatedClass) {
+function refreshState(object: any, validated: any, validatedClass: any, invalidatedClass: any) {
     if (validated && !object.hasClass(validatedClass)) {
         if (object.hasClass(invalidatedClass)) {
             object.removeClass(invalidatedClass);
@@ -19,16 +19,19 @@ function setCurrentNavLocation() {
 
     //Set corresponding nav items active
     if (path.includes("/settings")) {
+        // @ts-expect-error TS(2581): Cannot find name '$'. Do you need to install type ... Remove this comment to see the full error message
         $("#settings").addClass("active");
     } else if (path.includes("/login")) {
+        // @ts-expect-error TS(2581): Cannot find name '$'. Do you need to install type ... Remove this comment to see the full error message
         $("#login").addClass("active");
     } else if (path.includes("/register")) {
+        // @ts-expect-error TS(2581): Cannot find name '$'. Do you need to install type ... Remove this comment to see the full error message
         $("#register").addClass("active");
     }
 }
 
 //Verify password (GUI)
-function verifyPassword(passwordObj, infoObj) {
+function verifyPassword(passwordObj: any, infoObj: any) {
     let isEightChars = (passwordObj.val().length >= 8);
     let hasLetter = (/[a-z,A-Z]/g.test(passwordObj.val()));
     let hasDigit = (/\d/g.test(passwordObj.val()));
@@ -41,7 +44,7 @@ function verifyPassword(passwordObj, infoObj) {
     refreshState(passwordObj, isPasswordValid(passwordObj.val()), "is-valid", "is-invalid");
 }
 
-function matchPassword(passwordObj, passwordRepeatObj, repeatInfoObj) {
+function matchPassword(passwordObj: any, passwordRepeatObj: any, repeatInfoObj: any) {
     //Hide or show "Passwords do not match"
     refreshState(repeatInfoObj, isPasswordRepeatValid(passwordObj.val(), passwordRepeatObj.val()), "invisible", "visible");
 
@@ -50,24 +53,24 @@ function matchPassword(passwordObj, passwordRepeatObj, repeatInfoObj) {
 }
 
 //Remove tooltip if password is valid when password field looses focus
-function removeTooltip(passwordObj, infoObj) {
+function removeTooltip(passwordObj: any, infoObj: any) {
     if (isPasswordValid(passwordObj.val())) {
         infoObj.empty();
     }
 }
 
 //Test if password is vailid
-function isPasswordValid(password) {
+function isPasswordValid(password: any) {
     return password.length >= 8 && /[a-z,A-Z]/g.test(password) && /\d/g.test(password);
 }
 
 //Test if password repeat is valid
-function isPasswordRepeatValid(password, passwordRepeat) {
+function isPasswordRepeatValid(password: any, passwordRepeat: any) {
     return password === passwordRepeat;
 }
 
 //Generate tooltip html
-function generateTooltip(hasEight, hasLettr, hasDigit) {
+function generateTooltip(hasEight: any, hasLettr: any, hasDigit: any) {
     //Define tooltip parts
     let tooltipDesc = "<p><b>Password must match the following criteria:</b></p><ul style=\"list-style-type:none\">";
     let tooltipCritOK = "<li style=\"color:green\"><b>✓</b>";
@@ -104,7 +107,7 @@ function generateTooltip(hasEight, hasLettr, hasDigit) {
 }
 
 //Validate passwords on submit and prevent submit if not
-function validate(event, passwordObj, passwordRepeatObj, infoObj, passwordRepeatInfoObj) {
+function validate(event: any, passwordObj: any, passwordRepeatObj: any, infoObj: any, passwordRepeatInfoObj: any) {
     let password = passwordObj.val();
     let passwordRepeat = passwordRepeatObj.val();
 
@@ -118,12 +121,13 @@ function validate(event, passwordObj, passwordRepeatObj, infoObj, passwordRepeat
     }
 }
 
-function objectToArray(obj) {
+function objectToArray(obj: any) {
     var arr = [];
     var idx = [];
     var keys = Object.keys(obj);
 
     keys.sort(function (a, b) {
+        // @ts-expect-error TS(2362): The left-hand side of an arithmetic operation must... Remove this comment to see the full error message
         return a - b;
     });
 
@@ -136,11 +140,11 @@ function objectToArray(obj) {
 }
 
 //Pads numbers
-function padNumber(num) {
+function padNumber(num: any) {
     return ("00" + num).substr(-2, 2);
 }
 
-async function post(url, payload) {
+async function post(url: any, payload: any) {
     const res = await fetch('/api' + url, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -153,16 +157,19 @@ async function post(url, payload) {
     } catch {
     }
 
+    // @ts-expect-error TS(2339): Property 'status' does not exist on type '{}'.
     if (!res.ok || data.status === 'error') {
+        // @ts-expect-error TS(2339): Property 'message' does not exist on type '{}'.
         throw new Error(data.message || 'Request failed');
     }
     return data;          // { status:'success', message:'…' }
 }
 
 
-function showInlineAlert(status, message) {
+function showInlineAlert(status: any, message: any) {
     const alertBox = document.getElementById('liveAlerts')
     if (!alertBox) return;
+    // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
     const cls = {
         success: 'alert-success',
         info: 'alert-info',
@@ -179,19 +186,22 @@ function showInlineAlert(status, message) {
 function disableDnD() {
     const draggables = document.getElementsByClassName('draggable');
     for (let elem of draggables) {
+        // @ts-expect-error TS(2339): Property 'draggable' does not exist on type 'Eleme... Remove this comment to see the full error message
         elem.draggable = false;
     }
 }
 
 function enableDnD() {
+    // @ts-expect-error TS(2339): Property 'IS_MANAGE' does not exist on type 'Windo... Remove this comment to see the full error message
     if (!window.IS_MANAGE) return;
     const draggables = document.getElementsByClassName('draggable');
     for (let elem of draggables) {
+        // @ts-expect-error TS(2339): Property 'draggable' does not exist on type 'Eleme... Remove this comment to see the full error message
         elem.draggable = true;
     }
 }
 
-function startInlineEditArea(desc, url) {
+function startInlineEditArea(desc: any, url: any) {
     if (!desc || desc.querySelector('textarea')) return;
 
     const old = desc.innerText.trim();
@@ -206,7 +216,7 @@ function startInlineEditArea(desc, url) {
     desc.appendChild(ta);
     ta.focus();
 
-    function restore(val) {
+    function restore(val: any) {
         if (val === 'double-click to add description') val = '';
         desc.innerHTML = val
             ? val.replace(/\n/g, '<br>')
@@ -221,6 +231,7 @@ function startInlineEditArea(desc, url) {
             showInlineAlert('success', 'Description updated');
         } catch (err) {
             restore(old);
+            // @ts-expect-error TS(2571): Object is of type 'unknown'.
             showInlineAlert('error', err.message);
         }
     }
@@ -238,7 +249,7 @@ function startInlineEditArea(desc, url) {
     });
 }
 
-function startInlineEdit(elem, baseUrl) {
+function startInlineEdit(elem: any, baseUrl: any) {
     if (!elem || elem.querySelector('input')) return;
 
     disableDnD();
@@ -247,7 +258,7 @@ function startInlineEdit(elem, baseUrl) {
     const id = elem.dataset.id;         // from template
     const isTd = elem.nodeName === 'TD';
 
-    let old, countTxt;
+    let old: any, countTxt: any;
     if (isTd && field === 'maxAssignees') {
         // Special handling: whole td field is selected
         const cntSpan = elem.querySelector('[data-count]');
@@ -284,11 +295,12 @@ function startInlineEdit(elem, baseUrl) {
             }
         } catch (err) {
             rollback(old);
+            // @ts-expect-error TS(2571): Object is of type 'unknown'.
             showInlineAlert('error', err.message);
         }
     }
 
-    async function rollback(val) {
+    async function rollback(val: any) {
         if (isTd && field === 'maxAssignees')
             elem.innerHTML = `<span data-count>${countTxt}</span> / <span data-max>${val}</span>`;
         else
@@ -308,7 +320,7 @@ function startInlineEdit(elem, baseUrl) {
 
 // Return an array of the selected option values in the control.
 // Select is an HTML select element.
-function getSelectValues(select) {
+function getSelectValues(select: any) {
     let result = [];
     let options = select && select.options;
     let opt;

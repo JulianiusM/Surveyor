@@ -1,8 +1,11 @@
+// @ts-expect-error TS(2580): Cannot find name 'require'. Do you need to install... Remove this comment to see the full error message
 const bcrypt = require('bcryptjs');
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'generateUn... Remove this comment to see the full error message
 const {generateUniqueToken} = require('../../lib/util');
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'init'.
 const {init, db} = require('../pool');
 
-async function registerUser(username, password, email) {
+async function registerUser(username: any, password: any, email: any) {
     init();
     const hashed = await bcrypt.hash(password, 10);
     const [res] = await db().execute(
@@ -13,7 +16,7 @@ async function registerUser(username, password, email) {
     return res.insertId;
 }
 
-async function getUserByUsername(username) {
+async function getUserByUsername(username: any) {
     init();
     const [rows] = await db().execute(
         `SELECT id, username, email, is_active
@@ -24,7 +27,8 @@ async function getUserByUsername(username) {
     return rows[0];
 }
 
-async function verifyPassword(userId, plain) {
+// @ts-expect-error TS(2393): Duplicate function implementation.
+async function verifyPassword(userId: any, plain: any) {
     init();
     const [rows] = await db().execute(
         `SELECT password
@@ -35,7 +39,7 @@ async function verifyPassword(userId, plain) {
     return bcrypt.compare(plain, rows[0].password);
 }
 
-async function generateActivationToken(username) {
+async function generateActivationToken(username: any) {
     init();
     const token = generateUniqueToken();
     const exp = new Date(Date.now() + 3600_000);
@@ -49,7 +53,7 @@ async function generateActivationToken(username) {
     return token;
 }
 
-async function verifyActivationToken(token) {
+async function verifyActivationToken(token: any) {
     init();
     const [rows] = await db().execute(
         `SELECT id, username, email, is_active
@@ -61,7 +65,7 @@ async function verifyActivationToken(token) {
     return rows[0] || null;
 }
 
-async function activateUser(username) {
+async function activateUser(username: any) {
     init();
     await db().execute(
         `UPDATE users
@@ -73,7 +77,7 @@ async function activateUser(username) {
     );
 }
 
-async function generatePasswordResetToken(username) {
+async function generatePasswordResetToken(username: any) {
     init();
     const token = generateUniqueToken();
     const exp = new Date(Date.now() + 3600_000);
@@ -87,7 +91,7 @@ async function generatePasswordResetToken(username) {
     return token;
 }
 
-async function verifyPasswordResetToken(token) {
+async function verifyPasswordResetToken(token: any) {
     init();
     const [rows] = await db().execute(
         `SELECT id, username, email, is_active
@@ -99,7 +103,7 @@ async function verifyPasswordResetToken(token) {
     return rows[0] || null;
 }
 
-async function resetPassword(username, newPass) {
+async function resetPassword(username: any, newPass: any) {
     init();
     const hashed = await bcrypt.hash(newPass, 10);
     await db().execute(
@@ -113,7 +117,7 @@ async function resetPassword(username, newPass) {
 }
 
 // Guests
-async function createGuest(username, email = null) {
+async function createGuest(username: any, email = null) {
     init();
     const [res] = await db().execute(
         `INSERT INTO guests (username, email)
@@ -123,7 +127,7 @@ async function createGuest(username, email = null) {
     return res.insertId;
 }
 
-async function createGuestLink(entityType, entityId, guestId) {
+async function createGuestLink(entityType: any, entityId: any, guestId: any) {
     init();
     const token = generateUniqueToken();
     await db().execute(
@@ -134,13 +138,13 @@ async function createGuestLink(entityType, entityId, guestId) {
     return token;
 }
 
-async function registerGuest(entityType, entityId, username, email) {
+async function registerGuest(entityType: any, entityId: any, username: any, email: any) {
     const guestId = await createGuest(username, email);
     const token = await createGuestLink(entityType, entityId, guestId);
     return {guestId, token};
 }
 
-async function getGuestByToken(token) {
+async function getGuestByToken(token: any) {
     init();
     const [rows] = await db().execute(
         `SELECT g.id,
@@ -157,7 +161,7 @@ async function getGuestByToken(token) {
     return rows[0] || null;
 }
 
-async function getGuestInternal(guestId) {
+async function getGuestInternal(guestId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT id, username, email
@@ -168,7 +172,7 @@ async function getGuestInternal(guestId) {
     return rows[0] || null;
 }
 
-async function getGuestLinkToken(entityType, entityId, guestId) {
+async function getGuestLinkToken(entityType: any, entityId: any, guestId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT token
@@ -191,6 +195,7 @@ async function getAllRoles() {
     return rows;
 }
 
+// @ts-expect-error TS(2552): Cannot find name 'module'. Did you mean 'modules'?
 module.exports = {
     registerUser,
     getUserByUsername,

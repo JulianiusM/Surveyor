@@ -1,9 +1,28 @@
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'path'.
 let path = require("path");
 
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'fs'.
 const fs = require("fs");
+// @ts-expect-error TS(2580): Cannot find name 'require'. Do you need to install... Remove this comment to see the full error message
 const csv_reader = require("csv-reader");
 
 class Settings {
+    appPort: any;
+    file: any;
+    mysqlDatabase: any;
+    mysqlHost: any;
+    mysqlPassword: any;
+    mysqlPort: any;
+    mysqlUser: any;
+    rootUrl: any;
+    sessionSecret: any;
+    smtpEmail: any;
+    smtpHost: any;
+    smtpPassword: any;
+    smtpPool: any;
+    smtpPort: any;
+    smtpSecure: any;
+    smtpUser: any;
     constructor() {
         this.rootUrl = "http://localhost:3000";
 
@@ -38,9 +57,10 @@ class Settings {
         //Process inputstream with csv-reader
         await new Promise((resolve, reject) => {
             fileInputStream
-                .on("error", function (error) {
+                .on("error", function (error: any) {
                     console.log("Settings file is not present, create one!");
                     self.writeSettingsFile();
+                    // @ts-expect-error TS(2794): Expected 1 arguments, but got 0. Did you forget to... Remove this comment to see the full error message
                     resolve();
                 })
                 .pipe(
@@ -50,9 +70,10 @@ class Settings {
                     })
                 )
                 .on("finish", function () {
+                    // @ts-expect-error TS(2794): Expected 1 arguments, but got 0. Did you forget to... Remove this comment to see the full error message
                     resolve();
                 })
-                .on("data", function (row) {
+                .on("data", function (row: any) {
                     switch (row[0]) {
                         case "ROOT_URL":
                             self.rootUrl = row[1];
@@ -139,7 +160,7 @@ class Settings {
             this.sessionSecret +
             "\nAPP_PORT," +
             this.appPort;
-        fs.writeFile(this.file, contents, "utf-8", function (error) {
+        fs.writeFile(this.file, contents, "utf-8", function (error: any) {
             if (error) {
                 console.log("Error writing settings file: " + error);
                 return;
@@ -148,7 +169,7 @@ class Settings {
         });
     }
 
-    generateRandomString(length) {
+    generateRandomString(length: any) {
         const chars =
             "AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz1234567890-_.!?#+";
         const randomArray = Array.from(
@@ -160,4 +181,5 @@ class Settings {
     }
 }
 
+// @ts-expect-error TS(2552): Cannot find name 'module'. Did you mean 'modules'?
 module.exports = new Settings();

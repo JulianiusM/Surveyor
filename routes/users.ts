@@ -1,23 +1,30 @@
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'express'.
 const express = require('express');
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'db'.
 const db = require("../modules/database/db");
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'mailer'.
 const mailer = require("../modules/email");
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'renderer'.
 const renderer = require("../modules/renderer");
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'settings'.
 const settings = require("../modules/settings");
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'isAuthenti... Remove this comment to see the full error message
 const {isAuthenticated} = require("../middleware/permissionMiddleware");
 
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'app'.
 const app = express.Router();
 
 /* GET users listing. */
-app.get('/', function (req, res, next) {
+app.get('/', function (req: any, res: any, next: any) {
     res.redirect('/users/dashboard');
 });
 
 // Registrierung von Benutzern
-app.get('/register', (req, res) => {
+app.get('/register', (req: any, res: any) => {
     renderer.render(res, 'users/register');  // Zeige das Registrierungsformular an
 });
 
-app.post('/register', async (req, res) => {
+app.post('/register', async (req: any, res: any) => {
     const {username, password, password_repeat, email} = req.body;
 
     if (!username || !password || !password_repeat || !email) {
@@ -52,11 +59,11 @@ app.post('/register', async (req, res) => {
 });
 
 // Login-Funktionalität
-app.get('/login', (req, res) => {
+app.get('/login', (req: any, res: any) => {
     renderer.render(res, 'users/login');  // Zeige das Login-Formular an
 });
 
-app.post('/login', async (req, res) => {
+app.post('/login', async (req: any, res: any) => {
     const {username, password} = req.body;
 
     if (!username || !password) {
@@ -84,7 +91,7 @@ app.post('/login', async (req, res) => {
 });
 
 // Dashboard nach dem Login
-app.get('/dashboard', isAuthenticated, async (req, res) => {
+app.get('/dashboard', isAuthenticated, async (req: any, res: any) => {
     const surveys = await db.getSurveysByUserId(req.session.user.id);
     const packlists = await db.getPackingListByUserId(req.session.user.id);
     const activityplans = await db.getActivityPlansByUserId(req.session.user.id);
@@ -93,18 +100,18 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
 });
 
 // Logout
-app.get('/logout', (req, res) => {
+app.get('/logout', (req: any, res: any) => {
     req.session.destroy(() => {
         res.redirect('/');
     });
 });
 
 // Passwort zurücksetzen: E-Mail mit Link senden
-app.get('/forgot-password', (req, res) => {
+app.get('/forgot-password', (req: any, res: any) => {
     renderer.render(res, 'users/forgot-password.pug');  // Zeige das Formular zum Zurücksetzen des Passworts
 });
 
-app.post('/forgot-password', async (req, res) => {
+app.post('/forgot-password', async (req: any, res: any) => {
     const {username} = req.body;
 
     const user = await db.getUserByUsername(username);
@@ -125,7 +132,7 @@ app.post('/forgot-password', async (req, res) => {
 });
 
 // Passwort zurücksetzen: Formular anzeigen
-app.get('/reset-password/:token', async (req, res) => {
+app.get('/reset-password/:token', async (req: any, res: any) => {
     const token = req.params.token;
 
     // Überprüfe, ob der Token gültig ist
@@ -138,10 +145,11 @@ app.get('/reset-password/:token', async (req, res) => {
 });
 
 // Passwort zurücksetzen: Neues Passwort speichern
-app.post('/reset-password/:token', async (req, res) => {
+app.post('/reset-password/:token', async (req: any, res: any) => {
     const {token} = req.params;
     const {password} = req.body;
 
+    // @ts-expect-error TS(2304): Cannot find name 'confirmPassword'.
     if (password !== confirmPassword) {
         req.flash('error', 'Passwords do not match.');
         return res.redirect(`/users/reset-password/${token}`);
@@ -159,7 +167,7 @@ app.post('/reset-password/:token', async (req, res) => {
 });
 
 // Aktivierungs-Link
-app.get('/activate/:token', async (req, res) => {
+app.get('/activate/:token', async (req: any, res: any) => {
     const token = req.params.token;
 
     // Überprüfe, ob der Aktivierungs-Token gültig ist
@@ -173,4 +181,5 @@ app.get('/activate/:token', async (req, res) => {
     renderer.renderSuccess(res, 'Your account has been activated. You can log in now.')
 });
 
+// @ts-expect-error TS(2552): Cannot find name 'module'. Did you mean 'modules'?
 module.exports = app;

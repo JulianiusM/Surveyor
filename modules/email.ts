@@ -1,8 +1,11 @@
+// @ts-expect-error TS(2580): Cannot find name 'require'. Do you need to install... Remove this comment to see the full error message
 const nodemailer = require('nodemailer');
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'settings'.
 const settings = require('./settings.js');
 
-let transporter = undefined;
+let transporter: any = undefined;
 
+// @ts-expect-error TS(2393): Duplicate function implementation.
 function init() {
     if (!transporter) {
         transporter = nodemailer.createTransport({
@@ -19,7 +22,7 @@ function init() {
 }
 
 // Funktion zum Senden einer E-Mail
-async function sendEmail(to, subject, text) {
+async function sendEmail(to: any, subject: any, text: any) {
     init();
 
     const mailOptions = {
@@ -37,7 +40,7 @@ async function sendEmail(to, subject, text) {
 }
 
 // Funktion zum Senden einer Aktivierungs-E-Mail
-async function sendActivationEmail(userEmail, activationLink) {
+async function sendActivationEmail(userEmail: any, activationLink: any) {
     const subject = 'Activate your account';
     const text = `Hi! Welcome to Surveyor!\n\nTo activate your account, please follow this link:\n\n${activationLink}\n\nNote: This link will expire in 1 hour.\n\nYour Surveyor Team.`;
 
@@ -45,20 +48,21 @@ async function sendActivationEmail(userEmail, activationLink) {
 }
 
 // Funktion zum Senden einer E-Mail für das Passwort zurücksetzen
-async function sendPasswordResetEmail(userEmail, resetLink) {
+async function sendPasswordResetEmail(userEmail: any, resetLink: any) {
     const subject = 'Reset your password';
     const text = `Hi!\n\nYou requested to reset your password.\n\nTo set a new one, please follow this link:\n\n${resetLink}\n\nNote: This link will expire in 1 hour.\n\nYour Surveyor Team.`;
 
     await sendEmail(userEmail, subject, text);
 }
 
-async function sendLinkEmail(userEmail, surveyLink) {
+async function sendLinkEmail(userEmail: any, surveyLink: any) {
     const subject = 'Your personal editing link';
     const text = `Hi! Thank you for using Surveyor!\n\nThis is your personal link to editor your answers:\n\n${surveyLink}\n\nNote: Please do not share this link with anybody.\n\nYour Surveyor Team.`;
 
     await sendEmail(userEmail, subject, text);
 }
 
+// @ts-expect-error TS(2552): Cannot find name 'module'. Did you mean 'modules'?
 module.exports = {
     sendEmail,
     sendActivationEmail,

@@ -1,8 +1,10 @@
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'generateUn... Remove this comment to see the full error message
 const {generateUniqueId} = require('../../lib/util');
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'init'.
 const {init, db} = require('../pool');
 
 // Drivers Lists
-async function createDriversList(listId, ownerId, title, desc, allowGuestAdd, guestManage) {
+async function createDriversList(listId: any, ownerId: any, title: any, desc: any, allowGuestAdd: any, guestManage: any) {
     init();
     await db().execute(
         `INSERT INTO drivers_lists
@@ -12,7 +14,7 @@ async function createDriversList(listId, ownerId, title, desc, allowGuestAdd, gu
     );
 }
 
-async function createDriversListTx(ownerId, title, desc, allowGuestAdd, guestManage, items) {
+async function createDriversListTx(ownerId: any, title: any, desc: any, allowGuestAdd: any, guestManage: any, items: any) {
     init();
     const conn = await db().getConnection();
     try {
@@ -25,7 +27,7 @@ async function createDriversListTx(ownerId, title, desc, allowGuestAdd, guestMan
             [listId, ownerId, title, desc, allowGuestAdd ? 1 : 0, guestManage ? 1 : 0]
         );
         if (items.length) {
-            const vals = items.map(it => [
+            const vals = items.map((it: any) => [
                 it.id, listId, it.title, it.description, ownerId,
                 it.maxAssignees, it.position
             ]);
@@ -47,7 +49,7 @@ async function createDriversListTx(ownerId, title, desc, allowGuestAdd, guestMan
     }
 }
 
-async function updateDriversListTitle(listId, title) {
+async function updateDriversListTitle(listId: any, title: any) {
     init();
     await db().execute(
         `UPDATE drivers_lists
@@ -57,7 +59,7 @@ async function updateDriversListTitle(listId, title) {
     );
 }
 
-async function deleteDriversList(listId) {
+async function deleteDriversList(listId: any) {
     init();
     await db().execute(
         `DELETE
@@ -67,7 +69,7 @@ async function deleteDriversList(listId) {
     );
 }
 
-async function getDriversListById(listId) {
+async function getDriversListById(listId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT *
@@ -78,7 +80,7 @@ async function getDriversListById(listId) {
     return rows[0] || null;
 }
 
-async function getDriversListByUserId(userId) {
+async function getDriversListByUserId(userId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT *
@@ -89,7 +91,7 @@ async function getDriversListByUserId(userId) {
     return rows;
 }
 
-async function updateDriversListAllow(listId, allow) {
+async function updateDriversListAllow(listId: any, allow: any) {
     init();
     await db().execute(
         `UPDATE drivers_lists
@@ -99,7 +101,7 @@ async function updateDriversListAllow(listId, allow) {
     );
 }
 
-async function updateDriversListGuestManage(listId, flag) {
+async function updateDriversListGuestManage(listId: any, flag: any) {
     init();
     await db().execute(
         `UPDATE drivers_lists
@@ -109,7 +111,7 @@ async function updateDriversListGuestManage(listId, flag) {
     );
 }
 
-async function updateDriversListDescription(listId, description) {
+async function updateDriversListDescription(listId: any, description: any) {
     init();
     await db().execute(
         `UPDATE drivers_lists
@@ -120,7 +122,7 @@ async function updateDriversListDescription(listId, description) {
 }
 
 // Drivers Items
-async function createDriversItemUser(listId, userId, item) {
+async function createDriversItemUser(listId: any, userId: any, item: any) {
     init();
     await db().execute(
         `INSERT INTO drivers_items
@@ -131,7 +133,7 @@ async function createDriversItemUser(listId, userId, item) {
 }
 
 // Drivers Items
-async function createDriversItemGuest(listId, guestId, item) {
+async function createDriversItemGuest(listId: any, guestId: any, item: any) {
     init();
     await db().execute(
         `INSERT INTO drivers_items
@@ -141,9 +143,10 @@ async function createDriversItemGuest(listId, guestId, item) {
     );
 }
 
-async function updateDriversItem(itemId, fields) {
+async function updateDriversItem(itemId: any, fields: any) {
     init();
     const sets = [], vals = [];
+    // @ts-expect-error TS(2550): Property 'entries' does not exist on type 'ObjectC... Remove this comment to see the full error message
     for (const [col, val] of Object.entries({
         title: fields.title,
         description: fields.description,
@@ -166,7 +169,7 @@ async function updateDriversItem(itemId, fields) {
     return res[0].affectedRows === 1;
 }
 
-async function deleteDriversItem(itemId) {
+async function deleteDriversItem(itemId: any) {
     init();
     await db().execute(
         `DELETE
@@ -176,20 +179,19 @@ async function deleteDriversItem(itemId) {
     );
 }
 
-async function reorderDriversItems(listId, orders) {
+async function reorderDriversItems(listId: any, orders: any) {
     init();
-    await Promise.all(orders.map(o =>
-        db().execute(
-            `UPDATE drivers_items
-             SET pos = ?
-             WHERE id = ?
-               AND list_id = ?`,
-            [o.position, o.itemId, listId]
-        )
+    await Promise.all(orders.map((o: any) => db().execute(
+        `UPDATE drivers_items
+         SET pos = ?
+         WHERE id = ?
+           AND list_id = ?`,
+        [o.position, o.itemId, listId]
+    )
     ));
 }
 
-async function getDriversItems(listId) {
+async function getDriversItems(listId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT pi.*,
@@ -209,7 +211,7 @@ async function getDriversItems(listId) {
     return rows;
 }
 
-async function getDriversItemById(itemId) {
+async function getDriversItemById(itemId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT pi.*,
@@ -229,7 +231,7 @@ async function getDriversItemById(itemId) {
     return rows[0];
 }
 
-async function getDriversAssignmentCounts(listId) {
+async function getDriversAssignmentCounts(listId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT item_id, COUNT(*) AS cnt
@@ -238,13 +240,13 @@ async function getDriversAssignmentCounts(listId) {
          GROUP BY item_id`,
         [listId]
     );
-    return rows.reduce((m, r) => {
+    return rows.reduce((m: any, r: any) => {
         m[r.item_id] = r.cnt;
         return m;
     }, {});
 }
 
-async function getLastDriversItemNumber(listId) {
+async function getLastDriversItemNumber(listId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT MAX(pos)
@@ -256,7 +258,7 @@ async function getLastDriversItemNumber(listId) {
 }
 
 // Assignments
-async function assignDriversItemToUser(itemId, userId) {
+async function assignDriversItemToUser(itemId: any, userId: any) {
     init();
     await db().execute(
         `INSERT IGNORE INTO drivers_assignments (item_id, user_id, list_id)
@@ -267,7 +269,7 @@ async function assignDriversItemToUser(itemId, userId) {
     );
 }
 
-async function unassignDriversItemUser(itemId, userId) {
+async function unassignDriversItemUser(itemId: any, userId: any) {
     init();
     await db().execute(
         `DELETE
@@ -278,7 +280,7 @@ async function unassignDriversItemUser(itemId, userId) {
     );
 }
 
-async function assignDriversItemToGuest(itemId, guestId) {
+async function assignDriversItemToGuest(itemId: any, guestId: any) {
     init();
     await db().execute(
         `INSERT IGNORE INTO drivers_assignments (item_id, guest_id, list_id)
@@ -289,7 +291,7 @@ async function assignDriversItemToGuest(itemId, guestId) {
     );
 }
 
-async function unassignDriversItemGuest(itemId, guestId) {
+async function unassignDriversItemGuest(itemId: any, guestId: any) {
     init();
     await db().execute(
         `DELETE
@@ -300,7 +302,7 @@ async function unassignDriversItemGuest(itemId, guestId) {
     );
 }
 
-async function getDriversAssignmentsForUser(listId, userId) {
+async function getDriversAssignmentsForUser(listId: any, userId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT item_id
@@ -309,10 +311,10 @@ async function getDriversAssignmentsForUser(listId, userId) {
            AND user_id = ?`,
         [listId, userId]
     );
-    return rows.map(r => r.item_id);
+    return rows.map((r: any) => r.item_id);
 }
 
-async function getDriversAssignmentsForGuest(listId, guestId) {
+async function getDriversAssignmentsForGuest(listId: any, guestId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT item_id
@@ -321,10 +323,10 @@ async function getDriversAssignmentsForGuest(listId, guestId) {
            AND guest_id = ?`,
         [listId, guestId]
     );
-    return rows.map(r => r.item_id);
+    return rows.map((r: any) => r.item_id);
 }
 
-async function getDriversItemAssignees(listId) {
+async function getDriversItemAssignees(listId: any) {
     init();
     const [rows] = await db().execute(
         `SELECT pa.id      AS assign_id,
@@ -340,8 +342,10 @@ async function getDriversItemAssignees(listId) {
         [listId]
     );
     const map = {};
-    rows.forEach(r => {
+    rows.forEach((r: any) => {
+        // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
         map[r.item_id] = map[r.item_id] || [];
+        // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
         map[r.item_id].push({
             id: r.assign_id,
             user_id: r.user_id,
@@ -352,7 +356,7 @@ async function getDriversItemAssignees(listId) {
     return map;
 }
 
-async function deleteDriversAssignment(assignId) {
+async function deleteDriversAssignment(assignId: any) {
     init();
     await db().execute(
         `DELETE
@@ -362,7 +366,7 @@ async function deleteDriversAssignment(assignId) {
     );
 }
 
-async function updateDriversFlags(listId, allowAdd, guestManage) {
+async function updateDriversFlags(listId: any, allowAdd: any, guestManage: any) {
     init();
     await db().execute(
         `UPDATE drivers_lists
@@ -373,6 +377,7 @@ async function updateDriversFlags(listId, allowAdd, guestManage) {
     );
 }
 
+// @ts-expect-error TS(2552): Cannot find name 'module'. Did you mean 'modules'?
 module.exports = {
     createDriversList,
     createDriversListTx,

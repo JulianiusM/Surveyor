@@ -13,6 +13,7 @@ function initAssignButtons() {
     if (!table) return;
 
     table.addEventListener('click', async evt => {
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         const btn = evt.target.closest('button[data-action]');
         if (!btn) return;
 
@@ -21,6 +22,7 @@ function initAssignButtons() {
         const action = btn.dataset.action;
 
         try {
+            // @ts-expect-error TS(2339): Property 'DRIVERS_LIST_ID' does not exist on type ... Remove this comment to see the full error message
             await post(`/drivers/${window.DRIVERS_LIST_ID}/${action}`, {itemId});
 
             /* --- Count / Max sauber aktualisieren ------------------- */
@@ -68,6 +70,7 @@ function initAssignButtons() {
                 `Item ${action === 'assign' ? 'assigned' : 'unassigned'}`);
             setTimeout(() => location.reload(), 100);
         } catch (e) {
+            // @ts-expect-error TS(2571): Object is of type 'unknown'.
             showInlineAlert('error', e.message);
         }
     });
@@ -77,12 +80,14 @@ function initAssignButtons() {
 function initInlineEdit() {
     document.querySelectorAll('td[data-edit]').forEach(td => {
         td.addEventListener('dblclick', () => {
+            // @ts-expect-error TS(2339): Property 'DRIVERS_LIST_ID' does not exist on type ... Remove this comment to see the full error message
             startInlineEdit(td, `/drivers/${window.DRIVERS_LIST_ID}/item`);
         });
     });
 
     document.querySelectorAll('[data-edit="planDescription"]').forEach(elem => {
         elem.addEventListener('dblclick', () => {
+            // @ts-expect-error TS(2339): Property 'DRIVERS_LIST_ID' does not exist on type ... Remove this comment to see the full error message
             startInlineEditArea(elem, `/drivers/${window.DRIVERS_LIST_ID}/description`);
         })
     })
@@ -92,14 +97,17 @@ function initInlineEdit() {
 function initReorder() {
     const tbody = document.querySelector('tbody[data-reorderable]');
     if (!tbody) return;
-    let dragSrc;
+    let dragSrc: any;
 
     tbody.addEventListener('dragstart', e => {
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         if (e.target.closest('button') || e.target.closest('input')) return;
 
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         dragSrc = e.target.closest('tr');
         if (!dragSrc) return;
 
+        // @ts-expect-error TS(2339): Property 'dataTransfer' does not exist on type 'Ev... Remove this comment to see the full error message
         e.dataTransfer.effectAllowed = 'move';
     });
 
@@ -107,11 +115,13 @@ function initReorder() {
         if (!dragSrc) return;
 
         e.preventDefault();
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         const tr = e.target.closest('tr');
         if (!tr || tr === dragSrc) return;
         const rect = tr.getBoundingClientRect();
         tr.parentNode.insertBefore(
             dragSrc,
+            // @ts-expect-error TS(2339): Property 'clientY' does not exist on type 'Event'.
             (e.clientY - rect.top) > rect.height / 2 ? tr.nextSibling : tr
         );
     });
@@ -120,14 +130,17 @@ function initReorder() {
         if (!dragSrc) return;
 
         const orders = Array.from(tbody.children).map((tr, i) => ({
+            // @ts-expect-error TS(2339): Property 'dataset' does not exist on type 'Element... Remove this comment to see the full error message
             itemId: tr.dataset.itemid,
             position: i,
         }));
         try {
+            // @ts-expect-error TS(2339): Property 'DRIVERS_LIST_ID' does not exist on type ... Remove this comment to see the full error message
             await post(`/drivers/${window.DRIVERS_LIST_ID}/reorder`, {orders});
             showInlineAlert('success', 'Order saved');
         } catch (e) {
             /* z.B. "Only the owner can reorder" oder "Login required" */
+            // @ts-expect-error TS(2571): Object is of type 'unknown'.
             showInlineAlert('error', e.message);
             // Reihenfolge visuell zurückrollen (Reload)
             setTimeout(() => location.reload(), 1000);
@@ -143,13 +156,16 @@ function initQuickAdd() {
     if (quickForm) {
         quickForm.addEventListener('submit', async e => {
             e.preventDefault();
+            // @ts-expect-error TS(2550): Property 'fromEntries' does not exist on type 'Obj... Remove this comment to see the full error message
             const data = Object.fromEntries(new FormData(quickForm).entries());
 
             try {
+                // @ts-expect-error TS(2339): Property 'DRIVERS_LIST_ID' does not exist on type ... Remove this comment to see the full error message
                 await post(`/drivers/${window.DRIVERS_LIST_ID}/items`, data);
                 showInlineAlert('success', 'Added');
                 setTimeout(() => location.reload(), 100);
             } catch (err) {
+                // @ts-expect-error TS(2571): Object is of type 'unknown'.
                 showInlineAlert('error', err.message);
             }
         });
@@ -159,14 +175,17 @@ function initQuickAdd() {
 /* -------- Owner entfernt Assignee ----------------------------------- */
 function initOwnerRemove() {
     document.addEventListener('click', async e => {
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         const btn = e.target.closest('button[data-owner-remove]');
         if (!btn) return;
         const assignId = btn.dataset.assignid;
         try {
+            // @ts-expect-error TS(2339): Property 'DRIVERS_LIST_ID' does not exist on type ... Remove this comment to see the full error message
             await post(`/drivers/${window.DRIVERS_LIST_ID}/assignment/${assignId}/delete`, {});
             showInlineAlert('success', 'Removed');
             setTimeout(() => location.reload(), 100);
         } catch (err) {
+            // @ts-expect-error TS(2571): Object is of type 'unknown'.
             showInlineAlert('error', err.message);
         }
     });
@@ -179,14 +198,18 @@ function initOwnerFlags() {
 
     form.addEventListener('change', async () => {
         const payload = {
+            // @ts-expect-error TS(2531): Object is possibly 'null'.
             allowAdd: document.getElementById('allowAddSwitch').checked,
+            // @ts-expect-error TS(2531): Object is possibly 'null'.
             guestManage: document.getElementById('guestManageSwitch').checked,
         };
         try {
+            // @ts-expect-error TS(2339): Property 'DRIVERS_LIST_ID' does not exist on type ... Remove this comment to see the full error message
             await post(`/drivers/${window.DRIVERS_LIST_ID}/settings`, payload);
             showInlineAlert('success', 'Settings updated');
             setTimeout(() => location.reload(), 100);
         } catch (err) {
+            // @ts-expect-error TS(2571): Object is of type 'unknown'.
             showInlineAlert('error', err.message);
             /* Reload to force consistent switches */
             setTimeout(() => location.reload(), 800);
@@ -197,6 +220,7 @@ function initOwnerFlags() {
 /* -------- owner deletes item ----------------------------------- */
 function initOwnerDeleteItem() {
     document.addEventListener('click', async e => {
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         const btn = e.target.closest('[data-delete-item]');
         if (!btn) return;
 
@@ -204,10 +228,12 @@ function initOwnerDeleteItem() {
 
         const itemId = btn.dataset.itemid;
         try {
+            // @ts-expect-error TS(2339): Property 'DRIVERS_LIST_ID' does not exist on type ... Remove this comment to see the full error message
             await post(`/drivers/${window.DRIVERS_LIST_ID}/item/${itemId}/delete`, {});
             showInlineAlert('success', 'Driver deleted');
             setTimeout(() => location.reload(), 100);
         } catch (err) {
+            // @ts-expect-error TS(2571): Object is of type 'unknown'.
             showInlineAlert('error', err.message);
         }
     });
@@ -216,6 +242,7 @@ function initOwnerDeleteItem() {
 
 function init() {
     setCurrentNavLocation();
+    // @ts-expect-error TS(2339): Property 'DRIVERS_LIST_ID' does not exist on type ... Remove this comment to see the full error message
     if (window.DRIVERS_LIST_ID) {
         initAssignButtons();
         initReorder();          // nur aktiv, wenn tbody[data-reorderable] existiert

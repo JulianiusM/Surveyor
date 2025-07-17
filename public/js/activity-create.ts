@@ -2,46 +2,54 @@
 /* ─── utils ───────────────────────────────────────────────── */
 const ONE_DAY = 24 * 3600 * 1000;
 
-function fmtISO(date) {
+function fmtISO(date: any) {
     const y = date.getUTCFullYear();
+    // @ts-expect-error TS(2550): Property 'padStart' does not exist on type 'string... Remove this comment to see the full error message
     const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    // @ts-expect-error TS(2550): Property 'padStart' does not exist on type 'string... Remove this comment to see the full error message
     const d = String(date.getUTCDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
 }
 
-function toDate(val) {
+function toDate(val: any) {
     const [y, m, d] = val.split('-').map(Number);
     return new Date(Date.UTC(y, m - 1, d));
 }
 
 const slotsMap = {};        // dateISO -> array of slot objects
 
-function updateSlotObj(dateISO, obj) {
+function updateSlotObj(dateISO: any, obj: any) {
+    // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
     let arr = slotsMap[dateISO] ||= [];
-    let curr = arr.findIndex(v => v.id === obj.id);
+    let curr = arr.findIndex((v: any) => v.id === obj.id);
     if (curr !== -1) {
         arr[curr] = obj;
         return;
     }
     arr.push(obj);
-    slotsMap[dateISO].sort((a, b) => a.position - b.position);
+    // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
+    slotsMap[dateISO].sort((a: any, b: any) => a.position - b.position);
 }
 
-function getSlotObj(dateISO, id) {
-    return (slotsMap[dateISO] || []).find(v => v.id === id);
+function getSlotObj(dateISO: any, id: any) {
+    // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
+    return (slotsMap[dateISO] || []).find((v: any) => v.id === id);
 }
 
-function reIndexDay(dateISO) {
-    (slotsMap[dateISO] || []).forEach((s, i) => {
+function reIndexDay(dateISO: any) {
+    // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
+    (slotsMap[dateISO] || []).forEach((s: any, i: any) => {
         s.position = i
         updateSlotObj(dateISO, s);
     });
-    slotsMap[dateISO].sort((a, b) => a.position - b.position);
+    // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
+    slotsMap[dateISO].sort((a: any, b: any) => a.position - b.position);
 }
 
 /* ─── build slot table(s) ─────────────────────────────────── */
-function buildTables(dStart, dEnd) {
+function buildTables(dStart: any, dEnd: any) {
     const slotArea = document.getElementById('slotArea');
+    // @ts-expect-error TS(2531): Object is possibly 'null'.
     slotArea.innerHTML = '';           // UI reset, Map bleibt!
     let weekStart = new Date(dStart);
     weekStart.setDate(weekStart.getDate() - (weekStart.getDay() || 7) + 1); // monday
@@ -50,6 +58,7 @@ function buildTables(dStart, dEnd) {
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekEnd.getDate() + 6);            // sunday
         const tbl = createWeekTable(weekStart, weekEnd, dStart, dEnd);
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         slotArea.appendChild(tbl);
         weekStart.setDate(weekStart.getDate() + 7);
     }
@@ -60,15 +69,20 @@ function buildTables(dStart, dEnd) {
 /* ───── slot-row factory incl. delete button ───────────────────── */
 
 /* ===== 1. Slot-Row-Factory  ====================================== */
-function buildSlotRow(dateISO, pos, infoClb, pref = {}) {
+function buildSlotRow(dateISO: any, pos: any, infoClb: any, pref = {}) {
+    // @ts-expect-error TS(2339): Property 'id' does not exist on type '{}'.
     const id = pref.id || crypto.randomUUID();              // robuste ID
 
     const rowObj = {
         id,
+        // @ts-expect-error TS(2339): Property 'position' does not exist on type '{}'.
         position: pos || pref.position || 0,
         date: dateISO,
+        // @ts-expect-error TS(2339): Property 'title' does not exist on type '{}'.
         title: pref.title || '',
+        // @ts-expect-error TS(2339): Property 'description' does not exist on type '{}'... Remove this comment to see the full error message
         description: pref.description || '',
+        // @ts-expect-error TS(2339): Property 'maxAssignees' does not exist on type '{}... Remove this comment to see the full error message
         maxAssignees: pref.maxAssignees || 1
     };
     updateSlotObj(dateISO, rowObj);                            // → slotsMap
@@ -84,6 +98,7 @@ function buildSlotRow(dateISO, pos, infoClb, pref = {}) {
         document.createElement('input'),
         {
             className: 'form-control form-control-sm text-bg-dark',
+            // @ts-expect-error TS(2339): Property 'title' does not exist on type '{}'.
             placeholder: 'Title', required: true, value: pref.title || ''
         });
 
@@ -91,12 +106,14 @@ function buildSlotRow(dateISO, pos, infoClb, pref = {}) {
         document.createElement('input'),
         {
             className: 'form-control form-control-sm text-bg-dark',
+            // @ts-expect-error TS(2339): Property 'description' does not exist on type '{}'... Remove this comment to see the full error message
             placeholder: 'Description', value: pref.description || ''
         });
 
     const max = Object.assign(
         document.createElement('input'),
         {
+            // @ts-expect-error TS(2339): Property 'maxAssignees' does not exist on type '{}... Remove this comment to see the full error message
             type: 'number', min: '1', value: pref.maxAssignees || 1,
             className: 'form-control form-control-sm text-bg-dark'
         });
@@ -126,7 +143,8 @@ function buildSlotRow(dateISO, pos, infoClb, pref = {}) {
 
     delBtn.addEventListener('click', () => {
         wrap.remove();
-        slotsMap[dateISO] = slotsMap[dateISO].filter(s => s.id !== id);
+        // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
+        slotsMap[dateISO] = slotsMap[dateISO].filter((s: any) => s.id !== id);
         reIndexDay(dateISO);
         infoClb();
     });
@@ -136,7 +154,7 @@ function buildSlotRow(dateISO, pos, infoClb, pref = {}) {
 }
 
 /* ----------  Day-Cell ------------------------------------------ */
-function buildDayCell(slotDate, prefSlot /* or undefined */) {
+function buildDayCell(slotDate: any, prefSlot: any /* or undefined */) {
     const dateISO = fmtISO(slotDate);
     const cell = document.createElement('td');
 
@@ -159,8 +177,8 @@ function buildDayCell(slotDate, prefSlot /* or undefined */) {
     }
 
     // Vorhandene Slots rendern
-    (slotsMap[dateISO] || []).forEach(obj =>
-        container.appendChild(buildSlotRow(dateISO, obj.position, infoClb, obj)));
+    // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
+    (slotsMap[dateISO] || []).forEach((obj: any) => container.appendChild(buildSlotRow(dateISO, obj.position, infoClb, obj)));
 
     infoClb();
 
@@ -170,6 +188,7 @@ function buildDayCell(slotDate, prefSlot /* or undefined */) {
     addBtn.className = 'btn btn-sm btn-outline-info w-100 add-slot';
     addBtn.textContent = '+ Slot';
     addBtn.addEventListener('click', () => {
+        // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
         const pos = (slotsMap[dateISO] || []).length;   // next index
         container.appendChild(buildSlotRow(dateISO, pos, infoClb));
         infoClb();
@@ -180,7 +199,7 @@ function buildDayCell(slotDate, prefSlot /* or undefined */) {
 }
 
 /* ---------- Week-Table builder (replace old cell part) --------- */
-function createWeekTable(monday, sunday, start, end) {
+function createWeekTable(monday: any, sunday: any, start: any, end: any) {
     const tbl = document.createElement('table');
     tbl.className = 'table table-dark table-bordered align-middle activity-table';
 
@@ -207,6 +226,7 @@ function createWeekTable(monday, sunday, start, end) {
     const tbody = tbl.createTBody();
     const row = tbody.insertRow();
 
+    // @ts-expect-error TS(2554): Expected 2 arguments, but got 1.
     validDays.forEach(date => row.appendChild(buildDayCell(date)));
 
     const wrapper = document.createElement('div');
@@ -219,30 +239,41 @@ function createWeekTable(monday, sunday, start, end) {
 function maybeGenerate() {
     const startInp = document.getElementById('start');
     const endInp = document.getElementById('end');
+    // @ts-expect-error TS(2531): Object is possibly 'null'.
     const sVal = startInp.value;
+    // @ts-expect-error TS(2531): Object is possibly 'null'.
     const eVal = endInp.value;
     if (!sVal) return;
 
     if (!eVal) {
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         endInp.value = sVal;
     }
+    // @ts-expect-error TS(2531): Object is possibly 'null'.
     if (!endInp.value) return;
 
+    // @ts-expect-error TS(2531): Object is possibly 'null'.
     const dStart = toDate(startInp.value);
+    // @ts-expect-error TS(2531): Object is possibly 'null'.
     const dEnd = toDate(endInp.value);
     if (dEnd < dStart) {
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         endInp.setCustomValidity('End before start');
         return;
     }
+    // @ts-expect-error TS(2531): Object is possibly 'null'.
     endInp.setCustomValidity('');
     buildTables(dStart, dEnd);
 }
 
+// @ts-expect-error TS(2393): Duplicate function implementation.
 function initListeners() {
     const startInp = document.getElementById('start');
     const endInp = document.getElementById('end');
 
+    // @ts-expect-error TS(2531): Object is possibly 'null'.
     startInp.addEventListener('change', maybeGenerate);
+    // @ts-expect-error TS(2531): Object is possibly 'null'.
     endInp.addEventListener('change', maybeGenerate);
 }
 
@@ -253,35 +284,46 @@ function initSubmitHandler() {
     const endInp = document.getElementById('end');
 
     /* ─── submit → build JSON ----------------------------------- */
+    // @ts-expect-error TS(2531): Object is possibly 'null'.
     form.addEventListener('submit', e => {
         e.preventDefault();
         const payload = {};
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         const startD = toDate(startInp.value);
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         const endD = toDate(endInp.value);
 
+        // @ts-expect-error TS(2550): Property 'entries' does not exist on type 'ObjectC... Remove this comment to see the full error message
         for (const [date, arr] of Object.entries(slotsMap)) {
             const cur = toDate(date);
             if (cur < startD || cur > endD) continue;        // auslassen
+            // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
             payload[date] = arr;
         }
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         hidden.value = JSON.stringify(payload);
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         form.submit();
     });
 }
 
 /* ========  DRAG-&-DROP ORDERING  ================================= */
 function initSlotDnD() {
-    let dragSrc = null;
+    let dragSrc: any = null;
 
     document.addEventListener('dragstart', e => {
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         if (e.target.closest('button') || e.target.closest('input')) return;
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         const slot = e.target.closest('.slot');
         if (!slot) return;
         dragSrc = slot;
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         e.dataTransfer.effectAllowed = 'move';
     });
 
     document.addEventListener('dragover', e => {
+        // @ts-expect-error TS(2531): Object is possibly 'null'.
         const slot = e.target.closest('.slot');
         if (!slot || slot === dragSrc) return;
         const container = slot.parentElement;
@@ -301,13 +343,16 @@ function initSlotDnD() {
         if (!firstSlot) return;
 
         const dateISO = firstSlot.dataset.slotDate;
+        // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
         const dayArr = slotsMap[dateISO] || [];
 
         // neue Reihenfolge anhand data-slotId
         Array.from(cont.querySelectorAll('.slot')).forEach((el, i) => {
-            const obj = dayArr.find(s => s.id === el.dataset.slotId);
+            // @ts-expect-error TS(2571): Object is of type 'unknown'.
+            const obj = dayArr.find((s: any) => s.id === el.dataset.slotId);
             if (obj) obj.position = i;
         });
+        // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
         slotsMap[dateISO] = dayArr;
 
         reIndexDay(dateISO);
@@ -322,7 +367,9 @@ function init() {
     initSubmitHandler();
     //initSlotDnD();
 
+    // @ts-expect-error TS(2339): Property 'PREFILLED_SLOTS' does not exist on type ... Remove this comment to see the full error message
     if (window.PREFILLED_SLOTS) {
+        // @ts-expect-error TS(2339): Property 'PREFILLED_SLOTS' does not exist on type ... Remove this comment to see the full error message
         Object.assign(slotsMap, window.PREFILLED_SLOTS);
         maybeGenerate();
     }

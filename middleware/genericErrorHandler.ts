@@ -1,7 +1,10 @@
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'ExpectedEr... Remove this comment to see the full error message
 const {ExpectedError, APIError, ValidationError} = require("../modules/lib/errors");
+// @ts-expect-error TS(2451): Cannot redeclare block-scoped variable 'renderer'.
 const renderer = require("../modules/renderer");
 
-module.exports = (err, req, res, next) => {
+// @ts-expect-error TS(2552): Cannot find name 'module'. Did you mean 'modules'?
+module.exports = (err: any, req: any, res: any, next: any) => {
     const status = err.status || 500;
     if (status >= 500) console.error(err);
     res.status(status);
