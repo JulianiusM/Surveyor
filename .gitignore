@@ -257,3 +257,6 @@ $RECYCLE.BIN/
 *.lnk
 
 settings.csv
+
+src/public/js/*.gen.js
+src/public/js/*.gen.js.map
