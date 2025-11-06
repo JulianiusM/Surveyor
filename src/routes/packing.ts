@@ -6,6 +6,7 @@ import controller from "../controller/packingController";
 const app = express.Router();
 
 app.use("/", createGuestFlowRouter({
+    addToEvent: true,
     entityType: 'packing',
     db: {
         getById: packingService.getPackingListById,

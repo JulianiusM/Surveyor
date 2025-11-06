@@ -6,12 +6,13 @@ import {Guest} from '../entities/user/Guest';
 import {GuestLink} from '../entities/user/GuestLink';
 import {Role} from '../entities/user/Role';
 import {MoreThan} from "typeorm";
+import type {OidcClaims} from "../../../types/UserTypes";
 
-export async function registerUser(username: string, password: string, email: string) {
+export async function registerUser(username: string, name: string, password: string, email: string) {
     const repo = AppDataSource.getRepository(User);
     const hashed = await bcrypt.hash(password, 10);
 
-    const user = repo.create({username, password: hashed, email, isActive: false});
+    const user = repo.create({username, name, password: hashed, email, isActive: false});
     const result = await repo.save(user);
     return result.id;
 }
@@ -20,22 +21,22 @@ export async function getUserByUsername(username: string) {
     const repo = AppDataSource.getRepository(User);
     return await repo.findOne({
         where: {username},
-        select: ['id', 'username', 'email', 'isActive']
+        select: ['id', 'name', 'username', 'email', 'isActive']
     });
 }
 
-export async function verifyPassword(userId: number, plain: string) {
+export async function verifyPassword(userId: number, password: string) {
     const repo = AppDataSource.getRepository(User);
     const user = await repo.findOne({where: {id: userId}, select: ['password']});
-    if (!user) return false;
-    return bcrypt.compare(plain, user.password);
+    if (!user || !user.password) return false;
+    return bcrypt.compare(password, user.password);
 }
 
-export async function generateActivationToken(username: string) {
+export async function generateActivationToken(userId: number) {
     const repo = AppDataSource.getRepository(User);
     const token = generateUniqueToken();
     const expiration = new Date(Date.now() + 3600_000);
-    await repo.update({username}, {
+    await repo.update({id: userId}, {
         activationToken: token,
         activationTokenExpiration: expiration
     });
@@ -49,13 +50,13 @@ export async function verifyActivationToken(token: string) {
             activationToken: token,
             activationTokenExpiration: MoreThan(new Date())
         },
-        select: ['id', 'username', 'email', 'isActive']
+        select: ['id', 'name', 'username', 'email', 'isActive']
     });
 }
 
-export async function activateUser(username: string) {
+export async function activateUser(userId: number) {
     const repo = AppDataSource.getRepository(User);
-    await repo.update({username}, {
+    await repo.update({id: userId}, {
         isActive: true,
         activationToken: null,
         activationTokenExpiration: null
@@ -80,7 +81,7 @@ export async function verifyPasswordResetToken(token: string) {
             resetToken: token,
             resetTokenExpiration: MoreThan(new Date())
         },
-        select: ['id', 'username', 'email', 'isActive']
+        select: ['id', 'name', 'username', 'email', 'isActive']
     });
 }
 
@@ -117,17 +118,11 @@ export async function registerGuest(entityType: string, entityId: string, userna
     return {guestId, token};
 }
 
-export async function getGuestByToken(token: string) {
-    const repo = AppDataSource.getRepository(GuestLink);
-    return await repo.createQueryBuilder('gl')
-        .leftJoinAndSelect('gl.guest', 'g')
-        .where('gl.token = :token', {token})
-        .select([
-            'g.id', 'g.username', 'g.email',
-            'gl.entityType', 'gl.entityId'
-        ])
-        .limit(1)
-        .getRawOne();
+export async function getGuestByToken(token: string, entityType: string, entityId: string) {
+    const repo = AppDataSource.getRepository(Guest);
+    return await repo.findOne({
+        where: {guestLinks: {token: token, entityType: entityType, entityId: entityId}}
+    })
 }
 
 export async function getGuestInternal(guestId: number) {
@@ -150,4 +145,142 @@ export async function getGuestLinkToken(entityType: string, entityId: string, gu
 export async function getAllRoles() {
     const repo = AppDataSource.getRepository(Role);
     return await repo.find();
+}
+
+/**
+ * ---- SSO / OIDC helpers ----
+ */
+
+async function usernameExists(username: string): Promise<boolean> {
+    const repo = AppDataSource.getRepository(User);
+    const count = await repo.count({where: {username}});
+    return count > 0;
+}
+
+async function toUniqueUsername(base: string): Promise<string> {
+    const sanitized = base
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]/g, '')
+        .slice(0, 30) || 'user';
+    if (!(await usernameExists(sanitized))) return sanitized;
+
+    // add numeric suffix
+    for (let i = 1; i < 10_000; i++) {
+        const candidate = `${sanitized}-${i}`;
+        if (!(await usernameExists(candidate))) return candidate;
+    }
+    // fallback (should never happen)
+    return `${sanitized}-${Date.now()}`;
+}
+
+/**
+ * Find a user by OIDC issuer+sub.
+ */
+export async function getUserByOidc(oidcIssuer: string, oidcSub: string) {
+    const repo = AppDataSource.getRepository(User);
+    return await repo.findOne({
+        where: {oidcIssuer, oidcSub},
+        select: ['id', 'name', 'username', 'email', 'isActive'],
+    });
+}
+
+/**
+ * Link an existing local user to an OIDC identity.
+ * Useful if you want a one-time “Connect SSO” button.
+ */
+export async function linkUserToOidc(
+    userId: number,
+    oidcIssuer: string,
+    oidcSub: string
+) {
+    const repo = AppDataSource.getRepository(User);
+    await repo.update({id: userId}, {oidcIssuer, oidcSub});
+}
+
+/**
+ * Find or create a user from OIDC claims.
+ * - Primary key: (issuer, sub)
+ * - Optional fallback: email match (link existing local account)
+ * - JIT-provisions a new user when needed.
+ */
+export async function findOrCreateUserFromOidc(
+    oidcIssuer: string,
+    claims: OidcClaims,
+    opts: { linkByEmail?: boolean } = {linkByEmail: true}
+) {
+    const repo = AppDataSource.getRepository(User);
+    const {sub, email, preferred_username, name} = claims;
+
+    // 1) Try exact OIDC match first
+    let user = await repo.findOne({
+        where: {oidcIssuer, oidcSub: sub},
+    });
+
+    // 2) If not found: try link-by-email (optional)
+    if (!user && opts.linkByEmail && email) {
+        user = await repo.findOne({where: {email}});
+        if (user) {
+            user.oidcIssuer = oidcIssuer;
+            user.oidcSub = sub;
+            if (user.isActive !== true) user.isActive = true;
+            await repo.save(user);
+        }
+    }
+
+    // 3) If still not found: create a new local user (JIT provisioning)
+    // inside findOrCreateUserFromOidc, in the "3) If still not found: create a new local user" block
+    if (!user) {
+        const baseUsername =
+            preferred_username ||
+            (email ? email.split('@')[0] : `oidc_${sub.slice(0, 8)}`);
+        const uniqueUsername = await toUniqueUsername(baseUsername);
+
+        // Ensure we don't violate unique(email)
+        let emailToUse = email || `${sub}@no-email.local`;
+
+        // If linkByEmail is disabled OR the email is already taken, use a synthetic email
+        if (email) {
+            const emailTaken = await repo.exist({where: {email}});
+            if (!opts.linkByEmail || emailTaken) {
+                emailToUse = `${sub}@no-email.local`;
+            }
+        }
+
+        user = repo.create({
+            username: uniqueUsername,
+            name: name || baseUsername,
+            email: emailToUse,
+            password: null,
+            isActive: true,
+            oidcIssuer,
+            oidcSub: sub,
+        });
+
+        try {
+            user = await repo.save(user);
+        } catch (err: any) {
+            // Last-chance fallback for race conditions (MySQL/PG/SQLite)
+            const message = String(err?.message || '');
+            if (
+                err?.code === 'ER_DUP_ENTRY' || // MySQL/MariaDB
+                err?.code === '23505' ||        // Postgres
+                message.includes('UNIQUE')      // SQLite/others
+            ) {
+                user.email = `${sub}@no-email.local`;
+                user = await repo.save(user);
+            } else {
+                throw err;
+            }
+        }
+    }
+
+    return user;
+}
+
+/**
+ * Optional: remove OIDC link (keeps the local account).
+ */
+export async function unlinkOidc(userId: number) {
+    const repo = AppDataSource.getRepository(User);
+    await repo.update({id: userId}, {oidcIssuer: null, oidcSub: null});
 }

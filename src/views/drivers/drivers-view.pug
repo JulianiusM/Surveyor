@@ -9,9 +9,10 @@ block title
         | #{data.list.title}
 
 block content
-    - const owner = user && user.id === data.list.owner_id
-    - const manage = !!(owner || (data.list.guest_manage && (guest || user)))
-    - const add = !!(manage || data.list.allow_guest_add);
+    -
+        const owner = user && user.id === data.list.ownerId
+        const manage = !!(owner || (data.list.guestManage && (guest || user)))
+        const add = !!(manage || data.list.allowGuestAdd);
 
     // ─── Description (editable) ──────────────────────────────
     if add
@@ -49,14 +50,14 @@ block content
                             input#allowAddSwitch.form-check-input(
                                 type="checkbox"
                                 autocomplete="off"
-                                checked= data.list.allow_guest_add == 1 )
+                                checked= !!data.list.allowGuestAdd )
                             label.form-check-label(for="allowAddSwitch") Guests can add items
                     .col-md-6.d-flex.align-items-center
                         .form-check.form-switch
                             input#guestManageSwitch.form-check-input(
                                 type="checkbox"
                                 autocomplete="off"
-                                checked= data.list.guest_manage == 1 )
+                                checked= !!data.list.guestManage )
                             label.form-check-label(for="guestManageSwitch") Guests may manage list
 
     //Erste Zeile: Metainfos / Badge
@@ -105,14 +106,14 @@ block content
             tbody(data-reorderable=manage ? true : null)
                 each item in data.items
                     - const my     = data.assignments.includes(item.id)
-                    - const isFull = item.assigned_count >= item.max_assignees
-                    - const myOwner = user ? user.id === item.user_id : guest ? guest.id === item.guest_id : false;
-                    tr.draggable(data-itemid=item.id data-pos=item.position)
+                    - const isFull = item.assignedCount >= item.maxAssignees
+                    - const myOwner = user ? user.id === item.userId : guest ? guest.id === item.guestId : false;
+                    tr.draggable(data-itemid=item.id data-pos=item.pos)
                         // Title
-                        td= item.driver_name
+                        td= item.driverName
 
                         // Description
-                        if manage || data.list.allow_guest_add || myOwner
+                        if manage || data.list.allowGuestAdd || myOwner
                             td(data-edit="description" data-id=item.id)= item.description
                         else
                             td= item.description
@@ -137,14 +138,14 @@ block content
                                 data-edit="maxAssignees"
                                 data-id=item.id
                             )
-                                span(data-count)= item.assigned_count
+                                span(data-count)= item.assignedCount
                                 |  /&nbsp;
-                                span(data-max)= item.max_assignees
+                                span(data-max)= item.maxAssignees
                         else
                             td.text-center
-                                span(data-count)= item.assigned_count
+                                span(data-count)= item.assignedCount
                                 |  /&nbsp;
-                                span(data-max)= item.max_assignees
+                                span(data-max)= item.maxAssignees
 
                         //  ── Action-Spalte + Markierung ─────────────────────────────
                         td.text-center
@@ -165,7 +166,7 @@ block content
 
 
     // Sichtbar für Owner oder bei erlaubtem Gast-Add
-    if data.list.allow_guest_add || manage
+    if add
         hr
         .card.bg-dark.text-light.border-secondary.mb-3
             .card-header.p-2.d-flex.align-items-center
@@ -180,7 +181,7 @@ block content
                 .col-md-4
                     label.form-label.mb-1(for="title") Driver
                     input#title.form-control.text-bg-dark.text-secondary(
-                        name="title" value=`${user ? user.username : guest ? guest.username : 'ERROR'}` readonly required)
+                        name="title" value=`${user ? user.name : guest ? guest.username : 'ERROR'}` readonly required)
 
                 //Beschreibung
                 .col-md-4
@@ -192,7 +193,7 @@ block content
                 .col-md-2
                     label.form-label.mb-1(for="max") Max #
                     input#max.form-control.text-bg-dark(
-                        type="number" min="1" value="1" name="max")
+                        type="number" min="1" value="1" name="maxAssignees")
 
                 //Add-Button
                 .col-md-2.d-grid

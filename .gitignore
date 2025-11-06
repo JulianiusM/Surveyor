@@ -173,6 +173,7 @@ web_modules/
 .env.test.local
 .env.production.local
 .env.local
+.env.e2e
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -258,5 +259,8 @@ $RECYCLE.BIN/
 
 settings.csv
 
-src/public/js/*.gen.js
-src/public/js/*.gen.js.map
+src/public/js/**/*.gen.js
+src/public/js/**/*.gen.js.map
+
+src/public/style/**/*.css
+src/public/style/**/*.css.map

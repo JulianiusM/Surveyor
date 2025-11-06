@@ -1,22 +1,44 @@
 import {APIError, ExpectedError} from "../modules/lib/errors";
-import {asyncParamHandler} from "../modules/lib/asyncHandler";
+import {asyncHandler, asyncParamHandler} from "../modules/lib/asyncHandler";
+import {NextFunction, Request, Response, Router} from "express";
+import {GuestFlowDb} from "../types/UserTypes";
 
-export function paramHandler(param: any, router: any, getById: any, entityType: any) {
-    handleParam(param, router, getById, entityType, new ExpectedError(`${entityType} not found`, 'error', 404));
-}
-
-export function apiParamHandler(param: any, router: any, getById: any, entityType: any) {
+export function apiParamHandler(param: string, router: Router, getById: GuestFlowDb['getById'], entityType: string) {
     handleParam(param, router, getById, entityType, new APIError(`${entityType} not found`, {}, 404));
 }
 
-function handleParam(param: any, router: any, getById: any, entityName: any, error: any) {
-    router.param(param, asyncParamHandler(async (req: any, res: any, next: any, id: any) => {
-        const entity = await getById(id);
-        if (!entity) {
-            throw error;
-        }
-        req.resource = req.resource || {};
-        req.resource[entityName] = entity;
-        next();
-    }));
+export function paramHandler(param: string, router: Router, getById: GuestFlowDb['getById'], entityType: string) {
+    handleParam(param, router, getById, entityType, new ExpectedError(`${entityType} not found`, 'error', 404));
+}
+
+export function queryHandler(param: string, router: Router, getById: GuestFlowDb['getById'], entityName: string, error?: Error) {
+    router.use(asyncHandler(async (req: Request, res: Response, next: NextFunction) =>
+        await handle(req.query[param], getById, entityName, req, res, next, error)
+    ));
+}
+
+export function handleParam(param: string, router: Router, getById: GuestFlowDb['getById'], entityName: string, error: Error) {
+    router.param(param, asyncParamHandler(async (req: Request, res: Response, next: NextFunction, id: any) =>
+        await handle(id, getById, entityName, req, res, next, error)
+    ));
+}
+
+async function handle(
+    id: any,
+    getById: GuestFlowDb['getById'],
+    entityName: string,
+    req: Request,
+    res: Response,
+    next: NextFunction,
+    error?: Error,
+) {
+    const entity = await getById(id);
+    if (!entity) {
+        if (error) throw error;
+        // No error --> Optional resource
+        return next();
+    }
+    req.resource = req.resource || {};
+    req.resource[entityName] = entity;
+    next();
 }

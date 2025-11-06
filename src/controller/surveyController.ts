@@ -1,13 +1,15 @@
 import Joi from 'joi';
+import {Request} from "express";
 
 import * as surveyService from "../modules/database/services/SurveyService";
 import {ExpectedError, ValidationError} from "../modules/lib/errors";
 import {Survey} from "../modules/database/entities/surveys/Survey";
-import {SurveyAnswer} from "../types/SurveyTypes";
+import type {SurveyAnswer, WeekDay, WeekInMonth} from "../types/SurveyTypes";
+import {SurveyCombination} from "../modules/database/entities/surveys/SurveyCombination";
 
 const CREATE_TEMPLATE = 'surveyor/survey-create';
 
-function preprocessCreate(body: any) {
+function preprocessCreate(body: any): Partial<Survey> & { combinations: Partial<SurveyCombination>[] } {
     // 1) normalize combinations into an array of objects
     let combos = body.combinations;
     if (!combos) {
@@ -25,7 +27,7 @@ function preprocessCreate(body: any) {
             .items(
                 Joi.object({
                     weekday: Joi.string()
-                        .valid('MO', 'DI', 'MI', 'DO', 'FR', 'SA', 'SO')
+                        .valid('MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN')
                         .required(),
                     week: Joi.alternatives()
                         .try(Joi.number().integer().min(1).max(4), Joi.string().valid('LAST'))
@@ -53,42 +55,62 @@ function preprocessCreate(body: any) {
         throw new ValidationError(CREATE_TEMPLATE, msg, {body});
     }
 
-    // On success, return the sanitized values
+    // 3) Normalize to entity types:
+    //    week (number | 'LAST') -> nthWeek: WeekInMonth ('1' | '2' | '3' | '4' | 'LAST')
+    const normalized: Partial<SurveyCombination>[] = value.combinations.map(
+        (c: { weekday: WeekDay; week: number | 'LAST' }) => ({
+            weekday: c.weekday,
+            nthWeek: (typeof c.week === 'number' ? String(c.week) : c.week) as WeekInMonth,
+        })
+    );
+
     return {
         title: value.title,
         description: value.description || null,
-        combinations: value.combinations
+        combinations: normalized,
     };
 }
 
-async function createEntity(ownerId: number, p: any) {
-    return surveyService.createSurvey(ownerId, p.title, p.description, p.combinations); // gibt surveyId
+async function createEntity(
+    ownerId: number,
+    p: Partial<Survey> & { combinations: Partial<SurveyCombination>[] },
+) {
+    return surveyService.createSurveyTx(
+        ownerId,
+        p.title!,
+        p.description!,
+
+        p.combinations.map((it) => ({
+            weekday: it.weekday!,
+            week: it.nthWeek!,
+        })),
+    );
 }
 
 
 async function afterCreateItems() {
 }
 
-async function fetchForView(survey: Survey, session: any) {
+async function fetchForView(survey: Survey, session: Request['session']) {
     const combinations = await surveyService.getCombinationsBySurveyId(survey.id);
     const responses = await surveyService.getResponsesSorted(survey.id);
     return {survey, combinations, responses};
 }
 
-async function fetchForDuplicate(survey: any, session: any) {
+async function fetchForDuplicate(survey: Survey, session: Request['session']) {
     return await surveyService.getCombinationsBySurveyId(survey.id);
 }
 
-async function deleteEntity(survey: any, session: any) {
+async function deleteEntity(survey: Survey, session: Request['session']) {
     return await surveyService.deleteSurvey(survey.id);
 }
 
-async function addCombination(survey: any, weekday: any, nth: any) {
+async function addCombination(survey: Survey, weekday: WeekDay, nth: WeekInMonth) {
     if (!weekday || !nth) throw new ExpectedError('Invalid selection', 'error', 400);
     await surveyService.addCombination(survey.id, weekday, nth);
 }
 
-async function submitResponses(survey: Survey, session: any, body: any) {
+async function submitResponses(survey: Survey, session: Request['session'], body: any) {
     const answers: { [p: string]: SurveyAnswer } = body;
     if (session.user) {
         const uid = session.user.id;

@@ -4,11 +4,13 @@ import * as driverService from '../modules/database/services/DriverService';
 import {generateUniqueId} from "../modules/lib/util";
 import {APIError, ValidationError} from '../modules/lib/errors';
 import {DriversItem} from "../modules/database/entities/drivers/DriversItem";
+import {DriversList} from "../modules/database/entities/drivers/DriversList";
+import {Request} from "express";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'drivers/drivers-create';
 
-function preprocessCreate(body: any) {
+function preprocessCreate(body: any): Partial<DriversList> {
     let items;
     try {
         items = JSON.parse(body.items || '[]');
@@ -25,8 +27,7 @@ function preprocessCreate(body: any) {
     const schema = Joi.object({
         title: Joi.string().required(),
         allowGuestAdd: Joi.boolean(),
-        guestManage: Joi.boolean(),
-        items: Joi.array().items(itemSchema).min(0).required()
+        guestManage: Joi.boolean()
     });
 
     const {error, value} = schema.validate(
@@ -47,29 +48,22 @@ function preprocessCreate(body: any) {
     return {
         title: value.title,
         description: value.description || null,
-        allow: value.allowGuestAdd,
-        guestManage: value.guestManage,
-        items: value.items
+        allowGuestAdd: value.allowGuestAdd,
+        guestManage: value.guestManage
     };
 }
 
 /*  ---- NEU: alles in einer Transaktion ---- */
-async function createEntity(ownerId: any, listData: any) {
-    return await driverService.createDriversListTx(
+async function createEntity(
+    ownerId: number,
+    listData: Partial<DriversList>
+) {
+    return await driverService.createDriversList(
         ownerId,
-        listData.title,
-        listData.description,
-        listData.allow,
-        listData.guestManage,
-
-        // @ts-expect-error TS(7006): Parameter 'it' implicitly has an 'any' type.
-        listData.items.map((it, i) => ({
-            id: generateUniqueId(),
-            title: it.title,
-            description: it.description || '',
-            maxAssignees: Number(it.maxAssignees) || 1,
-            position: i
-        }))
+        listData.title!,
+        listData.description!,
+        listData.allowGuestAdd!,
+        listData.guestManage!
     );
 }
 
@@ -78,7 +72,7 @@ async function createEntity(ownerId: any, listData: any) {
 async function afterCreateItems() {
 }
 
-async function fetchForView(list: any, session: any) {
+async function fetchForView(list: DriversList, session: Request['session']) {
     const items = await driverService.getDriversItems(list.id);
 
     const assignments = session.user
@@ -93,21 +87,21 @@ async function fetchForView(list: any, session: any) {
     let openCount = 0;
     let emptyCount = 0;
 
-    items.forEach((it: any) => {                 // überspringen
+    items.forEach((it) => {                 // überspringen
         const arr = assigneeLists[it.id] || [];
-        arr.forEach((a: any) => {
+        arr.forEach((a) => {
             let id;
-            if (a.user_id) {
-                id = `u_${a.user_id}`;
-            } else if (a.guest_id) {
-                id = `g_${a.guest_id}`;
+            if (a.userId) {
+                id = `u_${a.userId}`;
+            } else if (a.guestId) {
+                id = `g_${a.guestId}`;
             } else {
                 id = a.name;
             }
             participantSet.add(id);
         }); // id, fallback name
-        if (it.assigned_count === 0) emptyCount++;
-        if (it.assigned_count < it.max_assignees) openCount++;
+        if (it.assignedCount === 0) emptyCount++;
+        if (it.assignedCount < (it.maxAssignees ?? 0)) openCount++;
     });
 
     const participantCount = participantSet.size;
@@ -121,17 +115,17 @@ async function fetchForView(list: any, session: any) {
     };
 }
 
-async function fetchForDuplicate(list: any, session: any) {
+async function fetchForDuplicate(list: DriversList, session: Request['session']) {
     return await driverService.getDriversItems(list.id);
 }
 
-async function deleteEntity(list: any, session: any) {
+async function deleteEntity(list: DriversList, session: Request['session']) {
     return await driverService.deleteDriversList(list.id);
 }
 
 // ---------- API ----------
 // API-specific controllers
-async function updateDescription(id: any, body: any) {
+async function updateDescription(id: string, body: any) {
     const {description} = body;
     if (description.length > 2000)
         throw new APIError('Description to long', body, 400)
@@ -140,13 +134,13 @@ async function updateDescription(id: any, body: any) {
 }
 
 
-async function reorderItems(id: any, order: any) {
+async function reorderItems(id: string, order: Array<{ itemId: string; position: number }>) {
     await driverService.reorderDriversItems(id, order);
     return 'Order saved';
 }
 
 
-async function quickAddItem(list: any, body: any, session: any) {
+async function quickAddItem(list: DriversList, body: any, session: Request['session']) {
     const {title = '', description = '', max = 1} = body;
     if (!title) throw new APIError('Title required', body, 400);
 
@@ -171,7 +165,7 @@ async function quickAddItem(list: any, body: any, session: any) {
 }
 
 
-async function updateItemDescription(itemId: any, body: any) {
+async function updateItemDescription(itemId: string, body: any) {
     if (!(await driverService.updateDriversItem(itemId, {description: body.description}))) {
         throw new APIError('Unknown error while saving', body, 500);
     }
@@ -179,7 +173,7 @@ async function updateItemDescription(itemId: any, body: any) {
 }
 
 
-async function updateItemAttr(itemId: any, body: any) {
+async function updateItemAttr(itemId: string, body: any) {
     const {field, value} = body;
     const allowed: any = {title: 1, description: 1, maxAssignees: 1};
 
@@ -191,29 +185,29 @@ async function updateItemAttr(itemId: any, body: any) {
     return 'Item updated';
 }
 
-async function deleteAssignment(assignId: any) {
+async function deleteAssignment(assignId: number) {
     await driverService.deleteDriversAssignment(assignId);
     return 'Assignment removed';
 }
 
-async function updateSettings(id: any, body: any) {
+async function updateSettings(id: string, body: any) {
     const {allowAdd, guestManage} = body;
     await driverService.updateDriversFlags(id, allowAdd, guestManage);
     return 'Settings saved';
 }
 
 
-async function deleteItem(itemId: any) {
+async function deleteItem(itemId: string) {
     await driverService.deleteDriversItem(itemId);
     return 'Item deleted';
 }
 
 function getAssignmentAccessMapping() {
     return {
-        assignToUser: (body: any, user: any) => driverService.assignDriversItemToUser(body.itemId, user),
-        assignToGuest: (body: any, user: any) => driverService.assignDriversItemToGuest(body.itemId, user),
-        unassignFromUser: (body: any, user: any) => driverService.unassignDriversItemUser(body.itemId, user),
-        unassignFromGuest: (body: any, user: any) => driverService.unassignDriversItemGuest(body.itemId, user),
+        assignToUser: (body: any, userId: number) => driverService.assignDriversItemToUser(body.itemId, userId),
+        assignToGuest: (body: any, guestId: number) => driverService.assignDriversItemToGuest(body.itemId, guestId),
+        unassignFromUser: (body: any, userId: number) => driverService.unassignDriversItemUser(body.itemId, userId),
+        unassignFromGuest: (body: any, guestId: number) => driverService.unassignDriversItemGuest(body.itemId, guestId),
     };
 }
 

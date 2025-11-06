@@ -1,5 +1,6 @@
 /*  Packing-Create – Client-Logic (no jQuery)  */
 import {setCurrentNavLocation} from "./module_functions";
+import {PackingItem} from "../../modules/database/entities/packing/PackingItem";
 
 export function buildCell(child: any) {
     const td = document.createElement('td');
@@ -8,20 +9,17 @@ export function buildCell(child: any) {
 }
 
 /* ───── Row creation / removal ──────────────────────────── */
-export function createRow(pref = {}, rowIdx = 0) {
-    const tableBody = document.getElementById('itemTable');
+export function createRow(pref: Partial<PackingItem> = {}, rowIdx = 0) {
+    const tableBody = document.getElementById('itemTable')!;
     const tr = document.createElement('tr');
 
-    // @ts-expect-error TS(2322): Type 'number' is not assignable to type 'string'.
-    tr.dataset.idx = rowIdx;
+    tr.dataset.idx = String(rowIdx);
 
     // title
     const tInput = document.createElement('input');
     tInput.className = 'form-control text-bg-dark';
     tInput.name = `t_${rowIdx}`;
     tInput.required = true;
-
-    // @ts-expect-error TS(2339): Property 'title' does not exist on type '{}'.
     tInput.value = pref.title || '';
     tr.appendChild(buildCell(tInput));
 
@@ -29,8 +27,6 @@ export function createRow(pref = {}, rowIdx = 0) {
     const dInput = document.createElement('input');
     dInput.className = 'form-control text-bg-dark';
     dInput.name = `d_${rowIdx}`;
-
-    // @ts-expect-error TS(2339): Property 'description' does not exist on type '{}'... Remove this comment to see the full error message
     dInput.value = pref.description || '';
     tr.appendChild(buildCell(dInput));
 
@@ -39,9 +35,7 @@ export function createRow(pref = {}, rowIdx = 0) {
     mInput.className = 'form-control text-bg-dark';
     mInput.type = 'number';
     mInput.min = '1';
-
-    // @ts-expect-error TS(2339): Property 'max_assignees' does not exist on type '{... Remove this comment to see the full error message
-    mInput.value = pref.max_assignees || 1;
+    mInput.value = String(pref.maxAssignees || 1);
     mInput.name = `m_${rowIdx}`;
     mInput.required = true;
     const tdMax = buildCell(mInput);
@@ -54,15 +48,19 @@ export function createRow(pref = {}, rowIdx = 0) {
 
     // Bootstrap-Switch
     const wrap = document.createElement('div');
-    wrap.className = 'form-check form-switch d-inline-flex align-items-center me-2';
+    wrap.className = 'form-check form-switch d-inline-flex align-items-center me-3';
+
     const sw = document.createElement('input');
     sw.type = 'checkbox';
     sw.className = 'form-check-input';
     sw.name = `e_${rowIdx}`;
-
-    // @ts-expect-error TS(2339): Property 'required_by_all' does not exist on type ... Remove this comment to see the full error message
-    sw.checked = !!pref.required_by_all;
+    sw.checked = !!pref.requiredByAll;
     wrap.appendChild(sw);
+
+    const lbl = document.createElement('span');
+    lbl.className = 'ms-1 small';
+    lbl.innerText = 'Everyone';
+    wrap.appendChild(lbl);
     tdAct.appendChild(wrap);
 
     // action remove
@@ -75,8 +73,6 @@ export function createRow(pref = {}, rowIdx = 0) {
 
     tr.appendChild(tdAct);
 
-
-    // @ts-expect-error TS(2531): Object is possibly 'null'.
     tableBody.appendChild(tr);
 }
 
@@ -87,20 +83,18 @@ export function prefillRows() {
     if (!window.PREFILLED_ITEMS) return;
 
     // @ts-expect-error TS(2339): Property 'PREFILLED_ITEMS' does not exist on type ... Remove this comment to see the full error message
-    window.PREFILLED_ITEMS.forEach((it: any, i: any) => createRow(it, i));
+    window.PREFILLED_ITEMS.forEach((it, i) => createRow(it, i));
 }
 
 /* ───── Build JSON & submit ─────────────────────────────── */
-export function handleSubmit(evt: any) {
-    const form = document.getElementById('packingForm');
-    const hiddenFld = document.getElementById('itemsJson');
+export function handleSubmit(evt: Event) {
+    const form = document.getElementById('packingForm') as HTMLFormElement;
+    const hiddenFld = document.getElementById('itemsJson') as HTMLInputElement;
     const tableBody = document.getElementById('itemTable');
     evt.preventDefault();
-    const items: any = [];
+    const items: Partial<PackingItem>[] = [];
 
-
-    // @ts-expect-error TS(2531): Object is possibly 'null'.
-    tableBody.querySelectorAll('tr').forEach(tr => {
+    tableBody?.querySelectorAll('tr').forEach(tr => {
 
         // @ts-expect-error TS(2531): Object is possibly 'null'.
         const tVal = tr.querySelector(`input[name^="t_"]`).value.trim();
@@ -119,22 +113,15 @@ export function handleSubmit(evt: any) {
         });
     });
 
-
-    // @ts-expect-error TS(2531): Object is possibly 'null'.
     hiddenFld.value = JSON.stringify(items);
-
-    // @ts-expect-error TS(2531): Object is possibly 'null'.
     form.submit();
 }
 
 export function initListeners() {
-    const addBtn = document.getElementById('addItemBtn');
-    const form = document.getElementById('packingForm');
+    const addBtn = document.getElementById('addItemBtn')!;
+    const form = document.getElementById('packingForm')!;
 
-    // @ts-expect-error TS(2531): Object is possibly 'null'.
-    addBtn.addEventListener('click', createRow);
-
-    // @ts-expect-error TS(2531): Object is possibly 'null'.
+    addBtn.addEventListener('click', (e) => createRow());
     form.addEventListener('submit', handleSubmit);
 }
 
@@ -152,6 +139,4 @@ export function init() {
 }
 
 // Expose to global scope
-window.Surveyor = {
-    init
-};
+window.Surveyor.init = init;

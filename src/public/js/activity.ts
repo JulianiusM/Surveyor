@@ -1,13 +1,18 @@
-/// <reference path="../../types/global.d.ts" />
-
-import {getSelectValues, setCurrentNavLocation, showInlineAlert} from "./module_functions";
+import {
+    getSelectValues,
+    post,
+    setCurrentNavLocation,
+    showInlineAlert,
+    startInlineEdit,
+    startInlineEditArea
+} from "./module_functions";
 
 /* ---------- assign / unassign ------------------------------- */
 export function initAssign() {
     document.addEventListener('click', async e => {
 
-        // @ts-expect-error TS(2531): Object is possibly 'null'.
-        const btn = e.target.closest('[data-action]');
+        // @ts-ignore
+        const btn = e.target?.closest('[data-action]');
         if (!btn) return;
 
         /* NEW — get surrounding .slot, not <td> ------------------ */
@@ -20,7 +25,7 @@ export function initAssign() {
         try {
 
             // @ts-expect-error TS(2304): Cannot find name 'ACT_PLAN_ID'.
-            await post(`/activity/${ACT_PLAN_ID}/${act}`, {slotId, role});
+            await post(`/activity/${window.ACT_PLAN_ID}/${act}`, {slotId, role});
             showInlineAlert('success', 'Updated');
             setTimeout(() => location.reload(), 120);
         } catch (err) {
@@ -33,10 +38,11 @@ export function initAssign() {
 
 export function initSelectBox() {
 
-    // @ts-expect-error TS(2581): Cannot find name '$'. Do you need to install type ... Remove this comment to see the full error message
     $('.multiSelect').select2({
         placeholder: 'Add Roles',
         width: '100%',
+
+        //@ts-ignore
         selectionCssClass: 'text-bg-dark',
         dropdownCssClass: 'text-bg-dark',
     });
@@ -59,7 +65,7 @@ export function initSelectBox() {
         try {
 
             // @ts-expect-error TS(2304): Cannot find name 'ACT_PLAN_ID'.
-            await post(`/activity/${ACT_PLAN_ID}/slot/${slot}/addRole`, {roles: vals});
+            await post(`/activity/${window.ACT_PLAN_ID}/slot/${slot}/addRole`, {roles: vals});
             showInlineAlert('success', 'Updated');
             setTimeout(() => location.reload(), 120);
         } catch (err) {
@@ -77,7 +83,7 @@ export function initInlineEdit() {
         const desc = e.target.closest('[data-edit="planDescription"]');
 
         // @ts-expect-error TS(2304): Cannot find name 'ACT_PLAN_ID'.
-        if (desc) return startInlineEditArea(desc, `/activity/${ACT_PLAN_ID}/description`);
+        if (desc) return startInlineEditArea(desc, `/activity/${window.ACT_PLAN_ID}/description`);
 
 
         // @ts-expect-error TS(2531): Object is possibly 'null'.
@@ -250,7 +256,7 @@ export function initDnD() {
         if (!dragCard) return;
 
         const order = [...dragParent.querySelectorAll('.slot')]
-            .map((el, i) => ({slotId: el.dataset.slotid, position: i}));
+            .map((el, i) => ({slotId: el.dataset.slotid, pos: i}));
 
         try {
 
@@ -354,6 +360,4 @@ export function init() {
 }
 
 // Expose to global scope
-window.Surveyor = {
-    init
-};
+window.Surveyor.init = init;

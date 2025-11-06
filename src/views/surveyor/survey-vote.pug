@@ -10,28 +10,29 @@ block title
 
 block content
     -
-        var weekdays = {
-            'MO': 'Monday',
-            'DI': 'Tuesday',
-            'MI': 'Wednesday',
-            'DO': 'Thursday',
-            'FR': 'Friday',
-            'SA': 'Saturday',
-            'SO': 'Sunday'
-        }
+        console.log(data.responses);
+        const weekdays = {
+            'MON': 'Monday',
+            'TUE': 'Tuesday',
+            'WED': 'Wednesday',
+            'THU': 'Thursday',
+            'FRI': 'Friday',
+            'SAT': 'Saturday',
+            'SUN': 'Sunday'
+        };
+        let userResponse;
         if (user) {
-            var userResponse = data.responses['u_' + user.id];
+            userResponse = data.responses['u_' + user.id];
         } else {
-            var userResponse = data.responses['g_' + guest.id];
+            userResponse = data.responses['g_' + guest.id];
         }
 
     if data.survey.description
         p#planDesc.mb-0.mt-2
             - const lines = data.survey.description.split('\n')
-            each line, i in lines
-                | #{line}
-                if i < lines.length - 1
-                    br
+            | #{line}
+            if i < lines.length - 1
+                br
 
     // Abstimmungsformular
     //── Your Response ────────────────────────────────────────
@@ -47,11 +48,11 @@ block content
                             i.bi.bi-person-lines-fill.me-1
                             | You
                         each combination in data.combinations
-                            th.text-center #{combination.nth_week === 'LAST' ? 'Last (4./5.) ' : combination.nth_week + '. ' } #{weekdays[combination.weekday]} of the month
+                            th.text-center #{combination.nthWeek === 'LAST' ? 'Last (4./5.) ' : combination.nthWeek + '. ' } #{weekdays[combination.weekday]} of the month
                 tbody
                     tr
                         if(user)
-                            td.sticky-col #{user.username}
+                            td.sticky-col #{user.name}
                         else if(guest)
                             td.sticky-col #{guest.username}
                         else
@@ -59,8 +60,7 @@ block content
                         each combination in data.combinations
                             td.text-center
                                 div.btn-group(role="group")
-                                    - if (userResponse) var own = userResponse.find((res) => res.combination_id === combination.id);
-
+                                    - const own = userResponse?.find((res) => res.combinationId === combination.id);
                                     input.btn-check(type="radio" name=`${combination.id}` value="yes" id=`yes-${combination.id}` checked=(own && own.answer === "yes"))
                                     label.btn.btn-outline-success(for=`yes-${combination.id}`) Yes
                                     input.btn-check(type="radio" name=`${combination.id}` value="maybe" id=`maybe-${combination.id}` checked=(own && own.answer === "maybe"))
@@ -86,13 +86,13 @@ block content
                             i.bi.bi-person-lines-fill.me-1
                             | User
                         each combination in data.combinations
-                            th.text-center #{combination.nth_week === 'LAST' ? 'Last (4./5.) ' : combination.nth_week + '. ' } #{weekdays[combination.weekday]} of the month
+                            th.text-center #{combination.nthWeek === 'LAST' ? 'Last (4./5.) ' : combination.nthWeek + '. ' } #{weekdays[combination.weekday]} of the month
                 tbody
                     each responses, res_id in data.responses
                         tr
-                            td.sticky-col #{responses[0].username}
+                            td.sticky-col #{responses[0].name || responses[0].username}
                             each combination in data.combinations
-                                - var found = responses.find((res) => res.combination_id === combination.id)
+                                -  const found = responses.find((res) => res.combinationId === combination.id);
                                 if(found)
                                     td.text-center
                                         input.btn-check(type="radio" id=`res-${found.id}` checked disabled)
@@ -115,16 +115,16 @@ block content
         .col-md-6
             label.form-label(for="weekday") Weekday:
             select.form-select.text-bg-dark(name="weekday" id="weekday" required)
-                option(value="MO") Monday
-                option(value="DI") Tuesday
-                option(value="MI") Wednesday
-                option(value="DO") Thursday
-                option(value="FR") Friday
-                option(value="SA") Saturday
-                option(value="SO") Sunday
+                option(value="MON") Monday
+                option(value="TUE") Tuesday
+                option(value="WED") Wednesday
+                option(value="THU") Thursday
+                option(value="FRI") Friday
+                option(value="SAT") Saturday
+                option(value="SUN") Sunday
         .col-md-6
             label.form-label(for="nth") Day in month:
-            select.form-select.text-bg-dark(name="nth" id="nth" required)
+            select.form-select.text-bg-dark(name="nthWeek" id="nth" required)
                 option(value="1") 1. day in month
                 option(value="2") 2. day in month
                 option(value="3") 3. day in month

@@ -19,17 +19,20 @@ export class User {
     @Column("varchar", {name: "username", unique: true, length: 50})
     username: string;
 
+    @Column("varchar", {name: "name", length: 50})
+    name: string;
+
     @Column("varchar", {name: "email", unique: true, length: 100})
     email: string;
 
-    @Column("varchar", {name: "PASSWORD", length: 255})
-    password: string;
+    @Column("varchar", {name: "PASSWORD", nullable: true, length: 255})
+    password: string | null;
 
     @Column("tinyint", {
         name: "is_active",
         nullable: true,
         width: 1,
-        default: () => "'0'",
+        default: 0,
     })
     isActive: boolean | null;
 
@@ -56,6 +59,12 @@ export class User {
 
     @Column("datetime", {name: "reset_token_expiration", nullable: true})
     resetTokenExpiration: Date | null;
+
+    @Column('varchar', {name: 'oidc_sub', nullable: true, length: 255})
+    oidcSub: string | null;
+
+    @Column('varchar', {name: 'oidc_issuer', nullable: true, length: 255})
+    oidcIssuer: string | null;
 
     @OneToMany(
         () => ActivityAssignment,

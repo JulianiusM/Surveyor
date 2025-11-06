@@ -6,7 +6,7 @@ import {ActivityAssignmentRole} from "../entities/activity/ActivityAssignmentRol
 import {Role} from "../entities/user/Role";
 import {generateUniqueId} from "../../lib/util";
 import {ActivitySlotRole} from "../entities/activity/ActivitySlotRole";
-import {PlanParticipant, PlanParticipantRow, SlotAssignmentMap} from "../../../types/ActivityTypes";
+import type {PlanParticipant, PlanParticipantRow, SlotAssignmentMap} from "../../../types/ActivityTypes";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Role & Assignment helpers
@@ -98,7 +98,8 @@ export async function createActivityPlan(
     startDate: string,
     endDate: string,
     allowGuestAdd: boolean,
-    guestManage: boolean
+    guestManage: boolean,
+    eventId?: string,
 ) {
     const repo = AppDataSource.getRepository(ActivityPlan);
     const plan = repo.create({
@@ -110,6 +111,7 @@ export async function createActivityPlan(
         endDate,
         allowGuestAdd,
         guestManage,
+        eventId,
     });
     await repo.save(plan);
 }
@@ -122,7 +124,8 @@ export async function createActivityPlanTx(
     endDate: string,
     allowGuestAdd: boolean,
     guestManage: boolean,
-    slots: any[]
+    slots: Partial<ActivitySlot>[],
+    eventId?: string,
 ) {
     return await AppDataSource.transaction(async (manager) => {
         const id = generateUniqueId();
@@ -138,6 +141,7 @@ export async function createActivityPlanTx(
             endDate,
             allowGuestAdd,
             guestManage,
+            eventId,
         });
 
         if (slots.length) {
@@ -147,8 +151,8 @@ export async function createActivityPlanTx(
                     planId: id,
                     title: s.title,
                     description: s.description,
-                    day: s.date,
-                    pos: s.position,
+                    day: s.day,
+                    pos: s.pos,
                     maxAssignees: s.maxAssignees,
                 })
             );
@@ -160,7 +164,10 @@ export async function createActivityPlanTx(
 }
 
 export async function getActivityPlanById(id: string) {
-    return await AppDataSource.getRepository(ActivityPlan).findOne({where: {id}});
+    return await AppDataSource.getRepository(ActivityPlan).findOne({
+        where: {id},
+        relations: ['event'],
+    });
 }
 
 export async function deleteActivityPlan(id: string) {
@@ -181,6 +188,7 @@ export async function updateActivityPlanFlags(
 export async function getActivityPlansByUserId(userId: number) {
     return await AppDataSource.getRepository(ActivityPlan).find({
         where: {ownerId: userId},
+        relations: ['event'],
     });
 }
 
@@ -209,7 +217,7 @@ export async function addActivitySlot(planId: string, slot: Partial<ActivitySlot
     await repo.save(slotEntity);
 }
 
-export async function addActivitySlots(planId: string, slots: any[]) {
+export async function addActivitySlots(planId: string, slots: Partial<ActivitySlot>[]) {
     const repo = AppDataSource.getRepository(ActivitySlot);
     const slotEntities = slots.map((s) =>
         repo.create({
@@ -217,8 +225,8 @@ export async function addActivitySlots(planId: string, slots: any[]) {
             planId,
             title: s.title,
             description: s.description,
-            day: s.date,
-            pos: s.position,
+            day: s.day,
+            pos: s.pos,
             maxAssignees: s.maxAssignees,
         })
     );
@@ -230,31 +238,26 @@ export async function getActivitySlots(planId: string) {
 
     const slots = await repo
         .createQueryBuilder("s")
-        .leftJoinAndSelect(
-            (qb) =>
-                qb
-                    .from(ActivityAssignment, "a")
-                    .select("a.slotId", "slotId")
-                    .addSelect("COUNT(*)", "cnt")
-                    .where("a.planId = :planId", {planId})
-                    .groupBy("a.slotId"),
-            "ac",
-            "ac.slotId = s.id"
+        //.leftJoin("s.assignments", "a", "a.planId = :planId", {planId})
+        .loadRelationCountAndMap(
+            "s.assignedCount",
+            "s.activityAssignments",
+            "a",
+            (qb) => qb.where("a.planId = :planId", {planId})
         )
         .where("s.planId = :planId", {planId})
         .orderBy("s.pos", "ASC")
-        .getRawMany();
+        .getMany(); // entities now have s.assignedCount
 
-    slots.forEach((s) => {
-        s.date = s.day;
-        s.position = s.pos;
-        s.assigned_count = Number(s.cnt) || 0;
-    });
-
-    return Object.groupBy(slots, (s) => s.date);
+    // Type hint: (ActivitySlot & { assignedCount: number })[]
+    return Object.groupBy(
+        slots as (ActivitySlot & { assignedCount: number })[],
+        (s) => s.day
+    );
 }
 
-export async function updateActivitySlot(slotId: string, fields: any) {
+
+export async function updateActivitySlot(slotId: string, fields: Partial<ActivitySlot>) {
     const repo = AppDataSource.getRepository(ActivitySlot);
 
     // Build partial update object conditionally
@@ -263,7 +266,7 @@ export async function updateActivitySlot(slotId: string, fields: any) {
     if (fields.title !== undefined) updateData.title = fields.title;
     if (fields.description !== undefined) updateData.description = fields.description;
     if (fields.maxAssignees !== undefined) updateData.maxAssignees = fields.maxAssignees;
-    if (fields.position !== undefined) updateData.pos = fields.position;
+    if (fields.pos !== undefined) updateData.pos = fields.pos;
 
     if (Object.keys(updateData).length === 0) return;
 
@@ -275,22 +278,17 @@ export async function deleteActivitySlot(slotId: string) {
     await AppDataSource.getRepository(ActivitySlot).delete(slotId);
 }
 
-export async function reorderActivitySlots(planId: string, order: any[]) {
+export async function reorderActivitySlots(planId: string, order: { slotId: string, pos: number }[]) {
     const repo = AppDataSource.getRepository(ActivitySlot);
     await Promise.all(
         order.map((o) =>
-            repo.update({id: o.slotId, planId}, {pos: o.position})
+            repo.update({id: o.slotId, planId}, {pos: o.pos})
         )
     );
 }
 
 export async function getLastActivitySlotNumber(planId: string, date: string) {
-    const res = await AppDataSource.getRepository(ActivitySlot)
-        .createQueryBuilder("s")
-        .select("MAX(s.pos)", "max")
-        .where("s.planId = :planId AND s.day = :day", {planId, day: date})
-        .getRawOne();
-    return res?.max ?? 0;
+    return await AppDataSource.getRepository(ActivitySlot).maximum("pos", {planId, day: date}) ?? 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -375,28 +373,31 @@ export async function getActivitySlotAssignmentsForGuest(planId: string, guestId
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function getActivitySlotAssignees(planId: string): Promise<SlotAssignmentMap> {
-    const qb = AppDataSource
-        .getRepository(ActivityAssignment)
-        .createQueryBuilder("aa")
-        .leftJoinAndSelect("aa.user", "user")
-        .leftJoinAndSelect("aa.guest", "guest")
-        .leftJoinAndSelect("aa.activityAssignmentRoles", "ar")
-        .leftJoinAndSelect("ar.role", "role")
-        .where("aa.planId = :planId", {planId});
+    const repo = AppDataSource.getRepository(ActivityAssignment);
 
-    const assignments = await qb.getMany();
+    // fetch assignments + needed relations
+    const assignments = await repo.find({
+        where: {planId},
+        relations: {
+            user: true,
+            guest: true,
+            activityAssignmentRoles: {role: true},
+        },
+    });
 
     const map: SlotAssignmentMap = {};
 
     for (const assignment of assignments) {
-        const slotId = (assignment as any).slotId; // or assignment.slot?.id if relation loaded
+        const slotId = assignment.slotId; // assuming slotId is scalar field on ActivityAssignment
 
         const name =
             assignment.user?.username ??
             assignment.guest?.username ??
             "—";
 
-        const roles = assignment.activityAssignmentRoles.map((ar) => ar.role.name);
+        const roles = assignment.activityAssignmentRoles.map(
+            (ar) => ar.role.name
+        );
 
         const assignee = {
             id: assignment.id,
@@ -443,25 +444,29 @@ export async function deleteActivitySlotAssignment(assignId: number) {
 }
 
 export async function getActivitySlotRoles(planId: string) {
-    const rows = await AppDataSource.query(
-        `SELECT sl.slot_id as slot_id,
-                r.id       as role_id,
-                r.name     as role_name
-         FROM activity_slot_role sl
-                  JOIN activity_slots slots ON slots.id = sl.slot_id
-                  JOIN roles r ON r.id = sl.role_id
-         WHERE slots.plan_id = ?`,
-        [planId]
-    );
+    const repo = AppDataSource.getRepository(ActivitySlotRole);
 
-    const map: any = {};
-    rows.forEach((r: any) => {
-        if (!map[r.slot_id]) map[r.slot_id] = [];
-        map[r.slot_id].push({id: r.role_id, name: r.role_name});
+    const slotRoles = await repo.find({
+        relations: {
+            slot: true,
+            role: true,
+        },
+        where: {
+            slot: {planId},
+        },
     });
+
+    const map: Record<string, { id: number; name: string }[]> = {};
+
+    for (const sr of slotRoles) {
+        const slotId = sr.slot.id;
+        if (!map[slotId]) map[slotId] = [];
+        map[slotId].push({id: sr.role.id, name: sr.role.name});
+    }
 
     return map;
 }
+
 
 export async function addActivitySlotRoles(slotId: string, roles: number[]) {
     const repo = AppDataSource.getRepository(ActivitySlotRole);

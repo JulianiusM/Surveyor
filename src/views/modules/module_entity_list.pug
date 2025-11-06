@@ -1,0 +1,69 @@
+//- Generic dashboard section mixin
+//- Args:
+//-   id            : string (unique DOM id, e.g. "sec-surveys")
+//-   title         : string (header text)
+//-   iconHeader    : string (Bootstrap icon class for header, e.g. "bi-clipboard-data")
+//-   items         : array  (list of entities)
+//-   basePath      : string (base URL path, e.g. "survey", "packing")
+//-   createHref    : string (URL for the create button)
+//-   createLabel   : string (button label)
+//-   createIcon    : string (Bootstrap icon for the create button, e.g. "bi-plus-circle")
+//-   emptyText     : string (message when list empty)
+//-   itemIcon      : string (Bootstrap icon for each item row, e.g. "bi-clipboard-check")
+//-   showCreate    : boolean (Whether to show the create button)
+//- Notes:
+//-   - Expects `user` in scope for owner checks
+//-   - Renders optional badges for items with allow_guest_add / guest_manage
+mixin entityList(id, title, iconHeader, items, basePath, createHref, createLabel, createIcon, emptyText, itemIcon, showCreate)
+    - const _count = (items && items.length) || 0;
+
+    .accordion-item.dashboard-accordion-item
+        h2.accordion-header
+            button.accordion-button.collapsed.dashboard-accordion-button(
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target=`#${id}`
+                aria-expanded="false"
+                aria-controls=id)
+                i(class=`bi ${iconHeader} me-2`)
+                | #{title}
+                span.badge.bg-secondary.ms-2 #{_count}
+
+        .accordion-collapse.collapse.dashboard-accordion-body(id=id data-bs-parent="#entityLists")
+            .accordion-body(data-filter="section")
+                .dashboard-toolbar
+                    .dashboard-filter.input-group.input-group-sm
+                        span.input-group-text
+                            i.bi.bi-search
+                        input.form-control(type="search" placeholder=`Filter ${title.toLowerCase()}…`)
+                        if showCreate
+                            a.btn.btn-primary(href=createHref)
+                                i(class=`bi ${createIcon} me-1`)
+                                | #{createLabel}
+                    .dashboard-count.small
+                        i.bi.bi-list-ul
+                        span.js-count 0
+
+                if _count
+                    .list-group.dashboard-list.js-list
+                        each item in items
+                            .list-group-item.list-group-item-action.d-flex.justify-content-between.align-items-center(data-search=item.title)
+                                a.text-decoration-none.flex-grow-1(href=`/${basePath}/${item.id}`)
+                                    i(class=`bi ${itemIcon} me-2`)
+                                    | #{item.title}
+                                    if item.allowGuestAdd
+                                        span.badge.bg-info-subtle.text-info-emphasis.float-end.ms-2 Add&nbsp;enabled
+                                    if item.guestManage
+                                        span.badge.bg-warning-subtle.text-warning-emphasis.float-end Guests&nbsp;manage
+                                if item.ownerId === user.id
+                                    form.d-inline.btn-group.ms-2(method="post" action=`/${basePath}/${item.id}/delete` onsubmit="return confirm('Delete this item?');")
+                                        a.btn.btn-sm.btn-outline-info(href=`/${basePath}/${item.id}/duplicate`)
+                                            i.bi.bi-files.me-1
+                                            | Duplicate
+                                        button.btn.btn-sm.btn-outline-danger(type="submit")
+                                            i.bi.bi-trash.me-1
+                                            | Delete
+                else
+                    .alert.alert-info.mb-0
+                        i.bi.bi-info-circle.me-2
+                        | #{emptyText}

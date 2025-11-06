@@ -9,17 +9,17 @@ export async function initDataSource() {
         return;
     }
 
-    if (!settings.initialized) {
-        await settings.readSettingsFile();
+    if (!settings.value.initialized) {
+        await settings.read();
     }
 
     AppDataSource = new DataSource({
-        type: 'mysql',
-        host: settings.mysqlHost,
-        port: settings.mysqlPort,
-        username: settings.mysqlUser,
-        password: settings.mysqlPassword,
-        database: settings.mysqlDatabase,
+        type: settings.value.dbType,
+        host: settings.value.dbHost,
+        port: settings.value.dbPort,
+        username: settings.value.dbUser,
+        password: settings.value.dbPassword,
+        database: settings.value.dbName,
         timezone: 'Z',              // treat TIMESTAMP / DATETIME as UTC
         dateStrings: ['DATE'],       // A & B: return DATE as **string**
         entities: ['src/modules/database/entities/**/*.ts'],

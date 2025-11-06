@@ -1,4 +1,4 @@
-import express from 'express';
+import express, {Request, Response} from 'express';
 import * as surveyService from "../modules/database/services/SurveyService";
 import {asyncHandler} from "../modules/lib/asyncHandler";
 import {createGuestFlowRouter} from "../middleware/guestFlowFactory";
@@ -9,11 +9,11 @@ const app = express.Router();
 
 const entityName = 'survey';
 
-const resFct = (req: any) => getResource(req, entityName);
+const resFct = (req: Request) => getResource(req, entityName);
 
 // Helper to DRY up flash + redirect logic
-function handleAction(actionFn: any, successMsg: any) {
-    return asyncHandler(async (req: any, res: any) => {
+function handleAction(actionFn: (req: Request) => Promise<void>, successMsg: string) {
+    return asyncHandler(async (req: Request, res: Response) => {
         const surveyId = resFct(req).id;
         try {
             // Execute the provided controller action
@@ -29,6 +29,7 @@ function handleAction(actionFn: any, successMsg: any) {
 }
 
 app.use('/', createGuestFlowRouter({
+    addToEvent: true,
     entityType: entityName,
     db: {
         getById: surveyService.getSurveyById,
@@ -53,7 +54,7 @@ app.use('/', createGuestFlowRouter({
 app.post(
     '/:id/add-combination',
     handleAction(
-        (req: any) => controller.addCombination(resFct(req), req.body.weekday, req.body.nth),
+        (req: Request) => controller.addCombination(resFct(req), req.body.weekday, req.body.nth),
         'Combination successfully added'
     )
 );
@@ -65,7 +66,7 @@ app.post(
 app.post(
     '/:id/submit',
     handleAction(
-        (req: any) => controller.submitResponses(resFct(req), req.session, req.body),
+        (req: Request) => controller.submitResponses(resFct(req), req.session, req.body),
         'Answers updated'
     )
 );

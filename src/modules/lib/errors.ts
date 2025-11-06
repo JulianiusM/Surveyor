@@ -1,6 +1,8 @@
 // lib/errors.js
 // Custom error types for centralized error handling in Express routes
 
+import type {Severity} from "../../types/ErrorTypes";
+
 /**
  * Represents a validation or business logic error that should render
  * a specific template with associated data.
@@ -9,15 +11,15 @@
  * @property {object} data - Contextual data to pass back to the template.
  */
 export class ValidationError extends Error {
-    data: any;
-    template: any;
+    data: object;
+    template: string;
 
     /**
      * @param {string} template - Template name or identifier for rendering.
      * @param {string} message - Error message to display.
      * @param {object} data - Data to re-populate the form or context.
      */
-    constructor(template: any, message: any, data: object = {}) {
+    constructor(template: string, message: string, data: object = {}) {
         super(message);
         this.name = 'ValidationError';
         this.template = template;
@@ -36,15 +38,15 @@ export class ValidationError extends Error {
  * @property {number} status - HTTP status
  */
 export class APIError extends Error {
-    data: any;
-    status: any;
+    data: object;
+    status: number;
 
     /**
      * @param {string} message - Error message to display.
      * @param {object} data - Data to re-populate the form or context.
      * @param {number} status - HTTP status
      */
-    constructor(message: any, data: object = {}, status: number = 500) {
+    constructor(message: string, data: object = {}, status: number = 500) {
         super(message);
         this.name = 'APIError';
         this.data = data;
@@ -59,25 +61,27 @@ export class APIError extends Error {
  * Represents a validation or business logic error that should render
  * a non-critical error message
  *
- * @property {string} severity - Message severity (error - info - success)
+ * @property {Severity} severity - Message severity (error - info - success)
  * @property {object} data - Contextual data to pass back to the client.
  * @property {number} status - HTTP status
  */
 export class ExpectedError extends Error {
-    data: any;
-    severity: any;
+    data: object;
+    severity: Severity;
+    status: number;
 
     /**
      * @param {string} message - Error message to display.
-     * @param {string} severity - Message severity (error - info - success)
+     * @param {Severity} severity - Message severity (error - info - success)
      * @param {number} status - HTTP status
      * @param {object} data - Data to re-populate the form or context.
      */
-    constructor(message: any, severity: string = 'error', status: number = 400, data: object = {}) {
+    constructor(message: string, severity: Severity = 'error', status: number = 400, data: object = {}) {
         super(message);
         this.name = 'ExpectedError';
         this.severity = severity;
         this.data = data;
+        this.status = status;
         if (Error.captureStackTrace) {
             Error.captureStackTrace(this, this.constructor);
         }

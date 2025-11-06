@@ -1,4 +1,4 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany,} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
 import {ActivityAssignment} from "./ActivityAssignment";
 import {ActivitySlotRole} from "./ActivitySlotRole";
 import {ActivityPlan} from "./ActivityPlan";
@@ -6,30 +6,36 @@ import {ActivityPlan} from "./ActivityPlan";
 @Index("plan_id", ["planId"], {})
 @Entity("activity_slots", {schema: "surveyor"})
 export class ActivitySlot {
-    @Column("char", {primary: true, name: "id", length: 36})
+    @PrimaryGeneratedColumn("uuid", {name: "id"})
     id: string;
 
-    @Column("char", {name: "plan_id", length: 36})
+    @Column("varchar", {name: "plan_id", length: 36})
     planId: string;
 
     @Column("date", {name: "day"})
     day: string;
 
-    @Column("int", {name: "pos", nullable: true, default: () => "'0'"})
-    pos: number | null;
+    @Column("int", {name: "pos", default: 0})
+    pos: number;
 
     @Column("varchar", {name: "title", length: 255})
     title: string;
 
     @Column("text", {name: "description", nullable: true})
-    description: string | null;
+    description?: string | null;
+
+    @Column('time', {name: 'start_time', nullable: true})
+    startTime?: string | null; // 'HH:MM:SS'
+
+    @Column('time', {name: 'end_time', nullable: true})
+    endTime?: string | null; // 'HH:MM:SS'
 
     @Column("int", {
         name: "max_assignees",
         nullable: true,
         default: () => "'1'",
     })
-    maxAssignees: number | null;
+    maxAssignees?: number | null;
 
     @Column("timestamp", {
         name: "created_at",

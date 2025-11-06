@@ -1,7 +1,7 @@
 import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
 import {Survey} from "./Survey";
 import {SurveyResponse} from "./SurveyResponse";
-import {WeekDay, WeekInMonth} from "../../../../types/SurveyTypes";
+import type {WeekDay, WeekInMonth} from "../../../../types/SurveyTypes";
 
 @Index("combinations_single_entry", ["weekday", "surveyId", "nthWeek"], {
     unique: true,
@@ -12,16 +12,16 @@ export class SurveyCombination {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
     id: number;
 
-    @Column("char", {name: "survey_id", length: 36})
+    @Column("varchar", {name: "survey_id", length: 36})
     surveyId: string;
 
-    @Column("enum", {
+    @Column("simple-enum", {
         name: "WEEKDAY",
-        enum: ["MO", "DI", "MI", "DO", "FR", "SA", "SO"],
+        enum: ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
     })
     weekday: WeekDay;
 
-    @Column("enum", {name: "nth_week", enum: ["1", "2", "3", "4", "LAST"]})
+    @Column("simple-enum", {name: "nth_week", enum: ["1", "2", "3", "4", "LAST"]})
     nthWeek: WeekInMonth;
 
     @Column("timestamp", {

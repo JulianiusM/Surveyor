@@ -23,8 +23,8 @@ block content
             return new Date(Date.UTC(y, m - 1, d));
         }
         const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        const start = toDate(data.plan.start_date);
-        const end = toDate(data.plan.end_date);
+        const start = toDate(data.plan.startDate);
+        const end = toDate(data.plan.endDate);
 
         const weeks = [];
         const monday = new Date(start);
@@ -34,9 +34,9 @@ block content
             monday.setDate(monday.getDate() + 7);
         }
 
-        const owner = !!(user && user.id === data.plan.owner_id);
-        const manage = !!(owner || (data.plan.guest_manage && (guest || user)));
-        const add = !!(manage || data.plan.allow_guest_add);
+        const owner = !!(user && user.id === data.plan.ownerId);
+        const manage = !!(owner || (data.plan.guestManage && (guest || user)));
+        const add = !!(manage || data.plan.allowGuestAdd);
 
     // ─── Description (editable) ──────────────────────────────
     if add
@@ -77,14 +77,14 @@ block content
                             input#allowAddSwitch.form-check-input(
                                 type="checkbox"
                                 autocomplete="off"
-                                checked= data.plan.allow_guest_add == 1 )
+                                checked= !!data.plan.allowGuestAdd )
                             label.form-check-label(for="allowAddSwitch") Guests can add slots
                     .col-md-6.d-flex.align-items-center
                         .form-check.form-switch
                             input#guestManageSwitch.form-check-input(
                                 type="checkbox"
                                 autocomplete="off"
-                                checked= data.plan.guest_manage == 1 )
+                                checked= !!data.plan.guestManage )
                             label.form-check-label(for="guestManageSwitch") Guests may manage plan
 
     //Erste Zeile: Metainfos / Badge
@@ -146,6 +146,7 @@ block content
                         td
                             // ▶ every slot now shares this parent
                             .slot-container(data-date=fmtISO(cur))
+                                - console.log(data.slots);
                                 - const daySlots = (data.slots[fmtISO(cur)] || []);
                                 if daySlots.length > 0
                                     each slot, idx in daySlots
@@ -163,16 +164,15 @@ block content
                                                 span.fw-5(data-edit="description" data-id=slot.id)= slot.description || ''
 
                                             - const slotRoles = (data.roles.slotRoles ? data.roles.slotRoles[slot.id] || [] : []);
-                                            - console.log(data.roles.slotRoles);
                                             if slotRoles.length > 0
                                                 for slotRole in slotRoles
                                                     +roleAssignmentAddon(slot.id, slotRole.name, slotRole.description || slotRole.name, data.assigneeLists[slot.id], user, guest)
 
                                             // badge + editable max
                                             span.badge.bg-secondary.w-100.text-center
-                                                span(data-count)= slot.assigned_count
+                                                span(data-count)= slot.assignedCount
                                                 |  /&nbsp;
-                                                span(data-edit="maxAssignees" data-id=slot.id data-max)= slot.max_assignees
+                                                span(data-edit="maxAssignees" data-id=slot.id data-max)= slot.maxAssignees
 
                                             // assignees
                                             ul.list-unstyled.mb-0
@@ -190,7 +190,7 @@ block content
                                                 if my
                                                     button.btn.btn-sm.btn-outline-danger.flex-grow-1(
                                                         data-action="unassign") Leave
-                                                else if slot.assigned_count < slot.max_assignees
+                                                else if slot.assignedCount < slot.maxAssignees
                                                     button.btn.btn-sm.btn-outline-success.flex-grow-1(
                                                         data-action="assign") Join
                                                 else

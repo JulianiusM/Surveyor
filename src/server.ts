@@ -1,17 +1,17 @@
 import http from 'http';
 import settings from './modules/settings';
-import app from './app';
 import {initDataSource} from "./modules/database/dataSource";
 
 async function bootstrap() {
     try {
         console.log('🔧 Initializing database connection...');
-        await settings.readSettingsFile();
+        await settings.read();
         await initDataSource();
 
+        const {default: app} = await import('./app');
         const server = http.createServer(app);
-        server.listen(settings.appPort, () => {
-            console.log(`🚀 Server listening on http://localhost:${settings.appPort}`);
+        server.listen(settings.value.appPort, () => {
+            console.log(`🚀 Server listening on ${settings.value.rootUrl}`);
         });
     } catch (err) {
         console.error('❌ Failed to initialize app:', err);

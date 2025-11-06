@@ -1,12 +1,13 @@
 /* ───── Build JSON & submit ─────────────────────────────── */
 import {setCurrentNavLocation} from "./module_functions";
+import {DriversItem} from "../../modules/database/entities/drivers/DriversItem";
 
-export function handleSubmit(evt: any) {
-    const form = document.getElementById('packingForm');
-    const hiddenFld = document.getElementById('itemsJson');
+export function handleSubmit(evt: Event) {
+    const form = document.getElementById('packingForm') as HTMLFormElement;
+    const hiddenFld = document.getElementById('itemsJson') as HTMLInputElement;
     const tableBody = document.getElementById('itemTable');
     evt.preventDefault();
-    const items: any = [];
+    const items: Partial<DriversItem>[] = [];
 
 
     // @ts-expect-error TS(2531): Object is possibly 'null'.
@@ -26,23 +27,13 @@ export function handleSubmit(evt: any) {
         });
     });
 
-
-    // @ts-expect-error TS(2531): Object is possibly 'null'.
     hiddenFld.value = JSON.stringify(items);
-
-    // @ts-expect-error TS(2531): Object is possibly 'null'.
     form.submit();
 }
 
 export function initListeners() {
-    const addBtn = document.getElementById('addItemBtn');
     const form = document.getElementById('packingForm');
-
-    // @ts-expect-error TS(2531): Object is possibly 'null'.
-    addBtn.addEventListener('click', createRow);
-
-    // @ts-expect-error TS(2531): Object is possibly 'null'.
-    form.addEventListener('submit', handleSubmit);
+    form?.addEventListener('submit', handleSubmit);
 }
 
 
@@ -52,6 +43,4 @@ export function init() {
 }
 
 // Expose to global scope
-window.Surveyor = {
-    init
-};
+window.Surveyor.init = init;

@@ -16,9 +16,7 @@ block content
             if (data.entity) {
                 parsed = data.entity;
             } else {
-                parsed = {
-                    description: data.description,
-                }
+                parsed = data;
             }
             if (data.data) {
                 parsedData = data.data;
@@ -30,7 +28,12 @@ block content
             parsedData = [];
         }
 
-    form#surveyForm.row.gy-4.justify-content-center(action="/survey/create" method="POST")
+        let eventIdQuery = '';
+        if (parsed.eventId) {
+            eventIdQuery = `?eventId=${parsed.eventId}`
+        }
+
+    form#surveyForm.row.gy-4.justify-content-center(action=`/survey/create${eventIdQuery}` method="POST")
         //── Survey Title ─────────────────────────────────────
         .col-md-12
             label.form-label.mb-1(for="title")
@@ -40,14 +43,14 @@ block content
                 type="text"
                 name="title"
                 required
-                value= data && data.title ? data.title : '')
+                value= (parsed.title || ''))
 
         .col-md-12
             label.form-label(for="desc")
                 i.bi.bi-pencil-square.me-1
                 | Description
             textarea#description.form-control.text-bg-dark(name="description"
-                value=(parsed.description ? parsed.description : ''))
+                value=(parsed.description || ''))
 
         //── Combinations Table ────────────────────────────────
         .col-12

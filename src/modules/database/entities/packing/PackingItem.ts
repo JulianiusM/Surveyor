@@ -1,14 +1,14 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany,} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
 import {PackingAssignment} from "./PackingAssignment";
 import {PackingList} from "./PackingList";
 
 @Index("fk_packing_items_list", ["listId"], {})
 @Entity("packing_items", {schema: "surveyor"})
 export class PackingItem {
-    @Column("char", {primary: true, name: "id", length: 36})
+    @PrimaryGeneratedColumn("uuid", {name: "id"})
     id: string;
 
-    @Column("char", {name: "list_id", length: 36})
+    @Column("varchar", {name: "list_id", length: 36})
     listId: string;
 
     @Column("varchar", {name: "title", length: 255})
@@ -20,19 +20,19 @@ export class PackingItem {
     @Column("int", {
         name: "max_assignees",
         nullable: true,
-        default: () => "'1'",
+        default: 1,
     })
     maxAssignees: number | null;
 
     @Column("tinyint", {
         name: "required_by_all",
         width: 1,
-        default: () => "'0'",
+        default: 0,
     })
     requiredByAll: boolean;
 
-    @Column("int", {name: "pos", nullable: true, default: () => "'0'"})
-    pos: number | null;
+    @Column("int", {name: "pos", default: 0})
+    pos: number;
 
     @Column("timestamp", {
         name: "created_at",

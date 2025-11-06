@@ -10,30 +10,25 @@ block title
 
 block content
     -
-        let parsed, parsedData;
+        let parsed = {}, parsedData = [];
         if (data) {
             if (data.entity) {
                 parsed = data.entity;
             } else {
-                parsed = {
-                    description: data.description,
-                    start_date: data.start,
-                    start_end: data.end,
-                    allow_guest_add: data.allowGuestAdd,
-                    guest_manage: data.guestManage,
-                }
+                parsed = data;
             }
             if (data.data) {
                 parsedData = data.data;
             } else {
                 parsedData = data.slots;
             }
-        } else {
-            parsed = {};
-            parsedData = [];
+        }
+        let eventIdQuery = '';
+        if (parsed.eventId) {
+            eventIdQuery = `?eventId=${parsed.eventId}`
         }
 
-    form#planForm(action="/activity/create" method="post")
+    form#planForm(action=`/activity/create${eventIdQuery}` method="post")
         .row.g-3.mb-3
             .col-md-6
                 label.form-label(for="title")
@@ -41,21 +36,21 @@ block content
                     | Title *
                 input#title.form-control.text-bg-dark(
                     type="text" name="title" required
-                value=(data && data.title ? data.title : ''))
+                value=(parsed.title || ''))
             .col-md-3
                 label.form-label(for="start")
                     i.bi.bi-calendar-event.me-1
                     | Start date *
-                input#start.form-control.text-bg-dark(
-                    type="date" name="start" required
-                value=(parsed.start_date ? parsed.start_date : ''))
+                input#startDate.form-control.text-bg-dark(
+                    type="date" name="startDate" required
+                value=(parsed.startDate || ''))
             .col-md-3
                 label.form-label(for="end")
                     i.bi.bi-calendar-range.me-1
                     | End date *
-                input#end.form-control.text-bg-dark(
-                    type="date" name="end" required
-                value=(parsed.end_date ? parsed.end_date : ''))
+                input#endDate.form-control.text-bg-dark(
+                    type="date" name="endDate" required
+                value=(parsed.endDate || ''))
 
         // Options (like packing list)
         .row.g-3.mb-3
@@ -63,7 +58,7 @@ block content
                 .form-check
                     input#allowAdd.form-check-input(
                         type="checkbox" name="allowGuestAdd"
-                        checked=parsed.allow_guest_add)
+                        checked=!!parsed.allowGuestAdd)
                     label.form-check-label(for="allowAdd")
                         i.bi.bi-plus-circle.me-1
                         | Guests can add slots
@@ -71,7 +66,7 @@ block content
                 .form-check
                     input#guestManage.form-check-input(
                         type="checkbox" name="guestManage"
-                        checked=parsed.guest_manage)
+                        checked=!!parsed.guestManage)
                     label.form-check-label(for="guestManage")
                         i.bi.bi-tools.me-1
                         | Guests may manage
@@ -82,8 +77,8 @@ block content
                 label.form-label(for="desc")
                     i.bi.bi-pencil-square.me-1
                     | Description
-                textarea#desc.form-control.text-bg-dark(name="description"
-                    value=(parsed.description ? parsed.description : ''))
+                textarea#desc.form-control.text-bg-dark(name="description")
+                    | #{parsed.description || ''}
 
         hr
 

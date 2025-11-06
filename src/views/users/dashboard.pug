@@ -7,145 +7,61 @@ block meta
 block title
     h1.card-header.text-center
         i.bi.bi-house-door-fill.me-2
-        | Welcome, #{user.username}!
+        | Welcome, #{user.name || user.username}!
 
 block content
-    //── Surveys ­───────────────────────────────────────────────
-    h2.text-center.mt-2
-        i.bi.bi-clipboard-data.me-2
-        | Your surveys
-    if data.surveys && data.surveys.length
-        .list-group.mb-4
-            each survey in data.surveys
-                // List-Entry
-                .list-group-item.list-group-item-action.d-flex.justify-content-between.align-items-center.text-bg-dark
-                    // Titel-Link (nimmt die ganze Breite ein)
-                    a.text-decoration-none.text-white.flex-grow-1(href=`/survey/${survey.id}`)
-                        i.bi.bi-clipboard-check.me-2
-                        | #{survey.title}
+    .accordion.accordion-dark#entityLists
+        +entityList(
+            'sec-surveys',
+            'Your surveys',
+            'bi-clipboard-data',
+            data.surveys,
+            'survey',
+            '/survey/create',
+            'Create new survey',
+            'bi-plus-circle',
+            'You don’t have any surveys yet.',
+            'bi-clipboard-check'
+        )
 
-                    // Duplicate-Button nur für Owner
-                    if survey.owner_id === user.id
-                        a.btn.btn-sm.btn-outline-info.ms-2(href=`/survey/${survey.id}/duplicate`)
-                            i.bi.bi-files.me-1
-                            | Duplicate
-                        form.d-inline(method="post" action=`/survey/${survey.id}/delete` onsubmit="return confirm('Delete this survey?');")
-                            button.btn.btn-sm.btn-outline-danger.ms-2(type="submit")
-                                i.bi.bi-trash.me-1
-                                | Delete
-    else
-        .alert.alert-info
-            i.bi.bi-info-circle.me-2
-            | You don’t have any surveys yet.
+        +entityList(
+            'sec-pack',
+            'Your packing lists',
+            'bi-box-seam',
+            data.packlists,
+            'packing',
+            '/packing/create',
+            'Create new packing list',
+            'bi-plus-circle',
+            'You don’t have any packing lists yet.',
+            'bi-bag-check'
+        )
 
-    a.btn.btn-primary.mt-2(href="/survey/create")
-        i.bi.bi-plus-circle.me-1
-        | Create new survey
+        +entityList(
+            'sec-activity',
+            'Your activity plans',
+            'bi-calendar',
+            data.activityplans,
+            'activity',
+            '/activity/create',
+            'Create new activity plan',
+            'bi-calendar-plus',
+            'You don’t have any activity plans yet.',
+            'bi-calendar-check'
+        )
 
-    hr.my-4.border-secondary-subtle
+        +entityList(
+            'sec-drivers',
+            'Your drivers lists',
+            'bi-car-front',
+            data.driverslists,
+            'drivers',
+            '/drivers/create',
+            'Create new drivers list',
+            'bi-plus-circle',
+            'You don’t have any drivers lists yet.',
+            'bi-car-front'
+        )
 
-    //── Packing Lists ­────────────────────────────────────────
-    h2.text-center.mt-2
-        i.bi.bi-box-seam.me-2
-        | Your packing lists
-    if data.packlists && data.packlists.length
-        .list-group.mb-4
-            each list in data.packlists
-                .list-group-item.list-group-item-action.d-flex.justify-content-between.align-items-center.text-bg-dark
-                    a.text-decoration-none.text-white.flex-grow-1(
-                        href=`/packing/${list.id}`)
-                        i.bi.bi-bag-check.me-2
-                        | #{list.title}
-                        if list.allow_guest_add
-                            span.badge.bg-info-subtle.text-info-emphasis.float-end.ms-2 Add&nbsp;enabled
-                        if list.guest_manage
-                            span.badge.bg-warning-subtle.text-warning-emphasis.float-end Guests&nbsp;manage
-                    // Duplicate-Button nur für Owner
-                    if list.owner_id === user.id
-                        a.btn.btn-sm.btn-outline-info.ms-2(href=`/packing/${list.id}/duplicate`)
-                            i.bi.bi-files.me-1
-                            | Duplicate
-                        form.d-inline(method="post" action=`/packing/${list.id}/delete` onsubmit="return confirm('Delete this list?');")
-                            button.btn.btn-sm.btn-outline-danger.ms-2(type="submit")
-                                i.bi.bi-trash.me-1
-                                | Delete
-    else
-        .alert.alert-info
-            i.bi.bi-info-circle.me-2
-            | You don’t have any packing lists yet.
-
-    a.btn.btn-primary(href="/packing/create")
-        i.bi.bi-plus-circle.me-1
-        | Create new packing list
-
-    hr.my-4.border-secondary-subtle
-
-    //── Activity Plans ────────────────────────────────────────
-    h2.text-center.mt-2
-        i.bi.bi-calendar.me-2
-        | Your activity plans
-    if data.activityplans && data.activityplans.length
-        .list-group.mb-4
-            each plan in data.activityplans
-                .list-group-item.list-group-item-action.d-flex.justify-content-between.align-items-center.text-bg-dark
-                    a.text-decoration-none.text-white.flex-grow-1(
-                        href=`/activity/${plan.id}`)
-                        i.bi.bi-calendar-check.me-2
-                        | #{plan.title}
-                        if plan.allow_guest_add
-                            span.badge.bg-info-subtle.text-info-emphasis.float-end.ms-2 Add&nbsp;enabled
-                        if plan.guest_manage
-                            span.badge.bg-warning-subtle.text-warning-emphasis.float-end Guests&nbsp;manage
-                    // Duplicate-Button nur für Owner
-                    if plan.owner_id === user.id
-                        a.btn.btn-sm.btn-outline-info.ms-2(href=`/activity/${plan.id}/duplicate`)
-                            i.bi.bi-files.me-1
-                            | Duplicate
-                        form.d-inline(method="post" action=`/activity/${plan.id}/delete` onsubmit="return confirm('Delete this plan?');")
-                            button.btn.btn-sm.btn-outline-danger.ms-2(type="submit")
-                                i.bi.bi-trash.me-1
-                                | Delete
-    else
-        .alert.alert-info
-            i.bi.bi-info-circle.me-2
-            | You don’t have any activity plans yet.
-
-    a.btn.btn-primary(href="/activity/create")
-        i.bi.bi-calendar-plus.me-1
-        | Create new activity plan
-
-    hr.my-4.border-secondary-subtle
-
-    //── Activity Plans ────────────────────────────────────────
-    h2.text-center.mt-2
-        i.bi.bi-car-front.me-2
-        | Your drivers lists
-    if data.driverslists && data.driverslists.length
-        .list-group.mb-4
-            each list in data.driverslists
-                .list-group-item.list-group-item-action.d-flex.justify-content-between.align-items-center.text-bg-dark
-                    a.text-decoration-none.text-white.flex-grow-1(
-                        href=`/drivers/${list.id}`)
-                        i.bi.bi-car-front.me-2
-                        | #{list.title}
-                        if list.allow_guest_add
-                            span.badge.bg-info-subtle.text-info-emphasis.float-end.ms-2 Add&nbsp;enabled
-                        if list.guest_manage
-                            span.badge.bg-warning-subtle.text-warning-emphasis.float-end Guests&nbsp;manage
-                    // Duplicate-Button nur für Owner
-                    if list.owner_id === user.id
-                        a.btn.btn-sm.btn-outline-info.ms-2(href=`/drivers/${list.id}/duplicate`)
-                            i.bi.bi-files.me-1
-                            | Duplicate
-                        form.d-inline(method="post" action=`/drivers/${list.id}/delete` onsubmit="return confirm('Delete this list?');")
-                            button.btn.btn-sm.btn-outline-danger.ms-2(type="submit")
-                                i.bi.bi-trash.me-1
-                                | Delete
-    else
-        .alert.alert-info
-            i.bi.bi-info-circle.me-2
-            | You don’t have any drivers lists yet.
-
-    a.btn.btn-primary(href="/drivers/create")
-        i.bi.bi-plus-circle.me-1
-        | Create new drivers list
+block scripts
+    script(type="module" src="/js/user-dashboard.gen.js")

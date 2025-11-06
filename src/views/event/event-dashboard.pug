@@ -1,0 +1,183 @@
+extends ../layout
+
+block meta
+    - const ev = data.event || data; // tolerate different controller shapes
+    title= `Dashboard — ${ev.title}`
+
+block title
+    h1.card-header.text-center
+        i.bi.bi-speedometer2.me-2
+        | Event Dashboard — #{ev.title}
+
+block content
+    -
+        const ownerId = ev.ownerId;
+        const startDate = ev.startDate;
+        const endDate = ev.endDate;
+        const location = ev.location || '';
+        const deadline = ev.bindingDeadline;
+        const participants = data.participants || [];
+
+        const isOwner = !!(user && ownerId && user.id === ownerId);
+        const isAuthed = !!(user || guest);
+
+    // ─── Event meta ───────────────────────────────────────────
+    .card.mb-3.bg-dark.text-white.border-secondary-subtle
+        .card-body
+            .row
+                .col-md-6
+                    dl.row.mb-0
+                        dt.col-sm-4 Dates
+                        dd.col-sm-8
+                            span#startSpan.me-1(data-start=startDate) #{startDate}
+                            | →
+                            span#endSpan.ms-1(data-end=endDate) #{endDate}
+                        if location
+                            dt.col-sm-4 Location
+                            dd.col-sm-8 #{location}
+                        if ev.maxParticipants
+                            dt.col-sm-4 Max. / registered participants
+                            dd.col-sm-8 #{ev.maxParticipants} / #{participants.length}
+                        if deadline
+                            dt.col-sm-4 Binding deadline
+                            dd.col-sm-8
+                                p Event timezone (#{ev.timezone || 'UTC'}):
+                                    span.ms-2#deadlineTZ(data-tz=ev.timezone) #{new Date(deadline).toLocaleString(undefined, {timeZone: ev.timezone || 'UTC'})}
+                                p Your timezone:
+                                    span.ms-2#deadlineText(data-date=new Date(deadline).toISOString()) #{new Date(deadline).toUTCString()}
+                                    span#deadlineCountdown.text-info.ms-2
+                .col-md-6
+                    if ev.description
+                        label.form-label Description
+                        p= ev.description
+
+    .card.mb-4.bg-dark.text-white.border-secondary-subtle
+        .card-header.py-2
+            i.bi.bi-gear-fill.me-2
+            | Event settings
+        .card-body
+            form.row.g-3#eventUpdateForm
+                .col-md-6
+                    label.form-label(for="titleEdit")
+                        i.bi.bi-tag.me-1
+                        | Title
+                    input#titleEdit.form-control.text-bg-dark(type="text" name="title" maxlength="255" value=ev.title)
+                .col-md-6
+                    label.form-label(for="locationEdit")
+                        i.bi.bi-geo-alt.me-1
+                        | Location
+                    input#locationEdit.form-control.text-bg-dark(type="text" name="location" maxlength="255" value=location)
+                .col-md-4
+                    label.form-label(for="startEdit")
+                        i.bi.bi-calendar-event.me-1
+                        | Start date
+                    input#startEdit.form-control.text-bg-dark(type="date" name="start" value=startDate)
+                .col-md-4
+                    label.form-label(for="endEdit")
+                        i.bi.bi-calendar2-event.me-1
+                        | End date
+                    input#endEdit.form-control.text-bg-dark(type="date" name="end" value=endDate)
+                .col-md-4
+                    label.form-label(for="maxParticipants")
+                        i.bi.bi-people.me-1
+                        | Max Participants
+                    input#maxParticipants.form-control.text-bg-dark(
+                        type="number"
+                        name="maxParticipants"
+                        placeholder=""
+                        value=(ev.maxParticipants || ''))
+                .col-md-12
+                    label.form-label(for="descEdit")
+                        i.bi.bi-pencil-square.me-1
+                        | Description
+                    textarea#descEdit.form-control.text-bg-dark(name="description" rows="3") #{ev.description || ''}
+                .col-md-4
+                    label.form-label(for="deadlineEdit")
+                        i.bi.bi-hourglass-split.me-1
+                        | Binding deadline
+                    input#deadlineEdit.form-control.text-bg-dark(type="datetime-local" name="bindingDeadline" value=(deadline ? new Date(deadline).toISOString().slice(0, 16) : ''))
+                .col-md-4
+                    +timezonePicker('deadlineTz', {
+                        label: 'Time zone',
+                        required: true,
+                        value: ev.timezone,
+                        help: 'Times will be converted for each user.'
+                    })
+                .col-md-4.d-flex.align-items-end
+                    .form-check
+                        input#requireDietEdit.form-check-input(
+                            type="checkbox"
+                            name="requireDietaryInfo"
+                            checked=ev.requireDietaryInfo)
+                        label.form-check-label(for="requireDietEdit")
+                            i.bi.bi-egg-fried.me-1
+                            | Require dietary info during registration
+                .col-12.d-flex.justify-content-end.gap-2
+                    button.btn.btn-primary(type="submit")
+                        i.bi.bi-save.me-1
+                        | Save settings
+
+    .row
+        .accordion.accordion-dark#entityLists
+            +entityList(
+                'sec-surveys',
+                'Event surveys',
+                'bi-clipboard-data',
+                data.surveys,
+                'survey',
+                `/survey/create?eventId=${ev.id}`,
+                'Create new survey',
+                'bi-plus-circle',
+                'No surveys in this event yet.',
+                'bi-clipboard-check',
+                true
+            )
+
+            +entityList(
+                'sec-pack',
+                'Event packing lists',
+                'bi-box-seam',
+                data.packLists,
+                'packing',
+                `/packing/create?eventId=${ev.id}`,
+                'Create new packing list',
+                'bi-plus-circle',
+                'No packing lists in this event yet.',
+                'bi-bag-check',
+                true
+            )
+
+            +entityList(
+                'sec-activity',
+                'Event activity plans',
+                'bi-calendar',
+                data.activityPlans,
+                'activity',
+                `/activity/create?eventId=${ev.id}`,
+                'Create new activity plan',
+                'bi-calendar-plus',
+                'No activity plans in this event yet.',
+                'bi-calendar-check',
+                true
+            )
+
+            +entityList(
+                'sec-drivers',
+                'Event drivers lists',
+                'bi-car-front',
+                data.driversLists,
+                'drivers',
+                `/drivers/create?eventId=${ev.id}`,
+                'Create new drivers list',
+                'bi-plus-circle',
+                'No drivers lists in this event yet.',
+                'bi-car-front',
+                true
+            )
+
+    p Coming soon: Participants | Suggestions | Exports
+
+block scripts
+    script(type="module" src="/js/events.gen.js")
+    script.
+        window.EVENT_ID = "#{ev.id}";

@@ -10,5 +10,6 @@
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="mobile-drag-drop" level="application" />
+    <orderEntry type="library" name="select2" level="application" />
   </component>
 </module>

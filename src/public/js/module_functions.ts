@@ -1,5 +1,5 @@
 //Custom conditional class switch
-export function refreshState(object: any, validated: any, validatedClass: any, invalidatedClass: any) {
+export function refreshState(object: JQuery<HTMLElement>, validated: boolean, validatedClass: string, invalidatedClass: string) {
     if (validated && !object.hasClass(validatedClass)) {
         if (object.hasClass(invalidatedClass)) {
             object.removeClass(invalidatedClass);
@@ -19,25 +19,19 @@ export function setCurrentNavLocation() {
 
     //Set corresponding nav items active
     if (path.includes("/settings")) {
-
-        // @ts-expect-error TS(2581): Cannot find name '$'. Do you need to install type ... Remove this comment to see the full error message
         $("#settings").addClass("active");
     } else if (path.includes("/login")) {
-
-        // @ts-expect-error TS(2581): Cannot find name '$'. Do you need to install type ... Remove this comment to see the full error message
         $("#login").addClass("active");
     } else if (path.includes("/register")) {
-
-        // @ts-expect-error TS(2581): Cannot find name '$'. Do you need to install type ... Remove this comment to see the full error message
         $("#register").addClass("active");
     }
 }
 
 //Verify password (GUI)
-export function verifyPassword(passwordObj: any, infoObj: any) {
-    let isEightChars = (passwordObj.val().length >= 8);
-    let hasLetter = (/[a-z,A-Z]/g.test(passwordObj.val()));
-    let hasDigit = (/\d/g.test(passwordObj.val()));
+export function verifyPassword(passwordObj: JQuery<HTMLInputElement>, infoObj: JQuery<HTMLElement>) {
+    let isEightChars = ((passwordObj.val()?.length || 0) >= 8);
+    let hasLetter = (/[a-z,A-Z]/g.test(passwordObj.val() ?? ''));
+    let hasDigit = (/\d/g.test(passwordObj.val() ?? ''));
 
     //Show tooltip
     infoObj.empty();
@@ -47,7 +41,7 @@ export function verifyPassword(passwordObj: any, infoObj: any) {
     refreshState(passwordObj, isPasswordValid(passwordObj.val()), "is-valid", "is-invalid");
 }
 
-export function matchPassword(passwordObj: any, passwordRepeatObj: any, repeatInfoObj: any) {
+export function matchPassword(passwordObj: JQuery<HTMLInputElement>, passwordRepeatObj: JQuery<HTMLInputElement>, repeatInfoObj: JQuery<HTMLElement>) {
     //Hide or show "Passwords do not match"
     refreshState(repeatInfoObj, isPasswordRepeatValid(passwordObj.val(), passwordRepeatObj.val()), "invisible", "visible");
 
@@ -56,24 +50,24 @@ export function matchPassword(passwordObj: any, passwordRepeatObj: any, repeatIn
 }
 
 //Remove tooltip if password is valid when password field looses focus
-export function removeTooltip(passwordObj: any, infoObj: any) {
-    if (isPasswordValid(passwordObj.val())) {
+export function removeTooltip(passwordObj: JQuery<HTMLInputElement>, infoObj: JQuery<HTMLElement>) {
+    if (isPasswordValid(passwordObj.val() ?? '')) {
         infoObj.empty();
     }
 }
 
-//Test if password is vailid
-export function isPasswordValid(password: any) {
-    return password.length >= 8 && /[a-z,A-Z]/g.test(password) && /\d/g.test(password);
+//Test if password is valid
+export function isPasswordValid(password?: string) {
+    return !!password && password.length >= 8 && /[a-z,A-Z]/g.test(password) && /\d/g.test(password);
 }
 
 //Test if password repeat is valid
-export function isPasswordRepeatValid(password: any, passwordRepeat: any) {
+export function isPasswordRepeatValid(password?: string, passwordRepeat?: string) {
     return password === passwordRepeat;
 }
 
 //Generate tooltip html
-export function generateTooltip(hasEight: any, hasLettr: any, hasDigit: any) {
+export function generateTooltip(hasEight: boolean, hasLettr: boolean, hasDigit: boolean) {
     //Define tooltip parts
     let tooltipDesc = "<p><b>Password must match the following criteria:</b></p><ul style=\"list-style-type:none\">";
     let tooltipCritOK = "<li style=\"color:green\"><b>✓</b>";
@@ -110,7 +104,7 @@ export function generateTooltip(hasEight: any, hasLettr: any, hasDigit: any) {
 }
 
 //Validate passwords on submit and prevent submit if not
-export function validate(event: any, passwordObj: any, passwordRepeatObj: any, infoObj: any, passwordRepeatInfoObj: any) {
+export function validate(event: Event, passwordObj: JQuery<HTMLInputElement>, passwordRepeatObj: JQuery<HTMLInputElement>, infoObj: JQuery<HTMLElement>, passwordRepeatInfoObj: JQuery<HTMLElement>) {
     let password = passwordObj.val();
     let passwordRepeat = passwordRepeatObj.val();
 
@@ -125,17 +119,11 @@ export function validate(event: any, passwordObj: any, passwordRepeatObj: any, i
 }
 
 export function objectToArray(obj: any) {
-    var arr = [];
-    var idx = [];
-    var keys = Object.keys(obj);
+    const arr = [];
+    const idx = [];
+    const keys = Object.keys(obj).sort();
 
-    keys.sort(function (a, b) {
-
-        // @ts-expect-error TS(2362): The left-hand side of an arithmetic operation must... Remove this comment to see the full error message
-        return a - b;
-    });
-
-    for (var i = 0; i < keys.length; i++) {
+    for (let i = 0; i < keys.length; i++) {
         arr.push(obj[keys[i]]);
         idx.push(keys[i]);
     }
@@ -144,11 +132,11 @@ export function objectToArray(obj: any) {
 }
 
 //Pads numbers
-export function padNumber(num: any) {
-    return ("00" + num).substr(-2, 2);
+export function padNumber(num: number) {
+    return String(num).padStart(2, '0');
 }
 
-async function post(url: any, payload: any) {
+export async function post(url: string, payload: any = {}) {
     const res = await fetch('/api' + url, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -172,11 +160,10 @@ async function post(url: any, payload: any) {
 }
 
 
-export function showInlineAlert(status: any, message: any) {
+export function showInlineAlert(status: 'success' | 'info' | 'error', message: any) {
     const alertBox = document.getElementById('liveAlerts')
     if (!alertBox) return;
 
-    // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
     const cls = {
         success: 'alert-success',
         info: 'alert-info',
@@ -209,7 +196,7 @@ export function enableDnD() {
     }
 }
 
-export function startInlineEditArea(desc: any, url: any) {
+export function startInlineEditArea(desc: HTMLElement, url: string) {
     if (!desc || desc.querySelector('textarea')) return;
 
     const old = desc.innerText.trim();
@@ -258,7 +245,7 @@ export function startInlineEditArea(desc: any, url: any) {
     });
 }
 
-export function startInlineEdit(elem: any, baseUrl: any) {
+export function startInlineEdit(elem: HTMLElement, baseUrl: string) {
     if (!elem || elem.querySelector('input')) return;
 
     disableDnD();
@@ -267,20 +254,20 @@ export function startInlineEdit(elem: any, baseUrl: any) {
     const id = elem.dataset.id;         // from template
     const isTd = elem.nodeName === 'TD';
 
-    let old: any, countTxt: any;
+    let old: string | undefined, countTxt: string | undefined;
     if (isTd && field === 'maxAssignees') {
         // Special handling: whole td field is selected
-        const cntSpan = elem.querySelector('[data-count]');
-        countTxt = cntSpan.textContent.trim();
-        old = elem.querySelector('[data-max]').textContent.trim();
+        const cntSpan = elem.querySelector('[data-count]')!;
+        countTxt = cntSpan.textContent?.trim();
+        old = elem.querySelector('[data-max]')?.textContent?.trim();
     } else {
-        old = elem.textContent.trim();
+        old = elem.textContent?.trim();
     }
 
     const inp = document.createElement('input');
     inp.className = 'form-control form-control-sm text-bg-dark draggable-false';
     inp.type = field === 'maxAssignees' ? 'number' : 'text';
-    inp.value = old;
+    inp.value = old || '';
     elem.textContent = '';
     elem.appendChild(inp);
     inp.focus();
@@ -288,7 +275,7 @@ export function startInlineEdit(elem: any, baseUrl: any) {
     async function save() {
         const val = inp.value.trim();
         if (val === old) {
-            rollback(old);
+            await rollback(old);
             return;
         }
         const url = `${baseUrl}/${id}/${field === 'description' ? 'description' : 'attr'}`;
@@ -303,18 +290,18 @@ export function startInlineEdit(elem: any, baseUrl: any) {
                 setTimeout(() => location.reload(), 100);
             }
         } catch (err) {
-            rollback(old);
+            await rollback(old);
 
             // @ts-expect-error TS(2571): Object is of type 'unknown'.
             showInlineAlert('error', err.message);
         }
     }
 
-    async function rollback(val: any) {
+    async function rollback(val?: string) {
         if (isTd && field === 'maxAssignees')
             elem.innerHTML = `<span data-count>${countTxt}</span> / <span data-max>${val}</span>`;
         else
-            elem.textContent = val;
+            elem.textContent = val || '';
         enableDnD();
     }
 
@@ -330,17 +317,86 @@ export function startInlineEdit(elem: any, baseUrl: any) {
 
 // Return an array of the selected option values in the control.
 // Select is an HTML select element.
-export function getSelectValues(select: any) {
+export function getSelectValues(select: HTMLSelectElement) {
     let result = [];
     let options = select && select.options;
-    let opt;
 
     for (let i = 0, iLen = options.length; i < iLen; i++) {
-        opt = options[i];
+        let opt = options[i];
 
         if (opt.selected) {
             result.push(opt.value || opt.text);
         }
     }
     return result;
+}
+
+export /**
+ * Format a Date for a given IANA timezone into an ISO-like string.
+ * @param {Date} date - A JavaScript Date (any tz; usually UTC or local).
+ * @param {string} timeZone - IANA timezone, e.g. "Europe/Berlin", "America/New_York".
+ * @returns {string} e.g. "2025-08-22T14:05:09+02:00"
+ */
+function formatISOInTimeZone(date: Date, timeZone: string) {
+    // Get date/time fields in the target timezone
+    const parts = new Intl.DateTimeFormat(undefined, {
+        timeZone,
+        hour12: false,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    }).formatToParts(date).reduce((acc: Record<string, string>, p) => {
+        acc[p.type] = p.value;
+        return acc;
+    }, {});
+
+    // Get a numeric UTC offset label like "GMT+2" or "GMT+02:00"
+    const tzNamePart = new Intl.DateTimeFormat(undefined, {
+        timeZone,
+        timeZoneName: 'shortOffset', // yields "GMT", "GMT+2", "GMT-05:30", etc.
+    }).formatToParts(date).find(p => p.type === 'timeZoneName');
+
+    // Parse that into "+HH:MM"
+    let offset = '+00:00';
+    if (tzNamePart && tzNamePart.value.startsWith('GMT')) {
+        const m = tzNamePart.value.match(/^GMT(?:(?<sign>[+-])(?<hh>\d{1,2})(?::?(?<mm>\d{2}))?)?$/);
+        if (m && m.groups) {
+            const sign = m.groups.sign || '+';
+            const hh = String(m.groups.hh || '0').padStart(2, '0');
+            const mm = String(m.groups.mm || '0').padStart(2, '0');
+            offset = `${sign}${hh}:${mm}`;
+        }
+    }
+
+    // Compose ISO-like string
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}${offset}`;
+}
+
+export function initEntityLists() {
+    document.querySelectorAll('[data-filter="section"]').forEach(sec => {
+        const input = sec.querySelector('input[type="search"]') as HTMLInputElement;
+        const list = sec.querySelector('.js-list');
+        const count = sec.querySelector('.js-count');
+        if (!input || !list || !count) return;
+        const items = Array.from(list.querySelectorAll('.list-group-item'));
+        const total = items.length;
+        const update = () => {
+            const q = (input.value || '').trim().toLowerCase();
+            let visible = 0;
+            items.forEach(li => {
+                const txt = (li.getAttribute('data-search') || li.textContent || '').toLowerCase();
+                const show = !q || txt.includes(q);
+                li.classList.toggle('d-none', !show);
+                if (show) visible++;
+            });
+            count.textContent = `${visible}/${total}`;
+        };
+        // mark section for script
+        sec.setAttribute('data-filter', 'section');
+        input.addEventListener('input', update);
+        update();
+    });
 }

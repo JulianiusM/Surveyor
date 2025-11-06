@@ -6,14 +6,4 @@ export function init() {
 }
 
 // Expose to global scope
-window.Surveyor = {
-    init
-};
-
-declare global {
-    interface Window {
-        Surveyor: {
-            init: () => void;
-        };
-    }
-}
+window.Surveyor.init = init;

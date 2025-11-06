@@ -4,7 +4,15 @@ import {Survey} from '../entities/surveys/Survey';
 import {SurveyCombination} from '../entities/surveys/SurveyCombination';
 import {SurveyResponse} from '../entities/surveys/SurveyResponse';
 import {GuestLink} from '../entities/user/GuestLink';
-import {SurveyAnswer, WeekDay, WeekInMonth} from "../../../types/SurveyTypes";
+import type {
+    GroupedResponses,
+    GroupKey,
+    GuestResponseItem,
+    SurveyAnswer,
+    UserResponseItem,
+    WeekDay,
+    WeekInMonth
+} from "../../../types/SurveyTypes";
 
 // Surveys
 
@@ -19,7 +27,7 @@ export async function getCombinationsBySurveyId(surveyId: string) {
     });
 }
 
-export async function createSurvey(userId: number, title: string, desc: string, combinations: {
+export async function createSurveyTx(userId: number, title: string, desc: string, combinations: {
     weekday: WeekDay,
     week: WeekInMonth,
 }[]): Promise<string> {
@@ -126,35 +134,55 @@ export async function getSurveyByGuestId(guestId: number) {
     });
 }
 
-export async function getResponsesSorted(surveyId: string) {
-    const guestResponses = await AppDataSource.getRepository(SurveyResponse)
-        .createQueryBuilder('r')
-        .innerJoinAndSelect('r.guest', 'g')
-        .where('r.survey_id = :surveyId', {surveyId})
-        .select([
-            'r',
-            'g.username',
-        ])
-        .getRawMany();
-
-    const userResponses = await AppDataSource.getRepository(SurveyResponse)
-        .createQueryBuilder('r')
-        .innerJoinAndSelect('r.user', 'u')
-        .where('r.survey_id = :surveyId', {surveyId})
-        .select([
-            'r',
-            'u.username',
-        ])
-        .getRawMany();
-
-    const combined = [...guestResponses, ...userResponses];
-
-    return Object.groupBy(combined, (res: any) => {
-        if (res.r_user_id) {
-            return 'u_' + res.r_user_id;
-        } else if (res.r_guest_id) {
-            return 'g_' + res.r_guest_id;
-        }
-        return '';
-    });
+function isUserResponse(
+    r: UserResponseItem | GuestResponseItem
+): r is UserResponseItem {
+    return (r as UserResponseItem).kind === "user";
 }
+
+export async function getResponsesSorted(surveyId: string): Promise<GroupedResponses> {
+    const repo = AppDataSource.getRepository(SurveyResponse);
+
+    // Load all responses for the survey with both possible assignee relations
+    const responses = await repo.find({
+        where: {surveyId},
+        relations: {user: true, guest: true},
+    });
+
+    const combined: Array<UserResponseItem | GuestResponseItem> = [];
+
+    for (const r of responses) {
+        if (r.user) {
+            const item: UserResponseItem = {
+                kind: "user",
+                id: r.id,
+                answer: r.answer,
+                combinationId: r.combinationId,
+                userId: r.user.id,
+                username: r.user.username,
+                name: r.user.name,
+            };
+            combined.push(item);
+        } else if (r.guest) {
+            const item: GuestResponseItem = {
+                kind: "guest",
+                id: r.id,
+                answer: r.answer,
+                combinationId: r.combinationId,
+                guestId: r.guest.id,
+                username: r.guest.username,
+            };
+            combined.push(item);
+        }
+        // If a row could have neither, it’s ignored (matches your original inner joins).
+    }
+
+    // Group into u_<id> / g_<id> buckets
+    return combined.reduce<GroupedResponses>((acc, item) => {
+        const key: GroupKey =
+            item.kind === "user" ? `u_${item.userId}` : `g_${item.guestId}`;
+        (acc[key] ??= []).push(item);
+        return acc;
+    }, {});
+}
+

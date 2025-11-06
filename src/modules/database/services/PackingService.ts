@@ -19,7 +19,7 @@ export async function createPackingList(listId: string, ownerId: number, title: 
     await repo.save(list);
 }
 
-export async function createPackingListTx(ownerId: number, title: string, desc: string, allowGuestAdd: boolean, guestManage: boolean, items: any[]) {
+export async function createPackingListTx(ownerId: number, title: string, desc: string, allowGuestAdd: boolean, guestManage: boolean, items: Partial<PackingItem>[]) {
     return await AppDataSource.transaction(async (manager) => {
         const listId = generateUniqueId();
         const listRepo = manager.getRepository(PackingList);
@@ -43,7 +43,7 @@ export async function createPackingListTx(ownerId: number, title: string, desc: 
                 description: it.description,
                 maxAssignees: it.maxAssignees,
                 requiredByAll: it.requiredByAll,
-                pos: it.position
+                pos: it.pos
             }));
             await itemRepo.save(itemEntities);
         }
@@ -81,7 +81,7 @@ export async function updatePackingListDescription(listId: string, description: 
 }
 
 // Packing Items
-export async function createPackingItem(listId: string, item: any) {
+export async function createPackingItem(listId: string, item: Partial<PackingItem>) {
     const repo = AppDataSource.getRepository(PackingItem);
     const entity = repo.create({
         id: item.id,
@@ -89,12 +89,12 @@ export async function createPackingItem(listId: string, item: any) {
         title: item.title,
         description: item.description,
         maxAssignees: item.maxAssignees,
-        pos: item.position
+        pos: item.pos
     });
     await repo.save(entity);
 }
 
-export async function addPackingItems(listId: string, items: any[]) {
+export async function addPackingItems(listId: string, items: Partial<PackingItem>[]) {
     if (!items.length) return;
     const repo = AppDataSource.getRepository(PackingItem);
     const entities = items.map(it => repo.create({
@@ -103,12 +103,12 @@ export async function addPackingItems(listId: string, items: any[]) {
         title: it.title,
         description: it.description,
         maxAssignees: it.maxAssignees,
-        pos: it.position
+        pos: it.pos
     }));
     await repo.save(entities);
 }
 
-export async function updatePackingItem(itemId: string, fields: any) {
+export async function updatePackingItem(itemId: string, fields: Partial<PackingItem>) {
     const repo = AppDataSource.getRepository(PackingItem);
 
     // Only include fields that are not undefined
@@ -116,7 +116,7 @@ export async function updatePackingItem(itemId: string, fields: any) {
     if (fields.title !== undefined) updateData.title = fields.title;
     if (fields.description !== undefined) updateData.description = fields.description;
     if (fields.maxAssignees !== undefined) updateData.maxAssignees = fields.maxAssignees;
-    if (fields.position !== undefined) updateData.pos = fields.position;
+    if (fields.pos !== undefined) updateData.pos = fields.pos;
 
     if (Object.keys(updateData).length === 0) return;
 
@@ -136,30 +136,25 @@ export async function reorderPackingItems(listId: string, orders: any[]) {
     }
 }
 
-export async function getPackingItems(listId: string) {
+export async function getPackingItems(listId: string): Promise<(PackingItem & { assignedCount: number })[]> {
     const repo = AppDataSource.getRepository(PackingItem);
     const items = await repo.find({where: {listId}, order: {pos: 'ASC'}});
 
     const assignmentCounts = await getPackingAssignmentCounts(listId);
-    return items.map(item => ({...item, assigned_count: assignmentCounts[item.id] || 0}));
+    return items.map(item => ({...item, assignedCount: assignmentCounts[item.id] || 0}));
 }
 
 export async function getPackingAssignmentCounts(listId: string) {
     const repo = AppDataSource.getRepository(PackingAssignment);
     const assignments = await repo.findBy({listId});
-    return assignments.reduce((map: any, a) => {
+    return assignments.reduce((map: Record<string, number>, a) => {
         map[a.itemId] = (map[a.itemId] || 0) + 1;
         return map;
     }, {});
 }
 
-export async function getLastPackingItemNumber(listId: string) {
-    const repo = AppDataSource.getRepository(PackingItem);
-    const max = await repo.createQueryBuilder('item')
-        .select('MAX(item.position)', 'max')
-        .where('item.listId = :listId', {listId})
-        .getRawOne();
-    return max;
+export async function getLastPackingItemNumber(listId: string): Promise<number> {
+    return await AppDataSource.getRepository(PackingItem).maximum("pos", {listId}) ?? 0;
 }
 
 // Assignments
@@ -210,7 +205,7 @@ export async function getPackingItemAssignees(listId: string) {
     });
     const map: Record<string, any[]> = {};
     for (const r of rows) {
-        const name = r.user?.username || r.guest?.username || '—';
+        const name = r.user?.name || r.user?.username || r.guest?.username || '—';
         if (!map[r.itemId]) map[r.itemId] = [];
         map[r.itemId].push({
             id: r.id,

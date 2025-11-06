@@ -9,7 +9,7 @@
 
 /* ========== Assign / Unassign ================================ */
 
-import {setCurrentNavLocation, showInlineAlert} from "./module_functions";
+import {post, setCurrentNavLocation, showInlineAlert, startInlineEdit, startInlineEditArea} from "./module_functions";
 
 export function initAssignButtons() {
     const table = document.querySelector('table[data-assignable]');
@@ -216,7 +216,7 @@ export function initOwnerRemove() {
 }
 
 export function initMarkEveryone() {
-    /* Toggle „everyone brings“ --------------------------------------- */
+    /* Toggle „everyone brings“ */
     document.addEventListener('change', async e => {
 
         // @ts-expect-error TS(2531): Object is possibly 'null'.
@@ -380,6 +380,4 @@ export function init() {
 }
 
 // Expose to global scope
-window.Surveyor = {
-    init
-};
+window.Surveyor.init = init;

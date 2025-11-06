@@ -3,11 +3,14 @@ import Joi from 'joi';
 import * as packingService from '../modules/database/services/PackingService';
 import {generateUniqueId} from "../modules/lib/util";
 import {APIError, ValidationError} from '../modules/lib/errors';
+import {PackingList} from "../modules/database/entities/packing/PackingList";
+import {Request} from "express";
+import {PackingItem} from "../modules/database/entities/packing/PackingItem";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'packing/packing-create';
 
-function preprocessCreate(body: any) {
+function preprocessCreate(body: any): Partial<PackingList> & { items: Partial<PackingItem>[] } {
     let items;
     try {
         items = JSON.parse(body.items || '[]');
@@ -47,25 +50,27 @@ function preprocessCreate(body: any) {
     return {
         title: value.title,
         description: value.description || null,
-        allow: value.allowGuestAdd,
+        allowGuestAdd: value.allowGuestAdd,
         guestManage: value.guestManage,
         items: value.items
     };
 }
 
 /*  ---- NEU: alles in einer Transaktion ---- */
-async function createEntity(ownerId: any, listData: any) {
+async function createEntity(
+    ownerId: number,
+    listData: Partial<PackingList> & { items: Partial<PackingItem>[] },
+) {
     return await packingService.createPackingListTx(
         ownerId,
-        listData.title,
-        listData.description,
-        listData.allow,
-        listData.guestManage,
+        listData.title!,
+        listData.description!,
+        listData.allowGuestAdd!,
+        listData.guestManage!,
 
-        // @ts-expect-error TS(7006): Parameter 'it' implicitly has an 'any' type.
         listData.items.map((it, i) => ({
             id: generateUniqueId(),
-            title: it.title,
+            title: it.title!,
             description: it.description || '',
             maxAssignees: Number(it.maxAssignees) || 1,
             requiredByAll: Boolean(it.requiredByAll),
@@ -78,7 +83,7 @@ async function createEntity(ownerId: any, listData: any) {
 async function afterCreateItems() {
 }
 
-async function fetchForView(list: any, session: any) {
+async function fetchForView(list: PackingList, session: Request['session']) {
     const items = await packingService.getPackingItems(list.id);
 
     const assignments = session.user
@@ -93,8 +98,8 @@ async function fetchForView(list: any, session: any) {
     let openCount = 0;
     let emptyCount = 0;
 
-    items.forEach((it: any) => {
-        if (it.required_by_all) return;                      // überspringen
+    items.forEach((it) => {
+        if (it.requiredByAll) return;                      // überspringen
         const arr = assigneeLists[it.id] || [];
         arr.forEach((a: any) => {
             let id;
@@ -107,8 +112,8 @@ async function fetchForView(list: any, session: any) {
             }
             participantSet.add(id);
         }); // id, fallback name
-        if (it.assigned_count === 0) emptyCount++;
-        if (it.assigned_count < it.max_assignees) openCount++;
+        if (it.assignedCount === 0) emptyCount++;
+        if (it.assignedCount < (it.maxAssignees ?? 0)) openCount++;
     });
 
     const participantCount = participantSet.size;
@@ -122,17 +127,17 @@ async function fetchForView(list: any, session: any) {
     };
 }
 
-async function fetchForDuplicate(list: any, session: any) {
+async function fetchForDuplicate(list: PackingList, session: Request['session']) {
     return await packingService.getPackingItems(list.id);
 }
 
-async function deleteEntity(list: any, session: any) {
+async function deleteEntity(list: PackingList, session: Request['session']) {
     return await packingService.deletePackingList(list.id);
 }
 
 // ---------- API ----------
 // API-specific controllers
-async function updateDescription(id: any, body: any) {
+async function updateDescription(id: string, body: any) {
     const {description} = body;
     if (description.length > 2000)
         throw new APIError('Description to long', body, 400)
@@ -140,16 +145,16 @@ async function updateDescription(id: any, body: any) {
     return 'Description updated';
 }
 
-async function reorderItems(id: any, order: any) {
+async function reorderItems(id: string, order: any) {
     await packingService.reorderPackingItems(id, order);
     return 'Order saved';
 }
 
-async function quickAddItem(list: any, body: any) {
+async function quickAddItem(list: PackingList, body: any) {
     const {title = '', description = '', max = 1} = body;
     if (!title) throw new APIError('Title required', body, 400);
 
-    const last = Number(await packingService.getLastPackingItemNumber(list.id,)) || 0;
+    const last = await packingService.getLastPackingItemNumber(list.id,) || 0;
     const item = {
         id: generateUniqueId(),
         title,
@@ -162,18 +167,18 @@ async function quickAddItem(list: any, body: any) {
     return 'Item added';
 }
 
-async function updateItemDescription(itemId: any, body: any) {
+async function updateItemDescription(itemId: string, body: any) {
     if (!(await packingService.updatePackingItem(itemId, {description: body.description}))) {
         throw new APIError('Unknown error while saving', body, 500);
     }
     return 'Description updated';
 }
 
-async function updateItemAttr(itemId: any, body: any) {
+async function updateItemAttr(itemId: string, body: any) {
     const {field, value} = body;
     const allowed = {title: 1, description: 1, maxAssignees: 1};
 
-    // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
+    // @ts-ignore
     if (!allowed[field]) throw new APIError('Invalid field', body, 400);
 
     if (!(await packingService.updatePackingItem(itemId, {[field]: value}))) {
@@ -182,34 +187,34 @@ async function updateItemAttr(itemId: any, body: any) {
     return 'Item updated';
 }
 
-async function updateRequired(itemId: any, body: any) {
+async function updateRequired(itemId: string, body: any) {
     const {flag} = body;
     await packingService.togglePackingItemRequiredByAll(itemId, flag);
     return 'Requirement updated';
 }
 
-async function deleteAssignment(assignId: any) {
+async function deleteAssignment(assignId: string) {
     await packingService.deletePackingAssignment(assignId);
     return 'Assignment removed';
 }
 
-async function updateSettings(id: any, body: any) {
+async function updateSettings(id: string, body: any) {
     const {allowAdd, guestManage} = body;
     await packingService.updatePackingFlags(id, allowAdd, guestManage);
     return 'Settings saved';
 }
 
-async function deleteItem(itemId: any) {
+async function deleteItem(itemId: string) {
     await packingService.deletePackingItem(itemId);
     return 'Item deleted';
 }
 
 function getAssignmentAccessMapping() {
     return {
-        assignToUser: (body: any, user: any) => packingService.assignPackingItemToUser(body.itemId, user),
-        assignToGuest: (body: any, user: any) => packingService.assignPackingItemToGuest(body.itemId, user),
-        unassignFromUser: (body: any, user: any) => packingService.unassignPackingItemUser(body.itemId, user),
-        unassignFromGuest: (body: any, user: any) => packingService.unassignPackingItemGuest(body.itemId, user),
+        assignToUser: (body: any, userId: number) => packingService.assignPackingItemToUser(body.itemId, userId),
+        assignToGuest: (body: any, guestId: number) => packingService.assignPackingItemToGuest(body.itemId, guestId),
+        unassignFromUser: (body: any, userId: number) => packingService.unassignPackingItemUser(body.itemId, userId),
+        unassignFromGuest: (body: any, guestId: number) => packingService.unassignPackingItemGuest(body.itemId, guestId),
     };
 }
 

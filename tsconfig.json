@@ -1,40 +1,26 @@
-// tsconfig.json
 {
   "compilerOptions": {
-    // ✅ General
     "target": "ES2024",
-    // Modern target with decorator support
-    "module": "CommonJS",
-    // Node.js backend module system
+    "module": "commonjs",
     "lib": [
       "ES2024",
       "DOM"
     ],
-    // Include DOM types for frontend code
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "strict": true,
-    "outDir": "dist",
     "rootDir": "src",
-    // ✅ Decorator support for TypeORM
+    "outDir": "dist",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "strictPropertyInitialization": false,
-    // Optional
     "sourceMap": true,
-    "types": [
-      "./types"
-    ]
+    "noEmit": true
+    // ← important: editor-only, don’t emit
   },
   "include": [
-    "src/**/*.ts",
-    "src/types/*.d.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "src/public/js"
+    "src/**/*"
   ]
 }

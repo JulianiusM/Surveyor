@@ -1,28 +1,31 @@
-import express from 'express';
+import express, {NextFunction, Request, Response} from 'express';
 
 import renderer from '../modules/renderer';
 import mailer from '../modules/email';
 import settings from '../modules/settings';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {ExpectedError, ValidationError} from '../modules/lib/errors';
-import {paramHandler} from "./paramHandler";
-import {isAuthenticated, requireOwner} from "./permissionMiddleware";
+import {paramHandler, queryHandler} from "./paramHandler";
+import {isAuthenticated, isEventPermitted, requireEventParticipant, requireOwner} from "./permissionMiddleware";
 import {getResource} from "../modules/lib/util";
 import * as userService from "../modules/database/services/UserService";
+import * as eventService from "../modules/database/services/EventService";
+import type {GuestFlowConfig, GuestFlowDb} from "../types/UserTypes";
 
 // Builds the guest edit link for emails and redirects using Node.js URL API
-function buildGuestLink(entityType: any, entityId: any, token: any) {
+function buildGuestLink(entityType: string, entityId: string, token: string) {
     // Construct the path segments and ensure proper encoding
     const pathSegments = [entityType, entityId, 'edit', token]
         .map(segment => encodeURIComponent(String(segment)))
         .join('/');
     // Ensure rootUrl ends with a slash
-    const base = settings.rootUrl.endsWith('/') ? settings.rootUrl : settings.rootUrl + '/';
+    let base = settings.value.rootUrl;
+    base = base.endsWith('/') ? base : base + '/';
     return new URL(pathSegments, base).toString();
 }
 
 // Default DB functions if none provided in config
-function initConfig() {
+function initConfig(): GuestFlowDb {
     return {
         getById: () => {
             throw new Error('getById not implemented');
@@ -44,9 +47,10 @@ function initConfig() {
  *   • /:id/delete                 (POST)
  *   • /:id  (SAFE-ZONE middleware + GET View)
  */
-export function createGuestFlowRouter(cfg: any) {
+export function createGuestFlowRouter(cfg: GuestFlowConfig) {
     const {
         entityType,
+        addToEvent,
         db = {},
         templates: {create, view},
         buildRedirect,
@@ -56,7 +60,7 @@ export function createGuestFlowRouter(cfg: any) {
         fetchForView,
         fetchForDuplicate,
         deleteEntity
-    } = cfg;
+    }: GuestFlowConfig = cfg;
 
     // merge defaults with any overrides
     const {
@@ -66,32 +70,40 @@ export function createGuestFlowRouter(cfg: any) {
         getGuestByToken,
         getGuestLinkToken,
         createGuestLink,
-    } = Object.assign(initConfig(), db);
+    }: GuestFlowDb = Object.assign(initConfig(), db);
 
     const guest = 'users/register-guest';
 
     const router = express.Router();
 
     // Preload entity for any route containing :id
-    const resFct = (req: any) => getResource(req, entityType);
+    const resFct = (req: Request) => getResource(req, entityType);
+    const eventResFn = (req: Request) => getResource(req, 'event');
     paramHandler('id', router, getById, entityType);
+
+    if (addToEvent) {
+        queryHandler("eventId", router, eventService.getEventById, 'event');
+        router.use(requireEventParticipant(eventResFn));
+    }
 
     // GET+POST /create
     router.route('/create')
-        .get(isAuthenticated, (req: any, res: any) => {
-            renderer.render(res, create);
+        .get(isAuthenticated, isEventPermitted(addToEvent, eventResFn), (req: Request, res: Response) => {
+            renderer.renderWithData(res, create, {eventId: req.query.eventId});
         })
-        .post(isAuthenticated, asyncHandler(async (req: any, res: any) => {
+        .post(isAuthenticated, isEventPermitted(addToEvent, eventResFn), asyncHandler(async (req: Request, res: Response) => {
             const parsed = preprocessCreate(req.body);
             if (parsed.error) {
                 throw new ValidationError(create, parsed.error.msg, parsed.error.data);
             }
+            if (addToEvent) {
+                parsed._injectedEventId = req.query.eventId;
+            }
             let id;
             try {
-                id = await createEntity(req.session.user.id, parsed);
+                id = await createEntity(req.session.user!.id, parsed);
                 await afterCreateItems(id, parsed);
             } catch (e) {
-
                 // @ts-expect-error TS(2571): Object is of type 'unknown'.
                 throw new ValidationError(create, e.message, parsed);
             }
@@ -101,12 +113,12 @@ export function createGuestFlowRouter(cfg: any) {
 
     // GET+POST /:id/guest
     router.route('/:id/guest')
-        .get(asyncHandler(async (req: any, res: any) => {
+        .get(asyncHandler(async (req: Request, res: Response) => {
             const {id, title} = resFct(req);
             if (req.session.user || req.session.guest) return res.redirect(buildRedirect(id))
             renderer.renderWithData(res, guest, {entityType, entityId: id, title});
         }))
-        .post(asyncHandler(async (req: any, res: any) => {
+        .post(asyncHandler(async (req: Request, res: Response) => {
             const entityId = resFct(req).id;
             const {username, email} = req.body;
             if (!username) {
@@ -127,21 +139,21 @@ export function createGuestFlowRouter(cfg: any) {
         }));
 
     // GET /:id/edit/:token
-    router.get('/:id/edit/:token', asyncHandler(async (req: any, res: any) => {
+    router.get('/:id/edit/:token', asyncHandler(async (req: Request, res: Response) => {
         const {id: entityId, token} = req.params;
-        const link = await getGuestByToken(token);
-        if (!link || link.entity_type !== entityType || link.entity_id !== entityId) {
+        const guest = await getGuestByToken(token, entityType, entityId);
+        if (!guest) {
             throw new ExpectedError('Invalid or mismatched token', 'error', 401);
         }
         // switch to guest session
         req.session.user = undefined;
-        req.session.guest = {id: link.id, username: link.username, email: link.email};
+        req.session.guest = guest;
         req.flash('info', 'Switched to guest edit');
         res.redirect(buildRedirect(entityId));
     }));
 
     // GET /:id/duplicate
-    router.get('/:id/duplicate', requireOwner(resFct), asyncHandler(async (req: any, res: any) => {
+    router.get('/:id/duplicate', requireOwner(resFct), asyncHandler(async (req: Request, res: Response) => {
         const data = await fetchForDuplicate(resFct(req), req.session);
         renderer.renderWithData(res, create, {
             title: `Copy of ${resFct(req).title}`,
@@ -152,14 +164,14 @@ export function createGuestFlowRouter(cfg: any) {
     }));
 
     // POST /:id/delete
-    router.post('/:id/delete', requireOwner(resFct), asyncHandler(async (req: any, res: any) => {
+    router.post('/:id/delete', requireOwner(resFct), asyncHandler(async (req: Request, res: Response) => {
         await deleteEntity(resFct(req), req.session);
         req.flash('success', `${entityType} deleted`);
         res.redirect('/users/dashboard');
     }));
 
     // SAFE-ZONE middleware before accessing /:id routes
-    async function requireAccess(req: any, res: any, next: any) {
+    async function requireAccess(req: Request, res: Response, next: NextFunction) {
         const entityId = resFct(req).id;
         // Registered user
         if (req.session.user) return next();
@@ -184,7 +196,7 @@ export function createGuestFlowRouter(cfg: any) {
     router.use('/:id', asyncHandler(requireAccess));
 
     // GET /:id (view)
-    router.get('/:id', asyncHandler(async (req: any, res: any) => {
+    router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
         const data = await fetchForView(resFct(req), req.session);
         if (!data) {
             throw new ValidationError(view, `${entityType} not found`, {});

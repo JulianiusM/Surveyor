@@ -4,7 +4,8 @@ export {};
 declare global {
     interface Window {
         Surveyor: {
-            init: () => void;
+            init?: () => void;
+            initTimezoneSelect?: (id: number, opts: any) => void;
             // Add more functions/properties if needed
         };
     }

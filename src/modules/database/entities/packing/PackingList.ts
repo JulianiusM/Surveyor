@@ -1,17 +1,13 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany,} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
 import {PackingAssignment} from "./PackingAssignment";
 import {PackingItem} from "./PackingItem";
 import {User} from "../user/User";
+import {Event} from "../event/Event";
 
 @Index("fk_packing_list_user", ["ownerId"], {})
 @Entity("packing_lists", {schema: "surveyor"})
 export class PackingList {
-    @Column("char", {
-        primary: true,
-        name: "id",
-        length: 36,
-        default: () => "'UUID()'",
-    })
+    @PrimaryGeneratedColumn("uuid", {name: "id"})
     id: string;
 
     @Column("int", {name: "owner_id"})
@@ -21,16 +17,19 @@ export class PackingList {
     title: string;
 
     @Column("text", {name: "description", nullable: true})
-    description: string | null;
+    description?: string | null;
+
+    @Column('varchar', {name: 'event_id', length: 36, nullable: true})
+    eventId?: string | null;
 
     @Column("tinyint", {
         name: "allow_guest_add",
         width: 1,
-        default: () => "'0'",
+        default: 0,
     })
     allowGuestAdd: boolean;
 
-    @Column("tinyint", {name: "guest_manage", width: 1, default: () => "'0'"})
+    @Column("tinyint", {name: "guest_manage", width: 1, default: 0})
     guestManage: boolean;
 
     @Column("timestamp", {
@@ -61,4 +60,11 @@ export class PackingList {
     })
     @JoinColumn([{name: "owner_id", referencedColumnName: "id"}])
     owner: User;
+
+    @ManyToOne(() => Event, (event) => event.packingLists, {
+        onDelete: "CASCADE",
+        onUpdate: "CASCADE",
+    })
+    @JoinColumn([{name: "event_id", referencedColumnName: "id"}])
+    event: User;
 }

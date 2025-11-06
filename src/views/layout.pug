@@ -1,6 +1,8 @@
 //- views/layout.pug  – überarbeitetes Haupt-Layout mit Version im Footer
 // Define mixins
 include modules/module_role_assignment_addon
+include modules/module_timezone_select
+include modules/module_entity_list
 
 doctype html
 html(lang="en")
@@ -20,6 +22,10 @@ html(lang="en")
         link(rel="stylesheet", href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css")
         link(rel="stylesheet" href="/style/style.css")
         block link
+
+        script(type="module" src="/js/module_functions.gen.js")
+        script.
+            window.Surveyor = {};
 
     body(class="d-flex flex-column min-vh-100 bg-secondary" onload="window.Surveyor.init()")
 
@@ -104,6 +110,5 @@ html(lang="en")
         script(src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous")
         script(src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js")
         script(src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js")
-        script(type="module" src="/js/module_functions.gen.js")
         block scripts
             script(type="module" src="/js/stub.gen.js")

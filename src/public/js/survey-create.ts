@@ -13,13 +13,13 @@ export function initButtons() {
 
     // Labels & values for selects
     const weekdays = [
-        ['Monday', 'MO'],
-        ['Tuesday', 'DI'],
-        ['Wednesday', 'MI'],
-        ['Thursday', 'DO'],
-        ['Friday', 'FR'],
-        ['Saturday', 'SA'],
-        ['Sunday', 'SO']
+        ['Monday', 'MON'],
+        ['Tuesday', 'TUE'],
+        ['Wednesday', 'WED'],
+        ['Thursday', 'THU'],
+        ['Friday', 'FRI'],
+        ['Saturday', 'SAT'],
+        ['Sunday', 'SUN']
     ];
     const weeks = ['1', '2', '3', '4', 'LAST'];
 
@@ -76,8 +76,7 @@ export function initButtons() {
         tr.appendChild(tdWeek);
         tr.appendChild(tdAction);
 
-        // @ts-expect-error TS(2531): Object is possibly 'null'.
-        tableBody.appendChild(tr);
+        tableBody?.appendChild(tr);
     }
 
 
@@ -92,14 +91,10 @@ export function initButtons() {
     }
 
     // Add new row on button click
-
-    // @ts-expect-error TS(2531): Object is possibly 'null'.
-    addBtn.addEventListener('click', addCombinationRow);
+    addBtn?.addEventListener('click', (e) => addCombinationRow());
 
     // Delegate removal to tbody
-
-    // @ts-expect-error TS(2531): Object is possibly 'null'.
-    tableBody.addEventListener('click', function (e) {
+    tableBody?.addEventListener('click', function (e) {
 
         // @ts-expect-error TS(2531): Object is possibly 'null'.
         if (e.target.matches('.remove-combination-btn')) {
@@ -117,6 +112,4 @@ export function init() {
 }
 
 // Expose to global scope
-window.Surveyor = {
-    init
-};
+window.Surveyor.init = init;

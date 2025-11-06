@@ -5,7 +5,7 @@ import {Role} from "../user/Role";
 @Index("role_id", ["roleId"], {})
 @Entity("activity_slot_role", {schema: "surveyor"})
 export class ActivitySlotRole {
-    @Column("char", {primary: true, name: "slot_id", length: 36})
+    @Column("varchar", {primary: true, name: "slot_id", length: 36})
     slotId: string;
 
     @Column("smallint", {primary: true, name: "role_id"})

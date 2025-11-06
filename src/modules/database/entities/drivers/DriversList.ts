@@ -2,6 +2,7 @@ import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGenerate
 import {DriversAssignment} from "./DriversAssignment";
 import {DriversItem} from "./DriversItem";
 import {User} from "../user/User";
+import {Event} from "../event/Event";
 
 @Index("owner_id", ["ownerId"], {})
 @Entity("drivers_lists", {schema: "surveyor"})
@@ -16,16 +17,19 @@ export class DriversList {
     title: string;
 
     @Column("text", {name: "description", nullable: true})
-    description: string | null;
+    description?: string | null;
+
+    @Column('varchar', {name: 'event_id', length: 36, nullable: true})
+    eventId?: string | null;
 
     @Column("tinyint", {
         name: "allow_guest_add",
         width: 1,
-        default: () => "'0'",
+        default: 0,
     })
     allowGuestAdd: boolean;
 
-    @Column("tinyint", {name: "guest_manage", width: 1, default: () => "'0'"})
+    @Column("tinyint", {name: "guest_manage", width: 1, default: 0})
     guestManage: boolean;
 
     @Column("timestamp", {
@@ -56,4 +60,11 @@ export class DriversList {
     })
     @JoinColumn([{name: "owner_id", referencedColumnName: "id"}])
     owner: User;
+
+    @ManyToOne(() => Event, (event) => event.driversLists, {
+        onDelete: "CASCADE",
+        onUpdate: "CASCADE",
+    })
+    @JoinColumn([{name: "event_id", referencedColumnName: "id"}])
+    event: Event;
 }

@@ -1,47 +1,113 @@
-//- views/users/register-guest.pug  – aufgefrischtes Guest-Register-Formular
-//- Erwartet in locals:  entityType, entityId, title
+//- views/users/register-guest.pug – refreshed Guest Register
+//- Expects in locals: data.entityType, data.entityId, data.title
 extends ../layout
 
 block meta
     title Join «#{data.title}»
 
 block title
-    h1.card-header.text-center
+    //- The page's card header (provided by your layout)
+    h1.card-header.text-center.py-3.mb-0
         i.bi.bi-door-open-fill.me-2
         | Join «#{data.title}»
 
 block content
-    p.lead.text-center.mb-4
-        | Enter a name (and optional e-mail) to participate.
+    //- Intro
+    .text-center.mb-4
+        p.lead.mb-2 Get the full experience — no juggling links.
+        ul.list-unstyled.small.d-inline-block.text-start.mb-0
+            li.mb-1
+                i.bi.bi-check-circle-fill.me-2
+                | See all your surveys in one place
+            li.mb-1
+                i.bi.bi-check-circle-fill.me-2
+                | One link for everything — no duplicates
+            li.mb-1
+                i.bi.bi-check-circle-fill.me-2
+                | Track events you're part of
+            li
+                i.bi.bi-check-circle-fill.me-2
+                | Create your own surveys
 
-    form#guestForm.row.gy-3.gx-2.justify-content-center(
+    //- Primary actions
+    .d-flex.flex-wrap.justify-content-center.gap-2.mb-4
+        a.btn.btn-primary.d-inline-flex.align-items-center.gap-2(href="/users/login")
+            i.bi.bi-box-arrow-in-right
+            | Log in
+        a.btn.btn-outline-primary.d-inline-flex.align-items-center.gap-2(href="/users/register")
+            i.bi.bi-person-plus
+            | Create account
+
+    //- Divider
+    .position-relative.text-center.my-4
+        hr
+        span.position-absolute.top-50.start-50.translate-middle.px-3.bg-body-tertiary.rounded-pill.text-muted.small
+            | or continue as a guest
+
+    //- Guest note
+    .alert.alert-warning.text-center.border-warning.mb-4(role="alert")
+        .d-flex
+            i.bi.bi-exclamation-triangle-fill.me-2
+            .flex-grow-1
+                strong Heads up:&nbsp;
+                | Use the personal link you’ll receive to edit your submission later. Keep it safe.
+
+    //- Guest form
+    form#guestForm.row.gx-3.gy-3.justify-content-center(
         method="post"
-        action=`/${data.entityType}/${data.entityId}/guest`)
-        // Username
-        .col-md-6
+        action=`/${data.entityType}/${data.entityId}/guest`
+        autocomplete="on"
+    )
+        //- Display name
+        .col-12.col-md-8
             label.form-label.mb-1(for="username")
                 i.bi.bi-person-circle.me-1
-                | Display name&nbsp;*
-            input#username.form-control.text-bg-dark(
-                type="text"
-                name="username"
-                maxlength="100"
-                placeholder="Your name"
-                required)
+                | Display name *
+            .input-group.input-group-lg
+                span.input-group-text
+                    i.bi.bi-person
+                input#username.form-control(
+                    type="text"
+                    name="username"
+                    maxlength="100"
+                    placeholder="Your name"
+                    required
+                    autocomplete="nickname"
+                )
+            .form-text
+                | This name will be shown to others. You can use your real name or a nickname.
 
-        // E-Mail (optional)
-        .col-md-6
+        //- E-mail (optional)
+        .col-12.col-md-8
             label.form-label.mb-1(for="email")
                 i.bi.bi-envelope-at.me-1
                 | E-mail (optional, for your personal editing link)
-            input#email.form-control.text-bg-dark(
-                type="email"
-                name="email"
-                maxlength="100"
-                placeholder="for edit-link")
+            .input-group.input-group-lg
+                span.input-group-text
+                    i.bi.bi-envelope
+                input#email.form-control(
+                    type="email"
+                    name="email"
+                    maxlength="100"
+                    placeholder="name@example.com"
+                    autocomplete="email"
+                    inputmode="email"
+                )
+            .form-text
+                | We’ll send your private edit link here. If you skip this, make sure to save the link after submitting.
 
-        // Submit-Button – volle Zeilenbreite auf Mobiles
-        .col-12.d-grid.mt-2
-            button.btn.btn-success(type="submit")
-                i.bi.bi-check-lg.me-1
-                | Register
+        //- Submit
+        .col-12.col-md-8.mt-2
+            .d-grid
+                button.btn.btn-success.btn-lg.d-inline-flex.align-items-center.justify-content-center.gap-2(type="submit")
+                    i.bi.bi-check-lg
+                    | Continue as guest
+
+    //- Subtle footer links
+    .text-center.mt-4
+        a.text-decoration-none.me-3(href="/users/login")
+            i.bi.bi-arrow-left-circle.me-1
+            | Back to login
+        a.text-decoration-none(href="/users/register")
+            i.bi.bi-person-plus.me-1
+            | Create a full account

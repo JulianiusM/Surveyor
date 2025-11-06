@@ -3,7 +3,7 @@ import {User} from "../user/User";
 import {Guest} from "../user/Guest";
 import {SurveyCombination} from "./SurveyCombination";
 import {Survey} from "./Survey";
-import {SurveyAnswer} from "../../../../types/SurveyTypes";
+import type {SurveyAnswer} from "../../../../types/SurveyTypes";
 
 @Index("responses_ibfk_1", ["userId"], {})
 @Index("responses_ibfk_2", ["guestId"], {})
@@ -20,15 +20,14 @@ export class SurveyResponse {
     @Column("int", {name: "guest_id", nullable: true})
     guestId: number | null;
 
-    @Column("char", {name: "survey_id", length: 36})
+    @Column("varchar", {name: "survey_id", length: 36})
     surveyId: string;
 
     @Column("int", {name: "combination_id"})
     combinationId: number;
 
-    @Column("enum", {
+    @Column("simple-enum", {
         name: "answer",
-        nullable: true,
         enum: ["yes", "no", "maybe"],
         default: "no",
     })

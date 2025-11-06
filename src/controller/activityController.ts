@@ -7,6 +7,8 @@ import {APIError, ValidationError} from '../modules/lib/errors';
 import * as activityService from "../modules/database/services/ActivityService";
 import * as userService from "../modules/database/services/UserService";
 import {ActivitySlot} from "../modules/database/entities/activity/ActivitySlot";
+import {ActivityPlan} from "../modules/database/entities/activity/ActivityPlan";
+import {Request} from "express";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'activity/activity-create';
@@ -16,9 +18,9 @@ const CREATE_TEMPLATE = 'activity/activity-create';
  * Throws ValidationError on failure; returns sanitized plan data on success.
  */
 
-function preprocessCreate(body: any) {
+function preprocessCreate(body: any): Partial<ActivityPlan> & { slots: Partial<ActivitySlot>[] } {
     // Parse JSON slots object
-    let slotsByDate;
+    let slotsByDate = {};
     try {
         slotsByDate = JSON.parse(body.slots || '{}');
     } catch {
@@ -28,8 +30,8 @@ function preprocessCreate(body: any) {
     // Define Joi schema for body & slots
     const slotSchema = Joi.object({
         id: Joi.string().guid({version: ['uuidv4', 'uuidv5']}).required(),
-        date: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
-        position: Joi.number().integer().required(),
+        day: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
+        pos: Joi.number().integer().required(),
         title: Joi.string().max(255).required(),
         description: Joi.string().allow(''),
         maxAssignees: Joi.number().integer().min(1).required()
@@ -37,13 +39,13 @@ function preprocessCreate(body: any) {
 
     const schema = Joi.object({
         title: Joi.string().required(),
-        start: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
-        end: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
+        startDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
+        endDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
         allowGuestAdd: Joi.allow('').allow('on'),
         guestManage: Joi.allow('').allow('on'),
         description: Joi.string().max(2000).allow('').required(),
         slots: Joi.object().pattern(
-            /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/, Joi.array().items(slotSchema).min(1)
+            /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/, Joi.array().items(slotSchema)
         ).min(1).required()
     });
 
@@ -58,23 +60,24 @@ function preprocessCreate(body: any) {
     }
 
     // Flatten slots arrays and return sanitized data
-    const flattenedSlots: any[] = Object.values(value.slots).flat();
+    const flattenedSlots: Partial<ActivitySlot>[] = Object.values(value.slots).flat() as Partial<ActivitySlot>[];
 
     // Ensure each slot date is within the start/end range
-    const startDate = fromISOtoLocal(value.start);
-    const endDate = fromISOtoLocal(value.end);
+    const startDate = fromISOtoLocal(value.startDate);
+    const endDate = fromISOtoLocal(value.endDate);
     for (const slot of flattenedSlots) {
-        const slotDate = fromISOtoLocal(slot.date);
+        const slotDate = fromISOtoLocal(slot.day!);
         if (slotDate < startDate || slotDate > endDate) {
-            throw new ValidationError(CREATE_TEMPLATE, `Slot date ${slot.date} outside range`, {body});
+            throw new ValidationError(CREATE_TEMPLATE, `Slot date ${slot.day} outside range`, {body});
         }
     }
+
     return {
         title: value.title,
         description: value.description || null,
-        start: value.start,
-        end: value.end,
-        allow: value.allowGuestAdd === 'on',
+        startDate: value.startDate,
+        endDate: value.endDate,
+        allowGuestAdd: value.allowGuestAdd === 'on',
         guestManage: value.guestManage === 'on',
         slots: flattenedSlots
     };
@@ -85,16 +88,20 @@ function preprocessCreate(body: any) {
  * @returns {Promise<string>} plan ID
  */
 
-async function createEntity(ownerId: any, planData: any): Promise<string> {
+async function createEntity(
+    ownerId: number,
+    planData: Partial<ActivityPlan> & { slots: Partial<ActivitySlot>[], _injectedEventId?: string }
+): Promise<string> {
     return await activityService.createActivityPlanTx(
         ownerId,
-        planData.title,
-        planData.description,
-        planData.start,
-        planData.end,
-        planData.allow,
-        planData.guestManage,
-        planData.slots
+        planData.title!,
+        planData.description!,
+        planData.startDate!,
+        planData.endDate!,
+        planData.allowGuestAdd!,
+        planData.guestManage!,
+        planData.slots,
+        planData._injectedEventId,
     );
 }
 
@@ -106,10 +113,10 @@ const afterCreateItems = async () => {
  * Assemble data for the view.
  */
 
-async function fetchForView(plan: any, session: any) {
+async function fetchForView(plan: ActivityPlan, session: Request['session']) {
     const slotsByDate = await activityService.getActivitySlots(plan.id);
 
-    const slotList: any[] = Object.values(slotsByDate).flat();
+    const slotList = Object.values(slotsByDate).flat();
 
     const assignPromise: Promise<string[]> = session.user
         ? activityService.getActivitySlotAssignmentsForUser(plan.id, session.user.id)
@@ -127,8 +134,9 @@ async function fetchForView(plan: any, session: any) {
     let empty = 0, open = 0;
 
     for (const slot of slotList) {
-        if (slot.assigned_count === 0) empty++;
-        if (slot.assigned_count < slot.max_assignees) open++;
+        if (!slot) continue;
+        if (slot.assignedCount === 0) empty++;
+        if (slot.assignedCount < (slot.maxAssignees ?? 0)) open++;
     }
 
     return {
@@ -146,7 +154,7 @@ async function fetchForView(plan: any, session: any) {
  * Provide data for duplication form.
  */
 
-async function fetchForDuplicate(plan: any, session: any) {
+async function fetchForDuplicate(plan: ActivityPlan, session: Request['session']) {
     return await activityService.getActivitySlots(plan.id);
 }
 
@@ -154,14 +162,14 @@ async function fetchForDuplicate(plan: any, session: any) {
  * Delete plan if owned by current user.
  */
 
-async function deleteEntity(plan: any, session: any) {
+async function deleteEntity(plan: ActivityPlan, session: Request['session']) {
     return await activityService.deleteActivityPlan(plan.id);
 }
 
 // ---------- API ----------
 // API-specific controllers
 
-async function updateDescription(planId: any, body: any) {
+async function updateDescription(planId: string, body: any) {
     const {description} = body;
     if (description.length > 2000)
         throw new APIError('Description to long', body, 400)
@@ -169,15 +177,15 @@ async function updateDescription(planId: any, body: any) {
     return 'Description updated';
 }
 
-async function reorderSlots(id: any, order: any) {
+async function reorderSlots(id: string, order: { slotId: string, pos: number }[]) {
     await activityService.reorderActivitySlots(id, order);
     return 'Order saved';
 }
 
-async function quickAddSlot(plan: any, body: any) {
+async function quickAddSlot(plan: ActivityPlan, body: any) {
     const {date, title = '', description = '', maxAssignees = 1} = body;
     const d = fromISOtoLocal(date);
-    if (d < fromISOtoLocal(plan.start_date) || d > fromISOtoLocal(plan.end_date))
+    if (d < fromISOtoLocal(plan.startDate) || d > fromISOtoLocal(plan.endDate))
         throw new APIError('Date outside range', body, 400);
 
     if (!title) throw new APIError('Title required', body, 400);
@@ -196,18 +204,18 @@ async function quickAddSlot(plan: any, body: any) {
     return 'Slot added';
 }
 
-async function updateSlotDescription(slotId: any, body: any) {
+async function updateSlotDescription(slotId: string, body: any) {
     if (!(await activityService.updateActivitySlot(slotId, {description: body.description}))) {
         throw new APIError('Unknown error while saving', body, 500);
     }
     return 'Description updated';
 }
 
-async function updateSlotAttr(slotId: any, body: any) {
+async function updateSlotAttr(slotId: string, body: any) {
     const {field, value} = body;
     const allowed = {title: 1, description: 1, maxAssignees: 1};
 
-    // @ts-expect-error TS(7053): Element implicitly has an 'any' type because expre... Remove this comment to see the full error message
+    // @ts-ignore
     if (!allowed[field]) throw new APIError('Invalid field', body, 400);
 
     if (!(await activityService.updateActivitySlot(slotId, {[field]: value}))) {
@@ -217,24 +225,24 @@ async function updateSlotAttr(slotId: any, body: any) {
 }
 
 
-async function deleteAssignment(assignId: any) {
+async function deleteAssignment(assignId: number) {
     await activityService.deleteActivitySlotAssignment(assignId);
     return 'Assignment removed';
 }
 
 
-async function updateSettings(id: any, body: any) {
+async function updateSettings(id: string, body: any) {
     const {allowAdd, guestManage} = body;
     await activityService.updateActivityPlanFlags(id, allowAdd, guestManage);
     return 'Settings saved';
 }
 
-async function deleteSlot(slotId: any) {
+async function deleteSlot(slotId: string) {
     await activityService.deleteActivitySlot(slotId);
     return 'Slot deleted';
 }
 
-async function addSlotRole(slotId: any, body: any) {
+async function addSlotRole(slotId: string, body: any) {
     const {roles} = body;
     if (!roles || !Array.isArray(roles) || roles.length < 1) {
         throw new APIError('Invalid roles', body, 400);
@@ -247,19 +255,19 @@ async function addSlotRole(slotId: any, body: any) {
 
 function getAssignmentAccessMapping() {
     return {
-        assignToUser: (body: any, user: any) => activityService.assignActivitySlotToUser(body.slotId, user),
-        assignToGuest: (body: any, user: any) => activityService.assignActivitySlotToGuest(body.slotId, user),
-        unassignFromUser: (body: any, user: any) => activityService.unassignActivitySlotUser(body.slotId, user),
-        unassignFromGuest: (body: any, user: any) => activityService.unassignActivitySlotGuest(body.slotId, user),
+        assignToUser: (body: any, userId: number) => activityService.assignActivitySlotToUser(body.slotId, userId),
+        assignToGuest: (body: any, guestId: number) => activityService.assignActivitySlotToGuest(body.slotId, guestId),
+        unassignFromUser: (body: any, userId: number) => activityService.unassignActivitySlotUser(body.slotId, userId),
+        unassignFromGuest: (body: any, guestId: number) => activityService.unassignActivitySlotGuest(body.slotId, guestId),
     };
 }
 
 function getRoleAccessMapping() {
     return {
-        assignToUser: (body: any, user: any) => activityService.assignActivityAssignmentRoleToUser(body.slotId, user, body.role),
-        assignToGuest: (body: any, user: any) => activityService.assignActivityAssignmentRoleToGuest(body.slotId, user, body.role),
-        unassignFromUser: (body: any, user: any) => activityService.unassignActivityAssignmentRoleFromUser(body.slotId, user, body.role),
-        unassignFromGuest: (body: any, user: any) => activityService.unassignActivityAssignmentRoleFromGuest(body.slotId, user, body.role),
+        assignToUser: (body: any, userId: number) => activityService.assignActivityAssignmentRoleToUser(body.slotId, userId, body.role),
+        assignToGuest: (body: any, guestId: number) => activityService.assignActivityAssignmentRoleToGuest(body.slotId, guestId, body.role),
+        unassignFromUser: (body: any, userId: number) => activityService.unassignActivityAssignmentRoleFromUser(body.slotId, userId, body.role),
+        unassignFromGuest: (body: any, guestId: number) => activityService.unassignActivityAssignmentRoleFromGuest(body.slotId, guestId, body.role),
     };
 }
 

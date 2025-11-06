@@ -1,11 +1,12 @@
 import {Column, Entity, Index, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
 import {ActivityAssignmentRole} from "../activity/ActivityAssignmentRole";
 import {ActivitySlotRole} from "../activity/ActivitySlotRole";
+import {ActivityPlanRequirement} from "../activity/ActivityPlanRequirement";
 
 @Index("name", ["name"], {unique: true})
 @Entity("roles", {schema: "surveyor"})
 export class Role {
-    @PrimaryGeneratedColumn({type: "smallint", name: "id"})
+    @PrimaryGeneratedColumn({type: "int", name: "id"})
     id: number;
 
     @Column("varchar", {name: "name", unique: true, length: 50})
@@ -28,4 +29,10 @@ export class Role {
         (activitySlotRole) => activitySlotRole.role
     )
     activitySlotRoles: ActivitySlotRole[];
+
+    @OneToMany(
+        () => ActivityPlanRequirement,
+        (activityPlanRequirements) => activityPlanRequirements.role
+    )
+    activityPlanRequirements: ActivityPlanRequirement[];
 }

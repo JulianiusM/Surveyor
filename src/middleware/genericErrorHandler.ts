@@ -1,8 +1,10 @@
+import {NextFunction, Request, Response} from "express";
+
 import {APIError, ExpectedError, ValidationError} from "../modules/lib/errors";
 import renderer from "../modules/renderer";
 
-export function handleGenericError(err: any, req: any, res: any, next: any) {
-    const status = err.status || 500;
+export function handleGenericError(err: Error, req: Request, res: Response, next: NextFunction) {
+    const status: number = (err as any).status || 500;
     if (status >= 500) console.error(err);
     res.status(status);
 

@@ -1,0 +1,36 @@
+import {defineConfig, devices} from '@playwright/test';
+import * as dotenv from 'dotenv';
+
+// Load E2E env before anything else
+dotenv.config({path: process.env.E2E_DOTENV_FILE ?? '.env.e2e'});
+
+const PORT = parseInt(process.env.PORT ?? '3001', 10);
+const BASE_URL = process.env.BASE_URL ?? `http://localhost:${PORT}`;
+
+export default defineConfig({
+    testDir: 'e2e',
+    timeout: 30_000,
+    expect: {timeout: 5_000},
+    fullyParallel: true,
+    reporter: [['list'], ['html', {open: 'never'}]],
+    use: {
+        baseURL: BASE_URL,
+        trace: 'on-first-retry',
+        screenshot: 'only-on-failure',
+        video: 'retain-on-failure',
+    },
+
+    // Start your real server; we chain DB init before launching the app.
+    webServer: {
+        command: `npm run e2e:start`,
+        url: `${BASE_URL}/healthz`,
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+        stderr: 'pipe',
+    },
+
+    projects: [
+        {name: 'chromium', use: {...devices['Desktop Chrome']}},
+        // Add firefox/webkit if you want cross-browser
+    ],
+});

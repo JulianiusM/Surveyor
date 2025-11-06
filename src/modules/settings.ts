@@ -1,183 +1,218 @@
-import fs from "fs";
-import csv_reader from "csv-reader";
+// src/settings-csv.ts
+import fs from "node:fs";
+import crypto from "node:crypto";
+import * as dotenv from "dotenv";
 
-class Settings {
-    appPort: any;
-    file: any;
-    mysqlDatabase: any;
-    mysqlHost: any;
-    mysqlPassword: any;
-    mysqlPort: any;
-    mysqlUser: any;
-    rootUrl: any;
-    sessionSecret: any;
-    smtpEmail: any;
-    smtpHost: any;
-    smtpPassword: any;
-    smtpPool: any;
-    smtpPort: any;
-    smtpSecure: any;
-    smtpUser: any;
+// Load env before anything else.
+// Priority: E2E_DOTENV_FILE > .env.e2e (when NODE_ENV=e2e) > .env
+const envPath =
+    process.env.E2E_DOTENV_FILE ??
+    (process.env.NODE_ENV === "e2e" ? ".env.e2e" : ".env");
+dotenv.config({path: envPath});
+
+export type Settings = {
+    appPort: number;
+    file: string;
+    dbType: "mariadb" | "mysql";
+    dbName: string;
+    dbHost: string;
+    dbPassword: string;
+    dbPort: number;
+    dbUser: string;
+    rootUrl: string;
+    sessionSecret: string;
+    smtpEmail: string;
+    smtpHost: string;
+    smtpPassword: string;
+    smtpPool: boolean;
+    smtpPort: number;
+    smtpSecure: boolean;
+    smtpUser: string;
+    localLoginEnabled: boolean;
+    oidcEnabled: boolean;
+    oidcName: string;
+    oidcIssuerBaseUrl: string;
+    oidcClientId: string;
+    oidcClientSecret: string;
+    oidcRedirectUrl: string;
     initialized: boolean;
+};
 
-    constructor() {
-        this.initialized = false;
-        this.rootUrl = "http://localhost:3000";
+const defaults: Settings = {
+    initialized: false,
+    rootUrl: "http://localhost:3000",
 
-        this.mysqlHost = "localhost";
-        this.mysqlPort = "3306";
-        this.mysqlUser = "user";
-        this.mysqlPassword = "password";
-        this.mysqlDatabase = "database";
+    dbType: "mariadb",
+    dbHost: "localhost",
+    dbPort: 3306,
+    dbUser: "user",
+    dbPassword: "password",
+    dbName: "database",
 
-        this.smtpPool = true;
-        this.smtpHost = "smtp.example.com";
-        this.smtpPort = 465;
-        this.smtpSecure = true;
-        this.smtpEmail = "test@example.com";
-        this.smtpUser = "username";
-        this.smtpPassword = "password";
+    smtpPool: true,
+    smtpHost: "smtp.example.com",
+    smtpPort: 465,
+    smtpSecure: true,
+    smtpEmail: "test@example.com",
+    smtpUser: "username",
+    smtpPassword: "password",
 
-        this.sessionSecret = "CHANGE__" + this.generateRandomString(20);
-        this.appPort = "3000";
+    oidcEnabled: false,
+    oidcName: "OIDC Provider",
+    oidcClientId: "CLIENT_ID",
+    oidcClientSecret: "CLIENT_SECRET",
+    oidcIssuerBaseUrl: "http://example.com",
+    oidcRedirectUrl: "http://localhost:3000/user/oidc/callback",
 
-        this.file = "./settings.csv";
+    localLoginEnabled: true,
+
+    sessionSecret:
+        "CHANGE__" + crypto.randomBytes(32).toString("base64url").slice(0, 20),
+    appPort: 3000,
+
+    file: "./settings.csv",
+};
+
+// CSV_KEY -> settings key
+const keyMap: Record<string, keyof Settings> = {
+    ROOT_URL: "rootUrl",
+    DB_TYPE: "dbType",
+    DB_HOST: "dbHost",
+    DB_PORT: "dbPort",
+    DB_NAME: "dbName",
+    DB_USER: "dbUser",
+    DB_PASSWORD: "dbPassword",
+    SMTP_POOL: "smtpPool",
+    SMTP_HOST: "smtpHost",
+    SMTP_PORT: "smtpPort",
+    SMTP_SECURE: "smtpSecure",
+    SMTP_EMAIL: "smtpEmail",
+    SMTP_USER: "smtpUser",
+    SMTP_PASSWORD: "smtpPassword",
+    OIDC_ENABLED: "oidcEnabled",
+    OIDC_NAME: "oidcName",
+    OIDC_CLIENT_ID: "oidcClientId",
+    OIDC_CLIENT_SECRET: "oidcClientSecret",
+    OIDC_ISSUER_BASE_URL: "oidcIssuerBaseUrl",
+    OIDC_REDIRECT_URL: "oidcRedirectUrl",
+    LOCAL_LOGIN_ENABLED: "localLoginEnabled",
+    SESSION_SECRET: "sessionSecret",
+    APP_PORT: "appPort",
+};
+
+// per-field coercion
+const coerce: Partial<Record<keyof Settings, (v: string) => any>> = {
+    dbPort: (v) => Number(v),
+    smtpPort: (v) => Number(v),
+    appPort: (v) => Number(v),
+    smtpPool: (v) => /^(1|true|yes|on)$/i.test(v),
+    smtpSecure: (v) => /^(1|true|yes|on)$/i.test(v),
+    localLoginEnabled: (v) => /^(1|true|yes|on)$/i.test(v),
+    oidcEnabled: (v) => /^(1|true|yes|on)$/i.test(v),
+};
+
+// Apply environment variable overrides AFTER reading CSV.
+// In E2E: E2E_* vars override; otherwise plain vars override.
+// Example: E2E_DB_HOST > DB_HOST > CSV value.
+function applyEnvOverrides(target: Settings): void {
+    const entries = Object.entries(keyMap) as [string, keyof Settings][];
+
+    for (const [csvKey, settingsKey] of entries) {
+        // Prefer E2E_ prefixed variables when running in E2E mode
+        const raw =
+            (process.env.NODE_ENV === "e2e" &&
+                process.env[`E2E_${csvKey}` as keyof NodeJS.ProcessEnv]) ??
+            process.env[csvKey as keyof NodeJS.ProcessEnv];
+
+        if (raw === undefined || raw === "") continue;
+
+        const conv = coerce[settingsKey];
+        const v = conv ? conv(String(raw)) : String(raw);
+        (target as any)[settingsKey] = v;
     }
 
-    public async readSettingsFile() {
-        let self = this;
-
-        //Open inputstream from settings.csv
-        let fileInputStream = fs.createReadStream(this.file, "utf-8");
-
-        //Process inputstream with csv-reader
-        await new Promise<void>((resolve, reject) => {
-            fileInputStream
-                .on("error", function (error: any) {
-                    console.log("Settings file is not present, create one!");
-                    self.writeSettingsFile();
-                    self.initialized = true;
-
-                    resolve();
-                })
-                .pipe(
-                    new csv_reader({
-                        parseNumbers: false,
-                        trim: true,
-                    })
-                )
-                .on("finish", function () {
-                    self.initialized = true;
-                    resolve();
-                })
-                .on("data", function (row: any) {
-                    switch (row[0]) {
-                        case "ROOT_URL":
-                            self.rootUrl = row[1];
-                            break;
-                        case "MYSQL_HOST":
-                            self.mysqlHost = row[1];
-                            break;
-                        case "MYSQL_PORT":
-                            self.mysqlPort = row[1];
-                            break;
-                        case "MYSQL_DATABASE":
-                            self.mysqlDatabase = row[1];
-                            break;
-                        case "MYSQL_USER":
-                            self.mysqlUser = row[1];
-                            break;
-                        case "MYSQL_PASSWORD":
-                            self.mysqlPassword = row[1];
-                            break;
-                        case "SMTP_POOL":
-                            self.smtpPool = row[1];
-                            break;
-                        case "SMTP_HOST":
-                            self.smtpHost = row[1];
-                            break;
-                        case "SMTP_PORT":
-                            self.smtpPort = row[1];
-                            break;
-                        case "SMTP_SECURE":
-                            self.smtpSecure = row[1];
-                            break;
-                        case "SMTP_EMAIL":
-                            self.smtpEmail = row[1];
-                            break;
-                        case "SMTP_USER":
-                            self.smtpUser = row[1];
-                            break;
-                        case "SMTP_PASSWORD":
-                            self.smtpPassword = row[1];
-                            break;
-                        case "SESSION_SECRET":
-                            self.sessionSecret = row[1];
-                            break;
-                        case "APP_PORT":
-                            self.appPort = row[1];
-                            break;
-                        default:
-                            console.log("Invalid row: " + row);
-                            break; //Invalid setting; Ignore!
-                    }
-                });
-        });
+    // Allow overriding the settings file location itself.
+    if (process.env.SETTINGS_FILE) {
+        target.file = process.env.SETTINGS_FILE;
     }
 
-    writeSettingsFile() {
-        let contents =
-            "ROOT_URL," +
-            this.rootUrl +
-            "\nMYSQL_HOST," +
-            this.mysqlHost +
-            "\nMYSQL_PORT," +
-            this.mysqlPort +
-            "\nMYSQL_DATABASE," +
-            this.mysqlDatabase +
-            "\nMYSQL_USER," +
-            this.mysqlUser +
-            "\nMYSQL_PASSWORD," +
-            this.mysqlPassword +
-            "\nSMTP_POOL," +
-            this.smtpPool +
-            "\nSMTP_PASSWORD," +
-            this.smtpHost +
-            "\nSMTP_PORT," +
-            this.smtpPort +
-            "\nSMTP_SECURE," +
-            this.smtpSecure +
-            "\nSMTP_EMAIL," +
-            this.smtpEmail +
-            "\nSMTP_USER," +
-            this.smtpUser +
-            "\nSMTP_PASSWORD," +
-            this.smtpPassword +
-            "\nSESSION_SECRET," +
-            this.sessionSecret +
-            "\nAPP_PORT," +
-            this.appPort;
-        fs.writeFile(this.file, contents, "utf-8", function (error: any) {
-            if (error) {
-                console.log("Error writing settings file: " + error);
-                return;
-            }
-            console.log("Settings file written!");
-        });
-    }
-
-    generateRandomString(length: any) {
-        const chars =
-            "AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz1234567890-_.!?#+";
-        const randomArray = Array.from(
-            {length: length},
-            (v, k) => chars[Math.floor(Math.random() * chars.length)]
+    // Safety: when in E2E, nudge to use a dedicated database.
+    if (
+        process.env.NODE_ENV === "e2e" &&
+        target.dbName &&
+        !/e2e/i.test(target.dbName)
+    ) {
+        console.warn(
+            `[settings] E2E mode: database name "${target.dbName}" does not contain "e2e". ` +
+            `Consider setting E2E_DB_NAME for safety.`
         );
-
-        return randomArray.join("");
     }
 }
 
-const _instance = new Settings();
+export class SettingsStore {
+    private _settings: Settings = {...defaults};
 
-export default _instance;
+    get value(): Settings {
+        return this._settings;
+    }
+
+    async read(file = this._settings.file): Promise<void> {
+        // If an env override for the file is present, prefer it.
+        if (process.env.SETTINGS_FILE) {
+            file = process.env.SETTINGS_FILE;
+            this._settings.file = file;
+        }
+
+        const isE2E = process.env.NODE_ENV === "e2e";
+
+        // If the CSV doesn't exist:
+        // - in normal modes, create it from defaults (original behavior)
+        // - in E2E, SKIP writing (we rely on env-only for secrets)
+        if (!fs.existsSync(file)) {
+            if (!isE2E) {
+                await this.write(file);
+            }
+            applyEnvOverrides(this._settings);
+            this._settings.initialized = true;
+            return;
+        }
+
+        // Parse CSV
+        const text = fs.readFileSync(file, "utf8");
+        for (const line of text.split(/\r?\n/)) {
+            if (!line.trim()) continue;
+            const [kRaw, ...rest] = line.split(",");
+            const k = kRaw.trim();
+            const vRaw = rest.join(","); // allow commas in values
+            const mapKey = keyMap[k];
+            if (!mapKey) {
+                console.warn("Unknown setting:", k);
+                continue;
+            }
+            const conv = coerce[mapKey];
+            const v = (conv ? conv(vRaw) : vRaw) as any;
+            (this._settings as any)[mapKey] = v;
+        }
+
+        // Finally, apply env overrides on top.
+        applyEnvOverrides(this._settings);
+        this._settings.initialized = true;
+    }
+
+    async write(file = this._settings.file): Promise<void> {
+        const reverse = Object.fromEntries(
+            Object.entries(keyMap).map(([csv, key]) => [key, csv])
+        );
+        const lines: string[] = [];
+        for (const [key, value] of Object.entries(this._settings)) {
+            const csvKey = (reverse as any)[key];
+            if (!csvKey) continue; // skip fields not in CSV
+            lines.push(`${csvKey},${String(value)}`);
+        }
+        fs.writeFileSync(file, lines.join("\n") + "\n", "utf8");
+        console.log("Settings file written!");
+    }
+}
+
+const settingsStore = new SettingsStore();
+export default settingsStore;

@@ -8,7 +8,7 @@
    ──────────────────────────────────────────────────────────────── */
 
 /* ========== Assign / Unassign ================================ */
-import {setCurrentNavLocation, showInlineAlert} from "./module_functions";
+import {post, setCurrentNavLocation, showInlineAlert, startInlineEdit, startInlineEditArea} from "./module_functions";
 
 export function initAssignButtons() {
     const table = document.querySelector('table[data-assignable]');
@@ -284,6 +284,4 @@ export function init() {
 }
 
 // Expose to global scope
-window.Surveyor = {
-    init
-};
+window.Surveyor.init = init;

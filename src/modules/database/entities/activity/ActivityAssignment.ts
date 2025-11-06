@@ -17,17 +17,17 @@ export class ActivityAssignment {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
     id: number;
 
-    @Column("char", {name: "slot_id", length: 36})
+    @Column("varchar", {name: "slot_id", length: 36})
     slotId: string;
 
-    @Column("char", {name: "plan_id", length: 36})
+    @Column("varchar", {name: "plan_id", length: 36})
     planId: string;
 
     @Column("int", {name: "user_id", nullable: true})
-    userId: number | null;
+    userId?: number | null;
 
     @Column("int", {name: "guest_id", nullable: true})
-    guestId: number | null;
+    guestId?: number | null;
 
     @Column("timestamp", {
         name: "created_at",

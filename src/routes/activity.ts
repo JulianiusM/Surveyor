@@ -6,6 +6,7 @@ import * as activityService from '../modules/database/services/ActivityService';
 const app = express.Router();
 
 app.use("/", createGuestFlowRouter({
+    addToEvent: true,
     entityType: 'activity',
     db: {
         getById: activityService.getActivityPlanById,

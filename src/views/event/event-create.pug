@@ -1,0 +1,127 @@
+//- views/event/event-create.pug  – überarbeitetes „Create“-Formular für Events
+extends ../layout
+
+block meta
+    title Create Event | Surveyor
+
+block title
+    h1.card-header.text-center
+        i.bi.bi-calendar2-plus.me-2
+        | Create event
+
+block content
+    -
+        let parsed = {};
+        if (data) {
+            if (data.entity) {
+                // From duplicate view: use source entity fields
+                parsed = data.entity;
+            } else {
+                // From validation error or prefilled form
+                parsed = data;
+                parsed.timezone = parsed.timezone || 'UTC';
+            }
+        }
+
+    form#eventForm(action="/event/create" method="POST")
+        // Titel
+        .mb-3
+            label.form-label(for="title")
+                i.bi.bi-tag.me-1
+                | Title *
+            input#title.form-control.text-bg-dark(
+                type="text"
+                name="title"
+                required
+                maxlength="255"
+                value=(parsed.title || ''))
+
+        // Datumsbereich
+        .row.mb-3
+            .col-md-6
+                label.form-label(for="start")
+                    i.bi.bi-calendar-event.me-1
+                    | Start date *
+                input#start.form-control.text-bg-dark(
+                    type="date"
+                    name="startDate"
+                    required
+                    value=(parsed.startDate || ''))
+            .col-md-6
+                label.form-label(for="end")
+                    i.bi.bi-calendar2-event.me-1
+                    | End date *
+                input#end.form-control.text-bg-dark(
+                    type="date"
+                    name="endDate"
+                    required
+                    value=(parsed.endDate || ''))
+
+        // Ort & Zeitzone
+        .row.mb-3
+            .col-md-8
+                label.form-label(for="location")
+                    i.bi.bi-geo-alt.me-1
+                    | Location
+                input#location.form-control.text-bg-dark(
+                    type="text"
+                    name="location"
+                    maxlength="255"
+                    placeholder="e.g., Camp Site A"
+                    value=(parsed.location || ''))
+            .col-md-4
+                label.form-label(for="maxParticipants")
+                    i.bi.bi-people.me-1
+                    | Max Participants
+                input#maxParticipants.form-control.text-bg-dark(
+                    type="number"
+                    name="maxParticipants"
+                    placeholder=""
+                    value=(parsed.maxParticipants || ''))
+
+        // Binding Deadline
+        .row.mb-3
+            .col-md-8
+                label.form-label(for="bindingDeadline")
+                    i.bi.bi-hourglass-split.me-1
+                    | Binding deadline (optional)
+                    small.ms-1 (self-service closes after this)
+                input#bindingDeadline.form-control.text-bg-dark(
+                    type="datetime-local"
+                    name="bindingDeadline"
+                    value=(parsed.bindingDeadline || ''))
+            .col-md-4
+                +timezonePicker('deadlineTz', {
+                    label: 'Time zone',
+                    required: true,
+                    value: parsed.timezone,
+                    help: 'Times will be converted for each user.'
+                })
+
+        // Organiser options
+        .row.mb-3
+            .col-md-6
+                .form-check
+                    input#requireDiet.form-check-input(
+                        type="checkbox"
+                        name="requireDietaryInfo"
+                        checked=!!parsed.requireDietaryInfo)
+                    label.form-check-label(for="requireDiet")
+                        i.bi.bi-egg-fried.me-1
+                        | Require dietary info during registration
+
+        // Beschreibung
+        .mb-3
+            label.form-label(for="desc")
+                i.bi.bi-pencil-square.me-1
+                | Description
+            textarea#desc.form-control.text-bg-dark(name="description" rows="4") #{parsed.description || ''}
+
+        // Buttons
+        .d-flex.justify-content-end.gap-2
+            a.btn.btn-outline-secondary(href="/users/dashboard")
+                i.bi.bi-x-circle.me-1
+                | Cancel
+            button.btn.btn-success(type="submit")
+                i.bi.bi-check-lg.me-1
+                | Create event

@@ -6,6 +6,7 @@ import controller from "../controller/driversController";
 const app = express.Router();
 
 app.use("/", createGuestFlowRouter({
+    addToEvent: true,
     entityType: 'drivers',
     db: {
         getById: driverService.getDriversListById,

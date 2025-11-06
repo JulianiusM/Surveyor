@@ -1,43 +1,44 @@
-import nodemailer from 'nodemailer';
+import nodemailer, {Transporter} from 'nodemailer';
 import settings from './settings';
+import {MailOptions, Options, SentMessageInfo} from 'nodemailer/lib/smtp-pool';
 
-let transporter: any = undefined;
+let transporter: Transporter<SentMessageInfo, Options> | undefined = undefined;
 
 function init() {
     if (!transporter) {
         transporter = nodemailer.createTransport({
-            pool: settings.smtpPool,
-            host: settings.smtpHost,
-            port: settings.smtpPort,
-            secure: settings.smtpSecure, // use TLS
+            pool: true,
+            host: settings.value.smtpHost,
+            port: settings.value.smtpPort,
+            secure: settings.value.smtpSecure, // use TLS
             auth: {
-                user: settings.smtpUser,
-                pass: settings.smtpPassword,
+                user: settings.value.smtpUser,
+                pass: settings.value.smtpPassword,
             },
         });
     }
 }
 
 // Funktion zum Senden einer E-Mail
-async function sendEmail(to: any, subject: any, text: any) {
+async function sendEmail(to: string, subject: string, text: string) {
     init();
 
-    const mailOptions = {
-        from: settings.smtpEmail,
+    const mailOptions: MailOptions = {
+        from: settings.value.smtpEmail,
         to: to,
         subject: subject,
         text: text,
     };
 
     try {
-        const info = await transporter.sendMail(mailOptions);
+        const info = await transporter!.sendMail(mailOptions);
     } catch (error) {
         console.error('Error sending E-Mail:', error);
     }
 }
 
 // Funktion zum Senden einer Aktivierungs-E-Mail
-async function sendActivationEmail(userEmail: any, activationLink: any) {
+async function sendActivationEmail(userEmail: string, activationLink: string) {
     const subject = 'Activate your account';
     const text = `Hi! Welcome to Surveyor!\n\nTo activate your account, please follow this link:\n\n${activationLink}\n\nNote: This link will expire in 1 hour.\n\nYour Surveyor Team.`;
 
@@ -45,16 +46,16 @@ async function sendActivationEmail(userEmail: any, activationLink: any) {
 }
 
 // Funktion zum Senden einer E-Mail für das Passwort zurücksetzen
-async function sendPasswordResetEmail(userEmail: any, resetLink: any) {
+async function sendPasswordResetEmail(userEmail: string, resetLink: string) {
     const subject = 'Reset your password';
     const text = `Hi!\n\nYou requested to reset your password.\n\nTo set a new one, please follow this link:\n\n${resetLink}\n\nNote: This link will expire in 1 hour.\n\nYour Surveyor Team.`;
 
     await sendEmail(userEmail, subject, text);
 }
 
-async function sendLinkEmail(userEmail: any, surveyLink: any) {
+async function sendLinkEmail(userEmail: string, surveyLink: string) {
     const subject = 'Your personal editing link';
-    const text = `Hi! Thank you for using Surveyor!\n\nThis is your personal link to editor your answers:\n\n${surveyLink}\n\nNote: Please do not share this link with anybody.\n\nYour Surveyor Team.`;
+    const text = `Hi! Thank you for using Surveyor!\n\nThis is your personal link to edit your answers:\n\n${surveyLink}\n\nNote: Please do not share this link with anybody.\n\nYour Surveyor Team.`;
 
     await sendEmail(userEmail, subject, text);
 }
