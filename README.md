@@ -25,9 +25,9 @@ A survey management application built with TypeScript, Express, and TypeORM.
    npm run build
    ```
 
-5. Run the application:
+5. Start the application:
    ```bash
-   npm run
+   npm run run
    ```
 
 ## Database Setup

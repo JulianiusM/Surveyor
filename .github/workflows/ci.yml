@@ -44,11 +44,13 @@ jobs:
           for i in {1..30}; do
             if mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -proot --silent; then
               echo "MariaDB is ready!"
-              break
+              exit 0
             fi
             echo "Waiting for MariaDB... ($i/30)"
             sleep 2
           done
+          echo "MariaDB failed to become ready in time"
+          exit 1
 
       - name: Setup test database
         run: |
@@ -97,6 +99,8 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      # E2E tests are allowed to fail since they may be flaky or incomplete
+      # This ensures the CI doesn't block on E2E test failures while still running them
       - name: Run Playwright E2E tests
         run: npm run e2e
         continue-on-error: true
