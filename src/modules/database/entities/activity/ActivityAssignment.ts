@@ -17,10 +17,10 @@ export class ActivityAssignment {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
     id: number;
 
-    @Column("varchar", {name: "slot_id", length: 36})
+    @Column("varchar", {name: "slot_id"})
     slotId: string;
 
-    @Column("varchar", {name: "plan_id", length: 36})
+    @Column("varchar", {name: "plan_id"})
     planId: string;
 
     @Column("int", {name: "user_id", nullable: true})

@@ -9,7 +9,7 @@ export class ActivitySlot {
     @PrimaryGeneratedColumn("uuid", {name: "id"})
     id: string;
 
-    @Column("varchar", {name: "plan_id", length: 36})
+    @Column("varchar", {name: "plan_id"})
     planId: string;
 
     @Column("date", {name: "day"})

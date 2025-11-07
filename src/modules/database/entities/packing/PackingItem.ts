@@ -8,7 +8,7 @@ export class PackingItem {
     @PrimaryGeneratedColumn("uuid", {name: "id"})
     id: string;
 
-    @Column("varchar", {name: "list_id", length: 36})
+    @Column("varchar", {name: "list_id"})
     listId: string;
 
     @Column("varchar", {name: "title", length: 255})

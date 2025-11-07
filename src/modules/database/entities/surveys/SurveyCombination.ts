@@ -12,7 +12,7 @@ export class SurveyCombination {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
     id: number;
 
-    @Column("varchar", {name: "survey_id", length: 36})
+    @Column("varchar", {name: "survey_id"})
     surveyId: string;
 
     @Column("simple-enum", {
