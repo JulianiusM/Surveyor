@@ -19,7 +19,7 @@ export class PackingList {
     @Column("text", {name: "description", nullable: true})
     description?: string | null;
 
-    @Column('varchar', {name: 'event_id', nullable: true})
+    @Column('varchar', {name: 'event_id', length: 36, nullable: true})
     eventId?: string | null;
 
     @Column("tinyint", {

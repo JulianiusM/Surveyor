@@ -11,7 +11,7 @@ export class EventRegistrationDietary {
     @Column("int", {name: "registration_id"})
     registrationId!: number;
 
-    @Column("simple-enum", {
+    @Column("enum", {
         name: "choice",
         enum: ["MEAT", "FISH", "VEGETARIAN", "VEGAN", "HALAL", "KOSHER", "ALLERGIES"]
     })

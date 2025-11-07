@@ -8,7 +8,7 @@ export class ActivityPlanRequirement {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
     id!: number;
 
-    @Column("varchar", {name: "plan_id"})
+    @Column("varchar", {name: "plan_id", length: 36})
     planId: string;
 
     @Column("smallint", {primary: true, name: "role_id"})

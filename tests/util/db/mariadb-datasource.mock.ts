@@ -10,7 +10,7 @@ const database = env('TEST_DB_NAME', 'surveyor_test');
 const logging = env('TEST_DB_LOGGING', 'false') === 'true';
 
 export const AppDataSource = new DataSource({
-    type: 'mariadb',
+    type: 'mysql',  // Use 'mysql' instead of 'mariadb' to avoid native UUID type issues
     host,
     port,
     username: user,

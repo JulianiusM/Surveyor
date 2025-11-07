@@ -48,7 +48,7 @@ export class ActivityPlan {
     @Column('simple-enum', {name: 'rounding_mode', enum: ['CEIL', 'ROUND', 'FLOOR'], nullable: true})
     roundingMode?: 'CEIL' | 'ROUND' | 'FLOOR' | null;
 
-    @Column('varchar', {name: 'event_id', nullable: true})
+    @Column('varchar', {name: 'event_id', length: 36, nullable: true})
     eventId?: string | null;
 
     @Column("timestamp", {name: "binding_deadline", nullable: true})

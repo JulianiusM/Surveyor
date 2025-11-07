@@ -10,10 +10,10 @@ export class GuestLink {
     @Column("varchar", {primary: true, name: "entity_type", length: 20})
     entityType: string;
 
-    @Column("varchar", {primary: true, name: "entity_id"})
+    @Column("varchar", {primary: true, name: "entity_id", length: 36})
     entityId: string;
 
-    @Column("varchar", {name: "token", unique: true, length: 255})
+    @Column("varchar", {name: "token", unique: true, length: 255, nullable: true})
     token: string;
 
     @Column("timestamp", {

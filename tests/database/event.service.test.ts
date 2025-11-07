@@ -177,7 +177,7 @@ describe('eventService (mysql)', () => {
         expect(userReg!.dietaryChoices![0].choice).toBe('VEGETARIAN');
 
         // Register guest
-        const gid = await registerGuest(eid, 11, '2025-09-10', '2025-09-12', ['LACTOSE_FREE'] as unknown as DIETARY[], null);
+        const gid = await registerGuest(eid, 11, '2025-09-10', '2025-09-12', ['ALLERGIES'] as unknown as DIETARY[], null);
         expect(typeof gid).toBe('number');
 
         // All regs for event

@@ -12,7 +12,7 @@ export class DriversItem {
     @PrimaryGeneratedColumn("uuid", {name: "id"})
     id: string;
 
-    @Column("varchar", {name: "list_id"})
+    @Column("varchar", {name: "list_id", length: 36})
     listId: string;
 
     @Column("varchar", {name: "title", length: 255})

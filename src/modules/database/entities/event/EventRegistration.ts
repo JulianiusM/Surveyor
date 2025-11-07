@@ -10,7 +10,7 @@ export class EventRegistration {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
     id!: number;
 
-    @Column("varchar", {name: "event_id"})
+    @Column("varchar", {name: "event_id", length: 36})
     eventId!: string;
 
     @Column("int", {name: "user_id", nullable: true})

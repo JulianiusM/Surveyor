@@ -20,10 +20,10 @@ export class DriversAssignment {
     @Column("int", {name: "guest_id", nullable: true})
     guestId: number | null;
 
-    @Column("varchar", {name: "list_id"})
+    @Column("varchar", {name: "list_id", length: 36})
     listId: string;
 
-    @Column("varchar", {name: "item_id"})
+    @Column("varchar", {name: "item_id", length: 36})
     itemId: string;
 
     @Column("timestamp", {

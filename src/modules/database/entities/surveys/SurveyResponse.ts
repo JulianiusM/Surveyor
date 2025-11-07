@@ -20,7 +20,7 @@ export class SurveyResponse {
     @Column("int", {name: "guest_id", nullable: true})
     guestId: number | null;
 
-    @Column("varchar", {name: "survey_id"})
+    @Column("varchar", {name: "survey_id", length: 36})
     surveyId: string;
 
     @Column("int", {name: "combination_id"})
