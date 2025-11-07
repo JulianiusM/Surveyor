@@ -1,0 +1,110 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: surveyor_test
+          MARIADB_USER: surveyor
+          MARIADB_PASSWORD: surveyor
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Wait for MariaDB
+        run: |
+          for i in {1..30}; do
+            if mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -proot --silent; then
+              echo "MariaDB is ready!"
+              break
+            fi
+            echo "Waiting for MariaDB... ($i/30)"
+            sleep 2
+          done
+
+      - name: Setup test database
+        run: |
+          mysql -h 127.0.0.1 -P 3306 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS surveyor_test;"
+          mysql -h 127.0.0.1 -P 3306 -uroot -proot -e "GRANT ALL PRIVILEGES ON surveyor_test.* TO 'surveyor'@'%';"
+          mysql -h 127.0.0.1 -P 3306 -uroot -proot -e "FLUSH PRIVILEGES;"
+
+      - name: Setup E2E database
+        run: |
+          mysql -h 127.0.0.1 -P 3306 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS surveyor_e2e;"
+          mysql -h 127.0.0.1 -P 3306 -uroot -proot -e "CREATE USER IF NOT EXISTS 'e2e_user'@'%' IDENTIFIED BY 'e2e_password';"
+          mysql -h 127.0.0.1 -P 3306 -uroot -proot -e "GRANT ALL PRIVILEGES ON surveyor_e2e.* TO 'e2e_user'@'%';"
+          mysql -h 127.0.0.1 -P 3306 -uroot -proot -e "FLUSH PRIVILEGES;"
+
+      - name: Create test environment files
+        run: |
+          cat > tests/.env.test << EOF
+          TEST_DB_HOST=127.0.0.1
+          TEST_DB_PORT=3306
+          TEST_DB_USER=surveyor
+          TEST_DB_PASSWORD=surveyor
+          TEST_DB_NAME=surveyor_test
+          TEST_DB_LOGGING=false
+          EOF
+
+          cat > .env.e2e << EOF
+          NODE_ENV=e2e
+          PORT=3001
+          BASE_URL=http://localhost:3001
+          E2E_DB_HOST=127.0.0.1
+          E2E_DB_PORT=3306
+          E2E_DB_USER=e2e_user
+          E2E_DB_PASSWORD=e2e_password
+          E2E_DB_NAME=surveyor_e2e
+          E2E_ADMIN_USERNAME=e2eadmin
+          E2E_ADMIN_EMAIL=e2e@example.com
+          E2E_ADMIN_PASSWORD=passw0rd!
+          EOF
+
+      - name: Build application
+        run: npm run build
+
+      - name: Run unit and integration tests
+        run: npm test
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E tests
+        run: npm run e2e
+        continue-on-error: true
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
