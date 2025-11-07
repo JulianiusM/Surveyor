@@ -2,7 +2,7 @@ name: CI
 
 on:
   workflow_dispatch:
-        
+
   push:
     branches: [ main, develop ]
   pull_request:
@@ -55,6 +55,16 @@ jobs:
             echo "Waiting for MariaDB... ($i)"
             sleep 2
           done
+
+      # IMPORTANT: align CI with your dev DB by disabling strict modes
+      - name: Set permissive SQL mode (match dev)
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot -e "SET GLOBAL sql_mode='';"
+          # new sessions will inherit GLOBAL; also fix the current runner session:
+          mysql -h 127.0.0.1 -uroot -proot -e "SET SESSION sql_mode='';"
+          # sanity check:
+          mysql -h 127.0.0.1 -uroot -proot -e "SELECT @@GLOBAL.sql_mode AS global_sql_mode, @@SESSION.sql_mode AS session_sql_mode;"
+
 
       - name: Create databases and grant privileges
         run: |
