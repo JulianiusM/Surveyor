@@ -6,8 +6,8 @@ A survey management application built with TypeScript, Express, and TypeORM.
 
 ### Prerequisites
 
-- Node.js 20 or higher
-- MariaDB 10.11 or higher
+- Node.js 24 or higher
+- MariaDB 10.4 or higher
 - npm
 
 ### Installation
