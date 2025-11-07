@@ -64,7 +64,7 @@ describe('settings', () => {
         // Point the store at our fake path
         (store.value as any).file = FILE;
 
-        await store.read(); // file missing -> write defaults
+        await store.read(FILE, true); // file missing -> write defaults
 
         const after = store.value;
         expect(after.initialized).toBe(true);
@@ -98,7 +98,7 @@ describe('settings', () => {
         ].join('\n') + '\n';
         memfs.__set(FILE, csv);
 
-        await store.read();
+        await store.read(FILE, true);
 
         const s = store.value as Settings;
         expect(s.initialized).toBe(true);

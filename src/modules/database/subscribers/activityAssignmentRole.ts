@@ -1,4 +1,4 @@
-import {DataSource, EntitySubscriberInterface, EventSubscriber, InsertEvent,} from "typeorm";
+import {EntitySubscriberInterface, EventSubscriber, InsertEvent,} from "typeorm";
 import {ActivityAssignmentRole} from "../entities/activity/ActivityAssignmentRole";
 import {ActivityAssignment} from "../entities/activity/ActivityAssignment";
 import {ActivitySlotRole} from "../entities/activity/ActivitySlotRole";
@@ -6,9 +6,6 @@ import {ActivitySlotRole} from "../entities/activity/ActivitySlotRole";
 @EventSubscriber()
 export class ActivityAssignmentRolesSubscriber
     implements EntitySubscriberInterface<ActivityAssignmentRole> {
-    constructor(dataSource: DataSource) {
-        dataSource.subscribers.push(this);
-    }
 
     listenTo() {
         return ActivityAssignmentRole;

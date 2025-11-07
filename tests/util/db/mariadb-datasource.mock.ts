@@ -34,6 +34,7 @@ export async function initDataSource() {
         } catch (err) {
             console.warn('[tests] runMigrations failed on MariaDB, falling back to synchronize:', (err as any)?.message || err);
             await AppDataSource.synchronize(true);
+            await AppDataSource.runMigrations();
         }
     }
 }

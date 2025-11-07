@@ -13,8 +13,6 @@ async function main() {
         process.env.DB_PASSWORD = settings.value.dbPassword || '';
         process.env.DB_NAME = settings.value.dbName || '';
 
-        console.log('Environment variables set from settings.csv');
-
         // Now spawn the typeorm CLI migration command
         const cliArgs = process.argv.slice(2); // forward all args after script name
         const cmd = cliArgs.shift();

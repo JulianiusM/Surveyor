@@ -119,10 +119,11 @@ function applyEnvOverrides(target: Settings): void {
 
     for (const [csvKey, settingsKey] of entries) {
         // Prefer E2E_ prefixed variables when running in E2E mode
-        const raw =
-            (process.env.NODE_ENV === "e2e" &&
-                process.env[`E2E_${csvKey}` as keyof NodeJS.ProcessEnv]) ??
-            process.env[csvKey as keyof NodeJS.ProcessEnv];
+        let raw;
+        if (process.env.NODE_ENV === 'e2e') {
+            raw = process.env[`E2E_${csvKey}` as keyof NodeJS.ProcessEnv]
+        }
+        raw = raw ?? process.env[csvKey as keyof NodeJS.ProcessEnv];
 
         if (raw === undefined || raw === "") continue;
 
@@ -156,9 +157,9 @@ export class SettingsStore {
         return this._settings;
     }
 
-    async read(file = this._settings.file): Promise<void> {
+    async read(file = this._settings.file, forceCsv: boolean = false): Promise<void> {
         // If an env override for the file is present, prefer it.
-        if (process.env.SETTINGS_FILE) {
+        if (!forceCsv && process.env.SETTINGS_FILE) {
             file = process.env.SETTINGS_FILE;
             this._settings.file = file;
         }
@@ -195,7 +196,7 @@ export class SettingsStore {
         }
 
         // Finally, apply env overrides on top.
-        applyEnvOverrides(this._settings);
+        if (!forceCsv) applyEnvOverrides(this._settings);
         this._settings.initialized = true;
     }
 

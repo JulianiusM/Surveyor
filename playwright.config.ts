@@ -4,11 +4,11 @@ import * as dotenv from 'dotenv';
 // Load E2E env before anything else
 dotenv.config({path: process.env.E2E_DOTENV_FILE ?? '.env.e2e'});
 
-const PORT = parseInt(process.env.PORT ?? '3001', 10);
-const BASE_URL = process.env.BASE_URL ?? `http://localhost:${PORT}`;
+const PORT = parseInt(process.env.APP_PORT ?? '3001', 10);
+const BASE_URL = process.env.ROOT_URL ?? `http://localhost:${PORT}`;
 
 export default defineConfig({
-    testDir: 'e2e',
+    testDir: 'tests/e2e',
     timeout: 30_000,
     expect: {timeout: 5_000},
     fullyParallel: true,
@@ -22,11 +22,12 @@ export default defineConfig({
 
     // Start your real server; we chain DB init before launching the app.
     webServer: {
-        command: `npm run e2e:start`,
+        command: `npm run e2e:init`,
         url: `${BASE_URL}/healthz`,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
         stderr: 'pipe',
+        stdout: 'pipe',
     },
 
     projects: [

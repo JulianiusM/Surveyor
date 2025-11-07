@@ -1,6 +1,8 @@
 import 'reflect-metadata';
 import * as dotenv from 'dotenv';
 import {DataSource} from 'typeorm';
+import bcrypt from "bcryptjs";
+import {User} from "../src/modules/database/entities/user/User";
 
 dotenv.config({path: process.env.E2E_DOTENV_FILE ?? '.env.e2e'});
 
@@ -19,7 +21,7 @@ export const E2EDataSource = new DataSource({
     host: process.env.E2E_DB_HOST,
     port: parseInt(process.env.E2E_DB_PORT ?? '3306', 10),
     username: process.env.E2E_DB_USER,
-    password: process.env.E2E_DB_PASS,
+    password: process.env.E2E_DB_PASSWORD,
     database: DB_NAME,
     timezone: 'Z' as any,
     // @ts-ignore common driver option
@@ -35,6 +37,8 @@ export const E2EDataSource = new DataSource({
 async function main() {
     await E2EDataSource.initialize();
 
+    console.log("Resetting E2E database...")
+
     // Clear all tables (TypeORM v0.3+)
     const qr = E2EDataSource.createQueryRunner();
     await qr.connect();
@@ -45,17 +49,20 @@ async function main() {
     await qr.release();
 
     // Recreate via migrations
+    await E2EDataSource.synchronize(true)
     await E2EDataSource.runMigrations();
 
     // ---- Seed minimal fixture data ----
     // Example: create a test admin user. Replace with your own seeder logic.
-    // const userRepo = E2EDataSource.getRepository(User);
-    // const passwordHash = await bcrypt.hash(process.env.E2E_ADMIN_PASSWORD!, 10);
-    // await userRepo.save(userRepo.create({
-    //   email: process.env.E2E_ADMIN_EMAIL!,
-    //   passwordHash,
-    //   role: 'admin',
-    // }));
+    const userRepo = E2EDataSource.getRepository(User);
+    const passwordHash = await bcrypt.hash(process.env.E2E_ADMIN_PASSWORD!, 10);
+    await userRepo.save(userRepo.create({
+        username: process.env.E2E_ADMIN_USERNAME!,
+        name: process.env.E2E_ADMIN_USERNAME!,
+        email: process.env.E2E_ADMIN_EMAIL!,
+        password: passwordHash,
+        isActive: true,
+    }));
 
     await E2EDataSource.destroy();
     // eslint-disable-next-line no-console

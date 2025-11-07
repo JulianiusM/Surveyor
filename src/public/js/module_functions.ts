@@ -179,8 +179,8 @@ export function showInlineAlert(status: 'success' | 'info' | 'error', message: a
 
 export function disableDnD() {
     const draggables = document.getElementsByClassName('draggable');
-    // @ts-ignore
     for (let elem of draggables) {
+        // @ts-ignore
         elem.draggable = false;
     }
 }
@@ -190,8 +190,8 @@ export function enableDnD() {
     // @ts-expect-error TS(2339): Property 'IS_MANAGE' does not exist on type 'Windo... Remove this comment to see the full error message
     if (!window.IS_MANAGE) return;
     const draggables = document.getElementsByClassName('draggable');
-    // @ts-ignore
     for (let elem of draggables) {
+        // @ts-ignore
         elem.draggable = true;
     }
 }

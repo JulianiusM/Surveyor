@@ -1,5 +1,6 @@
 import {DataSource} from 'typeorm';
 import settings from '../settings';
+import {entities, migrations, subscribers} from "./__index__";
 
 export let AppDataSource: DataSource;
 let initialized: boolean = false;
@@ -22,9 +23,9 @@ export async function initDataSource() {
         database: settings.value.dbName,
         timezone: 'Z',              // treat TIMESTAMP / DATETIME as UTC
         dateStrings: ['DATE'],       // A & B: return DATE as **string**
-        entities: ['src/modules/database/entities/**/*.ts'],
-        migrations: ['src/migrations/*.ts'],
-        subscribers: ['src/modules/database/subscribers/**/*.ts'],
+        entities: entities,
+        migrations: migrations,
+        subscribers: subscribers,
         synchronize: false,
     });
 
