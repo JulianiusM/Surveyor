@@ -129,6 +129,7 @@ The CI pipeline automatically:
 - Creates `surveyor_test` database for unit/integration tests
 - Creates `surveyor_e2e` database for E2E tests
 - Sets up required users and permissions
+- Initializes the test database schema using `npm run typeorm -- schema:sync`
 - Creates `.env.test` and `.env.e2e` files with appropriate credentials
 
 ## Development Scripts
