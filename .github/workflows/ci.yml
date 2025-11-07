@@ -2,11 +2,10 @@ name: CI
 
 on:
   workflow_dispatch:
-
   push:
-    branches: [ main, develop ]
+    branches: [ master, dev ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ master, dev ]
 
 jobs:
   test:
@@ -14,7 +13,7 @@ jobs:
 
     services:
       mariadb:
-        image: mariadb:10.4.32
+        image: mariadb:10.11
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: surveyor_test
@@ -38,13 +37,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
-      - name: Install MariaDB client
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y mariadb-client
+      - name: Install dependencies
+        run: npm ci
 
       - name: Wait for MariaDB
         run: |
@@ -113,40 +110,89 @@ jobs:
           EOF
           echo "Wrote .env.e2e"
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Build application
+        run: npm run build
 
-      # Shim 'cpx' -> 'cpx2' so build works without changing package.json
-      - name: Shim cpx to cpx2
-        run: |
-          mkdir -p node_modules/.bin
-          cat > node_modules/.bin/cpx <<'EOF'
-          #!/usr/bin/env bash
-          exec "$(dirname "$0")/cpx2" "$@"
-          EOF
-          chmod +x node_modules/.bin/cpx
+      # =========================
+      # Jest tests with coverage
+      # =========================
+      - name: Install Jest JUnit reporter (CI-only)
+        run: npm i --no-save jest-junit
 
-      # Unit & integration tests (Jest). Your script already uses --runInBand.
-      - name: Run unit/integration tests
+      - name: Run unit/integration tests (Jest) with coverage & report
         env:
-          # Make sure tests never accidentally read production env
           NODE_ENV: test
-        run: npm test
+          JEST_JUNIT_OUTPUT: artifacts/junit-jest.xml
+        run: |
+          mkdir -p artifacts
+          # Keep JSON results for debugging, plus JUnit for CI tools
+          npm test -- \
+            --ci \
+            --runInBand \
+            --detectOpenHandles \
+            --reporters=default \
+            --reporters=jest-junit \
+            --coverage \
+            --coverageReporters=lcov \
+            --coverageReporters=cobertura \
+            --coverageReporters=text-summary \
+            --json --outputFile=artifacts/jest-results.json
+          # Move coverage files into artifacts/
+          mkdir -p artifacts/coverage
+          if [ -f coverage/lcov.info ]; then cp coverage/lcov.info artifacts/coverage/lcov.info; fi
+          if [ -f coverage/cobertura-coverage.xml ]; then cp coverage/cobertura-coverage.xml artifacts/coverage/cobertura-coverage.xml; fi
+          if [ -f coverage/coverage-summary.json ]; then cp coverage/coverage-summary.json artifacts/coverage/coverage-summary.json; fi
 
-      # Install browsers for Playwright E2E
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps
-
-      # E2E tests; Playwright starts the server via webServer command (npm run e2e:init)
-      - name: Run E2E tests (Playwright)
-        env:
-          CI: true
-        run: npm run e2e
-
-      - name: Upload Playwright report
+      - name: Upload Jest reports & coverage (small)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
-          path: playwright-report/
+          name: jest-and-coverage
+          path: |
+            artifacts/junit-jest.xml
+            artifacts/jest-results.json
+            artifacts/coverage/lcov.info
+            artifacts/coverage/cobertura-coverage.xml
+            artifacts/coverage/coverage-summary.json
+          retention-days: 7
+          compression-level: 9
+          if-no-files-found: warn
+
+      # =========================
+      # Playwright E2E
+      # =========================
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Run E2E tests (Playwright) with JUnit
+        env:
+          CI: true
+          PLAYWRIGHT_JUNIT_OUTPUT: artifacts/junit-playwright.xml
+        run: |
+          mkdir -p artifacts
+          # Keep the HTML report locally; we'll only upload it if the job fails.
+          npx playwright test --reporter=line,junit,html || EXIT=$?
+          # Move the HTML report to artifacts for optional upload on failure
+          if [ -d playwright-report ]; then mv playwright-report artifacts/playwright-report; fi
+          exit ${EXIT:-0}
+
+      - name: Upload Playwright JUnit (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-junit
+          path: artifacts/junit-playwright.xml
+          retention-days: 7
+          compression-level: 9
+          if-no-files-found: warn
+
+      # Upload the heavy HTML report ONLY on failure to save storage
+      - name: Upload Playwright HTML report (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-html
+          path: artifacts/playwright-report/
+          retention-days: 3
+          compression-level: 9
           if-no-files-found: ignore

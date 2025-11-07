@@ -1,4 +1,4 @@
-import {Column, Entity, Index, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
+import {BeforeInsert, BeforeUpdate, Column, Entity, Index, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
 import {ActivityAssignment} from "../activity/ActivityAssignment";
 import {ActivityPlan} from "../activity/ActivityPlan";
 import {DriversAssignment} from "../drivers/DriversAssignment";
@@ -101,4 +101,12 @@ export class User {
 
     @OneToMany(() => Survey, (surveys) => surveys.owner)
     surveys: Survey[];
+
+    @BeforeInsert()
+    @BeforeUpdate()
+    private ensureName() {
+        if (!this.name || this.name === "") {
+            this.name = this.username;
+        }
+    }
 }

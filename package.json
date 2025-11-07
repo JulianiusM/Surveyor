@@ -17,6 +17,7 @@
     "build:client": "cross-env NODE_ENV=production node esbuild.client.js",
     "build": "npm run build:server && npm run build:client && npm run copy",
     "test:watch": "jest --watch",
+    "test:debug": "cross-env TEST_DB_LOGGING=true jest --runInBand --detectOpenHandles",
     "test": "jest --runInBand",
     "e2e:prepare": "ts-node --transpile-only scripts/e2e.db.init.ts",
     "e2e:server": "cross-env NODE_ENV=e2e node dist/server.js",

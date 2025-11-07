@@ -1,6 +1,17 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn} from "typeorm";
+import {
+    BeforeInsert,
+    BeforeUpdate,
+    Column,
+    Entity,
+    Index,
+    JoinColumn,
+    ManyToOne,
+    PrimaryGeneratedColumn
+} from "typeorm";
 import {EventRegistration} from "./EventRegistration";
 import type {DIETARY} from "../../../../types/EventTypes";
+
+const ALLOWED_DIETARY: DIETARY[] = ["MEAT", "FISH", "VEGETARIAN", "VEGAN", "HALAL", "KOSHER", "ALLERGIES"];
 
 @Entity("event_registration_dietary", {schema: "surveyor"})
 @Index("uk_registration_choice", ["registrationId", "choice"], {unique: true})
@@ -23,4 +34,17 @@ export class EventRegistrationDietary {
     @ManyToOne(() => EventRegistration, r => r.dietaryChoices, {onDelete: "CASCADE"})
     @JoinColumn([{name: "registration_id", referencedColumnName: "id"}])
     registration!: EventRegistration;
+
+    @BeforeInsert()
+    @BeforeUpdate()
+    private normalizeChoice() {
+        const v = this.choice;
+        if (v != null) {
+            const up = String(v).toUpperCase() as DIETARY;
+            if (!ALLOWED_DIETARY.includes(up)) {
+                throw new Error(`Invalid dietary choice: ${v}`);
+            }
+            this.choice = up;
+        }
+    }
 }

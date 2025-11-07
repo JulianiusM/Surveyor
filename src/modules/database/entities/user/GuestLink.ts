@@ -1,5 +1,6 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne} from "typeorm";
+import {BeforeInsert, Column, Entity, Index, JoinColumn, ManyToOne} from "typeorm";
 import {Guest} from "./Guest";
+import {randomBytes} from "node:crypto";
 
 @Index("uk_token", ["token"], {unique: true})
 @Entity("guest_links", {schema: "surveyor"})
@@ -14,7 +15,7 @@ export class GuestLink {
     entityId: string;
 
     @Column("varchar", {name: "token", unique: true, length: 255})
-    token: string;
+    token!: string;
 
     @Column("timestamp", {
         name: "created_at",
@@ -28,4 +29,12 @@ export class GuestLink {
     })
     @JoinColumn([{name: "guest_id", referencedColumnName: "id"}])
     guest: Guest;
+
+    @BeforeInsert()
+    private ensureToken() {
+        if (!this.token || this.token.trim() === '') {
+            // 32 bytes → 64 hex chars (fits in length 255, deterministic and URL-safe enough for your use)
+            this.token = randomBytes(32).toString('hex');
+        }
+    }
 }

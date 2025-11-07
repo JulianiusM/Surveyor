@@ -156,7 +156,7 @@ describe('eventService (mysql)', () => {
         );
 
         // Register user with duplicate dietary entries -> unique persisted
-        const initialChoices = ['VEGAN', 'VEGAN', 'MEAT'] as unknown as DIETARY[];
+        const initialChoices = ['VEGAN', 'VEGAN', 'MEAT'] as DIETARY[];
         const uid = await registerUser(eid, 2, '2025-09-10', '2025-09-12', initialChoices, 'no peanuts');
         expect(typeof uid).toBe('number');
 
@@ -167,7 +167,7 @@ describe('eventService (mysql)', () => {
         expect(userChoices).toEqual(['MEAT', 'VEGAN']);
 
         // Update user registration dates and replace dietary choices
-        const updatedChoices = ['VEGETARIAN'] as unknown as DIETARY[];
+        const updatedChoices = ['VEGETARIAN'] as DIETARY[];
         const uid2 = await registerUser(eid, 2, '2025-09-11', '2025-09-12', updatedChoices, 'loves veggies');
         expect(uid2).toBe(uid); // same registration id updated
 
@@ -177,7 +177,7 @@ describe('eventService (mysql)', () => {
         expect(userReg!.dietaryChoices![0].choice).toBe('VEGETARIAN');
 
         // Register guest
-        const gid = await registerGuest(eid, 11, '2025-09-10', '2025-09-12', ['LACTOSE_FREE'] as unknown as DIETARY[], null);
+        const gid = await registerGuest(eid, 11, '2025-09-10', '2025-09-12', ['HALAL'] as DIETARY[], null);
         expect(typeof gid).toBe('number');
 
         // All regs for event

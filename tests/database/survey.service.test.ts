@@ -173,6 +173,7 @@ describe('surveysService (mysql) with enum combinations', () => {
             guest: {id: 10},
             entityType: 'survey',
             entityId: surveyId,
+            token: 'irrelevant'
         });
         const linkedSurvey = await getSurveyByGuestId(10);
         expect(linkedSurvey).toBeTruthy();
