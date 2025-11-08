@@ -1,11 +1,11 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryColumn,} from "typeorm";
 import {PackingAssignment} from "./PackingAssignment";
 import {PackingList} from "./PackingList";
 
 @Index("fk_packing_items_list", ["listId"], {})
 @Entity("packing_items", {schema: "surveyor"})
 export class PackingItem {
-    @PrimaryGeneratedColumn("uuid", {name: "id"})
+    @PrimaryColumn("varchar", {name: "id", length: 36})
     id: string;
 
     @Column("varchar", {name: "list_id", length: 36})

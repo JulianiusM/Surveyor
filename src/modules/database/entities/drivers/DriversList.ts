@@ -1,4 +1,4 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryColumn,} from "typeorm";
 import {DriversAssignment} from "./DriversAssignment";
 import {DriversItem} from "./DriversItem";
 import {User} from "../user/User";
@@ -7,7 +7,7 @@ import {Event} from "../event/Event";
 @Index("owner_id", ["ownerId"], {})
 @Entity("drivers_lists", {schema: "surveyor"})
 export class DriversList {
-    @PrimaryGeneratedColumn("uuid", {name: "id"})
+    @PrimaryColumn("varchar", {name: "id", length: 36})
     id: string;
 
     @Column("int", {name: "owner_id"})

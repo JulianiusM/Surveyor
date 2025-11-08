@@ -1,4 +1,4 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryColumn,} from "typeorm";
 import {SurveyCombination} from "./SurveyCombination";
 import {SurveyResponse} from "./SurveyResponse";
 import {User} from "../user/User";
@@ -6,7 +6,7 @@ import {User} from "../user/User";
 @Index("surveys_owner_id_user_id_fk", ["ownerId"], {})
 @Entity("surveys", {schema: "surveyor"})
 export class Survey {
-    @PrimaryGeneratedColumn("uuid", {name: "id"})
+    @PrimaryColumn("varchar", {name: "id", length: 36})
     id: string;
 
     @Column("int", {name: "owner_id"})

@@ -1,4 +1,4 @@
-import {Column, Entity, Index, OneToMany, PrimaryGeneratedColumn} from "typeorm";
+import {Column, Entity, Index, OneToMany, PrimaryColumn} from "typeorm";
 import {ActivityPlan} from "../activity/ActivityPlan";
 import {PackingList} from "../packing/PackingList";
 import {DriversList} from "../drivers/DriversList";
@@ -10,7 +10,7 @@ import {EventRegistration} from "./EventRegistration";
 @Index("owner_id", ["ownerId"], {})
 @Entity("events", {schema: "surveyor"})
 export class Event {
-    @PrimaryGeneratedColumn("uuid", {name: "id"})
+    @PrimaryColumn("varchar", {name: "id", length: 36})
     id!: string; // UUID (use generateUniqueId())
 
     @Column("int", {name: "owner_id"})

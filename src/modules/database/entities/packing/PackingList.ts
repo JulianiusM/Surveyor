@@ -1,4 +1,4 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryColumn,} from "typeorm";
 import {PackingAssignment} from "./PackingAssignment";
 import {PackingItem} from "./PackingItem";
 import {User} from "../user/User";
@@ -7,7 +7,7 @@ import {Event} from "../event/Event";
 @Index("fk_packing_list_user", ["ownerId"], {})
 @Entity("packing_lists", {schema: "surveyor"})
 export class PackingList {
-    @PrimaryGeneratedColumn("uuid", {name: "id"})
+    @PrimaryColumn("varchar", {name: "id", length: 36})
     id: string;
 
     @Column("int", {name: "owner_id"})

@@ -1,4 +1,4 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryColumn,} from "typeorm";
 import {ActivityAssignment} from "./ActivityAssignment";
 import {User} from "../user/User";
 import {ActivitySlot} from "./ActivitySlot";
@@ -8,7 +8,7 @@ import {Event} from "../event/Event";
 @Index("owner_id", ["ownerId"], {})
 @Entity("activity_plans", {schema: "surveyor"})
 export class ActivityPlan {
-    @PrimaryGeneratedColumn("uuid", {name: "id"})
+    @PrimaryColumn("varchar", {name: "id", length: 36})
     id: string;
 
     @Column("int", {name: "owner_id"})
