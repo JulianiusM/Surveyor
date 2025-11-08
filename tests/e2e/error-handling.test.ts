@@ -164,6 +164,10 @@ test('survey form shows validation errors for empty required fields', async ({pa
     await login(page);
     await page.goto('/survey/create');
     
+    // Wait for the page to be fully loaded
+    await expect(page).toHaveURL(/\/survey\/create/);
+    await expect(page.getByRole('heading', {name: /create.*survey/i})).toBeVisible();
+    
     const titleInput = page.locator('input[name="title"]');
     const isRequired = await titleInput.getAttribute('required');
     expect(isRequired).not.toBeNull();

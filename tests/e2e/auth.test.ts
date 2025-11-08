@@ -15,7 +15,7 @@
 
 import {expect, test} from '@playwright/test';
 
-const USERNAME = process.env.E2E_ADMIN_USERNAME ?? 'e2e_user';
+const USERNAME = process.env.E2E_ADMIN_USERNAME ?? 'tester';
 const PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? 'passw0rd!';
 
 // Helper: fill the login form and submit.

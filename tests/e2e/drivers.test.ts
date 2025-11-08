@@ -39,6 +39,10 @@ test('can create a new drivers list with valid data', async ({page}) => {
     await login(page);
     await page.goto('/drivers/create');
     
+    // Wait for the page to be fully loaded
+    await expect(page).toHaveURL(/\/drivers\/create/);
+    await expect(page.getByRole('heading', {name: /create.*driver/i})).toBeVisible();
+    
     // Fill in drivers list details
     const driversTitle = `E2E Drivers ${Date.now()}`;
     await page.locator('input[name="title"]').fill(driversTitle);
@@ -57,6 +61,10 @@ test('can create a new drivers list with valid data', async ({page}) => {
 test('drivers form validates required fields', async ({page}) => {
     await login(page);
     await page.goto('/drivers/create');
+    
+    // Wait for the page to be fully loaded
+    await expect(page).toHaveURL(/\/drivers\/create/);
+    await expect(page.getByRole('heading', {name: /create.*driver/i})).toBeVisible();
     
     // Try to submit without filling required fields
     const titleInput = page.locator('input[name="title"]');

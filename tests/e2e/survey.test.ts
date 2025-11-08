@@ -39,6 +39,10 @@ test('can create a new survey with valid data', async ({page}) => {
     await login(page);
     await page.goto('/survey/create');
     
+    // Wait for the page to be fully loaded
+    await expect(page).toHaveURL(/\/survey\/create/);
+    await expect(page.getByRole('heading', {name: /create.*survey/i})).toBeVisible();
+    
     // Fill in survey details
     const surveyTitle = `E2E Survey ${Date.now()}`;
     await page.locator('input[name="title"]').fill(surveyTitle);
@@ -58,6 +62,10 @@ test('can create a new survey with valid data', async ({page}) => {
 test('survey form validates required fields', async ({page}) => {
     await login(page);
     await page.goto('/survey/create');
+    
+    // Wait for the page to be fully loaded
+    await expect(page).toHaveURL(/\/survey\/create/);
+    await expect(page.getByRole('heading', {name: /create.*survey/i})).toBeVisible();
     
     // Try to submit without filling required fields
     const titleInput = page.locator('input[name="title"]');

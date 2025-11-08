@@ -39,6 +39,10 @@ test('can create a new activity plan with valid data', async ({page}) => {
     await login(page);
     await page.goto('/activity/create');
     
+    // Wait for the page to be fully loaded
+    await expect(page).toHaveURL(/\/activity\/create/);
+    await expect(page.getByRole('heading', {name: /create.*activity/i})).toBeVisible();
+    
     // Fill in activity plan details
     const activityTitle = `E2E Activity ${Date.now()}`;
     await page.locator('input[name="title"]').fill(activityTitle);
@@ -57,6 +61,10 @@ test('can create a new activity plan with valid data', async ({page}) => {
 test('activity form validates required fields', async ({page}) => {
     await login(page);
     await page.goto('/activity/create');
+    
+    // Wait for the page to be fully loaded
+    await expect(page).toHaveURL(/\/activity\/create/);
+    await expect(page.getByRole('heading', {name: /create.*activity/i})).toBeVisible();
     
     // Try to submit without filling required fields
     const titleInput = page.locator('input[name="title"]');

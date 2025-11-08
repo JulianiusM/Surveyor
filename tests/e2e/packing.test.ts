@@ -39,6 +39,10 @@ test('can create a new packing list with valid data', async ({page}) => {
     await login(page);
     await page.goto('/packing/create');
     
+    // Wait for the page to be fully loaded
+    await expect(page).toHaveURL(/\/packing\/create/);
+    await expect(page.getByRole('heading', {name: /create.*packing/i})).toBeVisible();
+    
     // Fill in packing list details
     const packingTitle = `E2E Packing ${Date.now()}`;
     await page.locator('input[name="title"]').fill(packingTitle);
@@ -57,6 +61,10 @@ test('can create a new packing list with valid data', async ({page}) => {
 test('packing form validates required fields', async ({page}) => {
     await login(page);
     await page.goto('/packing/create');
+    
+    // Wait for the page to be fully loaded
+    await expect(page).toHaveURL(/\/packing\/create/);
+    await expect(page.getByRole('heading', {name: /create.*packing/i})).toBeVisible();
     
     // Try to submit without filling required fields
     const titleInput = page.locator('input[name="title"]');
