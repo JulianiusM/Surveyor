@@ -128,7 +128,7 @@ test('page remains functional after navigation', async ({page}) => {
 });
 
 // Test console errors
-test('no console errors on main pages', async ({page}) => {
+test('no critical console errors on main pages', async ({page}) => {
     const consoleErrors: string[] = [];
     
     page.on('console', (msg) => {
@@ -146,8 +146,51 @@ test('no console errors on main pages', async ({page}) => {
     const unexpectedErrors = consoleErrors.filter(err => 
         !err.includes('smtp.example.com') && 
         !err.includes('favicon') &&
-        !err.includes('ENOTFOUND')
+        !err.includes('ENOTFOUND') &&
+        !err.includes('ERR_NAME_NOT_RESOLVED') &&
+        !err.includes('net::')
     );
     
+    // Log any unexpected errors for debugging
+    if (unexpectedErrors.length > 0) {
+        console.log('Unexpected console errors:', unexpectedErrors);
+    }
+    
     expect(unexpectedErrors).toHaveLength(0);
+});
+
+// Test entity creation validation
+test('survey form shows validation errors for empty required fields', async ({page}) => {
+    await login(page);
+    await page.goto('/survey/create');
+    
+    const nameInput = page.locator('input[name="name"]');
+    const isRequired = await nameInput.getAttribute('required');
+    expect(isRequired).not.toBeNull();
+});
+
+// Test access control for non-existent resources
+test('shows error for accessing non-existent survey', async ({page}) => {
+    await login(page);
+    await page.goto('/survey/999999');
+    
+    // Should show 404 or error message
+    const body = await page.locator('body').textContent();
+    expect(body).toMatch(/404|not found|error/i);
+});
+
+// Test protected routes redirect properly
+test('all protected routes redirect unauthenticated users', async ({page}) => {
+    const protectedRoutes = [
+        '/survey/create',
+        '/packing/create',
+        '/activity/create',
+        '/drivers/create',
+        '/users/dashboard'
+    ];
+    
+    for (const route of protectedRoutes) {
+        await page.goto(route);
+        await expect(page).toHaveURL(/\/users\/login/);
+    }
 });

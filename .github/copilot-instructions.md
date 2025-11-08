@@ -85,19 +85,28 @@ Surveyor is a TypeScript-based survey management application built with:
 - Tests run against the built application
 - Configure test data through the E2E database initialization script
 - Organize tests by feature area:
-  - `auth.test.ts` - Authentication and session management
-  - `survey.test.ts`, `packing.test.ts`, `activity.test.ts`, `drivers.test.ts` - Feature tests
-  - `navigation.test.ts` - UI navigation and accessibility
-  - `error-handling.test.ts` - Frontend validation and error handling
+  - `auth.test.ts` - Authentication and session management (login, registration, password reset, tokens)
+  - `survey.test.ts` - Survey creation, validation, and management
+  - `packing.test.ts` - Packing list creation, validation, and management
+  - `activity.test.ts` - Activity plan creation, validation, and management
+  - `drivers.test.ts` - Drivers list creation, validation, and management
+  - `navigation.test.ts` - UI navigation, accessibility, and page structure
+  - `error-handling.test.ts` - Frontend validation, error handling, and exception scenarios
 - Focus on frontend behavior, not backend logic (backend is covered by unit/integration tests)
 - Test form validation, error messages, and user feedback
-- Verify authentication gates and access control
+- Verify authentication gates and access control for all protected routes
 - Test responsive design and accessibility features
+- Test error scenarios: invalid tokens, non-existent resources, server errors, network failures
+- Test HTML5 validation for required fields
+- Test console error monitoring to catch JavaScript errors
 - Mock OIDC for frontend testing without requiring a real provider
 - All tests should pass in CI environment
 - Use `.env.e2e` for configuration (never commit this file)
 - OIDC configuration in E2E is for frontend testing only (button visibility, UI state)
 - Do not test actual OIDC authentication flows in E2E tests
+- Tests should be isolated and use `test.beforeEach` to clear cookies/session
+- Use consistent login helper functions across test files
+- Test both positive and negative paths (success and failure scenarios)
 
 ## CI Pipeline
 
