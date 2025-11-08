@@ -40,8 +40,8 @@ test('can create a new packing list with valid data', async ({page}) => {
     await page.goto('/packing/create');
     
     // Fill in packing list details
-    const packingName = `E2E Packing ${Date.now()}`;
-    await page.locator('input[name="name"]').fill(packingName);
+    const packingTitle = `E2E Packing ${Date.now()}`;
+    await page.locator('input[name="title"]').fill(packingTitle);
     
     // Submit the form
     await page.getByRole('button', {name: /create.*list/i}).click();
@@ -51,7 +51,7 @@ test('can create a new packing list with valid data', async ({page}) => {
     
     // Verify success or packing list appears
     const body = await page.locator('body').textContent();
-    expect(body).toContain(packingName);
+    expect(body).toContain(packingTitle);
 });
 
 test('packing form validates required fields', async ({page}) => {
@@ -59,10 +59,10 @@ test('packing form validates required fields', async ({page}) => {
     await page.goto('/packing/create');
     
     // Try to submit without filling required fields
-    const nameInput = page.locator('input[name="name"]');
-    await expect(nameInput).toHaveAttribute('required', '');
+    const titleInput = page.locator('input[name="title"]');
+    await expect(titleInput).toHaveAttribute('required', '');
     
     // Check HTML5 validation
-    const isRequired = await nameInput.evaluate((el: HTMLInputElement) => el.required);
+    const isRequired = await titleInput.evaluate((el: HTMLInputElement) => el.required);
     expect(isRequired).toBe(true);
 });

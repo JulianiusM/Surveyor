@@ -40,8 +40,8 @@ test('can create a new drivers list with valid data', async ({page}) => {
     await page.goto('/drivers/create');
     
     // Fill in drivers list details
-    const driversName = `E2E Drivers ${Date.now()}`;
-    await page.locator('input[name="name"]').fill(driversName);
+    const driversTitle = `E2E Drivers ${Date.now()}`;
+    await page.locator('input[name="title"]').fill(driversTitle);
     
     // Submit the form
     await page.getByRole('button', {name: /create.*list/i}).click();
@@ -51,7 +51,7 @@ test('can create a new drivers list with valid data', async ({page}) => {
     
     // Verify success or drivers list appears
     const body = await page.locator('body').textContent();
-    expect(body).toContain(driversName);
+    expect(body).toContain(driversTitle);
 });
 
 test('drivers form validates required fields', async ({page}) => {
@@ -59,10 +59,10 @@ test('drivers form validates required fields', async ({page}) => {
     await page.goto('/drivers/create');
     
     // Try to submit without filling required fields
-    const nameInput = page.locator('input[name="name"]');
-    await expect(nameInput).toHaveAttribute('required', '');
+    const titleInput = page.locator('input[name="title"]');
+    await expect(titleInput).toHaveAttribute('required', '');
     
     // Check HTML5 validation
-    const isRequired = await nameInput.evaluate((el: HTMLInputElement) => el.required);
+    const isRequired = await titleInput.evaluate((el: HTMLInputElement) => el.required);
     expect(isRequired).toBe(true);
 });

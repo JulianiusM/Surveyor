@@ -164,8 +164,8 @@ test('survey form shows validation errors for empty required fields', async ({pa
     await login(page);
     await page.goto('/survey/create');
     
-    const nameInput = page.locator('input[name="name"]');
-    const isRequired = await nameInput.getAttribute('required');
+    const titleInput = page.locator('input[name="title"]');
+    const isRequired = await titleInput.getAttribute('required');
     expect(isRequired).not.toBeNull();
 });
 

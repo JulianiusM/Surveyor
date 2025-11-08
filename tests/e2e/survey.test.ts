@@ -40,8 +40,8 @@ test('can create a new survey with valid data', async ({page}) => {
     await page.goto('/survey/create');
     
     // Fill in survey details
-    const surveyName = `E2E Survey ${Date.now()}`;
-    await page.locator('input[name="name"]').fill(surveyName);
+    const surveyTitle = `E2E Survey ${Date.now()}`;
+    await page.locator('input[name="title"]').fill(surveyTitle);
     await page.locator('textarea[name="description"]').fill('Test survey description');
     
     // Submit the form
@@ -52,7 +52,7 @@ test('can create a new survey with valid data', async ({page}) => {
     
     // Verify success message or survey appears
     const body = await page.locator('body').textContent();
-    expect(body).toContain(surveyName);
+    expect(body).toContain(surveyTitle);
 });
 
 test('survey form validates required fields', async ({page}) => {
@@ -60,10 +60,10 @@ test('survey form validates required fields', async ({page}) => {
     await page.goto('/survey/create');
     
     // Try to submit without filling required fields
-    const nameInput = page.locator('input[name="name"]');
-    await expect(nameInput).toHaveAttribute('required', '');
+    const titleInput = page.locator('input[name="title"]');
+    await expect(titleInput).toHaveAttribute('required', '');
     
     // Check HTML5 validation
-    const isRequired = await nameInput.evaluate((el: HTMLInputElement) => el.required);
+    const isRequired = await titleInput.evaluate((el: HTMLInputElement) => el.required);
     expect(isRequired).toBe(true);
 });
