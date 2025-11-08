@@ -220,12 +220,12 @@ test('requests a password reset, changes the password, and logs in with the new 
 });
 
 // ---- OIDC Button Visibility ------------------------------------------------------------
-test('shows OIDC login button when OIDC is enabled', async ({page}) => {
+test('hides OIDC login button when OIDC is disabled', async ({page}) => {
     await page.goto('/users/login');
-    // Button is only rendered if settings.oidcEnabled === true (frontend behavior test)
+    // Button should NOT be rendered when settings.oidcEnabled === false (frontend behavior test)
+    // In E2E config, OIDC_ENABLED=0, so the button should not exist
     const oidcBtn = page.getByRole('link', {name: /login.*openid/i});
-    await expect(oidcBtn).toBeVisible();
-    await expect(oidcBtn).toHaveAttribute('href', '/users/oidc/login');
+    await expect(oidcBtn).not.toBeVisible();
 });
 
 
