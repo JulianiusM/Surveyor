@@ -34,3 +34,35 @@ test('activity dashboard shows empty state for new user', async ({page}) => {
     await login(page);
     await expect(page.getByText(/you don't have any activity/i)).toBeVisible();
 });
+
+test('can create a new activity plan with valid data', async ({page}) => {
+    await login(page);
+    await page.goto('/activity/create');
+    
+    // Fill in activity plan details
+    const activityName = `E2E Activity ${Date.now()}`;
+    await page.locator('input[name="name"]').fill(activityName);
+    
+    // Submit the form
+    await page.getByRole('button', {name: /create.*plan/i}).click();
+    
+    // Should redirect to dashboard or activity view
+    await page.waitForURL(/\/(users\/dashboard|activity\/\d+)/);
+    
+    // Verify success or activity appears
+    const body = await page.locator('body').textContent();
+    expect(body).toContain(activityName);
+});
+
+test('activity form validates required fields', async ({page}) => {
+    await login(page);
+    await page.goto('/activity/create');
+    
+    // Try to submit without filling required fields
+    const nameInput = page.locator('input[name="name"]');
+    await expect(nameInput).toHaveAttribute('required', '');
+    
+    // Check HTML5 validation
+    const isRequired = await nameInput.evaluate((el: HTMLInputElement) => el.required);
+    expect(isRequired).toBe(true);
+});

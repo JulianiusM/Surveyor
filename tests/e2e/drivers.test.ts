@@ -34,3 +34,35 @@ test('drivers dashboard shows empty state for new user', async ({page}) => {
     await login(page);
     await expect(page.getByText(/you don't have any drivers/i)).toBeVisible();
 });
+
+test('can create a new drivers list with valid data', async ({page}) => {
+    await login(page);
+    await page.goto('/drivers/create');
+    
+    // Fill in drivers list details
+    const driversName = `E2E Drivers ${Date.now()}`;
+    await page.locator('input[name="name"]').fill(driversName);
+    
+    // Submit the form
+    await page.getByRole('button', {name: /create.*list/i}).click();
+    
+    // Should redirect to dashboard or drivers view
+    await page.waitForURL(/\/(users\/dashboard|drivers\/\d+)/);
+    
+    // Verify success or drivers list appears
+    const body = await page.locator('body').textContent();
+    expect(body).toContain(driversName);
+});
+
+test('drivers form validates required fields', async ({page}) => {
+    await login(page);
+    await page.goto('/drivers/create');
+    
+    // Try to submit without filling required fields
+    const nameInput = page.locator('input[name="name"]');
+    await expect(nameInput).toHaveAttribute('required', '');
+    
+    // Check HTML5 validation
+    const isRequired = await nameInput.evaluate((el: HTMLInputElement) => el.required);
+    expect(isRequired).toBe(true);
+});

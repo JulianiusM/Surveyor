@@ -34,3 +34,36 @@ test('survey dashboard shows empty state for new user', async ({page}) => {
     await login(page);
     await expect(page.getByText(/you don't have any surveys/i)).toBeVisible();
 });
+
+test('can create a new survey with valid data', async ({page}) => {
+    await login(page);
+    await page.goto('/survey/create');
+    
+    // Fill in survey details
+    const surveyName = `E2E Survey ${Date.now()}`;
+    await page.locator('input[name="name"]').fill(surveyName);
+    await page.locator('textarea[name="description"]').fill('Test survey description');
+    
+    // Submit the form
+    await page.getByRole('button', {name: /create.*survey/i}).click();
+    
+    // Should redirect to dashboard or survey view
+    await page.waitForURL(/\/(users\/dashboard|survey\/\d+)/);
+    
+    // Verify success message or survey appears
+    const body = await page.locator('body').textContent();
+    expect(body).toContain(surveyName);
+});
+
+test('survey form validates required fields', async ({page}) => {
+    await login(page);
+    await page.goto('/survey/create');
+    
+    // Try to submit without filling required fields
+    const nameInput = page.locator('input[name="name"]');
+    await expect(nameInput).toHaveAttribute('required', '');
+    
+    // Check HTML5 validation
+    const isRequired = await nameInput.evaluate((el: HTMLInputElement) => el.required);
+    expect(isRequired).toBe(true);
+});

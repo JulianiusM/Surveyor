@@ -34,3 +34,35 @@ test('packing dashboard shows empty state for new user', async ({page}) => {
     await login(page);
     await expect(page.getByText(/you don't have any packing/i)).toBeVisible();
 });
+
+test('can create a new packing list with valid data', async ({page}) => {
+    await login(page);
+    await page.goto('/packing/create');
+    
+    // Fill in packing list details
+    const packingName = `E2E Packing ${Date.now()}`;
+    await page.locator('input[name="name"]').fill(packingName);
+    
+    // Submit the form
+    await page.getByRole('button', {name: /create.*list/i}).click();
+    
+    // Should redirect to dashboard or packing view
+    await page.waitForURL(/\/(users\/dashboard|packing\/\d+)/);
+    
+    // Verify success or packing list appears
+    const body = await page.locator('body').textContent();
+    expect(body).toContain(packingName);
+});
+
+test('packing form validates required fields', async ({page}) => {
+    await login(page);
+    await page.goto('/packing/create');
+    
+    // Try to submit without filling required fields
+    const nameInput = page.locator('input[name="name"]');
+    await expect(nameInput).toHaveAttribute('required', '');
+    
+    // Check HTML5 validation
+    const isRequired = await nameInput.evaluate((el: HTMLInputElement) => el.required);
+    expect(isRequired).toBe(true);
+});
