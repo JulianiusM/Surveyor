@@ -1,33 +1,18 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
 import {ActivityAssignmentRole} from "./ActivityAssignmentRole";
 import {ActivitySlot} from "./ActivitySlot";
 import {ActivityPlan} from "./ActivityPlan";
 import {User} from "../user/User";
 import {Guest} from "../user/Guest";
 
-@Index("guest_id", ["guestId"], {})
-@Index("plan_id", ["planId"], {})
-@Index("uk_activity_assignment_guest", ["slotId", "guestId"], {unique: true})
-@Index("uk_unique_activity_assignment_user", ["slotId", "userId"], {
+@Index("uk_activity_assignment_guest", ["slot", "guest"], {unique: true})
+@Index("uk_unique_activity_assignment_user", ["slot", "user"], {
     unique: true,
 })
-@Index("user_id", ["userId"], {})
 @Entity("activity_assignments", {schema: "surveyor"})
 export class ActivityAssignment {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
-    id: number;
-
-    @Column("varchar", {name: "slot_id", length: 36})
-    slotId: string;
-
-    @Column("varchar", {name: "plan_id", length: 36})
-    planId: string;
-
-    @Column("int", {name: "user_id", nullable: true})
-    userId?: number | null;
-
-    @Column("int", {name: "guest_id", nullable: true})
-    guestId?: number | null;
+    id!: number;
 
     @Column("timestamp", {
         name: "created_at",
@@ -48,13 +33,19 @@ export class ActivityAssignment {
     )
     activityAssignmentRoles: ActivityAssignmentRole[];
 
+    @RelationId((aa: ActivityAssignment) => aa.slot)
+    slotId!: string;
+
     @ManyToOne(
         () => ActivitySlot,
         (activitySlots) => activitySlots.activityAssignments,
         {onDelete: "CASCADE", onUpdate: "CASCADE"}
     )
     @JoinColumn([{name: "slot_id", referencedColumnName: "id"}])
-    slot: ActivitySlot;
+    slot!: ActivitySlot;
+
+    @RelationId((aa: ActivityAssignment) => aa.plan)
+    planId!: string;
 
     @ManyToOne(
         () => ActivityPlan,
@@ -62,19 +53,25 @@ export class ActivityAssignment {
         {onDelete: "CASCADE", onUpdate: "CASCADE"}
     )
     @JoinColumn([{name: "plan_id", referencedColumnName: "id"}])
-    plan: ActivityPlan;
+    plan!: ActivityPlan;
+
+    @RelationId((aa: ActivityAssignment) => aa.user)
+    userId?: number;
 
     @ManyToOne(() => User, (users) => users.activityAssignments, {
         onDelete: "CASCADE",
         onUpdate: "NO ACTION",
     })
     @JoinColumn([{name: "user_id", referencedColumnName: "id"}])
-    user: User;
+    user?: User;
+
+    @RelationId((aa: ActivityAssignment) => aa.guest)
+    guestId?: number;
 
     @ManyToOne(() => Guest, (guests) => guests.activityAssignments, {
         onDelete: "CASCADE",
         onUpdate: "NO ACTION",
     })
     @JoinColumn([{name: "guest_id", referencedColumnName: "id"}])
-    guest: Guest;
+    guest?: Guest;
 }

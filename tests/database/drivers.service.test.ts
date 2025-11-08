@@ -7,6 +7,8 @@ jest.mock('../../src/modules/database/dataSource', () =>
     require('../util/db/mariadb-datasource.mock')
 );
 
+import {v4 as uuidv4} from 'uuid';
+
 import {
     assignDriversItemToGuest,
     assignDriversItemToUser,
@@ -86,7 +88,7 @@ afterEach(async () => {
 
 describe('driversService (mysql)', () => {
     it('creates and updates a DriversList; fetch by id and user', async () => {
-        const listId = 'list-1';
+        const listId = uuidv4();
 
         await createDriversList(1, 'Initial Title', 'Initial Desc', true, false, listId);
 
@@ -128,7 +130,7 @@ describe('driversService (mysql)', () => {
     });
 
     it('creates items (user+guest), enriches, reorders, updates, and computes last item number', async () => {
-        const listId = 'list-2';
+        const listId = uuidv4();
         await createDriversList(1, 'Drivers', 'desc', true, false, listId);
 
         // Additional principals
@@ -146,9 +148,11 @@ describe('driversService (mysql)', () => {
         });
         await AppDataSource.getRepository(Guest).save(guest1);
 
+        const itemId1 = uuidv4()
+        const itemId2 = uuidv4()
         // Create two items; explicit ids/pos for determinism
         await createDriversItemUser(listId, 2, {
-            id: 'item-1',
+            id: itemId1,
             title: 'Pick up wood',
             description: '',
             maxAssignees: 2,
@@ -156,7 +160,7 @@ describe('driversService (mysql)', () => {
         });
 
         await createDriversItemGuest(listId, 10, {
-            id: 'item-2',
+            id: itemId2,
             title: 'Bring nails',
             description: 'galvanized',
             maxAssignees: 1,
@@ -166,15 +170,15 @@ describe('driversService (mysql)', () => {
         // Enriched list read
         const itemsInitial = await getDriversItems(listId);
         expect(itemsInitial).toHaveLength(2);
-        expect(itemsInitial[0].id).toBe('item-1');
+        expect(itemsInitial[0].id).toBe(itemId1);
         expect(itemsInitial[0].assignedCount).toBe(0);
         expect(itemsInitial[0].driverName).toBe('User Two');
 
-        expect(itemsInitial[1].id).toBe('item-2');
+        expect(itemsInitial[1].id).toBe(itemId2);
         expect(itemsInitial[1].driverName).toBe('guestOne');
 
         // Update item
-        const updated = await updateDriversItem('item-1', {
+        const updated = await updateDriversItem(itemId1, {
             title: 'Pick up timber',
             description: 'oak',
             maxAssignees: 3,
@@ -183,30 +187,32 @@ describe('driversService (mysql)', () => {
         expect(updated).toBe(true);
 
         // No-op update returns false
-        const noOp = await updateDriversItem('item-1', {});
+        const noOp = await updateDriversItem(itemId1, {});
         expect(noOp).toBe(false);
 
         // Reorder: item-2 first, item-1 second
         await reorderDriversItems(listId, [
-            {itemId: 'item-2', position: 1},
-            {itemId: 'item-1', position: 2},
+            {itemId: itemId2, position: 1},
+            {itemId: itemId1, position: 2},
         ]);
 
         const itemsReordered = await getDriversItems(listId);
-        expect(itemsReordered.map((i) => i.id)).toEqual(['item-2', 'item-1']);
+        expect(itemsReordered.map((i) => i.id)).toEqual([itemId2, itemId1]);
 
         // Last number
         const last = await getLastDriversItemNumber(listId);
         expect(last).toBe(2);
 
         // Delete one item
-        await deleteDriversItem('item-2');
+        await deleteDriversItem(itemId2);
         const afterDelete = await getDriversItems(listId);
-        expect(afterDelete.map((i) => i.id)).toEqual(['item-1']);
+        expect(afterDelete.map((i) => i.id)).toEqual([itemId1]);
     });
 
     it('assigns/unassigns items (user + guest), counts, maps assignees, and deletes assignments', async () => {
-        const listId = 'list-3';
+        const listId = uuidv4();
+        const itemId1 = uuidv4()
+        const itemId2 = uuidv4()
         await createDriversList(1, 'Drivers', 'desc', true, true, listId);
 
         // Principals
@@ -226,67 +232,67 @@ describe('driversService (mysql)', () => {
 
         // Items
         await createDriversItemUser(listId, 2, {
-            id: 'i-u',
+            id: itemId1,
             title: 'Drive van',
             pos: 1,
             maxAssignees: 2,
         });
         await createDriversItemGuest(listId, 11, {
-            id: 'i-g',
+            id: itemId2,
             title: 'Drive truck',
             pos: 2,
             maxAssignees: 1,
         });
 
         // Assign (idempotent/upsert)
-        await assignDriversItemToUser('i-u', 2);
-        await assignDriversItemToUser('i-u', 2); // duplicate
-        await assignDriversItemToGuest('i-g', 11);
-        await assignDriversItemToGuest('i-g', 11); // duplicate
+        await assignDriversItemToUser(itemId1, 2);
+        await assignDriversItemToUser(itemId1, 2); // duplicate
+        await assignDriversItemToGuest(itemId2, 11);
+        await assignDriversItemToGuest(itemId2, 11); // duplicate
 
         // Counts by item
         const counts = await getDriversAssignmentCounts(listId);
-        expect(counts['i-u']).toBe(1);
-        expect(counts['i-g']).toBe(1);
+        expect(counts[itemId1]).toBe(1);
+        expect(counts[itemId2]).toBe(1);
 
         // Enriched single fetch shows assignedCount
-        const enrichedU = await getDriversItemById('i-u');
+        const enrichedU = await getDriversItemById(itemId1);
         expect(enrichedU.assignedCount).toBe(1);
         expect(enrichedU.driverName).toBe('User Two');
 
         // Lists of assigned item ids
         const userItems = await getDriversAssignmentsForUser(listId, 2);
-        expect(userItems).toEqual(['i-u']);
+        expect(userItems).toEqual([itemId1]);
 
         const guestItems = await getDriversAssignmentsForGuest(listId, 11);
-        expect(guestItems).toEqual(['i-g']);
+        expect(guestItems).toEqual([itemId2]);
 
         // Map of assignees per item
         const assigneesMap = await getDriversItemAssignees(listId);
-        expect(Object.keys(assigneesMap).sort()).toEqual(['i-g', 'i-u']);
-        expect(assigneesMap['i-u']).toHaveLength(1);
-        expect(assigneesMap['i-u'][0].name).toBe('User Two');
-        expect(assigneesMap['i-g'][0].name).toBe('guestOne');
+        expect(Object.keys(assigneesMap).sort()).toEqual([itemId2, itemId1].sort());
+        expect(assigneesMap[itemId1]).toHaveLength(1);
+        expect(assigneesMap[itemId1][0].name).toBe('User Two');
+        expect(assigneesMap[itemId2][0].name).toBe('guestOne');
 
         // Delete one assignment by id
-        const guestAssignId = assigneesMap['i-g'][0].id!;
+        const guestAssignId = assigneesMap[itemId2][0].id!;
         await deleteDriversAssignment(guestAssignId);
 
         const countsAfterDelete = await getDriversAssignmentCounts(listId);
-        expect(countsAfterDelete['i-g'] ?? 0).toBe(0);
-        expect(countsAfterDelete['i-u']).toBe(1);
+        expect(countsAfterDelete[itemId2] ?? 0).toBe(0);
+        expect(countsAfterDelete[itemId1]).toBe(1);
 
         // Unassign the user via (itemId,userId)
-        await unassignDriversItemUser('i-u', 2);
+        await unassignDriversItemUser(itemId1, 2);
 
         const finalCounts = await getDriversAssignmentCounts(listId);
-        expect(finalCounts['i-u'] ?? 0).toBe(0);
+        expect(finalCounts[itemId1] ?? 0).toBe(0);
 
         // Also test guest unassign path again for completeness (no-op now)
-        await unassignDriversItemGuest('i-g', 11);
+        await unassignDriversItemGuest(itemId2, 11);
 
         const emptyMap = await getDriversItemAssignees(listId);
-        expect(emptyMap['i-u'] ?? []).toHaveLength(0);
-        expect(emptyMap['i-g'] ?? []).toHaveLength(0);
+        expect(emptyMap[itemId1] ?? []).toHaveLength(0);
+        expect(emptyMap[itemId2] ?? []).toHaveLength(0);
     });
 });

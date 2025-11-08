@@ -1,36 +1,29 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
 import {PackingAssignment} from "./PackingAssignment";
 import {PackingItem} from "./PackingItem";
 import {User} from "../user/User";
 import {Event} from "../event/Event";
 
-@Index("fk_packing_list_user", ["ownerId"], {})
 @Entity("packing_lists", {schema: "surveyor"})
 export class PackingList {
     @PrimaryGeneratedColumn("uuid", {name: "id"})
-    id: string;
-
-    @Column("int", {name: "owner_id"})
-    ownerId: number;
+    id!: string;
 
     @Column("varchar", {name: "title", length: 255})
-    title: string;
+    title!: string;
 
     @Column("text", {name: "description", nullable: true})
     description?: string | null;
-
-    @Column('varchar', {name: 'event_id', length: 36, nullable: true})
-    eventId?: string | null;
 
     @Column("tinyint", {
         name: "allow_guest_add",
         width: 1,
         default: 0,
     })
-    allowGuestAdd: boolean;
+    allowGuestAdd!: boolean;
 
     @Column("tinyint", {name: "guest_manage", width: 1, default: 0})
-    guestManage: boolean;
+    guestManage!: boolean;
 
     @Column("timestamp", {
         name: "created_at",
@@ -49,22 +42,28 @@ export class PackingList {
         () => PackingAssignment,
         (packingAssignments) => packingAssignments.list
     )
-    packingAssignments: PackingAssignment[];
+    packingAssignments!: PackingAssignment[];
 
     @OneToMany(() => PackingItem, (packingItems) => packingItems.list)
-    packingItems: PackingItem[];
+    packingItems!: PackingItem[];
+
+    @RelationId((pl: PackingList) => pl.owner)
+    ownerId!: number;
 
     @ManyToOne(() => User, (users) => users.packingLists, {
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "owner_id", referencedColumnName: "id"}])
-    owner: User;
+    owner!: User;
+
+    @RelationId((pl: PackingList) => pl.event)
+    eventId?: string | null;
 
     @ManyToOne(() => Event, (event) => event.packingLists, {
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "event_id", referencedColumnName: "id"}])
-    event: User;
+    event?: Event;
 }

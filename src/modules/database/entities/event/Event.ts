@@ -1,20 +1,14 @@
-import {Column, Entity, Index, OneToMany, PrimaryGeneratedColumn} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId} from "typeorm";
 import {ActivityPlan} from "../activity/ActivityPlan";
 import {PackingList} from "../packing/PackingList";
 import {DriversList} from "../drivers/DriversList";
 import {EventRegistration} from "./EventRegistration";
-// import related entities lazily to avoid circular deps
-// import { ActivityPlan } from "../activity/ActivityPlan";
-// import { PackingList } from "../packing/PackingList";
+import {User} from "../user/User";
 
-@Index("owner_id", ["ownerId"], {})
 @Entity("events", {schema: "surveyor"})
 export class Event {
     @PrimaryGeneratedColumn("uuid", {name: "id"})
-    id!: string; // UUID (use generateUniqueId())
-
-    @Column("int", {name: "owner_id"})
-    ownerId!: number;
+    id!: string;
 
     @Column("varchar", {name: "title", length: 255})
     title!: string;
@@ -38,10 +32,10 @@ export class Event {
     timezone?: string | null;
 
     @Column("tinyint", {name: "require_dietary_info", width: 1, default: 0})
-    requireDietaryInfo: boolean;
+    requireDietaryInfo!: boolean;
 
     @Column("int", {name: "max_participants", nullable: true})
-    maxParticipants: number | null;
+    maxParticipants?: number | null;
 
     @Column("timestamp", {name: "created_at", default: () => "CURRENT_TIMESTAMP"})
     createdAt!: Date;
@@ -60,4 +54,14 @@ export class Event {
 
     @OneToMany(() => DriversList, (d) => d.event)
     driversLists: DriversList[];
+
+    @RelationId((a: Event) => a.owner)
+    ownerId!: number;
+
+    @ManyToOne(() => User, (users) => users.events, {
+        onDelete: "CASCADE",
+        onUpdate: "CASCADE",
+    })
+    @JoinColumn([{name: "owner_id", referencedColumnName: "id"}])
+    owner!: User;
 }

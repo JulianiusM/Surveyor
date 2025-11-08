@@ -107,7 +107,7 @@ export async function createGuest(username: string, email: string | null = null)
 export async function createGuestLink(entityType: string, entityId: string, guestId: number) {
     const repo = AppDataSource.getRepository(GuestLink);
     const token = generateUniqueToken();
-    const link = repo.create({guestId, entityType, entityId, token});
+    const link = repo.create({guest: {id: guestId}, entityType, entityId, token});
     await repo.save(link);
     return token;
 }
@@ -119,10 +119,15 @@ export async function registerGuest(entityType: string, entityId: string, userna
 }
 
 export async function getGuestByToken(token: string, entityType: string, entityId: string) {
-    const repo = AppDataSource.getRepository(Guest);
-    return await repo.findOne({
-        where: {guestLinks: {token: token, entityType: entityType, entityId: entityId}}
-    })
+    // Avoid Repository.findOne with nested relation predicates to prevent MySQL/MariaDB DISTINCT alias issues
+    // when the related entity uses composite keys. Query explicitly instead.
+    return await AppDataSource.getRepository(Guest)
+        .createQueryBuilder('g')
+        .innerJoin('g.guestLinks', 'gl', 'gl.token = :token AND gl.entityType = :entityType AND gl.entityId = :entityId', {
+            token, entityType, entityId
+        })
+        .select(['g.id', 'g.username', 'g.email'])
+        .getOne();
 }
 
 export async function getGuestInternal(guestId: number) {
@@ -134,11 +139,14 @@ export async function getGuestInternal(guestId: number) {
 }
 
 export async function getGuestLinkToken(entityType: string, entityId: string, guestId: number) {
-    const repo = AppDataSource.getRepository(GuestLink);
-    const link = await repo.findOne({
-        where: {guestId, entityType, entityId},
-        select: ['token']
-    });
+    // Avoid nested relation predicate which can trigger DISTINCT alias bugs on MySQL/MariaDB.
+    const link = await AppDataSource.getRepository(GuestLink)
+        .createQueryBuilder('gl')
+        .where('gl.entityType = :entityType AND gl.entityId = :entityId AND gl.guest_id = :guestId', {
+            entityType, entityId, guestId
+        })
+        .select(['gl.token'])
+        .getOne();
     return link?.token || null;
 }
 

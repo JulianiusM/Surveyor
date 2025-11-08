@@ -1,8 +1,4 @@
-export {}; // make module
-
-// Ensure the service and tests share the same DataSource
-jest.mock('../../src/modules/database/dataSource', () => require('../util/db/mariadb-datasource.mock'));
-
+import {v4 as uuidv4} from "uuid";
 import {
     addActivitySlot,
     addActivitySlots,
@@ -37,6 +33,11 @@ import {Role} from '../../src/modules/database/entities/user/Role';
 import {User} from '../../src/modules/database/entities/user/User';
 import {Guest} from '../../src/modules/database/entities/user/Guest';
 import {ActivitySlotRole} from '../../src/modules/database/entities/activity/ActivitySlotRole';
+
+export {}; // make module
+
+// Ensure the service and tests share the same DataSource
+jest.mock('../../src/modules/database/dataSource', () => require('../util/db/mariadb-datasource.mock'));
 
 async function truncateAll() {
     await AppDataSource.query('SET FOREIGN_KEY_CHECKS=0');
@@ -76,12 +77,13 @@ afterEach(async () => {
 
 describe('Plan CRUD: get/update/delete/list', () => {
     test('create/get/update flags & description / list by owner / delete', async () => {
-        await createActivityPlan('planZ', 1, 'TitleZ', 'DescZ', '2025-02-01', '2025-02-02', true, false);
+        const planId = uuidv4()
+        await createActivityPlan(planId, 1, 'TitleZ', 'DescZ', '2025-02-01', '2025-02-02', true, false);
 
         // get by id
-        const got = await getActivityPlanById('planZ');
+        const got = await getActivityPlanById(planId);
         expect(got).toEqual(expect.objectContaining({
-            id: 'planZ',
+            id: planId,
             ownerId: 1,
             title: 'TitleZ',
             description: 'DescZ',
@@ -90,32 +92,35 @@ describe('Plan CRUD: get/update/delete/list', () => {
         }));
 
         // update flags
-        await updateActivityPlanFlags('planZ', false, true);
-        const got2 = await getActivityPlanById('planZ');
+        await updateActivityPlanFlags(planId, false, true);
+        const got2 = await getActivityPlanById(planId);
         expect(got2).toEqual(expect.objectContaining({allowGuestAdd: 0, guestManage: 1}));
 
         // update description
-        await updateActivityPlanDescription('planZ', 'DescZ+');
-        const got3 = await getActivityPlanById('planZ');
+        await updateActivityPlanDescription(planId, 'DescZ+');
+        const got3 = await getActivityPlanById(planId);
         expect(got3?.description).toBe('DescZ+');
 
         // list by owner
         const list = await getActivityPlansByUserId(1);
-        expect(list.map(p => p.id)).toContain('planZ');
+        expect(list.map(p => p.id)).toContain(planId);
 
         // delete
-        await deleteActivityPlan('planZ');
-        const gone = await AppDataSource.getRepository(ActivityPlan).findOneBy({id: 'planZ'});
+        await deleteActivityPlan(planId);
+        const gone = await AppDataSource.getRepository(ActivityPlan).findOneBy({id: planId});
         expect(gone).toBeNull();
     });
 });
 
 describe('Slot CRUD: add/list/update/reorder/delete/lastNumber', () => {
     test('addActivitySlots + getActivitySlots groups by day and counts assignments', async () => {
-        await createActivityPlan('planS', 1, 'T', 'D', '2025-01-01', '2025-01-03', true, true);
-        await addActivitySlots('planS', [
-            {id: 's1', title: 'A', day: '2025-01-01', pos: 1, maxAssignees: 2},
-            {id: 's2', title: 'B', day: '2025-01-02', pos: 1, maxAssignees: 3},
+        const planId = uuidv4()
+        const slotIdA = uuidv4()
+        const slotIdB = uuidv4()
+        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-03', true, true);
+        await addActivitySlots(planId, [
+            {id: slotIdA, title: 'A', day: '2025-01-01', pos: 1, maxAssignees: 2},
+            {id: slotIdB, title: 'B', day: '2025-01-02', pos: 1, maxAssignees: 3},
         ]);
 
         // Add one assignment to s1 so assignedCount = 1
@@ -123,98 +128,108 @@ describe('Slot CRUD: add/list/update/reorder/delete/lastNumber', () => {
             username: 'bob', email: 'b@b',
         }));
         await ensureRoleId('default');
-        const assignId = await ensureAssignment('s1', user.id, null);
+        const assignId = await ensureAssignment(slotIdA, user.id);
         await assignRole(assignId, 'default');
 
-        const grouped = await getActivitySlots('planS');
+        const grouped = await getActivitySlots(planId);
         expect(Object.keys(grouped).sort()).toEqual(['2025-01-01', '2025-01-02']);
         const s1 = (grouped['2025-01-01']![0] as any);
-        expect(s1.id).toBe('s1');
+        expect(s1.id).toBe(slotIdA);
         expect(s1.assignedCount).toBe(1);
     });
 
     test('updateActivitySlot returns undefined for empty input; true for changes and persists them', async () => {
-        await createActivityPlan('planU', 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
-        await addActivitySlot('planU', {id: 'sx', title: 'X', day: '2025-01-01', pos: 1, maxAssignees: 1});
+        const planId = uuidv4()
+        const slotId = uuidv4()
+        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
+        await addActivitySlot(planId, {id: slotId, title: 'X', day: '2025-01-01', pos: 1, maxAssignees: 1});
 
-        const noChange = await updateActivitySlot('sx', {});
+        const noChange = await updateActivitySlot(slotId, {});
         expect(noChange).toBeUndefined();
 
-        const ok = await updateActivitySlot('sx', {title: 'X+', maxAssignees: 5, pos: 3, description: 'New'});
+        const ok = await updateActivitySlot(slotId, {title: 'X+', maxAssignees: 5, pos: 3, description: 'New'});
         expect(ok).toBe(true);
 
-        const sx = await AppDataSource.getRepository(ActivitySlot).findOneByOrFail({id: 'sx'});
+        const sx = await AppDataSource.getRepository(ActivitySlot).findOneByOrFail({id: slotId});
         expect(sx).toEqual(expect.objectContaining({title: 'X+', maxAssignees: 5, pos: 3, description: 'New'}));
     });
 
     test('reorderActivitySlots updates per-slot pos and getLastActivitySlotNumber works per day', async () => {
-        await createActivityPlan('planR', 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
-        await addActivitySlots('planR', [
-            {id: 'a', title: 'A', day: '2025-01-01', pos: 1, maxAssignees: 1},
-            {id: 'b', title: 'B', day: '2025-01-01', pos: 2, maxAssignees: 1},
-            {id: 'c', title: 'C', day: '2025-01-02', pos: 1, maxAssignees: 1},
+        const planId = uuidv4()
+        const slotIdA = uuidv4()
+        const slotIdB = uuidv4()
+        const slotIdC = uuidv4()
+        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
+        await addActivitySlots(planId, [
+            {id: slotIdA, title: 'A', day: '2025-01-01', pos: 1, maxAssignees: 1},
+            {id: slotIdB, title: 'B', day: '2025-01-01', pos: 2, maxAssignees: 1},
+            {id: slotIdC, title: 'C', day: '2025-01-02', pos: 1, maxAssignees: 1},
         ]);
 
-        await reorderActivitySlots('planR', [
-            {slotId: 'a', pos: 2},
-            {slotId: 'b', pos: 1},
+        await reorderActivitySlots(planId, [
+            {slotId: slotIdA, pos: 2},
+            {slotId: slotIdB, pos: 1},
         ]);
 
         const day1 = await AppDataSource.getRepository(ActivitySlot).find({
-            where: {planId: 'planR', day: '2025-01-01'},
+            where: {plan: {id: planId}, day: '2025-01-01'},
             order: {pos: 'ASC'}
         });
-        expect(day1.map(s => s.id)).toEqual(['b', 'a']); // swapped
+        expect(day1.map(s => s.id)).toEqual([slotIdB, slotIdA]); // swapped
 
-        const maxDay1 = await getLastActivitySlotNumber('planR', '2025-01-01');
-        const maxDay2 = await getLastActivitySlotNumber('planR', '2025-01-02');
+        const maxDay1 = await getLastActivitySlotNumber(planId, '2025-01-01');
+        const maxDay2 = await getLastActivitySlotNumber(planId, '2025-01-02');
         expect(maxDay1).toBe(2);
         expect(maxDay2).toBe(1);
     });
 
     test('deleteActivitySlot removes slot', async () => {
-        await createActivityPlan('planD', 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
-        await addActivitySlot('planD', {id: 'toDel', title: 'X', day: '2025-01-01', pos: 1, maxAssignees: 1});
-        await deleteActivitySlot('toDel');
-        const gone = await AppDataSource.getRepository(ActivitySlot).findOneBy({id: 'toDel'});
+        const planId = uuidv4()
+        const slotId = uuidv4()
+        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
+        await addActivitySlot(planId, {id: slotId, title: 'X', day: '2025-01-01', pos: 1, maxAssignees: 1});
+        await deleteActivitySlot(slotId);
+        const gone = await AppDataSource.getRepository(ActivitySlot).findOneBy({id: slotId});
         expect(gone).toBeNull();
     });
 
     test('ensureAssignment throws when slotId missing', async () => {
-        await expect(ensureAssignment('', 1, null)).rejects.toThrow('slotId is required');
+        await expect(ensureAssignment('', 1, undefined)).rejects.toThrow('slotId is required');
     });
 });
 
 describe('Assignment wrapper helpers + lookups', () => {
     test('assign/unassign for user and guest + slot assignment lookups', async () => {
-        await createActivityPlan('planW', 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
-        await addActivitySlot('planW', {id: 's1', title: 'S', day: '2025-01-01', pos: 1, maxAssignees: 2});
+        const planId = uuidv4()
+        const slotId = uuidv4()
+        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
+        await addActivitySlot(planId, {id: slotId, title: 'S', day: '2025-01-01', pos: 1, maxAssignees: 2});
 
         // Role setup
         await ensureRoleId('helper');
         await ensureRoleId('default');
 
         // User assignment via wrapper
-        await assignActivityAssignmentRoleToUser('s1', 1, 'helper');
-        let assignmentsU = await getActivitySlotAssignmentsForUser('planW', 1);
-        expect(assignmentsU).toEqual(['s1']);
+        await assignActivityAssignmentRoleToUser(slotId, 1, 'helper');
+        let assignmentsU = await getActivitySlotAssignmentsForUser(planId, 1);
+        expect(assignmentsU).toEqual([slotId]);
 
         const guest = AppDataSource.getRepository(Guest).create({id: 77, username: ""});
         await AppDataSource.getRepository(Guest).save(guest);
 
         // Guest assignment via wrapper
-        await assignActivityAssignmentRoleToGuest('s1', 77, 'default');
-        let assignmentsG = await getActivitySlotAssignmentsForGuest('planW', 77);
-        expect(assignmentsG).toEqual(['s1']);
+        await assignActivityAssignmentRoleToGuest(slotId, 77, 'default');
+        let assignmentsG = await getActivitySlotAssignmentsForGuest(planId, 77);
+        expect(assignmentsG).toEqual([slotId]);
 
         // Unassign user 'helper' -> assignment gets removed (no remaining roles)
-        await unassignActivityAssignmentRoleFromUser('s1', 1, 'helper');
-        assignmentsU = await getActivitySlotAssignmentsForUser('planW', 1);
+        await unassignActivityAssignmentRoleFromUser(slotId, 1, 'helper');
+        assignmentsU = await getActivitySlotAssignmentsForUser(planId, 1);
         expect(assignmentsU).toEqual([]);
 
         // Unassign guest 'default' -> assignment removed (special-case default)
-        await unassignActivityAssignmentRoleFromGuest('s1', 77, 'default');
-        assignmentsG = await getActivitySlotAssignmentsForGuest('planW', 77);
+        await unassignActivityAssignmentRoleFromGuest(slotId, 77, 'default');
+        assignmentsG = await getActivitySlotAssignmentsForGuest(planId, 77);
         expect(assignmentsG).toEqual([]);
     });
 });

@@ -15,7 +15,7 @@ export async function createDriversList(
     listId: string = generateUniqueId(),
 ): Promise<string> {
     const repo = AppDataSource.getRepository(DriversList);
-    const list = repo.create({id: listId, ownerId, title, description: desc, allowGuestAdd, guestManage});
+    const list = repo.create({id: listId, owner: {id: ownerId}, title, description: desc, allowGuestAdd, guestManage});
     await repo.save(list);
     return listId;
 }
@@ -33,7 +33,7 @@ export async function getDriversListById(listId: string): Promise<DriversList | 
 }
 
 export async function getDriversListByUserId(userId: number): Promise<DriversList[]> {
-    return await AppDataSource.getRepository(DriversList).find({where: {ownerId: userId}});
+    return await AppDataSource.getRepository(DriversList).find({where: {owner: {id: userId}}});
 }
 
 export async function updateDriversListAllow(listId: string, allow: boolean): Promise<void> {
@@ -53,14 +53,14 @@ export async function updateDriversListDescription(listId: string, description: 
 export async function createDriversItemUser(listId: string, userId: number, item: Partial<DriversItem>) {
     const repo = AppDataSource.getRepository(DriversItem);
     const list = await AppDataSource.getRepository(DriversList).findOneByOrFail({id: listId});
-    const entity = repo.create({...item, list, user: {id: userId}, guest: undefined});
+    const entity = repo.create({...item, list, user: {id: userId}});
     await repo.save(entity);
 }
 
 export async function createDriversItemGuest(listId: string, guestId: number, item: Partial<DriversItem>) {
     const repo = AppDataSource.getRepository(DriversItem);
     const list = await AppDataSource.getRepository(DriversList).findOneByOrFail({id: listId});
-    const entity = repo.create({...item, list, user: undefined, guest: {id: guestId}});
+    const entity = repo.create({...item, list, guest: {id: guestId}});
     await repo.save(entity);
 }
 
@@ -93,7 +93,7 @@ export async function getDriversItems(listId: string): Promise<EnrichedDriversIt
     const repo = AppDataSource.getRepository(DriversItem);
 
     const entities = await repo.find({
-        where: {list: {id: listId}},          // or: where: { listId }
+        where: {list: {id: listId}},
         relations: ['user', 'guest'],             // join user & guest
         loadRelationIds: {relations: ['driversAssignments']}, // get IDs, not full rows
         order: {pos: 'ASC'},
@@ -147,10 +147,10 @@ export async function getDriversAssignmentCounts(
 ): Promise<Record<string, number>> {
     const rows = await AppDataSource.getRepository(DriversAssignment)
         .createQueryBuilder("da")
-        .select("da.itemId", "itemId")
+        .select("da.item_id", "itemId")
         .addSelect("COUNT(*)", "cnt")
         .where("da.list = :listId", {listId})
-        .groupBy("da.itemId")
+        .groupBy("da.item_id")
         .getRawMany<{ itemId: string; cnt: string }>();
 
     return Object.fromEntries(rows.map(r => [r.itemId, Number(r.cnt)]));
@@ -158,7 +158,7 @@ export async function getDriversAssignmentCounts(
 
 
 export async function getLastDriversItemNumber(listId: string): Promise<number> {
-    return await AppDataSource.getRepository(DriversItem).maximum("pos", {listId}) ?? 0;
+    return await AppDataSource.getRepository(DriversItem).maximum("pos", {list: {id: listId}}) ?? 0;
 }
 
 // Assignments
@@ -177,14 +177,14 @@ export async function assignDriversItemToUser(
         list: {id: listId},
     });
 
-    const existing = await repo.findOneBy({itemId, userId});
+    const existing = await repo.findOneBy({item: {id: itemId}, user: {id: userId}});
     if (existing) {
         assignment.id = existing.id;
     }
 
     // if you want to ignore duplicates, use upsert with conflict paths
     await repo.upsert(assignment, {
-        conflictPaths: ["itemId", "userId", "listId"], // adjust to your unique constraint
+        conflictPaths: ["item", "user", "list"], // adjust to your unique constraint
         skipUpdateIfNoValuesChanged: true,
     });
 }
@@ -206,14 +206,14 @@ export async function assignDriversItemToGuest(itemId: string, guestId: number):
         list: {id: listId},
     });
 
-    const existing = await repo.findOneBy({itemId, guestId});
+    const existing = await repo.findOneBy({item: {id: itemId}, guest: {id: guestId}});
     if (existing) {
         assignment.id = existing.id;
     }
 
     // if you want to ignore duplicates, use upsert with conflict paths
     await repo.upsert(assignment, {
-        conflictPaths: ["itemId", "guestId", "listId"], // adjust to your unique constraint
+        conflictPaths: ["item", "guest", "list"], // adjust to your unique constraint
         skipUpdateIfNoValuesChanged: true,
     });
 }

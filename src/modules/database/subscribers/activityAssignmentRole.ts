@@ -1,8 +1,12 @@
-import {EntitySubscriberInterface, EventSubscriber, InsertEvent,} from "typeorm";
+import {EntitySubscriberInterface, EventSubscriber, InsertEvent} from "typeorm";
 import {ActivityAssignmentRole} from "../entities/activity/ActivityAssignmentRole";
 import {ActivityAssignment} from "../entities/activity/ActivityAssignment";
 import {ActivitySlotRole} from "../entities/activity/ActivitySlotRole";
 
+/**
+ * Enforces slot-role capacity before inserting ActivityAssignmentRole.
+ * Robust against RelationId fields not being present in beforeInsert.
+ */
 @EventSubscriber()
 export class ActivityAssignmentRolesSubscriber
     implements EntitySubscriberInterface<ActivityAssignmentRole> {
@@ -13,40 +17,51 @@ export class ActivityAssignmentRolesSubscriber
 
     async beforeInsert(event: InsertEvent<ActivityAssignmentRole>) {
         const {entity, manager} = event;
+        if (!entity) return;
 
-        // Step 1: Get slot_id from assignment
-        const assignment = await manager.findOne(ActivityAssignment, {
-            where: {id: entity.assignmentId},
-            select: ["slotId"],
-        });
+        // RelationId fields may be undefined in beforeInsert; fall back to relation object ids.
+        const assignmentId = entity.assignmentId ?? entity.assignment?.id;
+        const roleId = entity.roleId ?? entity.role?.id;
 
-        if (!assignment) {
-            throw new Error(`Assignment with ID ${entity.assignmentId} not found`);
+        if (!assignmentId) {
+            throw new Error("ActivityAssignmentRole.beforeInsert: missing assignmentId");
+        }
+        if (!roleId) {
+            throw new Error("ActivityAssignmentRole.beforeInsert: missing roleId");
         }
 
-        const slotId = assignment.slotId;
+        // Step 1: Fetch the assignment to obtain slot_id (flat query, no nested relations)
+        const assignment = await manager
+            .getRepository(ActivityAssignment)
+            .createQueryBuilder("aa")
+            .select(["aa.id", "aa.slot_id"])
+            .where("aa.id = :id", {id: assignmentId})
+            .getOne();
 
-        // Step 2: Get max_qty for the role in this slot
-        const slotRole = await manager.findOne(ActivitySlotRole, {
-            where: {
-                slotId: slotId,
-                roleId: entity.roleId,
-            },
-            select: ["maxQty"],
-        });
+        if (!assignment) {
+            throw new Error("Assignment not found");
+        }
 
-        // No cap means insert is allowed
-        if (!slotRole || slotRole.maxQty === null) return;
+        const slotId = (assignment as any).slot_id;
 
-        // Step 3: Count how many times this role is already assigned in the slot
+        // Step 2: Fetch slot-role capacity for this (slot, role); avoid nested relation in WHERE
+        const slotRole = await manager
+            .getRepository(ActivitySlotRole)
+            .createQueryBuilder("sr")
+            .select(["sr.id", "sr.max_qty"])
+            .where("sr.slot_id = :slotId AND sr.role_id = :roleId", {slotId, roleId})
+            .getOne();
+
+        // Step 3: Count how many times this role is already assigned in the same slot
         const currentCount = await manager
             .createQueryBuilder(ActivityAssignmentRole, "ar")
-            .innerJoin(ActivityAssignment, "aa", "aa.id = ar.assignmentId")
-            .where("aa.slotId = :slotId", {slotId})
-            .andWhere("ar.roleId = :roleId", {roleId: entity.roleId})
+            .innerJoin(ActivityAssignment, "aa", "aa.id = ar.assignment_id")
+            .where("aa.slot_id = :slotId", {slotId})
+            .andWhere("ar.role_id = :roleId", {roleId})
             .getCount();
 
-        if (currentCount >= slotRole.maxQty) {
+        // Only enforce when a slotRole row exists and max_qty is set
+        if (slotRole && slotRole.maxQty != null && currentCount >= slotRole.maxQty) {
             throw new Error("Role capacity reached for this slot");
         }
     }

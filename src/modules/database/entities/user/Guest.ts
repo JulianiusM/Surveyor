@@ -5,17 +5,18 @@ import {DriversItem} from "../drivers/DriversItem";
 import {GuestLink} from "./GuestLink";
 import {PackingAssignment} from "../packing/PackingAssignment";
 import {SurveyResponse} from "../surveys/SurveyResponse";
+import {EventRegistration} from "../event/EventRegistration";
 
 @Entity("guests", {schema: "surveyor"})
 export class Guest {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
-    id: number;
+    id!: number;
 
-    @Column("varchar", {name: "username", length: 100})
-    username: string;
+    @Column("varchar", {name: "username", length: 50})
+    username!: string;
 
     @Column("varchar", {name: "email", nullable: true, length: 100})
-    email: string | null;
+    email?: string | null;
 
     @Column("timestamp", {
         name: "created_at",
@@ -55,4 +56,7 @@ export class Guest {
 
     @OneToMany(() => SurveyResponse, (surveyResponses) => surveyResponses.guest)
     surveyResponses: SurveyResponse[];
+
+    @OneToMany(() => EventRegistration, (eventRegistration) => eventRegistration.guest)
+    eventRegistrations: EventRegistration[];
 }

@@ -1,22 +1,18 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
 import {SurveyCombination} from "./SurveyCombination";
 import {SurveyResponse} from "./SurveyResponse";
 import {User} from "../user/User";
 
-@Index("surveys_owner_id_user_id_fk", ["ownerId"], {})
 @Entity("surveys", {schema: "surveyor"})
 export class Survey {
     @PrimaryGeneratedColumn("uuid", {name: "id"})
-    id: string;
-
-    @Column("int", {name: "owner_id"})
-    ownerId: number;
+    id!: string;
 
     @Column("varchar", {name: "title", length: 255})
-    title: string;
+    title!: string;
 
     @Column("text", {name: "description", nullable: true})
-    description: string | null;
+    description?: string | null;
 
     @Column("timestamp", {
         name: "created_at",
@@ -34,15 +30,18 @@ export class Survey {
         () => SurveyCombination,
         (surveyCombinations) => surveyCombinations.survey
     )
-    surveyCombinations: SurveyCombination[];
+    surveyCombinations!: SurveyCombination[];
 
     @OneToMany(() => SurveyResponse, (surveyResponses) => surveyResponses.survey)
-    surveyResponses: SurveyResponse[];
+    surveyResponses!: SurveyResponse[];
+
+    @RelationId((a: Survey) => a.owner)
+    ownerId!: number;
 
     @ManyToOne(() => User, (users) => users.surveys, {
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "owner_id", referencedColumnName: "id"}])
-    owner: User;
+    owner!: User;
 }

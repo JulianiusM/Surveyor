@@ -1,15 +1,12 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId, Unique} from "typeorm";
 import {ActivityAssignment} from "./ActivityAssignment";
 import {Role} from "../user/Role";
 
-@Index("role_id", ["roleId"], {})
+@Unique("unique_act_ass_role_map", ["assignment", "role"])
 @Entity("activity_assignment_roles", {schema: "surveyor"})
 export class ActivityAssignmentRole {
-    @Column("int", {primary: true, name: "assignment_id"})
-    assignmentId: number;
-
-    @Column("smallint", {primary: true, name: "role_id"})
-    roleId: number;
+    @PrimaryGeneratedColumn({type: "int", name: "id"})
+    id!: number;
 
     @Column("timestamp", {
         name: "created_at",
@@ -25,18 +22,24 @@ export class ActivityAssignmentRole {
     })
     updatedAt: Date | null;
 
+    @RelationId((aa: ActivityAssignmentRole) => aa.assignment)
+    assignmentId!: number;
+
     @ManyToOne(
         () => ActivityAssignment,
         (activityAssignments) => activityAssignments.activityAssignmentRoles,
         {onDelete: "CASCADE", onUpdate: "CASCADE"}
     )
     @JoinColumn([{name: "assignment_id", referencedColumnName: "id"}])
-    assignment: ActivityAssignment;
+    assignment!: ActivityAssignment;
+
+    @RelationId((aa: ActivityAssignmentRole) => aa.role)
+    roleId!: number;
 
     @ManyToOne(() => Role, (roles) => roles.activityAssignmentRoles, {
         onDelete: "RESTRICT",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "role_id", referencedColumnName: "id"}])
-    role: Role;
+    role!: Role;
 }

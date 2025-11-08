@@ -1,36 +1,29 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
 import {DriversAssignment} from "./DriversAssignment";
 import {DriversItem} from "./DriversItem";
 import {User} from "../user/User";
 import {Event} from "../event/Event";
 
-@Index("owner_id", ["ownerId"], {})
 @Entity("drivers_lists", {schema: "surveyor"})
 export class DriversList {
     @PrimaryGeneratedColumn("uuid", {name: "id"})
-    id: string;
-
-    @Column("int", {name: "owner_id"})
-    ownerId: number;
+    id!: string;
 
     @Column("varchar", {name: "title", length: 255})
-    title: string;
+    title!: string;
 
     @Column("text", {name: "description", nullable: true})
     description?: string | null;
-
-    @Column('varchar', {name: 'event_id', length: 36, nullable: true})
-    eventId?: string | null;
 
     @Column("tinyint", {
         name: "allow_guest_add",
         width: 1,
         default: 0,
     })
-    allowGuestAdd: boolean;
+    allowGuestAdd!: boolean;
 
     @Column("tinyint", {name: "guest_manage", width: 1, default: 0})
-    guestManage: boolean;
+    guestManage!: boolean;
 
     @Column("timestamp", {
         name: "created_at",
@@ -54,17 +47,23 @@ export class DriversList {
     @OneToMany(() => DriversItem, (driversItems) => driversItems.list)
     driversItems: DriversItem[];
 
+    @RelationId((a: DriversList) => a.owner)
+    ownerId!: number;
+
     @ManyToOne(() => User, (users) => users.driversLists, {
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "owner_id", referencedColumnName: "id"}])
-    owner: User;
+    owner!: User;
+
+    @RelationId((a: DriversList) => a.event)
+    eventId?: string;
 
     @ManyToOne(() => Event, (event) => event.driversLists, {
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "event_id", referencedColumnName: "id"}])
-    event: Event;
+    event?: Event;
 }

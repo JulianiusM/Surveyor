@@ -1,30 +1,15 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn,} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId,} from "typeorm";
 import {Guest} from "../user/Guest";
 import {PackingItem} from "./PackingItem";
 import {PackingList} from "./PackingList";
 import {User} from "../user/User";
 
-@Index("fk_packing_ass_guest", ["guestId"], {})
-@Index("fk_packing_ass_list", ["listId"], {})
-@Index("fk_packing_ass_user", ["userId"], {})
-@Index("uk_packing_assignment_guest", ["itemId", "guestId"], {unique: true})
-@Index("uk_packing_assignment_user", ["itemId", "userId"], {unique: true})
+@Index("uk_packing_assignment_guest", ["item", "guest"], {unique: true})
+@Index("uk_packing_assignment_user", ["item", "user"], {unique: true})
 @Entity("packing_assignments", {schema: "surveyor"})
 export class PackingAssignment {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
-    id: number;
-
-    @Column("int", {name: "user_id", nullable: true})
-    userId: number | null;
-
-    @Column("int", {name: "guest_id", nullable: true})
-    guestId: number | null;
-
-    @Column("varchar", {name: "list_id", length: 36})
-    listId: string;
-
-    @Column("varchar", {name: "item_id", length: 36})
-    itemId: string;
+    id!: number;
 
     @Column("timestamp", {
         name: "created_at",
@@ -38,19 +23,28 @@ export class PackingAssignment {
     })
     updatedAt: Date;
 
+    @RelationId((a: PackingAssignment) => a.user)
+    userId?: number;
+
     @ManyToOne(() => User, (users) => users.packingAssignments, {
         onDelete: "CASCADE",
         onUpdate: "RESTRICT",
     })
     @JoinColumn([{name: "user_id", referencedColumnName: "id"}])
-    user: User;
+    user?: User;
+
+    @RelationId((a: PackingAssignment) => a.guest)
+    guestId?: number;
 
     @ManyToOne(() => Guest, (guests) => guests.packingAssignments, {
         onDelete: "CASCADE",
         onUpdate: "RESTRICT",
     })
     @JoinColumn([{name: "guest_id", referencedColumnName: "id"}])
-    guest: Guest;
+    guest?: Guest;
+
+    @RelationId((a: PackingAssignment) => a.item)
+    itemId!: string;
 
     @ManyToOne(
         () => PackingItem,
@@ -58,7 +52,10 @@ export class PackingAssignment {
         {onDelete: "CASCADE", onUpdate: "CASCADE"}
     )
     @JoinColumn([{name: "item_id", referencedColumnName: "id"}])
-    item: PackingItem;
+    item!: PackingItem;
+
+    @RelationId((a: PackingAssignment) => a.list)
+    listId!: string;
 
     @ManyToOne(
         () => PackingList,
@@ -66,5 +63,5 @@ export class PackingAssignment {
         {onDelete: "CASCADE", onUpdate: "RESTRICT"}
     )
     @JoinColumn([{name: "list_id", referencedColumnName: "id"}])
-    list: PackingList;
+    list!: PackingList;
 }

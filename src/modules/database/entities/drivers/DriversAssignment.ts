@@ -1,30 +1,15 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn,} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId,} from "typeorm";
 import {User} from "../user/User";
 import {Guest} from "../user/Guest";
 import {DriversItem} from "./DriversItem";
 import {DriversList} from "./DriversList";
 
-@Index("guest_id", ["guestId"], {})
-@Index("list_id", ["listId"], {})
-@Index("uk_driver_assignment_guest", ["itemId", "guestId"], {unique: true})
-@Index("uk_driver_assignment_user", ["itemId", "userId"], {unique: true})
-@Index("user_id", ["userId"], {})
+@Index("uk_driver_assignment_guest", ["item", "guest"], {unique: true})
+@Index("uk_driver_assignment_user", ["item", "user"], {unique: true})
 @Entity("drivers_assignments", {schema: "surveyor"})
 export class DriversAssignment {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
-    id: number;
-
-    @Column("int", {name: "user_id", nullable: true})
-    userId: number | null;
-
-    @Column("int", {name: "guest_id", nullable: true})
-    guestId: number | null;
-
-    @Column("varchar", {name: "list_id", length: 36})
-    listId: string;
-
-    @Column("varchar", {name: "item_id", length: 36})
-    itemId: string;
+    id!: number;
 
     @Column("timestamp", {
         name: "created_at",
@@ -38,19 +23,28 @@ export class DriversAssignment {
     })
     updatedAt: Date;
 
+    @RelationId((a: DriversAssignment) => a.user)
+    userId?: number;
+
     @ManyToOne(() => User, (users) => users.driversAssignments, {
         onDelete: "CASCADE",
         onUpdate: "RESTRICT",
     })
     @JoinColumn([{name: "user_id", referencedColumnName: "id"}])
-    user: User;
+    user?: User;
+
+    @RelationId((a: DriversAssignment) => a.guest)
+    guestId?: number;
 
     @ManyToOne(() => Guest, (guests) => guests.driversAssignments, {
         onDelete: "CASCADE",
         onUpdate: "RESTRICT",
     })
     @JoinColumn([{name: "guest_id", referencedColumnName: "id"}])
-    guest: Guest;
+    guest?: Guest;
+
+    @RelationId((a: DriversAssignment) => a.item)
+    itemId!: string;
 
     @ManyToOne(
         () => DriversItem,
@@ -58,7 +52,10 @@ export class DriversAssignment {
         {onDelete: "CASCADE", onUpdate: "CASCADE"}
     )
     @JoinColumn([{name: "item_id", referencedColumnName: "id"}])
-    item: DriversItem;
+    item!: DriversItem;
+
+    @RelationId((a: DriversAssignment) => a.list)
+    listId!: string;
 
     @ManyToOne(
         () => DriversList,
@@ -66,5 +63,5 @@ export class DriversAssignment {
         {onDelete: "CASCADE", onUpdate: "CASCADE"}
     )
     @JoinColumn([{name: "list_id", referencedColumnName: "id"}])
-    list: DriversList;
+    list!: DriversList;
 }

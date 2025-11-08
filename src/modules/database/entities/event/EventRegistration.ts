@@ -1,23 +1,14 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId} from "typeorm";
 import {Event} from "./Event";
 import {User} from "../user/User";
 import {Guest} from "../user/Guest";
 import {EventRegistrationDietary} from "./EventRegistrationDietary";
 
 @Entity("event_registrations", {schema: "surveyor"})
-@Index("uk_event_participant", ["eventId", "userId", "guestId"], {unique: true})
+@Index("uk_event_participant", ["event", "user", "guest"], {unique: true})
 export class EventRegistration {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
     id!: number;
-
-    @Column("varchar", {name: "event_id", length: 36})
-    eventId!: string;
-
-    @Column("int", {name: "user_id", nullable: true})
-    userId?: number | null;
-
-    @Column("int", {name: "guest_id", nullable: true})
-    guestId?: number | null;
 
     @Column("date", {name: "arrival_date"})
     arrivalDate!: string;
@@ -32,11 +23,17 @@ export class EventRegistration {
     @JoinColumn([{name: "event_id", referencedColumnName: "id"}])
     event!: Event;
 
-    @ManyToOne(() => User, (u) => u.id, {onDelete: "CASCADE", onUpdate: "RESTRICT"})
+    @RelationId((a: EventRegistration) => a.user)
+    userId?: number;
+
+    @ManyToOne(() => User, (u) => u.eventRegistrations, {onDelete: "CASCADE", onUpdate: "RESTRICT"})
     @JoinColumn([{name: "user_id", referencedColumnName: "id"}])
     user?: User | null;
 
-    @ManyToOne(() => Guest, (g) => g.id, {onDelete: "CASCADE", onUpdate: "RESTRICT"})
+    @RelationId((a: EventRegistration) => a.guest)
+    guestId?: number;
+
+    @ManyToOne(() => Guest, (g) => g.eventRegistrations, {onDelete: "CASCADE", onUpdate: "RESTRICT"})
     @JoinColumn([{name: "guest_id", referencedColumnName: "id"}])
     guest?: Guest | null;
 

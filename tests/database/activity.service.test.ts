@@ -1,18 +1,4 @@
-export {}; // make module; avoid global collisions
-
-/**
- * Tests for ActivityService using the mysql (MariaDB/mysql2) DataSource mock.
- * Assumes you already have `tests/db/mariadb-datasource.mock.ts` and Jest configured to load envs.
- *
- * IMPORTANT:
- *  - We explicitly mock AppDataSource import used by the service, so both the test
- *    and ActivityService share the same instance.
- *  - Ensure mysql2 is installed and the test DB is reachable.
- */
-
-// Use the mysql/mariadb DataSource for the service
-jest.mock('../../src/modules/database/dataSource', () => require('../util/db/mariadb-datasource.mock'));
-
+import {v4 as uuidv4} from "uuid";
 import {
     addActivitySlot,
     addActivitySlotRoles,
@@ -40,6 +26,21 @@ import {ActivityAssignmentRole} from '../../src/modules/database/entities/activi
 import {ActivitySlotRole} from '../../src/modules/database/entities/activity/ActivitySlotRole';
 import {User} from '../../src/modules/database/entities/user/User';
 import {Guest} from '../../src/modules/database/entities/user/Guest';
+
+export {}; // make module; avoid global collisions
+
+/**
+ * Tests for ActivityService using the mysql (MariaDB/mysql2) DataSource mock.
+ * Assumes you already have `tests/db/mariadb-datasource.mock.ts` and Jest configured to load envs.
+ *
+ * IMPORTANT:
+ *  - We explicitly mock AppDataSource import used by the service, so both the test
+ *    and ActivityService share the same instance.
+ *  - Ensure mysql2 is installed and the test DB is reachable.
+ */
+
+// Use the mysql/mariadb DataSource for the service
+jest.mock('../../src/modules/database/dataSource', () => require('../util/db/mariadb-datasource.mock'));
 
 // Helper to clear relevant tables between tests (order matters due to FKs)
 async function truncateAll() {
@@ -92,17 +93,19 @@ describe('Roles and assignments', () => {
 
     test('ensureAssignment + assignRole + doUnassignRole lifecycle', async () => {
         // Create plan & slot
-        await createActivityPlan('planA', 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
-        await addActivitySlot('planA', {id: 'slot1', title: 'S1', day: '2025-01-01', pos: 1, maxAssignees: 5});
+        const planId = uuidv4()
+        const slotId = uuidv4()
+        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
+        await addActivitySlot(planId, {id: slotId, title: 'S1', day: '2025-01-01', pos: 1, maxAssignees: 5});
 
         // Create assignment for user 10
-        const assignId = await ensureAssignment('slot1', 1, null);
+        const assignId = await ensureAssignment(slotId, 1, undefined);
         const aBefore = await AppDataSource.getRepository(ActivityAssignment).findOneByOrFail({id: assignId});
-        expect(aBefore).toEqual(expect.objectContaining({slotId: 'slot1', planId: 'planA', userId: 1}));
+        expect(aBefore).toEqual(expect.objectContaining({slotId, planId, userId: 1}));
 
         // Assign default role
         await assignRole(assignId, 'default');
-        const aar = await AppDataSource.getRepository(ActivityAssignmentRole).findOneBy({assignmentId: assignId});
+        const aar = await AppDataSource.getRepository(ActivityAssignmentRole).findOneBy({assignment: {id: assignId}});
         expect(aar).toBeTruthy();
 
         // Unassign default -> should delete assignment (remaining 0 || roleName === 'default')
@@ -127,7 +130,7 @@ describe('createActivityPlanTx (with slots)', () => {
         expect(id).toMatch(uuidRegex);
         const plan = await AppDataSource.getRepository(ActivityPlan).findOneByOrFail({id});
         expect(plan).toEqual(expect.objectContaining({ownerId: 1, title: 'Title', description: 'Desc'}));
-        const slots = await AppDataSource.getRepository(ActivitySlot).find({where: {planId: id}});
+        const slots = await AppDataSource.getRepository(ActivitySlot).find({where: {plan: {id}}});
         for (let slot of slots) {
             expect(slot.id).toMatch(uuidRegex);
         }
@@ -137,8 +140,10 @@ describe('createActivityPlanTx (with slots)', () => {
 describe('Aggregates and lookups', () => {
     test('getActivitySlotAssignees returns map with assignee name and roles', async () => {
         // Setup: plan, user, role, slot, assignment, assignment role
-        await createActivityPlan('planC', 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
-        await addActivitySlot('planC', {id: 'slot1', title: 'S1', day: '2025-01-01', pos: 1, maxAssignees: 5});
+        const planId = uuidv4()
+        const slotId = uuidv4()
+        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
+        await addActivitySlot(planId, {id: slotId, title: 'S1', day: '2025-01-01', pos: 1, maxAssignees: 5});
 
         const user = await AppDataSource.getRepository(User).save(AppDataSource.getRepository(User).create({
             username: 'U1',
@@ -148,13 +153,13 @@ describe('Aggregates and lookups', () => {
         await ensureRoleId('lead');
 
         // Create assignment directly
-        const assignId = await ensureAssignment('slot1', user.id, null);
+        const assignId = await ensureAssignment(slotId, user.id, undefined);
         await assignRole(assignId, 'lead');
 
-        const map = await getActivitySlotAssignees('planC');
-        expect(Object.keys(map)).toEqual(['slot1']);
-        expect(map['slot1']).toHaveLength(1);
-        const entry = map['slot1'][0];
+        const map = await getActivitySlotAssignees(planId);
+        expect(Object.keys(map)).toEqual([slotId]);
+        expect(map[slotId]).toHaveLength(1);
+        const entry = map[slotId][0];
         expect(entry).toEqual(expect.objectContaining({
             id: assignId,
             user_id: user.id,
@@ -165,10 +170,13 @@ describe('Aggregates and lookups', () => {
     });
 
     test('getActivityPlanParticipants aggregates distinct assignments and roles per name', async () => {
-        await createActivityPlan('planP', 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
-        await addActivitySlots('planP', [
-            {id: 'sa', title: 'A', day: '2025-01-01', pos: 1, maxAssignees: 1},
-            {id: 'sb', title: 'B', day: '2025-01-01', pos: 2, maxAssignees: 1},
+        const planId = uuidv4()
+        const slotIdA = uuidv4()
+        const slotIdB = uuidv4()
+        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
+        await addActivitySlots(planId, [
+            {id: slotIdA, title: 'A', day: '2025-01-01', pos: 1, maxAssignees: 1},
+            {id: slotIdB, title: 'B', day: '2025-01-01', pos: 2, maxAssignees: 1},
         ]);
 
         const user = await AppDataSource.getRepository(User).save(AppDataSource.getRepository(User).create({
@@ -179,12 +187,12 @@ describe('Aggregates and lookups', () => {
         await ensureRoleId('lead');
         await ensureRoleId('helper');
 
-        const a1 = await ensureAssignment('sa', user.id, null);
+        const a1 = await ensureAssignment(slotIdA, user.id, undefined);
         await assignRole(a1, 'lead');
-        const a2 = await ensureAssignment('sb', user.id, null);
+        const a2 = await ensureAssignment(slotIdB, user.id, undefined);
         await assignRole(a2, 'helper');
 
-        const rows = await getActivityPlanParticipants('planP');
+        const rows = await getActivityPlanParticipants(planId);
         expect(rows).toHaveLength(1);
         expect(rows[0].name).toBe('alice');
         expect(rows[0].count).toBe(2);
@@ -192,25 +200,29 @@ describe('Aggregates and lookups', () => {
     });
 
     test('addActivitySlotRoles + getActivitySlotRoles maps slot->roles', async () => {
-        await createActivityPlan('planR', 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
-        await addActivitySlot('planR', {id: 's1', title: 'S', day: '2025-01-01', pos: 1, maxAssignees: 2});
+        const planId = uuidv4()
+        const slotId = uuidv4()
+        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
+        await addActivitySlot(planId, {id: slotId, title: 'S', day: '2025-01-01', pos: 1, maxAssignees: 2});
 
         const r1 = await ensureRoleId('helper');
         const r2 = await ensureRoleId('lead');
 
-        await addActivitySlotRoles('s1', [r1, r2]);
+        await addActivitySlotRoles(slotId, [r1, r2]);
 
-        const map = await getActivitySlotRoles('planR');
-        expect(Object.keys(map)).toEqual(['s1']);
-        const names = map['s1'].map(r => r.name).sort();
+        const map = await getActivitySlotRoles(planId);
+        expect(Object.keys(map)).toEqual([slotId]);
+        const names = map[slotId].map(r => r.name).sort();
         expect(names).toEqual(['helper', 'lead']);
     });
 
     test('deleteActivitySlotAssignment removes assignment', async () => {
-        await createActivityPlan('planD', 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
-        await addActivitySlot('planD', {id: 'slotX', title: 'X', day: '2025-01-01', pos: 1, maxAssignees: 1});
+        const planId = uuidv4()
+        const slotId = uuidv4()
+        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
+        await addActivitySlot(planId, {id: slotId, title: 'X', day: '2025-01-01', pos: 1, maxAssignees: 1});
 
-        const id = await ensureAssignment('slotX', 1, null);
+        const id = await ensureAssignment(slotId, 1, undefined);
         const before = await AppDataSource.getRepository(ActivityAssignment).findOneBy({id});
         expect(before).toBeTruthy();
 

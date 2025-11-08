@@ -1,38 +1,34 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
 import {PackingAssignment} from "./PackingAssignment";
 import {PackingList} from "./PackingList";
 
-@Index("fk_packing_items_list", ["listId"], {})
 @Entity("packing_items", {schema: "surveyor"})
 export class PackingItem {
     @PrimaryGeneratedColumn("uuid", {name: "id"})
-    id: string;
-
-    @Column("varchar", {name: "list_id", length: 36})
-    listId: string;
+    id!: string;
 
     @Column("varchar", {name: "title", length: 255})
-    title: string;
+    title!: string;
 
     @Column("varchar", {name: "description", nullable: true, length: 255})
-    description: string | null;
+    description!: string | null;
 
     @Column("int", {
         name: "max_assignees",
         nullable: true,
         default: 1,
     })
-    maxAssignees: number | null;
+    maxAssignees?: number | null;
 
     @Column("tinyint", {
         name: "required_by_all",
         width: 1,
         default: 0,
     })
-    requiredByAll: boolean;
+    requiredByAll!: boolean;
 
     @Column("int", {name: "pos", default: 0})
-    pos: number;
+    pos!: number;
 
     @Column("timestamp", {
         name: "created_at",
@@ -50,12 +46,15 @@ export class PackingItem {
         () => PackingAssignment,
         (packingAssignments) => packingAssignments.item
     )
-    packingAssignments: PackingAssignment[];
+    packingAssignments!: PackingAssignment[];
+
+    @RelationId((p: PackingItem) => p.list)
+    listId!: string;
 
     @ManyToOne(() => PackingList, (packingLists) => packingLists.packingItems, {
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "list_id", referencedColumnName: "id"}])
-    list: PackingList;
+    list!: PackingList;
 }

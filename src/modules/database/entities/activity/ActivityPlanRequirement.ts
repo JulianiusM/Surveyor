@@ -1,28 +1,28 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId} from "typeorm";
 import {Role} from "../user/Role";
 import {ActivityPlan} from "./ActivityPlan";
 
 @Entity("activity_plan_requirements", {schema: "surveyor"})
-@Index("uk_plan_role", ["planId", "role"], {unique: true})
+@Index("uk_plan_role", ["plan", "role"], {unique: true})
 export class ActivityPlanRequirement {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
     id!: number;
 
-    @Column("varchar", {name: "plan_id", length: 36})
-    planId: string;
-
-    @Column("smallint", {primary: true, name: "role_id"})
-    roleId: number;
-
     @Column("smallint", {name: "required_shifts"})
     requiredShifts!: number;
+
+    @RelationId((a: ActivityPlanRequirement) => a.role)
+    roleId!: string;
 
     @ManyToOne(() => Role, (roles) => roles.activitySlotRoles, {
         onDelete: "RESTRICT",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "role_id", referencedColumnName: "id"}])
-    role: Role;
+    role!: Role;
+
+    @RelationId((a: ActivityPlanRequirement) => a.plan)
+    planId!: string;
 
     @ManyToOne(
         () => ActivityPlan,
@@ -30,5 +30,5 @@ export class ActivityPlanRequirement {
         {onDelete: "CASCADE", onUpdate: "NO ACTION"}
     )
     @JoinColumn([{name: "plan_id", referencedColumnName: "id"}])
-    plan: ActivityPlan;
+    plan!: ActivityPlan;
 }

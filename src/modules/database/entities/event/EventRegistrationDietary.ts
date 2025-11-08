@@ -6,7 +6,8 @@ import {
     Index,
     JoinColumn,
     ManyToOne,
-    PrimaryGeneratedColumn
+    PrimaryGeneratedColumn,
+    RelationId
 } from "typeorm";
 import {EventRegistration} from "./EventRegistration";
 import type {DIETARY} from "../../../../types/EventTypes";
@@ -14,13 +15,10 @@ import type {DIETARY} from "../../../../types/EventTypes";
 const ALLOWED_DIETARY: DIETARY[] = ["MEAT", "FISH", "VEGETARIAN", "VEGAN", "HALAL", "KOSHER", "ALLERGIES"];
 
 @Entity("event_registration_dietary", {schema: "surveyor"})
-@Index("uk_registration_choice", ["registrationId", "choice"], {unique: true})
+@Index("uk_registration_choice", ["registration", "choice"], {unique: true})
 export class EventRegistrationDietary {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
     id!: number;
-
-    @Column("int", {name: "registration_id"})
-    registrationId!: number;
 
     @Column("simple-enum", {
         name: "choice",
@@ -30,6 +28,9 @@ export class EventRegistrationDietary {
 
     @Column("varchar", {name: "additional_info", nullable: true, length: 255})
     additionalInfo?: string | null;
+
+    @RelationId((a: EventRegistrationDietary) => a.registration)
+    registrationId!: number;
 
     @ManyToOne(() => EventRegistration, r => r.dietaryChoices, {onDelete: "CASCADE"})
     @JoinColumn([{name: "registration_id", referencedColumnName: "id"}])

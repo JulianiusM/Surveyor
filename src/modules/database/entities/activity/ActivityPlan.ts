@@ -1,40 +1,36 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
 import {ActivityAssignment} from "./ActivityAssignment";
 import {User} from "../user/User";
 import {ActivitySlot} from "./ActivitySlot";
 import {ActivityPlanRequirement} from "./ActivityPlanRequirement";
 import {Event} from "../event/Event";
 
-@Index("owner_id", ["ownerId"], {})
 @Entity("activity_plans", {schema: "surveyor"})
 export class ActivityPlan {
     @PrimaryGeneratedColumn("uuid", {name: "id"})
-    id: string;
-
-    @Column("int", {name: "owner_id"})
-    ownerId: number;
+    id!: string;
 
     @Column("varchar", {name: "title", length: 255})
-    title: string;
+    title!: string;
 
     @Column("text", {name: "description", nullable: true})
-    description: string | null;
+    description?: string | null;
 
     @Column("date", {name: "start_date"})
-    startDate: string;
+    startDate!: string;
 
     @Column("date", {name: "end_date"})
-    endDate: string;
+    endDate!: string;
 
     @Column("tinyint", {
         name: "allow_guest_add",
         width: 1,
         default: () => "'0'",
     })
-    allowGuestAdd: boolean;
+    allowGuestAdd!: boolean;
 
     @Column("tinyint", {name: "guest_manage", width: 1, default: () => "'0'"})
-    guestManage: boolean;
+    guestManage!: boolean;
 
     @Column('simple-enum', {name: 'assignment_mode', enum: ['FREE', 'REQUIRED'], default: 'FREE'})
     assignmentMode!: 'FREE' | 'REQUIRED';
@@ -47,9 +43,6 @@ export class ActivityPlan {
 
     @Column('simple-enum', {name: 'rounding_mode', enum: ['CEIL', 'ROUND', 'FLOOR'], nullable: true})
     roundingMode?: 'CEIL' | 'ROUND' | 'FLOOR' | null;
-
-    @Column('varchar', {name: 'event_id', length: 36, nullable: true})
-    eventId?: string | null;
 
     @Column("timestamp", {name: "binding_deadline", nullable: true})
     bindingDeadline?: Date | null;
@@ -74,19 +67,25 @@ export class ActivityPlan {
     )
     activityAssignments: ActivityAssignment[];
 
+    @RelationId((a: ActivityPlan) => a.owner)
+    ownerId!: number;
+
     @ManyToOne(() => User, (users) => users.activityPlans, {
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "owner_id", referencedColumnName: "id"}])
-    owner: User;
+    owner!: User;
+
+    @RelationId((a: ActivityPlan) => a.event)
+    eventId?: string;
 
     @ManyToOne(() => Event, (event) => event.activityPlans, {
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "event_id", referencedColumnName: "id"}])
-    event: Event;
+    event?: Event;
 
     @OneToMany(() => ActivitySlot, (activitySlots) => activitySlots.plan)
     activitySlots: ActivitySlot[];

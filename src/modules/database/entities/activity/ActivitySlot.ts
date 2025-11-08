@@ -1,25 +1,21 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
 import {ActivityAssignment} from "./ActivityAssignment";
 import {ActivitySlotRole} from "./ActivitySlotRole";
 import {ActivityPlan} from "./ActivityPlan";
 
-@Index("plan_id", ["planId"], {})
 @Entity("activity_slots", {schema: "surveyor"})
 export class ActivitySlot {
     @PrimaryGeneratedColumn("uuid", {name: "id"})
-    id: string;
-
-    @Column("varchar", {name: "plan_id", length: 36})
-    planId: string;
+    id!: string;
 
     @Column("date", {name: "day"})
-    day: string;
+    day!: string;
 
     @Column("int", {name: "pos", default: 0})
-    pos: number;
+    pos!: number;
 
     @Column("varchar", {name: "title", length: 255})
-    title: string;
+    title!: string;
 
     @Column("text", {name: "description", nullable: true})
     description?: string | null;
@@ -63,11 +59,14 @@ export class ActivitySlot {
     )
     activitySlotRoles: ActivitySlotRole[];
 
+    @RelationId((slot: ActivitySlot) => slot.plan)
+    planId!: string;
+
     @ManyToOne(
         () => ActivityPlan,
         (activityPlans) => activityPlans.activitySlots,
         {onDelete: "CASCADE", onUpdate: "NO ACTION"}
     )
     @JoinColumn([{name: "plan_id", referencedColumnName: "id"}])
-    plan: ActivityPlan;
+    plan!: ActivityPlan;
 }

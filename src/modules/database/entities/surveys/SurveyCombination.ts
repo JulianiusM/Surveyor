@@ -1,19 +1,15 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
 import {Survey} from "./Survey";
 import {SurveyResponse} from "./SurveyResponse";
 import type {WeekDay, WeekInMonth} from "../../../../types/SurveyTypes";
 
-@Index("combinations_single_entry", ["weekday", "surveyId", "nthWeek"], {
+@Index("combinations_single_entry", ["weekday", "survey", "nthWeek"], {
     unique: true,
 })
-@Index("combinations_surveys_id_fk", ["surveyId"], {})
 @Entity("survey_combinations", {schema: "surveyor"})
 export class SurveyCombination {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
     id: number;
-
-    @Column("varchar", {name: "survey_id", length: 36})
-    surveyId: string;
 
     @Column("simple-enum", {
         name: "WEEKDAY",
@@ -36,16 +32,19 @@ export class SurveyCombination {
     })
     updatedAt: Date;
 
+    @RelationId((c: SurveyCombination) => c.survey)
+    surveyId!: string;
+
     @ManyToOne(() => Survey, (surveys) => surveys.surveyCombinations, {
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "survey_id", referencedColumnName: "id"}])
-    survey: Survey;
+    survey!: Survey;
 
     @OneToMany(
         () => SurveyResponse,
         (surveyResponses) => surveyResponses.combination
     )
-    surveyResponses: SurveyResponse[];
+    surveyResponses!: SurveyResponse[];
 }

@@ -7,6 +7,7 @@ import {Role} from "../entities/user/Role";
 import {generateUniqueId} from "../../lib/util";
 import {ActivitySlotRole} from "../entities/activity/ActivitySlotRole";
 import type {PlanParticipant, PlanParticipantRow, SlotAssignmentMap} from "../../../types/ActivityTypes";
+import {ensureOneByObjectsAuthed} from "../utils/relation-upsert";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Role & Assignment helpers
@@ -27,8 +28,8 @@ export async function ensureRoleId(roleName = "default"): Promise<number> {
 
 export async function ensureAssignment(
     slotId: string,
-    userId: number | null = null,
-    guestId: number | null = null
+    userId?: number | null,
+    guestId?: number | null
 ): Promise<number> {
     if (!slotId) throw new Error("slotId is required");
 
@@ -36,34 +37,34 @@ export async function ensureAssignment(
     const planId = (
         await AppDataSource.getRepository(ActivitySlot).findOneOrFail({
             where: {id: slotId},
-            select: ["planId"],
+            relations: {plan: true},
+            select: {id: true, plan: {id: true}},
         })
-    ).planId;
+    ).plan.id;
 
-    const where = {
-        slotId,
-        planId,
-        userId: userId ?? undefined,
-        guestId: guestId ?? undefined,
-    };
+    const entity = await ensureOneByObjectsAuthed(repo, {
+        relations: {slot: slotId, plan: planId},
+        // no extra scalar columns in this case
+        party: {
+            user: userId,
+            guest: guestId,
+        },
+    });
 
-    let assignment = await repo.findOne({where});
-
-    if (!assignment) {
-        assignment = repo.create(where);
-        await repo.save(assignment);
-    }
-
-    return assignment.id;
+    return entity.id;
 }
 
 export async function assignRole(assignmentId: number, roleName: string) {
     const roleId = await ensureRoleId(roleName);
     const repo = AppDataSource.getRepository(ActivityAssignmentRole);
 
-    const exists = await repo.findOne({where: {assignmentId, roleId}});
+    const exists = await repo
+        .createQueryBuilder('aar')
+        .where('aar.assignment_id = :aid AND aar.role_id = :rid', {aid: assignmentId, rid: roleId})
+        .getExists();
+
     if (!exists) {
-        const role = repo.create({assignmentId, roleId});
+        const role = repo.create({assignment: {id: assignmentId}, role: {id: roleId}});
         await repo.save(role);
     }
 }
@@ -75,9 +76,9 @@ export async function doUnassignRole(assignmentId: number, roleName: string) {
     if (!role) return false;
 
     const aarRepo = AppDataSource.getRepository(ActivityAssignmentRole);
-    await aarRepo.delete({assignmentId, roleId: role.id});
+    await aarRepo.delete({assignment: {id: assignmentId}, role: {id: role.id}});
 
-    const remaining = await aarRepo.count({where: {assignmentId}});
+    const remaining = await aarRepo.count({where: {assignment: {id: assignmentId}}});
 
     if (remaining === 0 || roleName === "default") {
         await AppDataSource.getRepository(ActivityAssignment).delete(assignmentId);
@@ -104,14 +105,14 @@ export async function createActivityPlan(
     const repo = AppDataSource.getRepository(ActivityPlan);
     const plan = repo.create({
         id,
-        ownerId,
+        owner: {id: ownerId},
         title,
         description: desc,
         startDate,
         endDate,
         allowGuestAdd,
         guestManage,
-        eventId,
+        ...(eventId !== undefined ? {event: {id: eventId}} : {}),
     });
     await repo.save(plan);
 }
@@ -134,21 +135,21 @@ export async function createActivityPlanTx(
 
         await planRepo.insert({
             id,
-            ownerId,
+            owner: {id: ownerId},
             title,
             description: desc,
             startDate,
             endDate,
             allowGuestAdd,
             guestManage,
-            eventId,
+            ...(eventId !== undefined ? {event: {id: eventId}} : {}),
         });
 
         if (slots.length) {
             const slotEntities = slots.map((s) =>
                 slotRepo.create({
                     id: generateUniqueId(),
-                    planId: id,
+                    plan: {id},
                     title: s.title,
                     description: s.description,
                     day: s.day,
@@ -187,8 +188,8 @@ export async function updateActivityPlanFlags(
 
 export async function getActivityPlansByUserId(userId: number) {
     return await AppDataSource.getRepository(ActivityPlan).find({
-        where: {ownerId: userId},
-        relations: ['event'],
+        where: {owner: {id: userId}},
+        relations: ['event', 'owner'],
     });
 }
 
@@ -207,7 +208,7 @@ export async function addActivitySlot(planId: string, slot: Partial<ActivitySlot
     const repo = AppDataSource.getRepository(ActivitySlot);
     const slotEntity = repo.create({
         id: slot.id,
-        planId,
+        plan: {id: planId},
         title: slot.title,
         description: slot.description,
         day: slot.day,
@@ -222,7 +223,7 @@ export async function addActivitySlots(planId: string, slots: Partial<ActivitySl
     const slotEntities = slots.map((s) =>
         repo.create({
             id: s.id,
-            planId,
+            plan: {id: planId},
             title: s.title,
             description: s.description,
             day: s.day,
@@ -243,9 +244,9 @@ export async function getActivitySlots(planId: string) {
             "s.assignedCount",
             "s.activityAssignments",
             "a",
-            (qb) => qb.where("a.planId = :planId", {planId})
+            (qb) => qb.where("a.plan_id = :planId", {planId})
         )
-        .where("s.planId = :planId", {planId})
+        .where("s.plan_id = :planId", {planId})
         .orderBy("s.pos", "ASC")
         .getMany(); // entities now have s.assignedCount
 
@@ -282,13 +283,13 @@ export async function reorderActivitySlots(planId: string, order: { slotId: stri
     const repo = AppDataSource.getRepository(ActivitySlot);
     await Promise.all(
         order.map((o) =>
-            repo.update({id: o.slotId, planId}, {pos: o.pos})
+            repo.update({id: o.slotId, plan: {id: planId},}, {pos: o.pos})
         )
     );
 }
 
 export async function getLastActivitySlotNumber(planId: string, date: string) {
-    return await AppDataSource.getRepository(ActivitySlot).maximum("pos", {planId, day: date}) ?? 0;
+    return await AppDataSource.getRepository(ActivitySlot).maximum("pos", {plan: {id: planId}, day: date}) ?? 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -300,7 +301,7 @@ export async function assignActivityAssignmentRoleToUser(
     userId: number,
     roleName = "default"
 ) {
-    const assignmentId = await ensureAssignment(slotId, userId, null);
+    const assignmentId = await ensureAssignment(slotId, userId, undefined);
     await assignRole(assignmentId, roleName);
 }
 
@@ -309,7 +310,7 @@ export async function assignActivityAssignmentRoleToGuest(
     guestId: number,
     roleName = "default"
 ) {
-    const assignmentId = await ensureAssignment(slotId, null, guestId);
+    const assignmentId = await ensureAssignment(slotId, undefined, guestId);
     await assignRole(assignmentId, roleName);
 }
 
@@ -319,7 +320,7 @@ export async function unassignActivityAssignmentRoleFromUser(
     roleName = "default"
 ) {
     const assignment = await AppDataSource.getRepository(ActivityAssignment).findOne({
-        where: {slotId, userId},
+        where: {slot: {id: slotId}, user: {id: userId}},
     });
 
     if (assignment) {
@@ -333,7 +334,7 @@ export async function unassignActivityAssignmentRoleFromGuest(
     roleName = "default"
 ) {
     const assignment = await AppDataSource.getRepository(ActivityAssignment).findOne({
-        where: {slotId, guestId},
+        where: {slot: {id: slotId}, guest: {id: guestId}},
     });
 
     if (assignment) {
@@ -352,20 +353,22 @@ export const unassignActivitySlotGuest = unassignActivityAssignmentRoleFromGuest
 
 export async function getActivitySlotAssignmentsForUser(planId: string, userId: number) {
     const assignments = await AppDataSource.getRepository(ActivityAssignment).find({
-        select: ["slotId"],
-        where: {planId, userId}
+        select: ["slot"],
+        where: {plan: {id: planId}, user: {id: userId}},
+        relations: ["slot"]
     });
 
-    return assignments.map(a => a.slotId);
+    return assignments.map(a => a.slot.id);
 }
 
 export async function getActivitySlotAssignmentsForGuest(planId: string, guestId: number) {
     const assignments = await AppDataSource.getRepository(ActivityAssignment).find({
-        select: ["slotId"],
-        where: {planId, guestId}
+        select: ["slot"],
+        where: {plan: {id: planId}, guest: {id: guestId}},
+        relations: ["slot"]
     });
 
-    return assignments.map(a => a.slotId);
+    return assignments.map(a => a.slot.id);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -375,20 +378,21 @@ export async function getActivitySlotAssignmentsForGuest(planId: string, guestId
 export async function getActivitySlotAssignees(planId: string): Promise<SlotAssignmentMap> {
     const repo = AppDataSource.getRepository(ActivityAssignment);
 
-    // fetch assignments + needed relations
-    const assignments = await repo.find({
-        where: {planId},
-        relations: {
-            user: true,
-            guest: true,
-            activityAssignmentRoles: {role: true},
-        },
-    });
+    // Use QueryBuilder to avoid DISTINCT alias issues in MySQL/MariaDB when loading nested relations.
+    const assignments = await AppDataSource.getRepository(ActivityAssignment)
+        .createQueryBuilder('aa')
+        .innerJoinAndSelect('aa.slot', 'slot')
+        .leftJoinAndSelect('aa.user', 'user')
+        .leftJoinAndSelect('aa.guest', 'guest')
+        .leftJoinAndSelect('aa.activityAssignmentRoles', 'aar')
+        .leftJoinAndSelect('aar.role', 'role')
+        .where('aa.plan_id = :planId', {planId})
+        .getMany();
 
     const map: SlotAssignmentMap = {};
 
     for (const assignment of assignments) {
-        const slotId = assignment.slotId; // assuming slotId is scalar field on ActivityAssignment
+        const slotId = assignment.slot.id;
 
         const name =
             assignment.user?.username ??
@@ -422,7 +426,7 @@ export async function getActivityPlanParticipants(planId: string): Promise<PlanP
         .leftJoin("aa.guest", "guest")
         .leftJoin("aa.activityAssignmentRoles", "ar")
         .leftJoin("ar.role", "role")
-        .where("aa.planId = :planId", {planId})
+        .where("aa.plan_id = :planId", {planId})
         .select([
             `COALESCE(user.username, guest.username) AS name`,
             `COUNT(DISTINCT aa.id) AS count`,
@@ -444,26 +448,23 @@ export async function deleteActivitySlotAssignment(assignId: number) {
 }
 
 export async function getActivitySlotRoles(planId: string) {
-    const repo = AppDataSource.getRepository(ActivitySlotRole);
+    // Avoid TypeORM's DISTINCT subquery on MySQL/MariaDB that can mis-alias primary keys
+    // when using Repository.find with nested relations. Use an explicit QueryBuilder instead.
+    const qb = AppDataSource.getRepository(ActivitySlotRole)
+        .createQueryBuilder('sr')
+        .innerJoinAndSelect('sr.slot', 'slot')
+        .innerJoinAndSelect('sr.role', 'role')
+        .innerJoin('slot.plan', 'plan')
+        .where('plan.id = :planId', {planId});
 
-    const slotRoles = await repo.find({
-        relations: {
-            slot: true,
-            role: true,
-        },
-        where: {
-            slot: {planId},
-        },
-    });
+    const slotRoles = await qb.getMany();
 
     const map: Record<string, { id: number; name: string }[]> = {};
-
     for (const sr of slotRoles) {
         const slotId = sr.slot.id;
         if (!map[slotId]) map[slotId] = [];
         map[slotId].push({id: sr.role.id, name: sr.role.name});
     }
-
     return map;
 }
 
@@ -471,7 +472,7 @@ export async function getActivitySlotRoles(planId: string) {
 export async function addActivitySlotRoles(slotId: string, roles: number[]) {
     const repo = AppDataSource.getRepository(ActivitySlotRole);
     const entries = roles.map((roleId) =>
-        repo.create({slotId, roleId, maxQty: 1})
+        repo.create({slot: {id: slotId}, role: {id: roleId}, maxQty: 1})
     );
     await repo.save(entries);
 }

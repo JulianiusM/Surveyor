@@ -145,8 +145,8 @@ export async function getResponsesSorted(surveyId: string): Promise<GroupedRespo
 
     // Load all responses for the survey with both possible assignee relations
     const responses = await repo.find({
-        where: {surveyId},
-        relations: {user: true, guest: true},
+        where: {survey: {id: surveyId}},
+        relations: {user: true, guest: true, combination: true},
     });
 
     const combined: Array<UserResponseItem | GuestResponseItem> = [];

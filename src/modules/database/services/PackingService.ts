@@ -10,7 +10,7 @@ export async function createPackingList(listId: string, ownerId: number, title: 
     const repo = AppDataSource.getRepository(PackingList);
     const list = repo.create({
         id: listId,
-        ownerId,
+        owner: {id: ownerId},
         title,
         description: desc,
         allowGuestAdd,
@@ -27,7 +27,7 @@ export async function createPackingListTx(ownerId: number, title: string, desc: 
 
         const list = listRepo.create({
             id: listId,
-            ownerId,
+            owner: {id: ownerId},
             title,
             description: desc,
             allowGuestAdd,
@@ -38,7 +38,7 @@ export async function createPackingListTx(ownerId: number, title: string, desc: 
         if (items.length) {
             const itemEntities = items.map(it => itemRepo.create({
                 id: it.id,
-                listId,
+                list: {id: listId},
                 title: it.title,
                 description: it.description,
                 maxAssignees: it.maxAssignees,
@@ -65,7 +65,7 @@ export async function getPackingListById(listId: string) {
 }
 
 export async function getPackingListByUserId(userId: number) {
-    return await AppDataSource.getRepository(PackingList).findBy({ownerId: userId});
+    return await AppDataSource.getRepository(PackingList).findBy({owner: {id: userId}});
 }
 
 export async function updatePackingListAllow(listId: string, allow: boolean) {
@@ -85,7 +85,7 @@ export async function createPackingItem(listId: string, item: Partial<PackingIte
     const repo = AppDataSource.getRepository(PackingItem);
     const entity = repo.create({
         id: item.id,
-        listId,
+        list: {id: listId},
         title: item.title,
         description: item.description,
         maxAssignees: item.maxAssignees,
@@ -99,7 +99,7 @@ export async function addPackingItems(listId: string, items: Partial<PackingItem
     const repo = AppDataSource.getRepository(PackingItem);
     const entities = items.map(it => repo.create({
         id: it.id,
-        listId,
+        list: {id: listId},
         title: it.title,
         description: it.description,
         maxAssignees: it.maxAssignees,
@@ -132,13 +132,13 @@ export async function deletePackingItem(itemId: string) {
 export async function reorderPackingItems(listId: string, orders: any[]) {
     const repo = AppDataSource.getRepository(PackingItem);
     for (const order of orders) {
-        await repo.update({id: order.itemId, listId}, {pos: order.position});
+        await repo.update({id: order.itemId, list: {id: listId}}, {pos: order.position});
     }
 }
 
 export async function getPackingItems(listId: string): Promise<(PackingItem & { assignedCount: number })[]> {
     const repo = AppDataSource.getRepository(PackingItem);
-    const items = await repo.find({where: {listId}, order: {pos: 'ASC'}});
+    const items = await repo.find({where: {list: {id: listId}}, order: {pos: 'ASC'}});
 
     const assignmentCounts = await getPackingAssignmentCounts(listId);
     return items.map(item => ({...item, assignedCount: assignmentCounts[item.id] || 0}));
@@ -146,7 +146,7 @@ export async function getPackingItems(listId: string): Promise<(PackingItem & { 
 
 export async function getPackingAssignmentCounts(listId: string) {
     const repo = AppDataSource.getRepository(PackingAssignment);
-    const assignments = await repo.findBy({listId});
+    const assignments = await repo.findBy({list: {id: listId}});
     return assignments.reduce((map: Record<string, number>, a) => {
         map[a.itemId] = (map[a.itemId] || 0) + 1;
         return map;
@@ -154,7 +154,7 @@ export async function getPackingAssignmentCounts(listId: string) {
 }
 
 export async function getLastPackingItemNumber(listId: string): Promise<number> {
-    return await AppDataSource.getRepository(PackingItem).maximum("pos", {listId}) ?? 0;
+    return await AppDataSource.getRepository(PackingItem).maximum("pos", {list: {id: listId},}) ?? 0;
 }
 
 // Assignments
@@ -163,14 +163,14 @@ export async function assignPackingItemToUser(itemId: string, userId: number) {
     const item = await itemRepo.findOneBy({id: itemId});
     if (!item) return;
     const repo = AppDataSource.getRepository(PackingAssignment);
-    const exists = await repo.findOneBy({itemId, userId});
+    const exists = await repo.findOneBy({item: {id: itemId}, user: {id: userId}});
     if (!exists) {
-        await repo.save(repo.create({itemId, userId, listId: item.listId}));
+        await repo.save(repo.create({item: {id: itemId}, user: {id: userId}, list: {id: item.listId}}));
     }
 }
 
 export async function unassignPackingItemUser(itemId: string, userId: number) {
-    await AppDataSource.getRepository(PackingAssignment).delete({itemId, userId});
+    await AppDataSource.getRepository(PackingAssignment).delete({item: {id: itemId}, user: {id: userId}});
 }
 
 export async function assignPackingItemToGuest(itemId: string, guestId: number) {
@@ -178,29 +178,32 @@ export async function assignPackingItemToGuest(itemId: string, guestId: number) 
     const item = await itemRepo.findOneBy({id: itemId});
     if (!item) return;
     const repo = AppDataSource.getRepository(PackingAssignment);
-    const exists = await repo.findOneBy({itemId, guestId});
+    const exists = await repo.findOneBy({item: {id: itemId}, guest: {id: guestId}});
     if (!exists) {
-        await repo.save(repo.create({itemId, guestId, listId: item.listId}));
+        await repo.save(repo.create({item: {id: itemId}, guest: {id: guestId}, list: {id: item.listId}}));
     }
 }
 
 export async function unassignPackingItemGuest(itemId: string, guestId: number) {
-    await AppDataSource.getRepository(PackingAssignment).delete({itemId, guestId});
+    await AppDataSource.getRepository(PackingAssignment).delete({item: {id: itemId}, guest: {id: guestId}});
 }
 
 export async function getPackingAssignmentsForUser(listId: string, userId: number) {
-    const rows = await AppDataSource.getRepository(PackingAssignment).findBy({listId, userId});
+    const rows = await AppDataSource.getRepository(PackingAssignment).findBy({list: {id: listId}, user: {id: userId}});
     return rows.map(r => r.itemId);
 }
 
 export async function getPackingAssignmentsForGuest(listId: string, guestId: number) {
-    const rows = await AppDataSource.getRepository(PackingAssignment).findBy({listId, guestId});
+    const rows = await AppDataSource.getRepository(PackingAssignment).findBy({
+        list: {id: listId},
+        guest: {id: guestId}
+    });
     return rows.map(r => r.itemId);
 }
 
 export async function getPackingItemAssignees(listId: string) {
     const rows = await AppDataSource.getRepository(PackingAssignment).find({
-        where: {listId},
+        where: {list: {id: listId}},
         relations: ['user', 'guest']
     });
     const map: Record<string, any[]> = {};

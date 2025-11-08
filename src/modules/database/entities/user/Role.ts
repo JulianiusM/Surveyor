@@ -1,4 +1,4 @@
-import {BeforeInsert, BeforeUpdate, Column, Entity, Index, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
+import {Column, Entity, Index, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
 import {ActivityAssignmentRole} from "../activity/ActivityAssignmentRole";
 import {ActivitySlotRole} from "../activity/ActivitySlotRole";
 import {ActivityPlanRequirement} from "../activity/ActivityPlanRequirement";
@@ -7,7 +7,7 @@ import {ActivityPlanRequirement} from "../activity/ActivityPlanRequirement";
 @Entity("roles", {schema: "surveyor"})
 export class Role {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
-    id: number;
+    id!: number;
 
     @Column("varchar", {name: "name", unique: true, length: 50})
     name!: string;
@@ -35,12 +35,4 @@ export class Role {
         (activityPlanRequirements) => activityPlanRequirements.role
     )
     activityPlanRequirements: ActivityPlanRequirement[];
-
-    @BeforeInsert()
-    @BeforeUpdate()
-    private validateName() {
-        if (!this.name || this.name.trim() === '') {
-            throw new Error('Role.name is required');
-        }
-    }
 }
