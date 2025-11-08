@@ -115,12 +115,6 @@ export async function callback(req: Request) {
 }
 
 export async function logout(session: Request['session']) {
-    if (!config) await initOIDC();
-
-    const meta = config.serverMetadata();
-    const endSession = meta.end_session_endpoint;
-    const postLogoutRedirectUri = settings.value.rootUrl;
-
     const id_token_hint = session.tokens?.id_token;
     const isOidc = !!session.tokens;
 
@@ -128,12 +122,21 @@ export async function logout(session: Request['session']) {
     session.user = undefined;
     session.tokens = undefined;
 
-    if (endSession && isOidc) {
-        const url = new URL(endSession);
-        if (id_token_hint) url.searchParams.set('id_token_hint', id_token_hint);
-        url.searchParams.set('post_logout_redirect_uri', postLogoutRedirectUri);
-        return url.toString();
+    // Only initialize OIDC if this is an OIDC session
+    if (isOidc) {
+        if (!config) await initOIDC();
+        
+        const meta = config.serverMetadata();
+        const endSession = meta.end_session_endpoint;
+        const postLogoutRedirectUri = settings.value.rootUrl;
+
+        if (endSession) {
+            const url = new URL(endSession);
+            if (id_token_hint) url.searchParams.set('id_token_hint', id_token_hint);
+            url.searchParams.set('post_logout_redirect_uri', postLogoutRedirectUri);
+            return url.toString();
+        }
     }
 
-    return postLogoutRedirectUri;
+    return settings.value.rootUrl;
 }

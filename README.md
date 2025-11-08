@@ -84,6 +84,20 @@ npm run test:watch
 
 The E2E tests use Playwright and require the application to be built first.
 
+#### E2E Test Structure
+
+The E2E tests are organized by feature area:
+
+- `auth.test.ts` - Authentication flows (login, registration, password reset, tokens)
+- `survey.test.ts` - Survey creation and management
+- `packing.test.ts` - Packing list management
+- `activity.test.ts` - Activity plan management
+- `drivers.test.ts` - Drivers list management
+- `navigation.test.ts` - UI navigation and accessibility
+- `error-handling.test.ts` - Frontend error handling and validation
+
+#### Running E2E Tests
+
 Run E2E tests:
 
 ```bash
@@ -97,6 +111,55 @@ npm run e2e:headed
 ```
 
 Run E2E tests with UI:
+
+```bash
+npm run e2e:ui
+```
+
+#### E2E Configuration
+
+E2E tests require a `.env.e2e` file with the following configuration:
+
+```env
+NODE_ENV=e2e
+APP_PORT=3001
+ROOT_URL=http://localhost:3001
+
+# Database configuration
+E2E_DB_HOST=localhost
+E2E_DB_PORT=3306
+E2E_DB_USER=e2e_user
+E2E_DB_PASSWORD=e2e_password
+E2E_DB_NAME=surveyor_e2e
+
+# Test user credentials
+E2E_ADMIN_USERNAME=tester
+E2E_ADMIN_EMAIL=e2e@example.com
+E2E_ADMIN_PASSWORD=passw0rd!
+
+# Feature flags
+LOCAL_LOGIN_ENABLED=1
+OIDC_ENABLED=1
+OIDC_BUTTON_LABEL=Login with OpenID
+OIDC_ISSUER_BASE_URL=http://localhost:9999/mock-oidc
+OIDC_CLIENT_ID=mock-client-id
+OIDC_CLIENT_SECRET=mock-client-secret
+OIDC_REDIRECT_URL=http://localhost:3001/users/oidc/callback
+```
+
+Note: OIDC configuration is used for frontend testing only (to test button visibility and UI behavior). Actual OIDC authentication flows are not tested in E2E tests.
+
+#### E2E Test Coverage
+
+The E2E tests focus on frontend behavior and user interactions:
+
+- Authentication flows and session management
+- Form validation and error messages
+- Page navigation and routing
+- UI element visibility and accessibility
+- Error handling for invalid inputs and tokens
+- Feature access control (authentication gates)
+- Responsive design and cross-browser compatibility
 
 ```bash
 npm run e2e:ui

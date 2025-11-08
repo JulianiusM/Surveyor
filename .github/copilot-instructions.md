@@ -80,10 +80,24 @@ Surveyor is a TypeScript-based survey management application built with:
 
 ### E2E Tests
 
-- Test complete user workflows
+- Test complete user workflows and frontend behavior
 - Use Playwright test framework
 - Tests run against the built application
 - Configure test data through the E2E database initialization script
+- Organize tests by feature area:
+  - `auth.test.ts` - Authentication and session management
+  - `survey.test.ts`, `packing.test.ts`, `activity.test.ts`, `drivers.test.ts` - Feature tests
+  - `navigation.test.ts` - UI navigation and accessibility
+  - `error-handling.test.ts` - Frontend validation and error handling
+- Focus on frontend behavior, not backend logic (backend is covered by unit/integration tests)
+- Test form validation, error messages, and user feedback
+- Verify authentication gates and access control
+- Test responsive design and accessibility features
+- Mock OIDC for frontend testing without requiring a real provider
+- All tests should pass in CI environment
+- Use `.env.e2e` for configuration (never commit this file)
+- OIDC configuration in E2E is for frontend testing only (button visibility, UI state)
+- Do not test actual OIDC authentication flows in E2E tests
 
 ## CI Pipeline
 

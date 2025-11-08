@@ -53,7 +53,7 @@ app.get('/forgot-password', asyncHandler((req: Request, res: Response) => {
 
 app.post('/forgot-password', asyncHandler(async (req: Request, res: Response) => {
     if (!settings.value.localLoginEnabled) throw new ExpectedError('Login is not enabled!', 'error', 500);
-    await userController.sendPasswordForgotMail(req.body);
+    await userController.sendPasswordForgotMail(req.body.username);
     renderer.renderSuccess(res, 'A link has been sent to the email corresponding to this account (if present).')
 }));
 
