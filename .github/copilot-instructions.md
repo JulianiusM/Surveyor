@@ -49,6 +49,9 @@ Surveyor is a TypeScript-based survey management application built with:
 - Use TypeORM decorators for entity definitions
 - Include proper relationships between entities
 - Use timezone 'Z' for consistent UTC handling
+- **UUID Primary Keys**: Use `@PrimaryColumn("varchar", {length: 36})` instead of `@PrimaryGeneratedColumn("uuid")` to avoid MariaDB native UUID type which enforces strict validation incompatible with test data
+- **Foreign Keys**: Always specify `length: 36` for foreign key columns that reference UUID primary keys
+- **Generated IDs**: Use the `generateUniqueId()` utility function to create UUIDs programmatically
 
 ### Migrations
 
@@ -84,6 +87,10 @@ Surveyor is a TypeScript-based survey management application built with:
 - Use Playwright test framework
 - Tests run against the built application
 - Configure test data through the E2E database initialization script
+- **Bootstrap Dropdowns**: Avoid testing Bootstrap dropdown interactions in headless mode; use direct URL navigation instead
+- **Form Validation**: Ensure forms display validation errors properly before writing tests that depend on error messages
+- **Login Helper**: Always wait for navigation completion after form submission using `waitForURL()`
+- **Session Persistence**: Tests clear cookies before each run; ensure login helpers re-establish sessions
 
 ## CI Pipeline
 
