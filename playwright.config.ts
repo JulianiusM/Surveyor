@@ -17,7 +17,7 @@ export default defineConfig({
         baseURL: BASE_URL,
         trace: 'on-first-retry',
         screenshot: 'only-on-failure',
-        video: 'retain-on-failure',
+        video: 'off', // Disable video to avoid ffmpeg dependency
     },
 
     // Start your real server; we chain DB init before launching the app.
