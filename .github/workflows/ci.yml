@@ -3,9 +3,9 @@ name: CI
 on:
   workflow_dispatch:
   push:
-    branches: [ master, dev ]
+    branches: [ master, dev, ts-migration ]
   pull_request:
-    branches: [ master, dev ]
+    branches: [ master, dev, ts-migration ]
 
 jobs:
   test:
@@ -175,8 +175,6 @@ jobs:
           # Move the HTML report to artifacts for optional upload on failure
           if [ -d playwright-report ]; then mv playwright-report artifacts/playwright-report; fi
           exit ${EXIT:-0}
-        # Temporarily disable checks for new playwright tests (not fully done yet)
-        continue-on-error: true
 
       - name: Upload Playwright JUnit (always)
         if: always()
