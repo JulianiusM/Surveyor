@@ -48,9 +48,13 @@ async function main() {
     await qr.query('SET FOREIGN_KEY_CHECKS = 1');
     await qr.release();
 
+    console.log("Purged...")
+
     // Recreate via migrations
     await E2EDataSource.synchronize(true)
+    console.log("Synced...")
     await E2EDataSource.runMigrations();
+    console.log("Migrated...")
 
     // ---- Seed minimal fixture data ----
     // Example: create a test admin user. Replace with your own seeder logic.
@@ -63,6 +67,7 @@ async function main() {
         password: passwordHash,
         isActive: true,
     }));
+    console.log("Users created...")
 
     await E2EDataSource.destroy();
     // eslint-disable-next-line no-console

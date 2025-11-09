@@ -85,13 +85,13 @@ Surveyor is a TypeScript-based survey management application built with:
 - Tests run against the built application
 - Configure test data through the E2E database initialization script
 - Organize tests by feature area:
-  - `auth.test.ts` - Authentication and session management (login, registration, password reset, tokens)
-  - `survey.test.ts` - Survey creation, validation, and management
-  - `packing.test.ts` - Packing list creation, validation, and management
-  - `activity.test.ts` - Activity plan creation, validation, and management
-  - `drivers.test.ts` - Drivers list creation, validation, and management
-  - `navigation.test.ts` - UI navigation, accessibility, and page structure
-  - `error-handling.test.ts` - Frontend validation, error handling, and exception scenarios
+    - `auth.test.ts` - Authentication and session management (login, registration, password reset, tokens)
+    - `survey.test.ts` - Survey creation, validation, and management
+    - `packing.test.ts` - Packing list creation, validation, and management
+    - `activity.test.ts` - Activity plan creation, validation, and management
+    - `drivers.test.ts` - Drivers list creation, validation, and management
+    - `navigation.test.ts` - UI navigation, accessibility, and page structure
+    - `error-handling.test.ts` - Frontend validation, error handling, and exception scenarios
 - Focus on frontend behavior, not backend logic (backend is covered by unit/integration tests)
 - Test form validation, error messages, and user feedback
 - Verify authentication gates and access control for all protected routes
@@ -115,6 +115,7 @@ The GitHub Actions CI pipeline:
 - Runs on push to `main` or `develop` branches
 - Runs on pull requests to `main` or `develop`
 - Sets up MariaDB 10.11 service container
+- Sets up Node.js 24
 - Creates test and E2E databases with proper users
 - Runs all unit, integration, and E2E tests
 - Uploads Playwright reports as artifacts
@@ -183,6 +184,7 @@ npm run e2e:headed      # Run E2E tests with browser
 
 ### Key Production Dependencies
 
+- node >= 24
 - express - Web framework
 - typeorm - ORM for database operations
 - mysql2 - MariaDB driver

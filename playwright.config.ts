@@ -25,7 +25,7 @@ export default defineConfig({
         command: `npm run e2e:init`,
         url: `${BASE_URL}/healthz`,
         reuseExistingServer: !process.env.CI,
-        timeout: 120_000,
+        timeout: 180_000,
         stderr: 'pipe',
         stdout: 'pipe',
     },

@@ -32,21 +32,18 @@ async function login(page: import('@playwright/test').Page, username: string, pa
     await userInput.fill(username);
     await passInput.fill(password);
     await page.getByRole('button', {name: /login/i}).click();
-    
+
     // Wait for redirect and dashboard to load
     await page.waitForURL(/\/users\/dashboard/, {waitUntil: 'networkidle'});
     // Ensure we're logged in by checking for user menu
     await expect(page.locator('#userMenu')).toBeVisible();
-    
+
     // Verify session cookie was set
     const cookies = await page.context().cookies();
     const sessionCookie = cookies.find(c => c.name === 'connect.sid');
     if (!sessionCookie) {
         throw new Error('Session cookie was not set after login');
     }
-    
-    // Add a delay to ensure session is fully persisted to database
-    await page.waitForTimeout(1000);
 }
 
 // Before each test, start from a clean browser state (no cookies).
