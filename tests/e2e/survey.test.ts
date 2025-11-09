@@ -15,6 +15,8 @@ async function login(page: any) {
     await page.waitForURL(/\/users\/dashboard/, {waitUntil: 'networkidle'});
     // Ensure we're logged in by checking for user menu
     await expect(page.locator('#userMenu')).toBeVisible();
+    // Add a small delay to ensure session is fully persisted to database
+    await page.waitForTimeout(500);
 }
 
 test.beforeEach(async ({context}) => {
@@ -23,7 +25,7 @@ test.beforeEach(async ({context}) => {
 
 test('authenticated user can access survey create page', async ({page}) => {
     await login(page);
-    await page.goto('/survey/create');
+    await page.goto('/survey/create', {waitUntil: 'networkidle'});
     await expect(page).toHaveURL(/\/survey\/create/);
     await expect(page.getByRole('heading', {name: /create.*survey/i})).toBeVisible();
 });
@@ -40,7 +42,7 @@ test('survey dashboard shows empty state for new user', async ({page}) => {
 
 test('can create a new survey with valid data', async ({page}) => {
     await login(page);
-    await page.goto('/survey/create');
+    await page.goto('/survey/create', {waitUntil: 'networkidle'});
     
     // Wait for the page to be fully loaded
     await expect(page).toHaveURL(/\/survey\/create/);
@@ -64,7 +66,7 @@ test('can create a new survey with valid data', async ({page}) => {
 
 test('survey form validates required fields', async ({page}) => {
     await login(page);
-    await page.goto('/survey/create');
+    await page.goto('/survey/create', {waitUntil: 'networkidle'});
     
     // Wait for the page to be fully loaded
     await expect(page).toHaveURL(/\/survey\/create/);
