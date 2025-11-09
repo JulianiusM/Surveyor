@@ -11,7 +11,10 @@ async function login(page: any) {
     await page.locator('input[name="username"]').fill(USERNAME);
     await page.locator('input[name="password"]').fill(PASSWORD);
     await page.getByRole('button', {name: /login/i}).click();
-    await expect(page).toHaveURL(/\/users\/dashboard/);
+    // Wait for redirect and dashboard to load
+    await page.waitForURL(/\/users\/dashboard/, {waitUntil: 'networkidle'});
+    // Ensure we're logged in by checking for user menu
+    await expect(page.locator('#userMenu')).toBeVisible();
 }
 
 test.beforeEach(async ({context}) => {

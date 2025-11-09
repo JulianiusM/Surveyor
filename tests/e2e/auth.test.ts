@@ -32,6 +32,11 @@ async function login(page: import('@playwright/test').Page, username: string, pa
     await userInput.fill(username);
     await passInput.fill(password);
     await page.getByRole('button', {name: /login/i}).click();
+    
+    // Wait for redirect and dashboard to load
+    await page.waitForURL(/\/users\/dashboard/, {waitUntil: 'networkidle'});
+    // Ensure we're logged in by checking for user menu
+    await expect(page.locator('#userMenu')).toBeVisible();
 }
 
 // Before each test, start from a clean browser state (no cookies).
