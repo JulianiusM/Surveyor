@@ -31,8 +31,13 @@ async function login(page: any) {
         httpOnly: sessionCookie.httpOnly
     });
     
+    // Make a test request to verify session is valid and persisted
+    // Navigate to dashboard again to ensure session is readable
+    await page.goto('/users/dashboard', {waitUntil: 'networkidle'});
+    await expect(page.locator('#userMenu')).toBeVisible();
+    
     // Add a small delay to ensure session is fully persisted to database
-    await page.waitForTimeout(2000); // Increased to 2s for better reliability
+    await page.waitForTimeout(3000); // Increased to 3s for maximum reliability
 }
 
 test.beforeEach(async ({context}) => {
