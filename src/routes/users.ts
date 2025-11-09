@@ -35,6 +35,19 @@ app.get('/login', asyncHandler((req: Request, res: Response) => {
 app.post('/login', asyncHandler(async (req: Request, res: Response) => {
     if (!settings.value.localLoginEnabled) throw new ExpectedError('Login is not enabled!', 'error', 500);
     await userController.loginUser(req.body, req.session);
+    
+    // Manually save the session to ensure it's persisted before redirect
+    await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => {
+            if (err) {
+                console.error('Session save error:', err);
+                reject(err);
+            } else {
+                resolve();
+            }
+        });
+    });
+    
     req.flash('success', 'Login successful');
     res.redirect('/users/dashboard');  // Weiterleitung nach dem Login
 }));
