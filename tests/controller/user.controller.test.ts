@@ -137,12 +137,15 @@ describe('loginUser', () => {
     });
 
     it('sets session.user when active and password valid', async () => {
-        const session: any = {};
+        const session: any = {
+            save: jest.fn((cb: any) => cb())
+        };
         (userService.getUserByUsername as jest.Mock).mockResolvedValue(baseUser);
         (userService.verifyPassword as jest.Mock).mockResolvedValue(true);
 
         await loginUser({username: 'u', password: 'p'}, session);
         expect(session.user).toEqual(baseUser);
+        expect(session.save).toHaveBeenCalled();
     });
 
     it('inactive user: expired activation triggers resend and throws', async () => {
