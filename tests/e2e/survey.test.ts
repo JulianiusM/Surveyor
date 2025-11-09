@@ -16,15 +16,23 @@ async function login(page: any) {
     // Ensure we're logged in by checking for user menu
     await expect(page.locator('#userMenu')).toBeVisible();
     
-    // Verify session cookie was set
+    // Verify session cookie was set and log details for debugging
     const cookies = await page.context().cookies();
     const sessionCookie = cookies.find(c => c.name === 'connect.sid');
     if (!sessionCookie) {
         throw new Error('Session cookie was not set after login');
     }
+    console.log('Session cookie details:', {
+        name: sessionCookie.name,
+        domain: sessionCookie.domain,
+        path: sessionCookie.path,
+        sameSite: sessionCookie.sameSite,
+        secure: sessionCookie.secure,
+        httpOnly: sessionCookie.httpOnly
+    });
     
     // Add a small delay to ensure session is fully persisted to database
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000); // Increased to 2s for better reliability
 }
 
 test.beforeEach(async ({context}) => {
@@ -33,6 +41,12 @@ test.beforeEach(async ({context}) => {
 
 test('authenticated user can access survey create page', async ({page}) => {
     await login(page);
+    
+    // Verify cookie is still present before navigation
+    const cookiesBeforeNav = await page.context().cookies();
+    const sessionCookieBeforeNav = cookiesBeforeNav.find(c => c.name === 'connect.sid');
+    console.log('Cookie before navigation:', sessionCookieBeforeNav ? 'present' : 'MISSING');
+    
     await page.goto('/survey/create', {waitUntil: 'networkidle'});
     await expect(page).toHaveURL(/\/survey\/create/);
     await expect(page.getByRole('heading', {name: /create.*survey/i})).toBeVisible();
