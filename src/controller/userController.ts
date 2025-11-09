@@ -74,6 +74,15 @@ export async function loginUser(body: any, session: Request["session"]) {
     }
 
     session.user = user;
+    
+    // Explicitly save the session to ensure it's persisted before redirect
+    // This is critical for async session stores like TypeormStore
+    return new Promise<void>((resolve, reject) => {
+        session.save((err) => {
+            if (err) reject(err);
+            else resolve();
+        });
+    });
 }
 
 export async function getUserDashboardEntities(user: User) {

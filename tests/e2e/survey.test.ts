@@ -11,33 +11,8 @@ async function login(page: any) {
     await page.locator('input[name="username"]').fill(USERNAME);
     await page.locator('input[name="password"]').fill(PASSWORD);
     await page.getByRole('button', {name: /login/i}).click();
-    // Wait for redirect and dashboard to load
     await page.waitForURL(/\/users\/dashboard/, {waitUntil: 'networkidle'});
-    // Ensure we're logged in by checking for user menu
     await expect(page.locator('#userMenu')).toBeVisible();
-    
-    // Verify session cookie was set and log details for debugging
-    const cookies = await page.context().cookies();
-    const sessionCookie = cookies.find(c => c.name === 'connect.sid');
-    if (!sessionCookie) {
-        throw new Error('Session cookie was not set after login');
-    }
-    console.log('Session cookie details:', {
-        name: sessionCookie.name,
-        domain: sessionCookie.domain,
-        path: sessionCookie.path,
-        sameSite: sessionCookie.sameSite,
-        secure: sessionCookie.secure,
-        httpOnly: sessionCookie.httpOnly
-    });
-    
-    // Make a test request to verify session is valid and persisted
-    // Navigate to dashboard again to ensure session is readable
-    await page.goto('/users/dashboard', {waitUntil: 'networkidle'});
-    await expect(page.locator('#userMenu')).toBeVisible();
-    
-    // Add a small delay to ensure session is fully persisted to database
-    await page.waitForTimeout(3000); // Increased to 3s for maximum reliability
 }
 
 test.beforeEach(async ({context}) => {
@@ -46,12 +21,12 @@ test.beforeEach(async ({context}) => {
 
 test('authenticated user can access survey create page', async ({page}) => {
     await login(page);
+    // Instead of page.goto, try clicking a link (if one exists) or use click navigation
+    // For now, let's try a different approach - stay on dashboard and verify we're still logged in
+    await expect(page).toHaveURL(/\/users\/dashboard/);
+    await expect(page.locator('#userMenu')).toBeVisible();
     
-    // Verify cookie is still present before navigation
-    const cookiesBeforeNav = await page.context().cookies();
-    const sessionCookieBeforeNav = cookiesBeforeNav.find(c => c.name === 'connect.sid');
-    console.log('Cookie before navigation:', sessionCookieBeforeNav ? 'present' : 'MISSING');
-    
+    // Now navigate to survey create
     await page.goto('/survey/create', {waitUntil: 'networkidle'});
     await expect(page).toHaveURL(/\/survey\/create/);
     await expect(page.getByRole('heading', {name: /create.*survey/i})).toBeVisible();
