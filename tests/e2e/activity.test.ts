@@ -45,26 +45,37 @@ test('unauthenticated user cannot access activity create page', async ({page}) =
 
 test('activity dashboard shows empty state for new user', async ({page}) => {
     await login(page);
-    await expect(page.getByText(/you don't have any activity/i)).toBeVisible();
+    const accordion = page.locator('#sec-activity');
+    await page.getByRole('button', {name: /your activity plans/i}).click();
+    await expect(accordion).toContainText(/you don['’]t have any activity/i);
 });
 
 test('can create a new activity plan with valid data', async ({page}) => {
     await login(page);
     await page.goto('/activity/create');
-    
+
     // Wait for the page to be fully loaded
     await expect(page).toHaveURL(/\/activity\/create/);
     await expect(page.getByRole('heading', {name: /create.*activity/i})).toBeVisible();
-    
+
     // Fill in activity plan details
     const activityTitle = `E2E Activity ${Date.now()}`;
     await page.locator('input[name="title"]').fill(activityTitle);
-    
+    await page.locator('input[name="startDate"]').fill('2025-01-01');
+    await page.locator('input[name="endDate"]').fill('2025-01-02');
+    await page.evaluate(async () => {
+        const slotId = self.crypto?.randomUUID?.() ?? '00000000-0000-4000-8000-000000000000';
+        const day = '2025-01-01';
+        const slot = {id: slotId, day, pos: 0, title: 'Setup', description: '', maxAssignees: 1};
+        const mod = await import('/js/activity-create.gen.js');
+        mod.updateSlotObj(day, slot);
+    });
+
     // Submit the form
     await page.getByRole('button', {name: /create.*plan/i}).click();
     
     // Should redirect to dashboard or activity view
-    await page.waitForURL(/\/(users\/dashboard|activity\/\d+)/);
+    await page.waitForURL(url => /\/(users\/dashboard|activity\/[\w-]*-[\w-]+)/.test(url.pathname));
     
     // Verify success or activity appears
     const body = await page.locator('body').textContent();

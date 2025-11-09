@@ -64,7 +64,9 @@ test('unauthenticated user cannot access survey create page', async ({page}) => 
 
 test('survey dashboard shows empty state for new user', async ({page}) => {
     await login(page);
-    await expect(page.getByText(/you don't have any surveys/i)).toBeVisible();
+    const accordion = page.locator('#sec-surveys');
+    await page.getByRole('button', {name: /your surveys/i}).click();
+    await expect(accordion).toContainText(/you don['’]t have any surveys/i);
 });
 
 test('can create a new survey with valid data', async ({page}) => {
@@ -84,11 +86,10 @@ test('can create a new survey with valid data', async ({page}) => {
     await page.getByRole('button', {name: /create.*survey/i}).click();
     
     // Should redirect to dashboard or survey view
-    await page.waitForURL(/\/(users\/dashboard|survey\/\d+)/);
-    
+    await page.waitForURL(url => /\/(users\/dashboard|survey\/[\w-]*-[\w-]+)/.test(url.pathname));
+
     // Verify success message or survey appears
-    const body = await page.locator('body').textContent();
-    expect(body).toContain(surveyTitle);
+    await expect(page.locator('h1')).toContainText(surveyTitle);
 });
 
 test('survey form validates required fields', async ({page}) => {

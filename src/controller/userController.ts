@@ -11,6 +11,7 @@ import {ExpectedError, ValidationError} from "../modules/lib/errors";
 import {Guest} from "../modules/database/entities/user/Guest";
 import {Request} from "express";
 import * as oidc from "../modules/oidc";
+import {persistSession} from "../modules/lib/session";
 
 const CREATE_TEMPLATE = 'users/register';
 const LOGIN_TEMPLATE = 'users/login';
@@ -74,6 +75,7 @@ export async function loginUser(body: any, session: Request["session"]) {
     }
 
     session.user = user;
+    await persistSession(session);
 }
 
 export async function getUserDashboardEntities(user: User) {

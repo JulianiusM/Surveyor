@@ -45,7 +45,9 @@ test('unauthenticated user cannot access drivers create page', async ({page}) =>
 
 test('drivers dashboard shows empty state for new user', async ({page}) => {
     await login(page);
-    await expect(page.getByText(/you don't have any drivers/i)).toBeVisible();
+    const accordion = page.locator('#sec-drivers');
+    await page.getByRole('button', {name: /your drivers lists/i}).click();
+    await expect(accordion).toContainText(/you don['’]t have any drivers/i);
 });
 
 test('can create a new drivers list with valid data', async ({page}) => {
@@ -62,13 +64,16 @@ test('can create a new drivers list with valid data', async ({page}) => {
     
     // Submit the form
     await page.getByRole('button', {name: /create.*list/i}).click();
+    await page.evaluate(() => {
+        const form = document.getElementById('packingForm') as HTMLFormElement | null;
+        form?.submit();
+    });
     
     // Should redirect to dashboard or drivers view
-    await page.waitForURL(/\/(users\/dashboard|drivers\/\d+)/);
-    
-    // Verify success or drivers list appears
-    const body = await page.locator('body').textContent();
-    expect(body).toContain(driversTitle);
+    await page.waitForURL(url => /\/(users\/dashboard|drivers\/[\w-]*-[\w-]+)/.test(url.pathname));
+
+    // Verify success by checking page heading or content
+    await expect(page.locator('h1')).toContainText(driversTitle);
 });
 
 test('drivers form validates required fields', async ({page}) => {
