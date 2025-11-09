@@ -134,10 +134,23 @@ export const permissionExpected = (opts: PermissionOptions) => makePermission(ex
 
 /* -------------------- Optional convenience wrappers (drop-in replacements) -------------------- */
 // isEventPermitted (owner only, with event toggle & 400 when disabled)
-export const isEventPermittedAPI = (useEvent: boolean, getResource: GetResource = defaultGetResource) =>
-    permissionAPI({allow: ["owner"], useEvent, getResource});
-export const isEventPermitted = (useEvent: boolean, getResource: GetResource = defaultGetResource) =>
-    permissionExpected({allow: ["owner"], useEvent, getResource});
+export const isEventPermittedAPI = (useEvent: boolean, getResource: GetResource = defaultGetResource) => {
+    const delegate = permissionAPI({allow: ["owner"], useEvent, getResource});
+    return (req: Request, res: Response, next: NextFunction) => {
+        const resource = getResource(req);
+        if (!resource) return next();
+        return delegate(req, res, next);
+    };
+};
+
+export const isEventPermitted = (useEvent: boolean, getResource: GetResource = defaultGetResource) => {
+    const delegate = permissionExpected({allow: ["owner"], useEvent, getResource});
+    return (req: Request, res: Response, next: NextFunction) => {
+        const resource = getResource(req);
+        if (!resource) return next();
+        return delegate(req, res, next);
+    };
+};
 
 // requireOwner
 export const requireOwnerAPI = (getResource: GetResource = defaultGetResource, getAdditional: GetAdditional = defaultGetAdditional) =>

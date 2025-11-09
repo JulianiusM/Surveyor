@@ -3,6 +3,7 @@ import type {Request} from 'express';
 import {findOrCreateUserFromOidc} from "./database/services/UserService";
 import settings from "./settings";
 import {ExpectedError} from "./lib/errors";
+import {persistSession} from "./lib/session";
 
 let config: oidc.Configuration;
 
@@ -112,6 +113,8 @@ export async function callback(req: Request) {
 
     // Clear transient OIDC artifacts
     req.session.oidc = undefined;
+
+    await persistSession(req.session);
 }
 
 export async function logout(session: Request['session']) {
@@ -121,6 +124,8 @@ export async function logout(session: Request['session']) {
     // Clear local session first
     session.user = undefined;
     session.tokens = undefined;
+
+    await persistSession(session);
 
     // Only initialize OIDC if this is an OIDC session
     if (isOidc) {

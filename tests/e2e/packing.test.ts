@@ -45,7 +45,9 @@ test('unauthenticated user cannot access packing create page', async ({page}) =>
 
 test('packing dashboard shows empty state for new user', async ({page}) => {
     await login(page);
-    await expect(page.getByText(/you don't have any packing/i)).toBeVisible();
+    const accordion = page.locator('#sec-pack');
+    await page.getByRole('button', {name: /your packing lists/i}).click();
+    await expect(accordion).toContainText(/you don['’]t have any packing/i);
 });
 
 test('can create a new packing list with valid data', async ({page}) => {
@@ -59,16 +61,17 @@ test('can create a new packing list with valid data', async ({page}) => {
     // Fill in packing list details
     const packingTitle = `E2E Packing ${Date.now()}`;
     await page.locator('input[name="title"]').fill(packingTitle);
-    
+    await page.locator('input[name="t_0"]').fill('Tent');
+    await page.locator('input[name="d_0"]').fill('Two-person tent');
+
     // Submit the form
     await page.getByRole('button', {name: /create.*list/i}).click();
-    
+
     // Should redirect to dashboard or packing view
-    await page.waitForURL(/\/(users\/dashboard|packing\/\d+)/);
-    
+    await page.waitForURL(url => /\/(users\/dashboard|packing\/[\w-]*-[\w-]+)/.test(url.pathname));
+
     // Verify success or packing list appears
-    const body = await page.locator('body').textContent();
-    expect(body).toContain(packingTitle);
+    await expect(page.locator('h1')).toContainText(packingTitle);
 });
 
 test('packing form validates required fields', async ({page}) => {

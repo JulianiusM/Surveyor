@@ -38,8 +38,9 @@ test('home page loads correctly', async ({page}) => {
     // Should have basic navigation
     await expect(page.locator('body')).toBeAttached();
     
-    // Should have login link when not authenticated
-    await expect(page.getByRole('link', {name: /login/i})).toBeVisible();
+    // Should have login link when not authenticated (use navbar link to avoid duplicates)
+    const navLoginLink = page.locator('nav').getByRole('link', {name: /login/i});
+    await expect(navLoginLink).toBeVisible();
 });
 
 // Test navigation bar for authenticated users
@@ -81,8 +82,9 @@ test('footer contains required links', async ({page}) => {
     const footer = page.locator('footer');
     await expect(footer).toBeVisible();
     
-    // Should have some footer content
-    await expect(footer.locator('a')).toBeAttached();
+    // Should have specific footer links
+    await expect(footer.getByRole('link', {name: /imprint/i})).toBeVisible();
+    await expect(footer.getByRole('link', {name: /privacy policy/i})).toBeVisible();
 });
 
 // Test page titles

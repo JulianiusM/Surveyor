@@ -64,8 +64,10 @@ test('registration form validates password matching', async ({page}) => {
     
     await page.getByRole('button', {name: /register/i}).click();
     
-    // Should show validation error
-    await expect(page.locator('.invalid-feedback, .alert-danger, .alert')).toBeAttached();
+    // Should show validation error (at least one message)
+    const errorMessage = page.locator('.invalid-feedback, .alert-danger, .alert').first();
+    await expect(errorMessage).toBeAttached();
+    await expect(errorMessage).toContainText(/passwords do not match/i);
 });
 
 // Test invalid activation token
@@ -99,11 +101,15 @@ test('handles network errors gracefully', async ({page, context}) => {
     // Simulate offline mode
     await context.setOffline(true);
     
-    // Try to navigate to a page that requires API call
-    await page.goto('/users/dashboard');
-    
+    // Try to navigate to a page that requires API call; ignore navigation failure while offline
+    try {
+        await page.goto('/users/dashboard');
+    } catch {
+        // Expected when offline; ensure the page still responds
+    }
+
     // Page should handle the error (may show cached content or error message)
-    // At minimum, it shouldn't crash - just verify page loads
+    // At minimum, it shouldn't crash - just verify page is still interactive
     await expect(page.locator('body')).toBeAttached();
     
     // Restore online mode
