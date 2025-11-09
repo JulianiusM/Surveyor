@@ -96,7 +96,15 @@ jobs:
           SESSION_SECRET=ci_e2e_secret
           OIDC_ENABLED=0
 
-          # E2E DB (guard requires name to contain 'e2e')
+          # Database connection for the E2E server (used by AppDataSource)
+          DB_TYPE=mariadb
+          DB_HOST=127.0.0.1
+          DB_PORT=3306
+          DB_USER=surveyor
+          DB_PASSWORD=surveyor
+          DB_NAME=surveyor_e2e
+
+          # E2E DB init script variables (used by e2e.db.init.ts)
           E2E_DB_HOST=127.0.0.1
           E2E_DB_PORT=3306
           E2E_DB_USER=surveyor
