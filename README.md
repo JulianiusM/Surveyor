@@ -151,15 +151,50 @@ Note: OIDC configuration is used for frontend testing only (to test button visib
 
 #### E2E Test Coverage
 
-The E2E tests focus on frontend behavior and user interactions:
+The E2E tests focus on frontend behavior and user interactions, providing comprehensive coverage of:
 
-- Authentication flows and session management
-- Form validation and error messages
-- Page navigation and routing
-- UI element visibility and accessibility
-- Error handling for invalid inputs and tokens
-- Feature access control (authentication gates)
-- Responsive design and cross-browser compatibility
+**Authentication & User Management:**
+- Login/logout flows and session management
+- User registration and account activation
+- Password reset workflows
+- Token validation (activation and reset tokens)
+- Token reuse prevention
+- OIDC button visibility based on configuration
+- Duplicate username prevention
+- Password strength validation
+
+**Entity Management:**
+- Survey creation and validation
+- Packing list creation and validation
+- Activity plan creation and validation
+- Drivers list creation and validation
+- Form field validation (required fields)
+- Empty state handling
+
+**UI & Navigation:**
+- Page titles and headings
+- Navigation menu visibility for authenticated users
+- Footer and branding elements
+- Form labels and accessibility
+- Responsive design elements
+- Browser back button functionality
+- Logo and home page links
+
+**Error Handling:**
+- 404 error pages
+- Invalid token handling
+- Form validation errors
+- Server error responses
+- Network error resilience
+- Unauthorized access redirects
+- Non-existent resource handling
+- Console error monitoring
+
+**Security & Access Control:**
+- Authentication gates for protected routes
+- Session timeout handling
+- Proper redirects for unauthenticated users
+- Form input validation
 
 ```bash
 npm run e2e:ui

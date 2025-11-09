@@ -11,7 +11,20 @@ async function login(page: any) {
     await page.locator('input[name="username"]').fill(USERNAME);
     await page.locator('input[name="password"]').fill(PASSWORD);
     await page.getByRole('button', {name: /login/i}).click();
-    await expect(page).toHaveURL(/\/users\/dashboard/);
+    // Wait for redirect and dashboard to load
+    await page.waitForURL(/\/users\/dashboard/, {waitUntil: 'networkidle'});
+    // Ensure we're logged in by checking for user menu
+    await expect(page.locator('#userMenu')).toBeVisible();
+    
+    // Verify session cookie was set
+    const cookies = await page.context().cookies();
+    const sessionCookie = cookies.find(c => c.name === 'connect.sid');
+    if (!sessionCookie) {
+        throw new Error('Session cookie was not set after login');
+    }
+    
+    // Add a delay to ensure session is fully persisted to database
+    await page.waitForTimeout(1000);
 }
 
 test.beforeEach(async ({context}) => {
@@ -25,8 +38,9 @@ test('home page loads correctly', async ({page}) => {
     // Should have basic navigation
     await expect(page.locator('body')).toBeAttached();
     
-    // Should have login link when not authenticated
-    await expect(page.getByRole('link', {name: /login/i})).toBeVisible();
+    // Should have login link when not authenticated (use navbar link to avoid duplicates)
+    const navLoginLink = page.locator('nav').getByRole('link', {name: /login/i});
+    await expect(navLoginLink).toBeVisible();
 });
 
 // Test navigation bar for authenticated users
@@ -68,8 +82,9 @@ test('footer contains required links', async ({page}) => {
     const footer = page.locator('footer');
     await expect(footer).toBeVisible();
     
-    // Should have some footer content
-    await expect(footer.locator('a')).toBeAttached();
+    // Should have specific footer links
+    await expect(footer.getByRole('link', {name: /imprint/i})).toBeVisible();
+    await expect(footer.getByRole('link', {name: /privacy policy/i})).toBeVisible();
 });
 
 // Test page titles

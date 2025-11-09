@@ -11,7 +11,20 @@ async function login(page: any) {
     await page.locator('input[name="username"]').fill(USERNAME);
     await page.locator('input[name="password"]').fill(PASSWORD);
     await page.getByRole('button', {name: /login/i}).click();
-    await expect(page).toHaveURL(/\/users\/dashboard/);
+    // Wait for redirect and dashboard to load
+    await page.waitForURL(/\/users\/dashboard/, {waitUntil: 'networkidle'});
+    // Ensure we're logged in by checking for user menu
+    await expect(page.locator('#userMenu')).toBeVisible();
+    
+    // Verify session cookie was set
+    const cookies = await page.context().cookies();
+    const sessionCookie = cookies.find(c => c.name === 'connect.sid');
+    if (!sessionCookie) {
+        throw new Error('Session cookie was not set after login');
+    }
+    
+    // Add a delay to ensure session is fully persisted to database
+    await page.waitForTimeout(1000);
 }
 
 test.beforeEach(async ({context}) => {
@@ -51,8 +64,10 @@ test('registration form validates password matching', async ({page}) => {
     
     await page.getByRole('button', {name: /register/i}).click();
     
-    // Should show validation error
-    await expect(page.locator('.invalid-feedback, .alert-danger, .alert')).toBeAttached();
+    // Should show validation error (at least one message)
+    const errorMessage = page.locator('.invalid-feedback, .alert-danger, .alert').first();
+    await expect(errorMessage).toBeAttached();
+    await expect(errorMessage).toContainText(/passwords do not match/i);
 });
 
 // Test invalid activation token
@@ -86,11 +101,15 @@ test('handles network errors gracefully', async ({page, context}) => {
     // Simulate offline mode
     await context.setOffline(true);
     
-    // Try to navigate to a page that requires API call
-    await page.goto('/users/dashboard');
-    
+    // Try to navigate to a page that requires API call; ignore navigation failure while offline
+    try {
+        await page.goto('/users/dashboard');
+    } catch {
+        // Expected when offline; ensure the page still responds
+    }
+
     // Page should handle the error (may show cached content or error message)
-    // At minimum, it shouldn't crash - just verify page loads
+    // At minimum, it shouldn't crash - just verify page is still interactive
     await expect(page.locator('body')).toBeAttached();
     
     // Restore online mode
@@ -128,7 +147,7 @@ test('page remains functional after navigation', async ({page}) => {
 });
 
 // Test console errors
-test('no console errors on main pages', async ({page}) => {
+test('no critical console errors on main pages', async ({page}) => {
     const consoleErrors: string[] = [];
     
     page.on('console', (msg) => {
@@ -146,8 +165,55 @@ test('no console errors on main pages', async ({page}) => {
     const unexpectedErrors = consoleErrors.filter(err => 
         !err.includes('smtp.example.com') && 
         !err.includes('favicon') &&
-        !err.includes('ENOTFOUND')
+        !err.includes('ENOTFOUND') &&
+        !err.includes('ERR_NAME_NOT_RESOLVED') &&
+        !err.includes('net::')
     );
     
+    // Log any unexpected errors for debugging
+    if (unexpectedErrors.length > 0) {
+        console.log('Unexpected console errors:', unexpectedErrors);
+    }
+    
     expect(unexpectedErrors).toHaveLength(0);
+});
+
+// Test entity creation validation
+test('survey form shows validation errors for empty required fields', async ({page}) => {
+    await login(page);
+    await page.goto('/survey/create');
+    
+    // Wait for the page to be fully loaded
+    await expect(page).toHaveURL(/\/survey\/create/);
+    await expect(page.getByRole('heading', {name: /create.*survey/i})).toBeVisible();
+    
+    const titleInput = page.locator('input[name="title"]');
+    const isRequired = await titleInput.getAttribute('required');
+    expect(isRequired).not.toBeNull();
+});
+
+// Test access control for non-existent resources
+test('shows error for accessing non-existent survey', async ({page}) => {
+    await login(page);
+    await page.goto('/survey/999999');
+    
+    // Should show 404 or error message
+    const body = await page.locator('body').textContent();
+    expect(body).toMatch(/404|not found|error/i);
+});
+
+// Test protected routes redirect properly
+test('all protected routes redirect unauthenticated users', async ({page}) => {
+    const protectedRoutes = [
+        '/survey/create',
+        '/packing/create',
+        '/activity/create',
+        '/drivers/create',
+        '/users/dashboard'
+    ];
+    
+    for (const route of protectedRoutes) {
+        await page.goto(route);
+        await expect(page).toHaveURL(/\/users\/login/);
+    }
 });

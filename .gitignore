@@ -280,3 +280,5 @@ src/public/style/**/*.css
 src/public/style/**/*.css.map
 
 src.zip
+/playwright.config.js
+/scripts/e2e.db.init.js
