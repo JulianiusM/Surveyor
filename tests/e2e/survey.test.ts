@@ -15,8 +15,16 @@ async function login(page: any) {
     await page.waitForURL(/\/users\/dashboard/, {waitUntil: 'networkidle'});
     // Ensure we're logged in by checking for user menu
     await expect(page.locator('#userMenu')).toBeVisible();
+    
+    // Verify session cookie was set
+    const cookies = await page.context().cookies();
+    const sessionCookie = cookies.find(c => c.name === 'connect.sid');
+    if (!sessionCookie) {
+        throw new Error('Session cookie was not set after login');
+    }
+    
     // Add a small delay to ensure session is fully persisted to database
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1000);
 }
 
 test.beforeEach(async ({context}) => {
