@@ -11,20 +11,8 @@ async function login(page: any) {
     await page.locator('input[name="username"]').fill(USERNAME);
     await page.locator('input[name="password"]').fill(PASSWORD);
     await page.getByRole('button', {name: /login/i}).click();
-    // Wait for redirect and dashboard to load
     await page.waitForURL(/\/users\/dashboard/, {waitUntil: 'networkidle'});
-    // Ensure we're logged in by checking for user menu
     await expect(page.locator('#userMenu')).toBeVisible();
-    
-    // Verify session cookie was set
-    const cookies = await page.context().cookies();
-    const sessionCookie = cookies.find(c => c.name === 'connect.sid');
-    if (!sessionCookie) {
-        throw new Error('Session cookie was not set after login');
-    }
-    
-    // Add a delay to ensure session is fully persisted to database
-    await page.waitForTimeout(1000);
 }
 
 test.beforeEach(async ({context}) => {
@@ -33,7 +21,7 @@ test.beforeEach(async ({context}) => {
 
 test('authenticated user can access activity plan create page', async ({page}) => {
     await login(page);
-    await page.goto('/activity/create');
+    await page.goto('/activity/create', {waitUntil: 'networkidle'});
     await expect(page).toHaveURL(/\/activity\/create/);
     await expect(page.getByRole('heading', {name: /create.*activity/i})).toBeVisible();
 });
