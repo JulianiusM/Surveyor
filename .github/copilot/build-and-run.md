@@ -29,8 +29,8 @@ npm run e2e:headed      # Run E2E tests with browser
 
 The GitHub Actions CI pipeline:
 
-- Runs on push to `main` or `develop` branches
-- Runs on pull requests to `main` or `develop`
+- Runs on push to `master` or `dev` branches
+- Runs on pull requests to `master` or `dev`
 - Sets up MariaDB 10.11 service container
 - Sets up Node.js 24
 - Creates test and E2E databases with proper users
