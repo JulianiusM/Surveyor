@@ -30,7 +30,7 @@ export const entityConfigs: Record<EntityType, EntityConfig> = {
         displayNamePlural: 'surveys',
         accordionId: '#sec-surveys',
         createButtonPattern: /create.*survey/i,
-        emptyStatePattern: /you don't have any surveys yet/i,
+        emptyStatePattern: /you don[’']t have any surveys yet/i,
     },
     packing: {
         urlPath: '/packing/create',
@@ -38,7 +38,7 @@ export const entityConfigs: Record<EntityType, EntityConfig> = {
         displayNamePlural: 'packing lists',
         accordionId: '#sec-pack',
         createButtonPattern: /create.*list/i,
-        emptyStatePattern: /you don't have any packing lists yet/i,
+        emptyStatePattern: /you don[’']t have any packing lists yet/i,
     },
     activity: {
         urlPath: '/activity/create',
@@ -46,7 +46,7 @@ export const entityConfigs: Record<EntityType, EntityConfig> = {
         displayNamePlural: 'activity plans',
         accordionId: '#sec-activity',
         createButtonPattern: /create.*plan/i,
-        emptyStatePattern: /you don't have any activity plans yet/i,
+        emptyStatePattern: /you don[’']t have any activity plans yet/i,
     },
     drivers: {
         urlPath: '/drivers/create',
@@ -54,7 +54,7 @@ export const entityConfigs: Record<EntityType, EntityConfig> = {
         displayNamePlural: 'drivers lists',
         accordionId: '#sec-drivers',
         createButtonPattern: /create.*list/i,
-        emptyStatePattern: /you don't have any drivers lists yet/i,
+        emptyStatePattern: /you don[’']t have any drivers lists yet/i,
     },
 };
 
