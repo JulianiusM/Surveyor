@@ -34,11 +34,12 @@ jest.mock('../../src/modules/settings', () => ({
 // Runtime stub for JSON import
 jest.mock('../../package.json', () => ({version: '0.0.0-test'}), {virtual: true});
 
-import request from 'supertest';
 // Import app after mocks & DB init
 import app from '../../src/app';
 
 import {AppDataSource, initDataSource} from "../util/db/mariadb-datasource.mock";
+import { smokeTestData } from '../data/database/appData';
+import { makeRequest, verifyTextMatch } from '../keywords/database/databaseKeywords';
 
 // Initialize the in-memory DB once for this suite
 beforeAll(async () => {
@@ -49,13 +50,17 @@ afterAll(async () => {
     if (AppDataSource.isInitialized) await AppDataSource.destroy();
 });
 
-describe('App integration (smoke tests)', () => {
-    it('GET / returns 200 and contains "Surveyor"', async () => {
-        const res = await request(app).get('/').expect(200);
-        expect(res.text).toMatch(/Surveyor/i);
-    });
-
-    it('GET /nonexistent -> 404 via error handler', async () => {
-        await request(app).get('/definitely-not-a-real-route-xyz').expect(404);
+describe('App integration - Data Driven', () => {
+    test.each(smokeTestData)('$description', async (testCase) => {
+        const response = await makeRequest(
+            app,
+            testCase.method,
+            testCase.path,
+            testCase.expectedStatus
+        );
+        
+        if (testCase.expectedTextMatch) {
+            verifyTextMatch(response, testCase.expectedTextMatch);
+        }
     });
 });
