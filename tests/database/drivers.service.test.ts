@@ -79,7 +79,6 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-    await truncateAll();
     // Base owner for lists
     const owner = AppDataSource.getRepository(User).create({
         id: 1,
