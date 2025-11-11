@@ -3,9 +3,9 @@ name: CI
 on:
   workflow_dispatch:
   push:
-    branches: [ master, dev, ts-migration ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ master, dev, ts-migration ]
+    branches: [ main, develop ]
 
 jobs:
   test:
