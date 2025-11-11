@@ -31,15 +31,47 @@ Surveyor is a TypeScript-based survey management application built with:
 
 ### Testing
 
-- Write tests for all new features
+The project uses **data-driven** and **keyword-driven** testing approaches. See [TESTING.md](../TESTING.md) for comprehensive guidelines.
+
+#### Test Structure
+
+- **Test data** is separated into `tests/data/` directory organized by test type (unit, controller, middleware, database, e2e)
+- **Test keywords** (reusable actions) are in `tests/keywords/` directory
+- **Test builders** for creating test objects are in `tests/data/builders/`
+
+#### Test Organization
+
 - Place unit tests in `tests/unit/`
 - Place controller tests in `tests/controller/`
 - Place middleware tests in `tests/middleware/`
 - Place database integration tests in `tests/database/`
 - Place E2E tests in `tests/e2e/`
-- Mock external dependencies and use the existing mock utilities in `tests/util/`
-- Database tests must use the MariaDB test datasource mock
-- E2E tests must use the `.env.e2e` configuration
+
+#### Writing Tests
+
+- **Use data-driven tests**: Externalize test data into data files, use `test.each()` for parameterized tests
+- **Use test keywords**: Leverage reusable keywords from `tests/keywords/` for common operations
+- **Use builders**: Use test data builders from `tests/data/builders/` for creating test objects
+- **Separate concerns**: Test data in `tests/data/`, test logic in test files, test utilities in keywords
+- **Mock wisely**: Mock external dependencies using existing mock utilities in `tests/util/`
+- **Database tests**: Must use the MariaDB test datasource mock
+- **E2E tests**: Must use the `.env.e2e` configuration
+
+#### Test Data Guidelines
+
+- Create test data files in `tests/data/<type>/` matching the test file name
+- Export arrays of test cases with descriptive names
+- Include both success and failure scenarios
+- Cover edge cases and boundary conditions
+- Use test builders for complex objects
+
+#### Test Keywords Guidelines
+
+- Create keywords in `tests/keywords/<type>/` for reusable test actions
+- Use clear, action-oriented names (create*, verify*, setup*, expect*)
+- Keywords should be composable and single-purpose
+- Return useful data to enable further assertions
+- Handle errors gracefully within keywords
 
 ## Database Guidelines
 
@@ -66,17 +98,39 @@ Surveyor is a TypeScript-based survey management application built with:
 
 ## Testing Guidelines
 
+For comprehensive testing guidelines, see [TESTING.md](../TESTING.md).
+
 ### Unit Tests
 
-- Mock all external dependencies
-- Use existing stubs from `tests/util/stubs/`
+- Use **data-driven approach**: Extract test data to `tests/data/unit/`
+- Use **test keywords**: Leverage keywords from `tests/keywords/common/`
+- Mock all external dependencies using stubs from `tests/util/stubs/`
 - Test individual functions and methods in isolation
+- Use `test.each()` for parameterized tests with multiple data sets
+
+### Controller Tests
+
+- Use **data-driven approach**: Extract test data to `tests/data/controller/`
+- Use **controller keywords**: Leverage keywords from `tests/keywords/common/controllerKeywords.ts`
+- Mock service dependencies
+- Focus on validation, orchestration, and error mapping
+- No database interaction in controller tests
+
+### Middleware Tests
+
+- Use **data-driven approach**: Extract test data to `tests/data/middleware/`
+- Use **middleware keywords**: Leverage keywords from `tests/keywords/middleware/`
+- Test request/response handling
+- Verify authentication and authorization logic
+- Test error handling and redirection
 
 ### Integration Tests
 
+- Use **data-driven approach** where applicable
 - Test interaction between multiple components
-- Use the MariaDB test database
-- Clean up test data after each test
+- Use the MariaDB test database with provided mocks
+- Clean up test data after each test using keywords
+- Test complete workflows with real database operations
 
 ### E2E Tests
 
