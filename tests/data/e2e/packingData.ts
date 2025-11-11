@@ -3,40 +3,27 @@
  * Data-driven test cases for packing list creation, validation, and management
  */
 
+import {
+    generatePageAccessAuthenticatedData,
+    generatePageAccessUnauthenticatedData,
+    generateDashboardEmptyStateData,
+    generateFormValidationData,
+} from './entityData';
+
 /**
  * Test cases for packing page access (authenticated)
  */
-export const packingPageAccessAuthenticatedData = [
-    {
-        description: 'authenticated user can access packing list create page',
-        targetUrl: '/packing/create',
-        expectedUrl: /\/packing\/create/,
-        expectedHeading: /create.*packing/i,
-    },
-];
+export const packingPageAccessAuthenticatedData = generatePageAccessAuthenticatedData('packing');
 
 /**
  * Test cases for packing page access (unauthenticated)
  */
-export const packingPageAccessUnauthenticatedData = [
-    {
-        description: 'unauthenticated user cannot access packing create page',
-        targetUrl: '/packing/create',
-        expectedRedirectUrl: /\/users\/login/,
-    },
-];
+export const packingPageAccessUnauthenticatedData = generatePageAccessUnauthenticatedData('packing');
 
 /**
  * Test cases for packing dashboard empty state
  */
-export const packingDashboardEmptyStateData = [
-    {
-        description: 'packing dashboard shows empty state for new user',
-        accordionId: '#sec-pack',
-        buttonText: /your packing lists/i,
-        expectedEmptyText: /you don['']t have any packing/i,
-    },
-];
+export const packingDashboardEmptyStateData = generateDashboardEmptyStateData('packing');
 
 /**
  * Test cases for packing list creation
@@ -58,11 +45,4 @@ export const packingCreationData = [
 /**
  * Test cases for packing form validation
  */
-export const packingValidationData = [
-    {
-        description: 'packing form validates required fields',
-        titleFieldName: 'title',
-        expectedRequiredAttribute: true,
-        checkHtml5Validation: true,
-    },
-];
+export const packingValidationData = generateFormValidationData('packing');

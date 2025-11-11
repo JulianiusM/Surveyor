@@ -3,40 +3,27 @@
  * Data-driven test cases for activity plan creation, validation, and management
  */
 
+import {
+    generatePageAccessAuthenticatedData,
+    generatePageAccessUnauthenticatedData,
+    generateDashboardEmptyStateData,
+    generateFormValidationData,
+} from './entityData';
+
 /**
  * Test cases for activity page access (authenticated)
  */
-export const activityPageAccessAuthenticatedData = [
-    {
-        description: 'authenticated user can access activity plan create page',
-        targetUrl: '/activity/create',
-        expectedUrl: /\/activity\/create/,
-        expectedHeading: /create.*activity/i,
-    },
-];
+export const activityPageAccessAuthenticatedData = generatePageAccessAuthenticatedData('activity');
 
 /**
  * Test cases for activity page access (unauthenticated)
  */
-export const activityPageAccessUnauthenticatedData = [
-    {
-        description: 'unauthenticated user cannot access activity create page',
-        targetUrl: '/activity/create',
-        expectedRedirectUrl: /\/users\/login/,
-    },
-];
+export const activityPageAccessUnauthenticatedData = generatePageAccessUnauthenticatedData('activity');
 
 /**
  * Test cases for activity dashboard empty state
  */
-export const activityDashboardEmptyStateData = [
-    {
-        description: 'activity dashboard shows empty state for new user',
-        accordionId: '#sec-activity',
-        buttonText: /your activity plans/i,
-        expectedEmptyText: /you don['']t have any activity/i,
-    },
-];
+export const activityDashboardEmptyStateData = generateDashboardEmptyStateData('activity');
 
 /**
  * Test cases for activity plan creation
@@ -63,11 +50,4 @@ export const activityCreationData = [
 /**
  * Test cases for activity form validation
  */
-export const activityValidationData = [
-    {
-        description: 'activity form validates required fields',
-        titleFieldName: 'title',
-        expectedRequiredAttribute: true,
-        checkHtml5Validation: true,
-    },
-];
+export const activityValidationData = generateFormValidationData('activity');

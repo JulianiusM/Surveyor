@@ -3,40 +3,27 @@
  * Data-driven test cases for drivers list creation, validation, and management
  */
 
+import {
+    generatePageAccessAuthenticatedData,
+    generatePageAccessUnauthenticatedData,
+    generateDashboardEmptyStateData,
+    generateFormValidationData,
+} from './entityData';
+
 /**
  * Test cases for drivers page access (authenticated)
  */
-export const driversPageAccessAuthenticatedData = [
-    {
-        description: 'authenticated user can access drivers list create page',
-        targetUrl: '/drivers/create',
-        expectedUrl: /\/drivers\/create/,
-        expectedHeading: /create.*driver/i,
-    },
-];
+export const driversPageAccessAuthenticatedData = generatePageAccessAuthenticatedData('drivers');
 
 /**
  * Test cases for drivers page access (unauthenticated)
  */
-export const driversPageAccessUnauthenticatedData = [
-    {
-        description: 'unauthenticated user cannot access drivers create page',
-        targetUrl: '/drivers/create',
-        expectedRedirectUrl: /\/users\/login/,
-    },
-];
+export const driversPageAccessUnauthenticatedData = generatePageAccessUnauthenticatedData('drivers');
 
 /**
  * Test cases for drivers dashboard empty state
  */
-export const driversDashboardEmptyStateData = [
-    {
-        description: 'drivers dashboard shows empty state for new user',
-        accordionId: '#sec-drivers',
-        buttonText: /your drivers lists/i,
-        expectedEmptyText: /you don['']t have any drivers/i,
-    },
-];
+export const driversDashboardEmptyStateData = generateDashboardEmptyStateData('drivers');
 
 /**
  * Test cases for drivers list creation
@@ -55,11 +42,4 @@ export const driversCreationData = [
 /**
  * Test cases for drivers form validation
  */
-export const driversValidationData = [
-    {
-        description: 'drivers form validates required fields',
-        titleFieldName: 'title',
-        expectedRequiredAttribute: true,
-        checkHtml5Validation: true,
-    },
-];
+export const driversValidationData = generateFormValidationData('drivers');
