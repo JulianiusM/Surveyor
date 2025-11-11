@@ -67,6 +67,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+    await truncateAll();
     const user = AppDataSource.getRepository(User).create({id: 1, username: '', name: '', email: ''});
     await AppDataSource.getRepository(User).save(user);
 });

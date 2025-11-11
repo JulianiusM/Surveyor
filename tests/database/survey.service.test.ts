@@ -70,6 +70,9 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+    // Clean database before each test
+    await truncateAll();
+    
     // Default owner for surveys
     await createTestUser({
         id: 1,

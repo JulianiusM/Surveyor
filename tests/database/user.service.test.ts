@@ -73,6 +73,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+    await truncateAll();
     // nothing required globally; each test sets up what it needs
 });
 

@@ -78,6 +78,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+    await truncateAll();
     await createTestUser({ id: 1, username: '', name: '', email: '' });
 });
 

@@ -72,6 +72,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+    await truncateAll();
     // Base owner for events
     const owner = AppDataSource.getRepository(User).create({
         id: 1,
