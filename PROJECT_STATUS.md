@@ -7,7 +7,8 @@ Comprehensive test restructuring to data-driven and keyword-driven approach for 
 ## Current Status
 
 **Unit/Controller/Middleware Tests**: ✅ **COMPLETE** (15/15 files - 100%)
-**Database Tests**: 🔄 **IN PROGRESS** (3/9 files - 33%)
+**Database Tests**: 🔄 **IN PROGRESS** (6/9 files - 67%)
+**Overall Progress**: 21/24 files (88%)
 
 ---
 
@@ -38,16 +39,16 @@ All 287 tests passing with complete data extraction:
 - permissionMiddleware.test.ts (33 tests, +106%)
 - guestFlowFactory.test.ts (16 tests, +100%)
 
-### Database Tests (3/9 - 33%)
+### Database Tests (6/9 - 67%)
 
-- ✅ app.test.ts (2 tests)
-- ✅ survey.service.test.ts (2 tests)
-- ✅ activity.service.test.ts (8 tests)
-- ⏳ packing.service.test.ts
-- ⏳ drivers.service.test.ts
-- ⏳ event.service.test.ts
-- ⏳ user.service.test.ts
-- ⏳ activity.service.edge.test.ts
+- ✅ app.test.ts (2 tests) - b08fd6d
+- ✅ survey.service.test.ts (2 tests) - 9f62975
+- ✅ activity.service.test.ts (8 tests) - e230c35
+- ✅ packing.service.test.ts (3 tests) - 7e40b18
+- ✅ drivers.service.test.ts (3 tests) - f930cd0
+- ✅ event.service.test.ts (5 tests) - f9e520b
+- ⏳ user.service.test.ts (298 lines)
+- ⏳ activity.service.edge.test.ts (273 lines)
 - ⏳ activity.service.more.test.ts
 
 ---
