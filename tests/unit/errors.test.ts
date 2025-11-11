@@ -1,27 +1,34 @@
-import {APIError, ExpectedError, ValidationError} from '../../src/modules/lib/errors';
+import { APIError, ExpectedError, ValidationError } from '../../src/modules/lib/errors';
+import { apiErrorData, expectedErrorData, validationErrorData } from '../data/unit/errorsData';
 
 describe('lib/errors', () => {
-    test('APIError sets name, status and data', () => {
-        const err = new APIError('boom', {foo: 'bar'}, 418);
-        expect(err.name).toBe('APIError');
-        expect(err.status).toBe(418);
-        expect(err.data).toEqual({foo: 'bar'});
-        expect(err.message).toBe('boom');
+    describe('APIError - Data Driven', () => {
+        test.each(apiErrorData)('$description', ({ message, data, status, expected }) => {
+            const err = new APIError(message, data, status);
+            expect(err.name).toBe(expected.name);
+            expect(err.status).toBe(expected.status);
+            expect(err.data).toEqual(expected.data);
+            expect(err.message).toBe(expected.message);
+        });
     });
 
-    test('ExpectedError sets severity and defaults', () => {
-        const err = new ExpectedError('expected!', 'info', 400, {a: 1});
-        expect(err.name).toBe('ExpectedError');
-        expect(err.severity).toBe('info');
-        expect(err.data).toEqual({a: 1});
-        expect(err.message).toBe('expected!');
+    describe('ExpectedError - Data Driven', () => {
+        test.each(expectedErrorData)('$description', ({ message, severity, status, data, expected }) => {
+            const err = new ExpectedError(message, severity, status, data);
+            expect(err.name).toBe(expected.name);
+            expect(err.severity).toBe(expected.severity);
+            expect(err.data).toEqual(expected.data);
+            expect(err.message).toBe(expected.message);
+        });
     });
 
-    test('ValidationError carries template and data', () => {
-        const err = new ValidationError('form', 'test', {v: 1});
-        expect(err.name).toBe('ValidationError');
-        expect(err.template).toBe('form');
-        expect(err.message).toBe('test');
-        expect(err.data).toEqual({v: 1});
+    describe('ValidationError - Data Driven', () => {
+        test.each(validationErrorData)('$description', ({ template, message, data, expected }) => {
+            const err = new ValidationError(template, message, data);
+            expect(err.name).toBe(expected.name);
+            expect(err.template).toBe(expected.template);
+            expect(err.message).toBe(expected.message);
+            expect(err.data).toEqual(expected.data);
+        });
     });
 });

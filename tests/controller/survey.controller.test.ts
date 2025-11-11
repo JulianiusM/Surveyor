@@ -1,5 +1,6 @@
 /**
  * Controller unit tests for surveyController (services mocked).
+ * Uses data-driven and keyword-driven testing approach.
  * Focus: validation, orchestration, and error mapping — no DB involved.
  */
 
@@ -17,7 +18,35 @@ jest.mock('../../src/modules/database/services/SurveyService', () => ({
 
 import controller from '../../src/controller/surveyController';
 import * as surveyService from '../../src/modules/database/services/SurveyService';
-import {ExpectedError, ValidationError} from '../../src/modules/lib/errors';
+import { ExpectedError, ValidationError } from '../../src/modules/lib/errors';
+
+// Import test data
+import {
+    preprocessCreateData,
+    preprocessCreateErrorData,
+    createEntityData,
+    submitResponsesData,
+    addCombinationData,
+    addCombinationErrorData,
+    afterCreateItemsData,
+    fetchForViewData,
+    fetchForDuplicateData,
+    deleteEntityData,
+} from '../data/controller/surveyData';
+
+// Import test keywords
+import {
+    clearAllMocks,
+    setupMock,
+    verifyMockCall,
+    verifyMockNthCall,
+    verifyMockNotCalled,
+    verifyMockCallCount,
+    verifyResult,
+    expectSyncToThrowError,
+    executeControllerFunction,
+    expectToThrowError,
+} from '../keywords/common/controllerKeywords';
 
 const {
     preprocessCreate,
@@ -31,186 +60,185 @@ const {
 } = controller as any;
 
 beforeEach(() => {
-    jest.clearAllMocks();
+    clearAllMocks();
 });
 
-describe('preprocessCreate', () => {
-    it('normalizes combos (array) and trims strings; description "" -> null', () => {
-        const body = {
-            title: '  My Survey  ',
-            description: '',
-            combinations: [
-                {weekday: 'MON', week: 1},
-                {weekday: 'FRI', week: 'LAST'},
-            ],
-        };
+describe('preprocessCreate - Data Driven', () => {
+    // Run data-driven tests for valid inputs
+    test.each(preprocessCreateData)(
+        '$description',
+        ({ input, expected }) => {
+            const result = preprocessCreate(input);
+            verifyResult(result, expected);
+        }
+    );
 
-        const out = preprocessCreate(body);
-
-        expect(out).toEqual({
-            title: 'My Survey',
-            description: null,
-            combinations: [
-                {weekday: 'MON', nthWeek: '1'},
-                {weekday: 'FRI', nthWeek: 'LAST'},
-            ],
-        });
-    });
-
-    it('accepts combos object with numeric keys (qs-style) and validates', () => {
-        const body = {
-            title: 'Weekly',
-            description: '  desc ',
-            combinations: {
-                0: {weekday: 'WED', week: 3},
-                1: {weekday: 'SUN', week: 'LAST'},
-            },
-        };
-
-        const out = preprocessCreate(body);
-        expect(out.title).toBe('Weekly');
-        expect(out.description).toBe('desc');
-        expect(out.combinations).toEqual([
-            {weekday: 'WED', nthWeek: '3'},
-            {weekday: 'SUN', nthWeek: 'LAST'},
-        ]);
-    });
-
-    it('throws ValidationError when missing title, empty combos or invalid values', () => {
-        // missing title
-        expect(() =>
-            preprocessCreate({description: '', combinations: [{weekday: 'MON', week: 1}]})
-        ).toThrow(ValidationError);
-
-        // empty combos
-        expect(() =>
-            preprocessCreate({title: 'X', description: '', combinations: []})
-        ).toThrow(ValidationError);
-
-        // invalid weekday
-        expect(() =>
-            preprocessCreate({title: 'X', description: '', combinations: [{weekday: 'XXX', week: 1}]})
-        ).toThrow(ValidationError);
-
-        // invalid week
-        expect(() =>
-            preprocessCreate({title: 'X', description: '', combinations: [{weekday: 'MON', week: 9}]})
-        ).toThrow(ValidationError);
-    });
+    // Run data-driven tests for error cases
+    test.each(preprocessCreateErrorData)(
+        'throws ValidationError: $description',
+        ({ input, errorType }) => {
+            expectSyncToThrowError(() => preprocessCreate(input), ValidationError);
+        }
+    );
 });
 
-describe('createEntity', () => {
-    it('maps payload to createSurveyTx (uses combinations[].week)', async () => {
-        (surveyService.createSurveyTx as jest.Mock).mockResolvedValue('survey-123');
+describe('createEntity - Data Driven', () => {
+    test.each(createEntityData)(
+        '$description',
+        async ({ userId, payload, expectedServiceCall, mockReturnValue }) => {
+            // Setup mock
+            setupMock(surveyService.createSurveyTx as jest.Mock, mockReturnValue);
 
-        const payload = {
-            title: 'T',
-            description: 'D',
-            combinations: [
-                {weekday: 'MON', nthWeek: '1'},
-                {weekday: 'FRI', nthWeek: 'LAST'},
-            ],
-        };
+            // Execute
+            const result = await executeControllerFunction(createEntity, userId, payload);
 
-        const id = await createEntity(42, payload);
+            // Verify result
+            verifyResult(result, mockReturnValue);
 
-        expect(id).toBe('survey-123');
-        expect(surveyService.createSurveyTx).toHaveBeenCalledWith(42, 'T', 'D', [
-            {weekday: 'MON', week: '1'},
-            {weekday: 'FRI', week: 'LAST'},
-        ]);
-    });
+            // Verify service was called correctly
+            const { userId: expUserId, title, description, combinations } = expectedServiceCall;
+            verifyMockCall(
+                surveyService.createSurveyTx as jest.Mock,
+                expUserId,
+                title,
+                description,
+                combinations
+            );
+        }
+    );
 });
 
 describe('afterCreateItems', () => {
-    it('is a no-op that resolves', async () => {
-        await expect(afterCreateItems()).resolves.toBeUndefined();
+    test.each(afterCreateItemsData)('$description', async ({ expected }) => {
+        const result = await afterCreateItems();
+        expect(result).toBe(expected);
     });
 });
 
-describe('fetchForView', () => {
-    it('returns survey, combinations, responses (delegates to service)', async () => {
-        const survey = {id: 's1'};
-        const combos = [{id: 1}];
-        const responses = [{userId: 7}];
+describe('fetchForView - Data Driven', () => {
+    test.each(fetchForViewData)(
+        '$description',
+        async ({ survey, mockCombos, mockResponses, expected }) => {
+            setupMock(surveyService.getCombinationsBySurveyId as jest.Mock, mockCombos);
+            setupMock(surveyService.getResponsesSorted as jest.Mock, mockResponses);
 
-        (surveyService.getCombinationsBySurveyId as jest.Mock).mockResolvedValue(combos);
-        (surveyService.getResponsesSorted as jest.Mock).mockResolvedValue(responses);
+            const result = await fetchForView(survey as any, {} as any);
 
-        const out = await fetchForView(survey as any, {} as any);
-
-        expect(surveyService.getCombinationsBySurveyId).toHaveBeenCalledWith('s1');
-        expect(surveyService.getResponsesSorted).toHaveBeenCalledWith('s1');
-        expect(out).toEqual({survey, combinations: combos, responses});
-    });
+            verifyMockCall(surveyService.getCombinationsBySurveyId as jest.Mock, survey.id);
+            verifyMockCall(surveyService.getResponsesSorted as jest.Mock, survey.id);
+            verifyResult(result, expected);
+        }
+    );
 });
 
-describe('fetchForDuplicate', () => {
-    it('returns combinations by survey id', async () => {
-        (surveyService.getCombinationsBySurveyId as jest.Mock).mockResolvedValue([{id: 2}]);
+describe('fetchForDuplicate - Data Driven', () => {
+    test.each(fetchForDuplicateData)(
+        '$description',
+        async ({ survey, mockCombos, expectedSurveyId }) => {
+            setupMock(surveyService.getCombinationsBySurveyId as jest.Mock, mockCombos);
 
-        const out = await fetchForDuplicate({id: 's2'} as any, {} as any);
-        expect(surveyService.getCombinationsBySurveyId).toHaveBeenCalledWith('s2');
-        expect(out).toEqual([{id: 2}]);
-    });
+            const result = await fetchForDuplicate(survey as any, {} as any);
+
+            verifyMockCall(surveyService.getCombinationsBySurveyId as jest.Mock, expectedSurveyId);
+            verifyResult(result, mockCombos);
+        }
+    );
 });
 
-describe('deleteEntity', () => {
-    it('delegates to deleteSurvey', async () => {
-        await deleteEntity({id: 's9'} as any, {} as any);
-        expect(surveyService.deleteSurvey).toHaveBeenCalledWith('s9');
-    });
+describe('deleteEntity - Data Driven', () => {
+    test.each(deleteEntityData)(
+        '$description',
+        async ({ survey, expectedSurveyId }) => {
+            await deleteEntity(survey as any, {} as any);
+            verifyMockCall(surveyService.deleteSurvey as jest.Mock, expectedSurveyId);
+        }
+    );
 });
 
-describe('addCombination', () => {
-    it('throws ExpectedError when weekday or nth is missing', async () => {
-        await expect(addCombination({id: 's1'} as any, undefined as any, 2 as any))
-            .rejects.toBeInstanceOf(ExpectedError);
+describe('addCombination - Data Driven', () => {
+    // Run data-driven tests for valid inputs
+    test.each(addCombinationData)(
+        '$description',
+        async ({ survey, weekday, nth }) => {
+            await addCombination(survey as any, weekday, nth);
+            verifyMockCall(surveyService.addCombination as jest.Mock, survey.id, weekday, nth);
+        }
+    );
 
-        await expect(addCombination({id: 's1'} as any, 'MON' as any, undefined as any))
-            .rejects.toBeInstanceOf(ExpectedError);
-    });
-
-    it('calls service when both provided', async () => {
-        await addCombination({id: 's1'} as any, 'MON', 2);
-        expect(surveyService.addCombination).toHaveBeenCalledWith('s1', 'MON', 2);
-    });
+    // Run data-driven tests for error cases
+    test.each(addCombinationErrorData)(
+        'throws ExpectedError: $description',
+        async ({ survey, weekday, nth }) => {
+            await expectToThrowError(
+                () => addCombination(survey as any, weekday as any, nth as any),
+                ExpectedError
+            );
+        }
+    );
 });
 
-describe('submitResponses', () => {
-    const answers = {'10': 'YES', '11': 'NO'};
+describe('submitResponses - Data Driven', () => {
+    test.each(submitResponsesData)(
+        '$description',
+        async ({ survey, session, answers, expected }) => {
+            await submitResponses(survey as any, session as any, answers);
 
-    it('handles USER session: deletes then saves per combination', async () => {
-        const survey = {id: 's1'};
-        const session = {user: {id: 7}};
+            // Verify delete call
+            if (expected.deleteCall) {
+                if (expected.deleteCall.type === 'user') {
+                    verifyMockCall(
+                        surveyService.deleteResponsesByUserId as jest.Mock,
+                        expected.deleteCall.id,
+                        expected.deleteCall.surveyId
+                    );
+                    verifyMockNotCalled(surveyService.deleteResponsesByGuestId as jest.Mock);
+                } else if (expected.deleteCall.type === 'guest') {
+                    verifyMockCall(
+                        surveyService.deleteResponsesByGuestId as jest.Mock,
+                        expected.deleteCall.id,
+                        expected.deleteCall.surveyId
+                    );
+                    verifyMockNotCalled(surveyService.deleteResponsesByUserId as jest.Mock);
+                }
+            } else {
+                verifyMockNotCalled(surveyService.deleteResponsesByUserId as jest.Mock);
+                verifyMockNotCalled(surveyService.deleteResponsesByGuestId as jest.Mock);
+            }
 
-        await submitResponses(survey as any, session as any, answers);
+            // Verify save calls
+            if (expected.saveCalls.length > 0) {
+                verifyMockCallCount(
+                    expected.saveCalls[0].type === 'user'
+                        ? (surveyService.saveResponseUser as jest.Mock)
+                        : (surveyService.saveResponseGuest as jest.Mock),
+                    expected.saveCalls.length
+                );
 
-        expect(surveyService.deleteResponsesByUserId).toHaveBeenCalledWith(7, 's1');
-        expect(surveyService.saveResponseUser).toHaveBeenCalledTimes(2);
-        expect(surveyService.saveResponseUser).toHaveBeenNthCalledWith(1, 's1', 7, 10, 'YES');
-        expect(surveyService.saveResponseUser).toHaveBeenNthCalledWith(2, 's1', 7, 11, 'NO');
-        expect(surveyService.saveResponseGuest).not.toHaveBeenCalled();
-    });
-
-    it('handles GUEST session: deletes then saves per combination', async () => {
-        const survey = {id: 's1'};
-        const session = {guest: {id: 9}};
-
-        await submitResponses(survey as any, session as any, answers);
-
-        expect(surveyService.deleteResponsesByGuestId).toHaveBeenCalledWith(9, 's1');
-        expect(surveyService.saveResponseGuest).toHaveBeenCalledTimes(2);
-        expect(surveyService.saveResponseGuest).toHaveBeenNthCalledWith(1, 's1', 9, 10, 'YES');
-        expect(surveyService.saveResponseGuest).toHaveBeenNthCalledWith(2, 's1', 9, 11, 'NO');
-        expect(surveyService.saveResponseUser).not.toHaveBeenCalled();
-    });
-
-    it('no-op when session has neither user nor guest', async () => {
-        await submitResponses({id: 's1'} as any, {} as any, answers);
-        expect(surveyService.deleteResponsesByUserId).not.toHaveBeenCalled();
-        expect(surveyService.deleteResponsesByGuestId).not.toHaveBeenCalled();
-        expect(surveyService.saveResponseUser).not.toHaveBeenCalled();
-        expect(surveyService.saveResponseGuest).not.toHaveBeenCalled();
-    });
+                expected.saveCalls.forEach((saveCall, index) => {
+                    if (saveCall.type === 'user') {
+                        verifyMockNthCall(
+                            surveyService.saveResponseUser as jest.Mock,
+                            index + 1,
+                            saveCall.surveyId,
+                            saveCall.userId,
+                            saveCall.combinationId,
+                            saveCall.response
+                        );
+                    } else if (saveCall.type === 'guest') {
+                        verifyMockNthCall(
+                            surveyService.saveResponseGuest as jest.Mock,
+                            index + 1,
+                            saveCall.surveyId,
+                            saveCall.guestId,
+                            saveCall.combinationId,
+                            saveCall.response
+                        );
+                    }
+                });
+            } else {
+                verifyMockNotCalled(surveyService.saveResponseUser as jest.Mock);
+                verifyMockNotCalled(surveyService.saveResponseGuest as jest.Mock);
+            }
+        }
+    );
 });

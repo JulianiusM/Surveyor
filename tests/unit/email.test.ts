@@ -1,5 +1,5 @@
 /**
- * Unit tests for src/modules/email.ts
+ * Unit tests for src/modules/email.ts - Data Driven
  * - Mocks nodemailer to observe transport + payload
  * - Mocks settings to inject SMTP config + from address
  * - Verifies singleton init (createTransport called once)
@@ -8,6 +8,12 @@
  */
 export {}; // make this test file a module; avoids global name collisions
 
+import {
+    sendEmailTransportData,
+    emailTemplateData,
+    mockEmailSettings,
+    expectedTransportConfig,
+} from '../data/unit/emailData';
 
 // We'll lazily import the module after mocks are set
 const makeMocks = () => {
@@ -17,118 +23,56 @@ const makeMocks = () => {
     jest.doMock('../../src/modules/settings', () => ({
         __esModule: true,
         default: {
-            value: {
-                smtpHost: 'smtp.test.local',
-                smtpPort: 2525,
-                smtpSecure: false,
-                smtpUser: 'mailer',
-                smtpPassword: 'secret',
-                smtpEmail: 'noreply@surveyor.test',
-            }
+            value: mockEmailSettings,
         }
     }));
 
     // Mock nodemailer with spies
-    const sendMail = jest.fn().mockResolvedValue({accepted: ['ok'], messageId: 'msg-1'});
-    const createTransport = jest.fn(() => ({sendMail}));
+    const sendMail = jest.fn().mockResolvedValue({ accepted: ['ok'], messageId: 'msg-1' });
+    const createTransport = jest.fn(() => ({ sendMail }));
 
     jest.doMock('nodemailer', () => ({
         __esModule: true,
-        default: {createTransport},
+        default: { createTransport },
         createTransport,
     }));
 
-    return {sendMail, createTransport};
+    return { sendMail, createTransport };
 };
 
 describe('email module', () => {
     test('sendEmail initializes transport once and sends with settings.from', async () => {
-        const {sendMail, createTransport} = makeMocks();
+        const { sendMail, createTransport } = makeMocks();
         const email = (await import('../../src/modules/email')).default;
 
-        // First call creates transport
-        await email.sendEmail('user@example.com', 'Subject X', 'Hello');
-        expect(createTransport).toHaveBeenCalledTimes(1);
-        expect(createTransport).toHaveBeenCalledWith({
-            pool: true,
-            host: 'smtp.test.local',
-            port: 2525,
-            secure: false,
-            auth: {user: 'mailer', pass: 'secret'},
-        });
-        expect(sendMail).toHaveBeenCalledWith({
-            from: 'noreply@surveyor.test',
-            to: 'user@example.com',
-            subject: 'Subject X',
-            text: 'Hello',
-        });
-
-        // Second call reuses same transporter (no new createTransport)
-        await email.sendEmail('a@b.c', 'S2', 'Hi again');
-        expect(createTransport).toHaveBeenCalledTimes(1);
-        expect(sendMail).toHaveBeenCalledWith({
-            from: 'noreply@surveyor.test',
-            to: 'a@b.c',
-            subject: 'S2',
-            text: 'Hi again',
-        });
+        // Test both calls using data
+        for (const testCase of sendEmailTransportData) {
+            await email.sendEmail(testCase.to, testCase.subject, testCase.body);
+            
+            expect(createTransport).toHaveBeenCalledTimes(testCase.expectedTransportCalls);
+            
+            if (testCase.call === 1) {
+                expect(createTransport).toHaveBeenCalledWith(expectedTransportConfig);
+            }
+            
+            expect(sendMail).toHaveBeenCalledWith(testCase.expectedMailPayload);
+        }
     });
 
-    test('sendActivationEmail produces correct subject/body', async () => {
-        const {sendMail} = makeMocks();
-        const email = (await import('../../src/modules/email')).default;
+    describe('email template helpers - Data Driven', () => {
+        test.each(emailTemplateData)(
+            '$description',
+            async ({ method, to, link, expectedSubject, expectedBody }) => {
+                const { sendMail } = makeMocks();
+                const email = (await import('../../src/modules/email')).default;
 
-        const link = 'https://app.local/activate/abc';
-        await email.sendActivationEmail('user@x', link);
+                await (email as any)[method](to, link);
 
-        expect(sendMail).toHaveBeenCalledTimes(1);
-        const payload = sendMail.mock.calls[0][0];
-        expect(payload.subject).toBe('Activate your account');
-        expect(payload.text).toBe(
-            'Hi! Welcome to Surveyor!\n\n' +
-            'To activate your account, please follow this link:\n\n' +
-            link + '\n\n' +
-            'Note: This link will expire in 1 hour.\n\n' +
-            'Your Surveyor Team.'
-        );
-    });
-
-    test('sendPasswordResetEmail produces correct subject/body', async () => {
-        const {sendMail} = makeMocks();
-        const email = (await import('../../src/modules/email')).default;
-
-        const link = 'https://app.local/reset/xyz';
-        await email.sendPasswordResetEmail('user@x', link);
-
-        expect(sendMail).toHaveBeenCalledTimes(1);
-        const payload = sendMail.mock.calls[0][0];
-        expect(payload.subject).toBe('Reset your password');
-        expect(payload.text).toBe(
-            'Hi!\n\n' +
-            'You requested to reset your password.\n\n' +
-            'To set a new one, please follow this link:\n\n' +
-            link + '\n\n' +
-            'Note: This link will expire in 1 hour.\n\n' +
-            'Your Surveyor Team.'
-        );
-    });
-
-    test('sendLinkEmail produces correct subject/body', async () => {
-        const {sendMail} = makeMocks();
-        const email = (await import('../../src/modules/email')).default;
-
-        const link = 'https://app.local/surveys/edit/123';
-        await email.sendLinkEmail('user@x', link);
-
-        expect(sendMail).toHaveBeenCalledTimes(1);
-        const payload = sendMail.mock.calls[0][0];
-        expect(payload.subject).toBe('Your personal editing link');
-        expect(payload.text).toBe(
-            'Hi! Thank you for using Surveyor!\n\n' +
-            'This is your personal link to edit your answers:\n\n' +
-            link + '\n\n' +
-            'Note: Please do not share this link with anybody.\n\n' +
-            'Your Surveyor Team.'
+                expect(sendMail).toHaveBeenCalledTimes(1);
+                const payload = sendMail.mock.calls[0][0];
+                expect(payload.subject).toBe(expectedSubject);
+                expect(payload.text).toBe(expectedBody);
+            }
         );
     });
 
@@ -139,18 +83,15 @@ describe('email module', () => {
         jest.doMock('../../src/modules/settings', () => ({
             __esModule: true,
             default: {
-                value: {
-                    smtpHost: 'smtp.test.local', smtpPort: 2525, smtpSecure: false,
-                    smtpUser: 'mailer', smtpPassword: 'secret', smtpEmail: 'noreply@surveyor.test'
-                }
+                value: mockEmailSettings,
             }
         }));
 
         const sendMail = jest.fn().mockRejectedValue(new Error('SMTP down'));
-        const createTransport = jest.fn(() => ({sendMail}));
+        const createTransport = jest.fn(() => ({ sendMail }));
         jest.doMock('nodemailer', () => ({
             __esModule: true,
-            default: {createTransport},
+            default: { createTransport },
             createTransport,
         }));
 
@@ -164,3 +105,4 @@ describe('email module', () => {
         expect(spyErr).toHaveBeenCalled();
     });
 });
+

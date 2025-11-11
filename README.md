@@ -66,6 +66,19 @@ The E2E database should be configured with:
 
 ## Running Tests
 
+The Surveyor test suite uses **data-driven** and **keyword-driven** testing approaches for maintainable, reusable, and comprehensive test coverage. See [TESTING.md](TESTING.md) for detailed testing guidelines.
+
+### Test Organization
+
+Tests are organized into:
+- **Unit tests** (`tests/unit/`) - Test individual functions in isolation
+- **Controller tests** (`tests/controller/`) - Test business logic with mocked services
+- **Middleware tests** (`tests/middleware/`) - Test request/response handling
+- **Database tests** (`tests/database/`) - Test database operations with real DB
+- **E2E tests** (`tests/e2e/`) - Test complete user workflows
+
+Test data is separated into `tests/data/` and reusable test keywords are in `tests/keywords/`.
+
 ### Unit and Integration Tests
 
 Run all unit and integration tests:
@@ -78,6 +91,12 @@ Watch mode for development:
 
 ```bash
 npm run test:watch
+```
+
+Run with coverage:
+
+```bash
+npm test -- --coverage
 ```
 
 ### E2E Tests
