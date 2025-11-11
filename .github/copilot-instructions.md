@@ -134,6 +134,45 @@ For comprehensive testing guidelines, see [TESTING.md](../TESTING.md).
 
 ### E2E Tests
 
+E2E tests follow the same **data-driven** and **keyword-driven** patterns as unit and integration tests:
+
+- **Test data**: Externalized to `tests/data/e2e/*.ts`
+- **Test keywords**: Reusable actions in `tests/keywords/e2e/*.ts`
+- **For-loop pattern**: Use `for (const data of testData)` to iterate test cases
+
+#### Test Structure
+
+```typescript
+// Import test data
+import { surveyCreationData } from '../data/e2e/surveyData';
+import { testCredentials } from '../data/e2e/authData';
+
+// Import keywords
+import { loginUser } from '../keywords/e2e/authKeywords';
+import { createSurvey, generateEntityTitle } from '../keywords/e2e/entityKeywords';
+
+// Data-driven test
+for (const data of surveyCreationData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        const surveyTitle = generateEntityTitle(data.title);
+        await createSurvey(page, surveyTitle, data.surveyDescription, data.submitButtonText);
+        await page.waitForURL((url) => data.expectedRedirectPattern.test(url.pathname));
+    });
+}
+```
+
+#### Test Organization
+
+- **Test files**: `tests/e2e/*.test.ts`
+- **Test data**: `tests/data/e2e/*.ts` 
+- **Keywords**: `tests/keywords/e2e/*.ts`
+  - `authKeywords.ts` - Authentication operations (login, register, verify)
+  - `entityKeywords.ts` - Entity management (create, navigate, verify)
+  - `navigationKeywords.ts` - Navigation operations (links, pages, titles)
+  - `validationKeywords.ts` - Validation operations (errors, fields, alerts)
+  - `dbKeywords.ts` - Database helpers (tokens, queries)
+
 - Test complete user workflows and frontend behavior
 - Use Playwright test framework
 - Tests run against the built application
@@ -159,7 +198,7 @@ For comprehensive testing guidelines, see [TESTING.md](../TESTING.md).
 - OIDC configuration in E2E is for frontend testing only (button visibility, UI state)
 - Do not test actual OIDC authentication flows in E2E tests
 - Tests should be isolated and use `test.beforeEach` to clear cookies/session
-- Use consistent login helper functions across test files
+- Use keywords for common operations instead of duplicating code
 - Test both positive and negative paths (success and failure scenarios)
 
 ## CI Pipeline

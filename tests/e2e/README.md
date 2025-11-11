@@ -1,21 +1,67 @@
 # End-to-End Test Documentation
 
-This directory contains Playwright E2E tests for the Surveyor application. These tests focus on frontend behavior and user interactions.
+This directory contains Playwright E2E tests for the Surveyor application. These tests follow the same **data-driven** and **keyword-driven** testing patterns used in unit and integration tests.
+
+## Test Architecture
+
+### Data-Driven and Keyword-Driven Approach
+
+All E2E tests now use:
+- **Test data files** (`tests/data/e2e/*.ts`) - Separated test data from test logic
+- **Test keywords** (`tests/keywords/e2e/*.ts`) - Reusable test actions
+- **For-loop pattern** - Playwright-compatible data iteration
+
+### Example Pattern
+
+```typescript
+// Import test data
+import { surveyCreationData } from '../data/e2e/surveyData';
+import { testCredentials } from '../data/e2e/authData';
+
+// Import keywords
+import { loginUser } from '../keywords/e2e/authKeywords';
+import { createSurvey, generateEntityTitle } from '../keywords/e2e/entityKeywords';
+
+// Data-driven test
+for (const data of surveyCreationData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        const surveyTitle = generateEntityTitle(data.title);
+        await createSurvey(page, surveyTitle, data.surveyDescription, data.submitButtonText);
+        await page.waitForURL((url) => data.expectedRedirectPattern.test(url.pathname));
+    });
+}
+```
 
 ## Test Organization
 
 ### File Structure
 
 ```
-tests/e2e/
-├── auth.test.ts           # Authentication flows and user management
-├── survey.test.ts         # Survey entity management
-├── packing.test.ts        # Packing list management
-├── activity.test.ts       # Activity plan management
-├── drivers.test.ts        # Drivers list management
-├── navigation.test.ts     # UI navigation and page structure
-├── error-handling.test.ts # Error scenarios and validation
-└── README.md             # This file
+tests/
+├── e2e/
+│   ├── auth.test.ts           # Authentication flows and user management
+│   ├── survey.test.ts         # Survey entity management
+│   ├── packing.test.ts        # Packing list management
+│   ├── activity.test.ts       # Activity plan management
+│   ├── drivers.test.ts        # Drivers list management
+│   ├── navigation.test.ts     # UI navigation and page structure
+│   ├── error-handling.test.ts # Error scenarios and validation
+│   └── README.md             # This file
+├── data/e2e/
+│   ├── authData.ts           # Authentication test data
+│   ├── surveyData.ts         # Survey test data
+│   ├── packingData.ts        # Packing test data
+│   ├── activityData.ts       # Activity test data
+│   ├── driversData.ts        # Drivers test data
+│   ├── navigationData.ts     # Navigation test data
+│   └── errorHandlingData.ts  # Error handling test data
+└── keywords/e2e/
+    ├── authKeywords.ts       # Authentication keywords (login, register, etc.)
+    ├── entityKeywords.ts     # Entity management keywords (create, verify, etc.)
+    ├── navigationKeywords.ts # Navigation keywords (navigate, verify links, etc.)
+    ├── validationKeywords.ts # Validation keywords (check errors, fields, etc.)
+    └── dbKeywords.ts         # Database helper keywords (tokens, queries, etc.)
 ```
 
 ## Test Categories
@@ -86,18 +132,44 @@ Each entity type (Survey, Packing, Activity, Drivers) has its own test file with
 
 ## Test Patterns
 
-### Common Helpers
+### Data-Driven Tests
 
-All test files include a `login()` helper function:
+Tests iterate over test data using for loops (Playwright-compatible pattern):
 
 ```typescript
-async function login(page: any) {
-    await page.goto('/users/login');
-    await page.locator('input[name="username"]').fill(USERNAME);
-    await page.locator('input[name="password"]').fill(PASSWORD);
-    await page.getByRole('button', {name: /login/i}).click();
-    await expect(page).toHaveURL(/\/users\/dashboard/);
+for (const data of loginSuccessData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, data.username, data.password);
+        await verifyUrlMatches(page, data.expectedUrl);
+        await verifyHeadingVisible(page, data.expectedHeading);
+    });
 }
+```
+
+### Keyword-Driven Tests
+
+Tests use reusable keywords to abstract common operations:
+
+```typescript
+// Authentication keywords
+await loginUser(page, username, password);
+await registerUserThroughUI(page, { username, password, email });
+await verifyErrorAlert(page);
+
+// Entity management keywords
+await navigateToEntityCreatePage(page, 'survey', expectedUrl, expectedHeading);
+await createSurvey(page, title, description, submitButtonText);
+await verifyDashboardEmptyState(page, accordionId, buttonText, expectedEmptyText);
+
+// Navigation keywords
+await verifyLinkVisible(page, linkName);
+await navigateThroughSteps(page, steps);
+await verifyPageTitle(page, pattern);
+
+// Validation keywords
+await verifyErrorMessage(page, selector, expectedText);
+await verifyFieldRequired(page, fieldName);
+await verifyProtectedRoutesRedirect(page, routes, expectedRedirectUrl);
 ```
 
 ### Test Isolation
@@ -172,6 +244,51 @@ E2E_ADMIN_PASSWORD=passw0rd!
 # OIDC (for frontend testing only)
 OIDC_ENABLED=0
 ```
+
+## Benefits of Data-Driven and Keyword-Driven Approach
+
+### Maintainability
+- **Single source of truth**: Update test data in one place
+- **Reusable keywords**: Change implementation without updating all tests
+- **Clear separation**: Test logic separate from test data
+
+### Readability
+- **Business-focused**: Tests read like requirements
+- **Self-documenting**: Descriptive test data and keyword names
+- **Easy to understand**: High-level test flow without implementation details
+
+### Coverage
+- **Easy to add scenarios**: Just add new test data
+- **Parameterized tests**: Multiple test cases from single test function
+- **Comprehensive**: Cover edge cases and boundary conditions with data
+
+### Consistency
+- **Standardized patterns**: All E2E tests follow same structure
+- **Aligned with unit/integration tests**: Same patterns across test types
+- **Uniform keywords**: Common operations use same keywords
+
+## Best Practices for E2E Tests
+
+### Test Data
+1. **Use descriptive names**: Clear `description` field for each test case
+2. **Cover all scenarios**: Include success, failure, and edge cases
+3. **Keep data readable**: Use meaningful values, not random strings
+4. **Use test credentials**: Reference `testCredentials` from `authData.ts`
+5. **Generate unique IDs**: Use `generateUniqueUsername()` for user creation
+
+### Test Keywords
+1. **Single responsibility**: Each keyword does one thing well
+2. **Composable**: Combine keywords to build complex workflows
+3. **Return values**: Return data needed for assertions
+4. **Error handling**: Handle errors gracefully within keywords
+5. **Clear naming**: Use action verbs (login, create, verify, navigate)
+
+### Test Files
+1. **Import data and keywords**: Always import at the top
+2. **Use for loops**: Iterate over test data using Playwright pattern
+3. **Cleanup state**: Use `beforeEach` to clear cookies
+4. **Avoid duplication**: Use keywords instead of repeating code
+5. **Test one thing**: Each test should verify one behavior
 
 ## Coverage Goals
 
