@@ -47,6 +47,13 @@ import {DriversAssignment} from '../../src/modules/database/entities/drivers/Dri
 import {User} from '../../src/modules/database/entities/user/User';
 import {Guest} from '../../src/modules/database/entities/user/Guest';
 
+// Test data
+import {
+    driversListCrudData,
+    driversItemsData,
+    driversAssignmentsData,
+} from '../data/database/driversServiceData';
+
 // Helper to clear relevant tables between tests (order matters due to FKs)
 async function truncateAll() {
     await AppDataSource.query('SET FOREIGN_KEY_CHECKS=0');
@@ -87,41 +94,48 @@ afterEach(async () => {
 }, 60_000);
 
 describe('driversService (mysql)', () => {
-    it('creates and updates a DriversList; fetch by id and user', async () => {
+    test.each(driversListCrudData)('$description', async (testCase) => {
         const listId = uuidv4();
 
-        await createDriversList(1, 'Initial Title', 'Initial Desc', true, false, listId);
+        await createDriversList(
+            testCase.userId,
+            testCase.initialData.title,
+            testCase.initialData.description,
+            testCase.initialData.allowGuestAdd,
+            testCase.initialData.guestManage,
+            listId
+        );
 
         // By id
         const byId = await getDriversListById(listId);
         expect(byId).toBeTruthy();
         expect(byId!.id).toBe(listId);
-        expect(byId!.title).toBe('Initial Title');
-        expect(byId!.description).toBe('Initial Desc');
-        expect(byId!.allowGuestAdd).toBe(1);
-        expect(byId!.guestManage).toBe(0);
+        expect(byId!.title).toBe(testCase.expectedInitial.title);
+        expect(byId!.description).toBe(testCase.expectedInitial.description);
+        expect(byId!.allowGuestAdd).toBe(testCase.expectedInitial.allowGuestAdd);
+        expect(byId!.guestManage).toBe(testCase.expectedInitial.guestManage);
 
         // By user
-        const byUser = await getDriversListByUserId(1);
+        const byUser = await getDriversListByUserId(testCase.userId);
         expect(byUser.map((l) => l.id)).toContain(listId);
 
         // Update fields individually
-        await updateDriversListTitle(listId, 'New Title');
-        await updateDriversListDescription(listId, 'New Desc');
-        await updateDriversListAllow(listId, false);
-        await updateDriversListGuestManage(listId, true);
+        await updateDriversListTitle(listId, testCase.updates.title);
+        await updateDriversListDescription(listId, testCase.updates.description);
+        await updateDriversListAllow(listId, testCase.updates.allowGuestAdd);
+        await updateDriversListGuestManage(listId, testCase.updates.guestManage);
 
         const afterSingleUpdates = await getDriversListById(listId);
-        expect(afterSingleUpdates!.title).toBe('New Title');
-        expect(afterSingleUpdates!.description).toBe('New Desc');
-        expect(afterSingleUpdates!.allowGuestAdd).toBe(0);
-        expect(afterSingleUpdates!.guestManage).toBe(1);
+        expect(afterSingleUpdates!.title).toBe(testCase.expectedAfterUpdates.title);
+        expect(afterSingleUpdates!.description).toBe(testCase.expectedAfterUpdates.description);
+        expect(afterSingleUpdates!.allowGuestAdd).toBe(testCase.expectedAfterUpdates.allowGuestAdd);
+        expect(afterSingleUpdates!.guestManage).toBe(testCase.expectedAfterUpdates.guestManage);
 
         // Update flags together
-        await updateDriversFlags(listId, true, false);
+        await updateDriversFlags(listId, testCase.flagsUpdate.allowGuestAdd, testCase.flagsUpdate.guestManage);
         const afterFlags = await getDriversListById(listId);
-        expect(afterFlags!.allowGuestAdd).toBe(1);
-        expect(afterFlags!.guestManage).toBe(0);
+        expect(afterFlags!.allowGuestAdd).toBe(testCase.expectedAfterFlags.allowGuestAdd);
+        expect(afterFlags!.guestManage).toBe(testCase.expectedAfterFlags.guestManage);
 
         // Delete
         await deleteDriversList(listId);
@@ -129,167 +143,136 @@ describe('driversService (mysql)', () => {
         expect(deleted).toBeNull();
     });
 
-    it('creates items (user+guest), enriches, reorders, updates, and computes last item number', async () => {
+    test.each(driversItemsData)('$description', async (testCase) => {
         const listId = uuidv4();
-        await createDriversList(1, 'Drivers', 'desc', true, false, listId);
+        await createDriversList(
+            testCase.userId,
+            testCase.listData.title,
+            testCase.listData.description,
+            testCase.listData.allowGuestAdd,
+            testCase.listData.guestManage,
+            listId
+        );
 
         // Additional principals
-        const user2 = AppDataSource.getRepository(User).create({
-            id: 2,
-            username: 'u2',
-            name: 'User Two',
-            email: 'u2@example.com',
-        });
+        const user2 = AppDataSource.getRepository(User).create(testCase.testUser);
         await AppDataSource.getRepository(User).save(user2);
 
-        const guest1 = AppDataSource.getRepository(Guest).create({
-            id: 10,
-            username: 'guestOne',
-        });
+        const guest1 = AppDataSource.getRepository(Guest).create(testCase.testGuest);
         await AppDataSource.getRepository(Guest).save(guest1);
 
-        const itemId1 = uuidv4()
-        const itemId2 = uuidv4()
-        // Create two items; explicit ids/pos for determinism
-        await createDriversItemUser(listId, 2, {
-            id: itemId1,
-            title: 'Pick up wood',
-            description: '',
-            maxAssignees: 2,
-            pos: 1,
-        });
-
-        await createDriversItemGuest(listId, 10, {
-            id: itemId2,
-            title: 'Bring nails',
-            description: 'galvanized',
-            maxAssignees: 1,
-            pos: 2,
-        });
+        const itemId1 = testCase.userItem.id;
+        const itemId2 = testCase.guestItem.id;
+        
+        // Create two items
+        await createDriversItemUser(listId, testCase.testUser.id, testCase.userItem);
+        await createDriversItemGuest(listId, testCase.testGuest.id, testCase.guestItem);
 
         // Enriched list read
         const itemsInitial = await getDriversItems(listId);
         expect(itemsInitial).toHaveLength(2);
         expect(itemsInitial[0].id).toBe(itemId1);
         expect(itemsInitial[0].assignedCount).toBe(0);
-        expect(itemsInitial[0].driverName).toBe('User Two');
+        expect(itemsInitial[0].driverName).toBe(testCase.expectedUserItemName);
 
         expect(itemsInitial[1].id).toBe(itemId2);
-        expect(itemsInitial[1].driverName).toBe('guestOne');
+        expect(itemsInitial[1].driverName).toBe(testCase.expectedGuestItemName);
 
         // Update item
-        const updated = await updateDriversItem(itemId1, {
-            title: 'Pick up timber',
-            description: 'oak',
-            maxAssignees: 3,
-            pos: 5,
-        });
+        const updated = await updateDriversItem(testCase.itemUpdate.itemId, testCase.itemUpdate.updates);
         expect(updated).toBe(true);
 
         // No-op update returns false
-        const noOp = await updateDriversItem(itemId1, {});
+        const noOp = await updateDriversItem(testCase.itemUpdate.itemId, {});
         expect(noOp).toBe(false);
 
-        // Reorder: item-2 first, item-1 second
-        await reorderDriversItems(listId, [
-            {itemId: itemId2, position: 1},
-            {itemId: itemId1, position: 2},
-        ]);
+        // Reorder
+        await reorderDriversItems(listId, testCase.reorder);
 
         const itemsReordered = await getDriversItems(listId);
-        expect(itemsReordered.map((i) => i.id)).toEqual([itemId2, itemId1]);
+        expect(itemsReordered.map((i) => i.id)).toEqual(testCase.expectedAfterReorder);
 
         // Last number
         const last = await getLastDriversItemNumber(listId);
-        expect(last).toBe(2);
+        expect(last).toBe(testCase.expectedLastNumber);
 
         // Delete one item
-        await deleteDriversItem(itemId2);
+        await deleteDriversItem(testCase.deleteItemId);
         const afterDelete = await getDriversItems(listId);
-        expect(afterDelete.map((i) => i.id)).toEqual([itemId1]);
+        expect(afterDelete.map((i) => i.id)).toEqual(testCase.expectedAfterDelete);
     });
 
-    it('assigns/unassigns items (user + guest), counts, maps assignees, and deletes assignments', async () => {
+    test.each(driversAssignmentsData)('$description', async (testCase) => {
         const listId = uuidv4();
-        const itemId1 = uuidv4()
-        const itemId2 = uuidv4()
-        await createDriversList(1, 'Drivers', 'desc', true, true, listId);
+        const itemId1 = testCase.userItem.id;
+        const itemId2 = testCase.guestItem.id;
+        
+        await createDriversList(
+            testCase.userId,
+            testCase.listData.title,
+            testCase.listData.description,
+            testCase.listData.allowGuestAdd,
+            testCase.listData.guestManage,
+            listId
+        );
 
         // Principals
-        const user2 = AppDataSource.getRepository(User).create({
-            id: 2,
-            username: 'u2',
-            name: 'User Two',
-            email: 'u2@example.com',
-        });
+        const user2 = AppDataSource.getRepository(User).create(testCase.testUser);
         await AppDataSource.getRepository(User).save(user2);
 
-        const guest1 = AppDataSource.getRepository(Guest).create({
-            id: 11,
-            username: 'guestOne',
-        });
+        const guest1 = AppDataSource.getRepository(Guest).create(testCase.testGuest);
         await AppDataSource.getRepository(Guest).save(guest1);
 
         // Items
-        await createDriversItemUser(listId, 2, {
-            id: itemId1,
-            title: 'Drive van',
-            pos: 1,
-            maxAssignees: 2,
-        });
-        await createDriversItemGuest(listId, 11, {
-            id: itemId2,
-            title: 'Drive truck',
-            pos: 2,
-            maxAssignees: 1,
-        });
+        await createDriversItemUser(listId, testCase.testUser.id, testCase.userItem);
+        await createDriversItemGuest(listId, testCase.testGuest.id, testCase.guestItem);
 
         // Assign (idempotent/upsert)
-        await assignDriversItemToUser(itemId1, 2);
-        await assignDriversItemToUser(itemId1, 2); // duplicate
-        await assignDriversItemToGuest(itemId2, 11);
-        await assignDriversItemToGuest(itemId2, 11); // duplicate
+        await assignDriversItemToUser(itemId1, testCase.testUser.id);
+        await assignDriversItemToUser(itemId1, testCase.testUser.id); // duplicate
+        await assignDriversItemToGuest(itemId2, testCase.testGuest.id);
+        await assignDriversItemToGuest(itemId2, testCase.testGuest.id); // duplicate
 
         // Counts by item
         const counts = await getDriversAssignmentCounts(listId);
-        expect(counts[itemId1]).toBe(1);
-        expect(counts[itemId2]).toBe(1);
+        expect(counts[itemId1]).toBe(testCase.expectedCounts[itemId1]);
+        expect(counts[itemId2]).toBe(testCase.expectedCounts[itemId2]);
 
         // Enriched single fetch shows assignedCount
         const enrichedU = await getDriversItemById(itemId1);
-        expect(enrichedU.assignedCount).toBe(1);
-        expect(enrichedU.driverName).toBe('User Two');
+        expect(enrichedU.assignedCount).toBe(testCase.expectedCounts[itemId1]);
+        expect(enrichedU.driverName).toBe(testCase.expectedAssigneeNames[itemId1]);
 
         // Lists of assigned item ids
-        const userItems = await getDriversAssignmentsForUser(listId, 2);
-        expect(userItems).toEqual([itemId1]);
+        const userItems = await getDriversAssignmentsForUser(listId, testCase.testUser.id);
+        expect(userItems).toEqual(testCase.expectedUserItems);
 
-        const guestItems = await getDriversAssignmentsForGuest(listId, 11);
-        expect(guestItems).toEqual([itemId2]);
+        const guestItems = await getDriversAssignmentsForGuest(listId, testCase.testGuest.id);
+        expect(guestItems).toEqual(testCase.expectedGuestItems);
 
         // Map of assignees per item
         const assigneesMap = await getDriversItemAssignees(listId);
         expect(Object.keys(assigneesMap).sort()).toEqual([itemId2, itemId1].sort());
         expect(assigneesMap[itemId1]).toHaveLength(1);
-        expect(assigneesMap[itemId1][0].name).toBe('User Two');
-        expect(assigneesMap[itemId2][0].name).toBe('guestOne');
+        expect(assigneesMap[itemId1][0].name).toBe(testCase.expectedAssigneeNames[itemId1]);
+        expect(assigneesMap[itemId2][0].name).toBe(testCase.expectedAssigneeNames[itemId2]);
 
         // Delete one assignment by id
         const guestAssignId = assigneesMap[itemId2][0].id!;
         await deleteDriversAssignment(guestAssignId);
 
         const countsAfterDelete = await getDriversAssignmentCounts(listId);
-        expect(countsAfterDelete[itemId2] ?? 0).toBe(0);
-        expect(countsAfterDelete[itemId1]).toBe(1);
+        expect(countsAfterDelete[itemId2] ?? 0).toBe(testCase.expectedCountsAfterGuestDelete[itemId2]);
+        expect(countsAfterDelete[itemId1]).toBe(testCase.expectedCountsAfterGuestDelete[itemId1]);
 
         // Unassign the user via (itemId,userId)
-        await unassignDriversItemUser(itemId1, 2);
+        await unassignDriversItemUser(itemId1, testCase.testUser.id);
 
         const finalCounts = await getDriversAssignmentCounts(listId);
-        expect(finalCounts[itemId1] ?? 0).toBe(0);
+        expect(finalCounts[itemId1] ?? 0).toBe(testCase.expectedFinalCounts[itemId1]);
 
         // Also test guest unassign path again for completeness (no-op now)
-        await unassignDriversItemGuest(itemId2, 11);
+        await unassignDriversItemGuest(itemId2, testCase.testGuest.id);
 
         const emptyMap = await getDriversItemAssignees(listId);
         expect(emptyMap[itemId1] ?? []).toHaveLength(0);

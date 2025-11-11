@@ -35,6 +35,8 @@ jest.mock('../../src/modules/lib/util', () => ({
 import controller from '../../src/controller/driversController';
 import * as driverService from '../../src/modules/database/services/DriverService';
 import {APIError, ValidationError} from '../../src/modules/lib/errors';
+import {setupMock, verifyMockCall, verifyResult} from '../keywords/common/controllerKeywords';
+import * as testData from '../data/controller/driversData';
 
 const {
     preprocessCreate,
@@ -61,248 +63,215 @@ beforeEach(() => {
 });
 
 describe('preprocessCreate', () => {
-    it('sanitizes valid payload, converts flags to booleans, coalesces description', () => {
-        const body = {
-            title: 'Drivers',
-            description: '',
-            allowGuestAdd: 'anything truthy', // -> Boolean(...) === true
-            guestManage: '',                  // -> false
-            items: JSON.stringify([
-                {title: 'A', description: '', maxAssignees: 2},
-            ]),
-        };
-
-        const out = preprocessCreate(body);
-        expect(out).toMatchObject({
-            title: 'Drivers',
-            description: null,
-            allowGuestAdd: true,
-            guestManage: false,
-        });
-    });
-
-    it('throws ValidationError on invalid items JSON', () => {
-        const body = {
-            title: 'X',
-            items: '{bad json',
-        };
-        expect(() => preprocessCreate(body)).toThrow(ValidationError);
-    });
-
-    it('throws ValidationError when required title is missing', () => {
-        const body = {
-            description: 'no title',
-            items: '[]',
-        };
-        expect(() => preprocessCreate(body)).toThrow(ValidationError);
-    });
+    test.each(testData.preprocessCreateData)(
+        '$description',
+        ({input, expected, shouldThrow}) => {
+            if (shouldThrow) {
+                expect(() => preprocessCreate(input)).toThrow(shouldThrow === 'ValidationError' ? ValidationError : Error);
+            } else {
+                const out = preprocessCreate(input);
+                expect(out).toMatchObject(expected);
+            }
+        }
+    );
 });
 
 describe('createEntity / afterCreateItems', () => {
     it('delegates to createDriversList and returns id', async () => {
-        (driverService.createDriversList as jest.Mock).mockResolvedValue('list-123');
+        const {userId, listData, expectedId} = testData.createEntityData;
+        setupMock(driverService.createDriversList, expectedId);
 
-        const listData = {
-            title: 'T',
-            description: 'D',
-            allowGuestAdd: true,
-            guestManage: false,
-        };
-
-        const id = await createEntity(7, listData);
-        expect(id).toBe('list-123');
-        expect(driverService.createDriversList).toHaveBeenCalledWith(7, 'T', 'D', true, false);
+        const id = await createEntity(userId, listData);
+        
+        verifyResult(id, expectedId);
+        verifyMockCall(driverService.createDriversList, userId, listData.title, listData.description, listData.allowGuestAdd, listData.guestManage);
 
         await expect(afterCreateItems()).resolves.toBeUndefined();
     });
 });
 
 describe('fetchForView', () => {
-    const list = {id: 'L1'};
-
-    const items = [
-        {id: 'a', assignedCount: 0, maxAssignees: 2, title: 'A'}, // empty + open
-        {id: 'b', assignedCount: 1, maxAssignees: 1, title: 'B'}, // full
-        {id: 'c', assignedCount: 0, maxAssignees: 1, title: 'C'}, // empty + open
-    ];
-
-    const assigneeLists = {
-        a: [{userId: 10, name: 'Alice'}, {name: 'Temp'}],
-        b: [{guestId: 3, name: 'Bob'}],
-        c: [{userId: 10, name: 'Alice'}, {name: 'Temp'}],
-    };
+    const {list, items, assignees, scenarios} = testData.fetchForViewData;
 
     beforeEach(() => {
-        (driverService.getDriversItems as jest.Mock).mockResolvedValue(items);
-        (driverService.getDriversItemAssignees as jest.Mock).mockResolvedValue(assigneeLists);
+        setupMock(driverService.getDriversItems, items);
+        setupMock(driverService.getDriversItemAssignees, assignees);
     });
 
-    it('uses user assignments and computes counters and participant set size', async () => {
-        (driverService.getDriversAssignmentsForUser as jest.Mock).mockResolvedValue(['a']);
-        const session = {user: {id: 99}};
-
-        const out = await fetchForView(list as any, session as any);
-        expect(driverService.getDriversAssignmentsForUser).toHaveBeenCalledWith('L1', 99);
-        expect(out.assignments).toEqual(['a']);
-
-        // participants: u_10, g_3, 'Temp' => 3 unique
-        expect(out.counters).toEqual({participants: 3, open: 2, empty: 2});
-    });
-
-    it('uses guest assignments when no user', async () => {
-        (driverService.getDriversAssignmentsForGuest as jest.Mock).mockResolvedValue(['b']);
-        const session = {guest: {id: 7}};
-
-        const out = await fetchForView(list as any, session as any);
-        expect(driverService.getDriversAssignmentsForGuest).toHaveBeenCalledWith('L1', 7);
-        expect(out.assignments).toEqual(['b']);
-    });
-
-    it('falls back to empty assignments when no principal', async () => {
-        const out = await fetchForView(list as any, {} as any);
-        expect(out.assignments).toEqual([]);
-    });
+    test.each(scenarios)(
+        '$description',
+        async ({session, mockAssignments, mockFunc, mockArgs, expectedAssignments, expectedCounters}) => {
+            if (mockFunc) {
+                setupMock(driverService[mockFunc], mockAssignments);
+            }
+            
+            const out = await fetchForView(list as any, session as any);
+            
+            if (mockArgs) {
+                verifyMockCall(driverService[mockFunc], ...mockArgs);
+            }
+            verifyResult(out.assignments, expectedAssignments);
+            if (expectedCounters) {
+                verifyResult(out.counters, expectedCounters);
+            }
+        }
+    );
 });
 
 describe('fetchForDuplicate / deleteEntity', () => {
     it('fetchForDuplicate returns items array', async () => {
-        const mock = [{id: 'x'}];
-        (driverService.getDriversItems as jest.Mock).mockResolvedValue(mock);
+        const {list, items} = testData.fetchForDuplicateData;
+        setupMock(driverService.getDriversItems, items);
 
-        const out = await fetchForDuplicate({id: 'L9'} as any, {} as any);
-        expect(out).toBe(mock);
+        const out = await fetchForDuplicate(list as any, {} as any);
+        
+        verifyResult(out, items);
     });
 
     it('deleteEntity delegates to deleteDriversList', async () => {
-        await deleteEntity({id: 'L5'} as any, {} as any);
-        expect(driverService.deleteDriversList).toHaveBeenCalledWith('L5');
+        const {list} = testData.deleteEntityData;
+        
+        await deleteEntity(list as any, {} as any);
+        
+        verifyMockCall(driverService.deleteDriversList, list.id);
     });
 });
 
 describe('API helpers', () => {
     describe('updateDescription', () => {
-        it('updates when <= 2000 chars', async () => {
-            await expect(updateDescription('L1', {description: 'ok'})).resolves.toBe('Description updated');
-            expect(driverService.updateDriversListDescription).toHaveBeenCalledWith('L1', 'ok');
-        });
-
-        it('rejects when too long', async () => {
-            const long = 'x'.repeat(2001);
-            await expect(updateDescription('L1', {description: long})).rejects.toBeInstanceOf(APIError);
-        });
+        test.each(testData.updateDescriptionData)(
+            '$description',
+            async ({listId, body, expectedMessage, shouldThrow}) => {
+                if (shouldThrow) {
+                    await expect(updateDescription(listId, body)).rejects.toBeInstanceOf(APIError);
+                } else {
+                    const result = await updateDescription(listId, body);
+                    verifyResult(result, expectedMessage);
+                    verifyMockCall(driverService.updateDriversListDescription, listId, body.description);
+                }
+            }
+        );
     });
 
     it('reorderItems passes through and returns message', async () => {
-        await expect(reorderItems('L1', [{itemId: 'i1', position: 3}])).resolves.toBe('Order saved');
-        expect(driverService.reorderDriversItems).toHaveBeenCalledWith('L1', [{itemId: 'i1', position: 3}]);
+        const {listId, order, expectedMessage} = testData.reorderItemsData;
+        
+        const result = await reorderItems(listId, order);
+        
+        verifyResult(result, expectedMessage);
+        verifyMockCall(driverService.reorderDriversItems, listId, order);
     });
 
     describe('quickAddItem', () => {
+        const {list, lastPos, scenarios} = testData.quickAddItemData;
+
         beforeEach(() => {
-            (driverService.getLastDriversItemNumber as jest.Mock).mockResolvedValue(2);
+            setupMock(driverService.getLastDriversItemNumber, lastPos);
         });
 
-        it('creates item for logged-in user with next pos and numeric max', async () => {
-            const session = {user: {id: 42}};
-            await expect(
-                quickAddItem({id: 'L1'} as any, {title: 'Hammer', description: 'Steel', max: '3'}, session as any)
-            ).resolves.toBe('Item added');
-
-            expect(driverService.createDriversItemUser).toHaveBeenCalledWith(
-                'L1',
-                42,
-                expect.objectContaining({
-                    id: 'uid-xyz',
-                    title: 'Hammer',
-                    description: 'Steel',
-                    maxAssignees: 3,
-                    pos: 3,
-                })
-            );
-        });
-
-        it('creates item for guest if no user', async () => {
-            const session = {guest: {id: 9}};
-            await quickAddItem({id: 'L1'} as any, {title: 'Nails', max: 0}, session as any);
-            // max 0 -> default 1
-            expect(driverService.createDriversItemGuest).toHaveBeenCalledWith(
-                'L1',
-                9,
-                expect.objectContaining({maxAssignees: 1})
-            );
-        });
-
-        it('rejects when not logged in', async () => {
-            await expect(
-                quickAddItem({id: 'L1'} as any, {title: 'Glue'}, {} as any)
-            ).rejects.toBeInstanceOf(APIError);
-        });
-
-        it('rejects missing title', async () => {
-            await expect(
-                quickAddItem({id: 'L1'} as any, {title: ''}, {user: {id: 1}} as any)
-            ).rejects.toBeInstanceOf(APIError);
-        });
+        test.each(scenarios)(
+            '$description',
+            async ({session, body, expectedMessage, expectedService, expectedItem, expectedMaxAssignees, shouldThrow}) => {
+                if (shouldThrow) {
+                    await expect(quickAddItem(list as any, body, session as any)).rejects.toBeInstanceOf(APIError);
+                } else if (expectedItem) {
+                    const result = await quickAddItem(list as any, body, session as any);
+                    verifyResult(result, expectedMessage);
+                    expect(driverService[expectedService]).toHaveBeenCalledWith(
+                        list.id,
+                        session.user.id,
+                        expect.objectContaining(expectedItem)
+                    );
+                } else if (expectedMaxAssignees) {
+                    await quickAddItem(list as any, body, session as any);
+                    expect(driverService[expectedService]).toHaveBeenCalledWith(
+                        list.id,
+                        session.guest.id,
+                        expect.objectContaining({maxAssignees: expectedMaxAssignees})
+                    );
+                }
+            }
+        );
     });
 
     describe('updateItemDescription', () => {
-        it('returns ok if update true', async () => {
-            (driverService.updateDriversItem as jest.Mock).mockResolvedValue(true);
-            await expect(updateItemDescription('it1', {description: 'd'})).resolves.toBe('Description updated');
-            expect(driverService.updateDriversItem).toHaveBeenCalledWith('it1', {description: 'd'});
-        });
-
-        it('throws 500 if update false', async () => {
-            (driverService.updateDriversItem as jest.Mock).mockResolvedValue(false);
-            await expect(updateItemDescription('it1', {description: 'd'})).rejects.toBeInstanceOf(APIError);
-        });
+        test.each(testData.updateItemDescriptionData)(
+            '$description',
+            async ({itemId, body, mockResolve, expectedMessage, shouldThrow}) => {
+                setupMock(driverService.updateDriversItem, mockResolve);
+                
+                if (shouldThrow) {
+                    await expect(updateItemDescription(itemId, body)).rejects.toBeInstanceOf(APIError);
+                } else {
+                    const result = await updateItemDescription(itemId, body);
+                    verifyResult(result, expectedMessage);
+                    verifyMockCall(driverService.updateDriversItem, itemId, body);
+                }
+            }
+        );
     });
 
     describe('updateItemAttr', () => {
-        it('rejects invalid field', async () => {
-            await expect(updateItemAttr('it1', {field: 'pos', value: 2})).rejects.toBeInstanceOf(APIError);
-        });
-
-        it('updates allowed field and returns ok', async () => {
-            (driverService.updateDriversItem as jest.Mock).mockResolvedValue(true);
-            await expect(updateItemAttr('it1', {field: 'title', value: 'New'})).resolves.toBe('Item updated');
-            expect(driverService.updateDriversItem).toHaveBeenCalledWith('it1', {title: 'New'});
-        });
-
-        it('throws 500 when service returns false', async () => {
-            (driverService.updateDriversItem as jest.Mock).mockResolvedValue(false);
-            await expect(updateItemAttr('it1', {field: 'title', value: 'New'})).rejects.toBeInstanceOf(APIError);
-        });
+        test.each(testData.updateItemAttrData)(
+            '$description',
+            async ({itemId, body, mockResolve, expectedMessage, expectedUpdate, shouldThrow}) => {
+                if (mockResolve !== undefined) {
+                    setupMock(driverService.updateDriversItem, mockResolve);
+                }
+                
+                if (shouldThrow) {
+                    await expect(updateItemAttr(itemId, body)).rejects.toBeInstanceOf(APIError);
+                } else {
+                    const result = await updateItemAttr(itemId, body);
+                    verifyResult(result, expectedMessage);
+                    verifyMockCall(driverService.updateDriversItem, itemId, expectedUpdate);
+                }
+            }
+        );
     });
 
     it('deleteAssignment delegates and returns message', async () => {
-        await expect(deleteAssignment(77)).resolves.toBe('Assignment removed');
-        expect(driverService.deleteDriversAssignment).toHaveBeenCalledWith(77);
+        const {assignmentId, expectedMessage} = testData.deleteAssignmentData;
+        
+        const result = await deleteAssignment(assignmentId);
+        
+        verifyResult(result, expectedMessage);
+        verifyMockCall(driverService.deleteDriversAssignment, assignmentId);
     });
 
     it('updateSettings delegates and returns message', async () => {
-        await expect(updateSettings('L1', {allowAdd: true, guestManage: false})).resolves.toBe('Settings saved');
-        expect(driverService.updateDriversFlags).toHaveBeenCalledWith('L1', true, false);
+        const {listId, body, expectedMessage} = testData.updateSettingsData;
+        
+        const result = await updateSettings(listId, body);
+        
+        verifyResult(result, expectedMessage);
+        verifyMockCall(driverService.updateDriversFlags, listId, body.allowAdd, body.guestManage);
     });
 
     it('deleteItem delegates and returns message', async () => {
-        await expect(deleteItem('it9')).resolves.toBe('Item deleted');
-        expect(driverService.deleteDriversItem).toHaveBeenCalledWith('it9');
+        const {itemId, expectedMessage} = testData.deleteItemData;
+        
+        const result = await deleteItem(itemId);
+        
+        verifyResult(result, expectedMessage);
+        verifyMockCall(driverService.deleteDriversItem, itemId);
     });
 });
 
 describe('getAssignmentAccessMapping', () => {
     it('routes to correct service functions with itemId', async () => {
+        const {assignToUser, assignToGuest, unassignFromUser, unassignFromGuest} = testData.assignmentAccessMappingData;
+        
         const m = getAssignmentAccessMapping();
 
-        await m.assignToUser({itemId: 'i1'}, 5);
-        await m.assignToGuest({itemId: 'i2'}, 7);
-        await m.unassignFromUser({itemId: 'i3'}, 11);
-        await m.unassignFromGuest({itemId: 'i4'}, 13);
+        await m.assignToUser(assignToUser, assignToUser.userId);
+        await m.assignToGuest(assignToGuest, assignToGuest.guestId);
+        await m.unassignFromUser(unassignFromUser, unassignFromUser.userId);
+        await m.unassignFromGuest(unassignFromGuest, unassignFromGuest.guestId);
 
-        expect(driverService.assignDriversItemToUser).toHaveBeenCalledWith('i1', 5);
-        expect(driverService.assignDriversItemToGuest).toHaveBeenCalledWith('i2', 7);
-        expect(driverService.unassignDriversItemUser).toHaveBeenCalledWith('i3', 11);
-        expect(driverService.unassignDriversItemGuest).toHaveBeenCalledWith('i4', 13);
+        verifyMockCall(driverService.assignDriversItemToUser, assignToUser.itemId, assignToUser.userId);
+        verifyMockCall(driverService.assignDriversItemToGuest, assignToGuest.itemId, assignToGuest.guestId);
+        verifyMockCall(driverService.unassignDriversItemUser, unassignFromUser.itemId, unassignFromUser.userId);
+        verifyMockCall(driverService.unassignDriversItemGuest, unassignFromGuest.itemId, unassignFromGuest.guestId);
     });
 });
