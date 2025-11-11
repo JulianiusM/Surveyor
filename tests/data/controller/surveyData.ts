@@ -321,3 +321,75 @@ export const addCombinationErrorData = [
         errorType: 'ExpectedError',
     },
 ];
+
+/**
+ * Test cases for afterCreateItems function
+ */
+export const afterCreateItemsData = [
+    {
+        description: 'is a no-op that resolves',
+        expected: undefined,
+    },
+];
+
+/**
+ * Test cases for fetchForView function
+ */
+export const fetchForViewData = [
+    {
+        description: 'returns survey, combinations, responses (delegates to service)',
+        survey: { id: 's1' },
+        mockCombos: [{ id: 1 }],
+        mockResponses: [{ userId: 7 }],
+        expected: {
+            survey: { id: 's1' },
+            combinations: [{ id: 1 }],
+            responses: [{ userId: 7 }],
+        },
+    },
+    {
+        description: 'handles different survey data',
+        survey: { id: 's5', title: 'Test Survey' },
+        mockCombos: [{ id: 10 }, { id: 11 }],
+        mockResponses: [{ userId: 1 }, { userId: 2 }],
+        expected: {
+            survey: { id: 's5', title: 'Test Survey' },
+            combinations: [{ id: 10 }, { id: 11 }],
+            responses: [{ userId: 1 }, { userId: 2 }],
+        },
+    },
+];
+
+/**
+ * Test cases for fetchForDuplicate function
+ */
+export const fetchForDuplicateData = [
+    {
+        description: 'returns combinations by survey id',
+        survey: { id: 's2' },
+        mockCombos: [{ id: 2 }],
+        expectedSurveyId: 's2',
+    },
+    {
+        description: 'handles different survey id',
+        survey: { id: 's10' },
+        mockCombos: [{ id: 20 }, { id: 21 }],
+        expectedSurveyId: 's10',
+    },
+];
+
+/**
+ * Test cases for deleteEntity function
+ */
+export const deleteEntityData = [
+    {
+        description: 'delegates to deleteSurvey',
+        survey: { id: 's9' },
+        expectedSurveyId: 's9',
+    },
+    {
+        description: 'handles different survey id',
+        survey: { id: 's100' },
+        expectedSurveyId: 's100',
+    },
+];

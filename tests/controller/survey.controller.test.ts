@@ -28,6 +28,10 @@ import {
     submitResponsesData,
     addCombinationData,
     addCombinationErrorData,
+    afterCreateItemsData,
+    fetchForViewData,
+    fetchForDuplicateData,
+    deleteEntityData,
 } from '../data/controller/surveyData';
 
 // Import test keywords
@@ -105,46 +109,50 @@ describe('createEntity - Data Driven', () => {
 });
 
 describe('afterCreateItems', () => {
-    it('is a no-op that resolves', async () => {
+    test.each(afterCreateItemsData)('$description', async ({ expected }) => {
         const result = await afterCreateItems();
-        expect(result).toBeUndefined();
+        expect(result).toBe(expected);
     });
 });
 
-describe('fetchForView', () => {
-    it('returns survey, combinations, responses (delegates to service)', async () => {
-        const survey = { id: 's1' };
-        const combos = [{ id: 1 }];
-        const responses = [{ userId: 7 }];
+describe('fetchForView - Data Driven', () => {
+    test.each(fetchForViewData)(
+        '$description',
+        async ({ survey, mockCombos, mockResponses, expected }) => {
+            setupMock(surveyService.getCombinationsBySurveyId as jest.Mock, mockCombos);
+            setupMock(surveyService.getResponsesSorted as jest.Mock, mockResponses);
 
-        setupMock(surveyService.getCombinationsBySurveyId as jest.Mock, combos);
-        setupMock(surveyService.getResponsesSorted as jest.Mock, responses);
+            const result = await fetchForView(survey as any, {} as any);
 
-        const result = await fetchForView(survey as any, {} as any);
-
-        verifyMockCall(surveyService.getCombinationsBySurveyId as jest.Mock, 's1');
-        verifyMockCall(surveyService.getResponsesSorted as jest.Mock, 's1');
-        verifyResult(result, { survey, combinations: combos, responses });
-    });
+            verifyMockCall(surveyService.getCombinationsBySurveyId as jest.Mock, survey.id);
+            verifyMockCall(surveyService.getResponsesSorted as jest.Mock, survey.id);
+            verifyResult(result, expected);
+        }
+    );
 });
 
-describe('fetchForDuplicate', () => {
-    it('returns combinations by survey id', async () => {
-        const combos = [{ id: 2 }];
-        setupMock(surveyService.getCombinationsBySurveyId as jest.Mock, combos);
+describe('fetchForDuplicate - Data Driven', () => {
+    test.each(fetchForDuplicateData)(
+        '$description',
+        async ({ survey, mockCombos, expectedSurveyId }) => {
+            setupMock(surveyService.getCombinationsBySurveyId as jest.Mock, mockCombos);
 
-        const result = await fetchForDuplicate({ id: 's2' } as any, {} as any);
+            const result = await fetchForDuplicate(survey as any, {} as any);
 
-        verifyMockCall(surveyService.getCombinationsBySurveyId as jest.Mock, 's2');
-        verifyResult(result, combos);
-    });
+            verifyMockCall(surveyService.getCombinationsBySurveyId as jest.Mock, expectedSurveyId);
+            verifyResult(result, mockCombos);
+        }
+    );
 });
 
-describe('deleteEntity', () => {
-    it('delegates to deleteSurvey', async () => {
-        await deleteEntity({ id: 's9' } as any, {} as any);
-        verifyMockCall(surveyService.deleteSurvey as jest.Mock, 's9');
-    });
+describe('deleteEntity - Data Driven', () => {
+    test.each(deleteEntityData)(
+        '$description',
+        async ({ survey, expectedSurveyId }) => {
+            await deleteEntity(survey as any, {} as any);
+            verifyMockCall(surveyService.deleteSurvey as jest.Mock, expectedSurveyId);
+        }
+    );
 });
 
 describe('addCombination - Data Driven', () => {
