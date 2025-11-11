@@ -229,13 +229,13 @@ test.each(requireOwnerSuccessData)(
 
 Database integration tests verify database operations:
 
-1. **Use database keywords** (to be created):
+1. **Use database keywords**:
 ```typescript
 import {
     createTestEntity,
     verifyEntityExists,
     cleanupTestData,
-} from '../keywords/database/entityKeywords';
+} from '../keywords/database/databaseKeywords';
 ```
 
 2. **Test with real database**:
@@ -246,22 +246,51 @@ test('creates entity with valid data', async () => {
 });
 ```
 
-### E2E Tests
+3. **UUID Handling in Tests**:
+Database entities with UUID primary keys require valid UUIDs. **Never use simple strings** like `'item-1'` or `'test-id'` in test data.
 
-E2E tests verify complete user workflows:
-
-1. **Use E2E keywords** (to be created):
+**Correct approach** - Generate UUIDs at runtime:
 ```typescript
-import { loginAsUser, navigateToPage, fillForm } from '../keywords/e2e/uiKeywords';
+import { v4 as uuidv4 } from 'uuid';
+
+test.each(testData)('$description', async (testCase) => {
+    // Generate UUIDs for items at runtime
+    const itemIdMap = new Map<string, string>();
+    testCase.items.forEach(item => {
+        itemIdMap.set(item.id, uuidv4());
+    });
+    
+    // Map items to use real UUIDs
+    const items = testCase.items.map(item => ({
+        ...item,
+        id: itemIdMap.get(item.id)!
+    }));
+    
+    // Use mapped items in service calls
+    await createItems(listId, items);
+    
+    // Map expected results using itemIdMap
+    const expectedIds = testCase.expectedIds.map(id => itemIdMap.get(id)!);
+    expect(actualIds).toEqual(expectedIds);
+});
 ```
 
-2. **Test user workflows**:
+**Why this pattern?**
+- Entities use `@PrimaryGeneratedColumn("uuid")` which requires valid UUID format
+- Test data should use readable IDs ('item-1', 'pack-item-1') for clarity
+- Runtime mapping provides both readability and database compatibility
+
+### E2E Tests
+
+E2E tests verify complete user workflows. For comprehensive E2E testing guidelines, see [copilot instructions](../.github/copilot-instructions.md#e2e-tests).
+
+1. **Test user workflows**:
 ```typescript
 test('user can create survey', async ({ page }) => {
-    await loginAsUser(page, 'testuser', 'password');
-    await navigateToPage(page, '/surveys/create');
-    await fillForm(page, { title: 'My Survey' });
-    await verifySuccess(page, 'Survey created');
+    await page.goto('/surveys/create');
+    await page.fill('[name="title"]', 'My Survey');
+    await page.click('button[type="submit"]');
+    await expect(page.locator('.success-message')).toHaveText('Survey created');
 });
 ```
 
