@@ -145,9 +145,29 @@ describe('packingService (mysql)', () => {
     });
 
     test.each(packingItemsTransactionalData)('$description', async (testCase) => {
-        const itemIds = testCase.initialItems.map(i => i.id);
-        const additionalIds = testCase.additionalItems.map(i => i.id);
-        const singleId = testCase.singleItem.id;
+        // Generate UUIDs for items at runtime
+        const itemIdMap = new Map<string, string>();
+        testCase.initialItems.forEach(item => {
+            itemIdMap.set(item.id, uuidv4());
+        });
+        testCase.additionalItems.forEach(item => {
+            itemIdMap.set(item.id, uuidv4());
+        });
+        itemIdMap.set(testCase.singleItem.id, uuidv4());
+        
+        // Map items to use real UUIDs
+        const initialItems = testCase.initialItems.map(item => ({
+            ...item,
+            id: itemIdMap.get(item.id)!
+        }));
+        const additionalItems = testCase.additionalItems.map(item => ({
+            ...item,
+            id: itemIdMap.get(item.id)!
+        }));
+        const singleItem = {
+            ...testCase.singleItem,
+            id: itemIdMap.get(testCase.singleItem.id)!
+        };
         
         const txListId = await createPackingListTx(
             testCase.userId,
@@ -155,42 +175,52 @@ describe('packingService (mysql)', () => {
             testCase.listData.description,
             testCase.listData.allowGuestAdd,
             testCase.listData.guestManage,
-            testCase.initialItems
+            initialItems
         );
         expect(typeof txListId).toBe('string');
         expect(txListId.length).toBeGreaterThan(0);
 
         // Items initially (assignedCount from counts map)
         let items = await getPackingItems(txListId);
-        expect(items.map(i => i.id)).toEqual(testCase.expectedInitialIds);
+        const expectedInitialIds = testCase.expectedInitialIds.map(id => itemIdMap.get(id)!);
+        expect(items.map(i => i.id)).toEqual(expectedInitialIds);
         expect(items.every(i => i.assignedCount === 0)).toBe(true);
 
         // Add more items
-        await addPackingItems(txListId, testCase.additionalItems);
+        await addPackingItems(txListId, additionalItems);
         items = await getPackingItems(txListId);
-        expect(items.map(i => i.id)).toEqual(testCase.expectedAfterAdd);
+        const expectedAfterAdd = testCase.expectedAfterAdd.map(id => itemIdMap.get(id)!);
+        expect(items.map(i => i.id)).toEqual(expectedAfterAdd);
 
         // Single create
-        await createPackingItem(txListId, testCase.singleItem);
+        await createPackingItem(txListId, singleItem);
         items = await getPackingItems(txListId);
-        expect(items.map(i => i.id)).toEqual(testCase.expectedAfterSingle);
+        const expectedAfterSingle = testCase.expectedAfterSingle.map(id => itemIdMap.get(id)!);
+        expect(items.map(i => i.id)).toEqual(expectedAfterSingle);
 
         // Update item
-        const changed = await updatePackingItem(testCase.itemUpdate.itemId, testCase.itemUpdate.updates);
+        const itemUpdateId = itemIdMap.get(testCase.itemUpdate.itemId)!;
+        const changed = await updatePackingItem(itemUpdateId, testCase.itemUpdate.updates);
         expect(changed).toBe(true);
 
         // No-op update returns undefined
-        const noop = await updatePackingItem(testCase.itemUpdate.itemId, {});
+        const noop = await updatePackingItem(itemUpdateId, {});
         expect(noop).toBeUndefined();
 
         // Reorder
-        await reorderPackingItems(txListId, testCase.reorder);
+        const reorderMapped = testCase.reorder.map(r => ({
+            itemId: itemIdMap.get(r.itemId)!,
+            position: r.position
+        }));
+        await reorderPackingItems(txListId, reorderMapped);
         items = await getPackingItems(txListId);
-        expect(items.slice(0, 2).map(i => i.id)).toEqual(testCase.expectedAfterReorder);
+        const expectedAfterReorder = testCase.expectedAfterReorder.map(id => itemIdMap.get(id)!);
+        expect(items.slice(0, 2).map(i => i.id)).toEqual(expectedAfterReorder);
 
         // RequiredByAll toggle
-        await togglePackingItemRequiredByAll(testCase.requiredByAllToggle.itemId, testCase.requiredByAllToggle.value);
-        const pi1 = await AppDataSource.getRepository(PackingItem).findOneBy({id: testCase.requiredByAllToggle.itemId});
+        const toggleItemId = itemIdMap.get(testCase.requiredByAllToggle.itemId)!;
+        await togglePackingItemRequiredByAll(toggleItemId, testCase.requiredByAllToggle.value);
+        const pi1 = await AppDataSource.getRepository(PackingItem).findOneBy({id: toggleItemId});
         expect(pi1!.requiredByAll).toBe(1);
 
         // Last number (max pos)
@@ -198,17 +228,24 @@ describe('packingService (mysql)', () => {
         expect(last).toBe(testCase.expectedLastNumberInitial);
 
         // Delete one item
-        await deletePackingItem(testCase.deleteItemId);
+        const deleteItemId = itemIdMap.get(testCase.deleteItemId)!;
+        await deletePackingItem(deleteItemId);
         items = await getPackingItems(txListId);
-        expect(items.find(i => i.id === testCase.deleteItemId)).toBeFalsy();
+        expect(items.find(i => i.id === deleteItemId)).toBeFalsy();
         const lastAfterDelete = await getLastPackingItemNumber(txListId);
         expect(lastAfterDelete).toBe(testCase.expectedLastNumberAfterDelete);
     });
 
     test.each(packingAssignmentsData)('$description', async (testCase) => {
         const listId = uuidv4();
-        const itemId1 = testCase.items[0].id;
-        const itemId2 = testCase.items[1].id;
+        // Generate UUIDs for items at runtime
+        const itemIdMap = new Map<string, string>();
+        testCase.items.forEach(item => {
+            itemIdMap.set(item.id, uuidv4());
+        });
+        
+        const itemId1 = itemIdMap.get(testCase.items[0].id)!;
+        const itemId2 = itemIdMap.get(testCase.items[1].id)!;
         
         await createPackingList(
             listId,
@@ -227,52 +264,54 @@ describe('packingService (mysql)', () => {
         await AppDataSource.getRepository(Guest).save(guest1);
 
         // Items
-        await createPackingItem(listId, testCase.items[0]);
-        await createPackingItem(listId, testCase.items[1]);
+        await createPackingItem(listId, {...testCase.items[0], id: itemId1});
+        await createPackingItem(listId, {...testCase.items[1], id: itemId2});
 
         // Assign (idempotent)
-        await assignPackingItemToUser(testCase.assignments.userItemId, testCase.assignments.userId);
-        await assignPackingItemToUser(testCase.assignments.userItemId, testCase.assignments.userId); // duplicate ignored
-        await assignPackingItemToGuest(testCase.assignments.guestItemId, testCase.assignments.guestId);
-        await assignPackingItemToGuest(testCase.assignments.guestItemId, testCase.assignments.guestId); // duplicate ignored
+        const userItemId = itemIdMap.get(testCase.assignments.userItemId)!;
+        const guestItemId = itemIdMap.get(testCase.assignments.guestItemId)!;
+        await assignPackingItemToUser(userItemId, testCase.assignments.userId);
+        await assignPackingItemToUser(userItemId, testCase.assignments.userId); // duplicate ignored
+        await assignPackingItemToGuest(guestItemId, testCase.assignments.guestId);
+        await assignPackingItemToGuest(guestItemId, testCase.assignments.guestId); // duplicate ignored
 
         // Counts
         const counts = await getPackingAssignmentCounts(listId);
-        expect(counts[itemId1]).toBe(testCase.expectedCounts[itemId1]);
-        expect(counts[itemId2]).toBe(testCase.expectedCounts[itemId2]);
+        expect(counts[itemId1]).toBe(testCase.expectedCounts[testCase.items[0].id]);
+        expect(counts[itemId2]).toBe(testCase.expectedCounts[testCase.items[1].id]);
 
         // Lists of item ids
         const userItems = await getPackingAssignmentsForUser(listId, testCase.assignments.userId);
-        expect(userItems).toEqual(testCase.expectedUserItems);
+        expect(userItems).toEqual([userItemId]);
         const guestItems = await getPackingAssignmentsForGuest(listId, testCase.assignments.guestId);
-        expect(guestItems).toEqual(testCase.expectedGuestItems);
+        expect(guestItems).toEqual([guestItemId]);
 
         // Assignees map (names resolved)
         const map = await getPackingItemAssignees(listId);
         expect(Object.keys(map).sort()).toEqual([itemId1, itemId2].sort());
-        expect(map[itemId1][0].name).toBe(testCase.expectedAssigneeNames[itemId1]);
-        expect(map[itemId2][0].name).toBe(testCase.expectedAssigneeNames[itemId2]);
+        expect(map[itemId1][0].name).toBe(testCase.expectedAssigneeNames[testCase.items[0].id]);
+        expect(map[itemId2][0].name).toBe(testCase.expectedAssigneeNames[testCase.items[1].id]);
 
         // Delete one assignment by ID
         const guestAssignId = map[itemId2][0].id!;
         await deletePackingAssignment(guestAssignId);
 
         const countsAfterDelete = await getPackingAssignmentCounts(listId);
-        expect(countsAfterDelete[itemId2] ?? 0).toBe(testCase.expectedCountsAfterGuestDelete[itemId2]);
-        expect(countsAfterDelete[itemId1]).toBe(testCase.expectedCountsAfterGuestDelete[itemId1]);
+        expect(countsAfterDelete[itemId2] ?? 0).toBe(testCase.expectedCountsAfterGuestDelete[testCase.items[1].id]);
+        expect(countsAfterDelete[itemId1]).toBe(testCase.expectedCountsAfterGuestDelete[testCase.items[0].id]);
 
         // Unassign user path
-        await unassignPackingItemUser(testCase.assignments.userItemId, testCase.assignments.userId);
+        await unassignPackingItemUser(userItemId, testCase.assignments.userId);
         const finalCounts = await getPackingAssignmentCounts(listId);
-        expect(finalCounts[itemId1] ?? 0).toBe(testCase.expectedFinalCounts[itemId1]);
+        expect(finalCounts[itemId1] ?? 0).toBe(testCase.expectedFinalCounts[testCase.items[0].id]);
 
         // Guest unassign no-op (already deleted)
-        await unassignPackingItemGuest(testCase.assignments.guestItemId, testCase.assignments.guestId);
+        await unassignPackingItemGuest(guestItemId, testCase.assignments.guestId);
 
         // Items list reflects assignedCount=0
         const items = await getPackingItems(listId);
         const byId: Record<string, number> = Object.fromEntries(items.map(i => [i.id, i.assignedCount]));
-        expect(byId[itemId1]).toBe(testCase.expectedFinalCounts[itemId1]);
-        expect(byId[itemId2]).toBe(testCase.expectedFinalCounts[itemId2]);
+        expect(byId[itemId1]).toBe(testCase.expectedFinalCounts[testCase.items[0].id]);
+        expect(byId[itemId2]).toBe(testCase.expectedFinalCounts[testCase.items[1].id]);
     });
 });

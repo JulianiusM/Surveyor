@@ -251,10 +251,19 @@ export async function getActivitySlots(planId: string) {
         .getMany(); // entities now have s.assignedCount
 
     // Type hint: (ActivitySlot & { assignedCount: number })[]
-    return Object.groupBy(
-        slots as (ActivitySlot & { assignedCount: number })[],
-        (s) => s.day
-    );
+    // Group slots by day using reduce (Object.groupBy not available in Node.js 24)
+    const typedSlots = slots as (ActivitySlot & { assignedCount: number })[];
+    const grouped: Record<string, (ActivitySlot & { assignedCount: number })[]> = {};
+    
+    for (const slot of typedSlots) {
+        const day = slot.day;
+        if (!grouped[day]) {
+            grouped[day] = [];
+        }
+        grouped[day].push(slot);
+    }
+    
+    return grouped;
 }
 
 
