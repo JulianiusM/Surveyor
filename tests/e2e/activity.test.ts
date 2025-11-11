@@ -6,8 +6,7 @@ import { expect, test } from '@playwright/test';
 
 // Import test data
 import {
-    activityPageAccessAuthenticatedData,
-    activityPageAccessUnauthenticatedData,
+    activityPageAccessData,
     activityDashboardEmptyStateData,
     activityCreationData,
     activityValidationData,
@@ -30,22 +29,20 @@ test.beforeEach(async ({ context }) => {
     await context.clearCookies();
 });
 
-// 1) Authenticated user can access activity plan create page
-for (const data of activityPageAccessAuthenticatedData) {
+// 1) Page access tests (authenticated and unauthenticated)
+for (const data of activityPageAccessData) {
     test(data.description, async ({ page }) => {
-        await loginUser(page, testCredentials.username, testCredentials.password);
-        await navigateToEntityCreatePage(page, 'activity', data.expectedUrl, data.expectedHeading);
+        if (data.isAuthenticated) {
+            await loginUser(page, testCredentials.username, testCredentials.password);
+            await navigateToEntityCreatePage(page, 'activity', data.expectedUrl, data.expectedHeading);
+        } else {
+            await verifyUnauthenticatedRedirect(page, data.targetUrl, data.expectedRedirectUrl);
+        }
     });
 }
 
-// 2) Unauthenticated user cannot access activity create page
-for (const data of activityPageAccessUnauthenticatedData) {
-    test(data.description, async ({ page }) => {
-        await verifyUnauthenticatedRedirect(page, data.targetUrl, data.expectedRedirectUrl);
-    });
-}
 
-// 3) Activity dashboard shows empty state for new user
+// 2) Activity dashboard shows empty state for new user
 for (const data of activityDashboardEmptyStateData) {
     test(data.description, async ({ page }) => {
         await loginUser(page, testCredentials.username, testCredentials.password);
@@ -53,7 +50,7 @@ for (const data of activityDashboardEmptyStateData) {
     });
 }
 
-// 4) Can create a new activity plan with valid data
+// 3) Can create a new activity plan with valid data
 for (const data of activityCreationData) {
     test(data.description, async ({ page }) => {
         await loginUser(page, testCredentials.username, testCredentials.password);
@@ -78,7 +75,7 @@ for (const data of activityCreationData) {
     });
 }
 
-// 5) Activity form validates required fields
+// 4) Activity form validates required fields
 for (const data of activityValidationData) {
     test(data.description, async ({ page }) => {
         await loginUser(page, testCredentials.username, testCredentials.password);

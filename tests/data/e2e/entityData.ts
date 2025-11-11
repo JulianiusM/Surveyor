@@ -30,7 +30,7 @@ export const entityConfigs: Record<EntityType, EntityConfig> = {
         displayNamePlural: 'surveys',
         accordionId: '#sec-surveys',
         createButtonPattern: /create.*survey/i,
-        emptyStatePattern: /you don't have any surveys/i,
+        emptyStatePattern: /you don't have any surveys yet/i,
     },
     packing: {
         urlPath: '/packing/create',
@@ -38,7 +38,7 @@ export const entityConfigs: Record<EntityType, EntityConfig> = {
         displayNamePlural: 'packing lists',
         accordionId: '#sec-pack',
         createButtonPattern: /create.*list/i,
-        emptyStatePattern: /you don't have any packing/i,
+        emptyStatePattern: /you don't have any packing lists yet/i,
     },
     activity: {
         urlPath: '/activity/create',
@@ -46,7 +46,7 @@ export const entityConfigs: Record<EntityType, EntityConfig> = {
         displayNamePlural: 'activity plans',
         accordionId: '#sec-activity',
         createButtonPattern: /create.*plan/i,
-        emptyStatePattern: /you don't have any activity/i,
+        emptyStatePattern: /you don't have any activity plans yet/i,
     },
     drivers: {
         urlPath: '/drivers/create',
@@ -54,34 +54,27 @@ export const entityConfigs: Record<EntityType, EntityConfig> = {
         displayNamePlural: 'drivers lists',
         accordionId: '#sec-drivers',
         createButtonPattern: /create.*list/i,
-        emptyStatePattern: /you don't have any drivers/i,
+        emptyStatePattern: /you don't have any drivers lists yet/i,
     },
 };
 
 /**
- * Generate page access test data for an entity (authenticated)
+ * Generate page access test data for an entity (both authenticated and unauthenticated)
  */
-export function generatePageAccessAuthenticatedData(entityType: EntityType) {
+export function generatePageAccessData(entityType: EntityType) {
     const config = entityConfigs[entityType];
     return [
         {
             description: `authenticated user can access ${config.displayName} create page`,
             targetUrl: config.urlPath,
+            isAuthenticated: true,
             expectedUrl: new RegExp(config.urlPath.replace(/\//g, '\\/')),
             expectedHeading: new RegExp(`create.*${config.displayName.split(' ')[0]}`, 'i'),
         },
-    ];
-}
-
-/**
- * Generate page access test data for an entity (unauthenticated)
- */
-export function generatePageAccessUnauthenticatedData(entityType: EntityType) {
-    const config = entityConfigs[entityType];
-    return [
         {
             description: `unauthenticated user cannot access ${config.displayName} create page`,
             targetUrl: config.urlPath,
+            isAuthenticated: false,
             expectedRedirectUrl: /\/users\/login/,
         },
     ];

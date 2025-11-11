@@ -35,26 +35,22 @@ export const loginPageRenderData = [
 ];
 
 /**
- * Test cases for failed login attempts
+ * Test cases for login attempts (both success and failure)
  */
-export const loginFailureData = [
+export const loginData = [
     {
         description: 'rejects wrong credentials',
         username: 'unknown_user',
         password: 'totally-wrong',
+        shouldSucceed: false,
         expectedUrl: /\/users\/login/,
         expectedAlert: true,
     },
-];
-
-/**
- * Test cases for successful login
- */
-export const loginSuccessData = [
     {
         description: 'logs in with valid credentials and shows dashboard',
         username: testCredentials.username,
         password: testCredentials.password,
+        shouldSucceed: true,
         expectedUrl: /\/users\/dashboard/,
         expectedHeading: /welcome/i,
         expectSessionCookie: true,

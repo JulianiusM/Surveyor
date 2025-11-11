@@ -7,8 +7,7 @@ import { expect, test } from '@playwright/test';
 // Import test data
 import {
     testCredentials,
-    loginFailureData,
-    loginSuccessData,
+    loginData,
     logoutData,
     registrationFlowData,
     passwordResetFlowData,
@@ -72,29 +71,26 @@ test('renders login form', async ({ page }) => {
     ]);
 });
 
-// 3) Failed login attempt tests
-for (const data of loginFailureData) {
+// 3) Login tests (both success and failure)
+for (const data of loginData) {
     test(data.description, async ({ page }) => {
         await page.goto('/users/login');
         await fillLoginForm(page, data.username, data.password);
         await verifyUrlMatches(page, data.expectedUrl);
 
-        if (data.expectedAlert) {
-            await verifyErrorAlert(page);
+        if (data.shouldSucceed) {
+            if (data.expectedHeading) {
+                await verifyHeadingVisible(page, data.expectedHeading);
+            }
+        } else {
+            if (data.expectedAlert) {
+                await verifyErrorAlert(page);
+            }
         }
     });
 }
 
-// 4) Successful login tests
-for (const data of loginSuccessData) {
-    test(data.description, async ({ page }) => {
-        await loginUser(page, data.username, data.password);
-        await verifyUrlMatches(page, data.expectedUrl);
-        await verifyHeadingVisible(page, data.expectedHeading);
-    });
-}
-
-// 5) Logout tests
+// 4) Logout tests
 for (const data of logoutData) {
     test(data.description, async ({ page }) => {
         await loginUser(page, testCredentials.username, testCredentials.password);

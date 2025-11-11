@@ -4,21 +4,15 @@
  */
 
 import {
-    generatePageAccessAuthenticatedData,
-    generatePageAccessUnauthenticatedData,
+    generatePageAccessData,
     generateDashboardEmptyStateData,
     generateFormValidationData,
 } from './entityData';
 
 /**
- * Test cases for activity page access (authenticated)
+ * Test cases for activity page access (authenticated and unauthenticated)
  */
-export const activityPageAccessAuthenticatedData = generatePageAccessAuthenticatedData('activity');
-
-/**
- * Test cases for activity page access (unauthenticated)
- */
-export const activityPageAccessUnauthenticatedData = generatePageAccessUnauthenticatedData('activity');
+export const activityPageAccessData = generatePageAccessData('activity');
 
 /**
  * Test cases for activity dashboard empty state

@@ -6,8 +6,7 @@ import { expect, test } from '@playwright/test';
 
 // Import test data
 import {
-    packingPageAccessAuthenticatedData,
-    packingPageAccessUnauthenticatedData,
+    packingPageAccessData,
     packingDashboardEmptyStateData,
     packingCreationData,
     packingValidationData,
@@ -30,22 +29,20 @@ test.beforeEach(async ({ context }) => {
     await context.clearCookies();
 });
 
-// 1) Authenticated user can access packing list create page
-for (const data of packingPageAccessAuthenticatedData) {
+// 1) Page access tests (authenticated and unauthenticated)
+for (const data of packingPageAccessData) {
     test(data.description, async ({ page }) => {
-        await loginUser(page, testCredentials.username, testCredentials.password);
-        await navigateToEntityCreatePage(page, 'packing', data.expectedUrl, data.expectedHeading);
+        if (data.isAuthenticated) {
+            await loginUser(page, testCredentials.username, testCredentials.password);
+            await navigateToEntityCreatePage(page, 'packing', data.expectedUrl, data.expectedHeading);
+        } else {
+            await verifyUnauthenticatedRedirect(page, data.targetUrl, data.expectedRedirectUrl);
+        }
     });
 }
 
-// 2) Unauthenticated user cannot access packing create page
-for (const data of packingPageAccessUnauthenticatedData) {
-    test(data.description, async ({ page }) => {
-        await verifyUnauthenticatedRedirect(page, data.targetUrl, data.expectedRedirectUrl);
-    });
-}
 
-// 3) Packing dashboard shows empty state for new user
+// 2) Packing dashboard shows empty state for new user
 for (const data of packingDashboardEmptyStateData) {
     test(data.description, async ({ page }) => {
         await loginUser(page, testCredentials.username, testCredentials.password);
@@ -53,7 +50,7 @@ for (const data of packingDashboardEmptyStateData) {
     });
 }
 
-// 4) Can create a new packing list with valid data
+// 3) Can create a new packing list with valid data
 for (const data of packingCreationData) {
     test(data.description, async ({ page }) => {
         await loginUser(page, testCredentials.username, testCredentials.password);
@@ -77,7 +74,7 @@ for (const data of packingCreationData) {
     });
 }
 
-// 5) Packing form validates required fields
+// 4) Packing form validates required fields
 for (const data of packingValidationData) {
     test(data.description, async ({ page }) => {
         await loginUser(page, testCredentials.username, testCredentials.password);

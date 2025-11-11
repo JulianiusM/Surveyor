@@ -6,8 +6,7 @@ import { expect, test } from '@playwright/test';
 
 // Import test data
 import {
-    driversPageAccessAuthenticatedData,
-    driversPageAccessUnauthenticatedData,
+    driversPageAccessData,
     driversDashboardEmptyStateData,
     driversCreationData,
     driversValidationData,
@@ -30,22 +29,20 @@ test.beforeEach(async ({ context }) => {
     await context.clearCookies();
 });
 
-// 1) Authenticated user can access drivers list create page
-for (const data of driversPageAccessAuthenticatedData) {
+// 1) Page access tests (authenticated and unauthenticated)
+for (const data of driversPageAccessData) {
     test(data.description, async ({ page }) => {
-        await loginUser(page, testCredentials.username, testCredentials.password);
-        await navigateToEntityCreatePage(page, 'drivers', data.expectedUrl, data.expectedHeading);
+        if (data.isAuthenticated) {
+            await loginUser(page, testCredentials.username, testCredentials.password);
+            await navigateToEntityCreatePage(page, 'drivers', data.expectedUrl, data.expectedHeading);
+        } else {
+            await verifyUnauthenticatedRedirect(page, data.targetUrl, data.expectedRedirectUrl);
+        }
     });
 }
 
-// 2) Unauthenticated user cannot access drivers create page
-for (const data of driversPageAccessUnauthenticatedData) {
-    test(data.description, async ({ page }) => {
-        await verifyUnauthenticatedRedirect(page, data.targetUrl, data.expectedRedirectUrl);
-    });
-}
 
-// 3) Drivers dashboard shows empty state for new user
+// 2) Drivers dashboard shows empty state for new user
 for (const data of driversDashboardEmptyStateData) {
     test(data.description, async ({ page }) => {
         await loginUser(page, testCredentials.username, testCredentials.password);
@@ -53,7 +50,7 @@ for (const data of driversDashboardEmptyStateData) {
     });
 }
 
-// 4) Can create a new drivers list with valid data
+// 3) Can create a new drivers list with valid data
 for (const data of driversCreationData) {
     test(data.description, async ({ page }) => {
         await loginUser(page, testCredentials.username, testCredentials.password);
@@ -77,7 +74,7 @@ for (const data of driversCreationData) {
     });
 }
 
-// 5) Drivers form validates required fields
+// 4) Drivers form validates required fields
 for (const data of driversValidationData) {
     test(data.description, async ({ page }) => {
         await loginUser(page, testCredentials.username, testCredentials.password);

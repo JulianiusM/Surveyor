@@ -6,8 +6,7 @@ import { expect, test } from '@playwright/test';
 
 // Import test data
 import {
-    surveyPageAccessAuthenticatedData,
-    surveyPageAccessUnauthenticatedData,
+    surveyPageAccessData,
     surveyDashboardEmptyStateData,
     surveyCreationData,
     surveyValidationData,
@@ -30,22 +29,19 @@ test.beforeEach(async ({ context }) => {
     await context.clearCookies();
 });
 
-// 1) Authenticated user can access survey create page
-for (const data of surveyPageAccessAuthenticatedData) {
+// 1) Page access tests (authenticated and unauthenticated)
+for (const data of surveyPageAccessData) {
     test(data.description, async ({ page }) => {
-        await loginUser(page, testCredentials.username, testCredentials.password);
-        await navigateToEntityCreatePage(page, 'survey', data.expectedUrl, data.expectedHeading);
+        if (data.isAuthenticated) {
+            await loginUser(page, testCredentials.username, testCredentials.password);
+            await navigateToEntityCreatePage(page, 'survey', data.expectedUrl, data.expectedHeading);
+        } else {
+            await verifyUnauthenticatedRedirect(page, data.targetUrl, data.expectedRedirectUrl);
+        }
     });
 }
 
-// 2) Unauthenticated user cannot access survey create page
-for (const data of surveyPageAccessUnauthenticatedData) {
-    test(data.description, async ({ page }) => {
-        await verifyUnauthenticatedRedirect(page, data.targetUrl, data.expectedRedirectUrl);
-    });
-}
-
-// 3) Survey dashboard shows empty state for new user
+// 2) Survey dashboard shows empty state for new user
 for (const data of surveyDashboardEmptyStateData) {
     test(data.description, async ({ page }) => {
         await loginUser(page, testCredentials.username, testCredentials.password);
@@ -53,7 +49,7 @@ for (const data of surveyDashboardEmptyStateData) {
     });
 }
 
-// 4) Can create a new survey with valid data
+// 3) Can create a new survey with valid data
 for (const data of surveyCreationData) {
     test(data.description, async ({ page }) => {
         await loginUser(page, testCredentials.username, testCredentials.password);
@@ -77,7 +73,7 @@ for (const data of surveyCreationData) {
     });
 }
 
-// 5) Survey form validates required fields
+// 4) Survey form validates required fields
 for (const data of surveyValidationData) {
     test(data.description, async ({ page }) => {
         await loginUser(page, testCredentials.username, testCredentials.password);

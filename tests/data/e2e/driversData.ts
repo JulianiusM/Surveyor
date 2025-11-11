@@ -4,21 +4,15 @@
  */
 
 import {
-    generatePageAccessAuthenticatedData,
-    generatePageAccessUnauthenticatedData,
+    generatePageAccessData,
     generateDashboardEmptyStateData,
     generateFormValidationData,
 } from './entityData';
 
 /**
- * Test cases for drivers page access (authenticated)
+ * Test cases for drivers page access (authenticated and unauthenticated)
  */
-export const driversPageAccessAuthenticatedData = generatePageAccessAuthenticatedData('drivers');
-
-/**
- * Test cases for drivers page access (unauthenticated)
- */
-export const driversPageAccessUnauthenticatedData = generatePageAccessUnauthenticatedData('drivers');
+export const driversPageAccessData = generatePageAccessData('drivers');
 
 /**
  * Test cases for drivers dashboard empty state

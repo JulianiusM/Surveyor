@@ -4,21 +4,15 @@
  */
 
 import {
-    generatePageAccessAuthenticatedData,
-    generatePageAccessUnauthenticatedData,
+    generatePageAccessData,
     generateDashboardEmptyStateData,
     generateFormValidationData,
 } from './entityData';
 
 /**
- * Test cases for survey page access (authenticated)
+ * Test cases for survey page access (authenticated and unauthenticated)
  */
-export const surveyPageAccessAuthenticatedData = generatePageAccessAuthenticatedData('survey');
-
-/**
- * Test cases for survey page access (unauthenticated)
- */
-export const surveyPageAccessUnauthenticatedData = generatePageAccessUnauthenticatedData('survey');
+export const surveyPageAccessData = generatePageAccessData('survey');
 
 /**
  * Test cases for survey dashboard empty state

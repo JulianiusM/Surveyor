@@ -4,21 +4,15 @@
  */
 
 import {
-    generatePageAccessAuthenticatedData,
-    generatePageAccessUnauthenticatedData,
+    generatePageAccessData,
     generateDashboardEmptyStateData,
     generateFormValidationData,
 } from './entityData';
 
 /**
- * Test cases for packing page access (authenticated)
+ * Test cases for packing page access (authenticated and unauthenticated)
  */
-export const packingPageAccessAuthenticatedData = generatePageAccessAuthenticatedData('packing');
-
-/**
- * Test cases for packing page access (unauthenticated)
- */
-export const packingPageAccessUnauthenticatedData = generatePageAccessUnauthenticatedData('packing');
+export const packingPageAccessData = generatePageAccessData('packing');
 
 /**
  * Test cases for packing dashboard empty state
