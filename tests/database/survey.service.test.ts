@@ -1,6 +1,6 @@
 /**
  * Tests for surveysService using the mysql (MariaDB/mysql2) DataSource mock.
- * Adjusted for enum string types in SurveyCombination.weekday and .nthWeek.
+ * Migrated to data-driven approach with externalized test data.
  */
 
 jest.mock('../../src/modules/database/dataSource', () =>
@@ -23,15 +23,26 @@ import {
     saveResponseUser,
 } from '../../src/modules/database/services/SurveyService';
 
-import {AppDataSource, initDataSource} from '../../src/modules/database/dataSource';
+import { AppDataSource, initDataSource } from '../../src/modules/database/dataSource';
 
 // Entities for setup/cleanup
-import {Survey} from '../../src/modules/database/entities/surveys/Survey';
-import {SurveyCombination} from '../../src/modules/database/entities/surveys/SurveyCombination';
-import {SurveyResponse} from '../../src/modules/database/entities/surveys/SurveyResponse';
-import {GuestLink} from '../../src/modules/database/entities/user/GuestLink';
-import {User} from '../../src/modules/database/entities/user/User';
-import {Guest} from '../../src/modules/database/entities/user/Guest';
+import { Survey } from '../../src/modules/database/entities/surveys/Survey';
+import { SurveyCombination } from '../../src/modules/database/entities/surveys/SurveyCombination';
+import { SurveyResponse } from '../../src/modules/database/entities/surveys/SurveyResponse';
+import { GuestLink } from '../../src/modules/database/entities/user/GuestLink';
+import { User } from '../../src/modules/database/entities/user/User';
+import { Guest } from '../../src/modules/database/entities/user/Guest';
+
+// Test data and keywords
+import { createSurveyTestData, responseTestData } from '../data/database/surveyServiceData';
+import {
+    createTestUser,
+    createTestGuest,
+    createGuestLink,
+    verifyCombinationsOrder,
+    verifyGroupedResponses,
+    verifyAnswers,
+} from '../keywords/database/databaseKeywords';
 
 // Helper to clear relevant tables between tests (order matters due to FKs)
 async function truncateAll() {
@@ -60,13 +71,12 @@ afterAll(async () => {
 
 beforeEach(async () => {
     // Default owner for surveys
-    const owner = AppDataSource.getRepository(User).create({
+    await createTestUser({
         id: 1,
         username: 'owner',
         name: 'Owner One',
         email: 'owner@example.com',
     });
-    await AppDataSource.getRepository(User).save(owner);
 });
 
 afterEach(async () => {
@@ -74,120 +84,171 @@ afterEach(async () => {
 }, 60_000);
 
 describe('surveysService (mysql) with enum combinations', () => {
-    it('creates a survey tx, returns combinations ordered (weekday ASC, nthWeek ASC), supports add & delete', async () => {
-        // Create with 3 enum combos that will sort deterministically by string ASC:
-        // Expect order: MON/1, MON/3, WED/2 (since 'MON' < 'WED' alphabetically, and '1' < '3')
-        const surveyId = await createSurveyTx(1, 'Team Lunch', 'Pick a weekday', [
-            {weekday: 'WED' as any, week: '2' as any},
-            {weekday: 'MON' as any, week: '3' as any},
-            {weekday: 'MON' as any, week: '1' as any},
-        ]);
+    test.each(createSurveyTestData)(
+        '$description',
+        async ({ userId, title, descriptionText, combinations, expectedCombinationsOrder, newCombination }) => {
+            // Create survey with combinations
+            const surveyId = await createSurveyTx(
+                userId,
+                title,
+                descriptionText,
+                combinations.map(c => ({ weekday: c.weekday as any, week: c.week as any }))
+            );
 
-        const survey = await getSurveyById(surveyId);
-        expect(survey).toBeTruthy();
-        expect(survey!.id).toBe(surveyId);
-        expect(survey!.title).toBe('Team Lunch');
-        expect(survey!.description).toBe('Pick a weekday');
+            // Verify survey creation
+            const survey = await getSurveyById(surveyId);
+            expect(survey).toBeTruthy();
+            expect(survey!.id).toBe(surveyId);
+            expect(survey!.title).toBe(title);
+            expect(survey!.description).toBe(descriptionText);
 
-        const combos = await getCombinationsBySurveyId(surveyId);
-        expect(combos).toHaveLength(3);
-        expect(combos.map(c => [c.weekday, c.nthWeek])).toEqual([
-            ['MON', '1'],
-            ['MON', '3'],
-            ['WED', '2'],
-        ]);
+            // Verify combinations order
+            const combos = await getCombinationsBySurveyId(surveyId);
+            expect(combos).toHaveLength(combinations.length);
+            verifyCombinationsOrder(combos, expectedCombinationsOrder);
 
-        // Add another combination (ensure it's present and ordering by strings works)
-        const newComboId = await addCombination(surveyId, 'TUE' as any, '4' as any);
-        expect(typeof newComboId).toBe('number');
+            // Add new combination if specified
+            if (newCombination) {
+                const newComboId = await addCombination(
+                    surveyId,
+                    newCombination.weekday as any,
+                    newCombination.week as any
+                );
+                expect(typeof newComboId).toBe('number');
 
-        const combosAfter = await getCombinationsBySurveyId(surveyId);
-        expect(combosAfter).toHaveLength(4);
-        expect(combosAfter.some(c => c.weekday === 'TUE' && c.nthWeek === '4')).toBe(true);
+                const combosAfter = await getCombinationsBySurveyId(surveyId);
+                expect(combosAfter).toHaveLength(combinations.length + 1);
+                expect(
+                    combosAfter.some(
+                        c => c.weekday === newCombination.weekday && c.nthWeek === newCombination.week
+                    )
+                ).toBe(true);
+            }
 
-        // By user
-        const byUser = await getSurveysByUserId(1);
-        expect(byUser.map(s => s.id)).toContain(surveyId);
+            // Verify survey by user
+            const byUser = await getSurveysByUserId(userId);
+            expect(byUser.map(s => s.id)).toContain(surveyId);
 
-        // Delete survey (should cascade delete combinations)
-        await deleteSurvey(surveyId);
-        const deletedSurvey = await getSurveyById(surveyId);
-        expect(deletedSurvey).toBeNull();
+            // Delete survey (should cascade delete combinations)
+            await deleteSurvey(surveyId);
+            const deletedSurvey = await getSurveyById(surveyId);
+            expect(deletedSurvey).toBeNull();
 
-        const combosAfterDelete = await getCombinationsBySurveyId(surveyId);
-        expect(combosAfterDelete).toHaveLength(0);
-    });
+            const combosAfterDelete = await getCombinationsBySurveyId(surveyId);
+            expect(combosAfterDelete).toHaveLength(0);
+        }
+    );
 
-    it('handles responses (user/guest), grouping/sorting, and survey lookup via guest link', async () => {
-        // Principals
-        const u2 = AppDataSource.getRepository(User).create({
-            id: 2,
-            username: 'u2',
-            name: 'User Two',
-            email: 'u2@example.com',
-        });
-        await AppDataSource.getRepository(User).save(u2);
+    test.each(responseTestData)(
+        '$description',
+        async ({
+            ownerId,
+            additionalUsers,
+            guests,
+            title,
+            descriptionText,
+            combinations,
+            responses,
+            expectedGroupedKeys,
+            expectedUserAnswers,
+            expectedGuestAnswers,
+            guestLinkConfig,
+            deletions,
+        }) => {
+            // Create additional users and guests
+            for (const user of additionalUsers) {
+                await createTestUser(user);
+            }
 
-        const g10 = AppDataSource.getRepository(Guest).create({
-            id: 10,
-            username: 'guest10',
-        });
-        await AppDataSource.getRepository(Guest).save(g10);
+            for (const guest of guests) {
+                await createTestGuest(guest);
+            }
 
-        // Survey + combinations
-        const surveyId = await createSurveyTx(1, 'Retro', 'When can you join?', [
-            {weekday: 'TUE' as any, week: '1' as any},
-            {weekday: 'THU' as any, week: '2' as any},
-            {weekday: 'THU' as any, week: '3' as any},
-        ]);
-        const combos = await getCombinationsBySurveyId(surveyId);
-        const [c1, c2] = combos; // first two for responses
+            // Create survey with combinations
+            const surveyId = await createSurveyTx(
+                ownerId,
+                title,
+                descriptionText,
+                combinations.map(c => ({ weekday: c.weekday as any, week: c.week as any }))
+            );
+            const combos = await getCombinationsBySurveyId(surveyId);
 
-        // Save responses (undefined answer defaults to 'no')
-        await saveResponseUser(surveyId, 2, c1.id, 'yes');
-        await saveResponseUser(surveyId, 2, c2.id, undefined as any);
+            // Save responses
+            for (const resp of responses) {
+                const comboId = combos[resp.combinationIndex].id;
+                if (resp.principalType === 'user') {
+                    await saveResponseUser(surveyId, resp.principalId, comboId, resp.answer as any);
+                } else {
+                    await saveResponseGuest(surveyId, resp.principalId, comboId, resp.answer as any);
+                }
+            }
 
-        await saveResponseGuest(surveyId, 10, c1.id, 'maybe');
-        await saveResponseGuest(surveyId, 10, c2.id, 'yes');
+            // Verify guest responses are ordered by combination.id ASC
+            const guestIds = guests.map(g => g.id);
+            for (const guestId of guestIds) {
+                const guestRows = await getResponsesByGuestId(guestId);
+                if (guestRows.length > 0) {
+                    const combIds = guestRows.map(r => r.combinationId);
+                    expect([...combIds].sort((a, b) => Number(a) - Number(b))).toEqual(combIds);
+                }
+            }
 
-        // Guest rows ordered by combination.id ASC
-        const guestRows = await getResponsesByGuestId(10);
-        expect(guestRows).toHaveLength(2);
-        const combIds = guestRows.map(r => r.combinationId);
-        expect([...combIds].sort((a, b) => Number(a) - Number(b))).toEqual(combIds);
+            // Verify grouped responses
+            const grouped = await getResponsesSorted(surveyId);
+            verifyGroupedResponses(grouped, expectedGroupedKeys);
 
-        // Grouped across user/guest
-        const grouped = await getResponsesSorted(surveyId);
-        expect(Object.keys(grouped).sort()).toEqual(['g_10', 'u_2']);
-        expect(grouped['u_2']).toHaveLength(2);
-        expect(grouped['g_10']).toHaveLength(2);
+            // Verify user answers
+            for (const [principalKey, expectedAnswers] of Object.entries(expectedUserAnswers)) {
+                expect(grouped[principalKey]).toHaveLength(expectedAnswers.length);
+                verifyAnswers(grouped, principalKey, expectedAnswers);
+            }
 
-        const userAnswers = grouped['u_2'].map(i => i.answer).sort();
-        expect(userAnswers).toEqual(['no', 'yes']); // defaulted + explicit
+            // Verify guest answers
+            for (const [principalKey, expectedAnswers] of Object.entries(expectedGuestAnswers)) {
+                verifyAnswers(grouped, principalKey, expectedAnswers);
+            }
 
-        const guestAnswers = grouped['g_10'].map(i => i.answer).sort();
-        expect(guestAnswers).toEqual(['maybe', 'yes']);
+            // Verify guest link if configured
+            if (guestLinkConfig) {
+                await createGuestLink({
+                    guestId: guestLinkConfig.guestId,
+                    entityType: 'survey',
+                    entityId: surveyId,
+                    token: guestLinkConfig.token,
+                });
+                const linkedSurvey = await getSurveyByGuestId(guestLinkConfig.guestId);
+                expect(linkedSurvey).toBeTruthy();
+                expect(linkedSurvey!.id).toBe(surveyId);
+            }
 
-        // Guest link -> survey
-        await AppDataSource.getRepository(GuestLink).save({
-            guest: {id: 10},
-            entityType: 'survey',
-            entityId: surveyId,
-            token: 'irrelevant'
-        });
-        const linkedSurvey = await getSurveyByGuestId(10);
-        expect(linkedSurvey).toBeTruthy();
-        expect(linkedSurvey!.id).toBe(surveyId);
+            // Test deletions if configured
+            if (deletions) {
+                if (deletions.deleteUserId !== undefined) {
+                    await deleteResponsesByUserId(deletions.deleteUserId, surveyId);
+                    const afterUserDelete = await getResponsesSorted(surveyId);
 
-        // Delete user responses → only guest remains
-        await deleteResponsesByUserId(2, surveyId);
-        const afterUserDelete = await getResponsesSorted(surveyId);
-        expect(afterUserDelete['u_2'] ?? []).toHaveLength(0);
-        expect(afterUserDelete['g_10']).toHaveLength(2);
+                    if (deletions.expectedAfterUserDelete) {
+                        for (const [key, expectedLength] of Object.entries(deletions.expectedAfterUserDelete)) {
+                            expect(afterUserDelete[key] ?? []).toHaveLength(expectedLength);
+                        }
+                    }
+                }
 
-        // Delete guest responses → none remain
-        await deleteResponsesByGuestId(10, surveyId);
-        const afterGuestDelete = await getResponsesSorted(surveyId);
-        expect(Object.keys(afterGuestDelete)).toHaveLength(0);
-    });
+                if (deletions.deleteGuestId !== undefined) {
+                    await deleteResponsesByGuestId(deletions.deleteGuestId, surveyId);
+                    const afterGuestDelete = await getResponsesSorted(surveyId);
+
+                    if (deletions.expectedAfterGuestDelete) {
+                        const totalExpected = Object.values(deletions.expectedAfterGuestDelete).reduce(
+                            (sum, len) => sum + len,
+                            0
+                        );
+                        if (totalExpected === 0) {
+                            expect(Object.keys(afterGuestDelete)).toHaveLength(0);
+                        }
+                    }
+                }
+            }
+        }
+    );
 });
