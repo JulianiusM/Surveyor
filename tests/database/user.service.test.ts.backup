@@ -27,7 +27,7 @@ import {
     verifyActivationToken,
     verifyPassword,
     verifyPasswordResetToken,
-} from '../../src/modules/database/services/UserService';
+} from '../../src/modules/database/services/UserService'; // <- adjust if your filename differs
 import {AppDataSource, initDataSource} from '../../src/modules/database/dataSource';
 
 // Entities used for setup/cleanup
@@ -217,71 +217,69 @@ describe('Roles', () => {
 describe('OIDC / SSO', () => {
     it('finds by exact OIDC pair, links by email, and JIT-provisions when not found', async () => {
         // 1) Exact match
-        const exactData = oidcExactMatchData[0];
         const uExact = AppDataSource.getRepository(User).create({
-            username: exactData.username,
-            name: exactData.name,
-            email: exactData.email,
-            password: exactData.password,
-            isActive: exactData.isActive,
-            oidcIssuer: exactData.oidcIssuer,
-            oidcSub: exactData.oidcSub,
+            username: 'sso-exact',
+            name: 'Exact',
+            email: 'exact@example.com',
+            password: null,
+            isActive: true,
+            oidcIssuer: 'https://issuer.example',
+            oidcSub: 'sub-123',
         });
         await AppDataSource.getRepository(User).save(uExact);
 
-        const foundExact = await getUserByOidc(exactData.oidcIssuer, exactData.oidcSub);
-        expect(foundExact).toMatchObject({username: exactData.username, isActive: exactData.expectedActive});
+        const foundExact = await getUserByOidc('https://issuer.example', 'sub-123');
+        expect(foundExact).toMatchObject({username: 'sso-exact', isActive: 1});
 
         // 2) Link-by-email path (existing local account gets linked+activated)
-        const linkData = oidcLinkByEmailData[0];
         const localUnlinked = AppDataSource.getRepository(User).create({
-            username: linkData.localUsername,
-            name: linkData.localName,
-            email: linkData.localEmail,
-            password: linkData.localPassword,
-            isActive: linkData.localIsActive,
+            username: 'local-only',
+            name: 'Local',
+            email: 'linkme@example.com',
+            password: 'x',
+            isActive: false,
         });
         await AppDataSource.getRepository(User).save(localUnlinked);
 
         const linked = await findOrCreateUserFromOidc(
-            linkData.oidcIssuer,
+            'https://issuer.example',
             {
-                sub: linkData.oidcSub,
-                email: linkData.oidcEmail,
-                preferred_username: linkData.oidcUsername,
-                name: linkData.oidcName,
+                sub: 'sub-456',
+                email: 'linkme@example.com',
+                preferred_username: 'whatever',
+                name: 'Linked Name',
             },
-            {linkByEmail: linkData.linkByEmail}
+            {linkByEmail: true}
         );
 
         expect(linked.id).toBe(localUnlinked.id);
-        expect(linked.oidcIssuer).toBe(linkData.oidcIssuer);
-        expect(linked.oidcSub).toBe(linkData.oidcSub);
-        expect(linked.isActive).toBe(linkData.expectedActive);
+        expect(linked.oidcIssuer).toBe('https://issuer.example');
+        expect(linked.oidcSub).toBe('sub-456');
+        expect(linked.isActive).toBe(true);
 
         // 3) JIT-provisioning: ensure unique username is generated when base exists
-        const jitData = oidcJitProvisioningData[0];
-        await registerUser(jitData.existingUsername, jitData.existingName, jitData.existingPassword, jitData.existingEmail);
+        // Create an existing user "alice" so the JIT user should become "alice-1"
+        await registerUser('alice', 'Alice Local', 'pw', 'alice.local@example.com');
 
         const jitUser = await findOrCreateUserFromOidc(
-            jitData.oidcIssuer,
+            'https://issuer.example',
             {
-                sub: jitData.oidcSub,
-                email: jitData.oidcEmail,
-                preferred_username: jitData.oidcPreferredUsername,
-                name: jitData.oidcName,
+                sub: 'new-sub-999',
+                email: 'newuser@example.com',
+                preferred_username: 'alice', // collides with existing 'alice'
+                name: 'Alice OIDC',
             }
         );
 
-        expect(jitUser.username).toMatch(jitData.expectedUsernamePattern);
-        expect(jitUser.username).toBe(jitData.expectedUsername);
-        expect(jitUser.isActive).toBe(jitData.expectedActive);
+        expect(jitUser.username).toMatch(/^alice(-\d+)?$/);
+        expect(jitUser.username).toBe('alice-1'); // first collision should get -1
+        expect(jitUser.isActive).toBe(1);
         expect(jitUser.password).toBeNull();
 
         await unlinkOidc(linked.id);
 
-        // sanity: OIDC pair shouldn't resolve anymore
-        const shouldBeGone = await getUserByOidc(linkData.oidcIssuer, linkData.oidcSub);
+        // sanity: OIDC pair shouldn’t resolve anymore
+        const shouldBeGone = await getUserByOidc('https://issuer.example', 'sub-456');
         expect(shouldBeGone).toBeNull();
 
         // fetch the row and INCLUDE hidden columns explicitly
