@@ -136,36 +136,61 @@ For comprehensive testing guidelines, see [TESTING.md](../TESTING.md).
 
 E2E tests follow the same **data-driven** and **keyword-driven** patterns as unit and integration tests:
 
-- **Test data**: Externalized to `tests/data/e2e/*.ts`
+- **Test data**: Externalized to `tests/data/e2e/*.ts` with all constants (URLs, selectors, messages, field names)
 - **Test keywords**: Reusable actions in `tests/keywords/e2e/*.ts`
 - **For-loop pattern**: Use `for (const data of testData)` to iterate test cases
+- **Consolidated data**: Success/failure cases in same array with flags (`shouldSucceed`, `isAuthenticated`, etc.)
 
 #### Test Structure
 
 ```typescript
-// Import test data
+// Import test data with constants
 import { surveyCreationData } from '../data/e2e/surveyData';
-import { testCredentials } from '../data/e2e/authData';
+import { testCredentials, authUrls, formFields, successMessages, selectors } from '../data/e2e/authData';
 
 // Import keywords
 import { loginUser } from '../keywords/e2e/authKeywords';
 import { createSurvey, generateEntityTitle } from '../keywords/e2e/entityKeywords';
 
-// Data-driven test
+// Data-driven test with externalized URL
 for (const data of surveyCreationData) {
     test(data.description, async ({ page }) => {
         await loginUser(page, testCredentials.username, testCredentials.password);
         const surveyTitle = generateEntityTitle(data.title);
+        await page.goto(data.createUrl);  // URL from data
         await createSurvey(page, surveyTitle, data.surveyDescription, data.submitButtonText);
         await page.waitForURL((url) => data.expectedRedirectPattern.test(url.pathname));
     });
 }
+
+// Consolidated success/failure test
+for (const data of loginData) {
+    test(data.description, async ({ page }) => {
+        await page.goto(data.url);  // URL from data
+        await fillLoginForm(page, data.username, data.password);
+        
+        if (data.shouldSucceed) {
+            await expect(page).toHaveURL(data.expectedUrl);
+        } else {
+            await verifyErrorAlert(page);
+        }
+    });
+}
 ```
+
+#### Test Data Constants
+
+All E2E test data files include constants for:
+- **URLs**: `authUrls`, entity `createUrl`
+- **Selectors**: `selectors`, `titleSelector`, `footerSelector`
+- **Messages**: `successMessages`
+- **Form fields**: `formFields`
+- **Zero hardcoded strings** in test logic
 
 #### Test Organization
 
 - **Test files**: `tests/e2e/*.test.ts`
-- **Test data**: `tests/data/e2e/*.ts` 
+- **Test data**: `tests/data/e2e/*.ts` (includes all constants)
 - **Keywords**: `tests/keywords/e2e/*.ts`
   - `authKeywords.ts` - Authentication operations (login, register, verify)
   - `entityKeywords.ts` - Entity management (create, navigate, verify)
