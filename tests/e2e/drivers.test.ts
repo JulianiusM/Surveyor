@@ -1,94 +1,92 @@
 // e2e/drivers.test.ts
 // End-to-end tests for drivers list creation and management
+// Migrated to data-driven and keyword-driven testing approach.
 
-import {expect, test} from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
-const USERNAME = process.env.E2E_ADMIN_USERNAME ?? 'tester';
-const PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? 'passw0rd!';
+// Import test data
+import {
+    driversPageAccessData,
+    driversDashboardEmptyStateData,
+    driversCreationData,
+    driversValidationData,
+} from '../data/e2e/driversData';
 
-async function login(page: any) {
-    await page.goto('/users/login');
-    await page.locator('input[name="username"]').fill(USERNAME);
-    await page.locator('input[name="password"]').fill(PASSWORD);
-    await page.getByRole('button', {name: /login/i}).click();
-    // Wait for redirect and dashboard to load
-    await page.waitForURL(/\/users\/dashboard/, {waitUntil: 'networkidle'});
-    // Ensure we're logged in by checking for user menu
-    await expect(page.locator('#userMenu')).toBeVisible();
-    
-    // Verify session cookie was set
-    const cookies = await page.context().cookies();
-    const sessionCookie = cookies.find(c => c.name === 'connect.sid');
-    if (!sessionCookie) {
-        throw new Error('Session cookie was not set after login');
-    }
-    
-    // Add a delay to ensure session is fully persisted to database
-    await page.waitForTimeout(1000);
-}
+import { testCredentials } from '../data/e2e/authData';
 
-test.beforeEach(async ({context}) => {
+// Import keywords
+import { loginUser } from '../keywords/e2e/authKeywords';
+import {
+    navigateToEntityCreatePage,
+    verifyUnauthenticatedRedirect,
+    verifyDashboardEmptyState,
+    createDriversList,
+    verifyFormFieldRequired,
+    generateEntityTitle,
+} from '../keywords/e2e/entityKeywords';
+
+test.beforeEach(async ({ context }) => {
     await context.clearCookies();
 });
 
-test('authenticated user can access drivers list create page', async ({page}) => {
-    await login(page);
-    await page.goto('/drivers/create');
-    await expect(page).toHaveURL(/\/drivers\/create/);
-    await expect(page.getByRole('heading', {name: /create.*driver/i})).toBeVisible();
-});
-
-test('unauthenticated user cannot access drivers create page', async ({page}) => {
-    await page.goto('/drivers/create');
-    await expect(page).toHaveURL(/\/users\/login/);
-});
-
-test('drivers dashboard shows empty state for new user', async ({page}) => {
-    await login(page);
-    const accordion = page.locator('#sec-drivers');
-    await page.getByRole('button', {name: /your drivers lists/i}).click();
-    await expect(accordion).toContainText(/you don['’]t have any drivers/i);
-});
-
-test('can create a new drivers list with valid data', async ({page}) => {
-    await login(page);
-    await page.goto('/drivers/create');
-    
-    // Wait for the page to be fully loaded
-    await expect(page).toHaveURL(/\/drivers\/create/);
-    await expect(page.getByRole('heading', {name: /create.*driver/i})).toBeVisible();
-    
-    // Fill in drivers list details
-    const driversTitle = `E2E Drivers ${Date.now()}`;
-    await page.locator('input[name="title"]').fill(driversTitle);
-    
-    // Submit the form
-    await page.getByRole('button', {name: /create.*list/i}).click();
-    await page.evaluate(() => {
-        const form = document.getElementById('packingForm') as HTMLFormElement | null;
-        form?.submit();
+// 1) Page access tests (authenticated and unauthenticated)
+for (const data of driversPageAccessData) {
+    test(data.description, async ({ page }) => {
+        if (data.isAuthenticated) {
+            await loginUser(page, testCredentials.username, testCredentials.password);
+            await navigateToEntityCreatePage(page, 'drivers', data.expectedUrl, data.expectedHeading);
+        } else {
+            await verifyUnauthenticatedRedirect(page, data.targetUrl, data.expectedRedirectUrl);
+        }
     });
-    
-    // Should redirect to dashboard or drivers view
-    await page.waitForURL(url => /\/(users\/dashboard|drivers\/[\w-]*-[\w-]+)/.test(url.pathname));
+}
 
-    // Verify success by checking page heading or content
-    await expect(page.locator('h1')).toContainText(driversTitle);
-});
 
-test('drivers form validates required fields', async ({page}) => {
-    await login(page);
-    await page.goto('/drivers/create');
-    
-    // Wait for the page to be fully loaded
-    await expect(page).toHaveURL(/\/drivers\/create/);
-    await expect(page.getByRole('heading', {name: /create.*driver/i})).toBeVisible();
-    
-    // Try to submit without filling required fields
-    const titleInput = page.locator('input[name="title"]');
-    await expect(titleInput).toHaveAttribute('required', '');
-    
-    // Check HTML5 validation
-    const isRequired = await titleInput.evaluate((el: HTMLInputElement) => el.required);
-    expect(isRequired).toBe(true);
-});
+// 2) Drivers dashboard shows empty state for new user
+for (const data of driversDashboardEmptyStateData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await verifyDashboardEmptyState(page, data.accordionId, data.buttonText, data.expectedEmptyText);
+    });
+}
+
+// 3) Can create a new drivers list with valid data
+for (const data of driversCreationData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await page.goto('/drivers/create');
+
+        // Wait for the page to be fully loaded
+        await expect(page).toHaveURL(/\/drivers\/create/);
+        await expect(page.getByRole('heading', { name: /create.*driver/i })).toBeVisible();
+
+        // Fill in drivers list details with timestamped title
+        const driversTitle = generateEntityTitle(data.title);
+        await createDriversList(page, driversTitle, data.submitButtonText, data.requiresFormSubmit);
+
+        // Should redirect to dashboard or drivers view
+        await page.waitForURL((url) => data.expectedRedirectPattern.test(url.pathname));
+
+        // Verify success by checking page heading or content
+        if (data.verifyTitleInPage) {
+            await expect(page.locator('h1')).toContainText(driversTitle);
+        }
+    });
+}
+
+// 4) Drivers form validates required fields
+for (const data of driversValidationData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await page.goto('/drivers/create');
+
+        // Wait for the page to be fully loaded
+        await expect(page).toHaveURL(/\/drivers\/create/);
+        await expect(page.getByRole('heading', { name: /create.*driver/i })).toBeVisible();
+
+        // Verify required field
+        if (data.expectedRequiredAttribute && data.checkHtml5Validation) {
+            await verifyFormFieldRequired(page, data.titleFieldName);
+        }
+    });
+}

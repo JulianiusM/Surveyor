@@ -282,17 +282,131 @@ test.each(testData)('$description', async (testCase) => {
 
 ### E2E Tests
 
-E2E tests verify complete user workflows. For comprehensive E2E testing guidelines, see [copilot instructions](../.github/copilot-instructions.md#e2e-tests).
+E2E tests verify complete user workflows using Playwright. They follow the same data-driven and keyword-driven patterns as other tests.
 
-1. **Test user workflows**:
+1. **Use test data and keywords**:
 ```typescript
-test('user can create survey', async ({ page }) => {
-    await page.goto('/surveys/create');
-    await page.fill('[name="title"]', 'My Survey');
-    await page.click('button[type="submit"]');
-    await expect(page.locator('.success-message')).toHaveText('Survey created');
-});
+// Import test data with all constants
+import { surveyCreationData } from '../data/e2e/surveyData';
+import { testCredentials, authUrls, formFields, successMessages, selectors } from '../data/e2e/authData';
+
+// Import keywords
+import { loginUser } from '../keywords/e2e/authKeywords';
+import { createSurvey, generateEntityTitle } from '../keywords/e2e/entityKeywords';
+
+// Data-driven test using for loop (Playwright pattern)
+for (const data of surveyCreationData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        const surveyTitle = generateEntityTitle(data.title);
+        await page.goto(data.createUrl);
+        await createSurvey(page, surveyTitle, data.surveyDescription, data.submitButtonText);
+        await page.waitForURL((url) => data.expectedRedirectPattern.test(url.pathname));
+    });
+}
 ```
+
+2. **Test data structure with all constants externalized**:
+```typescript
+// Common constants (authData.ts)
+export const authUrls = {
+    login: '/users/login',
+    register: '/users/register',
+    dashboard: '/users/dashboard',
+};
+
+export const formFields = {
+    username: 'username',
+    password: 'password',
+};
+
+export const successMessages = {
+    accountActivated: 'Your account has been activated',
+};
+
+export const selectors = {
+    alertSuccess: '.alert, .alert-success',
+    alertDanger: '.alert, .alert-danger, [role="alert"]',
+};
+
+// Entity creation data
+export const surveyCreationData = [
+    {
+        description: 'can create a new survey with valid data',
+        createUrl: '/survey/create',
+        title: 'E2E Survey',
+        surveyDescription: 'Test survey description',
+        submitButtonText: /create.*survey/i,
+        expectedRedirectPattern: /\/(users\/dashboard|survey\/[\w-]*-[\w-]+)/,
+        verifyTitleInPage: true,
+        titleSelector: 'h1',
+    },
+];
+```
+
+3. **Consolidated success/failure data**:
+```typescript
+// Single array with flag indicating expected outcome
+export const loginData = [
+    {
+        description: 'rejects wrong credentials',
+        url: authUrls.login,
+        username: 'invalid_user',
+        password: 'wrong_password',
+        shouldSucceed: false,
+        expectedUrl: /\/users\/login/,
+        expectedAlert: true,
+    },
+    {
+        description: 'logs in with valid credentials',
+        url: authUrls.login,
+        username: testCredentials.username,
+        password: testCredentials.password,
+        shouldSucceed: true,
+        expectedUrl: /\/users\/dashboard/,
+    },
+];
+
+// Test uses conditional logic based on data
+for (const data of loginData) {
+    test(data.description, async ({ page }) => {
+        await page.goto(data.url);
+        await fillLoginForm(page, data.username, data.password);
+        
+        if (data.shouldSucceed) {
+            await expect(page).toHaveURL(data.expectedUrl);
+        } else {
+            await verifyErrorAlert(page);
+        }
+    });
+}
+```
+
+4. **Use keywords for common operations**:
+```typescript
+// Authentication keyword
+await loginUser(page, username, password);
+
+// Entity management keywords
+await navigateToEntityCreatePage(page, 'survey', expectedUrl, expectedHeading);
+await verifyUnauthenticatedRedirect(page, targetUrl, expectedRedirectUrl);
+await verifyDashboardEmptyState(page, accordionId, buttonText, expectedEmptyText);
+
+// Navigation keywords
+await verifyLinkVisible(page, linkName);
+await navigateThroughSteps(page, steps);
+
+// Validation keywords
+await verifyErrorMessage(page, selector, expectedText);
+await verifyFieldRequired(page, fieldName);
+```
+
+5. **E2E test organization**:
+- Test files: `tests/e2e/*.test.ts`
+- Test data: `tests/data/e2e/*.ts` (includes all URLs, selectors, messages, field names)
+- Test keywords: `tests/keywords/e2e/*.ts`
+- Database helpers: `tests/keywords/e2e/dbKeywords.ts`
+- **Zero hardcoded strings** - All constants defined in data files
 
 ## Running Tests
 

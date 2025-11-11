@@ -1,219 +1,191 @@
 // e2e/error-handling.test.ts
 // Frontend error handling and validation tests
+// Migrated to data-driven and keyword-driven testing approach.
 
-import {expect, test} from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
-const USERNAME = process.env.E2E_ADMIN_USERNAME ?? 'tester';
-const PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? 'passw0rd!';
+// Import test data
+import {
+    notFoundErrorData,
+    formValidationData,
+    invalidTokenData,
+    routeAccessData,
+    networkErrorData,
+    serverErrorData,
+    pageFunctionalityData,
+    consoleErrorData,
+    entityFormValidationData,
+    nonExistentResourceData,
+    protectedRoutesData,
+} from '../data/e2e/errorHandlingData';
 
-async function login(page: any) {
-    await page.goto('/users/login');
-    await page.locator('input[name="username"]').fill(USERNAME);
-    await page.locator('input[name="password"]').fill(PASSWORD);
-    await page.getByRole('button', {name: /login/i}).click();
-    // Wait for redirect and dashboard to load
-    await page.waitForURL(/\/users\/dashboard/, {waitUntil: 'networkidle'});
-    // Ensure we're logged in by checking for user menu
-    await expect(page.locator('#userMenu')).toBeVisible();
-    
-    // Verify session cookie was set
-    const cookies = await page.context().cookies();
-    const sessionCookie = cookies.find(c => c.name === 'connect.sid');
-    if (!sessionCookie) {
-        throw new Error('Session cookie was not set after login');
-    }
-    
-    // Add a delay to ensure session is fully persisted to database
-    await page.waitForTimeout(1000);
-}
+import { testCredentials } from '../data/e2e/authData';
 
-test.beforeEach(async ({context}) => {
+// Import keywords
+import { loginUser, generateUniqueUsername } from '../keywords/e2e/authKeywords';
+import {
+    submitForm,
+    verifyFieldRequired,
+    fillFormFields,
+    verifyErrorMessage,
+    verifyAlertVisible,
+    setOfflineMode,
+    tryNavigate,
+    verifyBodyAttached,
+    monitorConsoleErrors,
+    verifyNoUnexpectedErrors,
+    verifyUrlMatches,
+    verifyBodyTextMatches,
+    navigateToMultiplePages,
+    verifyProtectedRoutesRedirect,
+} from '../keywords/e2e/validationKeywords';
+
+import { verifyBodyContainsText } from '../keywords/e2e/navigationKeywords';
+
+test.beforeEach(async ({ context }) => {
     await context.clearCookies();
 });
 
-// Test 404 error page
-test('shows 404 error page for non-existent routes', async ({page}) => {
-    await page.goto('/this-route-does-not-exist');
-    // Should show error page or be handled gracefully
-    await expect(page.locator('body')).toContainText(/404|not found|error/i);
-});
+// 1) Shows 404 error page for non-existent routes
+for (const data of notFoundErrorData) {
+    test(data.description, async ({ page }) => {
+        await page.goto(data.url);
+        await verifyBodyContainsText(page, data.expectedBodyText);
+    });
+}
 
-// Test form validation errors
-test('login form shows validation errors for empty fields', async ({page}) => {
-    await page.goto('/users/login');
-    
-    // Try to submit without filling fields
-    await page.getByRole('button', {name: /login/i}).click();
-    
-    // HTML5 validation should prevent submission
-    const usernameInput = page.locator('input[name="username"]');
-    const isRequired = await usernameInput.getAttribute('required');
-    expect(isRequired).not.toBeNull();
-});
-
-// Test registration form validation
-test('registration form validates password matching', async ({page}) => {
-    await page.goto('/users/register');
-    
-    const username = `testuser_${Date.now()}`;
-    await page.locator('input[name="username"]').fill(username);
-    await page.locator('input[name="displayname"]').fill(username);
-    await page.locator('input[name="email"]').fill(`${username}@test.com`);
-    await page.locator('input[name="password"]').fill('Password123!');
-    await page.locator('input[name="password_repeat"]').fill('DifferentPassword123!');
-    
-    await page.getByRole('button', {name: /register/i}).click();
-    
-    // Should show validation error (at least one message)
-    const errorMessage = page.locator('.invalid-feedback, .alert-danger, .alert').first();
-    await expect(errorMessage).toBeAttached();
-    await expect(errorMessage).toContainText(/passwords do not match/i);
-});
-
-// Test invalid activation token
-test('shows error for invalid activation token', async ({page}) => {
-    await page.goto('/users/activate/invalid-token-12345');
-    
-    // Should show error message
-    await expect(page.locator('.alert-danger, .alert, [role="alert"]')).toBeVisible();
-});
-
-// Test invalid reset token  
-test('shows error for invalid password reset token', async ({page}) => {
-    await page.goto('/users/reset-password/invalid-token-12345');
-    
-    // Should show error message
-    await expect(page.locator('.alert-danger, .alert, [role="alert"]')).toBeVisible();
-});
-
-// Test session timeout/unauthorized access
-test('redirects to login when accessing protected route without auth', async ({page}) => {
-    await page.goto('/survey/create');
-    
-    // Should redirect to login
-    await expect(page).toHaveURL(/\/users\/login/);
-});
-
-// Test network error handling with offline mode
-test('handles network errors gracefully', async ({page, context}) => {
-    await login(page);
-    
-    // Simulate offline mode
-    await context.setOffline(true);
-    
-    // Try to navigate to a page that requires API call; ignore navigation failure while offline
-    try {
-        await page.goto('/users/dashboard');
-    } catch {
-        // Expected when offline; ensure the page still responds
-    }
-
-    // Page should handle the error (may show cached content or error message)
-    // At minimum, it shouldn't crash - just verify page is still interactive
-    await expect(page.locator('body')).toBeAttached();
-    
-    // Restore online mode
-    await context.setOffline(false);
-});
-
-// Test form submission with server error simulation
-test('handles server errors during login', async ({page}) => {
-    await page.goto('/users/login');
-    
-    // Use wrong credentials to trigger error
-    await page.locator('input[name="username"]').fill('nonexistent_user_12345');
-    await page.locator('input[name="password"]').fill('wrongpassword');
-    await page.getByRole('button', {name: /login/i}).click();
-    
-    // Should stay on login page and show error
-    await expect(page).toHaveURL(/\/users\/login/);
-    await expect(page.locator('.alert, .alert-danger, .invalid-feedback')).toBeAttached();
-});
-
-// Test JavaScript errors don't break the page
-test('page remains functional after navigation', async ({page}) => {
-    // Navigate through several pages to ensure no JS errors break functionality
-    await page.goto('/');
-    await expect(page.locator('body')).toBeAttached();
-    
-    await page.goto('/users/login');
-    await expect(page.getByRole('button', {name: /login/i})).toBeVisible();
-    
-    await page.goto('/users/register');
-    await expect(page.getByRole('button', {name: /register/i})).toBeVisible();
-    
-    await page.goto('/users/forgot-password');
-    await expect(page.getByRole('button', {name: /send reset link/i})).toBeVisible();
-});
-
-// Test console errors
-test('no critical console errors on main pages', async ({page}) => {
-    const consoleErrors: string[] = [];
-    
-    page.on('console', (msg) => {
-        if (msg.type() === 'error') {
-            consoleErrors.push(msg.text());
+// 2) Form validation tests (login and registration)
+for (const data of formValidationData) {
+    test(data.description, async ({ page }) => {
+        await page.goto(data.url);
+        
+        if (data.formType === 'login') {
+            await submitForm(page, data.submitButton);
+            if (data.expectedRequiredAttribute) {
+                await verifyFieldRequired(page, data.fieldToCheck);
+            }
+        } else if (data.formType === 'registration') {
+            const username = generateUniqueUsername(data.usernamePrefix);
+            await fillFormFields(page, [
+                { name: 'username', value: username },
+                { name: 'displayname', value: username },
+                { name: 'email', value: `${username}@test.com` },
+                { name: 'password', value: data.password },
+                { name: 'password_repeat', value: data.passwordRepeat },
+            ]);
+            
+            await submitForm(page, data.submitButton);
+            await verifyErrorMessage(page, '.invalid-feedback, .alert-danger, .alert', data.expectedErrorText);
         }
     });
-    
-    // Check key pages
-    await page.goto('/');
-    await page.goto('/users/login');
-    await page.goto('/users/register');
-    
-    // Filter out expected errors (like network errors in test environment)
-    const unexpectedErrors = consoleErrors.filter(err => 
-        !err.includes('smtp.example.com') && 
-        !err.includes('favicon') &&
-        !err.includes('ENOTFOUND') &&
-        !err.includes('ERR_NAME_NOT_RESOLVED') &&
-        !err.includes('net::')
-    );
-    
-    // Log any unexpected errors for debugging
-    if (unexpectedErrors.length > 0) {
-        console.log('Unexpected console errors:', unexpectedErrors);
-    }
-    
-    expect(unexpectedErrors).toHaveLength(0);
-});
+}
 
-// Test entity creation validation
-test('survey form shows validation errors for empty required fields', async ({page}) => {
-    await login(page);
-    await page.goto('/survey/create');
-    
-    // Wait for the page to be fully loaded
-    await expect(page).toHaveURL(/\/survey\/create/);
-    await expect(page.getByRole('heading', {name: /create.*survey/i})).toBeVisible();
-    
-    const titleInput = page.locator('input[name="title"]');
-    const isRequired = await titleInput.getAttribute('required');
-    expect(isRequired).not.toBeNull();
-});
+// 3) Shows error for invalid tokens
+for (const data of invalidTokenData) {
+    test(data.description, async ({ page }) => {
+        await page.goto(data.url);
+        await verifyAlertVisible(page, data.expectedAlertSelector);
+    });
+}
 
-// Test access control for non-existent resources
-test('shows error for accessing non-existent survey', async ({page}) => {
-    await login(page);
-    await page.goto('/survey/999999');
-    
-    // Should show 404 or error message
-    const body = await page.locator('body').textContent();
-    expect(body).toMatch(/404|not found|error/i);
-});
+// 4) Route access control tests (authorized and unauthorized)
+for (const data of routeAccessData) {
+    test(data.description, async ({ page }) => {
+        if (!data.isAuthenticated) {
+            await page.goto(data.url);
+            await verifyUrlMatches(page, data.expectedRedirectUrl);
+        }
+    });
+}
 
-// Test protected routes redirect properly
-test('all protected routes redirect unauthenticated users', async ({page}) => {
-    const protectedRoutes = [
-        '/survey/create',
-        '/packing/create',
-        '/activity/create',
-        '/drivers/create',
-        '/users/dashboard'
-    ];
-    
-    for (const route of protectedRoutes) {
-        await page.goto(route);
-        await expect(page).toHaveURL(/\/users\/login/);
-    }
-});
+// 5) Handles network errors gracefully
+for (const data of networkErrorData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        
+        if (data.setOffline) {
+            await setOfflineMode(page, true);
+        }
+        
+        // Try to navigate; ignore navigation failure while offline
+        await tryNavigate(page, data.targetUrl);
+        
+        // Page should handle the error - at minimum, it shouldn't crash
+        if (data.expectBodyAttached) {
+            await verifyBodyAttached(page);
+        }
+        
+        // Restore online mode
+        if (data.setOffline) {
+            await setOfflineMode(page, false);
+        }
+    });
+}
+
+// 6) Handles server errors during login
+for (const data of serverErrorData) {
+    test(data.description, async ({ page }) => {
+        await page.goto(data.url);
+        await fillFormFields(page, [
+            { name: 'username', value: data.username },
+            { name: 'password', value: data.password },
+        ]);
+        await submitForm(page, data.submitButton);
+        
+        await verifyUrlMatches(page, data.expectedUrl);
+        await expect(page.locator(data.expectedAlertSelector)).toBeAttached();
+    });
+}
+
+// 7) Page remains functional after navigation
+for (const data of pageFunctionalityData) {
+    test(data.description, async ({ page }) => {
+        await navigateToMultiplePages(page, data.pages);
+    });
+}
+
+// 8) No critical console errors on main pages
+for (const data of consoleErrorData) {
+    test(data.description, async ({ page }) => {
+        const consoleErrors = await monitorConsoleErrors(page, data.filterErrors);
+        
+        // Check key pages
+        for (const pageUrl of data.pages) {
+            await page.goto(pageUrl);
+        }
+        
+        // Verify no unexpected errors
+        verifyNoUnexpectedErrors(consoleErrors, data.filterErrors);
+    });
+}
+
+// 9) Survey form shows validation errors for empty required fields
+for (const data of entityFormValidationData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await page.goto(data.url);
+        
+        await expect(page).toHaveURL(data.url);
+        await expect(page.getByRole('heading', { name: data.expectedHeading })).toBeVisible();
+        
+        if (data.expectedRequiredAttribute) {
+            await verifyFieldRequired(page, data.titleField);
+        }
+    });
+}
+
+// 10) Shows error for accessing non-existent survey
+for (const data of nonExistentResourceData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await page.goto(data.url);
+        await verifyBodyTextMatches(page, data.expectedBodyText);
+    });
+}
+
+// 11) All protected routes redirect unauthenticated users
+for (const data of protectedRoutesData) {
+    test(data.description, async ({ page }) => {
+        await verifyProtectedRoutesRedirect(page, data.routes, data.expectedRedirectUrl);
+    });
+}
