@@ -31,6 +31,8 @@ jest.mock('../../src/modules/lib/util', () => ({
 import controller from '../../src/controller/packingController';
 import * as packingService from '../../src/modules/database/services/PackingService';
 import {APIError, ValidationError} from '../../src/modules/lib/errors';
+import {setupMock, verifyMockCall, verifyResult} from '../keywords/common/controllerKeywords';
+import * as testData from '../data/controller/packingData';
 
 const {
     preprocessCreate,
@@ -58,269 +60,234 @@ beforeEach(() => {
 });
 
 describe('preprocessCreate', () => {
-    it('parses, validates, and normalizes a valid payload', () => {
-        const body = {
-            title: 'Trip packing',
-            description: '',
-            allowGuestAdd: 'on',     // Boolean('on') → true
-            guestManage: '',         // Boolean('') → false
-            items: JSON.stringify([
-                {title: 'Tent', description: '', maxAssignees: 1, requiredByAll: true},
-                {title: 'Stove', description: 'gas', maxAssignees: 2, requiredByAll: false},
-            ]),
-        };
-
-        const res = preprocessCreate(body);
-        expect(res).toMatchObject({
-            title: 'Trip packing',
-            description: null,
-            allowGuestAdd: true,
-            guestManage: false,
-        });
-        expect(res.items).toHaveLength(2);
-        expect(res.items[0]).toMatchObject({title: 'Tent', requiredByAll: true, maxAssignees: 1});
-    });
-
-    it('throws ValidationError on invalid JSON', () => {
-        const body = {title: 'X', items: '[bad json'};
-        expect(() => preprocessCreate(body)).toThrow(ValidationError);
-    });
-
-    it('throws ValidationError on schema errors (missing item fields)', () => {
-        const body = {
-            title: 'X',
-            items: JSON.stringify([{description: '', maxAssignees: 1, requiredByAll: true}]), // missing title
-        };
-        expect(() => preprocessCreate(body)).toThrow(ValidationError);
-    });
-
-    it('requires at least one item', () => {
-        const body = {
-            title: 'X',
-            items: JSON.stringify([]),
-        };
-        expect(() => preprocessCreate(body)).toThrow(ValidationError);
-    });
+    test.each(testData.preprocessCreateData)(
+        '$description',
+        ({input, expected, shouldThrow}) => {
+            if (shouldThrow) {
+                expect(() => preprocessCreate(input)).toThrow(shouldThrow === 'ValidationError' ? ValidationError : Error);
+            } else {
+                const res = preprocessCreate(input);
+                expect(res).toMatchObject({
+                    title: expected.title,
+                    description: expected.description,
+                    allowGuestAdd: expected.allowGuestAdd,
+                    guestManage: expected.guestManage,
+                });
+                expect(res.items).toHaveLength(expected.itemsLength);
+                expect(res.items[0]).toMatchObject(expected.firstItem);
+            }
+        }
+    );
 });
 
 describe('createEntity / afterCreateItems', () => {
     it('maps list + items, generates ids/positions, coerces types', async () => {
-        (packingService.createPackingListTx as jest.Mock).mockResolvedValue('list-123');
+        const {userId, listData, expectedId, expectedItems} = testData.createEntityData;
+        setupMock(packingService.createPackingListTx, expectedId);
 
-        const listData = {
-            title: 'Trip',
-            description: 'desc',
-            allowGuestAdd: true,
-            guestManage: false,
-            items: [
-                {title: 'Tent', description: '', maxAssignees: '2', requiredByAll: true},
-                {title: 'Stove', requiredByAll: 0, maxAssignees: 0}, // coerces
-            ],
-        };
-
-        const id = await createEntity(7, listData as any);
-        expect(id).toBe('list-123');
-
-        // Check call args: items transformed with id, position, coerced numbers/booleans
+        const id = await createEntity(userId, listData as any);
+        
+        verifyResult(id, expectedId);
         expect(packingService.createPackingListTx).toHaveBeenCalledTimes(1);
         const args = (packingService.createPackingListTx as jest.Mock).mock.calls[0];
-        expect(args[0]).toBe(7);                      // ownerId
-        expect(args[1]).toBe('Trip');                 // title
-        expect(args[2]).toBe('desc');                 // description
-        expect(args[3]).toBe(true);                   // allowGuestAdd
-        expect(args[4]).toBe(false);                  // guestManage
+        expect(args[0]).toBe(userId);
+        expect(args[1]).toBe(listData.title);
+        expect(args[2]).toBe(listData.description);
+        expect(args[3]).toBe(listData.allowGuestAdd);
+        expect(args[4]).toBe(listData.guestManage);
         const mappedItems = args[5];
         expect(mappedItems).toHaveLength(2);
-        expect(mappedItems[0]).toMatchObject({
-            id: 'uid-123',
-            title: 'Tent',
-            description: '',
-            maxAssignees: 2,
-            requiredByAll: true,
-            position: 0,
-        });
-        expect(mappedItems[1]).toMatchObject({
-            id: 'uid-123',
-            title: 'Stove',
-            description: '', // defaulted
-            maxAssignees: 1, // Number(0) || 1 → 1
-            requiredByAll: false,
-            position: 1,
-        });
+        expect(mappedItems[0]).toMatchObject(expectedItems[0]);
+        expect(mappedItems[1]).toMatchObject(expectedItems[1]);
 
         await expect(afterCreateItems()).resolves.toBeUndefined();
     });
 });
 
 describe('fetchForView', () => {
-    const list = {id: 'L1'};
-
-    const items = [
-        {id: 'a', title: 'A', assignedCount: 0, maxAssignees: 2, requiredByAll: false},
-        {id: 'b', title: 'B', assignedCount: 1, maxAssignees: 1, requiredByAll: false},
-        {id: 'c', title: 'C', assignedCount: 0, maxAssignees: 5, requiredByAll: true}, // skipped in counters
-    ];
+    const {list, items, assignees, scenarios} = testData.fetchForViewData;
 
     beforeEach(() => {
-        (packingService.getPackingItems as jest.Mock).mockResolvedValue(items);
-        (packingService.getPackingItemAssignees as jest.Mock).mockResolvedValue({
-            a: [{user_id: 1}],
-            b: [{guest_id: 2}, {name: 'Anon'}],
-            c: [{user_id: 1}], // should not affect counters/participants
-        });
+        setupMock(packingService.getPackingItems, items);
+        setupMock(packingService.getPackingItemAssignees, assignees);
     });
 
-    it('uses user assignments and computes counters/participants excluding requiredByAll', async () => {
-        (packingService.getPackingAssignmentsForUser as jest.Mock).mockResolvedValue(['a']);
-        const res = await fetchForView(list as any, {user: {id: 99}} as any);
-
-        expect(res.items).toBe(items);
-        expect(res.assignments).toEqual(['a']);
-        expect(res.counters).toEqual({participants: 3, open: 1, empty: 1});
-        // participants: 'u_1', 'g_2', 'Anon' from items a/b only
-    });
-
-    it('uses guest assignments when no user', async () => {
-        (packingService.getPackingAssignmentsForGuest as jest.Mock).mockResolvedValue(['b']);
-        const res = await fetchForView(list as any, {guest: {id: 5}} as any);
-        expect(res.assignments).toEqual(['b']);
-    });
-
-    it('falls back to empty assignments with no principal', async () => {
-        const res = await fetchForView(list as any, {} as any);
-        expect(res.assignments).toEqual([]);
-    });
+    test.each(scenarios)(
+        '$description',
+        async ({session, mockAssignments, mockFunc, expectedAssignments, expectedCounters}) => {
+            if (mockFunc) {
+                setupMock(packingService[mockFunc], mockAssignments);
+            }
+            
+            const res = await fetchForView(list as any, session as any);
+            
+            verifyResult(res.items, items);
+            verifyResult(res.assignments, expectedAssignments);
+            if (expectedCounters) {
+                verifyResult(res.counters, expectedCounters);
+            }
+        }
+    );
 });
 
 describe('fetchForDuplicate / deleteEntity', () => {
     it('returns items from service', async () => {
-        (packingService.getPackingItems as jest.Mock).mockResolvedValue([{id: 'x'}]);
-        const out = await fetchForDuplicate({id: 'L9'} as any, {} as any);
-        expect(out).toEqual([{id: 'x'}]);
+        const {list, items} = testData.fetchForDuplicateData;
+        setupMock(packingService.getPackingItems, items);
+        
+        const out = await fetchForDuplicate(list as any, {} as any);
+        
+        verifyResult(out, items);
     });
 
     it('delegates deletion to service', async () => {
-        await deleteEntity({id: 'L9'} as any, {} as any);
-        expect(packingService.deletePackingList).toHaveBeenCalledWith('L9');
+        const {list} = testData.deleteEntityData;
+        
+        await deleteEntity(list as any, {} as any);
+        
+        verifyMockCall(packingService.deletePackingList, list.id);
     });
 });
 
 describe('API helpers', () => {
     describe('updateDescription', () => {
-        it('updates if <= 2000 chars', async () => {
-            await expect(updateDescription('L1', {description: 'ok'}))
-                .resolves.toBe('Description updated');
-            expect(packingService.updatePackingListDescription).toHaveBeenCalledWith('L1', 'ok');
-        });
-        it('rejects when too long', async () => {
-            const long = 'x'.repeat(2001);
-            await expect(updateDescription('L1', {description: long}))
-                .rejects.toBeInstanceOf(APIError);
-        });
+        test.each(testData.updateDescriptionData)(
+            '$description',
+            async ({listId, body, expectedMessage, shouldThrow}) => {
+                if (shouldThrow) {
+                    await expect(updateDescription(listId, body)).rejects.toBeInstanceOf(APIError);
+                } else {
+                    const result = await updateDescription(listId, body);
+                    verifyResult(result, expectedMessage);
+                    verifyMockCall(packingService.updatePackingListDescription, listId, body.description);
+                }
+            }
+        );
     });
 
     it('reorderItems passes through', async () => {
-        const order = [{itemId: 'a', position: 2}];
-        await expect(reorderItems('L1', order)).resolves.toBe('Order saved');
-        expect(packingService.reorderPackingItems).toHaveBeenCalledWith('L1', order);
+        const {listId, order, expectedMessage} = testData.reorderItemsData;
+        
+        const result = await reorderItems(listId, order);
+        
+        verifyResult(result, expectedMessage);
+        verifyMockCall(packingService.reorderPackingItems, listId, order);
     });
 
     describe('quickAddItem', () => {
-        const list = {id: 'L1'};
+        const {list, scenarios} = testData.quickAddItemData;
 
-        it('adds item with next position and numeric max', async () => {
-            (packingService.getLastPackingItemNumber as jest.Mock).mockResolvedValue(2);
-            await expect(
-                quickAddItem(list as any, {title: 'Knife', description: 'sharp', max: '3'})
-            ).resolves.toBe('Item added');
-
-            expect(packingService.addPackingItems).toHaveBeenCalledWith('L1', [{
-                id: 'uid-123',
-                title: 'Knife',
-                description: 'sharp',
-                maxAssignees: 3,
-                position: 3,
-            }]);
-        });
-
-        it('defaults maxAssignees to 1 when falsy', async () => {
-            (packingService.getLastPackingItemNumber as jest.Mock).mockResolvedValue(0);
-            await quickAddItem(list as any, {title: 'Spoon', max: 0});
-            expect(packingService.addPackingItems).toHaveBeenCalledWith('L1', [
-                expect.objectContaining({maxAssignees: 1, position: 1}),
-            ]);
-        });
-
-        it('rejects missing title', async () => {
-            await expect(quickAddItem(list as any, {title: ''}))
-                .rejects.toBeInstanceOf(APIError);
-        });
+        test.each(scenarios)(
+            '$description',
+            async ({lastPos, body, expectedMessage, expectedItem, expectedMaxAssignees, expectedPosition, shouldThrow}) => {
+                if (lastPos !== undefined) {
+                    setupMock(packingService.getLastPackingItemNumber, lastPos);
+                }
+                
+                if (shouldThrow) {
+                    await expect(quickAddItem(list as any, body)).rejects.toBeInstanceOf(APIError);
+                } else if (expectedItem) {
+                    const result = await quickAddItem(list as any, body);
+                    verifyResult(result, expectedMessage);
+                    verifyMockCall(packingService.addPackingItems, list.id, [expectedItem]);
+                } else if (expectedMaxAssignees) {
+                    await quickAddItem(list as any, body);
+                    expect(packingService.addPackingItems).toHaveBeenCalledWith(
+                        list.id,
+                        [expect.objectContaining({maxAssignees: expectedMaxAssignees, position: expectedPosition})]
+                    );
+                }
+            }
+        );
     });
 
     describe('updateItemDescription', () => {
-        it('returns ok if service true', async () => {
-            (packingService.updatePackingItem as jest.Mock).mockResolvedValue(true);
-            await expect(updateItemDescription('i1', {description: 'd'})).resolves.toBe('Description updated');
-            expect(packingService.updatePackingItem).toHaveBeenCalledWith('i1', {description: 'd'});
-        });
-        it('throws 500 if service false', async () => {
-            (packingService.updatePackingItem as jest.Mock).mockResolvedValue(false);
-            await expect(updateItemDescription('i1', {description: 'd'})).rejects.toBeInstanceOf(APIError);
-        });
+        test.each(testData.updateItemDescriptionData)(
+            '$description',
+            async ({itemId, body, mockResolve, expectedMessage, shouldThrow}) => {
+                setupMock(packingService.updatePackingItem, mockResolve);
+                
+                if (shouldThrow) {
+                    await expect(updateItemDescription(itemId, body)).rejects.toBeInstanceOf(APIError);
+                } else {
+                    const result = await updateItemDescription(itemId, body);
+                    verifyResult(result, expectedMessage);
+                    verifyMockCall(packingService.updatePackingItem, itemId, body);
+                }
+            }
+        );
     });
 
     describe('updateItemAttr', () => {
-        it('rejects invalid field', async () => {
-            await expect(updateItemAttr('i1', {field: 'position', value: 3}))
-                .rejects.toBeInstanceOf(APIError);
-        });
-        it('updates allowed field and returns ok', async () => {
-            (packingService.updatePackingItem as jest.Mock).mockResolvedValue(true);
-            await expect(updateItemAttr('i1', {field: 'title', value: 'New'}))
-                .resolves.toBe('Item updated');
-            expect(packingService.updatePackingItem).toHaveBeenCalledWith('i1', {title: 'New'});
-        });
-        it('throws 500 when service returns false', async () => {
-            (packingService.updatePackingItem as jest.Mock).mockResolvedValue(false);
-            await expect(updateItemAttr('i1', {field: 'title', value: 'New'}))
-                .rejects.toBeInstanceOf(APIError);
-        });
+        test.each(testData.updateItemAttrData)(
+            '$description',
+            async ({itemId, body, mockResolve, expectedMessage, expectedUpdate, shouldThrow}) => {
+                if (mockResolve !== undefined) {
+                    setupMock(packingService.updatePackingItem, mockResolve);
+                }
+                
+                if (shouldThrow) {
+                    await expect(updateItemAttr(itemId, body)).rejects.toBeInstanceOf(APIError);
+                } else {
+                    const result = await updateItemAttr(itemId, body);
+                    verifyResult(result, expectedMessage);
+                    verifyMockCall(packingService.updatePackingItem, itemId, expectedUpdate);
+                }
+            }
+        );
     });
 
     it('updateRequired toggles requiredByAll', async () => {
-        await expect(updateRequired('i2', {flag: true})).resolves.toBe('Requirement updated');
-        expect(packingService.togglePackingItemRequiredByAll).toHaveBeenCalledWith('i2', true);
+        const {itemId, body, expectedMessage} = testData.updateRequiredData;
+        
+        const result = await updateRequired(itemId, body);
+        
+        verifyResult(result, expectedMessage);
+        verifyMockCall(packingService.togglePackingItemRequiredByAll, itemId, body.flag);
     });
 
     it('deleteAssignment passes through', async () => {
-        await expect(deleteAssignment('a1')).resolves.toBe('Assignment removed');
-        expect(packingService.deletePackingAssignment).toHaveBeenCalledWith('a1');
+        const {assignmentId, expectedMessage} = testData.deleteAssignmentData;
+        
+        const result = await deleteAssignment(assignmentId);
+        
+        verifyResult(result, expectedMessage);
+        verifyMockCall(packingService.deletePackingAssignment, assignmentId);
     });
 
     it('updateSettings passes through', async () => {
-        await expect(updateSettings('L1', {allowAdd: true, guestManage: false}))
-            .resolves.toBe('Settings saved');
-        expect(packingService.updatePackingFlags).toHaveBeenCalledWith('L1', true, false);
+        const {listId, body, expectedMessage} = testData.updateSettingsData;
+        
+        const result = await updateSettings(listId, body);
+        
+        verifyResult(result, expectedMessage);
+        verifyMockCall(packingService.updatePackingFlags, listId, body.allowAdd, body.guestManage);
     });
 
     it('deleteItem passes through', async () => {
-        await expect(deleteItem('i9')).resolves.toBe('Item deleted');
-        expect(packingService.deletePackingItem).toHaveBeenCalledWith('i9');
+        const {itemId, expectedMessage} = testData.deleteItemData;
+        
+        const result = await deleteItem(itemId);
+        
+        verifyResult(result, expectedMessage);
+        verifyMockCall(packingService.deletePackingItem, itemId);
     });
 });
 
 describe('getAssignmentAccessMapping', () => {
     it('routes to correct packingService functions', async () => {
+        const {assignToUser, assignToGuest, unassignFromUser, unassignFromGuest} = testData.assignmentAccessMappingData;
+        
         const m = getAssignmentAccessMapping();
 
-        await m.assignToUser({itemId: 'i1'}, 7);
-        await m.assignToGuest({itemId: 'i2'}, 5);
-        await m.unassignFromUser({itemId: 'i3'}, 8);
-        await m.unassignFromGuest({itemId: 'i4'}, 9);
+        await m.assignToUser(assignToUser, assignToUser.userId);
+        await m.assignToGuest(assignToGuest, assignToGuest.guestId);
+        await m.unassignFromUser(unassignFromUser, unassignFromUser.userId);
+        await m.unassignFromGuest(unassignFromGuest, unassignFromGuest.guestId);
 
-        expect(packingService.assignPackingItemToUser).toHaveBeenCalledWith('i1', 7);
-        expect(packingService.assignPackingItemToGuest).toHaveBeenCalledWith('i2', 5);
-        expect(packingService.unassignPackingItemUser).toHaveBeenCalledWith('i3', 8);
-        expect(packingService.unassignPackingItemGuest).toHaveBeenCalledWith('i4', 9);
+        verifyMockCall(packingService.assignPackingItemToUser, assignToUser.itemId, assignToUser.userId);
+        verifyMockCall(packingService.assignPackingItemToGuest, assignToGuest.itemId, assignToGuest.guestId);
+        verifyMockCall(packingService.unassignPackingItemUser, unassignFromUser.itemId, unassignFromUser.userId);
+        verifyMockCall(packingService.unassignPackingItemGuest, unassignFromGuest.itemId, unassignFromGuest.guestId);
     });
 });
