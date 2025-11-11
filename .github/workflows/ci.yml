@@ -39,6 +39,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -161,19 +162,25 @@ jobs:
       # =========================
       # Playwright E2E
       # =========================
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
 
       - name: Run E2E tests (Playwright) with JUnit
         env:
           CI: true
           PLAYWRIGHT_JUNIT_OUTPUT: artifacts/junit-playwright.xml
+          PLAYWRIGHT_HTML_OUTPUT_DIR: artifacts/playwright-report
         run: |
           mkdir -p artifacts
-          # Keep the HTML report locally; we'll only upload it if the job fails.
-          npx playwright test --reporter=line,junit,html || EXIT=$?
-          # Move the HTML report to artifacts for optional upload on failure
-          if [ -d playwright-report ]; then mv playwright-report artifacts/playwright-report; fi
+          npx playwright test || EXIT=$?
           exit ${EXIT:-0}
 
       - name: Upload Playwright JUnit (always)
