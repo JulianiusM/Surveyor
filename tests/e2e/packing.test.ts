@@ -1,92 +1,95 @@
 // e2e/packing.test.ts
 // End-to-end tests for packing list creation and management
+// Migrated to data-driven and keyword-driven testing approach.
 
-import {expect, test} from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
-const USERNAME = process.env.E2E_ADMIN_USERNAME ?? 'tester';
-const PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? 'passw0rd!';
+// Import test data
+import {
+    packingPageAccessAuthenticatedData,
+    packingPageAccessUnauthenticatedData,
+    packingDashboardEmptyStateData,
+    packingCreationData,
+    packingValidationData,
+} from '../data/e2e/packingData';
 
-async function login(page: any) {
-    await page.goto('/users/login');
-    await page.locator('input[name="username"]').fill(USERNAME);
-    await page.locator('input[name="password"]').fill(PASSWORD);
-    await page.getByRole('button', {name: /login/i}).click();
-    // Wait for redirect and dashboard to load
-    await page.waitForURL(/\/users\/dashboard/, {waitUntil: 'networkidle'});
-    // Ensure we're logged in by checking for user menu
-    await expect(page.locator('#userMenu')).toBeVisible();
-    
-    // Verify session cookie was set
-    const cookies = await page.context().cookies();
-    const sessionCookie = cookies.find(c => c.name === 'connect.sid');
-    if (!sessionCookie) {
-        throw new Error('Session cookie was not set after login');
-    }
-    
-    // Add a delay to ensure session is fully persisted to database
-    await page.waitForTimeout(1000);
-}
+import { testCredentials } from '../data/e2e/authData';
 
-test.beforeEach(async ({context}) => {
+// Import keywords
+import { loginUser } from '../keywords/e2e/authKeywords';
+import {
+    navigateToEntityCreatePage,
+    verifyUnauthenticatedRedirect,
+    verifyDashboardEmptyState,
+    createPackingList,
+    verifyFormFieldRequired,
+    generateEntityTitle,
+} from '../keywords/e2e/entityKeywords';
+
+test.beforeEach(async ({ context }) => {
     await context.clearCookies();
 });
 
-test('authenticated user can access packing list create page', async ({page}) => {
-    await login(page);
-    await page.goto('/packing/create');
-    await expect(page).toHaveURL(/\/packing\/create/);
-    await expect(page.getByRole('heading', {name: /create.*packing/i})).toBeVisible();
-});
+// 1) Authenticated user can access packing list create page
+for (const data of packingPageAccessAuthenticatedData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await navigateToEntityCreatePage(page, 'packing', data.expectedUrl, data.expectedHeading);
+    });
+}
 
-test('unauthenticated user cannot access packing create page', async ({page}) => {
-    await page.goto('/packing/create');
-    await expect(page).toHaveURL(/\/users\/login/);
-});
+// 2) Unauthenticated user cannot access packing create page
+for (const data of packingPageAccessUnauthenticatedData) {
+    test(data.description, async ({ page }) => {
+        await verifyUnauthenticatedRedirect(page, data.targetUrl, data.expectedRedirectUrl);
+    });
+}
 
-test('packing dashboard shows empty state for new user', async ({page}) => {
-    await login(page);
-    const accordion = page.locator('#sec-pack');
-    await page.getByRole('button', {name: /your packing lists/i}).click();
-    await expect(accordion).toContainText(/you don['’]t have any packing/i);
-});
+// 3) Packing dashboard shows empty state for new user
+for (const data of packingDashboardEmptyStateData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await verifyDashboardEmptyState(page, data.accordionId, data.buttonText, data.expectedEmptyText);
+    });
+}
 
-test('can create a new packing list with valid data', async ({page}) => {
-    await login(page);
-    await page.goto('/packing/create');
-    
-    // Wait for the page to be fully loaded
-    await expect(page).toHaveURL(/\/packing\/create/);
-    await expect(page.getByRole('heading', {name: /create.*packing/i})).toBeVisible();
-    
-    // Fill in packing list details
-    const packingTitle = `E2E Packing ${Date.now()}`;
-    await page.locator('input[name="title"]').fill(packingTitle);
-    await page.locator('input[name="t_0"]').fill('Tent');
-    await page.locator('input[name="d_0"]').fill('Two-person tent');
+// 4) Can create a new packing list with valid data
+for (const data of packingCreationData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await page.goto('/packing/create');
 
-    // Submit the form
-    await page.getByRole('button', {name: /create.*list/i}).click();
+        // Wait for the page to be fully loaded
+        await expect(page).toHaveURL(/\/packing\/create/);
+        await expect(page.getByRole('heading', { name: /create.*packing/i })).toBeVisible();
 
-    // Should redirect to dashboard or packing view
-    await page.waitForURL(url => /\/(users\/dashboard|packing\/[\w-]*-[\w-]+)/.test(url.pathname));
+        // Fill in packing list details with timestamped title
+        const packingTitle = generateEntityTitle(data.title);
+        await createPackingList(page, packingTitle, data.items, data.submitButtonText);
 
-    // Verify success or packing list appears
-    await expect(page.locator('h1')).toContainText(packingTitle);
-});
+        // Should redirect to dashboard or packing view
+        await page.waitForURL((url) => data.expectedRedirectPattern.test(url.pathname));
 
-test('packing form validates required fields', async ({page}) => {
-    await login(page);
-    await page.goto('/packing/create');
-    
-    // Wait for the page to be fully loaded
-    await expect(page).toHaveURL(/\/packing\/create/);
-    await expect(page.getByRole('heading', {name: /create.*packing/i})).toBeVisible();
-    
-    // Try to submit without filling required fields
-    const titleInput = page.locator('input[name="title"]');
-    await expect(titleInput).toHaveAttribute('required', '');
-    
-    // Check HTML5 validation
-    const isRequired = await titleInput.evaluate((el: HTMLInputElement) => el.required);
-    expect(isRequired).toBe(true);
-});
+        // Verify success or packing list appears
+        if (data.verifyTitleInPage) {
+            await expect(page.locator('h1')).toContainText(packingTitle);
+        }
+    });
+}
+
+// 5) Packing form validates required fields
+for (const data of packingValidationData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await page.goto('/packing/create');
+
+        // Wait for the page to be fully loaded
+        await expect(page).toHaveURL(/\/packing\/create/);
+        await expect(page.getByRole('heading', { name: /create.*packing/i })).toBeVisible();
+
+        // Verify required field
+        if (data.expectedRequiredAttribute && data.checkHtml5Validation) {
+            await verifyFormFieldRequired(page, data.titleFieldName);
+        }
+    });
+}

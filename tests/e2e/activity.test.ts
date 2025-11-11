@@ -1,99 +1,96 @@
 // e2e/activity.test.ts
 // End-to-end tests for activity plan creation and management
+// Migrated to data-driven and keyword-driven testing approach.
 
-import {Cookie, expect, Page, test} from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
-const USERNAME = process.env.E2E_ADMIN_USERNAME ?? 'tester';
-const PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? 'passw0rd!';
+// Import test data
+import {
+    activityPageAccessAuthenticatedData,
+    activityPageAccessUnauthenticatedData,
+    activityDashboardEmptyStateData,
+    activityCreationData,
+    activityValidationData,
+} from '../data/e2e/activityData';
 
-async function login(page: Page) {
-    await page.goto('/users/login');
-    await page.locator('input[name="username"]').fill(USERNAME);
-    await page.locator('input[name="password"]').fill(PASSWORD);
-    await page.getByRole('button', {name: /login/i}).click();
-    // Wait for redirect and dashboard to load
-    await page.waitForURL(/\/users\/dashboard/, {waitUntil: 'networkidle'});
-    // Ensure we're logged in by checking for user menu
-    await expect(page.locator('#userMenu')).toBeVisible();
+import { testCredentials } from '../data/e2e/authData';
 
-    // Verify session cookie was set
-    const cookies = await page.context().cookies();
-    const sessionCookie = cookies.find((c: Cookie) => c.name === 'connect.sid');
-    if (!sessionCookie) {
-        throw new Error('Session cookie was not set after login');
-    }
-}
+// Import keywords
+import { loginUser } from '../keywords/e2e/authKeywords';
+import {
+    navigateToEntityCreatePage,
+    verifyUnauthenticatedRedirect,
+    verifyDashboardEmptyState,
+    createActivityPlan,
+    verifyFormFieldRequired,
+    generateEntityTitle,
+} from '../keywords/e2e/entityKeywords';
 
-test.beforeEach(async ({context}) => {
+test.beforeEach(async ({ context }) => {
     await context.clearCookies();
 });
 
-test('authenticated user can access activity plan create page', async ({page}) => {
-    await login(page);
-    await page.goto('/activity/create');
-    await expect(page).toHaveURL(/\/activity\/create/);
-    await expect(page.getByRole('heading', {name: /create.*activity/i})).toBeVisible();
-});
-
-test('unauthenticated user cannot access activity create page', async ({page}) => {
-    await page.goto('/activity/create');
-    await expect(page).toHaveURL(/\/users\/login/);
-});
-
-test('activity dashboard shows empty state for new user', async ({page}) => {
-    await login(page);
-    const accordion = page.locator('#sec-activity');
-    await page.getByRole('button', {name: /your activity plans/i}).click();
-    await expect(accordion).toContainText(/you don['’]t have any activity/i);
-});
-
-test('can create a new activity plan with valid data', async ({page}) => {
-    await login(page);
-    await page.goto('/activity/create');
-
-    // Wait for the page to be fully loaded
-    await expect(page).toHaveURL(/\/activity\/create/);
-    await expect(page.getByRole('heading', {name: /create.*activity/i})).toBeVisible();
-
-    // Fill in activity plan details
-    const activityTitle = `E2E Activity ${Date.now()}`;
-    await page.locator('input[name="title"]').fill(activityTitle);
-    await page.locator('input[name="startDate"]').fill('2025-01-01');
-    await page.locator('input[name="endDate"]').fill('2025-01-02');
-    await page.evaluate(async () => {
-        const slotId = self.crypto?.randomUUID?.() ?? '00000000-0000-4000-8000-000000000000';
-        const day = '2025-01-01';
-        const slot = {id: slotId, day, pos: 0, title: 'Setup', description: '', maxAssignees: 1};
-        // This is frontend call to backend (http)
-        // @ts-ignore
-        const mod = await import('/js/activity-create.gen.js');
-        mod.updateSlotObj(day, slot);
+// 1) Authenticated user can access activity plan create page
+for (const data of activityPageAccessAuthenticatedData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await navigateToEntityCreatePage(page, 'activity', data.expectedUrl, data.expectedHeading);
     });
+}
 
-    // Submit the form
-    await page.getByRole('button', {name: /create.*plan/i}).click();
+// 2) Unauthenticated user cannot access activity create page
+for (const data of activityPageAccessUnauthenticatedData) {
+    test(data.description, async ({ page }) => {
+        await verifyUnauthenticatedRedirect(page, data.targetUrl, data.expectedRedirectUrl);
+    });
+}
 
-    // Should redirect to dashboard or activity view
-    await page.waitForURL(url => /\/(users\/dashboard|activity\/[\w-]*-[\w-]+)/.test(url.pathname));
+// 3) Activity dashboard shows empty state for new user
+for (const data of activityDashboardEmptyStateData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await verifyDashboardEmptyState(page, data.accordionId, data.buttonText, data.expectedEmptyText);
+    });
+}
 
-    // Verify success or activity appears
-    const body = await page.locator('body').textContent();
-    expect(body).toContain(activityTitle);
-});
+// 4) Can create a new activity plan with valid data
+for (const data of activityCreationData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await page.goto('/activity/create');
 
-test('activity form validates required fields', async ({page}) => {
-    await login(page);
-    await page.goto('/activity/create');
+        // Wait for the page to be fully loaded
+        await expect(page).toHaveURL(/\/activity\/create/);
+        await expect(page.getByRole('heading', { name: /create.*activity/i })).toBeVisible();
 
-    // Wait for the page to be fully loaded
-    await expect(page).toHaveURL(/\/activity\/create/);
-    await expect(page.getByRole('heading', {name: /create.*activity/i})).toBeVisible();
+        // Fill in activity plan details with timestamped title
+        const activityTitle = generateEntityTitle(data.title);
+        await createActivityPlan(page, activityTitle, data.startDate, data.endDate, data.slot, data.submitButtonText);
 
-    // Try to submit without filling required fields
-    const titleInput = page.locator('input[name="title"]');
-    await expect(titleInput).toHaveAttribute('required', '');
+        // Should redirect to dashboard or activity view
+        await page.waitForURL((url) => data.expectedRedirectPattern.test(url.pathname));
 
-    // Check HTML5 validation
-    const isRequired = await titleInput.evaluate((el: HTMLInputElement) => el.required);
-    expect(isRequired).toBe(true);
-});
+        // Verify success or activity appears
+        if (data.verifyTitleInPage) {
+            const body = await page.locator('body').textContent();
+            expect(body).toContain(activityTitle);
+        }
+    });
+}
+
+// 5) Activity form validates required fields
+for (const data of activityValidationData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await page.goto('/activity/create');
+
+        // Wait for the page to be fully loaded
+        await expect(page).toHaveURL(/\/activity\/create/);
+        await expect(page.getByRole('heading', { name: /create.*activity/i })).toBeVisible();
+
+        // Verify required field
+        if (data.expectedRequiredAttribute && data.checkHtml5Validation) {
+            await verifyFormFieldRequired(page, data.titleFieldName);
+        }
+    });
+}

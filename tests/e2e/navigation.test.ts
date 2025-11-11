@@ -1,149 +1,135 @@
 // e2e/navigation.test.ts
 // Tests for general navigation, UI elements, and user flow
+// Migrated to data-driven and keyword-driven testing approach.
 
-import {expect, test} from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
-const USERNAME = process.env.E2E_ADMIN_USERNAME ?? 'tester';
-const PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? 'passw0rd!';
+// Import test data
+import {
+    homePageData,
+    navigationBarItemsData,
+    dashboardEntitySectionsData,
+    responsiveDesignData,
+    footerLinksData,
+    pageTitlesData,
+    logoData,
+    formAccessibilityData,
+    entityNavigationFlowData,
+    browserBackButtonData,
+} from '../data/e2e/navigationData';
 
-async function login(page: any) {
-    await page.goto('/users/login');
-    await page.locator('input[name="username"]').fill(USERNAME);
-    await page.locator('input[name="password"]').fill(PASSWORD);
-    await page.getByRole('button', {name: /login/i}).click();
-    // Wait for redirect and dashboard to load
-    await page.waitForURL(/\/users\/dashboard/, {waitUntil: 'networkidle'});
-    // Ensure we're logged in by checking for user menu
-    await expect(page.locator('#userMenu')).toBeVisible();
-    
-    // Verify session cookie was set
-    const cookies = await page.context().cookies();
-    const sessionCookie = cookies.find(c => c.name === 'connect.sid');
-    if (!sessionCookie) {
-        throw new Error('Session cookie was not set after login');
-    }
-    
-    // Add a delay to ensure session is fully persisted to database
-    await page.waitForTimeout(1000);
-}
+import { testCredentials } from '../data/e2e/authData';
 
-test.beforeEach(async ({context}) => {
+// Import keywords
+import { loginUser } from '../keywords/e2e/authKeywords';
+import {
+    navigateAndVerify,
+    verifyLinkVisible,
+    verifyTextVisible,
+    verifySelectorVisible,
+    verifyMetaTagContent,
+    verifyPageTitle,
+    verifyLabelExists,
+    navigateThroughSteps,
+    goBackAndVerify,
+    verifyHeadingVisible,
+} from '../keywords/e2e/navigationKeywords';
+
+test.beforeEach(async ({ context }) => {
     await context.clearCookies();
 });
 
-// Test home page
-test('home page loads correctly', async ({page}) => {
-    await page.goto('/');
-    
-    // Should have basic navigation
-    await expect(page.locator('body')).toBeAttached();
-    
-    // Should have login link when not authenticated (use navbar link to avoid duplicates)
-    const navLoginLink = page.locator('nav').getByRole('link', {name: /login/i});
-    await expect(navLoginLink).toBeVisible();
-});
+// 1) Home page loads correctly
+for (const data of homePageData) {
+    test(data.description, async ({ page }) => {
+        await navigateAndVerify(page, data.url);
+        
+        if (data.expectedLoginLinkVisible) {
+            await verifyLinkVisible(page, /login/i, data.loginLinkSelector);
+        }
+    });
+}
 
-// Test navigation bar for authenticated users
-test('navigation bar shows all menu items for authenticated users', async ({page}) => {
-    await login(page);
-    
-    // Check that main navigation items are present
-    await expect(page.getByRole('link', {name: /create survey/i})).toBeVisible();
-    await expect(page.getByRole('link', {name: /create packing/i})).toBeVisible();
-    await expect(page.getByRole('link', {name: /create activity/i})).toBeVisible();
-    await expect(page.getByRole('link', {name: /create drivers/i})).toBeVisible();
-});
+// 2) Navigation bar shows all menu items for authenticated users
+for (const data of navigationBarItemsData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await verifyLinkVisible(page, data.linkName);
+    });
+}
 
-// Test dashboard entity list UI
-test('dashboard shows entity counts', async ({page}) => {
-    await login(page);
-    
-    // Check that all entity sections are present
-    await expect(page.getByText(/your surveys/i)).toBeVisible();
-    await expect(page.getByText(/your packing lists/i)).toBeVisible();
-    await expect(page.getByText(/your activity plans/i)).toBeVisible();
-    await expect(page.getByText(/your drivers lists/i)).toBeVisible();
-});
+// 3) Dashboard shows entity counts
+for (const data of dashboardEntitySectionsData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await verifyTextVisible(page, data.sectionText);
+    });
+}
 
-// Test responsive navigation
-test('page is responsive and accessible', async ({page}) => {
-    await page.goto('/');
-    
-    // Check viewport meta tag for responsive design
-    const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
-    expect(viewport).toContain('width=device-width');
-});
+// 4) Page is responsive and accessible
+for (const data of responsiveDesignData) {
+    test(data.description, async ({ page }) => {
+        await page.goto(data.url);
+        await verifyMetaTagContent(page, data.viewportMetaName, data.expectedContent);
+    });
+}
 
-// Test footer links
-test('footer contains required links', async ({page}) => {
-    await page.goto('/');
-    
-    // Check for imprint and privacy links
-    const footer = page.locator('footer');
-    await expect(footer).toBeVisible();
-    
-    // Should have specific footer links
-    await expect(footer.getByRole('link', {name: /imprint/i})).toBeVisible();
-    await expect(footer.getByRole('link', {name: /privacy policy/i})).toBeVisible();
-});
+// 5) Footer contains required links
+for (const data of footerLinksData) {
+    test(data.description, async ({ page }) => {
+        await page.goto('/');
+        const footer = page.locator('footer');
+        await verifySelectorVisible(page, 'footer');
+        await expect(footer.getByRole('link', { name: data.linkName })).toBeVisible();
+    });
+}
 
-// Test page titles
-test('pages have appropriate titles', async ({page}) => {
-    await page.goto('/users/login');
-    await expect(page).toHaveTitle(/login|surveyor/i);
-    
-    await page.goto('/users/register');
-    await expect(page).toHaveTitle(/register|surveyor/i);
-});
+// 6) Pages have appropriate titles
+for (const data of pageTitlesData) {
+    test(data.description, async ({ page }) => {
+        await page.goto(data.url);
+        await verifyPageTitle(page, data.expectedTitle);
+    });
+}
 
-// Test logo and branding
-test('logo is present and links to home', async ({page}) => {
-    await login(page);
-    
-    // Find logo link
-    const logoLink = page.locator('a[href="/"]').first();
-    await expect(logoLink).toBeVisible();
-});
+// 7) Logo is present and links to home
+for (const data of logoData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        const logoLink = page.locator(`a[href="${data.logoHref}"]`).first();
+        if (data.expectVisible) {
+            await expect(logoLink).toBeVisible();
+        }
+    });
+}
 
-// Test form accessibility
-test('login form has proper labels', async ({page}) => {
-    await page.goto('/users/login');
-    
-    // Check for proper form labels
-    await expect(page.locator('label[for="username"]')).toBeVisible();
-    await expect(page.locator('label[for="password"]')).toBeVisible();
-});
+// 8) Login form has proper labels
+for (const data of formAccessibilityData) {
+    test(data.description, async ({ page }) => {
+        await page.goto(data.url);
+        for (const label of data.labels) {
+            await verifyLabelExists(page, label.for);
+        }
+    });
+}
 
-// Test navigation between entity create pages
-test('can navigate between different entity creation pages', async ({page}) => {
-    await login(page);
-    
-    // Navigate to survey create
-    await page.getByRole('link', {name: /create survey/i}).click();
-    await expect(page).toHaveURL(/\/survey\/create/);
-    
-    // Navigate to packing create
-    await page.getByRole('link', {name: /create packing/i}).click();
-    await expect(page).toHaveURL(/\/packing\/create/);
-    
-    // Navigate to activity create
-    await page.getByRole('link', {name: /create activity/i}).click();
-    await expect(page).toHaveURL(/\/activity\/create/);
-    
-    // Navigate to drivers create
-    await page.getByRole('link', {name: /create drivers/i}).click();
-    await expect(page).toHaveURL(/\/drivers\/create/);
-    
-    // Navigate back to dashboard
-    await page.goto('/users/dashboard');
-    await expect(page.getByRole('heading', {name: /welcome/i})).toBeVisible();
-});
+// 9) Can navigate between different entity creation pages
+for (const data of entityNavigationFlowData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await navigateThroughSteps(page, data.steps);
+        
+        // Navigate back to dashboard
+        await page.goto(data.finalStep.url);
+        await verifyHeadingVisible(page, data.finalStep.expectedHeading);
+    });
+}
 
-// Test browser back button works correctly
-test('browser back button navigates correctly', async ({page}) => {
-    await login(page);
-    
-    await page.goto('/survey/create');
-    await page.goBack();
-    await expect(page).toHaveURL(/\/users\/dashboard/);
-});
+// 10) Browser back button navigates correctly
+for (const data of browserBackButtonData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await page.goto(data.startUrl);
+        await goBackAndVerify(page, data.expectedUrlAfterBack);
+    });
+}

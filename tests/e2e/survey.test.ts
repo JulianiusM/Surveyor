@@ -1,110 +1,95 @@
 // e2e/survey.test.ts
 // End-to-end tests for survey creation, editing, and management
+// Migrated to data-driven and keyword-driven testing approach.
 
-import {expect, test} from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
-const USERNAME = process.env.E2E_ADMIN_USERNAME ?? 'tester';
-const PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? 'passw0rd!';
+// Import test data
+import {
+    surveyPageAccessAuthenticatedData,
+    surveyPageAccessUnauthenticatedData,
+    surveyDashboardEmptyStateData,
+    surveyCreationData,
+    surveyValidationData,
+} from '../data/e2e/surveyData';
 
-async function login(page: any) {
-    await page.goto('/users/login');
-    await page.locator('input[name="username"]').fill(USERNAME);
-    await page.locator('input[name="password"]').fill(PASSWORD);
-    await page.getByRole('button', {name: /login/i}).click();
-    // Wait for redirect and dashboard to load
-    await page.waitForURL(/\/users\/dashboard/, {waitUntil: 'networkidle'});
-    // Ensure we're logged in by checking for user menu
-    await expect(page.locator('#userMenu')).toBeVisible();
-    
-    // Verify session cookie was set and log details for debugging
-    const cookies = await page.context().cookies();
-    const sessionCookie = cookies.find(c => c.name === 'connect.sid');
-    if (!sessionCookie) {
-        throw new Error('Session cookie was not set after login');
-    }
-    console.log('Session cookie details:', {
-        name: sessionCookie.name,
-        domain: sessionCookie.domain,
-        path: sessionCookie.path,
-        sameSite: sessionCookie.sameSite,
-        secure: sessionCookie.secure,
-        httpOnly: sessionCookie.httpOnly
-    });
-    
-    // Make a test request to verify session is valid and persisted
-    // Navigate to dashboard again to ensure session is readable
-    await page.goto('/users/dashboard', {waitUntil: 'networkidle'});
-    await expect(page.locator('#userMenu')).toBeVisible();
-    
-    // Add a small delay to ensure session is fully persisted to database
-    await page.waitForTimeout(3000); // Increased to 3s for maximum reliability
-}
+import { testCredentials } from '../data/e2e/authData';
 
-test.beforeEach(async ({context}) => {
+// Import keywords
+import { loginUser } from '../keywords/e2e/authKeywords';
+import {
+    navigateToEntityCreatePage,
+    verifyUnauthenticatedRedirect,
+    verifyDashboardEmptyState,
+    createSurvey,
+    verifyFormFieldRequired,
+    generateEntityTitle,
+} from '../keywords/e2e/entityKeywords';
+
+test.beforeEach(async ({ context }) => {
     await context.clearCookies();
 });
 
-test('authenticated user can access survey create page', async ({page}) => {
-    await login(page);
-    
-    // Verify cookie is still present before navigation
-    const cookiesBeforeNav = await page.context().cookies();
-    const sessionCookieBeforeNav = cookiesBeforeNav.find(c => c.name === 'connect.sid');
-    console.log('Cookie before navigation:', sessionCookieBeforeNav ? 'present' : 'MISSING');
-    
-    await page.goto('/survey/create', {waitUntil: 'networkidle'});
-    await expect(page).toHaveURL(/\/survey\/create/);
-    await expect(page.getByRole('heading', {name: /create.*survey/i})).toBeVisible();
-});
+// 1) Authenticated user can access survey create page
+for (const data of surveyPageAccessAuthenticatedData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await navigateToEntityCreatePage(page, 'survey', data.expectedUrl, data.expectedHeading);
+    });
+}
 
-test('unauthenticated user cannot access survey create page', async ({page}) => {
-    await page.goto('/survey/create');
-    await expect(page).toHaveURL(/\/users\/login/);
-});
+// 2) Unauthenticated user cannot access survey create page
+for (const data of surveyPageAccessUnauthenticatedData) {
+    test(data.description, async ({ page }) => {
+        await verifyUnauthenticatedRedirect(page, data.targetUrl, data.expectedRedirectUrl);
+    });
+}
 
-test('survey dashboard shows empty state for new user', async ({page}) => {
-    await login(page);
-    const accordion = page.locator('#sec-surveys');
-    await page.getByRole('button', {name: /your surveys/i}).click();
-    await expect(accordion).toContainText(/you don['’]t have any surveys/i);
-});
+// 3) Survey dashboard shows empty state for new user
+for (const data of surveyDashboardEmptyStateData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await verifyDashboardEmptyState(page, data.accordionId, data.buttonText, data.expectedEmptyText);
+    });
+}
 
-test('can create a new survey with valid data', async ({page}) => {
-    await login(page);
-    await page.goto('/survey/create', {waitUntil: 'networkidle'});
-    
-    // Wait for the page to be fully loaded
-    await expect(page).toHaveURL(/\/survey\/create/);
-    await expect(page.getByRole('heading', {name: /create.*survey/i})).toBeVisible();
-    
-    // Fill in survey details
-    const surveyTitle = `E2E Survey ${Date.now()}`;
-    await page.locator('input[name="title"]').fill(surveyTitle);
-    await page.locator('textarea[name="description"]').fill('Test survey description');
-    
-    // Submit the form
-    await page.getByRole('button', {name: /create.*survey/i}).click();
-    
-    // Should redirect to dashboard or survey view
-    await page.waitForURL(url => /\/(users\/dashboard|survey\/[\w-]*-[\w-]+)/.test(url.pathname));
+// 4) Can create a new survey with valid data
+for (const data of surveyCreationData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await page.goto('/survey/create', { waitUntil: 'networkidle' });
 
-    // Verify success message or survey appears
-    await expect(page.locator('h1')).toContainText(surveyTitle);
-});
+        // Wait for the page to be fully loaded
+        await expect(page).toHaveURL(/\/survey\/create/);
+        await expect(page.getByRole('heading', { name: /create.*survey/i })).toBeVisible();
 
-test('survey form validates required fields', async ({page}) => {
-    await login(page);
-    await page.goto('/survey/create', {waitUntil: 'networkidle'});
-    
-    // Wait for the page to be fully loaded
-    await expect(page).toHaveURL(/\/survey\/create/);
-    await expect(page.getByRole('heading', {name: /create.*survey/i})).toBeVisible();
-    
-    // Try to submit without filling required fields
-    const titleInput = page.locator('input[name="title"]');
-    await expect(titleInput).toHaveAttribute('required', '');
-    
-    // Check HTML5 validation
-    const isRequired = await titleInput.evaluate((el: HTMLInputElement) => el.required);
-    expect(isRequired).toBe(true);
-});
+        // Fill in survey details with timestamped title
+        const surveyTitle = generateEntityTitle(data.title);
+        await createSurvey(page, surveyTitle, data.surveyDescription, data.submitButtonText);
+
+        // Should redirect to dashboard or survey view
+        await page.waitForURL((url) => data.expectedRedirectPattern.test(url.pathname));
+
+        // Verify success message or survey appears
+        if (data.verifyTitleInPage) {
+            await expect(page.locator('h1')).toContainText(surveyTitle);
+        }
+    });
+}
+
+// 5) Survey form validates required fields
+for (const data of surveyValidationData) {
+    test(data.description, async ({ page }) => {
+        await loginUser(page, testCredentials.username, testCredentials.password);
+        await page.goto('/survey/create', { waitUntil: 'networkidle' });
+
+        // Wait for the page to be fully loaded
+        await expect(page).toHaveURL(/\/survey\/create/);
+        await expect(page.getByRole('heading', { name: /create.*survey/i })).toBeVisible();
+
+        // Verify required field
+        if (data.expectedRequiredAttribute && data.checkHtml5Validation) {
+            await verifyFormFieldRequired(page, data.titleFieldName);
+        }
+    });
+}

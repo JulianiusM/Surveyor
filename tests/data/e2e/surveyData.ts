@@ -45,7 +45,7 @@ export const surveyCreationData = [
     {
         description: 'can create a new survey with valid data',
         title: 'E2E Survey',
-        description: 'Test survey description',
+        surveyDescription: 'Test survey description',
         submitButtonText: /create.*survey/i,
         expectedRedirectPattern: /\/(users\/dashboard|survey\/[\w-]*-[\w-]+)/,
         verifyTitleInPage: true,
