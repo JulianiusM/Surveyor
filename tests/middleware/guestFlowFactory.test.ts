@@ -1,11 +1,8 @@
-/**
- * Tests for createGuestFlowRouter middleware
- */
-
 import express from 'express';
 import request from 'supertest';
 import {ExpectedError, ValidationError} from '../../src/modules/lib/errors';
 import {createGuestFlowRouter} from '../../src/middleware/guestFlowFactory';
+import * as testData from '../data/middleware/guestFlowFactoryData';
 
 // ---- Mocks ----
 jest.mock('../../src/modules/renderer', () => ({
@@ -137,155 +134,146 @@ describe('guestFlowRouter', () => {
         jest.clearAllMocks();
     });
 
-    test('GET /create renders create template (no event)', async () => {
+    test(testData.getCreateRouteData.description, async () => {
+        const {method, path, expected} = testData.getCreateRouteData;
         const app = makeApp(createGuestFlowRouter(makeConfig()));
-        const res = await request(app).get('/create');
-        expect(res.status).toBe(200);
-        expect(res.body.tpl).toBe('activity/create');
-        // eventId omitted (undefined)
+        const res = await request(app)[method](path);
+        expect(res.status).toBe(expected.status);
+        expect(res.body.tpl).toBe(expected.tpl);
     });
 
-    test('POST /create happy path redirects to buildRedirect', async () => {
-        const app = makeApp(createGuestFlowRouter(makeConfig()), {user: {id: 5}});
-        const res = await request(app).post('/create').send({title: 'My Plan'});
-        expect(res.status).toBe(302);
-        expect(res.headers.location).toBe('/activity/new-123');
+    test.each(testData.postCreateData)(
+        '$description',
+        async ({path, body, session, configOverrides, expected}) => {
+            const cfg = configOverrides ? makeConfig(configOverrides) : makeConfig();
+            const app = makeApp(createGuestFlowRouter(cfg), session);
+            const res = await request(app).post(path).send(body);
+            
+            expect(res.status).toBe(expected.status);
+            if (expected.location) {
+                expect(res.headers.location).toBe(expected.location);
+            }
+            if (expected.kind) {
+                expect(res.body.kind).toBe(expected.kind);
+                expect(res.body.template).toBe(expected.template);
+            }
+        }
+    );
+
+    test.each(testData.guestRegistrationData)(
+        '$description',
+        async ({method, path, body, expected}) => {
+            const app = makeApp(createGuestFlowRouter(makeConfig()));
+            const res = await request(app)[method](path).send(body || {});
+            
+            expect(res.status).toBe(expected.status);
+            if (expected.tpl) {
+                expect(res.body.tpl).toBe(expected.tpl);
+                if (expected.data) {
+                    expect(res.body.data).toMatchObject(expected.data);
+                }
+            }
+            if (expected.location) {
+                expect(res.headers.location).toBe(expected.location);
+            }
+            if (expected.emailLink) {
+                expect(sendLinkEmail).toHaveBeenCalledTimes(1);
+                const link = (sendLinkEmail.mock.calls[0] as any[])[1];
+                expect(link).toBe(expected.emailLink);
+            }
+            if (expected.kind) {
+                expect(res.body.kind).toBe(expected.kind);
+                expect(res.body.template).toBe(expected.template);
+            }
+        }
+    );
+
+    test.each(testData.editTokenData)(
+        '$description',
+        async ({method, path, expected}) => {
+            const app = makeApp(createGuestFlowRouter(makeConfig()));
+            const res = await request(app)[method](path);
+            
+            expect(res.status).toBe(expected.status);
+            if (expected.location) {
+                expect(res.headers.location).toBe(expected.location);
+            }
+            if (expected.kind) {
+                expect(res.body.kind).toBe(expected.kind);
+            }
+        }
+    );
+
+    test(testData.duplicateData.description, async () => {
+        const {method, path, session, expected} = testData.duplicateData;
+        const app = makeApp(createGuestFlowRouter(makeConfig()), session);
+        const res = await request(app)[method](path);
+        
+        expect(res.status).toBe(expected.status);
+        expect(res.body.tpl).toBe(expected.tpl);
+        expect(res.body.data).toMatchObject(expected.data);
     });
 
-    test('POST /create validation error from preprocess', async () => {
-        const cfg = makeConfig({
-            preprocessCreate: () => ({error: {msg: 'Bad', data: {a: 1}}}),
-        });
-        const app = makeApp(createGuestFlowRouter(cfg), {user: {id: 1}});
-        const res = await request(app).post('/create').send({});
-        expect(res.status).toBe(400);
-        expect(res.body.kind).toBe('validation');
-        expect(res.body.template).toBe('activity/create');
-    });
-
-    test('POST /create wraps createEntity errors as ValidationError', async () => {
-        const cfg = makeConfig({
-            createEntity: async () => {
-                throw new Error('boom');
-            },
-        });
-        const app = makeApp(createGuestFlowRouter(cfg), {user: {id: 1}});
-        const res = await request(app).post('/create').send({title: 'x'});
-        expect(res.status).toBe(400);
-        expect(res.body.kind).toBe('validation');
-        expect(res.body.template).toBe('activity/create');
-    });
-
-    test('GET /:id/guest renders guest registration unless session present', async () => {
-        const app = makeApp(createGuestFlowRouter(makeConfig()));
-        const res = await request(app).get('/abc/guest');
-        expect(res.status).toBe(200);
-        expect(res.body.tpl).toBe('users/register-guest');
-        expect(res.body.data).toMatchObject({entityType: 'activity', entityId: 'abc', title: 'Plan abc'});
-    });
-
-    test('POST /:id/guest registers, emails link, redirects to entity', async () => {
-        const cfg = makeConfig();
-        const app = makeApp(createGuestFlowRouter(cfg));
-        const res = await request(app).post('/abc/guest').send({username: 'guest1', email: 'g@x'});
-        expect(res.status).toBe(302);
-        expect(res.headers.location).toBe('/activity/abc');
-        // mail with built link
-        expect(sendLinkEmail).toHaveBeenCalledTimes(1);
-        const link = (sendLinkEmail.mock.calls[0] as any[])[1];
-        expect(link).toBe('http://app.local/activity/abc/edit/tok-xyz');
-    });
-
-    test('POST /:id/guest requires username', async () => {
-        const app = makeApp(createGuestFlowRouter(makeConfig()));
-        const res = await request(app).post('/abc/guest').send({username: '', email: 'g@x'});
-        expect(res.status).toBe(400);
-        expect(res.body.kind).toBe('validation');
-        expect(res.body.template).toBe('users/register-guest');
-    });
-
-    test('GET /:id/edit/:token switches to guest on valid token; 401 otherwise', async () => {
-        const app = makeApp(createGuestFlowRouter(makeConfig()));
-        const ok = await request(app).get('/abc/edit/tok-xyz');
-        expect(ok.status).toBe(302);
-        expect(ok.headers.location).toBe('/activity/abc');
-
-        const bad = await request(app).get('/abc/edit/bad-token');
-        expect(bad.status).toBe(401);
-        expect(bad.body.kind).toBe('expected');
-    });
-
-    test('GET /:id/duplicate renders duplicate form', async () => {
-        const app = makeApp(createGuestFlowRouter(makeConfig()), {user: {id: 1}});
-        const res = await request(app).get('/abc/duplicate');
-        expect(res.status).toBe(200);
-        expect(res.body.tpl).toBe('activity/create');
-        expect(res.body.data).toMatchObject({
-            isDuplicate: true,
-            title: 'Copy of Plan abc',
-            entity: {id: 'abc', title: 'Plan abc'},
-            data: {cloned: true},
-        });
-    });
-
-    test('POST /:id/delete deletes and redirects to dashboard', async () => {
-        const del = jest.fn(async () => {
-        });
+    test(testData.deleteData.description, async () => {
+        const {method, path, session, expected} = testData.deleteData;
+        const del = jest.fn(async () => {});
         const cfg = makeConfig({deleteEntity: del});
-        const app = makeApp(createGuestFlowRouter(cfg), {user: {id: 1}});
-        const res = await request(app).post('/abc/delete');
-        expect(res.status).toBe(302);
-        expect(res.headers.location).toBe('/users/dashboard');
-        expect(del).toHaveBeenCalled();
+        const app = makeApp(createGuestFlowRouter(cfg), session);
+        const res = await request(app)[method](path);
+        
+        expect(res.status).toBe(expected.status);
+        expect(res.headers.location).toBe(expected.location);
+        if (expected.deleteCalled) {
+            expect(del).toHaveBeenCalled();
+        }
     });
 
-    test('SAFE-ZONE: user session passes through and renders view', async () => {
-        const app = makeApp(createGuestFlowRouter(makeConfig()), {user: {id: 99}});
-        const res = await request(app).get('/abc');
-        expect(res.status).toBe(200);
-        expect(res.body.tpl).toBe('activity/view');
-        expect(res.body.data).toMatchObject({plan: {id: 'abc', title: 'Plan abc'}, x: 1});
+    test.each(testData.safeZoneData)(
+        '$description',
+        async ({method, path, session, configOverrides, expected}) => {
+            const baseCfg = makeConfig();
+            const cfg = configOverrides 
+                ? makeConfig({db: {...baseCfg.db, ...configOverrides.db}})
+                : baseCfg;
+            const app = makeApp(createGuestFlowRouter(cfg), session);
+            const res = await request(app)[method](path);
+            
+            expect(res.status).toBe(expected.status);
+            if (expected.tpl) {
+                expect(res.body.tpl).toBe(expected.tpl);
+                if (expected.data) {
+                    expect(res.body.data).toMatchObject(expected.data);
+                }
+            }
+            if (expected.location) {
+                expect(res.headers.location).toBe(expected.location);
+            }
+            if (expected.emailLink) {
+                expect(sendLinkEmail).toHaveBeenCalledTimes(1);
+                expect((sendLinkEmail.mock.calls[0] as any[])[1]).toBe(expected.emailLink);
+            }
+        }
+    );
+
+    test(testData.validationData.description, async () => {
+        const {method, path, session, configOverrides, expected} = testData.validationData;
+        const cfg = makeConfig(configOverrides);
+        const app = makeApp(createGuestFlowRouter(cfg), session);
+        const res = await request(app)[method](path);
+        
+        expect(res.status).toBe(expected.status);
+        expect(res.body.kind).toBe(expected.kind);
+        expect(res.body.template).toBe(expected.template);
     });
 
-    test('SAFE-ZONE: guest session ensures link token (create if missing), emails, then renders view', async () => {
-        const cfg = makeConfig({
-            db: {
-                ...makeConfig().db,
-                getGuestLinkToken: async () => null,       // force creation
-                createGuestLink: async () => 'new-token',
-            },
-        });
-        const app = makeApp(createGuestFlowRouter(cfg), {guest: {id: 77, email: 'g@x'}});
-        const res = await request(app).get('/abc');
-        expect(res.status).toBe(200);
-        expect(res.body.tpl).toBe('activity/view');
-        expect(sendLinkEmail).toHaveBeenCalledTimes(1);
-        expect((sendLinkEmail.mock.calls[0] as any[])[1]).toBe('http://app.local/activity/abc/edit/new-token');
-    });
-
-    test('SAFE-ZONE: no session redirects to /:id/guest', async () => {
-        const app = makeApp(createGuestFlowRouter(makeConfig()));
-        const res = await request(app).get('/abc');
-        expect(res.status).toBe(302);
-        expect(res.headers.location).toBe('/activity/abc/guest');
-    });
-
-    test('GET /:id returns 400 ValidationError when fetchForView falsy', async () => {
-        const cfg = makeConfig({fetchForView: async () => null});
-        const app = makeApp(createGuestFlowRouter(cfg), {user: {id: 1}});
-        const res = await request(app).get('/abc');
-        expect(res.status).toBe(400);
-        expect(res.body.kind).toBe('validation');
-        expect(res.body.template).toBe('activity/view');
-    });
-
-    test('GET /create with addToEvent uses queryHandler (eventId in data)', async () => {
-        const cfg = makeConfig({addToEvent: true});
-        const app = makeApp(createGuestFlowRouter(cfg), {user: {id: 1}});
-        const res = await request(app).get('/create?eventId=E1');
-        expect(res.status).toBe(200);
-        expect(res.body.tpl).toBe('activity/create');
-        // we at least see the eventId fed back
-        expect(res.body.data).toMatchObject({eventId: 'E1'});
+    test(testData.addToEventData.description, async () => {
+        const {method, path, session, configOverrides, expected} = testData.addToEventData;
+        const cfg = makeConfig(configOverrides);
+        const app = makeApp(createGuestFlowRouter(cfg), session);
+        const res = await request(app)[method](path);
+        
+        expect(res.status).toBe(expected.status);
+        expect(res.body.tpl).toBe(expected.tpl);
+        expect(res.body.data).toMatchObject(expected.data);
     });
 });
