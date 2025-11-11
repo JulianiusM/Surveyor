@@ -5,6 +5,7 @@
  * - Verifies read() bootstrap, coercions, unknown keys, comma handling, and write() output
  */
 import type {Settings} from '../../src/modules/settings';
+import * as testData from '../data/unit/settingsData';
 
 // Simple in-memory FS mock
 const memfs = (() => {
@@ -46,141 +47,72 @@ async function loadModule() {
 }
 
 describe('settings', () => {
-    const FILE = '/settings.csv';
-
     beforeEach(() => {
         memfs.__reset();
         jest.restoreAllMocks();
     });
 
-    test('read() bootstraps file when missing and sets initialized', async () => {
-        const spyWriteLog = jest.spyOn(console, 'log').mockImplementation(() => {
-        });
+    test(testData.bootstrapTestData.description, async () => {
+        const {file, expectInitializedBefore, expectInitializedAfter, expectSessionSecretPrefix, expectFileExists, expectConsoleLogCalled} = testData.bootstrapTestData;
+        const spyWriteLog = jest.spyOn(console, 'log').mockImplementation(() => {});
         const {SettingsStore} = await loadModule();
         const store = new SettingsStore();
 
         const before = store.value;
-        expect(before.initialized).toBe(false);
-        // Point the store at our fake path
-        (store.value as any).file = FILE;
+        expect(before.initialized).toBe(expectInitializedBefore);
+        (store.value as any).file = file;
 
-        await store.read(FILE, true); // file missing -> write defaults
+        await store.read(file, true);
 
         const after = store.value;
-        expect(after.initialized).toBe(true);
-        expect(memfs.existsSync(FILE)).toBe(true);
-        // sessionSecret is deterministic due to crypto mock
-        expect(after.sessionSecret.startsWith('CHANGE__')).toBe(true);
-        expect(after.sessionSecret.length).toBeGreaterThan('CHANGE__'.length);
+        expect(after.initialized).toBe(expectInitializedAfter);
+        expect(memfs.existsSync(file)).toBe(expectFileExists);
+        expect(after.sessionSecret.startsWith(expectSessionSecretPrefix)).toBe(true);
+        expect(after.sessionSecret.length).toBeGreaterThan(expectSessionSecretPrefix.length);
 
-        // write() logs once
-        expect(spyWriteLog).toHaveBeenCalled();
+        if (expectConsoleLogCalled) {
+            expect(spyWriteLog).toHaveBeenCalled();
+        }
     });
 
-    test('read() parses CSV, coerces types, handles unknown keys & commas', async () => {
-        const spyWarn = jest.spyOn(console, 'warn').mockImplementation(() => {
-        });
+    test(testData.parseCSVTestData.description, async () => {
+        const {file, csvContent, expected, expectConsoleWarnCalled} = testData.parseCSVTestData;
+        const spyWarn = jest.spyOn(console, 'warn').mockImplementation(() => {});
         const {SettingsStore} = await loadModule();
         const store = new SettingsStore();
-        (store.value as any).file = FILE;
+        (store.value as any).file = file;
 
-        // Prepare CSV; commas after first comma are preserved
-        const csv = [
-            'ROOT_URL,http://x.example.com',
-            'DB_PORT,3310',
-            'APP_PORT,9001',
-            'SMTP_POOL,yes',
-            'SMTP_SECURE,0',
-            'LOCAL_LOGIN_ENABLED,On',
-            'OIDC_ENABLED,TRUE',
-            'SMTP_EMAIL,user,with,comma@example.com',
-            'FOO_BAR,should_warn', // unknown key
-        ].join('\n') + '\n';
-        memfs.__set(FILE, csv);
+        memfs.__set(file, csvContent);
 
-        await store.read(FILE, true);
+        await store.read(file, true);
 
         const s = store.value as Settings;
-        expect(s.initialized).toBe(true);
-        expect(s.rootUrl).toBe('http://x.example.com');
-        expect(s.dbPort).toBe(3310);
-        expect(s.appPort).toBe(9001);
-        expect(s.smtpPool).toBe(true);
-        expect(s.smtpSecure).toBe(false);
-        expect(s.localLoginEnabled).toBe(true);
-        expect(s.oidcEnabled).toBe(true);
-        expect(s.smtpEmail).toBe('user,with,comma@example.com');
-
-        expect(spyWarn).toHaveBeenCalled(); // unknown key warning
-    });
-
-    test('write() emits only CSV-known keys and matches current state', async () => {
-        const {SettingsStore} = await loadModule();
-        const store = new SettingsStore();
-        (store.value as any).file = FILE;
-
-        // mutate some values
-        Object.assign(store.value, {
-            rootUrl: 'http://changed:1234',
-            dbHost: 'db.example',
-            dbPort: 3307,
-            dbUser: 'alice',
-            dbPassword: 'secret',
-            dbName: 'testdb',
-            smtpPool: false,
-            smtpHost: 'smtp.local',
-            smtpPort: 2525,
-            smtpSecure: false,
-            smtpEmail: 'ci@example.com',
-            smtpUser: 'mailer',
-            smtpPassword: 'pw',
-            oidcEnabled: true,
-            oidcName: 'ExampleOIDC',
-            oidcClientId: 'client',
-            oidcClientSecret: 'client-secret',
-            oidcIssuerBaseUrl: 'http://issuer',
-            oidcRedirectUrl: 'http://app/cb',
-            localLoginEnabled: false,
-            sessionSecret: 'CHANGE__DETERMINISTIC',
-            appPort: 7777,
-            // fields not in CSV should be skipped by write (initialized, file)
-            initialized: true,
-            file: FILE,
+        Object.keys(expected).forEach(key => {
+            expect(s[key]).toBe(expected[key]);
         });
 
-        await store.write(FILE);
+        if (expectConsoleWarnCalled) {
+            expect(spyWarn).toHaveBeenCalled();
+        }
+    });
 
-        const written = memfs.__get(FILE)!;
+    test(testData.writeCSVTestData.description, async () => {
+        const {file, settingsOverrides, expectedLines, forbiddenFields} = testData.writeCSVTestData;
+        const {SettingsStore} = await loadModule();
+        const store = new SettingsStore();
+        (store.value as any).file = file;
+
+        Object.assign(store.value, settingsOverrides);
+        (store.value as any).file = file;
+
+        await store.write(file);
+
+        const written = memfs.__get(file)!;
         const lines = written.trim().split(/\r?\n/);
 
-        // Ensure some sample lines exist and match new values
-        expect(lines).toEqual(expect.arrayContaining([
-            'ROOT_URL,http://changed:1234',
-            'DB_HOST,db.example',
-            'DB_PORT,3307',
-            'DB_USER,alice',
-            'DB_PASSWORD,secret',
-            'DB_NAME,testdb',
-            'SMTP_POOL,false',
-            'SMTP_HOST,smtp.local',
-            'SMTP_PORT,2525',
-            'SMTP_SECURE,false',
-            'SMTP_EMAIL,ci@example.com',
-            'SMTP_USER,mailer',
-            'SMTP_PASSWORD,pw',
-            'OIDC_ENABLED,true',
-            'OIDC_NAME,ExampleOIDC',
-            'OIDC_CLIENT_ID,client',
-            'OIDC_CLIENT_SECRET,client-secret',
-            'OIDC_ISSUER_BASE_URL,http://issuer',
-            'OIDC_REDIRECT_URL,http://app/cb',
-            'LOCAL_LOGIN_ENABLED,false',
-            'SESSION_SECRET,CHANGE__DETERMINISTIC',
-            'APP_PORT,7777',
-        ]));
+        expect(lines).toEqual(expect.arrayContaining(expectedLines));
 
-        // Ensure non-CSV fields were NOT written
-        for (const forbidden of ['initialized', 'file']) {
+        for (const forbidden of forbiddenFields) {
             expect(lines.find(l => l.startsWith(forbidden.toUpperCase()))).toBeUndefined();
         }
     });
