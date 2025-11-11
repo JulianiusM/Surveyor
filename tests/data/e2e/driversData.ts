@@ -7,6 +7,7 @@ import {
     generatePageAccessData,
     generateDashboardEmptyStateData,
     generateFormValidationData,
+    entityConfigs,
 } from './entityData';
 
 /**
@@ -25,10 +26,12 @@ export const driversDashboardEmptyStateData = generateDashboardEmptyStateData('d
 export const driversCreationData = [
     {
         description: 'can create a new drivers list with valid data',
+        createUrl: entityConfigs.drivers.urlPath,
         title: 'E2E Drivers',
         submitButtonText: /create.*list/i,
         expectedRedirectPattern: /\/(users\/dashboard|drivers\/[\w-]*-[\w-]+)/,
         verifyTitleInPage: true,
+        titleSelector: 'h1',
         requiresFormSubmit: true,
     },
 ];

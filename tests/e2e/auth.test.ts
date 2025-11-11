@@ -7,6 +7,11 @@ import { expect, test } from '@playwright/test';
 // Import test data
 import {
     testCredentials,
+    authUrls,
+    formFields,
+    successMessages,
+    selectors,
+    loginPageRenderData,
     loginData,
     logoutData,
     registrationFlowData,
@@ -57,22 +62,15 @@ for (const data of unauthenticatedRedirectData) {
 }
 
 // 2) Login page rendering test
-test('renders login form', async ({ page }) => {
-    await page.goto('/users/login');
-
-    // Verify all expected elements using data
-    await verifyPageElements(page, [
-        { type: 'heading', value: /login/i },
-        { type: 'input', value: 'username' },
-        { type: 'input', value: 'password' },
-        { type: 'button', value: /login/i },
-    ]);
+test(loginPageRenderData.description, async ({ page }) => {
+    await page.goto(loginPageRenderData.url);
+    await verifyPageElements(page, loginPageRenderData.elements);
 });
 
 // 3) Login tests (both success and failure)
 for (const data of loginData) {
     test(data.description, async ({ page }) => {
-        await page.goto('/users/login');
+        await page.goto(data.url);
         await fillLoginForm(page, data.username, data.password);
         await verifyUrlMatches(page, data.expectedUrl);
 
@@ -119,10 +117,10 @@ for (const data of registrationFlowData) {
         const token = await getActivationToken(username);
         expect(token, 'Activation token should exist in DB').toBeTruthy();
         await page.goto(`/users/activate/${token}`);
-        await expect(page.getByText('Your account has been activated', { exact: false })).toBeVisible();
+        await expect(page.getByText(data.activationMessage, { exact: false })).toBeVisible();
 
         // Now log in with the freshly activated account
-        await page.goto('/users/login');
+        await page.goto(data.loginUrl);
         await fillLoginForm(page, username, data.password);
         await verifyUrlMatches(page, data.expectedDashboardUrl);
         await verifyHeadingVisible(page, data.expectedHeading);
@@ -142,11 +140,11 @@ for (const data of passwordResetFlowData) {
         const activationToken = await getActivationToken(username);
         expect(activationToken, 'Activation token should exist').toBeTruthy();
         await page.goto(`/users/activate/${activationToken}`);
-        await expect(page.getByText('Your account has been activated', { exact: false })).toBeVisible();
+        await expect(page.getByText(data.activationMessage, { exact: false })).toBeVisible();
 
         // Trigger forgot-password by username
         await page.goto(data.forgotPasswordUrl);
-        await page.locator('input[name="username"]').fill(username);
+        await page.locator(`input[name="${formFields.username}"]`).fill(username);
         await page.getByRole('button', { name: /send reset link/i }).click();
         await expect(page.getByText(data.resetLinkSentMessage, { exact: false })).toBeVisible();
 
@@ -163,21 +161,21 @@ for (const data of passwordResetFlowData) {
         expect(res.ok()).toBeTruthy();
 
         // Log in with the new password
-        await page.goto('/users/login');
+        await page.goto(data.loginUrl);
         await fillLoginForm(page, username, data.newPassword);
-        await expect(page).toHaveURL(/\/users\/dashboard/);
+        await expect(page).toHaveURL(data.dashboardUrl);
     });
 }
 
 // 8) OIDC button visibility test
 for (const data of oidcButtonData) {
     test(data.description, async ({ page }) => {
-        await page.goto('/users/login');
+        await page.goto(data.loginUrl);
         const oidcBtn = page.getByRole('link', { name: data.buttonName });
         if (data.shouldBeVisible) {
             await expect(oidcBtn).toBeVisible();
         } else {
-            await verifyNotVisible(page, 'a[href*="openid"]');
+            await verifyNotVisible(page, data.oidcSelector);
         }
     });
 }
@@ -201,12 +199,12 @@ for (const data of registrationData) {
             await registerUserThroughUI(page, { username, password: data.password, email: email1 });
             
             // Try again with same username
-            await page.goto('/users/register');
-            await page.locator('input[name="username"]').fill(username);
-            await page.locator('input[name="displayname"]').fill(username);
-            await page.locator('input[name="email"]').fill(`${username}+2@example.test`);
-            await page.locator('input[name="password"]').fill(data.password);
-            await page.locator('input[name="password_repeat"]').fill(data.password);
+            await page.goto(data.registerUrl);
+            await page.locator(`input[name="${data.formFields.username}"]`).fill(username);
+            await page.locator(`input[name="${data.formFields.displayname}"]`).fill(username);
+            await page.locator(`input[name="${data.formFields.email}"]`).fill(`${username}+2@example.test`);
+            await page.locator(`input[name="${data.formFields.password}"]`).fill(data.password);
+            await page.locator(`input[name="${data.formFields.passwordRepeat}"]`).fill(data.password);
             await page.getByRole('button', { name: /register/i }).click();
 
             await verifyUrlMatches(page, data.expectedUrl);
@@ -215,12 +213,12 @@ for (const data of registrationData) {
             }
         } else if (data.errorType === 'weakPassword') {
             // Weak password case
-            await page.goto('/users/register');
-            await page.locator('input[name="username"]').fill(username);
-            await page.locator('input[name="displayname"]').fill(username);
-            await page.locator('input[name="email"]').fill(email);
-            await page.locator('input[name="password"]').fill(data.password);
-            await page.locator('input[name="password_repeat"]').fill(data.password);
+            await page.goto(data.registerUrl);
+            await page.locator(`input[name="${data.formFields.username}"]`).fill(username);
+            await page.locator(`input[name="${data.formFields.displayname}"]`).fill(username);
+            await page.locator(`input[name="${data.formFields.email}"]`).fill(email);
+            await page.locator(`input[name="${data.formFields.password}"]`).fill(data.password);
+            await page.locator(`input[name="${data.formFields.passwordRepeat}"]`).fill(data.password);
             await page.getByRole('button', { name: /register/i }).click();
 
             await verifyUrlMatches(page, data.expectedUrl);
@@ -236,7 +234,7 @@ for (const data of activationTokenData) {
     test(data.description, async ({ page }) => {
         await page.goto(`/users/activate/${data.token}`);
         if (!data.isValid && data.expectErrorAlert) {
-            await verifyErrorAlert(page, '.alert, .alert-danger, [role="alert"]');
+            await verifyErrorAlert(page, data.errorSelector);
         }
     });
 }
@@ -255,13 +253,13 @@ for (const data of tokenReuseData) {
             // First activation works
             await page.goto(`/users/activate/${token}`);
             if (data.expectFirstUseSuccess) {
-                await expect(page.locator('.alert, .alert-success')).toBeVisible();
+                await expect(page.locator(data.successSelector)).toBeVisible();
             }
 
             // Second attempt should fail
             await page.goto(`/users/activate/${token}`);
             if (data.expectSecondUseError) {
-                await verifyErrorAlert(page, '.alert, .alert-danger, [role="alert"]');
+                await verifyErrorAlert(page, data.errorSelector);
             }
         } else if (data.tokenType === 'reset') {
             await registerUserThroughUI(page, { username, password: data.oldPassword, email });
@@ -270,13 +268,13 @@ for (const data of tokenReuseData) {
             const activationToken = await getActivationToken(username);
             expect(activationToken).toBeTruthy();
             await page.goto(`/users/activate/${activationToken}`);
-            await expect(page.locator('.alert, .alert-success')).toBeVisible();
+            await expect(page.locator(data.successSelector)).toBeVisible();
 
             // Request reset
-            await page.goto('/users/forgot-password');
+            await page.goto(data.forgotPasswordUrl);
             await page.locator('input[name="username"]').fill(username);
             await page.getByRole('button', { name: /send reset link/i }).click();
-            await expect(page.locator('.alert, .alert-success')).toBeVisible();
+            await expect(page.locator(data.successSelector)).toBeVisible();
 
             const token = await getResetToken(username);
             expect(token).toBeTruthy();
@@ -312,13 +310,13 @@ for (const data of resetTokenData) {
         const activationToken = await getActivationToken(username);
         expect(activationToken).toBeTruthy();
         await page.goto(`/users/activate/${activationToken}`);
-        await expect(page.locator('.alert, .alert-success')).toBeVisible();
+        await expect(page.locator(data.successSelector)).toBeVisible();
 
         // Request reset
-        await page.goto('/users/forgot-password');
+        await page.goto(data.forgotPasswordUrl);
         await page.locator('input[name="username"]').fill(username);
         await page.getByRole('button', { name: /send reset link/i }).click();
-        await expect(page.locator('.alert, .alert-success')).toBeVisible();
+        await expect(page.locator(data.successSelector)).toBeVisible();
 
         const token = await getResetToken(username);
         expect(token).toBeTruthy();
@@ -332,7 +330,7 @@ for (const data of resetTokenData) {
 
         await page.goto(`/users/reset-password/${token}`);
         if (data.expectErrorAlert) {
-            await verifyErrorAlert(page, '.alert, .alert-danger, [role="alert"]');
+            await verifyErrorAlert(page, data.errorSelector);
         }
     });
 }

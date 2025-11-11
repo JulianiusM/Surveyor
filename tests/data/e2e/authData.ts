@@ -13,26 +13,59 @@ export const testCredentials = {
 };
 
 /**
+ * Common URLs used across auth tests
+ */
+export const authUrls = {
+    login: '/users/login',
+    register: '/users/register',
+    dashboard: '/users/dashboard',
+    forgotPassword: '/users/forgot-password',
+    logout: '/users/logout',
+};
+
+/**
+ * Form field names
+ */
+export const formFields = {
+    username: 'username',
+    displayname: 'displayname',
+    email: 'email',
+    password: 'password',
+    passwordRepeat: 'password_repeat',
+};
+
+/**
+ * Common success messages
+ */
+export const successMessages = {
+    accountActivated: 'Your account has been activated',
+    accountRegistered: 'Account successfully registered',
+    resetLinkSent: 'link has been sent',
+};
+
+/**
+ * Common selectors
+ */
+export const selectors = {
+    alertSuccess: '.alert, .alert-success',
+    alertDanger: '.alert, .alert-danger, [role="alert"]',
+    alertAny: '.alert',
+    oidcLink: 'a[href*="openid"]',
+};
+
+/**
  * Test cases for login page rendering
  */
-export const loginPageRenderData = [
-    {
-        description: 'renders login form with heading',
-        expectedHeading: /login/i,
-    },
-    {
-        description: 'displays username input field',
-        inputName: 'username',
-    },
-    {
-        description: 'displays password input field',
-        inputName: 'password',
-    },
-    {
-        description: 'displays login button',
-        buttonText: /login/i,
-    },
-];
+export const loginPageRenderData = {
+    description: 'renders login form with all expected elements',
+    url: authUrls.login,
+    elements: [
+        { type: 'heading', value: /login/i },
+        { type: 'input', value: formFields.username },
+        { type: 'input', value: formFields.password },
+        { type: 'button', value: /login/i },
+    ],
+};
 
 /**
  * Test cases for login attempts (both success and failure)
@@ -40,6 +73,7 @@ export const loginPageRenderData = [
 export const loginData = [
     {
         description: 'rejects wrong credentials',
+        url: authUrls.login,
         username: 'unknown_user',
         password: 'totally-wrong',
         shouldSucceed: false,
@@ -48,6 +82,7 @@ export const loginData = [
     },
     {
         description: 'logs in with valid credentials and shows dashboard',
+        url: authUrls.login,
         username: testCredentials.username,
         password: testCredentials.password,
         shouldSucceed: true,
@@ -75,30 +110,36 @@ export const logoutData = [
 export const registrationData = [
     {
         description: 'registers a user with valid data',
+        registerUrl: authUrls.register,
         generateUsername: true,
         usernamePrefix: 'e2e_reg',
         password: 'RegTest!123',
         useEmailFromUsername: true,
         shouldSucceed: true,
-        expectedSuccessMessage: 'Account successfully registered',
+        expectedSuccessMessage: successMessages.accountRegistered,
+        formFields,
     },
     {
         description: 'rejects duplicate username during registration',
+        registerUrl: authUrls.register,
         usernamePrefix: 'e2e_dup',
         password: 'DupOk!123',
         shouldSucceed: false,
         errorType: 'duplicate',
         expectedUrl: /\/users\/register/,
         expectErrorAlert: true,
+        formFields,
     },
     {
         description: 'rejects weak password on registration',
+        registerUrl: authUrls.register,
         usernamePrefix: 'e2e_weak',
         password: '12345',
         shouldSucceed: false,
         errorType: 'weakPassword',
         expectedUrl: /\/users\/register/,
         expectValidationMessage: true,
+        formFields,
     },
 ];
 
@@ -110,6 +151,8 @@ export const registrationFlowData = [
         description: 'registers a user, activates the account, and logs in',
         usernamePrefix: 'e2e_reg',
         password: 'RegTest!123',
+        activationMessage: successMessages.accountActivated,
+        loginUrl: authUrls.login,
         expectedDashboardUrl: /\/users\/dashboard/,
         expectedHeading: /welcome/i,
     },
@@ -124,9 +167,13 @@ export const passwordResetFlowData = [
         usernamePrefix: 'e2e_reset',
         oldPassword: 'OldPass!123',
         newPassword: 'NewPass!456',
-        forgotPasswordUrl: '/users/forgot-password',
-        resetLinkSentMessage: 'link has been sent',
+        forgotPasswordUrl: authUrls.forgotPassword,
+        resetLinkSentMessage: successMessages.resetLinkSent,
         resetPageHeading: /reset your password/i,
+        activationMessage: successMessages.accountActivated,
+        loginUrl: authUrls.login,
+        dashboardUrl: /\/users\/dashboard/,
+        formFields,
     },
 ];
 
@@ -136,9 +183,11 @@ export const passwordResetFlowData = [
 export const oidcButtonData = [
     {
         description: 'hides OIDC login button when OIDC is disabled',
+        loginUrl: authUrls.login,
         buttonName: /login.*openid/i,
         oidcEnabled: false,
         shouldBeVisible: false,
+        oidcSelector: selectors.oidcLink,
     },
 ];
 
@@ -153,6 +202,10 @@ export const resetTokenData = [
         isExpired: true,
         expectErrorAlert: true,
         skipIfNoExpiryColumn: true,
+        activationMessage: successMessages.accountActivated,
+        forgotPasswordUrl: authUrls.forgotPassword,
+        successSelector: selectors.alertSuccess,
+        errorSelector: selectors.alertDanger,
     },
 ];
 
@@ -165,6 +218,7 @@ export const activationTokenData = [
         token: 'THIS-TOKEN-DOES-NOT-EXIST',
         isValid: false,
         expectErrorAlert: true,
+        errorSelector: selectors.alertDanger,
     },
 ];
 
@@ -179,6 +233,8 @@ export const tokenReuseData = [
         password: 'ActOnce!1',
         expectFirstUseSuccess: true,
         expectSecondUseError: true,
+        successSelector: selectors.alertSuccess,
+        errorSelector: selectors.alertDanger,
     },
     {
         description: 'reset token cannot be reused',
@@ -189,6 +245,9 @@ export const tokenReuseData = [
         secondPassword: 'Another!33',
         expectFirstUseSuccess: true,
         expectSecondUseError: true,
+        activationMessage: successMessages.accountActivated,
+        forgotPasswordUrl: authUrls.forgotPassword,
+        successSelector: selectors.alertSuccess,
     },
 ];
 

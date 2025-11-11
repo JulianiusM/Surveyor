@@ -4,6 +4,15 @@
  */
 
 /**
+ * Common selectors
+ */
+export const navigationSelectors = {
+    footer: 'footer',
+    heading: 'h1',
+    body: 'body',
+};
+
+/**
  * Test cases for home page structure
  */
 export const homePageData = [
@@ -86,10 +95,14 @@ export const responsiveDesignData = [
 export const footerLinksData = [
     {
         description: 'footer contains imprint link',
+        footerUrl: '/',
+        footerSelector: navigationSelectors.footer,
         linkName: /imprint/i,
     },
     {
         description: 'footer contains privacy policy link',
+        footerUrl: '/',
+        footerSelector: navigationSelectors.footer,
         linkName: /privacy policy/i,
     },
 ];

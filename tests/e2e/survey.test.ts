@@ -68,7 +68,7 @@ for (const data of surveyCreationData) {
 
         // Verify success message or survey appears
         if (data.verifyTitleInPage) {
-            await expect(page.locator('h1')).toContainText(surveyTitle);
+            await expect(page.locator(data.titleSelector)).toContainText(surveyTitle);
         }
     });
 }

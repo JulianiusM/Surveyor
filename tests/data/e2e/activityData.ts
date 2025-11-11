@@ -7,6 +7,7 @@ import {
     generatePageAccessData,
     generateDashboardEmptyStateData,
     generateFormValidationData,
+    entityConfigs,
 } from './entityData';
 
 /**
@@ -25,6 +26,7 @@ export const activityDashboardEmptyStateData = generateDashboardEmptyStateData('
 export const activityCreationData = [
     {
         description: 'can create a new activity plan with valid data',
+        createUrl: entityConfigs.activity.urlPath,
         title: 'E2E Activity',
         startDate: '2025-01-01',
         endDate: '2025-01-02',
@@ -38,6 +40,7 @@ export const activityCreationData = [
         submitButtonText: /create.*plan/i,
         expectedRedirectPattern: /\/(users\/dashboard|activity\/[\w-]*-[\w-]+)/,
         verifyTitleInPage: true,
+        titleSelector: 'h1',
     },
 ];
 

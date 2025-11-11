@@ -82,9 +82,9 @@ for (const data of responsiveDesignData) {
 // 5) Footer contains required links
 for (const data of footerLinksData) {
     test(data.description, async ({ page }) => {
-        await page.goto('/');
-        const footer = page.locator('footer');
-        await verifySelectorVisible(page, 'footer');
+        await page.goto(data.footerUrl);
+        const footer = page.locator(data.footerSelector);
+        await verifySelectorVisible(page, data.footerSelector);
         await expect(footer.getByRole('link', { name: data.linkName })).toBeVisible();
     });
 }

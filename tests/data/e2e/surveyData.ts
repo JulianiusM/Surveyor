@@ -7,6 +7,7 @@ import {
     generatePageAccessData,
     generateDashboardEmptyStateData,
     generateFormValidationData,
+    entityConfigs,
 } from './entityData';
 
 /**
@@ -25,11 +26,14 @@ export const surveyDashboardEmptyStateData = generateDashboardEmptyStateData('su
 export const surveyCreationData = [
     {
         description: 'can create a new survey with valid data',
+        createUrl: entityConfigs.survey.urlPath,
         title: 'E2E Survey',
         surveyDescription: 'Test survey description',
         submitButtonText: /create.*survey/i,
         expectedRedirectPattern: /\/(users\/dashboard|survey\/[\w-]*-[\w-]+)/,
         verifyTitleInPage: true,
+        titleSelector: 'h1',
+        waitUntilOption: 'networkidle',
     },
 ];
 

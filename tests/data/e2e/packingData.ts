@@ -7,6 +7,7 @@ import {
     generatePageAccessData,
     generateDashboardEmptyStateData,
     generateFormValidationData,
+    entityConfigs,
 } from './entityData';
 
 /**
@@ -25,6 +26,7 @@ export const packingDashboardEmptyStateData = generateDashboardEmptyStateData('p
 export const packingCreationData = [
     {
         description: 'can create a new packing list with valid data',
+        createUrl: entityConfigs.packing.urlPath,
         title: 'E2E Packing',
         items: [
             { name: 't_0', value: 'Tent' },
@@ -33,6 +35,7 @@ export const packingCreationData = [
         submitButtonText: /create.*list/i,
         expectedRedirectPattern: /\/(users\/dashboard|packing\/[\w-]*-[\w-]+)/,
         verifyTitleInPage: true,
+        titleSelector: 'h1',
     },
 ];
 
