@@ -46,6 +46,8 @@ import controller from '../../src/controller/activityController';
 import * as activityService from '../../src/modules/database/services/ActivityService';
 import * as userService from '../../src/modules/database/services/UserService';
 import {APIError, ValidationError} from '../../src/modules/lib/errors';
+import {setupMock, verifyMockCall, verifyResult} from '../keywords/common/controllerKeywords';
+import * as testData from '../data/controller/activityData';
 
 const {
     preprocessCreate,
@@ -74,270 +76,238 @@ beforeEach(() => {
 });
 
 describe('preprocessCreate', () => {
-    const validSlot = {
-        id: '11111111-1111-4111-8111-111111111111', // v4-ish
-        day: '2024-01-02',
-        pos: 1,
-        title: 'Morning shift',
-        description: '',
-        maxAssignees: 2,
-    };
-
-    it('sanitizes valid payload, flattens slots, maps flags and description', () => {
-        const body = {
-            title: 'Event',
-            startDate: '2024-01-01',
-            endDate: '2024-01-03',
-            allowGuestAdd: 'on',
-            guestManage: '',      // off
-            description: '',      // becomes null
-            slots: JSON.stringify({'2024-01-02': [validSlot]}),
-        };
-
-        const res = preprocessCreate(body);
-        expect(res).toMatchObject({
-            title: 'Event',
-            description: null,
-            startDate: '2024-01-01',
-            endDate: '2024-01-03',
-            allowGuestAdd: true,
-            guestManage: false,
-        });
-        expect(Array.isArray(res.slots)).toBe(true);
-        expect(res.slots).toHaveLength(1);
-        expect(res.slots[0]).toMatchObject({day: '2024-01-02', title: 'Morning shift'});
-    });
-
-    it('throws ValidationError on invalid slots JSON', () => {
-        const body = {
-            title: 'X',
-            startDate: '2024-01-01',
-            endDate: '2024-01-03',
-            description: '',
-            slots: '{bad json',
-        };
-        expect(() => preprocessCreate(body)).toThrow(ValidationError);
-    });
-
-    it('throws ValidationError on schema problems (missing title)', () => {
-        const body = {
-            startDate: '2024-01-01',
-            endDate: '2024-01-03',
-            description: '',
-            slots: JSON.stringify({'2024-01-02': [validSlot]}),
-        };
-        expect(() => preprocessCreate(body)).toThrow(ValidationError);
-    });
-
-    it('throws ValidationError if slot day outside start/end range', () => {
-        const body = {
-            title: 'Event',
-            startDate: '2024-01-10',
-            endDate: '2024-01-12',
-            description: '',
-            slots: JSON.stringify({'2024-01-05': [{...validSlot, day: '2024-01-05'}]}),
-        };
-        expect(() => preprocessCreate(body)).toThrow(ValidationError);
-    });
+    test.each(testData.preprocessCreateData)(
+        '$description',
+        ({input, expected, shouldThrow}) => {
+            if (shouldThrow) {
+                expect(() => preprocessCreate(input)).toThrow(shouldThrow === 'ValidationError' ? ValidationError : Error);
+            } else {
+                const res = preprocessCreate(input);
+                expect(res).toMatchObject({
+                    title: expected.title,
+                    description: expected.description,
+                    startDate: expected.startDate,
+                    endDate: expected.endDate,
+                    allowGuestAdd: expected.allowGuestAdd,
+                    guestManage: expected.guestManage,
+                });
+                expect(Array.isArray(res.slots)).toBe(true);
+                expect(res.slots).toHaveLength(expected.slotsLength);
+                expect(res.slots[0]).toMatchObject({day: expected.slotDay, title: expected.slotTitle});
+            }
+        }
+    );
 });
 
 describe('createEntity / afterCreateItems', () => {
     it('passes fields to createActivityPlanTx and returns plan id', async () => {
-        (activityService.createActivityPlanTx as jest.Mock).mockResolvedValue('plan-123');
-        const planData = {
-            title: 'T',
-            description: 'D',
-            startDate: '2024-01-01',
-            endDate: '2024-01-03',
-            allowGuestAdd: true,
-            guestManage: false,
-            slots: [{id: 's1'}],
-            _injectedEventId: 'evt-9',
-        };
-        const id = await createEntity(7, planData);
-        expect(id).toBe('plan-123');
-        expect(activityService.createActivityPlanTx).toHaveBeenCalledWith(
-            7, 'T', 'D', '2024-01-01', '2024-01-03', true, false, [{id: 's1'}], 'evt-9'
-        );
+        const {planData, userId, expectedId, expectedArgs} = testData.createEntityData;
+        setupMock(activityService.createActivityPlanTx, expectedId);
+        
+        const id = await createEntity(userId, planData);
+        
+        verifyResult(id, expectedId);
+        verifyMockCall(activityService.createActivityPlanTx, ...expectedArgs);
         await expect(afterCreateItems()).resolves.toBeUndefined();
     });
 });
 
 describe('fetchForView', () => {
-    const plan = {id: 'p1', startDate: '2024-01-01', endDate: '2024-01-31'};
-
-    const slotsByDate = {
-        '2024-01-10': [
-            {id: 'a', assignedCount: 0, maxAssignees: 2, title: 'A'},
-            {id: 'b', assignedCount: 1, maxAssignees: 1, title: 'B'},
-        ],
-    };
+    const {plan, slotsByDate, assignees, participants, roles, slotRoles, scenarios} = testData.fetchForViewData;
 
     beforeEach(() => {
-        (activityService.getActivitySlots as jest.Mock).mockResolvedValue(slotsByDate);
-        (activityService.getActivitySlotAssignees as jest.Mock).mockResolvedValue({a: [], b: []});
-        (activityService.getActivityPlanParticipants as jest.Mock).mockResolvedValue([1, 2, 3]);
-        (userService.getAllRoles as jest.Mock).mockResolvedValue(['role1']);
-        (activityService.getActivitySlotRoles as jest.Mock).mockResolvedValue({a: [], b: []});
+        setupMock(activityService.getActivitySlots, slotsByDate);
+        setupMock(activityService.getActivitySlotAssignees, assignees);
+        setupMock(activityService.getActivityPlanParticipants, participants);
+        setupMock(userService.getAllRoles, roles);
+        setupMock(activityService.getActivitySlotRoles, slotRoles);
     });
 
-    it('uses user-based assignments and computes counters', async () => {
-        (activityService.getActivitySlotAssignmentsForUser as jest.Mock).mockResolvedValue(['a']);
-        const session = {user: {id: 42}};
-        const res = await fetchForView(plan as any, session as any);
-        expect(res.assignments).toEqual(['a']);
-        expect(res.counters).toEqual({participants: 3, open: 1, empty: 1}); // a empty+open, b full
-    });
-
-    it('uses guest-based assignments when no user', async () => {
-        (activityService.getActivitySlotAssignmentsForGuest as jest.Mock).mockResolvedValue(['b']);
-        const session = {guest: {id: 8}};
-        const res = await fetchForView(plan as any, session as any);
-        expect(res.assignments).toEqual(['b']);
-    });
-
-    it('falls back to empty assignments when no principal', async () => {
-        const res = await fetchForView(plan as any, {} as any);
-        expect(res.assignments).toEqual([]);
-    });
+    test.each(scenarios)(
+        '$description',
+        async ({session, mockAssignments, mockFunc, expectedAssignments, expectedCounters}) => {
+            if (mockFunc) {
+                setupMock(activityService[mockFunc], mockAssignments);
+            }
+            
+            const res = await fetchForView(plan as any, session as any);
+            
+            verifyResult(res.assignments, expectedAssignments);
+            if (expectedCounters) {
+                verifyResult(res.counters, expectedCounters);
+            }
+        }
+    );
 });
 
 describe('fetchForDuplicate / deleteEntity', () => {
     it('fetchForDuplicate returns slot map', async () => {
-        const map = {'2024-01-01': [{id: 'x'}]};
-        (activityService.getActivitySlots as jest.Mock).mockResolvedValue(map);
-        const out = await fetchForDuplicate({id: 'p1'} as any, {} as any);
-        expect(out).toBe(map);
+        const {plan, slotMap} = testData.fetchForDuplicateData;
+        setupMock(activityService.getActivitySlots, slotMap);
+        
+        const out = await fetchForDuplicate(plan as any, {} as any);
+        
+        verifyResult(out, slotMap);
     });
 
     it('deleteEntity delegates to service', async () => {
-        await deleteEntity({id: 'p9'} as any, {} as any);
-        expect(activityService.deleteActivityPlan).toHaveBeenCalledWith('p9');
+        const {plan} = testData.deleteEntityData;
+        
+        await deleteEntity(plan as any, {} as any);
+        
+        verifyMockCall(activityService.deleteActivityPlan, plan.id);
     });
 });
 
 describe('API helpers', () => {
     describe('updateDescription', () => {
-        it('updates when <=2000 chars', async () => {
-            await expect(updateDescription('p1', {description: 'ok'})).resolves.toBe('Description updated');
-            expect(activityService.updateActivityPlanDescription).toHaveBeenCalledWith('p1', 'ok');
-        });
-        it('rejects when too long', async () => {
-            const long = 'x'.repeat(2001);
-            await expect(updateDescription('p1', {description: long})).rejects.toBeInstanceOf(APIError);
-        });
+        test.each(testData.updateDescriptionData)(
+            '$description',
+            async ({planId, body, expectedMessage, shouldThrow}) => {
+                if (shouldThrow) {
+                    await expect(updateDescription(planId, body)).rejects.toBeInstanceOf(APIError);
+                } else {
+                    const result = await updateDescription(planId, body);
+                    verifyResult(result, expectedMessage);
+                    verifyMockCall(activityService.updateActivityPlanDescription, planId, body.description);
+                }
+            }
+        );
     });
 
     it('reorderSlots passes through and returns message', async () => {
-        await expect(reorderSlots('p1', [{slotId: 's1', pos: 2}])).resolves.toBe('Order saved');
-        expect(activityService.reorderActivitySlots).toHaveBeenCalledWith('p1', [{slotId: 's1', pos: 2}]);
+        const {planId, order, expectedMessage} = testData.reorderSlotsData;
+        
+        const result = await reorderSlots(planId, order);
+        
+        verifyResult(result, expectedMessage);
+        verifyMockCall(activityService.reorderActivitySlots, planId, order);
     });
 
     describe('quickAddSlot', () => {
-        const plan = {id: 'p1', startDate: '2024-01-01', endDate: '2024-01-31'};
+        const {plan, scenarios} = testData.quickAddSlotData;
 
-        it('creates slot with next pos and numeric maxAssignees', async () => {
-            (activityService.getLastActivitySlotNumber as jest.Mock).mockResolvedValue(2);
-            await expect(
-                quickAddSlot(plan as any, {date: '2024-01-10', title: 'Foo', description: 'Bar', maxAssignees: '3'})
-            ).resolves.toBe('Slot added');
-
-            expect(activityService.addActivitySlot).toHaveBeenCalledWith('p1', {
-                id: 'uid-123',
-                day: '2024-01-10',
-                title: 'Foo',
-                description: 'Bar',
-                maxAssignees: 3,
-                pos: 3,
-            });
-        });
-
-        it('defaults maxAssignees to 1 when falsy', async () => {
-            (activityService.getLastActivitySlotNumber as jest.Mock).mockResolvedValue(0);
-            await quickAddSlot(plan as any, {date: '2024-01-10', title: 'T', maxAssignees: 0});
-            expect(activityService.addActivitySlot).toHaveBeenCalledWith('p1', expect.objectContaining({maxAssignees: 1}));
-        });
-
-        it('rejects missing title', async () => {
-            await expect(quickAddSlot(plan as any, {date: '2024-01-10', title: ''}))
-                .rejects.toBeInstanceOf(APIError);
-        });
-
-        it('rejects date outside range', async () => {
-            await expect(quickAddSlot(plan as any, {date: '2023-12-31', title: 'X'}))
-                .rejects.toBeInstanceOf(APIError);
-        });
+        test.each(scenarios)(
+            '$description',
+            async ({lastPos, body, expectedMessage, expectedSlot, expectedMaxAssignees, shouldThrow}) => {
+                if (lastPos !== undefined) {
+                    setupMock(activityService.getLastActivitySlotNumber, lastPos);
+                }
+                
+                if (shouldThrow) {
+                    await expect(quickAddSlot(plan as any, body)).rejects.toBeInstanceOf(APIError);
+                } else if (expectedSlot) {
+                    const result = await quickAddSlot(plan as any, body);
+                    verifyResult(result, expectedMessage);
+                    verifyMockCall(activityService.addActivitySlot, plan.id, expectedSlot);
+                } else if (expectedMaxAssignees) {
+                    await quickAddSlot(plan as any, body);
+                    expect(activityService.addActivitySlot).toHaveBeenCalledWith(
+                        plan.id, 
+                        expect.objectContaining({maxAssignees: expectedMaxAssignees})
+                    );
+                }
+            }
+        );
     });
 
     describe('updateSlotDescription', () => {
-        it('returns ok if update true', async () => {
-            (activityService.updateActivitySlot as jest.Mock).mockResolvedValue(true);
-            await expect(updateSlotDescription('s1', {description: 'd'})).resolves.toBe('Description updated');
-            expect(activityService.updateActivitySlot).toHaveBeenCalledWith('s1', {description: 'd'});
-        });
-        it('throws 500 if update false', async () => {
-            (activityService.updateActivitySlot as jest.Mock).mockResolvedValue(false);
-            await expect(updateSlotDescription('s1', {description: 'd'})).rejects.toBeInstanceOf(APIError);
-        });
+        test.each(testData.updateSlotDescriptionData)(
+            '$description',
+            async ({slotId, body, mockResolve, expectedMessage, shouldThrow}) => {
+                setupMock(activityService.updateActivitySlot, mockResolve);
+                
+                if (shouldThrow) {
+                    await expect(updateSlotDescription(slotId, body)).rejects.toBeInstanceOf(APIError);
+                } else {
+                    const result = await updateSlotDescription(slotId, body);
+                    verifyResult(result, expectedMessage);
+                    verifyMockCall(activityService.updateActivitySlot, slotId, body);
+                }
+            }
+        );
     });
 
     describe('updateSlotAttr', () => {
-        it('rejects invalid field', async () => {
-            await expect(updateSlotAttr('s1', {field: 'pos', value: 3})).rejects.toBeInstanceOf(APIError);
-        });
-        it('updates allowed field and returns ok', async () => {
-            (activityService.updateActivitySlot as jest.Mock).mockResolvedValue(true);
-            await expect(updateSlotAttr('s1', {field: 'title', value: 'N'})).resolves.toBe('Slot updated');
-            expect(activityService.updateActivitySlot).toHaveBeenCalledWith('s1', {title: 'N'});
-        });
-        it('throws 500 when service returns false', async () => {
-            (activityService.updateActivitySlot as jest.Mock).mockResolvedValue(false);
-            await expect(updateSlotAttr('s1', {field: 'title', value: 'N'})).rejects.toBeInstanceOf(APIError);
-        });
+        test.each(testData.updateSlotAttrData)(
+            '$description',
+            async ({slotId, body, mockResolve, expectedMessage, expectedUpdate, shouldThrow}) => {
+                if (mockResolve !== undefined) {
+                    setupMock(activityService.updateActivitySlot, mockResolve);
+                }
+                
+                if (shouldThrow) {
+                    await expect(updateSlotAttr(slotId, body)).rejects.toBeInstanceOf(APIError);
+                } else {
+                    const result = await updateSlotAttr(slotId, body);
+                    verifyResult(result, expectedMessage);
+                    verifyMockCall(activityService.updateActivitySlot, slotId, expectedUpdate);
+                }
+            }
+        );
     });
 
     it('deleteAssignment delegates and returns message', async () => {
-        await expect(deleteAssignment(99)).resolves.toBe('Assignment removed');
-        expect(activityService.deleteActivitySlotAssignment).toHaveBeenCalledWith(99);
+        const {assignmentId, expectedMessage} = testData.deleteAssignmentData;
+        
+        const result = await deleteAssignment(assignmentId);
+        
+        verifyResult(result, expectedMessage);
+        verifyMockCall(activityService.deleteActivitySlotAssignment, assignmentId);
     });
 
     it('updateSettings delegates and returns message', async () => {
-        await expect(updateSettings('p1', {allowAdd: true, guestManage: false})).resolves.toBe('Settings saved');
-        expect(activityService.updateActivityPlanFlags).toHaveBeenCalledWith('p1', true, false);
+        const {planId, body, expectedMessage} = testData.updateSettingsData;
+        
+        const result = await updateSettings(planId, body);
+        
+        verifyResult(result, expectedMessage);
+        verifyMockCall(activityService.updateActivityPlanFlags, planId, body.allowAdd, body.guestManage);
     });
 
     it('deleteSlot delegates and returns message', async () => {
-        await expect(deleteSlot('s1')).resolves.toBe('Slot deleted');
-        expect(activityService.deleteActivitySlot).toHaveBeenCalledWith('s1');
+        const {slotId, expectedMessage} = testData.deleteSlotData;
+        
+        const result = await deleteSlot(slotId);
+        
+        verifyResult(result, expectedMessage);
+        verifyMockCall(activityService.deleteActivitySlot, slotId);
     });
 
     describe('addSlotRole', () => {
-        it('rejects invalid roles', async () => {
-            await expect(addSlotRole('s1', {roles: []})).rejects.toBeInstanceOf(APIError);
-            await expect(addSlotRole('s1', {roles: null})).rejects.toBeInstanceOf(APIError);
-            await expect(addSlotRole('s1', {})).rejects.toBeInstanceOf(APIError);
-        });
-        it('adds roles when valid', async () => {
-            await expect(addSlotRole('s1', {roles: [1, 2]})).resolves.toBe('Roles added');
-            expect(activityService.addActivitySlotRoles).toHaveBeenCalledWith('s1', [1, 2]);
-        });
+        test.each(testData.addSlotRoleData)(
+            '$description',
+            async ({slotId, body, expectedMessage, shouldThrow}) => {
+                if (shouldThrow) {
+                    await expect(addSlotRole(slotId, body)).rejects.toBeInstanceOf(APIError);
+                } else {
+                    const result = await addSlotRole(slotId, body);
+                    verifyResult(result, expectedMessage);
+                    verifyMockCall(activityService.addActivitySlotRoles, slotId, body.roles);
+                }
+            }
+        );
     });
 });
 
 describe('access mappings', () => {
     it('getAssignmentAccessMapping routes to correct service funcs', async () => {
+        const {assignToUser, userId, unassignFromGuest, guestId} = testData.assignmentAccessMappingData;
+        
         const m = getAssignmentAccessMapping();
-        await m.assignToUser({slotId: 's1'}, 7);
-        await m.unassignFromGuest({slotId: 's2'}, 9);
+        await m.assignToUser(assignToUser, userId);
+        await m.unassignFromGuest(unassignFromGuest, guestId);
 
-        expect(activityService.assignActivitySlotToUser).toHaveBeenCalledWith('s1', 7);
-        expect(activityService.unassignActivitySlotGuest).toHaveBeenCalledWith('s2', 9);
+        verifyMockCall(activityService.assignActivitySlotToUser, assignToUser.slotId, userId);
+        verifyMockCall(activityService.unassignActivitySlotGuest, unassignFromGuest.slotId, guestId);
     });
 
     it('getRoleAccessMapping routes with role in body', async () => {
+        const {assignToUser, userId, roleId} = testData.roleAccessMappingData;
+        
         const m = getRoleAccessMapping();
-        await m.assignToUser({slotId: 's1', role: 3}, 7);
+        await m.assignToUser(assignToUser, userId);
 
-        expect(activityService.assignActivityAssignmentRoleToUser).toHaveBeenCalledWith('s1', 7, 3);
+        verifyMockCall(activityService.assignActivityAssignmentRoleToUser, assignToUser.slotId, userId, roleId);
     });
 });
