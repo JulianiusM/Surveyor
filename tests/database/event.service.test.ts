@@ -38,6 +38,15 @@ import {User} from '../../src/modules/database/entities/user/User';
 import {Guest} from '../../src/modules/database/entities/user/Guest';
 import type {DIETARY} from '../../src/types/EventTypes';
 
+// Test data
+import {
+    eventCrudData,
+    eventRegistrationData,
+    registeredEventsData,
+    eventFullData,
+    eventRegistrationCheckData,
+} from '../data/database/eventServiceData';
+
 // Helper to clear relevant tables between tests (order matters due to FKs)
 async function truncateAll() {
     await AppDataSource.query('SET FOREIGN_KEY_CHECKS=0');
@@ -78,60 +87,54 @@ afterEach(async () => {
 }, 60_000);
 
 describe('eventService (mysql)', () => {
-    it('creates, reads, updates, and deletes an Event', async () => {
-        const binding = "2025-08-01T12:00:00.000Z";
+    test.each(eventCrudData)('$description', async (testCase) => {
+        const binding = testCase.initialData.bindingDeadline;
         const eid = await createEventTx(
-            1,
-            'Camp',
-            null,
-            '2025-08-01',
-            '2025-08-03',
-            'Riverside Park',
+            testCase.ownerId,
+            testCase.initialData.title,
+            testCase.initialData.description,
+            testCase.initialData.startDate,
+            testCase.initialData.endDate,
+            testCase.initialData.location,
             binding,
-            true,
-            10,
-            'Europe/Berlin'
+            testCase.initialData.requireDietaryInfo,
+            testCase.initialData.maxParticipants,
+            testCase.initialData.timezone
         );
 
         // Read by id
         const ev1 = await getEventById(eid);
         expect(ev1).toBeTruthy();
-        expect(ev1!.ownerId).toBe(1);
-        expect(ev1!.title).toBe('Camp');
-        expect(ev1!.startDate).toBe('2025-08-01');
-        expect(ev1!.endDate).toBe('2025-08-03');
-        expect(ev1!.location).toBe('Riverside Park');
-        expect(ev1!.bindingDeadline).toStrictEqual(new Date(binding));
-        expect(ev1!.requireDietaryInfo).toBe(1);
-        expect(ev1!.maxParticipants).toBe(10);
-        expect(ev1!.timezone).toBe('Europe/Berlin');
+        expect(ev1!.ownerId).toBe(testCase.expectedInitial.ownerId);
+        expect(ev1!.title).toBe(testCase.expectedInitial.title);
+        expect(ev1!.startDate).toBe(testCase.expectedInitial.startDate);
+        expect(ev1!.endDate).toBe(testCase.expectedInitial.endDate);
+        expect(ev1!.location).toBe(testCase.expectedInitial.location);
+        expect(ev1!.bindingDeadline).toStrictEqual(new Date(binding!));
+        expect(ev1!.requireDietaryInfo).toBe(testCase.expectedInitial.requireDietaryInfo);
+        expect(ev1!.maxParticipants).toBe(testCase.expectedInitial.maxParticipants);
+        expect(ev1!.timezone).toBe(testCase.expectedInitial.timezone);
 
         // Read by owner
-        const owners = await getEventsByOwnerId(1);
+        const owners = await getEventsByOwnerId(testCase.ownerId);
         expect(owners.map(o => o.id)).toContain(eid);
 
         // Update title/description/meta/dates
-        await updateEventTitle(eid, 'Camp 2025');
-        await updateEventDescription(eid, 'Bring sunscreen');
-        await updateEventMeta(eid, {
-            location: 'Lakeview',
-            bindingDeadline: '2025-07-20T18:30',
-            requireDietaryInfo: false,
-            maxParticipants: 25,
-            timezone: 'UTC',
-        });
-        await updateEventDates(eid, '2025-08-02', '2025-08-04');
+        await updateEventTitle(eid, testCase.updates.title);
+        await updateEventDescription(eid, testCase.updates.description);
+        await updateEventMeta(eid, testCase.updates.meta);
+        await updateEventDates(eid, testCase.updates.dates.startDate, testCase.updates.dates.endDate);
 
         const ev2 = await getEventById(eid);
-        expect(ev2!.title).toBe('Camp 2025');
-        expect(ev2!.description).toBe('Bring sunscreen');
-        expect(ev2!.location).toBe('Lakeview');
-        expect(ev2!.bindingDeadline).toStrictEqual(new Date('2025-07-20T18:30'));
-        expect(ev2!.requireDietaryInfo).toBe(0);
-        expect(ev2!.maxParticipants).toBe(25);
-        expect(ev2!.timezone).toBe('UTC');
-        expect(ev2!.startDate).toBe('2025-08-02');
-        expect(ev2!.endDate).toBe('2025-08-04');
+        expect(ev2!.title).toBe(testCase.expectedAfterUpdates.title);
+        expect(ev2!.description).toBe(testCase.expectedAfterUpdates.description);
+        expect(ev2!.location).toBe(testCase.expectedAfterUpdates.location);
+        expect(ev2!.bindingDeadline).toStrictEqual(new Date(testCase.expectedAfterUpdates.bindingDeadline));
+        expect(ev2!.requireDietaryInfo).toBe(testCase.expectedAfterUpdates.requireDietaryInfo);
+        expect(ev2!.maxParticipants).toBe(testCase.expectedAfterUpdates.maxParticipants);
+        expect(ev2!.timezone).toBe(testCase.expectedAfterUpdates.timezone);
+        expect(ev2!.startDate).toBe(testCase.expectedAfterUpdates.startDate);
+        expect(ev2!.endDate).toBe(testCase.expectedAfterUpdates.endDate);
 
         // Delete
         await deleteEvent(eid);
