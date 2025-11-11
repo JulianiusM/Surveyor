@@ -257,20 +257,20 @@ describe('OIDC wrappers - Data Driven', () => {
         const session = testCase.mockRequest as any;
 
         if (testCase.method === 'loginUserWithOidc') {
-            (oidc.startLogin as jest.Mock).mockResolvedValue('redir');
+            (oidc.startLogin as jest.Mock).mockResolvedValue(testCase.mockReturnValue);
             const res = await loginUserWithOidc(session);
             expect(oidc.startLogin).toHaveBeenCalledWith(session);
-            expect(res).toBe('redir');
+            expect(res).toBe(testCase.expectedResult);
         } else if (testCase.method === 'loginUserWithOidcCallback') {
-            (oidc.callback as jest.Mock).mockResolvedValue({ user: { id: 1 } });
+            (oidc.callback as jest.Mock).mockResolvedValue(testCase.mockReturnValue);
             const res = await loginUserWithOidcCallback(session);
             expect(oidc.callback).toHaveBeenCalledWith(session);
-            expect(res).toEqual({ user: { id: 1 } });
+            expect(res).toEqual(testCase.expectedResult);
         } else if (testCase.method === 'logoutUserOidc') {
-            (oidc.logout as jest.Mock).mockResolvedValue('logoutUrl');
+            (oidc.logout as jest.Mock).mockResolvedValue(testCase.mockReturnValue);
             const res = await logoutUserOidc(session);
             expect(oidc.logout).toHaveBeenCalledWith(session);
-            expect(res).toBe('logoutUrl');
+            expect(res).toBe(testCase.expectedResult);
         }
     });
 });

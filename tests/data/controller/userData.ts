@@ -250,6 +250,8 @@ export const oidcWrapperData = [
         mockRequest: { query: { returnTo: '/dash' } },
         mockResponse: {},
         delegateTo: 'startLogin',
+        mockReturnValue: 'redir',
+        expectedResult: 'redir',
     },
     {
         description: 'loginUserWithOidcCallback delegates to callback',
@@ -257,6 +259,8 @@ export const oidcWrapperData = [
         mockRequest: {},
         mockResponse: {},
         delegateTo: 'callback',
+        mockReturnValue: { user: { id: 1 } },
+        expectedResult: { user: { id: 1 } },
     },
     {
         description: 'logoutUserOidc delegates to logout',
@@ -264,5 +268,7 @@ export const oidcWrapperData = [
         mockRequest: {},
         mockResponse: {},
         delegateTo: 'logout',
+        mockReturnValue: 'logoutUrl',
+        expectedResult: 'logoutUrl',
     },
 ];
