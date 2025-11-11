@@ -11,13 +11,11 @@ import {
     logoutData,
     registrationFlowData,
     passwordResetFlowData,
-    oidcButtonVisibilityData,
-    duplicateUsernameData,
-    weakPasswordData,
-    invalidActivationTokenData,
-    activationTokenReuseData,
-    expiredResetTokenData,
-    resetTokenReuseData,
+    oidcButtonData,
+    registrationData,
+    activationTokenData,
+    tokenReuseData,
+    resetTokenData,
     unauthenticatedRedirectData,
 } from '../data/e2e/authData';
 
@@ -172,7 +170,7 @@ for (const data of passwordResetFlowData) {
 }
 
 // 8) OIDC button visibility test
-for (const data of oidcButtonVisibilityData) {
+for (const data of oidcButtonData) {
     test(data.description, async ({ page }) => {
         await page.goto('/users/login');
         const oidcBtn = page.getByRole('link', { name: data.buttonName });
@@ -185,92 +183,125 @@ for (const data of oidcButtonVisibilityData) {
 }
 
 // ==============================================
-// Negative-path tests: duplicate usernames, weak passwords,
-// invalid/expired tokens, and reused tokens
+// Negative-path tests: registration errors, invalid/expired tokens, and reused tokens
 // ==============================================
 
-// 9) Duplicate username test
-for (const data of duplicateUsernameData) {
+// 9) Registration tests (success and validation errors)
+for (const data of registrationData) {
     test(data.description, async ({ page }) => {
         const username = generateUniqueUsername(data.usernamePrefix);
-        const email1 = `${username}@example.test`;
-        const email2 = `${username}+2@example.test`;
+        const email = data.useEmailFromUsername ? `${username}@example.test` : `${username}+2@example.test`;
 
-        // First registration succeeds
-        await registerUserThroughUI(page, { username, password: data.password, email: email1 });
+        if (data.shouldSucceed) {
+            // Success case - just register
+            await registerUserThroughUI(page, { username, password: data.password, email });
+        } else if (data.errorType === 'duplicate') {
+            // Duplicate username - register twice with same username
+            const email1 = `${username}@example.test`;
+            await registerUserThroughUI(page, { username, password: data.password, email: email1 });
+            
+            // Try again with same username
+            await page.goto('/users/register');
+            await page.locator('input[name="username"]').fill(username);
+            await page.locator('input[name="displayname"]').fill(username);
+            await page.locator('input[name="email"]').fill(`${username}+2@example.test`);
+            await page.locator('input[name="password"]').fill(data.password);
+            await page.locator('input[name="password_repeat"]').fill(data.password);
+            await page.getByRole('button', { name: /register/i }).click();
 
-        // Try again with same username
-        await page.goto('/users/register');
-        await page.locator('input[name="username"]').fill(username);
-        await page.locator('input[name="displayname"]').fill(username);
-        await page.locator('input[name="email"]').fill(email2);
-        await page.locator('input[name="password"]').fill(data.password);
-        await page.locator('input[name="password_repeat"]').fill(data.password);
-        await page.getByRole('button', { name: /register/i }).click();
+            await verifyUrlMatches(page, data.expectedUrl);
+            if (data.expectErrorAlert) {
+                await verifyErrorAlert(page);
+            }
+        } else if (data.errorType === 'weakPassword') {
+            // Weak password case
+            await page.goto('/users/register');
+            await page.locator('input[name="username"]').fill(username);
+            await page.locator('input[name="displayname"]').fill(username);
+            await page.locator('input[name="email"]').fill(email);
+            await page.locator('input[name="password"]').fill(data.password);
+            await page.locator('input[name="password_repeat"]').fill(data.password);
+            await page.getByRole('button', { name: /register/i }).click();
 
-        await verifyUrlMatches(page, data.expectedUrl);
-        if (data.expectErrorAlert) {
-            await verifyErrorAlert(page);
+            await verifyUrlMatches(page, data.expectedUrl);
+            if (data.expectValidationMessage) {
+                await verifyValidationMessage(page);
+            }
         }
     });
 }
 
-// 10) Weak password test
-for (const data of weakPasswordData) {
-    test(data.description, async ({ page }) => {
-        const username = generateUniqueUsername(data.usernamePrefix);
-
-        await page.goto('/users/register');
-        await page.locator('input[name="username"]').fill(username);
-        await page.locator('input[name="displayname"]').fill(username);
-        await page.locator('input[name="email"]').fill(`${username}@example.test`);
-        await page.locator('input[name="password"]').fill(data.weakPassword);
-        await page.locator('input[name="password_repeat"]').fill(data.weakPassword);
-        await page.getByRole('button', { name: /register/i }).click();
-
-        await verifyUrlMatches(page, data.expectedUrl);
-        if (data.expectValidationMessage) {
-            await verifyValidationMessage(page);
-        }
-    });
-}
-
-// 11) Invalid activation token test
-for (const data of invalidActivationTokenData) {
+// 10) Activation token tests (valid and invalid)
+for (const data of activationTokenData) {
     test(data.description, async ({ page }) => {
         await page.goto(`/users/activate/${data.token}`);
-        if (data.expectErrorAlert) {
+        if (!data.isValid && data.expectErrorAlert) {
             await verifyErrorAlert(page, '.alert, .alert-danger, [role="alert"]');
         }
     });
 }
 
-// 12) Activation token reuse test
-for (const data of activationTokenReuseData) {
+// 11) Token reuse tests (activation and reset)
+for (const data of tokenReuseData) {
     test(data.description, async ({ page }) => {
         const username = generateUniqueUsername(data.usernamePrefix);
         const email = `${username}@example.test`;
 
-        await registerUserThroughUI(page, { username, password: data.password, email });
-        const token = await getActivationToken(username);
-        expect(token).toBeTruthy();
+        if (data.tokenType === 'activation') {
+            await registerUserThroughUI(page, { username, password: data.password, email });
+            const token = await getActivationToken(username);
+            expect(token).toBeTruthy();
 
-        // First activation works
-        await page.goto(`/users/activate/${token}`);
-        if (data.expectFirstActivationSuccess) {
+            // First activation works
+            await page.goto(`/users/activate/${token}`);
+            if (data.expectFirstUseSuccess) {
+                await expect(page.locator('.alert, .alert-success')).toBeVisible();
+            }
+
+            // Second attempt should fail
+            await page.goto(`/users/activate/${token}`);
+            if (data.expectSecondUseError) {
+                await verifyErrorAlert(page, '.alert, .alert-danger, [role="alert"]');
+            }
+        } else if (data.tokenType === 'reset') {
+            await registerUserThroughUI(page, { username, password: data.oldPassword, email });
+
+            // Activate
+            const activationToken = await getActivationToken(username);
+            expect(activationToken).toBeTruthy();
+            await page.goto(`/users/activate/${activationToken}`);
             await expect(page.locator('.alert, .alert-success')).toBeVisible();
-        }
 
-        // Second attempt should fail
-        await page.goto(`/users/activate/${token}`);
-        if (data.expectSecondActivationError) {
-            await verifyErrorAlert(page, '.alert, .alert-danger, [role="alert"]');
+            // Request reset
+            await page.goto('/users/forgot-password');
+            await page.locator('input[name="username"]').fill(username);
+            await page.getByRole('button', { name: /send reset link/i }).click();
+            await expect(page.locator('.alert, .alert-success')).toBeVisible();
+
+            const token = await getResetToken(username);
+            expect(token).toBeTruthy();
+
+            // First use succeeds
+            let res = await page.request.post(`/users/reset-password/${token}`, {
+                form: { password: data.newPassword, confirmPassword: data.newPassword },
+            });
+            if (data.expectFirstUseSuccess) {
+                expect(res.ok()).toBeTruthy();
+            }
+
+            // Second use fails
+            res = await page.request.post(`/users/reset-password/${token}`, {
+                form: { password: data.secondPassword, confirmPassword: data.secondPassword },
+            });
+            if (data.expectSecondUseError) {
+                expect(res.ok(), 'Reusing token should not be OK').toBeFalsy();
+            }
         }
     });
 }
 
-// 13) Expired reset token test
-for (const data of expiredResetTokenData) {
+// 12) Reset token expiry test
+for (const data of resetTokenData) {
     test(data.description, async ({ page }) => {
         const username = generateUniqueUsername(data.usernamePrefix);
         const email = `${username}@example.test`;
@@ -302,47 +333,6 @@ for (const data of expiredResetTokenData) {
         await page.goto(`/users/reset-password/${token}`);
         if (data.expectErrorAlert) {
             await verifyErrorAlert(page, '.alert, .alert-danger, [role="alert"]');
-        }
-    });
-}
-
-// 14) Reset token reuse test
-for (const data of resetTokenReuseData) {
-    test(data.description, async ({ page }) => {
-        const username = generateUniqueUsername(data.usernamePrefix);
-        const email = `${username}@example.test`;
-
-        await registerUserThroughUI(page, { username, password: data.oldPassword, email });
-
-        // Activate
-        const activationToken = await getActivationToken(username);
-        expect(activationToken).toBeTruthy();
-        await page.goto(`/users/activate/${activationToken}`);
-        await expect(page.locator('.alert, .alert-success')).toBeVisible();
-
-        // Request reset
-        await page.goto('/users/forgot-password');
-        await page.locator('input[name="username"]').fill(username);
-        await page.getByRole('button', { name: /send reset link/i }).click();
-        await expect(page.locator('.alert, .alert-success')).toBeVisible();
-
-        const token = await getResetToken(username);
-        expect(token).toBeTruthy();
-
-        // First use succeeds
-        let res = await page.request.post(`/users/reset-password/${token}`, {
-            form: { password: data.newPassword, confirmPassword: data.newPassword },
-        });
-        if (data.expectFirstResetSuccess) {
-            expect(res.ok()).toBeTruthy();
-        }
-
-        // Second use fails
-        res = await page.request.post(`/users/reset-password/${token}`, {
-            form: { password: data.secondPassword, confirmPassword: data.secondPassword },
-        });
-        if (data.expectSecondResetFailure) {
-            expect(res.ok(), 'Reusing token should not be OK').toBeFalsy();
         }
     });
 }

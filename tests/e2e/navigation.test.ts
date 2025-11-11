@@ -7,7 +7,7 @@ import { expect, test } from '@playwright/test';
 // Import test data
 import {
     homePageData,
-    navigationBarItemsData,
+    navigationBarData,
     dashboardEntitySectionsData,
     responsiveDesignData,
     footerLinksData,
@@ -50,11 +50,16 @@ for (const data of homePageData) {
     });
 }
 
-// 2) Navigation bar shows all menu items for authenticated users
-for (const data of navigationBarItemsData) {
+// 2) Navigation bar items (authenticated and unauthenticated states)
+for (const data of navigationBarData) {
     test(data.description, async ({ page }) => {
-        await loginUser(page, testCredentials.username, testCredentials.password);
-        await verifyLinkVisible(page, data.linkName);
+        if (data.isAuthenticated) {
+            await loginUser(page, testCredentials.username, testCredentials.password);
+        }
+        
+        if (data.shouldBeVisible) {
+            await verifyLinkVisible(page, data.linkName);
+        }
     });
 }
 

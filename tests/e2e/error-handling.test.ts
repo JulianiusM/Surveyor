@@ -7,10 +7,9 @@ import { expect, test } from '@playwright/test';
 // Import test data
 import {
     notFoundErrorData,
-    loginFormValidationData,
-    registrationFormValidationData,
+    formValidationData,
     invalidTokenData,
-    unauthorizedAccessData,
+    routeAccessData,
     networkErrorData,
     serverErrorData,
     pageFunctionalityData,
@@ -55,38 +54,33 @@ for (const data of notFoundErrorData) {
     });
 }
 
-// 2) Login form shows validation errors for empty fields
-for (const data of loginFormValidationData) {
+// 2) Form validation tests (login and registration)
+for (const data of formValidationData) {
     test(data.description, async ({ page }) => {
         await page.goto(data.url);
-        await submitForm(page, data.submitButton);
         
-        if (data.expectedRequiredAttribute) {
-            await verifyFieldRequired(page, data.usernameField);
+        if (data.formType === 'login') {
+            await submitForm(page, data.submitButton);
+            if (data.expectedRequiredAttribute) {
+                await verifyFieldRequired(page, data.fieldToCheck);
+            }
+        } else if (data.formType === 'registration') {
+            const username = generateUniqueUsername(data.usernamePrefix);
+            await fillFormFields(page, [
+                { name: 'username', value: username },
+                { name: 'displayname', value: username },
+                { name: 'email', value: `${username}@test.com` },
+                { name: 'password', value: data.password },
+                { name: 'password_repeat', value: data.passwordRepeat },
+            ]);
+            
+            await submitForm(page, data.submitButton);
+            await verifyErrorMessage(page, '.invalid-feedback, .alert-danger, .alert', data.expectedErrorText);
         }
     });
 }
 
-// 3) Registration form validates password matching
-for (const data of registrationFormValidationData) {
-    test(data.description, async ({ page }) => {
-        await page.goto(data.url);
-        
-        const username = generateUniqueUsername(data.usernamePrefix);
-        await fillFormFields(page, [
-            { name: 'username', value: username },
-            { name: 'displayname', value: username },
-            { name: 'email', value: `${username}@test.com` },
-            { name: 'password', value: data.password },
-            { name: 'password_repeat', value: data.passwordRepeat },
-        ]);
-        
-        await submitForm(page, data.submitButton);
-        await verifyErrorMessage(page, '.invalid-feedback, .alert-danger, .alert', data.expectedErrorText);
-    });
-}
-
-// 4) Shows error for invalid tokens
+// 3) Shows error for invalid tokens
 for (const data of invalidTokenData) {
     test(data.description, async ({ page }) => {
         await page.goto(data.url);
@@ -94,15 +88,17 @@ for (const data of invalidTokenData) {
     });
 }
 
-// 5) Redirects to login when accessing protected route without auth
-for (const data of unauthorizedAccessData) {
+// 4) Route access control tests (authorized and unauthorized)
+for (const data of routeAccessData) {
     test(data.description, async ({ page }) => {
-        await page.goto(data.url);
-        await verifyUrlMatches(page, data.expectedRedirectUrl);
+        if (!data.isAuthenticated) {
+            await page.goto(data.url);
+            await verifyUrlMatches(page, data.expectedRedirectUrl);
+        }
     });
 }
 
-// 6) Handles network errors gracefully
+// 5) Handles network errors gracefully
 for (const data of networkErrorData) {
     test(data.description, async ({ page }) => {
         await loginUser(page, testCredentials.username, testCredentials.password);
@@ -126,7 +122,7 @@ for (const data of networkErrorData) {
     });
 }
 
-// 7) Handles server errors during login
+// 6) Handles server errors during login
 for (const data of serverErrorData) {
     test(data.description, async ({ page }) => {
         await page.goto(data.url);
@@ -141,14 +137,14 @@ for (const data of serverErrorData) {
     });
 }
 
-// 8) Page remains functional after navigation
+// 7) Page remains functional after navigation
 for (const data of pageFunctionalityData) {
     test(data.description, async ({ page }) => {
         await navigateToMultiplePages(page, data.pages);
     });
 }
 
-// 9) No critical console errors on main pages
+// 8) No critical console errors on main pages
 for (const data of consoleErrorData) {
     test(data.description, async ({ page }) => {
         const consoleErrors = await monitorConsoleErrors(page, data.filterErrors);
@@ -163,7 +159,7 @@ for (const data of consoleErrorData) {
     });
 }
 
-// 10) Survey form shows validation errors for empty required fields
+// 9) Survey form shows validation errors for empty required fields
 for (const data of entityFormValidationData) {
     test(data.description, async ({ page }) => {
         await loginUser(page, testCredentials.username, testCredentials.password);
@@ -178,7 +174,7 @@ for (const data of entityFormValidationData) {
     });
 }
 
-// 11) Shows error for accessing non-existent survey
+// 10) Shows error for accessing non-existent survey
 for (const data of nonExistentResourceData) {
     test(data.description, async ({ page }) => {
         await loginUser(page, testCredentials.username, testCredentials.password);
@@ -187,7 +183,7 @@ for (const data of nonExistentResourceData) {
     });
 }
 
-// 12) All protected routes redirect unauthenticated users
+// 11) All protected routes redirect unauthenticated users
 for (const data of protectedRoutesData) {
     test(data.description, async ({ page }) => {
         await verifyProtectedRoutesRedirect(page, data.routes, data.expectedRedirectUrl);

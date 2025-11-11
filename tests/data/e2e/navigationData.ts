@@ -17,24 +17,32 @@ export const homePageData = [
 ];
 
 /**
- * Test cases for navigation bar items (authenticated)
+ * Test cases for navigation bar items (authenticated and unauthenticated states)
  */
-export const navigationBarItemsData = [
+export const navigationBarData = [
     {
-        description: 'navigation bar shows create survey link',
+        description: 'navigation bar shows create survey link when authenticated',
+        isAuthenticated: true,
         linkName: /create survey/i,
+        shouldBeVisible: true,
     },
     {
-        description: 'navigation bar shows create packing link',
+        description: 'navigation bar shows create packing link when authenticated',
+        isAuthenticated: true,
         linkName: /create packing/i,
+        shouldBeVisible: true,
     },
     {
-        description: 'navigation bar shows create activity link',
+        description: 'navigation bar shows create activity link when authenticated',
+        isAuthenticated: true,
         linkName: /create activity/i,
+        shouldBeVisible: true,
     },
     {
-        description: 'navigation bar shows create drivers link',
+        description: 'navigation bar shows create drivers link when authenticated',
+        isAuthenticated: true,
         linkName: /create drivers/i,
+        shouldBeVisible: true,
     },
 ];
 

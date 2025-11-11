@@ -70,26 +70,35 @@ export const logoutData = [
 ];
 
 /**
- * Test cases for user registration
+ * Test cases for user registration (success and validation errors)
  */
-export const registrationSuccessData = [
+export const registrationData = [
     {
         description: 'registers a user with valid data',
         generateUsername: true,
         usernamePrefix: 'e2e_reg',
         password: 'RegTest!123',
         useEmailFromUsername: true,
+        shouldSucceed: true,
         expectedSuccessMessage: 'Account successfully registered',
     },
-];
-
-/**
- * Test cases for account activation
- */
-export const activationSuccessData = [
     {
-        description: 'activates account with valid token',
-        expectedSuccessMessage: 'Your account has been activated',
+        description: 'rejects duplicate username during registration',
+        usernamePrefix: 'e2e_dup',
+        password: 'DupOk!123',
+        shouldSucceed: false,
+        errorType: 'duplicate',
+        expectedUrl: /\/users\/register/,
+        expectErrorAlert: true,
+    },
+    {
+        description: 'rejects weak password on registration',
+        usernamePrefix: 'e2e_weak',
+        password: '12345',
+        shouldSucceed: false,
+        errorType: 'weakPassword',
+        expectedUrl: /\/users\/register/,
+        expectValidationMessage: true,
     },
 ];
 
@@ -122,91 +131,64 @@ export const passwordResetFlowData = [
 ];
 
 /**
- * Test cases for OIDC button visibility
+ * Test cases for OIDC button visibility (enabled and disabled states)
  */
-export const oidcButtonVisibilityData = [
+export const oidcButtonData = [
     {
         description: 'hides OIDC login button when OIDC is disabled',
         buttonName: /login.*openid/i,
+        oidcEnabled: false,
         shouldBeVisible: false,
     },
 ];
 
 /**
- * Test cases for duplicate username validation
+ * Test cases for reset tokens (valid and expired)
  */
-export const duplicateUsernameData = [
-    {
-        description: 'rejects duplicate username during registration',
-        usernamePrefix: 'e2e_dup',
-        password: 'DupOk!123',
-        expectedUrl: /\/users\/register/,
-        expectErrorAlert: true,
-    },
-];
-
-/**
- * Test cases for weak password validation
- */
-export const weakPasswordData = [
-    {
-        description: 'rejects weak password on registration',
-        usernamePrefix: 'e2e_weak',
-        weakPassword: '12345',
-        expectedUrl: /\/users\/register/,
-        expectValidationMessage: true,
-    },
-];
-
-/**
- * Test cases for invalid activation tokens
- */
-export const invalidActivationTokenData = [
-    {
-        description: 'invalid activation token shows an error',
-        token: 'THIS-TOKEN-DOES-NOT-EXIST',
-        expectErrorAlert: true,
-    },
-];
-
-/**
- * Test cases for activation token reuse
- */
-export const activationTokenReuseData = [
-    {
-        description: 'activation token cannot be reused',
-        usernamePrefix: 'e2e_react',
-        password: 'ActOnce!1',
-        expectFirstActivationSuccess: true,
-        expectSecondActivationError: true,
-    },
-];
-
-/**
- * Test cases for expired reset tokens
- */
-export const expiredResetTokenData = [
+export const resetTokenData = [
     {
         description: 'expired reset token is rejected (if supported by schema)',
         usernamePrefix: 'e2e_expire',
         password: 'ExpireOk!123',
+        isExpired: true,
         expectErrorAlert: true,
         skipIfNoExpiryColumn: true,
     },
 ];
 
 /**
- * Test cases for reset token reuse
+ * Test cases for activation tokens (valid and invalid)
  */
-export const resetTokenReuseData = [
+export const activationTokenData = [
+    {
+        description: 'invalid activation token shows an error',
+        token: 'THIS-TOKEN-DOES-NOT-EXIST',
+        isValid: false,
+        expectErrorAlert: true,
+    },
+];
+
+/**
+ * Test cases for token reuse (activation and reset tokens)
+ */
+export const tokenReuseData = [
+    {
+        description: 'activation token cannot be reused',
+        tokenType: 'activation',
+        usernamePrefix: 'e2e_react',
+        password: 'ActOnce!1',
+        expectFirstUseSuccess: true,
+        expectSecondUseError: true,
+    },
     {
         description: 'reset token cannot be reused',
+        tokenType: 'reset',
         usernamePrefix: 'e2e_rereset',
         oldPassword: 'OldP@ss!11',
         newPassword: 'BrandNew!22',
         secondPassword: 'Another!33',
-        expectFirstResetSuccess: true,
-        expectSecondResetFailure: true,
+        expectFirstUseSuccess: true,
+        expectSecondUseError: true,
     },
 ];
 

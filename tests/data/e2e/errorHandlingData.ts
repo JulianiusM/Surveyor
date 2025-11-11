@@ -15,24 +15,20 @@ export const notFoundErrorData = [
 ];
 
 /**
- * Test cases for login form validation
+ * Test cases for form validation (login and registration)
  */
-export const loginFormValidationData = [
+export const formValidationData = [
     {
         description: 'login form shows validation errors for empty fields',
+        formType: 'login',
         url: '/users/login',
         submitButton: /login/i,
-        usernameField: 'username',
+        fieldToCheck: 'username',
         expectedRequiredAttribute: true,
     },
-];
-
-/**
- * Test cases for registration form validation
- */
-export const registrationFormValidationData = [
     {
         description: 'registration form validates password matching',
+        formType: 'registration',
         url: '/users/register',
         usernamePrefix: 'testuser',
         password: 'Password123!',
@@ -59,11 +55,12 @@ export const invalidTokenData = [
 ];
 
 /**
- * Test cases for unauthorized access
+ * Test cases for route access control (authorized and unauthorized)
  */
-export const unauthorizedAccessData = [
+export const routeAccessData = [
     {
         description: 'redirects to login when accessing protected route without auth',
+        isAuthenticated: false,
         url: '/survey/create',
         expectedRedirectUrl: /\/users\/login/,
     },
