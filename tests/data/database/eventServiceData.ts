@@ -60,8 +60,20 @@ export const eventCrudData = [
 export const eventRegistrationData = [
     {
         description: 'registers user & guest; updates registration; handles dietary choices; lists participants; deletes registration',
-        ownerId: 1,
+        principals: {
+            user: {
+                id: 2,
+                username: 'u2',
+                name: 'User Two',
+                email: 'u2@example.com',
+            },
+            guest: {
+                id: 11,
+                username: 'guestOne',
+            },
+        },
         eventData: {
+            ownerId: 1,
             title: 'Meetup',
             description: null,
             startDate: '2025-09-10',
@@ -72,99 +84,122 @@ export const eventRegistrationData = [
             maxParticipants: 50,
             timezone: 'Europe/Berlin',
         },
-        testUser: {
-            id: 2,
-            username: 'u2',
-            name: 'User Two',
-            email: 'u2@example.com',
-        },
-        testGuest: {
-            id: 11,
-            username: 'guestOne',
-        },
         userRegistration: {
             userId: 2,
             arrivalDate: '2025-09-10',
             departureDate: '2025-09-12',
-            initialDietaryChoices: ['VEGAN', 'VEGAN', 'MEAT'],
-            dietaryRemarks: 'no peanuts',
+            initialChoices: ['VEGAN', 'VEGAN', 'MEAT'],
+            note: 'no peanuts',
+            updatedArrivalDate: '2025-09-11',
+            updatedDepartureDate: '2025-09-12',
+            updatedChoices: ['VEGETARIAN'],
+            updatedNote: 'loves veggies',
         },
-        expectedInitialDietaryChoices: ['MEAT', 'VEGAN'],
-        userRegistrationUpdate: {
-            arrivalDate: '2025-09-11',
-            departureDate: '2025-09-12',
-            updatedDietaryChoices: ['VEGETARIAN'],
-            dietaryRemarks: 'loves veggies',
-        },
-        expectedUpdatedDietaryChoice: 'VEGETARIAN',
         guestRegistration: {
             guestId: 11,
             arrivalDate: '2025-09-10',
             departureDate: '2025-09-12',
             dietaryChoices: ['HALAL'],
-            dietaryRemarks: null,
+            note: null,
         },
-        expectedParticipantNames: ['User Two', 'guestOne'],
-        expectedRegsBeforeDelete: 2,
-        expectedRegsAfterDelete: 1,
+        clearDietary: {
+            choices: [],
+            note: null,
+        },
+        expected: {
+            initialDietaryCount: 2,
+            initialChoices: ['MEAT', 'VEGAN'],
+            updatedArrivalDate: '2025-09-11',
+            updatedDietaryCount: 1,
+            updatedChoice: 'VEGETARIAN',
+            totalRegistrations: 2,
+            participantNames: ['User Two', 'guestOne'],
+            userDietaryCount: 1,
+            guestDietaryCount: 1,
+            afterDeleteCount: 1,
+            clearedDietaryCount: 0,
+        },
     },
 ];
 
 export const registeredEventsData = [
     {
         description: 'getRegisteredEventsFor returns events for user/guest sorted by startDate DESC',
-        ownerId: 1,
-        testUser: {
-            id: 2,
-            username: 'u2',
-            name: 'User Two',
-            email: 'u2@example.com',
-        },
-        testGuest: {
-            id: 11,
-            username: 'guestOne',
-        },
-        events: [
-            {
-                title: 'E1',
-                description: null,
-                startDate: '2025-12-01',
-                endDate: '2025-12-03',
-                location: null,
-                bindingDeadline: null,
-                requireDietaryInfo: false,
-                maxParticipants: null,
-                timezone: null,
+        principals: {
+            user: {
+                id: 2,
+                username: 'u2',
+                name: 'User Two',
+                email: 'u2@example.com',
             },
-            {
-                title: 'E2',
-                description: null,
-                startDate: '2025-11-01',
-                endDate: '2025-11-02',
-                location: null,
-                bindingDeadline: null,
-                requireDietaryInfo: false,
-                maxParticipants: null,
-                timezone: null,
+            guest: {
+                id: 11,
+                username: 'guestOne',
             },
-        ],
-        userRegistrations: [
-            {eventIndex: 0, arrivalDate: '2025-12-01', departureDate: '2025-12-03'},
-            {eventIndex: 1, arrivalDate: '2025-11-01', departureDate: '2025-11-02'},
-        ],
-        guestRegistrations: [
-            {eventIndex: 1, arrivalDate: '2025-11-01', departureDate: '2025-11-02'},
-        ],
-        expectedUserEventOrder: [0, 1], // DESC by startDate
-        expectedGuestEventOrder: [1],
+        },
+        event1: {
+            ownerId: 1,
+            title: 'E1',
+            description: null,
+            startDate: '2025-12-01',
+            endDate: '2025-12-03',
+            location: null,
+            bindingDeadline: null,
+            requireDietaryInfo: false,
+            maxParticipants: null,
+            timezone: null,
+        },
+        event2: {
+            ownerId: 1,
+            title: 'E2',
+            description: null,
+            startDate: '2025-11-01',
+            endDate: '2025-11-02',
+            location: null,
+            bindingDeadline: null,
+            requireDietaryInfo: false,
+            maxParticipants: null,
+            timezone: null,
+        },
+        registrations: {
+            user: {
+                event1: {
+                    userId: 2,
+                    arrivalDate: '2025-12-01',
+                    departureDate: '2025-12-03',
+                },
+                event2: {
+                    userId: 2,
+                    arrivalDate: '2025-11-01',
+                    departureDate: '2025-11-02',
+                },
+            },
+            guest: {
+                event2: {
+                    guestId: 11,
+                    arrivalDate: '2025-11-01',
+                    departureDate: '2025-11-02',
+                },
+            },
+        },
+        queries: {
+            user: {userId: 2},
+            guest: {guestId: 11},
+        },
+        expected: {
+            userEventIds: (e1: string, e2: string) => [e1, e2],
+            guestEventIds: (e2: string) => [e2],
+            noQueryResult: [],
+        },
     },
 ];
 
 export const eventFullData = [
     {
-        description: 'isEventFull respects unlimited/null max, counts registrations, and throws for missing event',
-        ownerId: 1,
-        unlimitedEvent: {
+        description: 'isEventFull - unlimited event',
+        type: 'unlimited',
+        event: {
+            ownerId: 1,
             title: 'Unlimited',
             description: null,
             startDate: '2025-10-01',
@@ -175,7 +210,15 @@ export const eventFullData = [
             maxParticipants: null,
             timezone: null,
         },
-        limitedEvent: {
+        expected: {
+            isFull: false,
+        },
+    },
+    {
+        description: 'isEventFull - limited event with capacity',
+        type: 'limited',
+        event: {
+            ownerId: 1,
             title: 'Limited',
             description: null,
             startDate: '2025-10-10',
@@ -186,36 +229,49 @@ export const eventFullData = [
             maxParticipants: 1,
             timezone: null,
         },
-        testUser: {
+        user: {
             id: 3,
             username: 'u3',
             name: 'User Three',
             email: 'u3@example.com',
         },
         registration: {
+            userId: 3,
             arrivalDate: '2025-10-10',
             departureDate: '2025-10-12',
         },
-        nonExistentEventId: 'no-such-event',
-        expectedError: 'Event not found',
+        expected: {
+            initialFull: false,
+            afterRegistration: true,
+        },
+    },
+    {
+        description: 'isEventFull - missing event throws',
+        type: 'missing',
+        eventId: 'no-such-event',
+        expected: {
+            error: 'Event not found',
+        },
     },
 ];
 
 export const eventRegistrationCheckData = [
     {
         description: 'isRegisteredForEvent returns correct booleans',
-        ownerId: 1,
-        testUser: {
-            id: 2,
-            username: 'u2',
-            name: 'User Two',
-            email: 'u2@example.com',
+        principals: {
+            user: {
+                id: 2,
+                username: 'u2',
+                name: 'User Two',
+                email: 'u2@example.com',
+            },
+            guest: {
+                id: 11,
+                username: 'guestOne',
+            },
         },
-        testGuest: {
-            id: 11,
-            username: 'guestOne',
-        },
-        eventData: {
+        event: {
+            ownerId: 1,
             title: 'Check',
             description: null,
             startDate: '2025-09-20',
@@ -226,13 +282,24 @@ export const eventRegistrationCheckData = [
             maxParticipants: null,
             timezone: null,
         },
-        userRegistration: {
-            arrivalDate: '2025-09-20',
-            departureDate: '2025-09-21',
+        registrations: {
+            user: {
+                userId: 2,
+                arrivalDate: '2025-09-20',
+                departureDate: '2025-09-21',
+            },
+            guest: {
+                guestId: 11,
+                arrivalDate: '2025-09-20',
+                departureDate: '2025-09-21',
+            },
         },
-        guestRegistration: {
-            arrivalDate: '2025-09-20',
-            departureDate: '2025-09-21',
+        expected: {
+            emptyQuery: false,
+            userBeforeRegistration: false,
+            guestBeforeRegistration: false,
+            userAfterRegistration: true,
+            guestAfterRegistration: true,
         },
     },
 ];

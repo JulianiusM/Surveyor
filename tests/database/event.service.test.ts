@@ -142,139 +142,211 @@ describe('eventService (mysql)', () => {
         expect(gone).toBeNull();
     });
 
-    it('registers user & guest; updates registration; handles dietary choices; lists participants; deletes registration', async () => {
+    test.each(eventRegistrationData)('$description', async (testCase) => {
         // Principals
-        const user2 = AppDataSource.getRepository(User).create({
-            id: 2, username: 'u2', name: 'User Two', email: 'u2@example.com',
-        });
+        const user2 = AppDataSource.getRepository(User).create(testCase.principals.user);
         await AppDataSource.getRepository(User).save(user2);
-        const guest1 = AppDataSource.getRepository(Guest).create({
-            id: 11, username: 'guestOne',
-        });
+        const guest1 = AppDataSource.getRepository(Guest).create(testCase.principals.guest);
         await AppDataSource.getRepository(Guest).save(guest1);
 
         const eid = await createEventTx(
-            1, 'Meetup', null, '2025-09-10', '2025-09-12', 'Hall A',
-            null, true, 50, 'Europe/Berlin'
+            testCase.eventData.ownerId,
+            testCase.eventData.title,
+            testCase.eventData.description,
+            testCase.eventData.startDate,
+            testCase.eventData.endDate,
+            testCase.eventData.location,
+            testCase.eventData.bindingDeadline,
+            testCase.eventData.requireDietaryInfo,
+            testCase.eventData.maxParticipants,
+            testCase.eventData.timezone
         );
 
         // Register user with duplicate dietary entries -> unique persisted
-        const initialChoices = ['VEGAN', 'VEGAN', 'MEAT'] as DIETARY[];
-        const uid = await registerUser(eid, 2, '2025-09-10', '2025-09-12', initialChoices, 'no peanuts');
+        const uid = await registerUser(
+            eid,
+            testCase.userRegistration.userId,
+            testCase.userRegistration.arrivalDate,
+            testCase.userRegistration.departureDate,
+            testCase.userRegistration.initialChoices,
+            testCase.userRegistration.note
+        );
         expect(typeof uid).toBe('number');
 
-        let userReg = await getRegistrationFor({userId: 2}, eid);
+        let userReg = await getRegistrationFor({userId: testCase.userRegistration.userId}, eid);
         expect(userReg).toBeTruthy();
-        expect(userReg!.dietaryChoices!.length).toBe(2);
+        expect(userReg!.dietaryChoices!.length).toBe(testCase.expected.initialDietaryCount);
         const userChoices = userReg!.dietaryChoices!.map(d => d.choice).sort();
-        expect(userChoices).toEqual(['MEAT', 'VEGAN']);
+        expect(userChoices).toEqual(testCase.expected.initialChoices);
 
         // Update user registration dates and replace dietary choices
-        const updatedChoices = ['VEGETARIAN'] as DIETARY[];
-        const uid2 = await registerUser(eid, 2, '2025-09-11', '2025-09-12', updatedChoices, 'loves veggies');
+        const uid2 = await registerUser(
+            eid,
+            testCase.userRegistration.userId,
+            testCase.userRegistration.updatedArrivalDate,
+            testCase.userRegistration.updatedDepartureDate,
+            testCase.userRegistration.updatedChoices,
+            testCase.userRegistration.updatedNote
+        );
         expect(uid2).toBe(uid); // same registration id updated
 
-        userReg = await getRegistrationFor({userId: 2}, eid);
-        expect(userReg!.arrivalDate).toBe('2025-09-11');
-        expect(userReg!.dietaryChoices!.length).toBe(1);
-        expect(userReg!.dietaryChoices![0].choice).toBe('VEGETARIAN');
+        userReg = await getRegistrationFor({userId: testCase.userRegistration.userId}, eid);
+        expect(userReg!.arrivalDate).toBe(testCase.expected.updatedArrivalDate);
+        expect(userReg!.dietaryChoices!.length).toBe(testCase.expected.updatedDietaryCount);
+        expect(userReg!.dietaryChoices![0].choice).toBe(testCase.expected.updatedChoice);
 
         // Register guest
-        const gid = await registerGuest(eid, 11, '2025-09-10', '2025-09-12', ['HALAL'] as DIETARY[], null);
+        const gid = await registerGuest(
+            eid,
+            testCase.guestRegistration.guestId,
+            testCase.guestRegistration.arrivalDate,
+            testCase.guestRegistration.departureDate,
+            testCase.guestRegistration.dietaryChoices,
+            testCase.guestRegistration.note
+        );
         expect(typeof gid).toBe('number');
 
         // All regs for event
         const regs = await getRegistrationsForEvent(eid);
-        expect(regs).toHaveLength(2);
+        expect(regs).toHaveLength(testCase.expected.totalRegistrations);
 
         // Participants projection with names & dietary
         const participants = await getEventParticipants(eid);
         const names = participants.map(p => p.name).sort();
-        expect(names).toEqual(['User Two', 'guestOne']);
-        const pUser = participants.find(p => p.userId === 2)!;
-        expect((pUser.dietaryChoices ?? []).length).toBe(1);
-        const pGuest = participants.find(p => p.guestId === 11)!;
-        expect((pGuest.dietaryChoices ?? []).length).toBe(1);
+        expect(names).toEqual(testCase.expected.participantNames);
+        const pUser = participants.find(p => p.userId === testCase.userRegistration.userId)!;
+        expect((pUser.dietaryChoices ?? []).length).toBe(testCase.expected.userDietaryCount);
+        const pGuest = participants.find(p => p.guestId === testCase.guestRegistration.guestId)!;
+        expect((pGuest.dietaryChoices ?? []).length).toBe(testCase.expected.guestDietaryCount);
 
         // Delete guest registration
-        await deleteRegistrationFor(eid, {guestId: 11});
+        await deleteRegistrationFor(eid, {guestId: testCase.guestRegistration.guestId});
         const regsAfter = await getRegistrationsForEvent(eid);
-        expect(regsAfter).toHaveLength(1);
+        expect(regsAfter).toHaveLength(testCase.expected.afterDeleteCount);
 
         // Replace dietary choices directly clears when empty
-        await replaceDietaryChoices(uid!, [] as unknown as DIETARY[], null);
-        const cleared = await getRegistrationFor({userId: 2}, eid);
-        expect(cleared!.dietaryChoices ?? []).toHaveLength(0);
+        await replaceDietaryChoices(uid!, testCase.clearDietary.choices, testCase.clearDietary.note);
+        const cleared = await getRegistrationFor({userId: testCase.userRegistration.userId}, eid);
+        expect(cleared!.dietaryChoices ?? []).toHaveLength(testCase.expected.clearedDietaryCount);
     });
 
-    it('getRegisteredEventsFor returns events for user/guest sorted by startDate DESC', async () => {
+    test.each(registeredEventsData)('$description', async (testCase) => {
         // Principals
-        const user2 = AppDataSource.getRepository(User).create({
-            id: 2, username: 'u2', name: 'User Two', email: 'u2@example.com',
-        });
+        const user2 = AppDataSource.getRepository(User).create(testCase.principals.user);
         await AppDataSource.getRepository(User).save(user2);
-        const guest1 = AppDataSource.getRepository(Guest).create({id: 11, username: 'guestOne'});
+        const guest1 = AppDataSource.getRepository(Guest).create(testCase.principals.guest);
         await AppDataSource.getRepository(Guest).save(guest1);
 
         // Events with differing start dates
-        const e1 = await createEventTx(1, 'E1', null, '2025-12-01', '2025-12-03', null, null, false, null, null);
-        const e2 = await createEventTx(1, 'E2', null, '2025-11-01', '2025-11-02', null, null, false, null, null);
+        const e1 = await createEventTx(
+            testCase.event1.ownerId,
+            testCase.event1.title,
+            testCase.event1.description,
+            testCase.event1.startDate,
+            testCase.event1.endDate,
+            testCase.event1.location,
+            testCase.event1.bindingDeadline,
+            testCase.event1.requireDietaryInfo,
+            testCase.event1.maxParticipants,
+            testCase.event1.timezone
+        );
+        const e2 = await createEventTx(
+            testCase.event2.ownerId,
+            testCase.event2.title,
+            testCase.event2.description,
+            testCase.event2.startDate,
+            testCase.event2.endDate,
+            testCase.event2.location,
+            testCase.event2.bindingDeadline,
+            testCase.event2.requireDietaryInfo,
+            testCase.event2.maxParticipants,
+            testCase.event2.timezone
+        );
 
-        await registerUser(e1, 2, '2025-12-01', '2025-12-03', null, null);
-        await registerUser(e2, 2, '2025-11-01', '2025-11-02', null, null);
-        await registerGuest(e2, 11, '2025-11-01', '2025-11-02', null, null);
+        await registerUser(e1, testCase.registrations.user.event1.userId, testCase.registrations.user.event1.arrivalDate, testCase.registrations.user.event1.departureDate, null, null);
+        await registerUser(e2, testCase.registrations.user.event2.userId, testCase.registrations.user.event2.arrivalDate, testCase.registrations.user.event2.departureDate, null, null);
+        await registerGuest(e2, testCase.registrations.guest.event2.guestId, testCase.registrations.guest.event2.arrivalDate, testCase.registrations.guest.event2.departureDate, null, null);
 
-        const userEvents = await getRegisteredEventsFor({userId: 2});
-        expect(userEvents.map(e => e.id)).toEqual([e1, e2]); // DESC by startDate
+        const userEvents = await getRegisteredEventsFor({userId: testCase.queries.user.userId});
+        expect(userEvents.map(e => e.id)).toEqual(testCase.expected.userEventIds(e1, e2)); // DESC by startDate
 
-        const guestEvents = await getRegisteredEventsFor({guestId: 11});
-        expect(guestEvents.map(e => e.id)).toEqual([e2]);
+        const guestEvents = await getRegisteredEventsFor({guestId: testCase.queries.guest.guestId});
+        expect(guestEvents.map(e => e.id)).toEqual(testCase.expected.guestEventIds(e2));
 
         const none = await getRegisteredEventsFor({});
-        expect(none).toEqual([]);
+        expect(none).toEqual(testCase.expected.noQueryResult);
     });
 
-    it('isEventFull respects unlimited/null max, counts registrations, and throws for missing event', async () => {
-        // Unlimited
-        const eUnlimited = await createEventTx(1, 'Unlimited', null, '2025-10-01', '2025-10-02', null, null, true, null, null);
-        expect(await isEventFull(eUnlimited)).toBe(false);
-
-        // Limited = 1
-        const eLimited = await createEventTx(1, 'Limited', null, '2025-10-10', '2025-10-12', null, null, true, 1, null);
-        expect(await isEventFull(eLimited)).toBe(false);
-        await AppDataSource.getRepository(User).save(
-            AppDataSource.getRepository(User).create({
-                id: 3,
-                username: 'u3',
-                name: 'User Three',
-                email: 'u3@example.com'
-            })
-        );
-        await registerUser(eLimited, 3, '2025-10-10', '2025-10-12', null, null);
-        expect(await isEventFull(eLimited)).toBe(true);
-
-        // Missing event -> throws
-        await expect(isEventFull('no-such-event')).rejects.toThrow('Event not found');
+    test.each(eventFullData)('$description', async (testCase) => {
+        if (testCase.type === 'unlimited') {
+            // Unlimited
+            const eUnlimited = await createEventTx(
+                testCase.event.ownerId,
+                testCase.event.title,
+                testCase.event.description,
+                testCase.event.startDate,
+                testCase.event.endDate,
+                testCase.event.location,
+                testCase.event.bindingDeadline,
+                testCase.event.requireDietaryInfo,
+                testCase.event.maxParticipants,
+                testCase.event.timezone
+            );
+            expect(await isEventFull(eUnlimited)).toBe(testCase.expected.isFull);
+        } else if (testCase.type === 'limited') {
+            // Limited = 1
+            const eLimited = await createEventTx(
+                testCase.event.ownerId,
+                testCase.event.title,
+                testCase.event.description,
+                testCase.event.startDate,
+                testCase.event.endDate,
+                testCase.event.location,
+                testCase.event.bindingDeadline,
+                testCase.event.requireDietaryInfo,
+                testCase.event.maxParticipants,
+                testCase.event.timezone
+            );
+            expect(await isEventFull(eLimited)).toBe(testCase.expected.initialFull);
+            
+            await AppDataSource.getRepository(User).save(
+                AppDataSource.getRepository(User).create(testCase.user)
+            );
+            await registerUser(eLimited, testCase.registration.userId, testCase.registration.arrivalDate, testCase.registration.departureDate, null, null);
+            expect(await isEventFull(eLimited)).toBe(testCase.expected.afterRegistration);
+        } else if (testCase.type === 'missing') {
+            // Missing event -> throws
+            await expect(isEventFull(testCase.eventId)).rejects.toThrow(testCase.expected.error);
+        }
     });
 
-    it('isRegisteredForEvent returns correct booleans', async () => {
-        const user2 = AppDataSource.getRepository(User).create({
-            id: 2, username: 'u2', name: 'User Two', email: 'u2@example.com',
-        });
+    test.each(eventRegistrationCheckData)('$description', async (testCase) => {
+        const user2 = AppDataSource.getRepository(User).create(testCase.principals.user);
         await AppDataSource.getRepository(User).save(user2);
-        const guest1 = AppDataSource.getRepository(Guest).create({id: 11, username: 'guestOne'});
+        const guest1 = AppDataSource.getRepository(Guest).create(testCase.principals.guest);
         await AppDataSource.getRepository(Guest).save(guest1);
 
-        const eid = await createEventTx(1, 'Check', null, '2025-09-20', '2025-09-21', null, null, false, null, null);
+        const eid = await createEventTx(
+            testCase.event.ownerId,
+            testCase.event.title,
+            testCase.event.description,
+            testCase.event.startDate,
+            testCase.event.endDate,
+            testCase.event.location,
+            testCase.event.bindingDeadline,
+            testCase.event.requireDietaryInfo,
+            testCase.event.maxParticipants,
+            testCase.event.timezone
+        );
 
-        expect(await isRegisteredForEvent({}, eid)).toBe(false);
-        expect(await isRegisteredForEvent({userId: 2}, eid)).toBe(false);
-        expect(await isRegisteredForEvent({guestId: 11}, eid)).toBe(false);
+        expect(await isRegisteredForEvent({}, eid)).toBe(testCase.expected.emptyQuery);
+        expect(await isRegisteredForEvent({userId: testCase.principals.user.id}, eid)).toBe(testCase.expected.userBeforeRegistration);
+        expect(await isRegisteredForEvent({guestId: testCase.principals.guest.id}, eid)).toBe(testCase.expected.guestBeforeRegistration);
 
-        await registerUser(eid, 2, '2025-09-20', '2025-09-21', null, null);
-        expect(await isRegisteredForEvent({userId: 2}, eid)).toBe(true);
+        await registerUser(eid, testCase.registrations.user.userId, testCase.registrations.user.arrivalDate, testCase.registrations.user.departureDate, null, null);
+        expect(await isRegisteredForEvent({userId: testCase.principals.user.id}, eid)).toBe(testCase.expected.userAfterRegistration);
 
-        await registerGuest(eid, 11, '2025-09-20', '2025-09-21', null, null);
-        expect(await isRegisteredForEvent({guestId: 11}, eid)).toBe(true);
+        await registerGuest(eid, testCase.registrations.guest.guestId, testCase.registrations.guest.arrivalDate, testCase.registrations.guest.departureDate, null, null);
+        expect(await isRegisteredForEvent({guestId: testCase.principals.guest.id}, eid)).toBe(testCase.expected.guestAfterRegistration);
     });
 });
