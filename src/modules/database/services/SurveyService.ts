@@ -17,7 +17,7 @@ import type {
 // Surveys
 
 export async function getSurveyById(id: string) {
-    return await AppDataSource.getRepository(Survey).findOne({where: {id}});
+    return await AppDataSource.getRepository(Survey).findOne({where: {id}, relations: ["event"]});
 }
 
 export async function getCombinationsBySurveyId(surveyId: string) {

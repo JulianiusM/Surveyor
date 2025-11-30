@@ -12,7 +12,7 @@ import {
 import {EventRegistration} from "./EventRegistration";
 import type {DIETARY} from "../../../../types/EventTypes";
 
-const ALLOWED_DIETARY: DIETARY[] = ["MEAT", "FISH", "VEGETARIAN", "VEGAN", "HALAL", "KOSHER", "ALLERGIES"];
+export const ALLOWED_DIETARY: DIETARY[] = ["MEAT", "FISH", "VEGETARIAN", "VEGAN", "HALAL", "KOSHER", "ALLERGIES"];
 
 @Entity("event_registration_dietary", {schema: "surveyor"})
 @Index("uk_registration_choice", ["registration", "choice"], {unique: true})

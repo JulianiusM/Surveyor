@@ -18,7 +18,7 @@ block content
         const location = ev.location || '';
         const deadline = ev.bindingDeadline;
         const reg = data.registration;
-        const full = data.isFull || true;
+        const full = data.isFull ?? true;
         const participants = data.participants || [];
 
         const isOwner = !!(user && ownerId && user.id === ownerId);
@@ -53,6 +53,14 @@ block content
                     if ev.description
                         label.form-label Description
                         p= ev.description
+
+            if isOwner
+                .row
+                    .col-12.d-flex.justify-content-end.gap-2
+                        a.btn.btn-primary(href=`/event/${ev.id}/admin`)
+                            i.bi.bi-check2-circle.me-1
+                            | Event administration dashboard
+
 
     // ─── Scenario 1 & 2: Registration / Update / Cancel ──────
     if isAuthed

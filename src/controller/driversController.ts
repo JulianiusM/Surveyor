@@ -27,7 +27,8 @@ function preprocessCreate(body: any): Partial<DriversList> {
     const schema = Joi.object({
         title: Joi.string().required(),
         allowGuestAdd: Joi.boolean(),
-        guestManage: Joi.boolean()
+        guestManage: Joi.boolean(),
+        event_id: Joi.string().uuid().optional(),
     });
 
     const {error, value} = schema.validate(
@@ -36,7 +37,8 @@ function preprocessCreate(body: any): Partial<DriversList> {
             description: body.description,
             allowGuestAdd: Boolean(body.allowGuestAdd),
             guestManage: Boolean(body.guestManage),
-            items
+            items,
+            event_id: body.event_id
         },
         {abortEarly: false, allowUnknown: true}
     );
@@ -49,7 +51,8 @@ function preprocessCreate(body: any): Partial<DriversList> {
         title: value.title,
         description: value.description || null,
         allowGuestAdd: value.allowGuestAdd,
-        guestManage: value.guestManage
+        guestManage: value.guestManage,
+        eventId: value.event_id,
     };
 }
 
@@ -63,7 +66,8 @@ async function createEntity(
         listData.title!,
         listData.description!,
         listData.allowGuestAdd!,
-        listData.guestManage!
+        listData.guestManage!,
+        listData.eventId,
     );
 }
 

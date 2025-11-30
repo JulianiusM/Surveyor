@@ -2,7 +2,7 @@
 extends ../layout
 
 block meta
-    title Create Drivers List | PackMaster
+    title Create Drivers List | Surveyor
 
 block title
     h1.card-header.text-center
@@ -12,6 +12,7 @@ block title
 block content
     -
         let parsed = {}, parsedData = [];
+        let parsedEventData = {};
         if (data) {
             if (data.entity) {
                 parsed = data.entity;
@@ -23,11 +24,17 @@ block content
             } else {
                 parsedData = data.items;
             }
+            if (data.eventId) {
+                parsedEventData.id = data.eventId;
+            }
+            if (data.events) {
+                parsedEventData.events = data.events;
+            }
         }
 
         let eventIdQuery = '';
-        if (parsed.eventId) {
-            eventIdQuery = `?eventId=${parsed.eventId}`
+        if (parsedEventData.id) {
+            eventIdQuery = `?eventId=${parsedEventData.id}`
         }
 
     form#packingForm(action=`/drivers/create${eventIdQuery}` method="POST")
@@ -65,6 +72,10 @@ block content
                     | Description
                 textarea#desc.form-control.text-bg-dark(name="description")
                     | #{parsed.description || ''}
+
+        .row.mb-3
+            .col-md-12
+                +entityPicker('event_id', parsedEventData.events, {label: 'Assign to event', value: parsedEventData.id})
 
         // Buttons
         .d-flex.justify-content-between.align-items-center

@@ -21,7 +21,8 @@ block content
             'Create new survey',
             'bi-plus-circle',
             'You don’t have any surveys yet.',
-            'bi-clipboard-check'
+            'bi-clipboard-check',
+            true
         )
 
         +entityList(
@@ -34,7 +35,8 @@ block content
             'Create new packing list',
             'bi-plus-circle',
             'You don’t have any packing lists yet.',
-            'bi-bag-check'
+            'bi-bag-check',
+            true
         )
 
         +entityList(
@@ -47,7 +49,8 @@ block content
             'Create new activity plan',
             'bi-calendar-plus',
             'You don’t have any activity plans yet.',
-            'bi-calendar-check'
+            'bi-calendar-check',
+            true
         )
 
         +entityList(
@@ -60,7 +63,36 @@ block content
             'Create new drivers list',
             'bi-plus-circle',
             'You don’t have any drivers lists yet.',
-            'bi-car-front'
+            'bi-car-front',
+            true
+        )
+
+        +entityList(
+            'sec-events',
+            'Your events',
+            'bi-people',
+            data.events,
+            'event',
+            '/event/create',
+            'Create new event',
+            'bi-plus-circle',
+            'You don’t have any events yet.',
+            'bi-people',
+            true
+        )
+
+        +entityList(
+            'sec-event-regs',
+            'Your event registrations',
+            'bi-person-check',
+            data.events,
+            'event',
+            '',
+            '',
+            'bi-plus-circle',
+            'You are not registered for any event yet.',
+            'bi-person-check',
+            false
         )
 
 block scripts

@@ -61,7 +61,7 @@ export async function deletePackingList(listId: string) {
 }
 
 export async function getPackingListById(listId: string) {
-    return await AppDataSource.getRepository(PackingList).findOneBy({id: listId});
+    return await AppDataSource.getRepository(PackingList).findOne({where: {id: listId}, relations: ["event"]});
 }
 
 export async function getPackingListByUserId(userId: number) {

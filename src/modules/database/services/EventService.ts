@@ -8,7 +8,7 @@ import {PackingList} from "../entities/packing/PackingList";
 import {DriversList} from "../entities/drivers/DriversList";
 import {EventRegistrationDietary} from "../entities/event/EventRegistrationDietary";
 import type {DIETARY} from "../../../types/EventTypes";
-import {EntityManager, FindOptionsWhere, IsNull} from 'typeorm';
+import {EntityManager, FindOptionsWhere, IsNull, MoreThanOrEqual} from 'typeorm';
 import {ensureOneByObjectsAuthed, findOneByObjectsAuthed} from "../utils/relation-upsert";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -89,6 +89,17 @@ export async function updateEventMeta(eventId: string, fields: {
 
 export async function updateEventDates(eventId: string, startDate: string, endDate: string) {
     await AppDataSource.getRepository(Event).update(eventId, {startDate, endDate});
+}
+
+export async function getActiveEventsByOwnerId(ownerId: number) {
+    const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+    return await AppDataSource.getRepository(Event).find({
+        where: {
+            owner: {id: ownerId},
+            endDate: MoreThanOrEqual(today),
+        },
+        order: {startDate: 'ASC'},
+    });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -258,6 +269,8 @@ export async function isRegisteredForEvent(actor: { userId?: number; guestId?: n
     const repo = AppDataSource.getRepository(EventRegistration);
     return await repo.exists({
         where: {event: {id: eventId}, user: {id: actor.userId ?? IsNull()}, guest: {id: actor.guestId ?? IsNull()}}
+    }) || await AppDataSource.getRepository(Event).exists({
+        where: {id: eventId, owner: {id: actor.userId}}
     });
 }
 

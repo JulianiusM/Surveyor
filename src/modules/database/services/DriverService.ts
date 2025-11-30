@@ -5,6 +5,7 @@ import {DriversList} from '../entities/drivers/DriversList';
 import {DriversItem} from '../entities/drivers/DriversItem';
 import {DriversAssignment} from '../entities/drivers/DriversAssignment';
 import type {DriversItemAssignee, EnrichedDriversItem} from "../../../types/DriversTypes";
+import {DeepPartial} from "typeorm";
 
 export async function createDriversList(
     ownerId: number,
@@ -12,10 +13,20 @@ export async function createDriversList(
     desc: string,
     allowGuestAdd: boolean,
     guestManage: boolean,
+    eventId?: string,
     listId: string = generateUniqueId(),
 ): Promise<string> {
     const repo = AppDataSource.getRepository(DriversList);
-    const list = repo.create({id: listId, owner: {id: ownerId}, title, description: desc, allowGuestAdd, guestManage});
+    const creator: DeepPartial<DriversList> = {
+        id: listId,
+        owner: {id: ownerId},
+        title,
+        description: desc,
+        allowGuestAdd,
+        guestManage
+    };
+    if (eventId) creator.event = {id: eventId};
+    const list = repo.create(creator);
     await repo.save(list);
     return listId;
 }
@@ -29,7 +40,7 @@ export async function deleteDriversList(listId: string): Promise<void> {
 }
 
 export async function getDriversListById(listId: string): Promise<DriversList | null> {
-    return await AppDataSource.getRepository(DriversList).findOne({where: {id: listId}});
+    return await AppDataSource.getRepository(DriversList).findOne({where: {id: listId}, relations: ["event"]});
 }
 
 export async function getDriversListByUserId(userId: number): Promise<DriversList[]> {

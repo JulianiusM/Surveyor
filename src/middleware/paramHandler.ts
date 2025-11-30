@@ -17,6 +17,18 @@ export function queryHandler(param: string, router: Router, getById: GuestFlowDb
     ));
 }
 
+export function createPathQueryHandler(param: string, router: Router, getById: GuestFlowDb['getById'], entityName: string, error?: Error) {
+    router.use(asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+            if (!req.path.endsWith("/create") && !req.path.endsWith("/duplicate")) {
+                console.log(req.path);
+                return next();
+            }
+
+            return await handle(req.query[param], getById, entityName, req, res, next, error)
+        }
+    ));
+}
+
 export function handleParam(param: string, router: Router, getById: GuestFlowDb['getById'], entityName: string, error: Error) {
     router.param(param, asyncParamHandler(async (req: Request, res: Response, next: NextFunction, id: any) =>
         await handle(id, getById, entityName, req, res, next, error)
@@ -40,5 +52,8 @@ async function handle(
     }
     req.resource = req.resource || {};
     req.resource[entityName] = entity;
+    if (entity.event) {
+        req.resource['event'] = entity.event;
+    }
     next();
 }

@@ -9,6 +9,7 @@ import {isWithinWindow, rewriteISOToZone} from "../modules/lib/util";
 import {Event} from "../modules/database/entities/event/Event";
 import type {DIETARY} from "../types/EventTypes";
 import {Request} from "express";
+import {ALLOWED_DIETARY} from "../modules/database/entities/event/EventRegistrationDietary";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'event/event-create';
@@ -135,12 +136,17 @@ async function registerAttendance(event: Event, body: any, session: Request['ses
         userId: session.user?.id,
     }, event.id))) throw new APIError('Event is full', body, 403);
 
+    // Deny registration if past binding deadline
+    if (event.bindingDeadline && new Date(Date.parse(event.bindingDeadline)) < new Date()) {
+        throw new APIError('Registration deadline has passed', body, 403);
+    }
+
     const schema = Joi.object({
         arrivalDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
         departureDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
         dietary: Joi.alternatives().try(
-            Joi.array().items(Joi.string().valid('MEAT', 'FISH', 'VEGETARIAN', 'VEGAN', 'HALAL', 'KOSHER', 'ALLERGIES').uppercase()),
-            Joi.string().valid('MEAT', 'FISH', 'VEGETARIAN', 'VEGAN', 'HALAL', 'KOSHER', 'ALLERGIES').uppercase() // handles single value form-post
+            Joi.array().items(Joi.string().valid(ALLOWED_DIETARY).uppercase()),
+            Joi.string().valid(ALLOWED_DIETARY).uppercase() // handles single value form-post
         ).optional(),
         allergyNotes: Joi.string().max(255).allow(''),
     });
@@ -168,11 +174,11 @@ async function registerAttendance(event: Event, body: any, session: Request['ses
     return 'Registration saved';
 }
 
-async function cancelRegistration(eventId: string, session: Request['session']) {
+async function cancelRegistration(event: Event, session: Request['session']) {
     if (session.user?.id) {
-        await eventService.deleteRegistrationFor(eventId, {userId: session.user.id});
+        await eventService.deleteRegistrationFor(event.id, {userId: session.user.id});
     } else if (session.guest?.id) {
-        await eventService.deleteRegistrationFor(eventId, {guestId: session.guest.id});
+        await eventService.deleteRegistrationFor(event.id, {guestId: session.guest.id});
     } else {
         throw new APIError('Authentication required', {}, 401);
     }

@@ -88,9 +88,12 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
 
     // GET+POST /create
     router.route('/create')
-        .get(isAuthenticated, isEventPermitted(addToEvent, eventResFn), (req: Request, res: Response) => {
-            renderer.renderWithData(res, create, {eventId: req.query.eventId});
-        })
+        .get(isAuthenticated, isEventPermitted(addToEvent, eventResFn), asyncHandler(async (req: Request, res: Response) => {
+            renderer.renderWithData(res, create, {
+                eventId: req.query.eventId,
+                events: await eventService.getActiveEventsByOwnerId(req.session.user!.id)
+            });
+        }))
         .post(isAuthenticated, isEventPermitted(addToEvent, eventResFn), asyncHandler(async (req: Request, res: Response) => {
             const parsed = preprocessCreate(req.body);
             if (parsed.error) {
@@ -159,6 +162,8 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
             title: `Copy of ${resFct(req).title}`,
             entity: resFct(req),
             data: data,
+            eventId: req.query.eventId,
+            events: await eventService.getActiveEventsByOwnerId(req.session.user!.id),
             isDuplicate: true
         });
     }));
@@ -172,15 +177,28 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
 
     // SAFE-ZONE middleware before accessing /:id routes
     async function requireAccess(req: Request, res: Response, next: NextFunction) {
-        const entityId = resFct(req).id;
+        const entity = resFct(req);
+        const event = eventResFn(req);
+        if (addToEvent && event) {
+            if (await eventService.isRegisteredForEvent({
+                userId: req.session.user?.id,
+                guestId: req.session.guest?.id
+            }, event.id)) {
+                // We have a valid registration --> Don't need to check in more detail.
+                return next();
+            }
+
+            // No valid registration
+            throw new ValidationError(view, 'You must be registered for the event to access this resource', {});
+        }
         // Registered user
         if (req.session.user) return next();
         // Guest session
         if (req.session.guest) {
-            let token = await getGuestLinkToken(entityType, entityId, req.session.guest.id);
+            let token = await getGuestLinkToken(entityType, entity.id, req.session.guest.id);
             if (!token) {
-                token = await createGuestLink(entityType, entityId, req.session.guest.id);
-                const link = buildGuestLink(entityType, entityId, token);
+                token = await createGuestLink(entityType, entity.id, req.session.guest.id);
+                const link = buildGuestLink(entityType, entity.id, token);
                 req.flash('success', `Login successful. Use ${link} to edit later.`);
                 if (req.session.guest.email) {
                     await mailer.sendLinkEmail(req.session.guest.email, link);
@@ -190,7 +208,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         }
         // No session → redirect to guest registration
         req.flash('info', 'Register as a guest to participate');
-        res.redirect(`${buildRedirect(entityId)}/guest`);
+        res.redirect(`${buildRedirect(entity.id)}/guest`);
     }
 
     router.use('/:id', asyncHandler(requireAccess));
