@@ -20,7 +20,6 @@ import {
     unassignActivityAssignmentRoleFromGuest,
     unassignActivityAssignmentRoleFromUser,
     updateActivityPlanDescription,
-    updateActivityPlanFlags,
     updateActivitySlot,
 } from '../../src/modules/database/services/ActivityService';
 
@@ -87,14 +86,7 @@ describe('Plan CRUD: get/update/delete/list', () => {
             ownerId: 1,
             title: 'TitleZ',
             description: 'DescZ',
-            allowGuestAdd: 1,
-            guestManage: 0,
         }));
-
-        // update flags
-        await updateActivityPlanFlags(planId, false, true);
-        const got2 = await getActivityPlanById(planId);
-        expect(got2).toEqual(expect.objectContaining({allowGuestAdd: 0, guestManage: 1}));
 
         // update description
         await updateActivityPlanDescription(planId, 'DescZ+');

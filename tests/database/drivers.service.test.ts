@@ -98,8 +98,7 @@ describe('driversService (mysql)', () => {
             testCase.userId,
             testCase.initialData.title,
             testCase.initialData.description,
-            testCase.initialData.allowGuestAdd,
-            testCase.initialData.guestManage,
+            undefined, // eventId
             listId
         );
 
