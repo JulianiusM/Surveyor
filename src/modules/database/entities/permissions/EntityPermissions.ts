@@ -1,6 +1,6 @@
 // src/modules/database/entities/common/EntityPermissions.ts
 import {Column, Entity, Index, PrimaryGeneratedColumn} from "typeorm";
-import {CombEntityType} from "../../../../types/UtilTypes";
+import type {CombEntityType} from "../../../../types/UtilTypes";
 
 @Entity("entity_permissions")
 @Index("uk_entity_perm_audience", ["entityType", "entityId", "audience"], {unique: true})

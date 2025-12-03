@@ -13,14 +13,13 @@ export const validSlot = {
 
 export const preprocessCreateData = [
     {
-        description: 'sanitizes valid payload, flattens slots, maps flags and description',
+        description: 'sanitizes valid payload, flattens slots and description',
         input: {
             title: 'Event',
             startDate: '2024-01-01',
             endDate: '2024-01-03',
-            allowGuestAdd: 'on',
-            guestManage: '',
             description: '',
+            event_id: '',
             slots: JSON.stringify({'2024-01-02': [validSlot]}),
         },
         expected: {
@@ -28,8 +27,6 @@ export const preprocessCreateData = [
             description: null,
             startDate: '2024-01-01',
             endDate: '2024-01-03',
-            allowGuestAdd: true,
-            guestManage: false,
             slotsLength: 1,
             slotDay: '2024-01-02',
             slotTitle: 'Morning shift',
@@ -75,14 +72,12 @@ export const createEntityData = {
         description: 'D',
         startDate: '2024-01-01',
         endDate: '2024-01-03',
-        allowGuestAdd: true,
-        guestManage: false,
         slots: [{id: 's1'}],
-        _injectedEventId: 'evt-9',
+        eventId: undefined,
     },
     userId: 7,
     expectedId: 'plan-123',
-    expectedArgs: [7, 'T', 'D', '2024-01-01', '2024-01-03', true, false, [{id: 's1'}], 'evt-9'],
+    expectedArgs: [7, 'T', 'D', '2024-01-01', '2024-01-03', [{id: 's1'}], undefined],
 };
 
 export const fetchForViewData = {

@@ -142,122 +142,6 @@ export const requireEventParticipantBypassData = [
 ];
 
 /**
- * Test cases for requireManageRight - success scenarios
- */
-export const requireManageRightSuccessData = [
-    {
-        description: 'guestManage grants access when identified (user)',
-        session: { user: { id: 4 } },
-        resource: { guestManage: true },
-    },
-    {
-        description: 'guestManage grants access when identified (guest)',
-        session: { guest: { id: 8 } },
-        resource: { guestManage: true },
-    },
-    {
-        description: 'owner can manage even without guestManage',
-        session: { user: { id: 1 } },
-        resource: { ownerId: 1, guestManage: false },
-    },
-];
-
-/**
- * Test cases for requireAddRight - success scenarios
- */
-export const requireAddRightSuccessData = [
-    {
-        description: 'guestAdd grants access when identified (user)',
-        session: { user: { id: 4 } },
-        resource: { allowGuestAdd: true },
-    },
-    {
-        description: 'guestAdd grants access when identified (guest)',
-        session: { guest: { id: 55 } },
-        resource: { allowGuestAdd: true },
-    },
-    {
-        description: 'owner can add even without guestAdd',
-        session: { user: { id: 2 } },
-        resource: { ownerId: 2, allowGuestAdd: false },
-    },
-];
-
-/**
- * Test cases for requireManageRight/requireAddRight - failure scenarios
- */
-export const requireRightsFailureData = [
-    {
-        description: 'no identification -> guestManage/guestAdd do not grant',
-        session: {},
-        resource: { allowGuestAdd: true, guestManage: true },
-        expectedStatus: 403,
-        expectedErrorType: 'expected',
-    },
-    {
-        description: 'guestManage false and not owner',
-        session: { user: { id: 5 } },
-        resource: { ownerId: 1, guestManage: false },
-        expectedStatus: 403,
-        expectedErrorType: 'expected',
-    },
-];
-
-/**
- * Test cases for isEventPermitted - useEvent=false scenarios
- */
-export const isEventPermittedFalseData = [
-    {
-        description: 'useEvent=false + eventId query -> 400',
-        session: { user: { id: 1 } },
-        resource: { ownerId: 1 },
-        query: { eventId: 'E123' },
-        expectedStatus: 400,
-        expectedErrorType: 'expected',
-    },
-    {
-        description: 'useEvent=false + different eventId',
-        session: { user: { id: 2 } },
-        resource: { ownerId: 2 },
-        query: { eventId: 'E999' },
-        expectedStatus: 400,
-        expectedErrorType: 'expected',
-    },
-];
-
-/**
- * Test cases for isEventPermittedAPI - useEvent=false scenarios  
- */
-export const isEventPermittedAPIFalseData = [
-    {
-        description: 'returns API error when useEvent=false + eventId',
-        session: { user: { id: 1 } },
-        resource: { ownerId: 1 },
-        query: { eventId: 'E123' },
-        expectedStatus: 400,
-        expectedErrorType: 'api',
-    },
-];
-
-/**
- * Test cases for isEventPermitted - useEvent=true scenarios
- */
-export const isEventPermittedTrueData = [
-    {
-        description: 'useEvent=true does not 400 when eventId present',
-        session: { user: { id: 1 } },
-        resource: { ownerId: 1 },
-        query: { eventId: 'E123' },
-    },
-    {
-        description: 'useEvent=true allows different eventId',
-        session: { user: { id: 2 } },
-        resource: { ownerId: 2 },
-        query: { eventId: 'E456' },
-    },
-];
-
-/**
  * Test cases for isAuthenticated middleware
  */
 export const isAuthenticatedData = [
@@ -277,5 +161,79 @@ export const isAuthenticatedData = [
         shouldPass: false,
         expectedRedirect: '/users/login',
         expectedFlashMessage: 'You must be logged in to access this site.',
+    },
+];
+
+/**
+ * Test cases for requirePermission - success scenarios
+ * Tests the new permission system that replaced requireManageRight/requireAddRight
+ */
+export const requirePermissionSuccessData = [
+    {
+        description: 'allows owner with any permission check',
+        session: { user: { id: 1 } },
+        entityDescriptor: { entityType: 'activity', entityId: 'a1', ownerUserId: 1 },
+        requiredPerm: 1 << 0, // EDIT_TITLE permission
+    },
+    {
+        description: 'allows user with specific permission granted',
+        session: { user: { id: 2 } },
+        entityDescriptor: { entityType: 'drivers', entityId: 'd1', ownerUserId: 1 },
+        requiredPerm: 1 << 13, // ACCESS_VIEW permission
+        userPerms: 1 << 13, // User has ACCESS_VIEW
+    },
+    {
+        description: 'allows guest with permission granted',
+        session: { guest: { id: 3 } },
+        entityDescriptor: { entityType: 'packing', entityId: 'p1', ownerUserId: 1 },
+        requiredPerm: 1 << 13, // ACCESS_VIEW permission
+        guestPerms: 1 << 13, // Guest has ACCESS_VIEW
+    },
+];
+
+/**
+ * Test cases for requirePermission - failure scenarios
+ */
+export const requirePermissionFailureData = [
+    {
+        description: 'forbids user without required permission',
+        session: { user: { id: 2 } },
+        entityDescriptor: { entityType: 'activity', entityId: 'a1', ownerUserId: 1 },
+        requiredPerm: 1 << 0, // EDIT_TITLE permission
+        userPerms: 0, // User has no permissions
+        expectedStatus: 403,
+        expectedErrorType: 'expected',
+    },
+    {
+        description: 'forbids guest without required permission',
+        session: { guest: { id: 3 } },
+        entityDescriptor: { entityType: 'drivers', entityId: 'd1', ownerUserId: 1 },
+        requiredPerm: 1 << 4, // ITEM_ADD permission
+        guestPerms: 1 << 13, // Guest only has ACCESS_VIEW
+        expectedStatus: 403,
+        expectedErrorType: 'expected',
+    },
+    {
+        description: 'forbids when no session',
+        session: {},
+        entityDescriptor: { entityType: 'packing', entityId: 'p1', ownerUserId: 1 },
+        requiredPerm: 1 << 13, // ACCESS_VIEW permission
+        expectedStatus: 403,
+        expectedErrorType: 'expected',
+    },
+];
+
+/**
+ * Test cases for requirePermissionApi - failure scenarios (API error variant)
+ */
+export const requirePermissionApiFailureData = [
+    {
+        description: 'returns API error when permission denied',
+        session: { user: { id: 2 } },
+        entityDescriptor: { entityType: 'activity', entityId: 'a1', ownerUserId: 1 },
+        requiredPerm: 1 << 0, // EDIT_TITLE permission
+        userPerms: 0,
+        expectedStatus: 403,
+        expectedErrorType: 'api',
     },
 ];

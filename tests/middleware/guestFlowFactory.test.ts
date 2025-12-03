@@ -32,6 +32,11 @@ jest.mock('../../src/middleware/permissionMiddleware', () => ({
         (_eventResFn: any) => (_req: any, _res: any, next: any) => next(),
     requireOwner:
         (_resFct: any) => (_req: any, _res: any, next: any) => next(),
+    requirePermission: (_getEntity: any, _requiredPerm: any) => (_req: any, _res: any, next: any) => next(),
+    optionalPermission: (_getData: any, _requiredPerm: any, _getEntity: any) => (_req: any, _res: any, next: any) => next(),
+    attachPermMeta: (_entityType: any, _idSupplyer?: any) => (_req: any, _res: any, next: any) => next(),
+    attachPermBundle: (_getEntity: any, _getItems: any) => (_req: any, _res: any, next: any) => next(),
+    attachAdminData: (_entityType: any, _idSupplyer?: any) => (_req: any, _res: any, next: any) => next(),
 }));
 
 // Bind :id and ?eventId into req.resources so getResource() can pick them up.
@@ -58,11 +63,14 @@ jest.mock('../../src/middleware/paramHandler', () => ({
 jest.mock('../../src/modules/lib/util', () => ({
     // make the controller pull the resource from our req.resources
     getResource: (req: any, type: string) => req.resources?.[type],
+    // mock getItemFromEntityPermFct to return an empty function
+    getItemFromEntityPermFct: jest.fn(() => async () => []),
 }));
 
-// services only used by queryHandler(addToEvent)
+// services only used by queryHandler(addToEvent) and create route
 jest.mock('../../src/modules/database/services/EventService', () => ({
     getEventById: jest.fn(async (id: string) => ({id, title: `Event ${id}`})),
+    getActiveManagedEventsForUser: jest.fn(async () => []),
 }));
 
 // ---- Test helpers ----
@@ -136,7 +144,7 @@ describe('guestFlowRouter', () => {
 
     test(testData.getCreateRouteData.description, async () => {
         const {method, path, expected} = testData.getCreateRouteData;
-        const app = makeApp(createGuestFlowRouter(makeConfig()));
+        const app = makeApp(createGuestFlowRouter(makeConfig()), {user: {id: 1}});
         const res = await request(app)[method](path);
         expect(res.status).toBe(expected.status);
         expect(res.body.tpl).toBe(expected.tpl);

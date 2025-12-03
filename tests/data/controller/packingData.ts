@@ -8,8 +8,7 @@ export const preprocessCreateData = [
         input: {
             title: 'Trip packing',
             description: '',
-            allowGuestAdd: 'on',
-            guestManage: '',
+            event_id: '',
             items: JSON.stringify([
                 {title: 'Tent', description: '', maxAssignees: 1, requiredByAll: true},
                 {title: 'Stove', description: 'gas', maxAssignees: 2, requiredByAll: false},
@@ -18,8 +17,6 @@ export const preprocessCreateData = [
         expected: {
             title: 'Trip packing',
             description: null,
-            allowGuestAdd: true,
-            guestManage: false,
             itemsLength: 2,
             firstItem: {title: 'Tent', requiredByAll: true, maxAssignees: 1},
         },

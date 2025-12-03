@@ -10,7 +10,7 @@ import {ActivitySlot} from "../modules/database/entities/activity/ActivitySlot";
 import {ActivityPlan} from "../modules/database/entities/activity/ActivityPlan";
 import {Request} from "express";
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
-import {PermBundle} from "../types/PermissionTypes";
+import type {PermBundle} from "../types/PermissionTypes";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'activity/activity-create';

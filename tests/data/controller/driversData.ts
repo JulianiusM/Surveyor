@@ -4,12 +4,11 @@
 
 export const preprocessCreateData = [
     {
-        description: 'sanitizes valid payload, converts flags to booleans, coalesces description',
+        description: 'sanitizes valid payload, coalesces description and event_id',
         input: {
             title: 'Drivers',
             description: '',
-            allowGuestAdd: 'anything truthy',
-            guestManage: '',
+            event_id: '',
             items: JSON.stringify([
                 {title: 'A', description: '', maxAssignees: 2},
             ]),
@@ -17,23 +16,13 @@ export const preprocessCreateData = [
         expected: {
             title: 'Drivers',
             description: null,
-            allowGuestAdd: true,
-            guestManage: false,
+            eventId: null,
         },
-    },
-    {
-        description: 'throws ValidationError on invalid items JSON',
-        input: {
-            title: 'X',
-            items: '{bad json',
-        },
-        shouldThrow: 'ValidationError',
     },
     {
         description: 'throws ValidationError when required title is missing',
         input: {
             description: 'no title',
-            items: '[]',
         },
         shouldThrow: 'ValidationError',
     },
@@ -44,8 +33,7 @@ export const createEntityData = {
     listData: {
         title: 'T',
         description: 'D',
-        allowGuestAdd: true,
-        guestManage: false,
+        eventId: undefined,
     },
     expectedId: 'list-123',
 };

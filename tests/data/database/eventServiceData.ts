@@ -266,7 +266,7 @@ export const eventRegistrationCheckData = [
                 email: 'u2@example.com',
             },
             guest: {
-                id: 11,
+                id: 999,
                 username: 'guestOne',
             },
         },
@@ -289,7 +289,7 @@ export const eventRegistrationCheckData = [
                 departureDate: '2025-09-21',
             },
             guest: {
-                guestId: 11,
+                guestId: 999,
                 arrivalDate: '2025-09-20',
                 departureDate: '2025-09-21',
             },

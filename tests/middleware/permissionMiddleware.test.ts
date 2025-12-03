@@ -5,19 +5,22 @@
 
 import {
     isAuthenticated,
-    isEventPermitted,
-    isEventPermittedAPI,
-    requireAddRight,
     requireEventParticipant,
-    requireManageRight,
     requireOwner,
     requireOwnerAPI,
+    requirePermission,
+    requirePermissionApi,
 } from '../../src/middleware/permissionMiddleware';
 
 import { isRegisteredForEvent } from '../../src/modules/database/services/EventService';
+import { can } from '../../src/modules/permissionEngine';
 
 jest.mock('../../src/modules/database/services/EventService', () => ({
     isRegisteredForEvent: jest.fn(),
+}));
+
+jest.mock('../../src/modules/permissionEngine', () => ({
+    can: jest.fn(),
 }));
 
 // Import test data
@@ -28,12 +31,9 @@ import {
     requireEventParticipantSuccessData,
     requireEventParticipantFailureData,
     requireEventParticipantBypassData,
-    requireManageRightSuccessData,
-    requireAddRightSuccessData,
-    requireRightsFailureData,
-    isEventPermittedFalseData,
-    isEventPermittedAPIFalseData,
-    isEventPermittedTrueData,
+    requirePermissionSuccessData,
+    requirePermissionFailureData,
+    requirePermissionApiFailureData,
     isAuthenticatedData,
 } from '../data/middleware/permissionData';
 
@@ -145,90 +145,69 @@ describe('requireEventParticipant - Data Driven', () => {
     });
 });
 
-describe('requireManageRight - Data Driven', () => {
+// Tests for requireManageRight, requireAddRight, isEventPermitted, and isEventPermittedAPI 
+// removed as these functions were removed in the permission system rework
+
+describe('requirePermission - Data Driven', () => {
     describe('success scenarios', () => {
-        test.each(requireManageRightSuccessData)(
+        test.each(requirePermissionSuccessData)(
             '$description',
-            async ({ session, resource }) => {
-                await expectMiddlewareSuccess(requireManageRight(), session, resource);
+            async ({ session, entityDescriptor, requiredPerm, userPerms, guestPerms }) => {
+                // Mock the can function to return true for success scenarios
+                (can as jest.Mock).mockResolvedValue(true);
+
+                const getEntity = () => entityDescriptor;
+                const middleware = requirePermission(getEntity, requiredPerm);
+                
+                await expectMiddlewareSuccess(middleware, session, {});
+                
+                expect(can).toHaveBeenCalled();
             }
         );
     });
 
-    describe('failure scenarios', () => {
-        test.each(requireRightsFailureData)(
+    describe('failure scenarios (ExpectedError)', () => {
+        test.each(requirePermissionFailureData)(
             '$description',
-            async ({ session, resource, expectedStatus, expectedErrorType }) => {
-                (isRegisteredForEvent as jest.Mock).mockResolvedValue(false);
+            async ({ session, entityDescriptor, requiredPerm, userPerms, guestPerms, expectedStatus, expectedErrorType }) => {
+                // Mock the can function to return false for failure scenarios
+                (can as jest.Mock).mockResolvedValue(false);
+
+                const getEntity = () => entityDescriptor;
+                const middleware = requirePermission(getEntity, requiredPerm);
+                
                 await expectMiddlewareFailure(
-                    requireManageRight(),
+                    middleware,
                     session,
-                    resource,
+                    {},
                     expectedStatus,
                     expectedErrorType
                 );
-            }
-        );
-    });
-});
-
-describe('requireAddRight - Data Driven', () => {
-    describe('success scenarios', () => {
-        test.each(requireAddRightSuccessData)(
-            '$description',
-            async ({ session, resource }) => {
-                await expectMiddlewareSuccess(requireAddRight(), session, resource);
+                
+                expect(can).toHaveBeenCalled();
             }
         );
     });
 
-    describe('failure scenarios with no identification', () => {
-        test.each(requireRightsFailureData)(
+    describe('API error scenarios', () => {
+        test.each(requirePermissionApiFailureData)(
             '$description',
-            async ({ session, resource, expectedStatus, expectedErrorType }) => {
-                (isRegisteredForEvent as jest.Mock).mockResolvedValue(false);
+            async ({ session, entityDescriptor, requiredPerm, userPerms, expectedStatus, expectedErrorType }) => {
+                // Mock the can function to return false for failure scenarios
+                (can as jest.Mock).mockResolvedValue(false);
+
+                const getEntity = () => entityDescriptor;
+                const middleware = requirePermissionApi(getEntity, requiredPerm);
+                
                 await expectMiddlewareFailure(
-                    requireAddRight(),
+                    middleware,
                     session,
-                    resource,
+                    {},
                     expectedStatus,
                     expectedErrorType
                 );
-            }
-        );
-    });
-});
-
-describe('isEventPermitted (useEvent toggle) - Data Driven', () => {
-    describe('useEvent=false scenarios', () => {
-        test.each(isEventPermittedFalseData)(
-            '$description',
-            async ({ session, resource, query, expectedStatus, expectedErrorType }) => {
-                const app = buildMiddlewareApp(isEventPermitted(false), { session, resource });
-                const response = await makeGetRequest(app, '/ok', query);
-                verifyMiddlewareBlocks(response, expectedStatus, expectedErrorType);
-            }
-        );
-    });
-
-    describe('useEvent=false with API error', () => {
-        test.each(isEventPermittedAPIFalseData)(
-            '$description',
-            async ({ session, resource, query, expectedStatus, expectedErrorType }) => {
-                const app = buildMiddlewareApp(isEventPermittedAPI(false), { session, resource });
-                const response = await makeGetRequest(app, '/ok', query);
-                verifyMiddlewareBlocks(response, expectedStatus, expectedErrorType);
-            }
-        );
-    });
-
-    describe('useEvent=true scenarios', () => {
-        test.each(isEventPermittedTrueData)(
-            '$description',
-            async ({ session, resource, query }) => {
-                const app = buildMiddlewareApp(isEventPermitted(true), { session, resource });
-                const response = await makeGetRequest(app, '/ok', query);
-                verifyMiddlewareAllows(response);
+                
+                expect(can).toHaveBeenCalled();
             }
         );
     });

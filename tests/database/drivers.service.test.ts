@@ -30,11 +30,8 @@ import {
     reorderDriversItems,
     unassignDriversItemGuest,
     unassignDriversItemUser,
-    updateDriversFlags,
     updateDriversItem,
-    updateDriversListAllow,
     updateDriversListDescription,
-    updateDriversListGuestManage,
     updateDriversListTitle,
 } from '../../src/modules/database/services/DriverService';
 
@@ -101,8 +98,7 @@ describe('driversService (mysql)', () => {
             testCase.userId,
             testCase.initialData.title,
             testCase.initialData.description,
-            testCase.initialData.allowGuestAdd,
-            testCase.initialData.guestManage,
+            undefined, // eventId
             listId
         );
 
@@ -112,8 +108,6 @@ describe('driversService (mysql)', () => {
         expect(byId!.id).toBe(listId);
         expect(byId!.title).toBe(testCase.expectedInitial.title);
         expect(byId!.description).toBe(testCase.expectedInitial.description);
-        expect(byId!.allowGuestAdd).toBe(testCase.expectedInitial.allowGuestAdd);
-        expect(byId!.guestManage).toBe(testCase.expectedInitial.guestManage);
 
         // By user
         const byUser = await getDriversListByUserId(testCase.userId);
@@ -122,20 +116,10 @@ describe('driversService (mysql)', () => {
         // Update fields individually
         await updateDriversListTitle(listId, testCase.updates.title);
         await updateDriversListDescription(listId, testCase.updates.description);
-        await updateDriversListAllow(listId, testCase.updates.allowGuestAdd);
-        await updateDriversListGuestManage(listId, testCase.updates.guestManage);
 
         const afterSingleUpdates = await getDriversListById(listId);
         expect(afterSingleUpdates!.title).toBe(testCase.expectedAfterUpdates.title);
         expect(afterSingleUpdates!.description).toBe(testCase.expectedAfterUpdates.description);
-        expect(afterSingleUpdates!.allowGuestAdd).toBe(testCase.expectedAfterUpdates.allowGuestAdd);
-        expect(afterSingleUpdates!.guestManage).toBe(testCase.expectedAfterUpdates.guestManage);
-
-        // Update flags together
-        await updateDriversFlags(listId, testCase.flagsUpdate.allowGuestAdd, testCase.flagsUpdate.guestManage);
-        const afterFlags = await getDriversListById(listId);
-        expect(afterFlags!.allowGuestAdd).toBe(testCase.expectedAfterFlags.allowGuestAdd);
-        expect(afterFlags!.guestManage).toBe(testCase.expectedAfterFlags.guestManage);
 
         // Delete
         await deleteDriversList(listId);
@@ -149,8 +133,7 @@ describe('driversService (mysql)', () => {
             testCase.userId,
             testCase.listData.title,
             testCase.listData.description,
-            testCase.listData.allowGuestAdd,
-            testCase.listData.guestManage,
+            undefined, // eventId
             listId
         );
 
@@ -229,8 +212,7 @@ describe('driversService (mysql)', () => {
             testCase.userId,
             testCase.listData.title,
             testCase.listData.description,
-            testCase.listData.allowGuestAdd,
-            testCase.listData.guestManage,
+            undefined, // eventId
             listId
         );
 

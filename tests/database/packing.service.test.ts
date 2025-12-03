@@ -31,11 +31,8 @@ import {
     togglePackingItemRequiredByAll,
     unassignPackingItemGuest,
     unassignPackingItemUser,
-    updatePackingFlags,
     updatePackingItem,
-    updatePackingListAllow,
     updatePackingListDescription,
-    updatePackingListGuestManage,
     updatePackingListTitle,
 } from '../../src/modules/database/services/PackingService';
 
@@ -102,9 +99,7 @@ describe('packingService (mysql)', () => {
             listId,
             testCase.userId,
             testCase.initialData.title,
-            testCase.initialData.description,
-            testCase.initialData.allowGuestAdd,
-            testCase.initialData.guestManage
+            testCase.initialData.description
         );
 
         // By id
@@ -113,8 +108,6 @@ describe('packingService (mysql)', () => {
         expect(byId!.id).toBe(listId);
         expect(byId!.title).toBe(testCase.expectedInitial.title);
         expect(byId!.description).toBe(testCase.expectedInitial.description);
-        expect(byId!.allowGuestAdd).toBe(testCase.expectedInitial.allowGuestAdd);
-        expect(byId!.guestManage).toBe(testCase.expectedInitial.guestManage);
 
         // By user
         const byUser = await getPackingListByUserId(testCase.userId);
@@ -123,20 +116,10 @@ describe('packingService (mysql)', () => {
         // Field updates
         await updatePackingListTitle(listId, testCase.updates.title);
         await updatePackingListDescription(listId, testCase.updates.description);
-        await updatePackingListAllow(listId, testCase.updates.allowGuestAdd);
-        await updatePackingListGuestManage(listId, testCase.updates.guestManage);
 
         const afterSingles = await getPackingListById(listId);
         expect(afterSingles!.title).toBe(testCase.expectedAfterUpdates.title);
         expect(afterSingles!.description).toBe(testCase.expectedAfterUpdates.description);
-        expect(afterSingles!.allowGuestAdd).toBe(testCase.expectedAfterUpdates.allowGuestAdd);
-        expect(afterSingles!.guestManage).toBe(testCase.expectedAfterUpdates.guestManage);
-
-        // Combined flags
-        await updatePackingFlags(listId, testCase.flagsUpdate.allowGuestAdd, testCase.flagsUpdate.guestManage);
-        const afterFlags = await getPackingListById(listId);
-        expect(afterFlags!.allowGuestAdd).toBe(testCase.expectedAfterFlags.allowGuestAdd);
-        expect(afterFlags!.guestManage).toBe(testCase.expectedAfterFlags.guestManage);
 
         // Delete
         await deletePackingList(listId);
@@ -173,8 +156,6 @@ describe('packingService (mysql)', () => {
             testCase.userId,
             testCase.listData.title,
             testCase.listData.description,
-            testCase.listData.allowGuestAdd,
-            testCase.listData.guestManage,
             initialItems
         );
         expect(typeof txListId).toBe('string');
@@ -251,9 +232,7 @@ describe('packingService (mysql)', () => {
             listId,
             testCase.userId,
             testCase.listData.title,
-            testCase.listData.description,
-            testCase.listData.allowGuestAdd,
-            testCase.listData.guestManage
+            testCase.listData.description
         );
 
         // Principals

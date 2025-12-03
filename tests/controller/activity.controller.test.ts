@@ -36,15 +36,19 @@ jest.mock('../../src/modules/database/services/UserService', () => ({
 }));
 
 // Make IDs deterministic and date parsing stable
-jest.mock('../../src/modules/lib/util', () => ({
+import { mockUtil, mockPermissionEngine } from '../mocks/commonMocks';
+
+jest.mock('../../src/modules/lib/util', () => mockUtil({
     generateUniqueId: jest.fn(() => 'uid-123'),
-    // Simple stable parser: treat date as local midnight
     fromISOtoLocal: (s: string) => new Date(`${s}T00:00:00`),
 }));
+
+jest.mock('../../src/modules/permissionEngine', () => mockPermissionEngine());
 
 import controller from '../../src/controller/activityController';
 import * as activityService from '../../src/modules/database/services/ActivityService';
 import * as userService from '../../src/modules/database/services/UserService';
+import * as permissionEngine from '../../src/modules/permissionEngine';
 import {APIError, ValidationError} from '../../src/modules/lib/errors';
 import {setupMock, verifyMockCall, verifyResult} from '../keywords/common/controllerKeywords';
 import * as testData from '../data/controller/activityData';
@@ -88,8 +92,6 @@ describe('preprocessCreate', () => {
                     description: expected.description,
                     startDate: expected.startDate,
                     endDate: expected.endDate,
-                    allowGuestAdd: expected.allowGuestAdd,
-                    guestManage: expected.guestManage,
                 });
                 expect(Array.isArray(res.slots)).toBe(true);
                 expect(res.slots).toHaveLength(expected.slotsLength);
@@ -108,7 +110,7 @@ describe('createEntity / afterCreateItems', () => {
         
         verifyResult(id, expectedId);
         verifyMockCall(activityService.createActivityPlanTx, ...expectedArgs);
-        await expect(afterCreateItems()).resolves.toBeUndefined();
+        await expect(afterCreateItems(expectedId, {_body: {}})).resolves.toBeUndefined();
     });
 });
 
@@ -130,7 +132,8 @@ describe('fetchForView', () => {
                 setupMock(activityService[mockFunc], mockAssignments);
             }
             
-            const res = await fetchForView(plan as any, session as any);
+            const req = {session} as any;
+            const res = await fetchForView(plan as any, req);
             
             verifyResult(res.assignments, expectedAssignments);
             if (expectedCounters) {
@@ -236,10 +239,15 @@ describe('API helpers', () => {
                     setupMock(activityService.updateActivitySlot, mockResolve);
                 }
                 
+                // Mock permData with all necessary permissions
+                const mockPermData = {
+                    entity: new Set(['EDIT_META', 'EDIT_TITLE', 'EDIT_DESC', 'MANAGE_REQUIREMENTS', 'EDIT_CAPACITY'])
+                };
+                
                 if (shouldThrow) {
-                    await expect(updateSlotAttr(slotId, body)).rejects.toBeInstanceOf(APIError);
+                    await expect(updateSlotAttr(slotId, body, mockPermData as any)).rejects.toBeInstanceOf(APIError);
                 } else {
-                    const result = await updateSlotAttr(slotId, body);
+                    const result = await updateSlotAttr(slotId, body, mockPermData as any);
                     verifyResult(result, expectedMessage);
                     verifyMockCall(activityService.updateActivitySlot, slotId, expectedUpdate);
                 }
@@ -262,7 +270,7 @@ describe('API helpers', () => {
         const result = await updateSettings(planId, body);
         
         verifyResult(result, expectedMessage);
-        verifyMockCall(activityService.updateActivityPlanFlags, planId, body.allowAdd, body.guestManage);
+        verifyMockCall(permissionEngine.saveDefaultPermsFromBody, 'activity', planId, body);
     });
 
     it('deleteSlot delegates and returns message', async () => {

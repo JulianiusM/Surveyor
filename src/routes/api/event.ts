@@ -13,10 +13,10 @@ import {
     requirePermissionApi
 } from "../../middleware/permissionMiddleware";
 import {PERM} from "../../modules/lib/permissions";
-import {EntityType} from "../../types/UtilTypes";
+import type {EntityType} from "../../types/UtilTypes";
 import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
-import {ItemGetter} from "../../types/PermissionTypes";
 import buildInvoiceRouter from "./eventInvoices";
+import type {ItemGetter} from "../../types/PermissionTypes";
 
 const app = express.Router();
 const entityName: EntityType = ENTITIES.EVENT;

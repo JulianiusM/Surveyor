@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import {Request} from "express";
 
 import {APIError} from "./errors";
-import {
+import type {
     EntityDescriptor,
     EntityGetter,
     GetAdditional,
@@ -13,7 +13,7 @@ import {
     ItemSubject,
     ItemWithParentGetter
 } from "../../types/PermissionTypes";
-import {EntityItemType, EntityType} from "../../types/UtilTypes";
+import type {EntityItemType, EntityType} from "../../types/UtilTypes";
 
 // Generic currency helpers for invoice math
 export function toAmount(val: string | number | undefined | null): number {

@@ -19,9 +19,9 @@ import {attachAssignRoleRoutes, attachAssignRoutes} from '../../middleware/assig
 
 import controller from '../../controller/activityController';
 import {PERM} from "../../modules/lib/permissions";
-import {EntityItemType, EntityType} from "../../types/UtilTypes";
+import type {EntityItemType, EntityType} from "../../types/UtilTypes";
 import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
-import {ItemGetter} from "../../types/PermissionTypes";
+import type {ItemGetter} from "../../types/PermissionTypes";
 
 const app = express.Router();
 const entityName: EntityType = ENTITIES.ACTIVITY;

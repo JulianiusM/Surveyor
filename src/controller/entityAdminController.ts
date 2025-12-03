@@ -3,7 +3,7 @@ import Joi from 'joi';
 import * as entityAdminService from '../modules/database/services/EntityAdminService';
 import * as userService from '../modules/database/services/UserService';
 import {getPresetMask, PERM, toMask} from "../modules/lib/permissions";
-import {CombEntityType} from "../types/UtilTypes";
+import type {CombEntityType} from "../types/UtilTypes";
 
 const REQ_PERM = PERM.MANAGE_PERMISSIONS;
 
