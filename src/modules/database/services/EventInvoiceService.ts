@@ -127,12 +127,12 @@ export async function updateTakeovers(
         // Fetch current takeovers so we can diff them; the controller owns validation of who may edit.
         const existing = await takeoverRepo.find({where: {pool: {id: poolId}}});
 
+        // Keep track of current mappings after applying removals so conflict checks stay accurate.
         const normalizedBeneficiaries = Array.from(new Set(beneficiaryIds.map(Number)));
         const removed: {payerId: number; beneficiaryId: number}[] = [];
         const added: {payerId: number; beneficiaryId: number}[] = [];
-
-        // Remove anything no longer desired or reassigned to a different payer when allowed.
         const toDelete = new Set<number>();
+
         for (const takeover of existing) {
             const isPayer = takeover.payerRegistrationId === payerRegistrationId;
             const beneficiaryDesired = normalizedBeneficiaries.includes(takeover.beneficiaryRegistrationId);
@@ -143,13 +143,17 @@ export async function updateTakeovers(
             }
         }
 
+        // Drop removed/conflicting rows once before inserting replacements to avoid duplicates.
         if (toDelete.size) {
             await takeoverRepo.delete(Array.from(toDelete));
         }
 
+        const remaining = existing.filter((t) => !toDelete.has(t.id));
+        toDelete.clear();
+
         // Ensure uniqueness per beneficiary by removing conflicting rows before inserting the new mapping when allowed.
         for (const beneficiaryId of normalizedBeneficiaries) {
-            const conflicting = existing.find(
+            const conflicting = remaining.find(
                 (t) => t.beneficiaryRegistrationId === beneficiaryId && t.payerRegistrationId !== payerRegistrationId,
             );
             if (conflicting && allowReassign) {
@@ -157,7 +161,7 @@ export async function updateTakeovers(
                 toDelete.add(conflicting.id);
             }
 
-            const alreadyCoveredByPayer = existing.some(
+            const alreadyCoveredByPayer = remaining.some(
                 (t) => t.payerRegistrationId === payerRegistrationId && t.beneficiaryRegistrationId === beneficiaryId,
             );
             if (!alreadyCoveredByPayer) {
@@ -172,6 +176,7 @@ export async function updateTakeovers(
             }
         }
 
+        // Clean up any conflicting rows identified during the add phase.
         if (toDelete.size) {
             await takeoverRepo.delete(Array.from(toDelete));
         }
@@ -319,7 +324,7 @@ export async function updateAssignments(
         const invalidTakeovers = await takeoverRepo.find({where: {pool: {id: poolId}}});
         const validIds = allowedRegistrationIds.length
             ? allowedRegistrationIds
-            : (await manager.getRepository(EventRegistration).find({where: {event: {id: pool.event.id}}})).map((r) => r.id);
+            : (await manager.getRepository(EventRegistration).find({where: {event: {id: pool.eventId}}})).map((r) => r.id);
         const toDrop = invalidTakeovers.filter(
             (t) => !validIds.includes(t.payerRegistrationId) || !validIds.includes(t.beneficiaryRegistrationId),
         );

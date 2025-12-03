@@ -183,7 +183,7 @@ async function updateTakeovers(event: Event, poolId: string, body: any, session:
 
     if (pool.status === 'CLOSED') throw new APIError('Pool is closed', body, 400);
 
-    const beneficiaries = Array.isArray(value.beneficiaries)
+    const beneficiaries: number[] = Array.isArray(value.beneficiaries)
         ? value.beneficiaries.map(Number)
         : value.beneficiaries
             ? [Number(value.beneficiaries)]
@@ -194,7 +194,9 @@ async function updateTakeovers(event: Event, poolId: string, body: any, session:
         : pool.assignments.map((a) => a.registration.id);
     if (!allowedIds.includes(payerId)) throw new APIError('Payer is not part of this pool', body, 400);
 
-    const normalizedBeneficiaries = Array.from(new Set(beneficiaries)).filter((id) => allowedIds.includes(id) && id !== payerId);
+    const normalizedBeneficiaries: number[] = Array.from(new Set(beneficiaries)).filter(
+        (id) => allowedIds.includes(id) && id !== payerId,
+    );
     const existing = pool.takeovers || [];
     const payerCovered = existing.some((t) => t.beneficiaryRegistrationId === payerId);
     if (payerCovered && normalizedBeneficiaries.length) {

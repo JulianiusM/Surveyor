@@ -31,7 +31,8 @@ export function formatAmount(amount: number): string {
 export function resolveActorLabel(session: Request['session'] | undefined | null): string {
     if (session?.user?.name) return session.user.name;
     if ((session?.user as any)?.username) return (session?.user as any).username;
-    if (session?.guest?.name) return session.guest.name;
+    const guestUsername = (session?.guest as any)?.username;
+    if (guestUsername) return guestUsername;
     return 'an organizer';
 }
 

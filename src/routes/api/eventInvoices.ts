@@ -23,7 +23,7 @@ const proofStorage = multer.diskStorage({
         const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.pdf'];
         const ext = path.extname(file.originalname).toLowerCase();
         if (!allowedExts.includes(ext)) {
-            cb(new Error('Invalid file extension'));
+            cb(new Error('Invalid file extension'), file.originalname);
         } else {
             cb(null, `${Date.now()}-${uuidv4()}${ext}`);
         }
@@ -35,7 +35,11 @@ const proofUpload = multer({
     limits: {fileSize: 10 * 1024 * 1024},
     fileFilter: (_req, file, cb) => {
         const ok = file.mimetype === "application/pdf" || file.mimetype.startsWith("image/");
-        cb(ok ? null : new Error("Only images or PDFs allowed"), ok);
+        if (ok) {
+            cb(null, true);
+        } else {
+            cb(new Error("Only images or PDFs allowed"));
+        }
     },
 });
 
