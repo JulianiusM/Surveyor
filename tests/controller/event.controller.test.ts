@@ -25,6 +25,7 @@ jest.mock('../../src/modules/lib/util', () => ({
     // Keep these deterministic for tests
     isWithinWindow: jest.fn(() => true),
     rewriteISOToZone: jest.fn((iso: string, tz: string) => `rewritten:${iso}:${tz}`),
+    getResource: jest.fn((req: any, type: string) => req.resource?.[type]),
     ENTITIES: {
         ACTIVITY: 'activity',
         DRIVERS: 'drivers',
@@ -189,16 +190,18 @@ describe('registerAttendance', () => {
                 (isWithinWindow as jest.Mock).mockReturnValue(mockWithinWindow);
             }
             
+            const req = {session, resource: {}} as any;
+            
             if (shouldThrow) {
-                await expect(registerAttendance(event as any, body, session as any)).rejects.toBeInstanceOf(APIError);
+                await expect(registerAttendance(event as any, body, req)).rejects.toBeInstanceOf(APIError);
             } else if (expectedCall) {
-                const result = await registerAttendance(event as any, body, session as any);
+                const result = await registerAttendance(event as any, body, req);
                 if (expectedMessage) {
                     verifyResult(result, expectedMessage);
                 }
                 verifyMockCall(eventService[expectedCall.service], ...expectedCall.args);
             } else if (expectCallMade) {
-                await registerAttendance(event as any, body, session as any);
+                await registerAttendance(event as any, body, req);
                 expect(eventService[expectCallMade]).toHaveBeenCalled();
             }
         }

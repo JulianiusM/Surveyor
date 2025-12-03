@@ -32,6 +32,7 @@ jest.mock('../../src/middleware/permissionMiddleware', () => ({
         (_eventResFn: any) => (_req: any, _res: any, next: any) => next(),
     requireOwner:
         (_resFct: any) => (_req: any, _res: any, next: any) => next(),
+    attachPermMeta: (_entityType: any, _idSupplyer?: any) => (_req: any, _res: any, next: any) => next(),
 }));
 
 // Bind :id and ?eventId into req.resources so getResource() can pick them up.
@@ -58,6 +59,8 @@ jest.mock('../../src/middleware/paramHandler', () => ({
 jest.mock('../../src/modules/lib/util', () => ({
     // make the controller pull the resource from our req.resources
     getResource: (req: any, type: string) => req.resources?.[type],
+    // mock getItemFromEntityPermFct to return an empty function
+    getItemFromEntityPermFct: jest.fn(() => async () => []),
 }));
 
 // services only used by queryHandler(addToEvent)
