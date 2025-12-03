@@ -142,7 +142,7 @@ describe('Edge cases & additional scenarios', () => {
     });
 
     test('createActivityPlanTx with empty slots inserts only the plan', async () => {
-        const id = await createActivityPlanTx(1, 'OnlyPlan', 'D', '2025-01-01', '2025-01-02', false, false, []);
+        const id = await createActivityPlanTx(1, 'OnlyPlan', 'D', '2025-01-01', '2025-01-02', []);
         expect(id).toBeTruthy();
 
         const plan = await AppDataSource.getRepository(ActivityPlan).findOneBy({id});

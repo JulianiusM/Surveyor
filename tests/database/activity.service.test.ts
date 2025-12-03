@@ -150,8 +150,6 @@ describe('createActivityPlanTx (with slots)', () => {
             plan.description,
             plan.from,
             plan.to,
-            plan.rolesEnabled,
-            plan.showContactInfo,
             slots
         );
 

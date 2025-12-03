@@ -77,7 +77,7 @@ afterEach(async () => {
 describe('Plan CRUD: get/update/delete/list', () => {
     test('create/get/update flags & description / list by owner / delete', async () => {
         const planId = uuidv4()
-        await createActivityPlan(planId, 1, 'TitleZ', 'DescZ', '2025-02-01', '2025-02-02', true, false);
+        await createActivityPlan(planId, 1, 'TitleZ', 'DescZ', '2025-02-01', '2025-02-02');
 
         // get by id
         const got = await getActivityPlanById(planId);
