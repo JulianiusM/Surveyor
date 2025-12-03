@@ -38,6 +38,7 @@
     "connect-typeorm": "^2.0.0",
     "cookie-parser": "^1.4.7",
     "csv-reader": "^1.0.12",
+    "date-fns": "^4.1.0",
     "debug": "^4.4.3",
     "express": "^5.0.1",
     "express-flash": "^0.0.2",

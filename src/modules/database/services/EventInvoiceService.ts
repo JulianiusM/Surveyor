@@ -152,6 +152,8 @@ export async function updateTakeovers(
         toDelete.clear();
 
         // Ensure uniqueness per beneficiary by removing conflicting rows before inserting the new mapping when allowed.
+        // First pass: identify conflicting rows and prepare new takeovers
+        const takeoversToBeSaved: Array<{payerId: number; beneficiaryId: number}> = [];
         for (const beneficiaryId of normalizedBeneficiaries) {
             const conflicting = remaining.find(
                 (t) => t.beneficiaryRegistrationId === beneficiaryId && t.payerRegistrationId !== payerRegistrationId,
@@ -166,19 +168,24 @@ export async function updateTakeovers(
             );
             if (!alreadyCoveredByPayer) {
                 added.push({payerId: payerRegistrationId, beneficiaryId});
-                await takeoverRepo.save(
-                    takeoverRepo.create({
-                        pool: {id: poolId} as EventInvoicePool,
-                        payerRegistration: {id: payerRegistrationId} as EventRegistration,
-                        beneficiaryRegistration: {id: beneficiaryId} as EventRegistration,
-                    }),
-                );
+                takeoversToBeSaved.push({payerId: payerRegistrationId, beneficiaryId});
             }
         }
 
-        // Clean up any conflicting rows identified during the add phase.
+        // Delete conflicting rows first to prevent unique constraint violations
         if (toDelete.size) {
             await takeoverRepo.delete(Array.from(toDelete));
+        }
+
+        // Then insert new takeovers
+        for (const takeover of takeoversToBeSaved) {
+            await takeoverRepo.save(
+                takeoverRepo.create({
+                    pool: {id: poolId} as EventInvoicePool,
+                    payerRegistration: {id: takeover.payerId} as EventRegistration,
+                    beneficiaryRegistration: {id: takeover.beneficiaryId} as EventRegistration,
+                }),
+            );
         }
 
         return {added, removed};
