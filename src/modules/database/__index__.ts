@@ -32,10 +32,11 @@ import { GuestLink } from "./entities/user/GuestLink";
 import { Role } from "./entities/user/Role";
 import { User } from "./entities/user/User";
 import { AddCheckSlotRoleTrigger1752829591073 } from "../../migrations/1752829591073-AddCheckSlotRoleTrigger";
+import { AddInvoicePoolEntities1764805699117 } from "../../migrations/1764805699117-AddInvoicePoolEntities";
 import { ActivityAssignmentRolesSubscriber } from "./subscribers/activityAssignmentRole";
 
 export const entities = [ActivityAssignment, ActivityAssignmentRole, ActivityPlan, ActivityPlanRequirement, ActivitySlot, ActivitySlotRole, DriversAssignment, DriversItem, DriversList, Event, EventInvoice, EventInvoicePool, EventInvoiceShare, EventInvoiceSurcharge, EventPoolAssignment, EventPoolTakeover, EventRegBypassLink, EventRegistration, EventRegistrationDietary, PackingAssignment, PackingItem, PackingList, EntityAdminAssignment, EntityPermissions, Session, Survey, SurveyCombination, SurveyResponse, Guest, GuestLink, Role, User];
 
-export const migrations = [AddCheckSlotRoleTrigger1752829591073];
+export const migrations = [AddCheckSlotRoleTrigger1752829591073, AddInvoicePoolEntities1764805699117];
 
 export const subscribers = [ActivityAssignmentRolesSubscriber];
