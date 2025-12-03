@@ -305,11 +305,27 @@ export async function isRegisteredForEvent(actor: { userId?: number; guestId?: n
     if (!actor.userId && !actor.guestId) return false;
 
     const repo = AppDataSource.getRepository(EventRegistration);
-    return await repo.exists({
-        where: {event: {id: eventId}, user: {id: actor.userId ?? IsNull()}, guest: {id: actor.guestId ?? IsNull()}}
-    }) || await AppDataSource.getRepository(Event).exists({
-        where: {id: eventId, owner: {id: actor.userId}}
-    });
+    
+    // Check if user or guest is registered (use separate queries for clarity)
+    let isRegistered = false;
+    if (actor.userId) {
+        isRegistered = await repo.exists({
+            where: {event: {id: eventId}, user: {id: actor.userId}}
+        });
+    } else if (actor.guestId) {
+        isRegistered = await repo.exists({
+            where: {event: {id: eventId}, guest: {id: actor.guestId}}
+        });
+    }
+    
+    // Also check if user is the event owner
+    if (!isRegistered && actor.userId) {
+        isRegistered = await AppDataSource.getRepository(Event).exists({
+            where: {id: eventId, owner: {id: actor.userId}}
+        });
+    }
+    
+    return isRegistered;
 }
 
 // ---------------- Associated content (event-scoped) ----------------
