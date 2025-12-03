@@ -5,11 +5,7 @@
 
 import {
     isAuthenticated,
-    isEventPermitted,
-    isEventPermittedAPI,
-    requireAddRight,
     requireEventParticipant,
-    requireManageRight,
     requireOwner,
     requireOwnerAPI,
 } from '../../src/middleware/permissionMiddleware';
@@ -28,12 +24,6 @@ import {
     requireEventParticipantSuccessData,
     requireEventParticipantFailureData,
     requireEventParticipantBypassData,
-    requireManageRightSuccessData,
-    requireAddRightSuccessData,
-    requireRightsFailureData,
-    isEventPermittedFalseData,
-    isEventPermittedAPIFalseData,
-    isEventPermittedTrueData,
     isAuthenticatedData,
 } from '../data/middleware/permissionData';
 
@@ -145,94 +135,8 @@ describe('requireEventParticipant - Data Driven', () => {
     });
 });
 
-describe('requireManageRight - Data Driven', () => {
-    describe('success scenarios', () => {
-        test.each(requireManageRightSuccessData)(
-            '$description',
-            async ({ session, resource }) => {
-                await expectMiddlewareSuccess(requireManageRight(), session, resource);
-            }
-        );
-    });
-
-    describe('failure scenarios', () => {
-        test.each(requireRightsFailureData)(
-            '$description',
-            async ({ session, resource, expectedStatus, expectedErrorType }) => {
-                (isRegisteredForEvent as jest.Mock).mockResolvedValue(false);
-                await expectMiddlewareFailure(
-                    requireManageRight(),
-                    session,
-                    resource,
-                    expectedStatus,
-                    expectedErrorType
-                );
-            }
-        );
-    });
-});
-
-describe('requireAddRight - Data Driven', () => {
-    describe('success scenarios', () => {
-        test.each(requireAddRightSuccessData)(
-            '$description',
-            async ({ session, resource }) => {
-                await expectMiddlewareSuccess(requireAddRight(), session, resource);
-            }
-        );
-    });
-
-    describe('failure scenarios with no identification', () => {
-        test.each(requireRightsFailureData)(
-            '$description',
-            async ({ session, resource, expectedStatus, expectedErrorType }) => {
-                (isRegisteredForEvent as jest.Mock).mockResolvedValue(false);
-                await expectMiddlewareFailure(
-                    requireAddRight(),
-                    session,
-                    resource,
-                    expectedStatus,
-                    expectedErrorType
-                );
-            }
-        );
-    });
-});
-
-describe('isEventPermitted (useEvent toggle) - Data Driven', () => {
-    describe('useEvent=false scenarios', () => {
-        test.each(isEventPermittedFalseData)(
-            '$description',
-            async ({ session, resource, query, expectedStatus, expectedErrorType }) => {
-                const app = buildMiddlewareApp(isEventPermitted(false), { session, resource });
-                const response = await makeGetRequest(app, '/ok', query);
-                verifyMiddlewareBlocks(response, expectedStatus, expectedErrorType);
-            }
-        );
-    });
-
-    describe('useEvent=false with API error', () => {
-        test.each(isEventPermittedAPIFalseData)(
-            '$description',
-            async ({ session, resource, query, expectedStatus, expectedErrorType }) => {
-                const app = buildMiddlewareApp(isEventPermittedAPI(false), { session, resource });
-                const response = await makeGetRequest(app, '/ok', query);
-                verifyMiddlewareBlocks(response, expectedStatus, expectedErrorType);
-            }
-        );
-    });
-
-    describe('useEvent=true scenarios', () => {
-        test.each(isEventPermittedTrueData)(
-            '$description',
-            async ({ session, resource, query }) => {
-                const app = buildMiddlewareApp(isEventPermitted(true), { session, resource });
-                const response = await makeGetRequest(app, '/ok', query);
-                verifyMiddlewareAllows(response);
-            }
-        );
-    });
-});
+// Tests for requireManageRight, requireAddRight, isEventPermitted, and isEventPermittedAPI 
+// removed as these functions were removed in the permission system rework
 
 describe('isAuthenticated - Data Driven', () => {
     test.each(isAuthenticatedData)(

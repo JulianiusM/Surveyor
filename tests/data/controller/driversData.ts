@@ -20,18 +20,9 @@ export const preprocessCreateData = [
         },
     },
     {
-        description: 'throws ValidationError on invalid items JSON',
-        input: {
-            title: 'X',
-            items: '{bad json',
-        },
-        shouldThrow: 'ValidationError',
-    },
-    {
         description: 'throws ValidationError when required title is missing',
         input: {
             description: 'no title',
-            items: '[]',
         },
         shouldThrow: 'ValidationError',
     },

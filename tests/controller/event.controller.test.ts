@@ -209,10 +209,12 @@ describe('cancelRegistration', () => {
     test.each(testData.cancelRegistrationData)(
         '$description',
         async ({eventId, session, expectedMessage, expectedArgs, shouldThrow}) => {
+            const event = {id: eventId} as any;
+            
             if (shouldThrow) {
-                await expect(cancelRegistration(eventId, session as any)).rejects.toBeInstanceOf(APIError);
+                await expect(cancelRegistration(event, session as any)).rejects.toBeInstanceOf(APIError);
             } else {
-                const result = await cancelRegistration(eventId, session as any);
+                const result = await cancelRegistration(event, session as any);
                 if (expectedMessage) {
                     verifyResult(result, expectedMessage);
                 }

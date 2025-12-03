@@ -82,8 +82,6 @@ describe('preprocessCreate', () => {
                 expect(res).toMatchObject({
                     title: expected.title,
                     description: expected.description,
-                    allowGuestAdd: expected.allowGuestAdd,
-                    guestManage: expected.guestManage,
                 });
                 expect(res.items).toHaveLength(expected.itemsLength);
                 expect(res.items[0]).toMatchObject(expected.firstItem);

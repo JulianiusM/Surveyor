@@ -28,7 +28,7 @@ function preprocessCreate(body: any): Partial<PackingList> & { items: Partial<Pa
 
     const schema = Joi.object({
         title: Joi.string().required(),
-        description: Joi.string().optional(),
+        description: Joi.string().allow('').optional(),
         items: Joi.array().items(itemSchema).min(1).required(),
         event_id: Joi.string().uuid().allow('').optional(),
     });
