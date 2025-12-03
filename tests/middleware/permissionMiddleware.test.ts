@@ -8,12 +8,19 @@ import {
     requireEventParticipant,
     requireOwner,
     requireOwnerAPI,
+    requirePermission,
+    requirePermissionApi,
 } from '../../src/middleware/permissionMiddleware';
 
 import { isRegisteredForEvent } from '../../src/modules/database/services/EventService';
+import { can } from '../../src/modules/permissionEngine';
 
 jest.mock('../../src/modules/database/services/EventService', () => ({
     isRegisteredForEvent: jest.fn(),
+}));
+
+jest.mock('../../src/modules/permissionEngine', () => ({
+    can: jest.fn(),
 }));
 
 // Import test data
@@ -24,6 +31,9 @@ import {
     requireEventParticipantSuccessData,
     requireEventParticipantFailureData,
     requireEventParticipantBypassData,
+    requirePermissionSuccessData,
+    requirePermissionFailureData,
+    requirePermissionApiFailureData,
     isAuthenticatedData,
 } from '../data/middleware/permissionData';
 
@@ -137,6 +147,71 @@ describe('requireEventParticipant - Data Driven', () => {
 
 // Tests for requireManageRight, requireAddRight, isEventPermitted, and isEventPermittedAPI 
 // removed as these functions were removed in the permission system rework
+
+describe('requirePermission - Data Driven', () => {
+    describe('success scenarios', () => {
+        test.each(requirePermissionSuccessData)(
+            '$description',
+            async ({ session, entityDescriptor, requiredPerm, userPerms, guestPerms }) => {
+                // Mock the can function to return true for success scenarios
+                (can as jest.Mock).mockResolvedValue(true);
+
+                const getEntity = () => entityDescriptor;
+                const middleware = requirePermission(getEntity, requiredPerm);
+                
+                await expectMiddlewareSuccess(middleware, session, {});
+                
+                expect(can).toHaveBeenCalled();
+            }
+        );
+    });
+
+    describe('failure scenarios (ExpectedError)', () => {
+        test.each(requirePermissionFailureData)(
+            '$description',
+            async ({ session, entityDescriptor, requiredPerm, userPerms, guestPerms, expectedStatus, expectedErrorType }) => {
+                // Mock the can function to return false for failure scenarios
+                (can as jest.Mock).mockResolvedValue(false);
+
+                const getEntity = () => entityDescriptor;
+                const middleware = requirePermission(getEntity, requiredPerm);
+                
+                await expectMiddlewareFailure(
+                    middleware,
+                    session,
+                    {},
+                    expectedStatus,
+                    expectedErrorType
+                );
+                
+                expect(can).toHaveBeenCalled();
+            }
+        );
+    });
+
+    describe('API error scenarios', () => {
+        test.each(requirePermissionApiFailureData)(
+            '$description',
+            async ({ session, entityDescriptor, requiredPerm, userPerms, expectedStatus, expectedErrorType }) => {
+                // Mock the can function to return false for failure scenarios
+                (can as jest.Mock).mockResolvedValue(false);
+
+                const getEntity = () => entityDescriptor;
+                const middleware = requirePermissionApi(getEntity, requiredPerm);
+                
+                await expectMiddlewareFailure(
+                    middleware,
+                    session,
+                    {},
+                    expectedStatus,
+                    expectedErrorType
+                );
+                
+                expect(can).toHaveBeenCalled();
+            }
+        );
+    });
+});
 
 describe('isAuthenticated - Data Driven', () => {
     test.each(isAuthenticatedData)(

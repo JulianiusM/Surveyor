@@ -279,3 +279,77 @@ export const isAuthenticatedData = [
         expectedFlashMessage: 'You must be logged in to access this site.',
     },
 ];
+
+/**
+ * Test cases for requirePermission - success scenarios
+ * Tests the new permission system that replaced requireManageRight/requireAddRight
+ */
+export const requirePermissionSuccessData = [
+    {
+        description: 'allows owner with any permission check',
+        session: { user: { id: 1 } },
+        entityDescriptor: { entityType: 'activity', entityId: 'a1', ownerUserId: 1 },
+        requiredPerm: 1 << 0, // EDIT_TITLE permission
+    },
+    {
+        description: 'allows user with specific permission granted',
+        session: { user: { id: 2 } },
+        entityDescriptor: { entityType: 'drivers', entityId: 'd1', ownerUserId: 1 },
+        requiredPerm: 1 << 13, // ACCESS_VIEW permission
+        userPerms: 1 << 13, // User has ACCESS_VIEW
+    },
+    {
+        description: 'allows guest with permission granted',
+        session: { guest: { id: 3 } },
+        entityDescriptor: { entityType: 'packing', entityId: 'p1', ownerUserId: 1 },
+        requiredPerm: 1 << 13, // ACCESS_VIEW permission
+        guestPerms: 1 << 13, // Guest has ACCESS_VIEW
+    },
+];
+
+/**
+ * Test cases for requirePermission - failure scenarios
+ */
+export const requirePermissionFailureData = [
+    {
+        description: 'forbids user without required permission',
+        session: { user: { id: 2 } },
+        entityDescriptor: { entityType: 'activity', entityId: 'a1', ownerUserId: 1 },
+        requiredPerm: 1 << 0, // EDIT_TITLE permission
+        userPerms: 0, // User has no permissions
+        expectedStatus: 403,
+        expectedErrorType: 'expected',
+    },
+    {
+        description: 'forbids guest without required permission',
+        session: { guest: { id: 3 } },
+        entityDescriptor: { entityType: 'drivers', entityId: 'd1', ownerUserId: 1 },
+        requiredPerm: 1 << 4, // ITEM_ADD permission
+        guestPerms: 1 << 13, // Guest only has ACCESS_VIEW
+        expectedStatus: 403,
+        expectedErrorType: 'expected',
+    },
+    {
+        description: 'forbids when no session',
+        session: {},
+        entityDescriptor: { entityType: 'packing', entityId: 'p1', ownerUserId: 1 },
+        requiredPerm: 1 << 13, // ACCESS_VIEW permission
+        expectedStatus: 403,
+        expectedErrorType: 'expected',
+    },
+];
+
+/**
+ * Test cases for requirePermissionApi - failure scenarios (API error variant)
+ */
+export const requirePermissionApiFailureData = [
+    {
+        description: 'returns API error when permission denied',
+        session: { user: { id: 2 } },
+        entityDescriptor: { entityType: 'activity', entityId: 'a1', ownerUserId: 1 },
+        requiredPerm: 1 << 0, // EDIT_TITLE permission
+        userPerms: 0,
+        expectedStatus: 403,
+        expectedErrorType: 'api',
+    },
+];
