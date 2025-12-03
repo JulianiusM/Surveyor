@@ -1,7 +1,7 @@
 import {APIError, ExpectedError} from "../modules/lib/errors";
 import {asyncHandler, asyncParamHandler} from "../modules/lib/asyncHandler";
 import {NextFunction, Request, Response, Router} from "express";
-import {GuestFlowDb} from "../types/UserTypes";
+import type {GuestFlowDb} from "../types/UserTypes";
 
 export function apiParamHandler(param: string, router: Router, getById: GuestFlowDb['getById'], entityType: string) {
     handleParam(param, router, getById, entityType, new APIError(`${entityType} not found`, {}, 404));

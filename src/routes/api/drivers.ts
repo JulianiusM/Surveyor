@@ -19,9 +19,9 @@ import {attachAssignRoutes} from '../../middleware/assignFlowFactory';
 
 import controller from "../../controller/driversController";
 import {PERM} from "../../modules/lib/permissions";
-import {EntityItemType, EntityType} from "../../types/UtilTypes";
+import type {EntityItemType, EntityType} from "../../types/UtilTypes";
 import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
-import {ItemGetter} from "../../types/PermissionTypes";
+import type {ItemGetter} from "../../types/PermissionTypes";
 
 const app = express.Router();
 

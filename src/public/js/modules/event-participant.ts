@@ -1,6 +1,6 @@
 // src/public/js(modules/event-participants.ts
 
-import {ParticipantRow} from "../../../types/EventTypes";
+import type {ParticipantRow} from "../../../types/EventTypes";
 
 function qs<T extends Element>(sel: string, root: ParentNode | Document = document): T | null {
     return root.querySelector(sel) as T | null;

@@ -2,8 +2,8 @@
 import {AppDataSource} from '../dataSource';
 import {EntityAdminAssignment as ACL} from '../entities/permissions/EntityAdminAssignment';
 import {EntityPermissions} from "../entities/permissions/EntityPermissions";
-import {Audience, PermData} from "../../../types/PermissionTypes";
-import {CombEntityType} from "../../../types/UtilTypes";
+import type {Audience, PermData} from "../../../types/PermissionTypes";
+import type {CombEntityType} from "../../../types/UtilTypes";
 
 export async function addAdmin(entityType: CombEntityType, entityId: string, userId: number, perms: number, createdBy?: number) {
     const repo = AppDataSource.getRepository(ACL);
