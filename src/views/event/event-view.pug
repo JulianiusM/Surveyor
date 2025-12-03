@@ -1,5 +1,6 @@
 //- views/event/event-view.pug — Event view + registration page
 extends ../layout
+include ../modules/module_invoice_pool.pug
 
 block meta
     - const ev = data.event || data; // tolerate different controller shapes
@@ -165,10 +166,15 @@ block content
                             button.btn.btn-outline-danger#cancelRegistrationBtn(type="button")
                                 i.bi.bi-x-circle.me-1
                                 | Cancel registration
-    else
-        .alert.alert-info.mx-1
-            i.bi.bi-info-circle.me-2
-            | Log in or use your guest link to register for this event.
+
+            if data.participantPools && data.participantPools.length
+                +invoiceSubmission(ev.id, data.participantPools, 'participant', data.participantInvoices)
+                +participantTakeoverList(data.participantPools, data.participants)
+                +participantShareSummary(data.registration.id, data.invoicePools)
+            else
+                .alert.alert-info.mx-1
+                    i.bi.bi-info-circle.me-2
+                    | Log in or use your guest link to register for this event.
 
     // ─── Associated content within this event ────────────────
     if reg
@@ -249,9 +255,14 @@ block content
                 apiList: `/api/event/${ev.id}/participants`,
             })
 
+    +takeoverModal('takeoverModal')
+
 
 block scripts
     script(type="module" src="/js/events.gen.js")
     script.
         window.EVENT_ID = "#{ev.id}";
         window.PERM_DATA = !{JSON.stringify(permData)};
+    script#participantsData(type="application/json")!= JSON.stringify(data.participants || [])
+    if reg
+        script#registrationData(type="application/json")!= JSON.stringify({id: reg.id})

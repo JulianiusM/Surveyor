@@ -15,6 +15,26 @@ import {
 } from "../../types/PermissionTypes";
 import {EntityItemType, EntityType} from "../../types/UtilTypes";
 
+// Generic currency helpers for invoice math
+export function toAmount(val: string | number | undefined | null): number {
+    if (val === undefined || val === null) return 0;
+    const num = Number(val);
+    return Number.isNaN(num) ? 0 : num;
+}
+
+export function formatAmount(amount: number): string {
+    return amount.toFixed(2);
+}
+
+// Resolve a human-friendly label for the current actor, falling back to usernames where names are missing.
+// This keeps email/audit messages readable without duplicating lookup logic across controllers.
+export function resolveActorLabel(session: Request['session'] | undefined | null): string {
+    if (session?.user?.name) return session.user.name;
+    if ((session?.user as any)?.username) return (session?.user as any).username;
+    if (session?.guest?.name) return session.guest.name;
+    return 'an organizer';
+}
+
 // Funktion zur Generierung eines einzigartigen Tokens
 export function generateUniqueToken() {
     return crypto.randomBytes(32).toString('hex');

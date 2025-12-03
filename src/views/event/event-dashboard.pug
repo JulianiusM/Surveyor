@@ -1,4 +1,5 @@
 extends ../layout
+include ../modules/module_invoice_pool.pug
 
 block meta
     - const ev = data.event || data; // tolerate different controller shapes
@@ -202,6 +203,11 @@ block content
                 true
             )
 
+    if permData.entity.has('MANAGE_ASSIGNMENTS')
+        +invoiceManagementTabs(ev, data)
+
+    +takeoverModal('takeoverModal')
+
     if permData.entity.has("DATA_EXPORT")
         hr
         h2.fs-3.mb-3 Exports
@@ -217,3 +223,4 @@ block scripts
     script(type="module" src="/js/events.gen.js")
     script.
         window.EVENT_ID = "#{ev.id}";
+    script#participantsData(type="application/json")!= JSON.stringify(data.participants || [])

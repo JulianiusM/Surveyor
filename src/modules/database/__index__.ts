@@ -9,6 +9,12 @@ import { DriversAssignment } from "./entities/drivers/DriversAssignment";
 import { DriversItem } from "./entities/drivers/DriversItem";
 import { DriversList } from "./entities/drivers/DriversList";
 import { Event } from "./entities/event/Event";
+import { EventInvoice } from "./entities/event/EventInvoice";
+import { EventPoolAssignment } from "./entities/event/EventPoolAssignment";
+import { EventInvoicePool } from "./entities/event/EventInvoicePool";
+import { EventInvoiceShare } from "./entities/event/EventInvoiceShare";
+import { EventPoolTakeover } from "./entities/event/EventPoolTakeover";
+import { EventInvoiceSurcharge } from "./entities/event/EventInvoiceSurcharge";
 import { EventRegBypassLink } from "./entities/event/EventRegBypassLink";
 import { EventRegistration } from "./entities/event/EventRegistration";
 import { EventRegistrationDietary } from "./entities/event/EventRegistrationDietary";
@@ -28,7 +34,7 @@ import { User } from "./entities/user/User";
 import { AddCheckSlotRoleTrigger1752829591073 } from "../../migrations/1752829591073-AddCheckSlotRoleTrigger";
 import { ActivityAssignmentRolesSubscriber } from "./subscribers/activityAssignmentRole";
 
-export const entities = [ActivityAssignment, ActivityAssignmentRole, ActivityPlan, ActivityPlanRequirement, ActivitySlot, ActivitySlotRole, DriversAssignment, DriversItem, DriversList, Event, EventRegBypassLink, EventRegistration, EventRegistrationDietary, PackingAssignment, PackingItem, PackingList, EntityAdminAssignment, EntityPermissions, Session, Survey, SurveyCombination, SurveyResponse, Guest, GuestLink, Role, User];
+export const entities = [ActivityAssignment, ActivityAssignmentRole, ActivityPlan, ActivityPlanRequirement, ActivitySlot, ActivitySlotRole, DriversAssignment, DriversItem, DriversList, Event, EventInvoice, EventPoolAssignment, EventInvoicePool, EventInvoiceShare, EventPoolTakeover, EventInvoiceSurcharge, EventRegBypassLink, EventRegistration, EventRegistrationDietary, PackingAssignment, PackingItem, PackingList, EntityAdminAssignment, EntityPermissions, Session, Survey, SurveyCombination, SurveyResponse, Guest, GuestLink, Role, User];
 
 export const migrations = [AddCheckSlotRoleTrigger1752829591073];
 

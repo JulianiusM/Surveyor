@@ -34,6 +34,8 @@ app.use(express.json());
 app.use(express.urlencoded({extended: true}));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
+// Serve uploaded invoice proofs directly; files are stored under /uploads/invoices
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // ensure dataSource is initialized before this
 const sessionRepository = AppDataSource.getRepository(Session);
