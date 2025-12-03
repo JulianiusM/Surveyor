@@ -28,20 +28,10 @@ jest.mock('../../src/modules/database/services/DriverService', () => ({
     unassignDriversItemGuest: jest.fn(),
 }));
 
-jest.mock('../../src/modules/lib/util', () => ({
-    generateUniqueId: jest.fn(() => 'uid-xyz'),
-    ENTITIES: {
-        ACTIVITY: 'activity',
-        DRIVERS: 'drivers',
-        EVENT: 'event',
-        PACKING: 'packing',
-        SURVEY: 'survey',
-    },
-}));
+import { mockUtil, mockPermissionEngine } from '../mocks/commonMocks';
 
-jest.mock('../../src/modules/permissionEngine', () => ({
-    saveDefaultPermsFromBody: jest.fn(),
-}));
+jest.mock('../../src/modules/lib/util', () => mockUtil());
+jest.mock('../../src/modules/permissionEngine', () => mockPermissionEngine());
 
 import controller from '../../src/controller/driversController';
 import * as driverService from '../../src/modules/database/services/DriverService';

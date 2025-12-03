@@ -24,20 +24,13 @@ jest.mock('../../src/modules/database/services/PackingService', () => ({
     deletePackingList: jest.fn(),
 }));
 
-jest.mock('../../src/modules/lib/util', () => ({
+import { mockUtil, mockPermissionEngine } from '../mocks/commonMocks';
+
+jest.mock('../../src/modules/lib/util', () => mockUtil({
     generateUniqueId: jest.fn(() => 'uid-123'),
-    ENTITIES: {
-        ACTIVITY: 'activity',
-        DRIVERS: 'drivers',
-        EVENT: 'event',
-        PACKING: 'packing',
-        SURVEY: 'survey',
-    },
 }));
 
-jest.mock('../../src/modules/permissionEngine', () => ({
-    saveDefaultPermsFromBody: jest.fn(),
-}));
+jest.mock('../../src/modules/permissionEngine', () => mockPermissionEngine());
 
 import controller from '../../src/controller/packingController';
 import * as packingService from '../../src/modules/database/services/PackingService';

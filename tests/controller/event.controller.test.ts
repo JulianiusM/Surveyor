@@ -21,23 +21,15 @@ jest.mock('../../src/modules/database/services/EventService', () => ({
     updateEventDates: jest.fn(),
 }));
 
-jest.mock('../../src/modules/lib/util', () => ({
-    // Keep these deterministic for tests
+import { mockUtil, mockPermissionEngine } from '../mocks/commonMocks';
+
+jest.mock('../../src/modules/lib/util', () => mockUtil({
     isWithinWindow: jest.fn(() => true),
     rewriteISOToZone: jest.fn((iso: string, tz: string) => `rewritten:${iso}:${tz}`),
     getResource: jest.fn((req: any, type: string) => req.resource?.[type]),
-    ENTITIES: {
-        ACTIVITY: 'activity',
-        DRIVERS: 'drivers',
-        EVENT: 'event',
-        PACKING: 'packing',
-        SURVEY: 'survey',
-    },
 }));
 
-jest.mock('../../src/modules/permissionEngine', () => ({
-    saveDefaultPermsFromBody: jest.fn(),
-}));
+jest.mock('../../src/modules/permissionEngine', () => mockPermissionEngine());
 
 import controller from '../../src/controller/eventController';
 import * as eventService from '../../src/modules/database/services/EventService';

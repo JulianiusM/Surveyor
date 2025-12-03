@@ -36,22 +36,14 @@ jest.mock('../../src/modules/database/services/UserService', () => ({
 }));
 
 // Make IDs deterministic and date parsing stable
-jest.mock('../../src/modules/lib/util', () => ({
+import { mockUtil, mockPermissionEngine, ENTITIES_MOCK } from '../mocks/commonMocks';
+
+jest.mock('../../src/modules/lib/util', () => mockUtil({
     generateUniqueId: jest.fn(() => 'uid-123'),
-    // Simple stable parser: treat date as local midnight
     fromISOtoLocal: (s: string) => new Date(`${s}T00:00:00`),
-    ENTITIES: {
-        ACTIVITY: 'activity',
-        DRIVERS: 'drivers',
-        EVENT: 'event',
-        PACKING: 'packing',
-        SURVEY: 'survey',
-    },
 }));
 
-jest.mock('../../src/modules/permissionEngine', () => ({
-    saveDefaultPermsFromBody: jest.fn(),
-}));
+jest.mock('../../src/modules/permissionEngine', () => mockPermissionEngine());
 
 import controller from '../../src/controller/activityController';
 import * as activityService from '../../src/modules/database/services/ActivityService';
