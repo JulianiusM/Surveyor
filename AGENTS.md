@@ -364,6 +364,4 @@ When making changes:
 - **Playwright**: Latest stable
 - **Jest**: Latest stable
 
-## License
-
-Private - All rights reserved
+For license information, see [README.md](README.md).
