@@ -20,7 +20,7 @@ import * as userService from "../modules/database/services/UserService";
 import * as eventService from "../modules/database/services/EventService";
 import type {GuestFlowConfig, GuestFlowDb} from "../types/UserTypes";
 import {PERM} from "../modules/lib/permissions";
-import {EntityDescriptor, EntityGetter, GetResource, ItemGetter} from "../types/PermissionTypes";
+import type {EntityDescriptor, EntityGetter, GetResource, ItemGetter} from "../types/PermissionTypes";
 import {persistSession} from "../modules/lib/session";
 
 // Builds the guest edit link for emails and redirects using Node.js URL API

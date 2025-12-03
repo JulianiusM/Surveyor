@@ -7,8 +7,8 @@ import {requirePermission} from "../middleware/permissionMiddleware";
 import {asyncHandler} from "../modules/lib/asyncHandler";
 import renderer from "../modules/renderer";
 import {PERM} from "../modules/lib/permissions";
-import {EntityType} from "../types/UtilTypes";
-import {EntityDescriptor} from "../types/PermissionTypes";
+import type {EntityType} from "../types/UtilTypes";
+import type {EntityDescriptor} from "../types/PermissionTypes";
 import {queryHandler} from "../middleware/paramHandler";
 
 const app = express.Router();

@@ -3,7 +3,7 @@ import {ALL_MASK, getInitialPerms, hasPerm, PERM, toMaskFromBodyValue} from './l
 import * as entityAdminService from './database/services/EntityAdminService';
 import {getUserPerms, updatePerms} from './database/services/EntityAdminService';
 import {isRegisteredForEvent} from './database/services/EventService';
-import {
+import type {
     Audience,
     EntityDescriptor,
     ItemDescriptor,
@@ -15,7 +15,7 @@ import {
     SessionLike,
     Subject
 } from "../types/PermissionTypes";
-import {CombEntityType} from "../types/UtilTypes";
+import type {CombEntityType} from "../types/UtilTypes";
 import {jsonReplacer} from "./lib/util";
 
 function keyUser(t: CombEntityType, id: string, userId: number) {

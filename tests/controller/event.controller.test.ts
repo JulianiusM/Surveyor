@@ -21,14 +21,19 @@ jest.mock('../../src/modules/database/services/EventService', () => ({
     updateEventDates: jest.fn(),
 }));
 
-jest.mock('../../src/modules/lib/util', () => ({
-    // Keep these deterministic for tests
+import { mockUtil, mockPermissionEngine } from '../mocks/commonMocks';
+
+jest.mock('../../src/modules/lib/util', () => mockUtil({
     isWithinWindow: jest.fn(() => true),
     rewriteISOToZone: jest.fn((iso: string, tz: string) => `rewritten:${iso}:${tz}`),
+    getResource: jest.fn((req: any, type: string) => req.resource?.[type]),
 }));
+
+jest.mock('../../src/modules/permissionEngine', () => mockPermissionEngine());
 
 import controller from '../../src/controller/eventController';
 import * as eventService from '../../src/modules/database/services/EventService';
+import * as permissionEngine from '../../src/modules/permissionEngine';
 import {APIError, ValidationError} from '../../src/modules/lib/errors';
 import {isWithinWindow, rewriteISOToZone} from '../../src/modules/lib/util';
 import {setupMock, verifyMockCall, verifyResult} from '../keywords/common/controllerKeywords';
@@ -90,7 +95,7 @@ describe('createEntity / afterCreateItems / deleteEntity', () => {
             userId, data.title, data.description, data.startDate, data.endDate,
             data.location, data.bindingDeadline, data.requireDietaryInfo, data.maxParticipants, data.timezone
         );
-        await expect(afterCreateItems()).resolves.toBeUndefined();
+        await expect(afterCreateItems(expectedId, {_body: {}})).resolves.toBeUndefined();
     });
 
     it('deleteEntity delegates to service', async () => {
@@ -132,7 +137,8 @@ describe('fetchForView', () => {
                 setupMock(eventService.getDriverListsForEvent, mockDriverLists);
             }
             
-            const res = await fetchForView(event, session as any);
+            const req = {session} as any;
+            const res = await fetchForView(event, req);
             
             if (expectedRegistrationCall) {
                 verifyMockCall(eventService.getRegistrationFor, ...expectedRegistrationCall);
@@ -176,16 +182,18 @@ describe('registerAttendance', () => {
                 (isWithinWindow as jest.Mock).mockReturnValue(mockWithinWindow);
             }
             
+            const req = {session, resource: {}} as any;
+            
             if (shouldThrow) {
-                await expect(registerAttendance(event as any, body, session as any)).rejects.toBeInstanceOf(APIError);
+                await expect(registerAttendance(event as any, body, req)).rejects.toBeInstanceOf(APIError);
             } else if (expectedCall) {
-                const result = await registerAttendance(event as any, body, session as any);
+                const result = await registerAttendance(event as any, body, req);
                 if (expectedMessage) {
                     verifyResult(result, expectedMessage);
                 }
                 verifyMockCall(eventService[expectedCall.service], ...expectedCall.args);
             } else if (expectCallMade) {
-                await registerAttendance(event as any, body, session as any);
+                await registerAttendance(event as any, body, req);
                 expect(eventService[expectCallMade]).toHaveBeenCalled();
             }
         }
@@ -196,10 +204,12 @@ describe('cancelRegistration', () => {
     test.each(testData.cancelRegistrationData)(
         '$description',
         async ({eventId, session, expectedMessage, expectedArgs, shouldThrow}) => {
+            const event = {id: eventId} as any;
+            
             if (shouldThrow) {
-                await expect(cancelRegistration(eventId, session as any)).rejects.toBeInstanceOf(APIError);
+                await expect(cancelRegistration(event, session as any)).rejects.toBeInstanceOf(APIError);
             } else {
-                const result = await cancelRegistration(eventId, session as any);
+                const result = await cancelRegistration(event, session as any);
                 if (expectedMessage) {
                     verifyResult(result, expectedMessage);
                 }
@@ -215,10 +225,15 @@ describe('updateEventSettings', () => {
     test.each(scenarios)(
         '$description',
         async ({body, expectedMessage, expectRewrite, expectedCalls, expectNotCalled, shouldThrow}) => {
+            // Mock permData with all necessary permissions
+            const mockPermData = {
+                entity: new Set(['EDIT_META', 'EDIT_TITLE', 'EDIT_DESC', 'MANAGE_REQUIREMENTS', 'EDIT_CAPACITY'])
+            };
+            
             if (shouldThrow) {
-                await expect(updateEventSettings(event as any, body)).rejects.toBeInstanceOf(APIError);
+                await expect(updateEventSettings(event as any, body, mockPermData as any)).rejects.toBeInstanceOf(APIError);
             } else {
-                const msg = await updateEventSettings(event as any, body);
+                const msg = await updateEventSettings(event as any, body, mockPermData as any);
                 
                 if (expectedMessage) {
                     verifyResult(msg, expectedMessage);

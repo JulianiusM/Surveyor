@@ -4,7 +4,7 @@
 import {APIError, ExpectedError} from "../modules/lib/errors";
 import {NextFunction, Request, Response} from "express";
 import {isRegisteredForEvent} from "../modules/database/services/EventService";
-import {
+import type {
     EntityGetter,
     GetAdditional,
     GetResource,
@@ -15,7 +15,7 @@ import {
 import {buildPermBundle, can, getDefaultPerms} from "../modules/permissionEngine";
 import {asyncHandler} from "../modules/lib/asyncHandler";
 import {getPermMeta, getPresets} from "../modules/lib/permissions";
-import {CombEntityType} from "../types/UtilTypes";
+import type {CombEntityType} from "../types/UtilTypes";
 import * as entityAdminService from "../modules/database/services/EntityAdminService"
 
 /* -------------------- Error adapters -------------------- */

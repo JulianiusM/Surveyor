@@ -11,7 +11,7 @@ import type {DIETARY} from "../types/EventTypes";
 import {Request} from "express";
 import {ALLOWED_DIETARY} from "../modules/database/entities/event/EventRegistrationDietary";
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
-import {PermBundle} from "../types/PermissionTypes";
+import type {PermBundle} from "../types/PermissionTypes";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'event/event-create';

@@ -4,7 +4,7 @@ import {asyncHandler} from "../modules/lib/asyncHandler";
 import {createGuestFlowRouter} from "../middleware/guestFlowFactory";
 import controller from "../controller/surveyController";
 import {ENTITIES, ENTITY_ITEMS, getResource} from "../modules/lib/util";
-import {EntityType} from "../types/UtilTypes";
+import type {EntityType} from "../types/UtilTypes";
 
 const app = express.Router();
 

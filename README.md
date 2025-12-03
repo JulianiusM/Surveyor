@@ -168,8 +168,9 @@ The CI pipeline automatically:
 - `npm run server:dev` - Run the server in development mode
 - `npm run server:client` - Build client-side assets in watch mode
 - `npm run server` - Run both server and client in development mode
-- `npm run build` - Build the entire application
+- `npm run build` - Build the entire application (includes SASS compilation)
 - `npm run build:server` - Build server-side code only
+- `npm run build:sass` - Compile SASS files to CSS
 - `npm run build:client` - Build client-side assets only
 - `npm run typeorm` - Run TypeORM migrations
 - `npm run generate` - Generate database indexes

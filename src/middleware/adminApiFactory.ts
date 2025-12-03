@@ -8,8 +8,8 @@ import {
     searchUsers,
     updateAdmin
 } from '../controller/entityAdminController';
-import {EntityGetter} from "../types/PermissionTypes";
-import {CombEntityType} from "../types/UtilTypes";
+import type {EntityGetter} from "../types/PermissionTypes";
+import type {CombEntityType} from "../types/UtilTypes";
 import renderer from "../modules/renderer";
 import rateLimit from "express-rate-limit";
 

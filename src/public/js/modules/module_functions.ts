@@ -1,6 +1,6 @@
 //Custom conditional class switch
 
-import {PermBundle, PermType, PermView} from "../../../types/PermissionTypes";
+import type {PermBundle, PermType, PermView} from "../../../types/PermissionTypes";
 import {PERM} from "../../../modules/lib/permissions";
 
 export function refreshState(object: JQuery<HTMLElement>, validated: boolean, validatedClass: string, invalidatedClass: string) {
