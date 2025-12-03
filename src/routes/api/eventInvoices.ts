@@ -20,8 +20,13 @@ const proofStorage = multer.diskStorage({
         cb(null, proofDir);
     },
     filename: (_req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        cb(null, `${Date.now()}-${uuidv4()}${ext}`);
+        const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.pdf'];
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (!allowedExts.includes(ext)) {
+            cb(new Error('Invalid file extension'));
+        } else {
+            cb(null, `${Date.now()}-${uuidv4()}${ext}`);
+        }
     },
 });
 
@@ -143,7 +148,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/shares/:shareId/pay',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {
-            const isPaid = req.body.isPaid === true || req.body.isPaid === 'on';
+            const isPaid = req.body.isPaid === true || req.body.isPaid === 'true' || req.body.isPaid === 'on';
             await eventPoolController.markSharePaid(resFct(req), req.params.poolId, req.params.shareId, isPaid, req.session);
             renderer.respondWithSuccessJson(res, "share updated");
         })

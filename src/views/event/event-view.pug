@@ -263,6 +263,6 @@ block scripts
     script.
         window.EVENT_ID = "#{ev.id}";
         window.PERM_DATA = !{JSON.stringify(permData)};
-    script#participantsData(type="application/json")!= JSON.stringify(data.participants || [])
+    script#participantsData(type="application/json")!= JSON.stringify(data.participants || []).replace(/<\/script>/g, '<\\/script>')
     if reg
         script#registrationData(type="application/json")!= JSON.stringify({id: reg.id})

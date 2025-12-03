@@ -132,19 +132,19 @@ export async function updateTakeovers(
         const added: {payerId: number; beneficiaryId: number}[] = [];
 
         // Remove anything no longer desired or reassigned to a different payer when allowed.
-        const toDelete: number[] = [];
+        const toDelete = new Set<number>();
         for (const takeover of existing) {
             const isPayer = takeover.payerRegistrationId === payerRegistrationId;
             const beneficiaryDesired = normalizedBeneficiaries.includes(takeover.beneficiaryRegistrationId);
             const conflictingClaim = allowReassign && beneficiaryDesired && takeover.payerRegistrationId !== payerRegistrationId;
             if ((isPayer && !beneficiaryDesired) || conflictingClaim) {
                 removed.push({payerId: takeover.payerRegistrationId, beneficiaryId: takeover.beneficiaryRegistrationId});
-                toDelete.push(takeover.id);
+                toDelete.add(takeover.id);
             }
         }
 
-        if (toDelete.length) {
-            await takeoverRepo.delete(toDelete);
+        if (toDelete.size) {
+            await takeoverRepo.delete(Array.from(toDelete));
         }
 
         // Ensure uniqueness per beneficiary by removing conflicting rows before inserting the new mapping when allowed.
@@ -154,7 +154,7 @@ export async function updateTakeovers(
             );
             if (conflicting && allowReassign) {
                 removed.push({payerId: conflicting.payerRegistrationId, beneficiaryId: conflicting.beneficiaryRegistrationId});
-                await takeoverRepo.delete(conflicting.id);
+                toDelete.add(conflicting.id);
             }
 
             const alreadyCoveredByPayer = existing.some(
@@ -170,6 +170,10 @@ export async function updateTakeovers(
                     }),
                 );
             }
+        }
+
+        if (toDelete.size) {
+            await takeoverRepo.delete(Array.from(toDelete));
         }
 
         return {added, removed};
@@ -313,8 +317,11 @@ export async function updateAssignments(
 
         // Keep takeover mappings consistent with the new assignment scope.
         const invalidTakeovers = await takeoverRepo.find({where: {pool: {id: poolId}}});
+        const validIds = allowedRegistrationIds.length
+            ? allowedRegistrationIds
+            : (await manager.getRepository(EventRegistration).find({where: {event: {id: pool.event.id}}})).map((r) => r.id);
         const toDrop = invalidTakeovers.filter(
-            (t) => !allowedRegistrationIds.includes(t.payerRegistrationId) || !allowedRegistrationIds.includes(t.beneficiaryRegistrationId),
+            (t) => !validIds.includes(t.payerRegistrationId) || !validIds.includes(t.beneficiaryRegistrationId),
         );
         if (toDrop.length) {
             await takeoverRepo.delete(toDrop.map((t) => t.id));
@@ -323,7 +330,7 @@ export async function updateAssignments(
         // Drop surcharges for participants that are no longer assigned so the UI stays consistent.
         const invalidSurcharges = await surchargeRepo.find({where: {pool: {id: poolId}}});
         const surchargeDropIds = invalidSurcharges
-            .filter((s) => !allowedRegistrationIds.includes(s.registrationId))
+            .filter((s) => !validIds.includes(s.registrationId))
             .map((s) => s.id);
         if (surchargeDropIds.length) {
             await surchargeRepo.delete(surchargeDropIds);

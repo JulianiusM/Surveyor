@@ -1,9 +1,10 @@
-// controllers/eventPoolController.ts
+// controller/eventPoolController.ts
 // Invoice pool and invoice workflow handlers extracted from the event controller for clarity and reuse.
 import fs from 'fs';
 import path from 'path';
 import Joi from 'joi';
-import {Request, Express} from 'express';
+import type {Express} from 'express';
+import {Request} from 'express';
 
 import mailer from '../modules/email';
 import {Event} from '../modules/database/entities/event/Event';
@@ -80,8 +81,8 @@ async function createInvoicePool(event: Event, body: any) {
 async function updatePoolAssignments(event: Event, poolId: string, body: any) {
     const pool = await ensurePool(event, poolId);
     if (pool.status === 'CLOSED') throw new APIError('Pool is closed', body, 400);
-    const isDefault = body.isDefault === true || body.isDefault === 'on' || pool.isDefault;
-    const assignAll = body.assignAll === true || body.assignAll === 'on' || pool.assignAll;
+    const isDefault = body.isDefault === true || body.isDefault === 'on';
+    const assignAll = body.assignAll === true || body.assignAll === 'on';
     const regIdsRaw = Array.isArray(body.registrations) ? body.registrations : (body.registrations ? [body.registrations] : []);
     const allowedIds = (await eventService.getRegistrationsForEvent(event.id)).map((r) => r.id);
     const regIds = assignAll ? allowedIds : regIdsRaw.map((id: any) => Number(id)).filter((id: number) => allowedIds.includes(id));
@@ -295,7 +296,7 @@ async function declineInvoice(event: Event, poolId: string, invoiceId: string, s
 }
 
 // Close a pool by distributing approved invoice totals, surcharges, and takeovers into payer shares.
-async function closePool(event: Event, poolId: string, _body: any = {}, session?: Request['session']) {
+async function closePool(event: Event, poolId: string, body: any = {}, session?: Request['session']) {
     const pool = await ensurePool(event, poolId);
     if (pool.status === 'CLOSED') return;
 
@@ -368,7 +369,7 @@ async function closePool(event: Event, poolId: string, _body: any = {}, session?
     await invoiceService.closePool(poolId, approvedInvoices.map((inv) => inv.id), sharePayloads);
 
     // Notify payers so they know what they owe and whether they are covering someone else
-    const actor = resolveActorLabel(session || {} as any);
+    const actor = resolveActorLabel(session ?? undefined);
     for (const [payerId, data] of payerShares.entries()) {
         const recipient = participantMap.get(payerId);
         const email = recipient?.email && recipient.email !== '—' ? recipient.email : null;

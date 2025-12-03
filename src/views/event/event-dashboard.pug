@@ -223,4 +223,4 @@ block scripts
     script(type="module" src="/js/events.gen.js")
     script.
         window.EVENT_ID = "#{ev.id}";
-    script#participantsData(type="application/json")!= JSON.stringify(data.participants || [])
+    script#participantsData(type="application/json")!= JSON.stringify(data.participants || []).replace(/<\/script>/g, '<\\/script>')
