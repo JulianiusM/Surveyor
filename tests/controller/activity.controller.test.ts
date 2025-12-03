@@ -36,7 +36,7 @@ jest.mock('../../src/modules/database/services/UserService', () => ({
 }));
 
 // Make IDs deterministic and date parsing stable
-import { mockUtil, mockPermissionEngine, ENTITIES_MOCK } from '../mocks/commonMocks';
+import { mockUtil, mockPermissionEngine } from '../mocks/commonMocks';
 
 jest.mock('../../src/modules/lib/util', () => mockUtil({
     generateUniqueId: jest.fn(() => 'uid-123'),
