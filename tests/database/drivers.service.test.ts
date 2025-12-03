@@ -133,8 +133,7 @@ describe('driversService (mysql)', () => {
             testCase.userId,
             testCase.listData.title,
             testCase.listData.description,
-            testCase.listData.allowGuestAdd,
-            testCase.listData.guestManage,
+            undefined, // eventId
             listId
         );
 
@@ -213,8 +212,7 @@ describe('driversService (mysql)', () => {
             testCase.userId,
             testCase.listData.title,
             testCase.listData.description,
-            testCase.listData.allowGuestAdd,
-            testCase.listData.guestManage,
+            undefined, // eventId
             listId
         );
 
