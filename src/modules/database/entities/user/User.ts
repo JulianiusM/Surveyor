@@ -10,6 +10,8 @@ import {Survey} from "../surveys/Survey";
 import {PackingAssignment} from "../packing/PackingAssignment";
 import {Event} from "../event/Event";
 import {EventRegistration} from "../event/EventRegistration";
+import {EntityAdminAssignment} from "../permissions/EntityAdminAssignment";
+import {EventRegBypassLink} from "../event/EventRegBypassLink";
 
 @Index("email", ["email"], {unique: true})
 @Index("username", ["username"], {unique: true})
@@ -109,6 +111,12 @@ export class User {
 
     @OneToMany(() => EventRegistration, (eventRegistration) => eventRegistration.user)
     eventRegistrations: EventRegistration[];
+
+    @OneToMany(() => EntityAdminAssignment, (entityAdminAssignments) => entityAdminAssignments.user)
+    entityAdminAssignments: EntityAdminAssignment[];
+
+    @OneToMany(() => EventRegBypassLink, (link) => link.user)
+    eventRegBypassLinksUsed: EventRegBypassLink[];
 
     @BeforeInsert()
     @BeforeUpdate()

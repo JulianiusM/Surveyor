@@ -22,16 +22,6 @@ export class ActivityPlan {
     @Column("date", {name: "end_date"})
     endDate!: string;
 
-    @Column("tinyint", {
-        name: "allow_guest_add",
-        width: 1,
-        default: () => "'0'",
-    })
-    allowGuestAdd!: boolean;
-
-    @Column("tinyint", {name: "guest_manage", width: 1, default: () => "'0'"})
-    guestManage!: boolean;
-
     @Column('simple-enum', {name: 'assignment_mode', enum: ['FREE', 'REQUIRED'], default: 'FREE'})
     assignmentMode!: 'FREE' | 'REQUIRED';
 

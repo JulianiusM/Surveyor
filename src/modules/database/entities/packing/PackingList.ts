@@ -15,16 +15,6 @@ export class PackingList {
     @Column("text", {name: "description", nullable: true})
     description?: string | null;
 
-    @Column("tinyint", {
-        name: "allow_guest_add",
-        width: 1,
-        default: 0,
-    })
-    allowGuestAdd!: boolean;
-
-    @Column("tinyint", {name: "guest_manage", width: 1, default: 0})
-    guestManage!: boolean;
-
     @Column("timestamp", {
         name: "created_at",
         nullable: true,
@@ -58,7 +48,7 @@ export class PackingList {
     owner!: User;
 
     @RelationId((pl: PackingList) => pl.event)
-    eventId?: string | null;
+    eventId?: string;
 
     @ManyToOne(() => Event, (event) => event.packingLists, {
         onDelete: "CASCADE",

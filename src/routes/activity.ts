@@ -2,14 +2,17 @@ import express from 'express';
 import {createGuestFlowRouter} from '../middleware/guestFlowFactory';
 import controller from '../controller/activityController';
 import * as activityService from '../modules/database/services/ActivityService';
+import {ENTITIES, ENTITY_ITEMS} from "../modules/lib/util";
 
 const app = express.Router();
 
 app.use("/", createGuestFlowRouter({
     addToEvent: true,
-    entityType: 'activity',
+    entityType: ENTITIES.ACTIVITY,
+    entityItemType: ENTITY_ITEMS.ACTIVITY,
     db: {
         getById: activityService.getActivityPlanById,
+        getItems: activityService.getActivitySlotsFlat,
     },
     templates: {
         create: 'activity/activity-create',

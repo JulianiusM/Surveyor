@@ -21,7 +21,6 @@ block content
         const full = data.isFull ?? true;
         const participants = data.participants || [];
 
-        const isOwner = !!(user && ownerId && user.id === ownerId);
         const isAuthed = !!(user || guest);
 
     // ─── Event meta ───────────────────────────────────────────
@@ -54,7 +53,7 @@ block content
                         label.form-label Description
                         p= ev.description
 
-            if isOwner
+            if permData.entity.has('ACCESS_ADMIN')
                 .row
                     .col-12.d-flex.justify-content-end.gap-2
                         a.btn.btn-primary(href=`/event/${ev.id}/admin`)
@@ -98,6 +97,9 @@ block content
                                     .mt-2
                                         label.form-label(for="allergyNotes") Allergies (if selected)
                                         input#allergyNotes.form-control.text-bg-dark(type="text" name="allergyNotes" placeholder="e.g., peanuts, lactose")
+
+                            if data.regToken
+                                input(type="hidden" name="regToken" value=data.regToken)
 
                             .col-12.d-flex.justify-content-end.gap-2
                                 button.btn.btn-success(type="submit")
@@ -189,13 +191,13 @@ block content
                         false
                     )
 
-                if data.packLists && data.packLists.length > 0
+                if data.packingLists && data.packingLists.length > 0
                     - shownSegments++;
                     +entityList(
                         'sec-pack',
                         'Event packing lists',
                         'bi-box-seam',
-                        data.packLists,
+                        data.packingLists,
                         'packing',
                         `/packing/create?eventId=${ev.id}`,
                         'Create new packing list',
@@ -221,13 +223,13 @@ block content
                         false
                     )
 
-                if data.driversLists && data.driversLists.length > 0
+                if data.driverLists && data.driverLists.length > 0
                     - shownSegments++;
                     +entityList(
                         'sec-drivers',
                         'Event drivers lists',
                         'bi-car-front',
-                        data.driversLists,
+                        data.driverLists,
                         'drivers',
                         `/drivers/create?eventId=${ev.id}`,
                         'Create new drivers list',
@@ -241,8 +243,15 @@ block content
                     i.bi.bi-info-circle.me-2
                     | No actions are currently added to the event.
 
+        if permData.entity.has("ACCESS_PARTICIPANTS")
+            +eventParticipants({
+                eventId: ev.id,
+                apiList: `/api/event/${ev.id}/participants`,
+            })
+
 
 block scripts
     script(type="module" src="/js/events.gen.js")
     script.
         window.EVENT_ID = "#{ev.id}";
+        window.PERM_DATA = !{JSON.stringify(permData)};

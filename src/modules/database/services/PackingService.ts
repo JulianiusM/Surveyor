@@ -4,22 +4,23 @@ import {PackingList} from '../entities/packing/PackingList';
 import {PackingItem} from '../entities/packing/PackingItem';
 import {PackingAssignment} from '../entities/packing/PackingAssignment';
 import {generateUniqueId} from '../../lib/util';
+import * as entityAdminService from "./EntityAdminService";
+import {In} from "typeorm";
 
 // Packing Lists
-export async function createPackingList(listId: string, ownerId: number, title: string, desc: string, allowGuestAdd: boolean, guestManage: boolean) {
+export async function createPackingList(listId: string, ownerId: number, title: string, desc: string, eventId?: string,) {
     const repo = AppDataSource.getRepository(PackingList);
     const list = repo.create({
         id: listId,
         owner: {id: ownerId},
         title,
         description: desc,
-        allowGuestAdd,
-        guestManage
+        ...(eventId !== undefined ? {event: {id: eventId}} : {}),
     });
     await repo.save(list);
 }
 
-export async function createPackingListTx(ownerId: number, title: string, desc: string, allowGuestAdd: boolean, guestManage: boolean, items: Partial<PackingItem>[]) {
+export async function createPackingListTx(ownerId: number, title: string, desc: string, items: Partial<PackingItem>[], eventId?: string,) {
     return await AppDataSource.transaction(async (manager) => {
         const listId = generateUniqueId();
         const listRepo = manager.getRepository(PackingList);
@@ -30,8 +31,7 @@ export async function createPackingListTx(ownerId: number, title: string, desc: 
             owner: {id: ownerId},
             title,
             description: desc,
-            allowGuestAdd,
-            guestManage
+            ...(eventId !== undefined ? {event: {id: eventId}} : {}),
         });
         await listRepo.save(list);
 
@@ -68,16 +68,23 @@ export async function getPackingListByUserId(userId: number) {
     return await AppDataSource.getRepository(PackingList).findBy({owner: {id: userId}});
 }
 
-export async function updatePackingListAllow(listId: string, allow: boolean) {
-    await AppDataSource.getRepository(PackingList).update(listId, {allowGuestAdd: allow});
-}
-
-export async function updatePackingListGuestManage(listId: string, flag: boolean) {
-    await AppDataSource.getRepository(PackingList).update(listId, {guestManage: flag});
-}
-
 export async function updatePackingListDescription(listId: string, description: string) {
     await AppDataSource.getRepository(PackingList).update(listId, {description});
+}
+
+export async function getManagedListsForUser(userId: number) {
+    const ids = await entityAdminService.getIdsForUser('packing', userId);
+    const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+    return await AppDataSource.getRepository(PackingList).find({
+        where: [
+            {
+                owner: {id: userId},
+            },
+            {
+                id: In(ids),
+            }
+        ],
+    });
 }
 
 // Packing Items
@@ -106,6 +113,10 @@ export async function addPackingItems(listId: string, items: Partial<PackingItem
         pos: it.pos
     }));
     await repo.save(entities);
+}
+
+export async function getPackingItemById(itemId: string) {
+    return await AppDataSource.getRepository(PackingItem).findOneBy({id: itemId});
 }
 
 export async function updatePackingItem(itemId: string, fields: Partial<PackingItem>) {
@@ -220,6 +231,13 @@ export async function getPackingItemAssignees(listId: string) {
     return map;
 }
 
+export async function getPackingAssignmentById(assignId: number) {
+    return await AppDataSource.getRepository(PackingAssignment).findOne({
+        where: {id: assignId},
+        relations: ['item']
+    })
+}
+
 export async function deletePackingAssignment(assignId: string) {
     await AppDataSource.getRepository(PackingAssignment).delete(assignId);
 }
@@ -228,9 +246,3 @@ export async function togglePackingItemRequiredByAll(itemId: string, flag: boole
     await AppDataSource.getRepository(PackingItem).update(itemId, {requiredByAll: flag});
 }
 
-export async function updatePackingFlags(listId: string, allowAdd: boolean, guestManage: boolean) {
-    await AppDataSource.getRepository(PackingList).update(listId, {
-        allowGuestAdd: allowAdd,
-        guestManage
-    });
-}

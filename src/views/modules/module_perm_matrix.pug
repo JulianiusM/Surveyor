@@ -1,0 +1,82 @@
+//- views/mixins/perm-matrix.pug
+//- Reusable permission matrix (dark, collapsed, one-at-a-time via accordion)
+//- Params:
+//-   audiences: ['participant','guest','authenticated','public']
+//-   permMeta:  [{ key, bit, label, desc? }]
+//-   defaults:  { participant:number, guest:number, authenticated:number, public:number }
+//-   presets?:  [{ key, label, mask }]
+//-   fieldBase?: string  (default "defaultPerms")
+//-   opts?: { openFirst?: boolean, apiUrl?: string }
+
+mixin permMatrix(audiences, permMeta, defaults, presets=[], fieldBase="defaultPerms", opts={})
+    - const title = "Group Permissions"
+    - const openFirst = opts.openFirst ?? false
+    - const accId = 'perm-acc-' + Math.random().toString(36).slice(2)
+
+    .perm-matrix.text-bg-dark.border.border-secondary.rounded-2.p-2#permMatrix
+        .d-flex.align-items-center.justify-content-between.mb-2
+            .d-flex.align-items-center.gap-2
+                i.bi.bi-shield-lock
+                strong= title
+        .accordion.accordion-flush(id=accId)
+            each aud, idx in audiences
+                - const headingId = `${accId}-${aud}-heading`
+                - const collapseId = `${accId}-${aud}-collapse`
+                .accordion-item.bg-dark.border-secondary
+                    h2.accordion-header(id=headingId)
+                        // collapsed by default; only title shown
+                        button.accordion-button.text-light.bg-dark(class=(openFirst && idx === 0) ? '' : 'collapsed'
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target=`#${collapseId}`
+                            aria-controls=collapseId
+                            aria-expanded=(openFirst && idx === 0 ? 'true' : 'false'))
+                            i.bi.bi-people.me-2
+                            span.text-capitalize= aud
+                    // only one open at a time
+                    .accordion-collapse.collapse(id=collapseId data-bs-parent=`#${accId}` class=(openFirst && idx === 0) ? 'show' : '')
+                        .accordion-body.bg-dark.pt-2
+                            // toolbar INSIDE body so it is hidden when collapsed
+                            .d-flex.flex-wrap.gap-2.justify-content-between.align-items-center.mb-2
+                                if presets && presets.length
+                                    .btn-group.btn-group-sm(role="group" aria-label="Presets")
+                                        each pr in presets
+                                            button.btn.btn-outline-light.perm-preset(
+                                                type="button"
+                                                data-aud=aud
+                                                data-mask=pr.mask
+                                                title=`Apply preset: ${pr.label}`
+                                            )= pr.label
+                                .btn-group.btn-group-sm
+                                    button.btn.btn-outline-light.perm-select-all(type="button" data-aud=aud title="Select all") All
+                                    button.btn.btn-outline-light.perm-clear(type="button" data-aud=aud title="Clear all") None
+
+                            .row.row-cols-2.row-cols-md-3.row-cols-lg-4.g-2(data-aud=aud)
+                                each p in permMeta
+                                    - const checked = ((defaults?.[aud] ?? 0) & p.bit) !== 0
+                                    .col
+                                        .form-check
+                                            input.form-check-input.perm-box.bg-dark.border-secondary(
+                                                type="checkbox"
+                                                name=`${fieldBase}[${aud}][]`
+                                                value=p.key
+                                                id=`perm-${aud}-${p.key}`
+                                                checked=checked
+                                                data-bit=p.bit
+                                            )
+                                            label.form-check-label.text-light(for=`perm-${aud}-${p.key}`)= p.label
+                                            if p.desc
+                                                small.text-secondary.d-block= p.desc
+        if opts.apiUrl
+            hr.mb-0.mt-0
+            .d-flex.justify-content-end.mt-3
+                button.btn.btn-primary.btn-perm-update(type="button" data-api=opts.apiUrl)
+                    span.label Update permissions
+                    span.spinner-border.spinner-border-sm.ms-2.d-none(role="status" aria-hidden="true")
+
+
+
+        // Load the module
+    script(type="module").
+        import { initPermMatrix } from "/js/modules/perm-matrix.gen.js";
+        initPermMatrix();

@@ -138,3 +138,17 @@ $dash-input-addon: #2a2f34
 
     &:hover
       background-color: $dash-bg-2
+
+// Permission matrix
+.perm-matrix, .admin-matrix, .perm-mgmnt, .reg-links, .event-participants
+  .accordion-button.bg-dark
+    color: #fff
+
+  .accordion-button.bg-dark:not(.collapsed)
+    box-shadow: none
+
+  .accordion-button::after
+    filter: invert(1) opacity(0.85)
+
+  .accordion-item
+    border-color: rgba(255, 255, 255, .15)

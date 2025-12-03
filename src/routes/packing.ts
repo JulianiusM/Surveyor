@@ -2,14 +2,17 @@ import express from 'express';
 import * as packingService from '../modules/database/services/PackingService';
 import {createGuestFlowRouter} from "../middleware/guestFlowFactory";
 import controller from "../controller/packingController";
+import {ENTITIES, ENTITY_ITEMS} from "../modules/lib/util";
 
 const app = express.Router();
 
 app.use("/", createGuestFlowRouter({
     addToEvent: true,
-    entityType: 'packing',
+    entityType: ENTITIES.PACKING,
+    entityItemType: ENTITY_ITEMS.PACKING,
     db: {
         getById: packingService.getPackingListById,
+        getItems: packingService.getPackingItems,
     },
     templates: {
         create: 'packing/packing-create',

@@ -158,7 +158,3 @@ export function initTimezoneSelect(id: number, opts: any) {
         renderList("");
     });
 }
-
-
-// Expose to global scope
-window.Surveyor.initTimezoneSelect = initTimezoneSelect;

@@ -6,6 +6,7 @@ import {GuestLink} from "./GuestLink";
 import {PackingAssignment} from "../packing/PackingAssignment";
 import {SurveyResponse} from "../surveys/SurveyResponse";
 import {EventRegistration} from "../event/EventRegistration";
+import {EventRegBypassLink} from "../event/EventRegBypassLink";
 
 @Entity("guests", {schema: "surveyor"})
 export class Guest {
@@ -59,4 +60,7 @@ export class Guest {
 
     @OneToMany(() => EventRegistration, (eventRegistration) => eventRegistration.guest)
     eventRegistrations: EventRegistration[];
+
+    @OneToMany(() => EventRegBypassLink, (link) => link.guest)
+    eventRegBypassLinksUsed: EventRegBypassLink[];
 }

@@ -2,20 +2,47 @@ import express, {Request, Response} from 'express';
 import * as activityService from '../../modules/database/services/ActivityService';
 import {asyncHandler} from '../../modules/lib/asyncHandler';
 import renderer from '../../modules/renderer';
-import {getResource} from "../../modules/lib/util";
+import {
+    ENTITIES,
+    ENTITY_ITEMS,
+    getAdditional,
+    getItemFromEntityPermFct,
+    getPermFct,
+    getPermFctAssign,
+    getPermFctItems,
+    getResource
+} from "../../modules/lib/util";
 
 import {apiParamHandler} from "../../middleware/paramHandler";
-import {requireAddRightAPI, requireManageRightAPI, requireOwnerAPI} from '../../middleware/permissionMiddleware';
+import {attachPermBundle, requireItemPermissionApi, requirePermissionApi} from '../../middleware/permissionMiddleware';
 import {attachAssignRoleRoutes, attachAssignRoutes} from '../../middleware/assignFlowFactory';
 
 import controller from '../../controller/activityController';
+import {PERM} from "../../modules/lib/permissions";
+import {EntityItemType, EntityType} from "../../types/UtilTypes";
+import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
+import {ItemGetter} from "../../types/PermissionTypes";
 
 const app = express.Router();
-const entityName = 'activity';
+const entityName: EntityType = ENTITIES.ACTIVITY;
+const entityItemName: EntityItemType = ENTITY_ITEMS.ACTIVITY;
+const assignName = "assignment"
 const resFct = (req: Request) => getResource(req, entityName);
-apiParamHandler('id', app, activityService.getActivityPlanById, entityName);
+const resFctItems = (req: Request) => getAdditional(req, entityItemName);
+const resFctAssign = (req: Request) => getAdditional(req, assignName);
+const permFct = getPermFct(resFct, entityName);
+const permFctItems = getPermFctItems(resFct, resFctItems, entityName, entityItemName);
+const permFctAssign = getPermFctAssign(resFct, resFctAssign, entityName, entityItemName);
+const itemPermFct: ItemGetter = getItemFromEntityPermFct(activityService.getActivitySlotsFlat, resFct, entityItemName);
 
-app.post('/:id/description', requireAddRightAPI(resFct), async (req: Request, res: Response) => {
+apiParamHandler('id', app, activityService.getActivityPlanById, entityName);
+apiParamHandler('slotId', app, activityService.getActivitySlotById, entityItemName);
+apiParamHandler('assignId', app, activityService.getActivitySlotAssignmentById, assignName);
+app.use("/:id", attachPermBundle(permFct, itemPermFct));
+
+createEntityAdminApiRouter(app, entityName, permFct)
+
+app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), async (req: Request, res: Response) => {
     const msg = await controller.updateDescription(resFct(req).id, req.body);
     renderer.respondWithSuccessJson(res, msg);
 })
@@ -29,46 +56,46 @@ attachAssignRoleRoutes(app, controller.getRoleAccessMapping());
 /* ───────────────── REORDER (Owner) ────────────────────────── */
 
 /* ----------- REORDER (nur Owner, JSON-Antwort) ---------------- */
-app.post('/:id/slot/reorder', requireManageRightAPI(resFct), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/slot/reorder', requirePermissionApi(permFct, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.reorderSlots(resFct(req).id, req.body.order);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 /* ───────────────── QUICK-ADD ──────────────────────────────── */
 
-app.post('/:id/slot/add', requireAddRightAPI(resFct), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/slot/add', requirePermissionApi(permFct, PERM.ITEM_ADD), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.quickAddSlot(resFct(req), req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
-app.post('/:id/slot/:slotId/description', requireAddRightAPI(resFct), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/slot/:slotId/description', requireItemPermissionApi(permFctItems, PERM.EDIT_DESC, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.updateSlotDescription(req.params.slotId, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 /* ---------- PATCH einzelnes Attribut -------------------------------- */
-app.post('/:id/slot/:slotId/attr', requireManageRightAPI(resFct), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/slot/:slotId/attr', requireItemPermissionApi(permFctItems, PERM.EDIT_META, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.updateSlotAttr(req.params.slotId, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
-app.post('/:id/assignment/:assignId/delete', requireManageRightAPI(resFct), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/assignment/:assignId/delete', requireItemPermissionApi(permFctAssign, PERM.MANAGE_ASSIGNMENTS), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.deleteAssignment(Number(req.params.assignId));
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 /* Owner-Settings ändern (AJAX) -------------------------------------- */
-app.post('/:id/settings', requireOwnerAPI(resFct), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/settings', requirePermissionApi(permFct, PERM.MANAGE_PERMISSIONS), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.updateSettings(resFct(req).id, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
-app.post('/:id/slot/:slotId/delete', requireManageRightAPI(resFct), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/slot/:slotId/delete', requireItemPermissionApi(permFctItems, PERM.ITEM_DELETE, PERM.ITEM_DELETE), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.deleteSlot(req.params.slotId);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
-app.post('/:id/slot/:slotId/addRole', requireManageRightAPI(resFct), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/slot/:slotId/addRole', requireItemPermissionApi(permFctItems, PERM.EDIT_META, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.addSlotRole(req.params.slotId, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));

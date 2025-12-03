@@ -75,6 +75,7 @@ export async function loginUser(body: any, session: Request["session"]) {
     }
 
     session.user = user;
+    session.guest = undefined;
     await persistSession(session);
 }
 
@@ -86,6 +87,14 @@ export async function getUserDashboardEntities(user: User) {
     const events = await eventService.getEventsByOwnerId(user.id);
     const registeredEvents = await eventService.getRegisteredEventsFor({userId: user.id});
     return {surveys, packlists, activityplans, driverslists, events, registeredEvents};
+}
+
+export async function getUserAdminDashboardEntities(user: User) {
+    const packlists = await packingService.getManagedListsForUser(user.id);
+    const activityplans = await activityService.getManagedPlansForUser(user.id);
+    const driverslists = await driverService.getManagedListsForUser(user.id);
+    const events = await eventService.getActiveManagedEventsForUser(user.id);
+    return {packlists, activityplans, driverslists, events, admin_flag: true};
 }
 
 export async function getGuestDashboardEntities(guest: Guest) {

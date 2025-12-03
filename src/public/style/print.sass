@@ -1,0 +1,159 @@
+:root
+  --ink: #111
+  --muted: #666
+  --rule: #ddd
+  --chip: #f1f3f5
+  --chipText: #222
+
+
+@page
+    size: A4 portrait
+    margin: 14mm
+
+
+@media print
+  html, body
+    background: #fff !important
+
+
+  .no-print
+    display: none !important
+
+
+
+@media screen
+  body
+    background: #0b0d0f
+    padding: 24px
+
+
+  .sheet
+    margin: 0 auto 24px auto
+    max-width: 794px /* A4 width at 96dpi approx */
+    box-shadow: 0 8px 30px rgba(0, 0, 0, .35)
+
+
+
+body, table
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif
+    color: var(--ink)
+
+
+.sheet
+    background: #fff
+    border-radius: 8px
+
+
+.wrap
+    padding: 18px 20px 24px
+
+
+h1, h2, h3
+    margin: 0 0 8px
+    line-height: 1.25
+
+
+.muted
+    color: var(--muted)
+
+
+.rule
+    border-top: 1px solid var(--rule)
+    margin: 12px 0
+
+
+.meta
+    display: flex
+    flex-wrap: wrap
+    gap: 10px 20px
+    font-size: 12px
+
+
+    div
+      white-space: nowrap
+
+
+.toolbar
+    display: flex
+    justify-content: space-between
+    align-items: center
+    gap: 12px
+
+
+.btn
+    background: #111
+    color: #fff
+    border: 0
+    border-radius: 6px
+    padding: 8px 12px
+    cursor: pointer
+
+
+.btn:active
+    transform: translateY(1px)
+
+
+.chips
+    display: flex
+    flex-wrap: wrap
+    gap: 6px
+
+
+.chip
+    background: var(--chip)
+    color: var(--chipText)
+    border-radius: 999px
+    padding: 2px 8px
+    font-size: 12px
+
+
+table
+    width: 100%
+    border-collapse: collapse
+    margin-top: 8px
+
+
+th, td
+    border: 1px solid var(--rule)
+    padding: 6px 8px
+    vertical-align: top
+    font-size: 12px
+
+
+th
+    background: #f7f7f7
+    text-align: left
+
+
+tbody tr:nth-child(odd) td
+    background: #fafafa
+
+
+.right
+    text-align: right
+
+
+.nowrap
+    white-space: nowrap
+
+
+.small
+    font-size: 12px
+
+
+.allergies
+    white-space: pre-wrap
+    font-size: 12px
+
+
+.footer
+    display: flex
+    justify-content: space-between
+    align-items: center
+    margin-top: 10px
+    font-size: 11px
+    color: var(--muted)
+
+
+.pagebreak
+    page-break-after: always

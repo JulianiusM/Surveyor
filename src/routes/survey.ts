@@ -3,11 +3,12 @@ import * as surveyService from "../modules/database/services/SurveyService";
 import {asyncHandler} from "../modules/lib/asyncHandler";
 import {createGuestFlowRouter} from "../middleware/guestFlowFactory";
 import controller from "../controller/surveyController";
-import {getResource} from "../modules/lib/util";
+import {ENTITIES, ENTITY_ITEMS, getResource} from "../modules/lib/util";
+import {EntityType} from "../types/UtilTypes";
 
 const app = express.Router();
 
-const entityName = 'survey';
+const entityName: EntityType = ENTITIES.SURVEY;
 
 const resFct = (req: Request) => getResource(req, entityName);
 
@@ -31,8 +32,10 @@ function handleAction(actionFn: (req: Request) => Promise<void>, successMsg: str
 app.use('/', createGuestFlowRouter({
     addToEvent: true,
     entityType: entityName,
+    entityItemType: ENTITY_ITEMS.SURVEY,
     db: {
         getById: surveyService.getSurveyById,
+        getItems: surveyService.getCombinationsBySurveyId,
     },
     templates: {
         create: 'surveyor/survey-create',

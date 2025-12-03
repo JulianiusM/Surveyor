@@ -1,0 +1,57 @@
+include module_perm_matrix
+include module_admin_matrix
+
+//-
+//- Params:
+//-   admins:   Array<{ userId:number, username:string, email?:string, avatarUrl?:string, perms:number }>
+//-   audiences: ['participant','guest','authenticated','public']
+//-   permMeta: Array<{ key:string, bit:number, label:string, desc?:string }>
+//-   defaults:  { participant:number, guest:number, authenticated:number, public:number }
+//-   presets:  Array<{ key:string, label:string, mask:number }>  (optional)
+//-   opts?: {
+//-     entityType?: string   // if set, the URLs will be generated.
+//-     entityId?: string     // if set, the URLs will be generated.
+//-     title?: string,
+//-     apiAdd: string,       // POST   /api/{entity}/{id}/admins
+//-     apiUpdate: string,    // PATCH  /api/{entity}/{id}/admins/{userId}
+//-     apiRemove: string,    // DELETE /api/{entity}/{id}/admins/{userId}
+//-     apiSearch?: string,   // GET    /api/users/search?q=...  (optional for typeahead)
+//-     apiUrl?: string       // shows the update permission for the entity scope
+//-     openFirst?: boolean
+//-   }
+//-   fieldBase?: string  (default "defaultPerms")
+mixin permissionManagement(admins, permMeta, defaults, presets=[], opts={}, audiences=['participant','guest','authenticated','public'], fieldBase="defaultPerms")
+    -
+        const entityType = opts?.entityType;
+        const entityId = opts?.entityId;
+        if (entityType && entityId) {
+            opts = Object.assign({
+                apiAdd: `/api/${entityType}/${entityId}/admins`,
+                apiUpdate: `/api/${entityType}/${entityId}/admins`,
+                apiRemove: `/api/${entityType}/${entityId}/admins`,
+                apiSearch: '/api/users/search',
+                apiUrl: `/${entityType}/${entityId}/settings`
+            }, opts)
+        }
+
+    .perm-mgmnt.text-bg-dark.border.border-secondary.rounded-2.py-1.my-2#permMgmnt
+        .accordion.accordion-flush
+            .accordion-item.bg-dark.border-secondary
+                h2.accordion-header
+                    // collapsed by default; only title shown
+                    button.accordion-button.text-light.bg-dark.collapsed(
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#permMgmntBody"
+                        aria-controls="permMgmntBody"
+                        aria-expanded=false)
+                        i.bi.bi-people.me-2
+                        span.text-capitalize Administration Options
+                // only one open at a time
+                .accordion-collapse.collapse#permMgmntBody
+                    .accordion-body.text-bg-dark.pt-2.px-0.py-0
+                        if !(opts.disablePermMatrix)
+                            .mb-2
+                                +permMatrix(audiences, permMeta, defaults, presets, fieldBase, opts)
+                        if !(opts.disableAdminMatrix)
+                            +adminMatrix(admins, permMeta, presets, opts)

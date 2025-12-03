@@ -1,5 +1,5 @@
 /*  Packing-Create – Client-Logic (no jQuery)  */
-import {setCurrentNavLocation} from "./module_functions";
+import {setCurrentNavLocation} from "./modules/module_functions";
 import {PackingItem} from "../../modules/database/entities/packing/PackingItem";
 
 export function buildCell(child: any) {

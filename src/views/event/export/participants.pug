@@ -1,16 +1,116 @@
-extends ../../layout
+//- views/event/export/participants.pug
+doctype html
+html(lang="en")
+    head
+        meta(charset="utf-8")
+        meta(name="viewport" content="width=device-width, initial-scale=1")
+        title= `Participants – ${data.event.title}`
+        link(rel="stylesheet" href="/style/print.css")
 
-block meta
-    title Participants Export
+    body
+        .sheet
+            .wrap
+                .toolbar.no-print
+                    h1= data.event.title
+                    button.btn(type="button" onclick="window.print()") Print
 
-block content
-    h1 Participants
-    table.table.table-striped
-        thead
-            tr
-                th Name
-                th Email
-                th Arrival
-                th Departure
-        tbody
-            //- Rows filled server-side in real implementation
+                h2 Event info
+                .meta
+                    if data.event.location
+                        div
+                            strong Location:&nbsp;
+                            span= data.event.location
+                    div
+                        strong Dates:&nbsp;
+                        span= `${data.event.startDate} → ${data.event.endDate}`
+                    if data.event.bindingDeadline
+                        div
+                            -
+                                const localDeadline = new Date(data.event.bindingDeadline).toLocaleString(undefined, {
+                                    timeZone: data.event.timezone || 'UTC',
+                                    dateStyle: "medium",
+                                    timeStyle: "short"
+                                })
+                            strong Binding deadline:&nbsp;
+                            span= localDeadline
+                    div
+                        strong Timezone:&nbsp;
+                        span= data.event.timezone
+                if data.event.description
+                    div.small
+                        strong Description:&nbsp;
+                        span= data.event.description
+
+                .rule
+                h2 Participants
+                if Object.keys(data.dateTotals || {}).length
+                    .chips
+                        span.chip= `Total: ${data.participants.length}`
+                        each val, key in data.dateTotals
+                            if val > 0
+                                span.chip= `${key}: ${val}`
+                else
+                    p.small.muted —
+
+                // Totals
+                h3.small Dietary totals
+                if Object.keys(data.totals || {}).length
+                    .chips
+                        each val, key in data.totals
+                            if val > 0
+                                span.chip= `${key}: ${val}`
+                else
+                    p.small.muted —
+
+                // Participants Table
+                table
+                    thead
+                        tr
+                            th(style="width:28mm") Name
+                            th(style="width:40mm") Email
+                            th(style="width:34mm") Dates
+                            th(style="width:34mm") Dietary
+                            th Allergies
+                    tbody
+                        if !data.participants || !data.participants.length
+                            tr
+                                td(colspan="5").muted.small No registrations yet.
+                        else
+                            each p, i in data.participants
+                                tr
+                                    td
+                                        div= p.name
+                                    td.small
+                                        if p.email
+                                            a(href=`mailto:${p.email}`)= p.email
+                                        else
+                                            span.muted —
+                                    td.small.nowrap
+                                        = (p.arrivalDate || '—') + ' → ' + (p.departureDate || '—')
+                                    td.small
+                                        if p.dietaryChoices && p.dietaryChoices.length
+                                            .chips
+                                                each d in p.dietaryChoices
+                                                    span.chip= d.choice
+                                        else
+                                            span.muted —
+                                    td.allergies
+                                        - const allergyChoice = p?.dietaryChoices?.find(c => c.choice === "ALLERGIES");
+                                        if allergyChoice && allergyChoice.additionalInfo
+                                            = allergyChoice.additionalInfo
+                                        else
+                                            span.muted —
+
+                .footer
+                    div Generated: #{new Date(data.generatedAt).toLocaleString()}
+                    div Page <span class="pageNumber"></span>
+
+        // Optional simple page number script for print preview contexts
+        script.
+            (function () {
+                try {
+                    const spans = document.querySelectorAll('.pageNumber');
+                    spans.forEach(s => s.textContent = '1'); // browsers usually add page counters when printing; this is a placeholder for some viewers
+                } catch (e) {
+                }
+            })();

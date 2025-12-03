@@ -91,7 +91,7 @@ async function createEntity(
 async function afterCreateItems() {
 }
 
-async function fetchForView(survey: Survey, session: Request['session']) {
+async function fetchForView(survey: Survey, req: Request) {
     const combinations = await surveyService.getCombinationsBySurveyId(survey.id);
     const responses = await surveyService.getResponsesSorted(survey.id);
     return {survey, combinations, responses};

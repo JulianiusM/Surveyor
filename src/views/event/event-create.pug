@@ -117,6 +117,10 @@ block content
                 | Description
             textarea#desc.form-control.text-bg-dark(name="description" rows="4") #{parsed.description || ''}
 
+        .row.mb-3
+            .col-md-12
+                +permMatrix(['participant', 'guest', 'authenticated', 'public'], perms.permMeta, perms.defaultPerms, perms.presets, 'defaultPerms')
+
         // Buttons
         .d-flex.justify-content-end.gap-2
             a.btn.btn-outline-secondary(href="/users/dashboard")

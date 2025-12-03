@@ -5,14 +5,13 @@ import {DriversList} from '../entities/drivers/DriversList';
 import {DriversItem} from '../entities/drivers/DriversItem';
 import {DriversAssignment} from '../entities/drivers/DriversAssignment';
 import type {DriversItemAssignee, EnrichedDriversItem} from "../../../types/DriversTypes";
-import {DeepPartial} from "typeorm";
+import {DeepPartial, In} from "typeorm";
+import * as entityAdminService from "./EntityAdminService";
 
 export async function createDriversList(
     ownerId: number,
     title: string,
     desc: string,
-    allowGuestAdd: boolean,
-    guestManage: boolean,
     eventId?: string,
     listId: string = generateUniqueId(),
 ): Promise<string> {
@@ -22,8 +21,6 @@ export async function createDriversList(
         owner: {id: ownerId},
         title,
         description: desc,
-        allowGuestAdd,
-        guestManage
     };
     if (eventId) creator.event = {id: eventId};
     const list = repo.create(creator);
@@ -47,16 +44,23 @@ export async function getDriversListByUserId(userId: number): Promise<DriversLis
     return await AppDataSource.getRepository(DriversList).find({where: {owner: {id: userId}}});
 }
 
-export async function updateDriversListAllow(listId: string, allow: boolean): Promise<void> {
-    await AppDataSource.getRepository(DriversList).update({id: listId}, {allowGuestAdd: allow});
-}
-
-export async function updateDriversListGuestManage(listId: string, flag: boolean): Promise<void> {
-    await AppDataSource.getRepository(DriversList).update({id: listId}, {guestManage: flag});
-}
-
 export async function updateDriversListDescription(listId: string, description: string): Promise<void> {
     await AppDataSource.getRepository(DriversList).update({id: listId}, {description});
+}
+
+export async function getManagedListsForUser(userId: number) {
+    const ids = await entityAdminService.getIdsForUser('drivers', userId);
+    const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+    return await AppDataSource.getRepository(DriversList).find({
+        where: [
+            {
+                owner: {id: userId},
+            },
+            {
+                id: In(ids),
+            }
+        ],
+    });
 }
 
 // Drivers Items
@@ -233,6 +237,13 @@ export async function unassignDriversItemGuest(itemId: string, guestId: number):
     await AppDataSource.getRepository(DriversAssignment).delete({item: {id: itemId}, guest: {id: guestId}});
 }
 
+export async function getDriversAssignmentById(assignId: number) {
+    return await AppDataSource.getRepository(DriversAssignment).findOne({
+        where: {id: assignId},
+        relations: ['item']
+    })
+}
+
 export async function getDriversAssignmentsForUser(listId: string, userId: number): Promise<string[]> {
     const rows = await AppDataSource.getRepository(DriversAssignment).find({
         where: {list: {id: listId}, user: {id: userId}},
@@ -275,8 +286,4 @@ export async function getDriversItemAssignees(listId: string) {
 
 export async function deleteDriversAssignment(assignId: number): Promise<void> {
     await AppDataSource.getRepository(DriversAssignment).delete({id: assignId});
-}
-
-export async function updateDriversFlags(listId: string, allowAdd: boolean, guestManage: boolean): Promise<void> {
-    await AppDataSource.getRepository(DriversList).update({id: listId}, {allowGuestAdd: allowAdd, guestManage});
 }

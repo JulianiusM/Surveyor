@@ -5,7 +5,7 @@ import {
     showInlineAlert,
     startInlineEdit,
     startInlineEditArea
-} from "./module_functions";
+} from "./modules/module_functions";
 
 /* ---------- assign / unassign ------------------------------- */
 export function initAssign() {

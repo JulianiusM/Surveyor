@@ -1,5 +1,5 @@
 //Empty js to use when no custom module js is loaded instead to prevent errors
-import {setCurrentNavLocation} from "./module_functions";
+import {setCurrentNavLocation} from "./modules/module_functions";
 
 export function init() {
     setCurrentNavLocation();

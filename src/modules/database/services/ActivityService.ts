@@ -8,6 +8,8 @@ import {generateUniqueId} from "../../lib/util";
 import {ActivitySlotRole} from "../entities/activity/ActivitySlotRole";
 import type {PlanParticipant, PlanParticipantRow, SlotAssignmentMap} from "../../../types/ActivityTypes";
 import {ensureOneByObjectsAuthed} from "../utils/relation-upsert";
+import * as entityAdminService from "./EntityAdminService";
+import {In} from "typeorm";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Role & Assignment helpers
@@ -98,8 +100,6 @@ export async function createActivityPlan(
     desc: string,
     startDate: string,
     endDate: string,
-    allowGuestAdd: boolean,
-    guestManage: boolean,
     eventId?: string,
 ) {
     const repo = AppDataSource.getRepository(ActivityPlan);
@@ -110,8 +110,6 @@ export async function createActivityPlan(
         description: desc,
         startDate,
         endDate,
-        allowGuestAdd,
-        guestManage,
         ...(eventId !== undefined ? {event: {id: eventId}} : {}),
     });
     await repo.save(plan);
@@ -123,8 +121,6 @@ export async function createActivityPlanTx(
     desc: string,
     startDate: string,
     endDate: string,
-    allowGuestAdd: boolean,
-    guestManage: boolean,
     slots: Partial<ActivitySlot>[],
     eventId?: string,
 ) {
@@ -140,8 +136,6 @@ export async function createActivityPlanTx(
             description: desc,
             startDate,
             endDate,
-            allowGuestAdd,
-            guestManage,
             ...(eventId !== undefined ? {event: {id: eventId}} : {}),
         });
 
@@ -175,17 +169,6 @@ export async function deleteActivityPlan(id: string) {
     await AppDataSource.getRepository(ActivityPlan).delete(id);
 }
 
-export async function updateActivityPlanFlags(
-    planId: string,
-    allowAdd: boolean,
-    guestManage: boolean
-) {
-    await AppDataSource.getRepository(ActivityPlan).update(planId, {
-        allowGuestAdd: allowAdd,
-        guestManage,
-    });
-}
-
 export async function getActivityPlansByUserId(userId: number) {
     return await AppDataSource.getRepository(ActivityPlan).find({
         where: {owner: {id: userId}},
@@ -198,6 +181,21 @@ export async function updateActivityPlanDescription(
     description: string
 ) {
     await AppDataSource.getRepository(ActivityPlan).update(planId, {description});
+}
+
+export async function getManagedPlansForUser(userId: number) {
+    const ids = await entityAdminService.getIdsForUser('activity', userId);
+    const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+    return await AppDataSource.getRepository(ActivityPlan).find({
+        where: [
+            {
+                owner: {id: userId},
+            },
+            {
+                id: In(ids),
+            }
+        ],
+    });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -234,7 +232,7 @@ export async function addActivitySlots(planId: string, slots: Partial<ActivitySl
     await repo.save(slotEntities);
 }
 
-export async function getActivitySlots(planId: string) {
+export async function getActivitySlotsFlat(planId: string) {
     const repo = AppDataSource.getRepository(ActivitySlot);
 
     const slots = await repo
@@ -252,9 +250,15 @@ export async function getActivitySlots(planId: string) {
 
     // Type hint: (ActivitySlot & { assignedCount: number })[]
     // Group slots by day using reduce (Object.groupBy not available in Node.js 24)
-    const typedSlots = slots as (ActivitySlot & { assignedCount: number })[];
+    return slots as (ActivitySlot & { assignedCount: number })[];
+}
+
+export async function getActivitySlots(planId: string) {
+    // Type hint: (ActivitySlot & { assignedCount: number })[]
+    // Group slots by day using reduce (Object.groupBy not available in Node.js 24)
+    const typedSlots = await getActivitySlotsFlat(planId);
     const grouped: Record<string, (ActivitySlot & { assignedCount: number })[]> = {};
-    
+
     for (const slot of typedSlots) {
         const day = slot.day;
         if (!grouped[day]) {
@@ -262,10 +266,13 @@ export async function getActivitySlots(planId: string) {
         }
         grouped[day].push(slot);
     }
-    
+
     return grouped;
 }
 
+export async function getActivitySlotById(slotId: string) {
+    return await AppDataSource.getRepository(ActivitySlot).findOneBy({id: slotId});
+}
 
 export async function updateActivitySlot(slotId: string, fields: Partial<ActivitySlot>) {
     const repo = AppDataSource.getRepository(ActivitySlot);
@@ -378,6 +385,13 @@ export async function getActivitySlotAssignmentsForGuest(planId: string, guestId
     });
 
     return assignments.map(a => a.slot.id);
+}
+
+export async function getActivitySlotAssignmentById(assignId: number) {
+    return await AppDataSource.getRepository(ActivityAssignment).findOne({
+        where: {id: assignId},
+        relations: ['slot']
+    })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

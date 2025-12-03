@@ -4,6 +4,7 @@ import {PackingList} from "../packing/PackingList";
 import {DriversList} from "../drivers/DriversList";
 import {EventRegistration} from "./EventRegistration";
 import {User} from "../user/User";
+import {EventRegBypassLink} from "./EventRegBypassLink";
 
 @Entity("events", {schema: "surveyor"})
 export class Event {
@@ -54,6 +55,9 @@ export class Event {
 
     @OneToMany(() => DriversList, (d) => d.event)
     driversLists: DriversList[];
+
+    @OneToMany(() => EventRegBypassLink, (d) => d.event)
+    eventRegBypassLinks: EventRegBypassLink[];
 
     @RelationId((a: Event) => a.owner)
     ownerId!: number;

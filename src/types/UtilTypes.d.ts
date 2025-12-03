@@ -45,3 +45,7 @@ export type ColumnEntry<E, K extends keyof E & string, V = any> = {
 export type DualParty<L extends string, R extends string> =
     | { kind: L; id: Maybe<IdInput> }
     | { kind: R; id: Maybe<IdInput> };
+
+export type EntityType = "activity" | "drivers" | "packing" | "event" | "survey";
+export type EntityItemType = "activitySlot" | "driversItem" | "packingItem" | "eventRegistration" | "surveyItem";
+export type CombEntityType = EntityType | EntityItemType;

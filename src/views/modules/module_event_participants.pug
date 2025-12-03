@@ -1,0 +1,75 @@
+//- views/modules/event_participants.pug
+//- Collapsible admin section to display participants (dates, dietary, allergies)
+//- Params: opts = { eventId, apiList, apiDelete?: string, title?, help? }
+
+mixin eventParticipants(opts)
+    - const title = opts?.title ?? 'Participants'
+    - const help  = opts?.help  ?? 'Registered users and guests with their attendance window and dietary information.'
+    - const accId = 'ev-part-' + Math.random().toString(36).slice(2)
+    - const allowDelete = Boolean(opts?.apiDelete !== undefined)
+
+    .event-participants.text-bg-dark.border.border-secondary.rounded-2.py-1.my-2(
+        data-api-list=opts.apiList
+        data-event-id=opts.eventId
+        data-can-delete=allowDelete ? '1' : '0'
+        data-api-delete=(allowDelete ? opts.apiDelete : '')
+    )
+        .accordion.accordion-flush(id=accId)
+            .accordion-item.bg-dark.border-secondary
+                h2.accordion-header
+                    button.accordion-button.text-light.bg-dark.collapsed(
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target=`#${accId}-col`
+                        aria-expanded="false"
+                        aria-controls=`${accId}-col`
+                    )
+                        i.bi.bi-people-fill.me-2
+                        | #{title}
+                        span.badge.bg-secondary.ms-2.js-count 0
+                .accordion-collapse.collapse(id=`${accId}-col` data-bs-parent=`#${accId}`)
+                    .accordion-body.bg-dark
+                        //- Totals bar
+                        .mb-2
+                            .js-date-totals.small.text-secondary
+                                // will be filled by JS
+
+                        .d-flex.flex-wrap.gap-2.justify-content-between.align-items-center.mb-3
+                            .input-group.input-group-sm.w-auto
+                                span.input-group-text.bg-secondary.text-light
+                                    i.bi.bi-search
+                                input.form-control.text-bg-dark.js-filter(type="text" placeholder="Filter name, email, dietary…")
+                            small.text-secondary= help
+
+                        //- Totals bar
+                        .mb-2
+                            .js-totals.small.text-secondary
+                                // will be filled by JS
+
+                        .table-responsive
+                            table.table.table-dark.table-striped.table-bordered.align-middle.mb-0
+                                thead
+                                    tr
+                                        th Name
+                                        th(class="d-none d-md-table-cell") Email
+                                        th Dates
+                                        th Dietary
+                                        th(class="text-end") Actions
+                                tbody.js-rows
+                                    tr.js-empty
+                                        td(colspan="5")
+                                            .text-secondary.small No participants yet.
+
+        //- Allergies modal (shared)
+        .modal.fade(id=`${accId}-allergies`, tabindex="-1", aria-labelledby=`${accId}-allergies-title`, aria-hidden="true")
+            .modal-dialog.modal-dialog-centered
+                .modal-content.bg-dark.text-light.border.border-secondary
+                    .modal-header
+                        h5.modal-title(id=`${accId}-allergies-title`) Allergies
+                        button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
+                    .modal-body
+                        pre.js-allergy-text.mb-0(style="white-space:pre-wrap")
+
+    script(type="module").
+        import { initEventParticipants } from "/js/modules/event-participant.gen.js";
+        initEventParticipants();

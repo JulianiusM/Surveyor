@@ -3,10 +3,7 @@
  * Common patterns for survey, packing, activity, and drivers entities
  */
 
-/**
- * Entity types supported in the application
- */
-export type EntityType = 'survey' | 'packing' | 'activity' | 'drivers';
+import {EntityType} from "../../../src/types/UtilTypes";
 
 /**
  * Entity-specific configuration for generating test data
@@ -55,6 +52,14 @@ export const entityConfigs: Record<EntityType, EntityConfig> = {
         accordionId: '#sec-drivers',
         createButtonPattern: /create.*list/i,
         emptyStatePattern: /you don[’']t have any drivers lists yet/i,
+    },
+    event: {
+        urlPath: '/event/create',
+        displayName: 'event',
+        displayNamePlural: 'events',
+        accordionId: '#sec-event',
+        createButtonPattern: /create.*event/i,
+        emptyStatePattern: /you don[’']t have any events yet/i,
     },
 };
 

@@ -8,7 +8,14 @@
    ──────────────────────────────────────────────────────────────── */
 
 /* ========== Assign / Unassign ================================ */
-import {post, setCurrentNavLocation, showInlineAlert, startInlineEdit, startInlineEditArea} from "./module_functions";
+import {
+    loadPerms,
+    post,
+    setCurrentNavLocation,
+    showInlineAlert,
+    startInlineEdit,
+    startInlineEditArea
+} from "./modules/module_functions";
 
 export function initAssignButtons() {
     const table = document.querySelector('table[data-assignable]');
@@ -270,6 +277,7 @@ export function initOwnerDeleteItem() {
 
 export function init() {
     setCurrentNavLocation();
+    loadPerms();
 
     // @ts-expect-error TS(2339): Property 'DRIVERS_LIST_ID' does not exist on type ... Remove this comment to see the full error message
     if (window.DRIVERS_LIST_ID) {

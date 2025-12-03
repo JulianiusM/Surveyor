@@ -18,9 +18,6 @@ block content
         const deadline = ev.bindingDeadline;
         const participants = data.participants || [];
 
-        const isOwner = !!(user && ownerId && user.id === ownerId);
-        const isAuthed = !!(user || guest);
-
     // ─── Event meta ───────────────────────────────────────────
     .card.mb-3.bg-dark.text-white.border-secondary-subtle
         .card-body
@@ -51,93 +48,123 @@ block content
                         label.form-label Description
                         p= ev.description
 
-    .card.mb-4.bg-dark.text-white.border-secondary-subtle
-        .card-header.py-2
-            i.bi.bi-gear-fill.me-2
-            | Event settings
-        .card-body
-            form.row.g-3#eventUpdateForm
-                .col-md-6
-                    label.form-label(for="titleEdit")
-                        i.bi.bi-tag.me-1
-                        | Title
-                    input#titleEdit.form-control.text-bg-dark(type="text" name="title" maxlength="255" value=ev.title)
-                .col-md-6
-                    label.form-label(for="locationEdit")
-                        i.bi.bi-geo-alt.me-1
-                        | Location
-                    input#locationEdit.form-control.text-bg-dark(type="text" name="location" maxlength="255" value=location)
-                .col-md-4
-                    label.form-label(for="startEdit")
-                        i.bi.bi-calendar-event.me-1
-                        | Start date
-                    input#startEdit.form-control.text-bg-dark(type="date" name="start" value=startDate)
-                .col-md-4
-                    label.form-label(for="endEdit")
-                        i.bi.bi-calendar2-event.me-1
-                        | End date
-                    input#endEdit.form-control.text-bg-dark(type="date" name="end" value=endDate)
-                .col-md-4
-                    label.form-label(for="maxParticipants")
-                        i.bi.bi-people.me-1
-                        | Max Participants
-                    input#maxParticipants.form-control.text-bg-dark(
-                        type="number"
-                        name="maxParticipants"
-                        placeholder=""
-                        value=(ev.maxParticipants || ''))
-                .col-md-12
-                    label.form-label(for="descEdit")
-                        i.bi.bi-pencil-square.me-1
-                        | Description
-                    textarea#descEdit.form-control.text-bg-dark(name="description" rows="3") #{ev.description || ''}
-                .col-md-4
-                    label.form-label(for="deadlineEdit")
-                        i.bi.bi-hourglass-split.me-1
-                        | Binding deadline
-                    input#deadlineEdit.form-control.text-bg-dark(type="datetime-local" name="bindingDeadline" value=(deadline ? new Date(deadline).toISOString().slice(0, 16) : ''))
-                .col-md-4
-                    +timezonePicker('deadlineTz', {
-                        label: 'Time zone',
-                        required: true,
-                        value: ev.timezone,
-                        help: 'Times will be converted for each user.'
-                    })
-                .col-md-4.d-flex.align-items-end
-                    .form-check
-                        input#requireDietEdit.form-check-input(
-                            type="checkbox"
-                            name="requireDietaryInfo"
-                            checked=ev.requireDietaryInfo)
-                        label.form-check-label(for="requireDietEdit")
-                            i.bi.bi-egg-fried.me-1
-                            | Require dietary info during registration
-                .col-12.d-flex.justify-content-end.gap-2
-                    button.btn.btn-primary(type="submit")
-                        i.bi.bi-save.me-1
-                        | Save settings
+    if permData.entity.any("EDIT_TITLE", "EDIT_DESC", "EDIT_CAPACITY", "EDIT_META")
+        .card.mb-2.bg-dark.text-white.border-secondary-subtle
+            .card-header.py-2
+                i.bi.bi-gear-fill.me-2
+                | Event settings
+            .card-body
+                form.row.g-3#eventUpdateForm
+                    if permData.entity.has("EDIT_TITLE")
+                        .col-md-6
+                            label.form-label(for="titleEdit")
+                                i.bi.bi-tag.me-1
+                                | Title
+                            input#titleEdit.form-control.text-bg-dark(type="text" name="title" maxlength="255" value=ev.title)
+                    if permData.entity.has("EDIT_META")
+                        .col-md-6
+                            label.form-label(for="locationEdit")
+                                i.bi.bi-geo-alt.me-1
+                                | Location
+                            input#locationEdit.form-control.text-bg-dark(type="text" name="location" maxlength="255" value=location)
+                        .col-md-4
+                            label.form-label(for="startEdit")
+                                i.bi.bi-calendar-event.me-1
+                                | Start date
+                            input#startEdit.form-control.text-bg-dark(type="date" name="start" value=startDate)
+                        .col-md-4
+                            label.form-label(for="endEdit")
+                                i.bi.bi-calendar2-event.me-1
+                                | End date
+                            input#endEdit.form-control.text-bg-dark(type="date" name="end" value=endDate)
+                    if permData.entity.has("EDIT_CAPACITY")
+                        .col-md-4
+                            label.form-label(for="maxParticipants")
+                                i.bi.bi-people.me-1
+                                | Max Participants
+                            input#maxParticipants.form-control.text-bg-dark(
+                                type="number"
+                                name="maxParticipants"
+                                placeholder=""
+                                value=(ev.maxParticipants || ''))
+                    if permData.entity.has("EDIT_DESC")
+                        .col-md-12
+                            label.form-label(for="descEdit")
+                                i.bi.bi-pencil-square.me-1
+                                | Description
+                            textarea#descEdit.form-control.text-bg-dark(name="description" rows="3") #{ev.description || ''}
+                    if permData.entity.has("EDIT_META")
+                        .col-md-4
+                            label.form-label(for="deadlineEdit")
+                                i.bi.bi-hourglass-split.me-1
+                                | Binding deadline
+                            input#deadlineEdit.form-control.text-bg-dark(type="datetime-local" name="bindingDeadline" value=(deadline ? new Date(deadline).toISOString().slice(0, 16) : ''))
+                        .col-md-4
+                            +timezonePicker('deadlineTz', {
+                                label: 'Time zone',
+                                required: true,
+                                value: ev.timezone,
+                                help: 'Times will be converted for each user.'
+                            })
+                    if permData.entity.has("MANAGE_REQUIREMENTS")
+                        .col-md-4.d-flex.align-items-end
+                            .form-check
+                                input#requireDietEdit.form-check-input(
+                                    type="checkbox"
+                                    name="requireDietaryInfo"
+                                    checked=!!ev.requireDietaryInfo)
+                                label.form-check-label(for="requireDietEdit")
+                                    i.bi.bi-egg-fried.me-1
+                                    | Require dietary info during registration
+                    .col-12.d-flex.justify-content-end.gap-2
+                        button.btn.btn-primary(type="submit")
+                            i.bi.bi-save.me-1
+                            | Save settings
+
+    if permData.entity.has('MANAGE_PERMISSIONS')
+        +permissionManagement(admins, perms.permMeta, perms.defaultPerms, perms.presets, {
+            entityType: 'event',
+            entityId: ev.id,
+        })
+
+    if permData.entity.has('MANAGE_REGISTRATIONS')
+        +eventRegLinks({
+            eventId: ev.id,
+            apiList: `/api/event/${ev.id}/links`,
+            apiCreate: `/api/event/${ev.id}/links`,
+            apiRevoke: `/api/event/${ev.id}/links`
+        })
+
+    if permData.entity.has('ACCESS_PARTICIPANTS')
+        - const apiDelete = permData.entity.has('MANAGE_REGISTRATIONS') ? `/api/event/${ev.id}/registrations` : undefined
+        +eventParticipants({
+            eventId: ev.id,
+            apiList: `/api/event/${ev.id}/participants`,
+            apiDelete: apiDelete,
+        })
 
     .row
         .accordion.accordion-dark#entityLists
-            +entityList(
-                'sec-surveys',
-                'Event surveys',
-                'bi-clipboard-data',
-                data.surveys,
-                'survey',
-                `/survey/create?eventId=${ev.id}`,
-                'Create new survey',
-                'bi-plus-circle',
-                'No surveys in this event yet.',
-                'bi-clipboard-check',
-                true
-            )
+            //-
+                +entityList(
+                    'sec-surveys',
+                    'Event surveys',
+                    'bi-clipboard-data',
+                    data.surveys,
+                    'survey',
+                    `/survey/create?eventId=${ev.id}`,
+                    'Create new survey',
+                    'bi-plus-circle',
+                    'No surveys in this event yet.',
+                    'bi-clipboard-check',
+                    true
+                )
 
             +entityList(
                 'sec-pack',
                 'Event packing lists',
                 'bi-box-seam',
-                data.packLists,
+                data.packingLists,
                 'packing',
                 `/packing/create?eventId=${ev.id}`,
                 'Create new packing list',
@@ -165,7 +192,7 @@ block content
                 'sec-drivers',
                 'Event drivers lists',
                 'bi-car-front',
-                data.driversLists,
+                data.driverLists,
                 'drivers',
                 `/drivers/create?eventId=${ev.id}`,
                 'Create new drivers list',
@@ -175,7 +202,16 @@ block content
                 true
             )
 
-    p Coming soon: Participants | Suggestions | Exports
+    if permData.entity.has("DATA_EXPORT")
+        hr
+        h2.fs-3.mb-3 Exports
+        if permData.entity.has("ACCESS_PARTICIPANTS")
+            a.btn.btn-sm.btn-outline-light(
+                href=`/event/${ev.id}/export/participants`
+                target="_blank" rel="noopener"
+            )
+                i.bi.bi-printer.me-1
+                | Participants (print)
 
 block scripts
     script(type="module" src="/js/events.gen.js")

@@ -1,6 +1,6 @@
 /*  Activity-Create – no jQuery  */
 /* ─── utils ───────────────────────────────────────────────── */
-import {setCurrentNavLocation} from "./module_functions";
+import {setCurrentNavLocation} from "./modules/module_functions";
 import {ActivitySlot} from "../../modules/database/entities/activity/ActivitySlot";
 
 const ONE_DAY = 24 * 3600 * 1000;

@@ -34,12 +34,8 @@ block content
             monday.setDate(monday.getDate() + 7);
         }
 
-        const owner = !!(user && user.id === data.plan.ownerId);
-        const manage = !!(owner || (data.plan.guestManage && (guest || user)));
-        const add = !!(manage || data.plan.allowGuestAdd);
-
     // ─── Description (editable) ──────────────────────────────
-    if add
+    if permData.entity.has('EDIT_DESC')
         // manager sees pointer
         small.text-info.fst-italic.fw-light Double click to edit
         p#planDesc.border.border-secondary.rounded.p-1(
@@ -65,27 +61,11 @@ block content
         hr.mb-1.mt-0
 
     // Owner settings toggles
-    if owner
-        .card.mb-3.bg-dark.text-white.border-secondary-subtle
-            .card-header.py-2
-                i.bi.bi-gear-fill.me-2
-                | List settings
-            .card-body.py-2
-                form#flagForm(class="row g-3")
-                    .col-md-6.d-flex.align-items-center
-                        .form-check.form-switch
-                            input#allowAddSwitch.form-check-input(
-                                type="checkbox"
-                                autocomplete="off"
-                                checked= !!data.plan.allowGuestAdd )
-                            label.form-check-label(for="allowAddSwitch") Guests can add slots
-                    .col-md-6.d-flex.align-items-center
-                        .form-check.form-switch
-                            input#guestManageSwitch.form-check-input(
-                                type="checkbox"
-                                autocomplete="off"
-                                checked= !!data.plan.guestManage )
-                            label.form-check-label(for="guestManageSwitch") Guests may manage plan
+    if permData.entity.has('MANAGE_PERMISSIONS')
+        +permissionManagement(admins, perms.permMeta, perms.defaultPerms, perms.presets, {
+            entityType: 'activity',
+            entityId: data.plan.id
+        })
 
     //Erste Zeile: Metainfos / Badge
     .d-flex.justify-content-between.align-items-center.mb-3
@@ -107,22 +87,11 @@ block content
                 i.bi.bi-slash-circle.me-1
                 | #{data.counters.empty} unassigned
 
-
-        .d-flex.flex-wrap.gap-2
-            // Einstellungen
-            if data.plan.allow_guest_add
-                span.badge.bg-info-subtle.text-info-emphasis
-                    i.bi.bi-pencil-square.me-1
-                    | Guests can add slots
-            if data.plan.guest_manage
-                span.badge.bg-warning-subtle.text-warning-emphasis.ms-1
-                    i.bi.bi-tools.me-1
-                    | Guests can manage
-
     each week in weeks
         h4.mt-4.mb-2 Week of #{fmtISO(week)}
         .table-responsive
-            small.text-info.fst-italic.fw-light Double click to edit, drag to reorder
+            if permData.entity.has('ITEM_EDIT')
+                small.text-info.fst-italic.fw-light Double click to edit, drag to reorder
             table.table.table-dark.table-bordered.activity-table
                 thead
                     tr
@@ -146,19 +115,18 @@ block content
                         td
                             // ▶ every slot now shares this parent
                             .slot-container(data-date=fmtISO(cur))
-                                - console.log(data.slots);
                                 - const daySlots = (data.slots[fmtISO(cur)] || []);
                                 if daySlots.length > 0
                                     each slot, idx in daySlots
                                         - const my = data.assignments.includes(slot.id)
-                                        .slot.border.rounded.p-2.mb-2.d-grid.gap-1.draggable(data-slotid=slot.id draggable=manage ? 'true' : null)
+                                        .slot.border.rounded.p-2.mb-2.d-grid.gap-1.draggable(data-slotid=slot.id draggable=permData.entity.has('ITEM_EDIT') ? 'true' : null)
 
                                             // editable title
                                             span.fw-bold.text-center(data-edit="title" data-id=slot.id)= slot.title
                                             hr.m-0
 
                                             // editable description
-                                            if add
+                                            if permData.itemAllow(slot.id, 'EDIT_DESC', 'ITEM_EDIT')
                                                 span.border.border-secondary.rounded.p-1.fw-5(data-edit="description" data-id=slot.id)= slot.description || ''
                                             else
                                                 span.fw-5(data-edit="description" data-id=slot.id)= slot.description || ''
@@ -195,12 +163,12 @@ block content
                                                         data-action="assign") Join
                                                 else
                                                     span.badge.bg-secondary.flex-grow-1.text-center Full
-                                                if manage
+                                                if permData.itemAllow(slot.id, 'ITEM_DELETE', 'ITEM_DELETE')
                                                     button.btn.btn-sm.btn-outline-danger(
                                                         data-delete-slot data-slotid=slot.id
                                                         draggable="false")
                                                         i.bi.bi-trash
-                                            if manage
+                                            if permData.itemAllow(slot.id, 'EDIT_META', 'ITEM_EDIT')
                                                 +roleAssignmentSlotCreator(slot.id, data.roles.allRoles)
                                 else
                                     span.badge.w-100.text-center
@@ -209,7 +177,7 @@ block content
                     - }
                     // @formatter:on
                 // ★ add-slot buttons row
-                if add
+                if permData.entity.has('ITEM_ADD')
                     tfoot
                         tr
                             // @formatter:off
@@ -245,4 +213,4 @@ block scripts
     script(type="module" src="/js/activity.gen.js")
     script.
         window.ACT_PLAN_ID = "#{data.plan.id}";
-        window.IS_MANAGE = #{manage};
+        window.PERM_DATA = !{JSON.stringify(permData)};

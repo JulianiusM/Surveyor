@@ -2,14 +2,17 @@
 import {AppDataSource} from '../dataSource';
 import {Event} from '../entities/event/Event';
 import {EventRegistration} from '../entities/event/EventRegistration';
-import {generateUniqueId} from '../../lib/util';
+import {generateUniqueId, generateUniqueToken, now} from '../../lib/util';
 import {ActivityPlan} from "../entities/activity/ActivityPlan";
 import {PackingList} from "../entities/packing/PackingList";
 import {DriversList} from "../entities/drivers/DriversList";
 import {EventRegistrationDietary} from "../entities/event/EventRegistrationDietary";
-import type {DIETARY} from "../../../types/EventTypes";
-import {EntityManager, FindOptionsWhere, IsNull, MoreThanOrEqual} from 'typeorm';
+import type {DIETARY, ParticipantRow} from "../../../types/EventTypes";
+import {EntityManager, FindOptionsWhere, In, IsNull, MoreThanOrEqual} from 'typeorm';
 import {ensureOneByObjectsAuthed, findOneByObjectsAuthed} from "../utils/relation-upsert";
+import * as entityAdminService from "./EntityAdminService";
+import {EventRegBypassLink} from "../entities/event/EventRegBypassLink";
+import {ExpectedError} from "../../lib/errors";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Events (CRUD)
@@ -102,6 +105,24 @@ export async function getActiveEventsByOwnerId(ownerId: number) {
     });
 }
 
+export async function getActiveManagedEventsForUser(userId: number) {
+    const ids = await entityAdminService.getIdsForUser('event', userId);
+    const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+    return await AppDataSource.getRepository(Event).find({
+        where: [
+            {
+                owner: {id: userId},
+                endDate: MoreThanOrEqual(today),
+            },
+            {
+                id: In(ids),
+                endDate: MoreThanOrEqual(today),
+            }
+        ],
+        order: {startDate: 'ASC'},
+    });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Registrations (no validation — controller handles it)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -112,9 +133,10 @@ export async function registerUser(
     arrivalDate: string,
     departureDate: string,
     dietaryChoices?: DIETARY[] | null,
-    dietaryAllergies?: string | null
+    dietaryAllergies?: string | null,
+    bypass?: { ok: boolean, linkId?: string },
 ) {
-    return register(eventId, arrivalDate, departureDate, {userId}, dietaryChoices, dietaryAllergies);
+    return register(eventId, arrivalDate, departureDate, {userId}, dietaryChoices, dietaryAllergies, bypass);
 }
 
 export async function registerGuest(
@@ -123,9 +145,10 @@ export async function registerGuest(
     arrivalDate: string,
     departureDate: string,
     dietaryChoices?: DIETARY[] | null,
-    dietaryAllergies?: string | null
+    dietaryAllergies?: string | null,
+    bypass?: { ok: boolean, linkId?: string },
 ) {
-    return register(eventId, arrivalDate, departureDate, {guestId}, dietaryChoices, dietaryAllergies);
+    return register(eventId, arrivalDate, departureDate, {guestId}, dietaryChoices, dietaryAllergies, bypass);
 }
 
 export async function register(
@@ -134,7 +157,8 @@ export async function register(
     departureDate: string,
     actor: { userId?: number, guestId?: number },
     dietaryChoices?: DIETARY[] | null,
-    dietaryAllergies?: string | null
+    dietaryAllergies?: string | null,
+    bypass?: { ok: boolean, linkId?: string },
 ) {
     if (!actor.userId && !actor.guestId) return undefined;
     return await AppDataSource.transaction('READ COMMITTED', async (manager) => {
@@ -155,6 +179,10 @@ export async function register(
             });
         }
         await replaceDietaryChoicesTx(manager, reg.id, dietaryChoices, dietaryAllergies);
+        if (bypass && bypass.ok && bypass.linkId) {
+            const ok = await consumeDeadlineBypassToken(bypass.linkId, actor);
+            if (!ok) throw new ExpectedError('This link has already been used', 'error', 409);
+        }
         return reg.id;
     });
 }
@@ -174,17 +202,19 @@ export async function getRegistrationsForEvent(eventId: string) {
     return await AppDataSource.getRepository(EventRegistration).findBy({event: {id: eventId}});
 }
 
-export async function getEventParticipants(eventId: string) {
+export async function getEventParticipants(eventId: string): Promise<ParticipantRow[]> {
     const repo = AppDataSource.getRepository(EventRegistration);
     const rows = await repo.find({
         where: {event: {id: eventId}},
         relations: ['user', 'guest', 'dietaryChoices'],
         order: {id: 'ASC'},
     });
-    return rows.map((r) => ({
+    return rows.map((r): ParticipantRow => ({
+        id: r.id,
         userId: r.user?.id ?? null,
         guestId: r.guest?.id ?? null,
         name: r.user?.name || r.user?.username || r.guest?.username || '—',
+        email: r.user?.email || r.guest?.email || '—',
         arrivalDate: r.arrivalDate,
         departureDate: r.departureDate,
         dietaryChoices: r.dietaryChoices ?? null,
@@ -246,6 +276,14 @@ export async function getRegisteredEventsFor(actor: { userId?: number; guestId?:
     });
 }
 
+export async function deleteRegistration(eventId: string, regId: string | number) {
+    const repo = AppDataSource.getRepository(EventRegistration);
+
+    // Only delete within the event scope
+    const res = await repo.delete({id: Number(regId), event: {id: eventId}});
+    return res?.affected ?? 0 > 0;
+}
+
 export async function isEventFull(eventId: string): Promise<boolean> {
     const eventRepo = AppDataSource.getRepository(Event);
     const regRepo = AppDataSource.getRepository(EventRegistration);
@@ -287,4 +325,103 @@ export async function getPackingListsForEvent(eventId: string) {
 
 export async function getDriverListsForEvent(eventId: string) {
     return await AppDataSource.getRepository(DriversList).findBy({event: {id: eventId}});
+}
+
+// ---------- Registration Bypass Links ----------
+export async function createDeadlineBypassLink(
+    eventId: string,
+    createdBy: number,
+    opts?: { expiresAt?: Date | null; maxUses?: number }
+) {
+    const token = generateUniqueToken();
+    const repo = AppDataSource.getRepository(EventRegBypassLink);
+    const row = repo.create({
+        id: generateUniqueId(),
+        event: {id: eventId},
+        token,
+        createdBy,
+        maxUses: Math.max(1, Number(opts?.maxUses ?? 1)),
+        usedCount: 0,
+        expiresAt: opts?.expiresAt ?? null,
+    });
+    await repo.save(row);
+    return {id: row.id, token: row.token};
+}
+
+export async function listDeadlineBypassLinks(eventId: string) {
+    const repo = AppDataSource.getRepository(EventRegBypassLink);
+    const rows = await repo.find({where: {event: {id: eventId}}, order: {createdAt: 'DESC'}});
+    return rows.map(r => ({
+        id: r.id,
+        token: r.token, // you may redact on the UI if preferred
+        createdAt: r.createdAt,
+        expiresAt: r.expiresAt,
+        revokedAt: r.revokedAt,
+        used: r.usedCount > 0 || !!r.usedAt,
+        userId: r.userId ?? null,
+        guestId: r.guestId ?? null,
+        status: r.revokedAt
+            ? 'revoked'
+            : (r.expiresAt && r.expiresAt < now())
+                ? 'expired'
+                : (r.usedCount >= r.maxUses)
+                    ? 'consumed'
+                    : 'active'
+    }));
+}
+
+export async function revokeDeadlineBypassLink(eventId: string, linkId: string) {
+    const repo = AppDataSource.getRepository(EventRegBypassLink);
+    await repo.update({id: linkId, event: {id: eventId}}, {revokedAt: now()});
+}
+
+export async function validateDeadlineBypassToken(eventId: string, token: string) {
+    const repo = AppDataSource.getRepository(EventRegBypassLink);
+    const row = await repo.findOne({where: {event: {id: eventId}, token}});
+    if (!row) return null;
+    if (row.revokedAt) return null;
+    if (row.expiresAt && row.expiresAt < now()) return null;
+    if (row.usedCount >= row.maxUses) return null;
+    return row;
+}
+
+/**
+ * Consume token in a race-safe way. Write who used it.
+ * Returns true if consumed; false otherwise.
+ */
+export async function consumeDeadlineBypassToken(
+    linkId: string,
+    actor: { userId?: number; guestId?: number }
+): Promise<boolean> {
+    return await AppDataSource.transaction(async (manager) => {
+        const repo = manager.getRepository(EventRegBypassLink);
+        // SELECT ... FOR UPDATE could be used as well; here we use an atomic UPDATE condition.
+        const res = await repo.createQueryBuilder()
+            .update(EventRegBypassLink)
+            .set({
+                usedCount: () => 'used_count + 1',
+                user: {id: actor.userId},
+                guest: {id: actor.guestId},
+                usedAt: () => 'CURRENT_TIMESTAMP',
+                updatedAt: () => 'CURRENT_TIMESTAMP'
+            })
+            .where('id = :id', {id: linkId})
+            .andWhere('revoked_at IS NULL')
+            .andWhere('(expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)')
+            .andWhere('used_count < max_uses')
+            .execute();
+
+        return (res.affected ?? 0) > 0;
+    });
+}
+
+/** Helper used by registration to decide deadline enforcement */
+export async function canBypassDeadlineWithToken(
+    eventId: string,
+    token?: string | null
+): Promise<{ ok: boolean; linkId?: string }> {
+    if (!token) return {ok: false};
+    const row = await validateDeadlineBypassToken(eventId, token);
+    if (!row) return {ok: false};
+    return {ok: true, linkId: row.id};
 }

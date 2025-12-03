@@ -1,4 +1,8 @@
 //Custom conditional class switch
+
+import {PermBundle, PermType, PermView} from "../../../types/PermissionTypes";
+import {PERM} from "../../../modules/lib/permissions";
+
 export function refreshState(object: JQuery<HTMLElement>, validated: boolean, validatedClass: string, invalidatedClass: string) {
     if (validated && !object.hasClass(validatedClass)) {
         if (object.hasClass(invalidatedClass)) {
@@ -399,4 +403,57 @@ export function initEntityLists() {
         input.addEventListener('input', update);
         update();
     });
+}
+
+export function jsonReviver(key: any, value: any) {
+    if (typeof value === 'object' && value !== null) {
+        if (value.dataType === 'Map') {
+            return new Map(value.value);
+        }
+    }
+    return value;
+}
+
+export function loadPerms() {
+    // @ts-ignore
+    if (window.PERM_DATA) {
+        // @ts-ignore
+        window.PERMS = restorePermBundle(JSON.parse(window.PERM_DATA, jsonReviver))
+    }
+}
+
+function restorePermBundle(data: Partial<PermBundle>): PermBundle {
+    const entity = restorePermView(data.entity!)
+    const itemMap = data.items!;
+    for (let key of itemMap.keys()) {
+        itemMap.set(key, restorePermView(itemMap.get(key)!, entity))
+    }
+
+    const empty = restorePermView({mask: 0, parentMask: entity.mask, bits: {}}, entity);
+    const getItem = (id: string) => itemMap.get(id) ?? empty;
+
+    const bundle: PermBundle = {
+        entity: restorePermView(data.entity!),
+        items: itemMap,
+        item: getItem,
+        itemHas: (id: string, key: keyof typeof PERM) => getItem(id).has(key),
+        itemAllow: (id: string, key: keyof typeof PERM, parentKey?: keyof typeof PERM) => getItem(id).allow(key, parentKey),
+    };
+
+    return bundle;
+}
+
+function restorePermView(data: Partial<PermView>, parentData?: Partial<PermView>): PermView {
+    const selfHas = (k: PermType) => (data.bits ? data.bits[k] : false) ?? false;
+    const parentHas = (k: PermType) => (parentData?.bits ? parentData.bits[k] : false) ?? false;
+
+    return {
+        mask: data.mask!,
+        parentMask: data.parentMask!,
+        has: selfHas,
+        allow: (k, parentKey) => selfHas(k) || parentHas(k),
+        all: (...keys) => keys.every(selfHas),
+        any: (...keys) => keys.some(selfHas),
+        bits: data.bits!
+    }
 }

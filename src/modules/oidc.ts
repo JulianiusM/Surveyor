@@ -113,6 +113,7 @@ export async function callback(req: Request) {
 
     // Clear transient OIDC artifacts
     req.session.oidc = undefined;
+    req.session.guest = undefined;
 
     await persistSession(req.session);
 }
@@ -130,7 +131,7 @@ export async function logout(session: Request['session']) {
     // Only initialize OIDC if this is an OIDC session
     if (isOidc) {
         if (!config) await initOIDC();
-        
+
         const meta = config.serverMetadata();
         const endSession = meta.end_session_endpoint;
         const postLogoutRedirectUri = settings.value.rootUrl;

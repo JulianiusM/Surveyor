@@ -1,6 +1,13 @@
 /* ========== Assign / Unassign ================================ */
 
-import {formatISOInTimeZone, initEntityLists, post, setCurrentNavLocation, showInlineAlert} from "./module_functions";
+import {
+    formatISOInTimeZone,
+    initEntityLists,
+    loadPerms,
+    post,
+    setCurrentNavLocation,
+    showInlineAlert
+} from "./modules/module_functions";
 
 export function allergyCheck() {
     const allergyBox = document.getElementById('diet-allergies');
@@ -99,6 +106,10 @@ export function initUpdate() {
         e.preventDefault();
         try {
             const formData = new FormData(form as HTMLFormElement);
+            const checkbox = form.querySelector("#requireDietEdit") as HTMLInputElement;
+            if (checkbox) {
+                formData.set(checkbox.name, checkbox.checked ? 'on' : 'off');
+            }
             // @ts-ignore
             await post(`/event/${EVENT_ID}/update`, Object.fromEntries(formData));
             showInlineAlert('success', 'Updated');
@@ -163,6 +174,7 @@ export function initRegistrationDateRange() {
 
 export function init() {
     setCurrentNavLocation();
+    loadPerms();
     allergyCheck();
     deadlineUpdater();
     initDateRange();

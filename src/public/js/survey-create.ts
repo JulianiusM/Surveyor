@@ -1,6 +1,6 @@
 // public/js/survey-create.js
 
-import {setCurrentNavLocation} from "./module_functions";
+import {setCurrentNavLocation} from "./modules/module_functions";
 
 /**
  * Initializes the dynamic combination rows on the Create Survey page.

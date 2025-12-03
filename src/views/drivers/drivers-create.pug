@@ -49,22 +49,6 @@ block content
                 required
                 value=(parsed.title || ''))
 
-        // Optionen
-        .row.mb-3
-            .col-md-6
-                .form-check
-                    input#allowAdd.form-check-input(type="checkbox" name="allowGuestAdd" checked=!!parsed.allowGuestAdd)
-                    label.form-check-label(for="allowAdd")
-                        i.bi.bi-plus-circle.me-1
-                        | Guests can add items
-            .col-md-6
-                .form-check
-                    input#guestManage.form-check-input(type="checkbox" name="guestManage" checked=!!parsed.guestManage)
-                    label.form-check-label(for="guestManage")
-                        i.bi.bi-exclamation-triangle.me-1
-                        | Guests may manage list
-                        span.badge.bg-danger.ms-1 DANGER
-
         .row.mb-3
             .col-md-12
                 label.form-label(for="desc")
@@ -76,6 +60,10 @@ block content
         .row.mb-3
             .col-md-12
                 +entityPicker('event_id', parsedEventData.events, {label: 'Assign to event', value: parsedEventData.id})
+
+        .row.mb-3
+            .col-md-12
+                +permMatrix(['participant', 'guest', 'authenticated', 'public'], perms.permMeta, perms.defaultPerms, perms.presets, 'defaultPerms')
 
         // Buttons
         .d-flex.justify-content-between.align-items-center

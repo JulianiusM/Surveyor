@@ -15,16 +15,6 @@ export class DriversList {
     @Column("text", {name: "description", nullable: true})
     description?: string | null;
 
-    @Column("tinyint", {
-        name: "allow_guest_add",
-        width: 1,
-        default: 0,
-    })
-    allowGuestAdd!: boolean;
-
-    @Column("tinyint", {name: "guest_manage", width: 1, default: 0})
-    guestManage!: boolean;
-
     @Column("timestamp", {
         name: "created_at",
         nullable: true,

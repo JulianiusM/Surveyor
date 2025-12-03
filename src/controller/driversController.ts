@@ -1,43 +1,27 @@
 import Joi from 'joi';
 
 import * as driverService from '../modules/database/services/DriverService';
-import {generateUniqueId} from "../modules/lib/util";
+import {ENTITIES, generateUniqueId} from "../modules/lib/util";
 import {APIError, ValidationError} from '../modules/lib/errors';
 import {DriversItem} from "../modules/database/entities/drivers/DriversItem";
 import {DriversList} from "../modules/database/entities/drivers/DriversList";
 import {Request} from "express";
+import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'drivers/drivers-create';
 
 function preprocessCreate(body: any): Partial<DriversList> {
-    let items;
-    try {
-        items = JSON.parse(body.items || '[]');
-    } catch {
-        throw new ValidationError(CREATE_TEMPLATE, 'Invalid items JSON', {body});
-    }
-
-    const itemSchema = Joi.object({
-        title: Joi.string().required(),
-        description: Joi.string().allow(''),
-        maxAssignees: Joi.number().integer().min(1).required()
-    });
-
     const schema = Joi.object({
         title: Joi.string().required(),
-        allowGuestAdd: Joi.boolean(),
-        guestManage: Joi.boolean(),
-        event_id: Joi.string().uuid().optional(),
+        description: Joi.string().allow('').optional(),
+        event_id: Joi.string().uuid().allow('').optional(),
     });
 
     const {error, value} = schema.validate(
         {
             title: body.title,
             description: body.description,
-            allowGuestAdd: Boolean(body.allowGuestAdd),
-            guestManage: Boolean(body.guestManage),
-            items,
             event_id: body.event_id
         },
         {abortEarly: false, allowUnknown: true}
@@ -50,9 +34,7 @@ function preprocessCreate(body: any): Partial<DriversList> {
     return {
         title: value.title,
         description: value.description || null,
-        allowGuestAdd: value.allowGuestAdd,
-        guestManage: value.guestManage,
-        eventId: value.event_id,
+        eventId: value.event_id || null,
     };
 }
 
@@ -65,19 +47,17 @@ async function createEntity(
         ownerId,
         listData.title!,
         listData.description!,
-        listData.allowGuestAdd!,
-        listData.guestManage!,
         listData.eventId,
     );
 }
 
-// No-op since slots handled in transaction
-
-async function afterCreateItems() {
+async function afterCreateItems(id: string, data: any) {
+    await saveDefaultPermsFromBody(ENTITIES.DRIVERS, id, data._body);
 }
 
-async function fetchForView(list: DriversList, session: Request['session']) {
+async function fetchForView(list: DriversList, req: Request) {
     const items = await driverService.getDriversItems(list.id);
+    const session = req.session;
 
     const assignments = session.user
         ? await driverService.getDriversAssignmentsForUser(list.id, session.user.id)
@@ -195,8 +175,7 @@ async function deleteAssignment(assignId: number) {
 }
 
 async function updateSettings(id: string, body: any) {
-    const {allowAdd, guestManage} = body;
-    await driverService.updateDriversFlags(id, allowAdd, guestManage);
+    await saveDefaultPermsFromBody(ENTITIES.DRIVERS, id, body);
     return 'Settings saved';
 }
 

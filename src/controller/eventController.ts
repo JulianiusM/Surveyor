@@ -4,12 +4,14 @@ import Joi from 'joi';
 
 import * as eventService from '../modules/database/services/EventService';
 import {APIError, ValidationError} from '../modules/lib/errors';
-import {isWithinWindow, rewriteISOToZone} from "../modules/lib/util";
+import {buildDateTotals, ENTITIES, getResource, isWithinWindow, rewriteISOToZone} from "../modules/lib/util";
 
 import {Event} from "../modules/database/entities/event/Event";
 import type {DIETARY} from "../types/EventTypes";
 import {Request} from "express";
 import {ALLOWED_DIETARY} from "../modules/database/entities/event/EventRegistrationDietary";
+import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
+import {PermBundle} from "../types/PermissionTypes";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'event/event-create';
@@ -76,14 +78,16 @@ async function createEntity(ownerId: number, eventData: Partial<Event>) {
 }
 
 // No-op — nothing else created alongside the event at this step
-async function afterCreateItems() {
+async function afterCreateItems(id: string, data: any) {
+    await saveDefaultPermsFromBody(ENTITIES.EVENT, id, data._body);
 }
 
 /**
  * Data for the view page.
  * Returns the event plus the current actor’s registration (if any).
  */
-async function fetchForView(event: Event, session: Request['session']) {
+async function fetchForView(event: Event, req: Request) {
+    const session = req.session;
     const registration = session.user
         ? await eventService.getRegistrationFor({userId: session.user.id}, event.id)
         : session.guest
@@ -112,6 +116,7 @@ async function fetchForView(event: Event, session: Request['session']) {
         packingLists,
         driverLists,
         isFull,
+        regToken: getResource(req, 'regToken'),
     };
 }
 
@@ -127,8 +132,9 @@ async function deleteEntity(event: Event, _session: Request['session']) {
     return await (eventService as any).deleteEvent(event.id);
 }
 
-async function registerAttendance(event: Event, body: any, session: Request['session']) {
+async function registerAttendance(event: Event, body: any, req: Request) {
     if (!event) throw new APIError('Event not found', body, 404);
+    const session = req.session;
 
     // Deny registration if not already registered (allow updates to registration)
     if (await eventService.isEventFull(event.id) && !(await eventService.isRegisteredForEvent({
@@ -137,16 +143,22 @@ async function registerAttendance(event: Event, body: any, session: Request['ses
     }, event.id))) throw new APIError('Event is full', body, 403);
 
     // Deny registration if past binding deadline
+    let bypass: { ok: boolean; linkId?: string } = {ok: false};
     if (event.bindingDeadline && new Date(Date.parse(event.bindingDeadline)) < new Date()) {
-        throw new APIError('Registration deadline has passed', body, 403);
+        bypass = await eventService.canBypassDeadlineWithToken(event.id, body.regToken ?? getResource(req, 'regToken') ?? null);
+        if (!bypass.ok) {
+            // owners/co-organizers may bypass via permission in your middleware;
+            // if you still reach here, reject:
+            throw new APIError('Registration deadline has passed', {}, 403);
+        }
     }
 
     const schema = Joi.object({
         arrivalDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
         departureDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
         dietary: Joi.alternatives().try(
-            Joi.array().items(Joi.string().valid(ALLOWED_DIETARY).uppercase()),
-            Joi.string().valid(ALLOWED_DIETARY).uppercase() // handles single value form-post
+            Joi.array().items(Joi.string().valid(...ALLOWED_DIETARY).uppercase()),
+            Joi.string().valid(...ALLOWED_DIETARY).uppercase() // handles single value form-post
         ).optional(),
         allergyNotes: Joi.string().max(255).allow(''),
     });
@@ -164,9 +176,9 @@ async function registerAttendance(event: Event, body: any, session: Request['ses
     const allergyNotes: string = value.allergyNotes || '';
 
     if (session.user?.id) {
-        await eventService.registerUser(event.id, session.user.id, value.arrivalDate, value.departureDate, dietary, allergyNotes.trim() || null);
+        await eventService.registerUser(event.id, session.user.id, value.arrivalDate, value.departureDate, dietary, allergyNotes.trim() || null, bypass);
     } else if (session.guest?.id) {
-        await eventService.registerGuest(event.id, session.guest.id, value.arrivalDate, value.departureDate, dietary, allergyNotes.trim() || null);
+        await eventService.registerGuest(event.id, session.guest.id, value.arrivalDate, value.departureDate, dietary, allergyNotes.trim() || null, bypass);
     } else {
         throw new APIError('Authentication required', body, 401);
     }
@@ -187,7 +199,18 @@ async function cancelRegistration(event: Event, session: Request['session']) {
 
 /* ----------------------- API: Organizer edit ----------------------- */
 
-async function updateEventSettings(event: Event, body: any) {
+async function updateEventSettings(event: Event, body: any, permData?: PermBundle) {
+    // Permission check
+    if (!permData ||
+        ((body.location !== undefined || body.start !== undefined || body.end !== undefined || body.deadlineTz !== undefined) && !permData.entity.has("EDIT_META"))
+        || (body.title !== undefined && !permData.entity.has("EDIT_TITLE"))
+        || (body.description !== undefined && !permData.entity.has("EDIT_DESC"))
+        || (body.requireDietaryInfo !== undefined && !permData.entity.has("MANAGE_REQUIREMENTS"))
+        || (body.maxParticipants !== undefined && !permData.entity.has("EDIT_CAPACITY"))
+    ) {
+        throw new APIError("Not allowed", body, 403);
+    }
+
     const schema = Joi.object({
         title: Joi.string().max(255).allow(''),
         description: Joi.string().max(2000).allow(''),
@@ -217,19 +240,75 @@ async function updateEventSettings(event: Event, body: any) {
 
     const timedDeadline = value.bindingDeadline ? rewriteISOToZone(value.bindingDeadline, value.deadlineTz || 'UTC') : undefined;
 
-    await eventService.updateEventMeta(event.id, {
-        location: value.location || null,
-        bindingDeadline: timedDeadline || null,
-        requireDietaryInfo: value.requireDietaryInfo === 'on',
-        maxParticipants: value.maxParticipants || null,
-        timezone: value.deadlineTz || null,
-    });
+    const update: {
+        location?: string | null;
+        bindingDeadline?: string | null;
+        requireDietaryInfo?: boolean;
+        maxParticipants?: number;
+        timezone?: string | null;
+    } = {};
+    if (value.location !== undefined) update.location = value.location || null;
+    if (start !== undefined && end !== undefined) update.bindingDeadline = timedDeadline || null;
+    if (value.requireDietaryInfo !== undefined) update.requireDietaryInfo = value.requireDietaryInfo === 'on';
+    if (value.maxParticipants !== undefined) update.maxParticipants = value.maxParticipants || null;
+    if (value.deadlineTz !== undefined) update.timezone = value.deadlineTz || null;
+
+    await eventService.updateEventMeta(event.id, update);
     if (value.title !== undefined) await eventService.updateEventTitle(event.id, value.title || event.title);
     if (value.description !== undefined) await eventService.updateEventDescription(event.id, value.description || null);
     // Optionally persist start/end if changed (add a meta helper if you prefer keeping them together):
     await eventService.updateEventDates(event.id, start, end);
 
     return 'Event updated';
+}
+
+async function updateSettings(id: string, body: any) {
+    await saveDefaultPermsFromBody(ENTITIES.EVENT, id, body);
+    return 'Settings saved';
+}
+
+async function listDeadlineBypassLinks(event: Event) {
+    return await eventService.listDeadlineBypassLinks(event.id);
+}
+
+async function createDeadlineBypassLink(event: Event, body: any, session: Request['session']) {
+    if (!event) throw new APIError('Event not found', body, 404);
+    if (!session.user) throw new APIError('Must be logged in', body, 401);
+
+    const expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
+    return await eventService.createDeadlineBypassLink(
+        event.id,
+        session.user.id,
+        {expiresAt, maxUses: 1}
+    );
+}
+
+async function revokeDeadlineBypassLink(event: Event, linkId: string) {
+    await eventService.revokeDeadlineBypassLink(event.id, linkId);
+}
+
+async function getParticipants(event: Event) {
+    return await eventService.getEventParticipants(event.id);
+}
+
+async function deleteRegistration(event: Event, registrationId: string) {
+    return await eventService.deleteRegistration(event.id, registrationId);
+}
+
+async function getParticipantsExtended(event: Event) {
+    const participants = await eventService.getEventParticipants(event.id);
+    const totals: Record<string, number> = {};
+    for (const p of participants) {
+        for (const k of p.dietaryChoices) totals[k.choice] = (totals[k.choice] || 0) + 1;
+    }
+    const dateTotals: Record<string, number> = buildDateTotals(event.startDate, event.endDate, participants);
+    return {
+        event: event,
+        participants: participants,
+        totals: totals,
+        dateTotals: dateTotals,
+        generatedAt: new Date().toISOString(),
+    }
 }
 
 export default {
@@ -243,4 +322,13 @@ export default {
     registerAttendance,
     cancelRegistration,
     updateEventSettings,
+    updateSettings,
+
+    listDeadlineBypassLinks,
+    createDeadlineBypassLink,
+    revokeDeadlineBypassLink,
+
+    getParticipants,
+    deleteRegistration,
+    getParticipantsExtended,
 };

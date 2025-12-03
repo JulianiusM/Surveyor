@@ -170,6 +170,3 @@ export function initEntitySelect(
     setButtonLabelById(selectedId);
     render(data);
 }
-
-// Expose to global scope
-window.Surveyor.initEntitySelect = initEntitySelect;

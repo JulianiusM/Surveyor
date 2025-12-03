@@ -10,7 +10,7 @@ block title
 
 block content
     -
-        let parsed = {}, parsedData = [];
+        let parsed = {}, parsedData = [], parsedEventData = {};
         if (data) {
             if (data.entity) {
                 parsed = data.entity;
@@ -21,6 +21,12 @@ block content
                 parsedData = data.data;
             } else {
                 parsedData = data.slots;
+            }
+            if (data.eventId) {
+                parsedEventData.id = data.eventId;
+            }
+            if (data.events) {
+                parsedEventData.events = data.events;
             }
         }
         let eventIdQuery = '';
@@ -52,26 +58,6 @@ block content
                     type="date" name="endDate" required
                 value=(parsed.endDate || ''))
 
-        // Options (like packing list)
-        .row.g-3.mb-3
-            .col-md-6.d-flex.align-items-end
-                .form-check
-                    input#allowAdd.form-check-input(
-                        type="checkbox" name="allowGuestAdd"
-                        checked=!!parsed.allowGuestAdd)
-                    label.form-check-label(for="allowAdd")
-                        i.bi.bi-plus-circle.me-1
-                        | Guests can add slots
-            .col-md-6.d-flex.align-items-end
-                .form-check
-                    input#guestManage.form-check-input(
-                        type="checkbox" name="guestManage"
-                        checked=!!parsed.guestManage)
-                    label.form-check-label(for="guestManage")
-                        i.bi.bi-tools.me-1
-                        | Guests may manage
-                        span.badge.bg-danger.ms-1 DANGER
-
         .row.g-3.mb-3
             .col-md-12
                 label.form-label(for="desc")
@@ -79,6 +65,14 @@ block content
                     | Description
                 textarea#desc.form-control.text-bg-dark(name="description")
                     | #{parsed.description || ''}
+
+        .row.g-3.mb-3
+            .col-md-12
+                +entityPicker('event_id', parsedEventData.events, {label: 'Assign to event', value: parsedEventData.id})
+
+        .row.g-3.mb-3
+            .col-md-12
+                +permMatrix(['participant', 'guest', 'authenticated', 'public'], perms.permMeta, perms.defaultPerms, perms.presets, 'defaultPerms')
 
         hr
 

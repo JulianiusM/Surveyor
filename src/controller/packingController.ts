@@ -1,11 +1,12 @@
 import Joi from 'joi';
 
 import * as packingService from '../modules/database/services/PackingService';
-import {generateUniqueId} from "../modules/lib/util";
+import {ENTITIES, generateUniqueId} from "../modules/lib/util";
 import {APIError, ValidationError} from '../modules/lib/errors';
 import {PackingList} from "../modules/database/entities/packing/PackingList";
 import {Request} from "express";
 import {PackingItem} from "../modules/database/entities/packing/PackingItem";
+import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'packing/packing-create';
@@ -27,9 +28,9 @@ function preprocessCreate(body: any): Partial<PackingList> & { items: Partial<Pa
 
     const schema = Joi.object({
         title: Joi.string().required(),
-        allowGuestAdd: Joi.boolean(),
-        guestManage: Joi.boolean(),
-        items: Joi.array().items(itemSchema).min(1).required()
+        description: Joi.string().optional(),
+        items: Joi.array().items(itemSchema).min(1).required(),
+        event_id: Joi.string().uuid().allow('').optional(),
     });
 
     const {error, value} = schema.validate(
@@ -38,7 +39,8 @@ function preprocessCreate(body: any): Partial<PackingList> & { items: Partial<Pa
             description: body.description,
             allowGuestAdd: Boolean(body.allowGuestAdd),
             guestManage: Boolean(body.guestManage),
-            items
+            items,
+            event_id: body.event_id,
         },
         {abortEarly: false, allowUnknown: true}
     );
@@ -50,9 +52,8 @@ function preprocessCreate(body: any): Partial<PackingList> & { items: Partial<Pa
     return {
         title: value.title,
         description: value.description || null,
-        allowGuestAdd: value.allowGuestAdd,
-        guestManage: value.guestManage,
-        items: value.items
+        items: value.items,
+        eventId: value.event_id || null,
     };
 }
 
@@ -65,8 +66,6 @@ async function createEntity(
         ownerId,
         listData.title!,
         listData.description!,
-        listData.allowGuestAdd!,
-        listData.guestManage!,
 
         listData.items.map((it, i) => ({
             id: generateUniqueId(),
@@ -75,16 +74,19 @@ async function createEntity(
             maxAssignees: Number(it.maxAssignees) || 1,
             requiredByAll: Boolean(it.requiredByAll),
             position: i
-        }))
+        })),
+        listData.eventId,
     );
 }
 
 // No-op since slots handled in transaction
-async function afterCreateItems() {
+async function afterCreateItems(id: string, data: any) {
+    await saveDefaultPermsFromBody(ENTITIES.PACKING, id, data._body);
 }
 
-async function fetchForView(list: PackingList, session: Request['session']) {
+async function fetchForView(list: PackingList, req: Request) {
     const items = await packingService.getPackingItems(list.id);
+    const session = req.session;
 
     const assignments = session.user
         ? await packingService.getPackingAssignmentsForUser(list.id, session.user.id)
@@ -199,8 +201,7 @@ async function deleteAssignment(assignId: string) {
 }
 
 async function updateSettings(id: string, body: any) {
-    const {allowAdd, guestManage} = body;
-    await packingService.updatePackingFlags(id, allowAdd, guestManage);
+    await saveDefaultPermsFromBody(ENTITIES.PACKING, id, body);
     return 'Settings saved';
 }
 

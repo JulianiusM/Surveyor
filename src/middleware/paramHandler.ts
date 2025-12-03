@@ -12,9 +12,9 @@ export function paramHandler(param: string, router: Router, getById: GuestFlowDb
 }
 
 export function queryHandler(param: string, router: Router, getById: GuestFlowDb['getById'], entityName: string, error?: Error) {
-    router.use(asyncHandler(async (req: Request, res: Response, next: NextFunction) =>
+    router.use(asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
         await handle(req.query[param], getById, entityName, req, res, next, error)
-    ));
+    }));
 }
 
 export function createPathQueryHandler(param: string, router: Router, getById: GuestFlowDb['getById'], entityName: string, error?: Error) {
@@ -29,7 +29,7 @@ export function createPathQueryHandler(param: string, router: Router, getById: G
     ));
 }
 
-export function handleParam(param: string, router: Router, getById: GuestFlowDb['getById'], entityName: string, error: Error) {
+export function handleParam(param: string, router: Router, getById: GuestFlowDb['getById'], entityName: string, error?: Error) {
     router.param(param, asyncParamHandler(async (req: Request, res: Response, next: NextFunction, id: any) =>
         await handle(id, getById, entityName, req, res, next, error)
     ));
@@ -44,7 +44,10 @@ async function handle(
     next: NextFunction,
     error?: Error,
 ) {
-    const entity = await getById(id);
+    let entity = undefined;
+    if (id !== undefined) {
+        entity = await getById(id);
+    }
     if (!entity) {
         if (error) throw error;
         // No error --> Optional resource
@@ -55,5 +58,5 @@ async function handle(
     if (entity.event) {
         req.resource['event'] = entity.event;
     }
-    next();
+    return next();
 }

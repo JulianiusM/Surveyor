@@ -1,12 +1,12 @@
 import bcrypt from 'bcryptjs';
 import {AppDataSource} from '../dataSource';
-import {generateUniqueToken} from '../../lib/util';
+import {coerceLimit, generateUniqueToken, maskEmail, SQL_ALLOW_LIST} from '../../lib/util';
 import {User} from '../entities/user/User';
 import {Guest} from '../entities/user/Guest';
 import {GuestLink} from '../entities/user/GuestLink';
 import {Role} from '../entities/user/Role';
 import {MoreThan} from "typeorm";
-import type {OidcClaims} from "../../../types/UserTypes";
+import type {OidcClaims, UserInfo} from "../../../types/UserTypes";
 
 export async function registerUser(username: string, name: string, password: string, email: string) {
     const repo = AppDataSource.getRepository(User);
@@ -291,4 +291,98 @@ export async function findOrCreateUserFromOidc(
 export async function unlinkOidc(userId: number) {
     const repo = AppDataSource.getRepository(User);
     await repo.update({id: userId}, {oidcIssuer: null, oidcSub: null});
+}
+
+/**
+ * Resolve by id | email | username.
+ * Use only behind a permission check to avoid enumeration leaks.
+ */
+export async function findUserByNameOrEmail(identifier: string | number): Promise<User | null> {
+    const repo = AppDataSource.getRepository(User);
+    const raw = String(identifier).trim();
+
+    if (/^\d+$/.test(raw)) {
+        return await repo.findOne({where: {id: Number(raw)}});
+    }
+
+    if (raw.includes('@')) {
+        // case-insensitive email; avoid LOWER() on column to keep indexes usable where possible
+        return await repo
+            .createQueryBuilder('u')
+            .where('u.email = :email', {email: raw})
+            .orWhere('u.email LIKE :emailCase', {emailCase: raw}) // fallback for case-insensitive collations
+            .orWhere('u.username = :username', {username: raw})
+            .getOne();
+    }
+
+    // username exact, email fallback
+    return await repo
+        .createQueryBuilder('u')
+        .where('u.username = :username', {username: raw})
+        .orWhere('u.email = :email', {email: raw})
+        .getOne();
+}
+
+/**
+ * Prefix search for username/email (index-friendly). Validates the query.
+ * Returns { id, username, emailMasked } (no raw email by default).
+ */
+export async function searchUsersSecure(query: string, limit = 10): Promise<Array<UserInfo>> {
+    const repo = AppDataSource.getRepository(User);
+    const q = (query || '').trim();
+
+    if (!SQL_ALLOW_LIST.test(q)) return [];            // too short / invalid chars -> no results
+    const lim = coerceLimit(limit, 10, 25);
+
+    const likePrefix = `${q}%`;
+
+    const rows = await repo
+        .createQueryBuilder('u')
+        .select(['u.id', 'u.username', 'u.email', 'u.name'])
+        .where('u.username LIKE :pfx', {pfx: likePrefix})
+        .orWhere('u.email LIKE :pfx', {pfx: likePrefix})
+        .orWhere('u.name LIKE :pfx', {pfx: likePrefix})
+        .orderBy('u.username', 'ASC')
+        .limit(lim)
+        .getMany();
+
+    return rows.map(u => ({id: u.id, username: u.username, email: maskEmail(u.email), name: u.name}));
+}
+
+/**
+ * Optional fallback when admins explicitly want substring search.
+ * Still validated and heavily limited to avoid table scans abuse.
+ */
+export async function searchUsersSubstringStrict(query: string, limit = 10): Promise<Array<{
+    id: number;
+    username: string;
+    emailMasked: string
+}>> {
+    const repo = AppDataSource.getRepository(User);
+    const q = (query || '').trim();
+
+    // require >=3 chars for substring and allowlist
+    if (q.length < 3 || !SQL_ALLOW_LIST.test(q)) return [];
+    const lim = coerceLimit(limit, 10, 10);
+
+    // Escape LIKE wildcards
+    const esc = q.replace(/[%_\\]/g, '\\$&');
+    const likeAny = `%${esc}%`;
+
+    const rows = await repo
+        .createQueryBuilder('u')
+        .select(['u.id', 'u.username', 'u.email', 'u.name'])
+        .where('u.username LIKE :like ESCAPE "\\\\"', {like: likeAny})
+        .orWhere('u.email LIKE :like ESCAPE "\\\\"', {like: likeAny})
+        .orWhere('u.name LIKE :like ESCAPE "\\\\"', {like: likeAny})
+        .orderBy('u.username', 'ASC')
+        .limit(lim)
+        .getMany();
+
+    return rows.map(u => ({id: u.id, username: u.username, emailMasked: maskEmail(u.email)}));
+}
+
+/** Optional helpers you might find useful elsewhere */
+export async function getUserById(id: number): Promise<User | null> {
+    return await AppDataSource.getRepository(User).findOne({where: {id}});
 }

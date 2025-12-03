@@ -1,5 +1,11 @@
 //Main function; similar in all modules to reduce redundancy in pug code
-import {matchPassword, removeTooltip, setCurrentNavLocation, validate, verifyPassword} from "./module_functions";
+import {
+    matchPassword,
+    removeTooltip,
+    setCurrentNavLocation,
+    validate,
+    verifyPassword
+} from "./modules/module_functions";
 
 export function init() {
     registerEvents();

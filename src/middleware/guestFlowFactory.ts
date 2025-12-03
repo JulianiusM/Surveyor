@@ -6,11 +6,22 @@ import settings from '../modules/settings';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {ExpectedError, ValidationError} from '../modules/lib/errors';
 import {paramHandler, queryHandler} from "./paramHandler";
-import {isAuthenticated, isEventPermitted, requireEventParticipant, requireOwner} from "./permissionMiddleware";
-import {getResource} from "../modules/lib/util";
+import {
+    attachAdminData,
+    attachPermBundle,
+    attachPermMeta,
+    isAuthenticated,
+    optionalPermission,
+    requireOwner,
+    requirePermission
+} from "./permissionMiddleware";
+import {getItemFromEntityPermFct, getResource} from "../modules/lib/util";
 import * as userService from "../modules/database/services/UserService";
 import * as eventService from "../modules/database/services/EventService";
 import type {GuestFlowConfig, GuestFlowDb} from "../types/UserTypes";
+import {PERM} from "../modules/lib/permissions";
+import {EntityDescriptor, EntityGetter, GetResource, ItemGetter} from "../types/PermissionTypes";
+import {persistSession} from "../modules/lib/session";
 
 // Builds the guest edit link for emails and redirects using Node.js URL API
 function buildGuestLink(entityType: string, entityId: string, token: string) {
@@ -29,6 +40,9 @@ function initConfig(): GuestFlowDb {
     return {
         getById: () => {
             throw new Error('getById not implemented');
+        },
+        getItems: () => {
+            throw new Error('getItems not implemented');
         },
         registerGuest: userService.registerGuest,
         getGuestInternal: userService.getGuestInternal,
@@ -50,6 +64,7 @@ function initConfig(): GuestFlowDb {
 export function createGuestFlowRouter(cfg: GuestFlowConfig) {
     const {
         entityType,
+        entityItemType,
         addToEvent,
         db = {},
         templates: {create, view},
@@ -65,6 +80,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
     // merge defaults with any overrides
     const {
         getById,
+        getItems,
         registerGuest,
         getGuestInternal,
         getGuestByToken,
@@ -77,24 +93,42 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
     const router = express.Router();
 
     // Preload entity for any route containing :id
-    const resFct = (req: Request) => getResource(req, entityType);
-    const eventResFn = (req: Request) => getResource(req, 'event');
-    paramHandler('id', router, getById, entityType);
-
-    if (addToEvent) {
-        queryHandler("eventId", router, eventService.getEventById, 'event');
-        router.use(requireEventParticipant(eventResFn));
+    const resFct: GetResource = (req: Request) => getResource(req, entityType);
+    const eventResFn: GetResource = (req: Request) => getResource(req, 'event');
+    const eventNewResFn: GetResource = (req: Request) => getResource(req, 'eventNew');
+    const permFct: EntityGetter = (req: Request): EntityDescriptor => {
+        const resource = getResource(req, entityType);
+        return {
+            entityType: entityType,
+            entityId: resource?.id,
+            ownerUserId: resource?.ownerId,
+            eventId: entityType === "event" ? resource?.id : resource?.eventId,
+        };
     }
+    const eventPermFct: EntityGetter = (req: Request): EntityDescriptor => {
+        const resource = eventNewResFn(req);
+        return {
+            entityType: 'event',
+            entityId: resource.id,
+            ownerUserId: resource.ownerId
+        };
+    }
+    const itemPermFct: ItemGetter = getItemFromEntityPermFct(getItems, resFct, entityItemType);
+
+    paramHandler('id', router, getById, entityType);
+    queryHandler("eventId", router, eventService.getEventById, 'eventNew');
+
+    router.use(attachPermMeta(entityType));
 
     // GET+POST /create
     router.route('/create')
-        .get(isAuthenticated, isEventPermitted(addToEvent, eventResFn), asyncHandler(async (req: Request, res: Response) => {
+        .get(isAuthenticated, optionalPermission(eventPermFct, PERM.MANAGE_ASSIGNMENTS, eventNewResFn), asyncHandler(async (req: Request, res: Response) => {
             renderer.renderWithData(res, create, {
                 eventId: req.query.eventId,
-                events: await eventService.getActiveEventsByOwnerId(req.session.user!.id)
+                events: await eventService.getActiveManagedEventsForUser(req.session.user!.id)
             });
         }))
-        .post(isAuthenticated, isEventPermitted(addToEvent, eventResFn), asyncHandler(async (req: Request, res: Response) => {
+        .post(isAuthenticated, optionalPermission(eventPermFct, PERM.MANAGE_ASSIGNMENTS, eventNewResFn), asyncHandler(async (req: Request, res: Response) => {
             const parsed = preprocessCreate(req.body);
             if (parsed.error) {
                 throw new ValidationError(create, parsed.error.msg, parsed.error.data);
@@ -102,6 +136,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
             if (addToEvent) {
                 parsed._injectedEventId = req.query.eventId;
             }
+            parsed._body = req.body;
             let id;
             try {
                 id = await createEntity(req.session.user!.id, parsed);
@@ -113,6 +148,8 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
             req.flash('success', `${entityType} created`);
             res.redirect(buildRedirect(id));
         }));
+
+    router.use("/:id", attachPermBundle(permFct, itemPermFct), attachPermMeta(entityType, (req) => req.params['id']), attachAdminData(entityType, (req) => req.params['id']));
 
     // GET+POST /:id/guest
     router.route('/:id/guest')
@@ -151,19 +188,21 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         // switch to guest session
         req.session.user = undefined;
         req.session.guest = guest;
+        await persistSession(req.session);
+
         req.flash('info', 'Switched to guest edit');
         res.redirect(buildRedirect(entityId));
     }));
 
     // GET /:id/duplicate
-    router.get('/:id/duplicate', requireOwner(resFct), asyncHandler(async (req: Request, res: Response) => {
+    router.get('/:id/duplicate', requirePermission(permFct, PERM.DATA_DUPLICATE), asyncHandler(async (req: Request, res: Response) => {
         const data = await fetchForDuplicate(resFct(req), req.session);
         renderer.renderWithData(res, create, {
             title: `Copy of ${resFct(req).title}`,
             entity: resFct(req),
             data: data,
             eventId: req.query.eventId,
-            events: await eventService.getActiveEventsByOwnerId(req.session.user!.id),
+            events: await eventService.getActiveManagedEventsForUser(req.session.user!.id),
             isDuplicate: true
         });
     }));
@@ -189,7 +228,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
             }
 
             // No valid registration
-            throw new ValidationError(view, 'You must be registered for the event to access this resource', {});
+            throw new ExpectedError('You must be registered for the event to access this resource');
         }
         // Registered user
         if (req.session.user) return next();
@@ -215,7 +254,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
 
     // GET /:id (view)
     router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
-        const data = await fetchForView(resFct(req), req.session);
+        const data = await fetchForView(resFct(req), req);
         if (!data) {
             throw new ValidationError(view, `${entityType} not found`, {});
         }

@@ -1,5 +1,5 @@
 /* ───── Build JSON & submit ─────────────────────────────── */
-import {setCurrentNavLocation} from "./module_functions";
+import {setCurrentNavLocation} from "./modules/module_functions";
 import {DriversItem} from "../../modules/database/entities/drivers/DriversItem";
 
 export function handleSubmit(evt: Event) {

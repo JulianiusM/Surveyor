@@ -6,24 +6,29 @@ block meta
 
 block title
     h1.card-header.text-center
-        i.bi.bi-house-door-fill.me-2
-        | Welcome, #{user.name || user.username}!
+        if data.admin_flag
+            i.bi.bi-patch-check-fill.me-2
+                | Your managed entities
+        else
+            i.bi.bi-house-door-fill.me-2
+            | Welcome, #{user.name || user.username}!
 
 block content
     .accordion.accordion-dark#entityLists
-        +entityList(
-            'sec-surveys',
-            'Your surveys',
-            'bi-clipboard-data',
-            data.surveys,
-            'survey',
-            '/survey/create',
-            'Create new survey',
-            'bi-plus-circle',
-            'You don’t have any surveys yet.',
-            'bi-clipboard-check',
-            true
-        )
+        if !data.admin_flag
+            +entityList(
+                'sec-surveys',
+                'Your surveys',
+                'bi-clipboard-data',
+                data.surveys,
+                'survey',
+                '/survey/create',
+                'Create new survey',
+                'bi-plus-circle',
+                'You don’t have any surveys yet.',
+                'bi-clipboard-check',
+                true
+            )
 
         +entityList(
             'sec-pack',
@@ -81,19 +86,20 @@ block content
             true
         )
 
-        +entityList(
-            'sec-event-regs',
-            'Your event registrations',
-            'bi-person-check',
-            data.events,
-            'event',
-            '',
-            '',
-            'bi-plus-circle',
-            'You are not registered for any event yet.',
-            'bi-person-check',
-            false
-        )
+        if !data.admin_flag
+            +entityList(
+                'sec-event-regs',
+                'Your event registrations',
+                'bi-person-check',
+                data.registeredEvents,
+                'event',
+                '',
+                '',
+                'bi-plus-circle',
+                'You are not registered for any event yet.',
+                'bi-person-check',
+                false
+            )
 
 block scripts
     script(type="module" src="/js/user-dashboard.gen.js")

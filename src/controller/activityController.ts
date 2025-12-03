@@ -2,13 +2,15 @@
 // Business logic for the Activity routes
 import Joi from 'joi';
 
-import {fromISOtoLocal, generateUniqueId} from '../modules/lib/util';
+import {ENTITIES, fromISOtoLocal, generateUniqueId} from '../modules/lib/util';
 import {APIError, ValidationError} from '../modules/lib/errors';
 import * as activityService from "../modules/database/services/ActivityService";
 import * as userService from "../modules/database/services/UserService";
 import {ActivitySlot} from "../modules/database/entities/activity/ActivitySlot";
 import {ActivityPlan} from "../modules/database/entities/activity/ActivityPlan";
 import {Request} from "express";
+import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
+import {PermBundle} from "../types/PermissionTypes";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'activity/activity-create';
@@ -41,12 +43,11 @@ function preprocessCreate(body: any): Partial<ActivityPlan> & { slots: Partial<A
         title: Joi.string().required(),
         startDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
         endDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
-        allowGuestAdd: Joi.allow('').allow('on'),
-        guestManage: Joi.allow('').allow('on'),
         description: Joi.string().max(2000).allow('').required(),
         slots: Joi.object().pattern(
             /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/, Joi.array().items(slotSchema)
-        ).min(1).required()
+        ).min(1).required(),
+        event_id: Joi.string().uuid().allow('').optional(),
     });
 
     // Validate combined payload
@@ -77,9 +78,8 @@ function preprocessCreate(body: any): Partial<ActivityPlan> & { slots: Partial<A
         description: value.description || null,
         startDate: value.startDate,
         endDate: value.endDate,
-        allowGuestAdd: value.allowGuestAdd === 'on',
-        guestManage: value.guestManage === 'on',
-        slots: flattenedSlots
+        slots: flattenedSlots,
+        eventId: value.event_id || null,
     };
 }
 
@@ -90,7 +90,7 @@ function preprocessCreate(body: any): Partial<ActivityPlan> & { slots: Partial<A
 
 async function createEntity(
     ownerId: number,
-    planData: Partial<ActivityPlan> & { slots: Partial<ActivitySlot>[], _injectedEventId?: string }
+    planData: Partial<ActivityPlan> & { slots: Partial<ActivitySlot>[] }
 ): Promise<string> {
     return await activityService.createActivityPlanTx(
         ownerId,
@@ -98,23 +98,23 @@ async function createEntity(
         planData.description!,
         planData.startDate!,
         planData.endDate!,
-        planData.allowGuestAdd!,
-        planData.guestManage!,
         planData.slots,
-        planData._injectedEventId,
+        planData.eventId,
     );
 }
 
 // No-op since slots handled in transaction
-const afterCreateItems = async () => {
+const afterCreateItems = async (id: string, data: any) => {
+    await saveDefaultPermsFromBody(ENTITIES.ACTIVITY, id, data._body);
 };
 
 /**
  * Assemble data for the view.
  */
 
-async function fetchForView(plan: ActivityPlan, session: Request['session']) {
+async function fetchForView(plan: ActivityPlan, req: Request) {
     const slotsByDate = await activityService.getActivitySlots(plan.id);
+    const session = req.session;
 
     const slotList = Object.values(slotsByDate).flat();
 
@@ -211,12 +211,23 @@ async function updateSlotDescription(slotId: string, body: any) {
     return 'Description updated';
 }
 
-async function updateSlotAttr(slotId: string, body: any) {
+async function updateSlotAttr(slotId: string, body: any, permData?: PermBundle) {
     const {field, value} = body;
     const allowed = {title: 1, description: 1, maxAssignees: 1};
 
     // @ts-ignore
     if (!allowed[field]) throw new APIError('Invalid field', body, 400);
+
+    // Permission check
+    if (!permData ||
+        ((body.location !== undefined || body.start !== undefined || body.end !== undefined || body.deadlineTz !== undefined) && !permData.entity.has("EDIT_META"))
+        || (body.title !== undefined && !permData.entity.has("EDIT_TITLE"))
+        || (body.description !== undefined && !permData.entity.has("EDIT_DESC"))
+        || (body.requireDietaryInfo !== undefined && !permData.entity.has("MANAGE_REQUIREMENTS"))
+        || (body.maxParticipants !== undefined && !permData.entity.has("EDIT_CAPACITY"))
+    ) {
+        throw new APIError("Not allowed", body, 403);
+    }
 
     if (!(await activityService.updateActivitySlot(slotId, {[field]: value}))) {
         throw new APIError('Unknown error while saving', body, 500);
@@ -232,8 +243,7 @@ async function deleteAssignment(assignId: number) {
 
 
 async function updateSettings(id: string, body: any) {
-    const {allowAdd, guestManage} = body;
-    await activityService.updateActivityPlanFlags(id, allowAdd, guestManage);
+    await saveDefaultPermsFromBody(ENTITIES.ACTIVITY, id, body);
     return 'Settings saved';
 }
 

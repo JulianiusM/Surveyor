@@ -4,6 +4,19 @@
 import {APIError, ExpectedError} from "../modules/lib/errors";
 import {NextFunction, Request, Response} from "express";
 import {isRegisteredForEvent} from "../modules/database/services/EventService";
+import {
+    EntityGetter,
+    GetAdditional,
+    GetResource,
+    ItemGetter,
+    ItemWithParentGetter,
+    Subject
+} from "../types/PermissionTypes";
+import {buildPermBundle, can, getDefaultPerms} from "../modules/permissionEngine";
+import {asyncHandler} from "../modules/lib/asyncHandler";
+import {getPermMeta, getPresets} from "../modules/lib/permissions";
+import {CombEntityType} from "../types/UtilTypes";
+import * as entityAdminService from "../modules/database/services/EntityAdminService"
 
 /* -------------------- Error adapters -------------------- */
 type ErrorAdapter = {
@@ -30,9 +43,6 @@ const expectedErrors: ErrorAdapter = {
 };
 
 /* -------------------- Helpers -------------------- */
-type GetResource = (req: Request) => any;
-type GetAdditional = (req: Request) => any[];
-
 const defaultGetResource: GetResource = (req) => req.resource;
 const defaultGetAdditional: GetAdditional = (req) => req.additional ?? [];
 
@@ -69,9 +79,9 @@ async function isEventParticipant(req: Request, resource?: Record<string, any>) 
  * Allow if ANY of the listed conditions is true. Otherwise throw 403.
  * Optionally throws 400 when an eventId is passed but events are disabled.
  */
-type AllowKey = "owner" | "eventParticipant" | "guestManage" | "guestAdd";
+type AllowKey = "owner" | "eventParticipant";
 
-export type PermissionOptions = {
+export type UserRoleCheckOptions = {
     /** Which conditions are sufficient for access (any-of). */
     allow: AllowKey[];
     /** If false, a query eventId triggers 400; if true, it’s allowed. Default: true */
@@ -81,7 +91,7 @@ export type PermissionOptions = {
     getAdditional?: GetAdditional;
 };
 
-function makePermission(errs: ErrorAdapter, opts: PermissionOptions) {
+function makeUserRoleCheck(errs: ErrorAdapter, opts: UserRoleCheckOptions) {
     const {
         allow,
         useEvent = true,
@@ -96,31 +106,16 @@ function makePermission(errs: ErrorAdapter, opts: PermissionOptions) {
         // Compute predicates and gate guest* by eventParticipant when requested
         const resource = getResource(req);
         const additional = getAdditional(req);
-        const identified = req.session.guest || req.session.user;
-
-        // Do we need to gate guest* behind eventParticipant?
-        const needsEPGate =
-            allow.includes("eventParticipant") &&
-            allow.some(k => k === "guestManage" || k === "guestAdd");
 
         const ownerOk = isOwner(req, resource, additional);
         const epOk = await isEventParticipant(req, resource);
 
-        // guest* require identification; if gated, also require epOk
-        const gmOk = Boolean(resource?.guestManage && identified && (!needsEPGate || epOk));
-        const gaOk = Boolean(resource?.allowGuestAdd && identified && (!needsEPGate || epOk));
-
         const checks: Record<AllowKey, boolean> = {
             owner: ownerOk,
             eventParticipant: epOk,
-            guestManage: gmOk,
-            guestAdd: gaOk,
         };
 
-        // If we’re gating, don’t let raw eventParticipant pass by itself.
-        const keysToEval = needsEPGate ? allow.filter(k => k !== "eventParticipant") : allow;
-
-        for (const key of keysToEval) {
+        for (const key of allow) {
             if (checks[key]) return next();
         }
 
@@ -129,56 +124,139 @@ function makePermission(errs: ErrorAdapter, opts: PermissionOptions) {
 }
 
 /* -------------------- Two variants (API / Expected) -------------------- */
-export const permissionAPI = (opts: PermissionOptions) => makePermission(apiErrors, opts);
-export const permissionExpected = (opts: PermissionOptions) => makePermission(expectedErrors, opts);
+export const userRoleAPI = (opts: UserRoleCheckOptions) => makeUserRoleCheck(apiErrors, opts);
+export const userRoleExpected = (opts: UserRoleCheckOptions) => makeUserRoleCheck(expectedErrors, opts);
 
 /* -------------------- Optional convenience wrappers (drop-in replacements) -------------------- */
-// isEventPermitted (owner only, with event toggle & 400 when disabled)
-export const isEventPermittedAPI = (useEvent: boolean, getResource: GetResource = defaultGetResource) => {
-    const delegate = permissionAPI({allow: ["owner"], useEvent, getResource});
-    return (req: Request, res: Response, next: NextFunction) => {
-        const resource = getResource(req);
-        if (!resource) return next();
-        return delegate(req, res, next);
-    };
-};
-
-export const isEventPermitted = (useEvent: boolean, getResource: GetResource = defaultGetResource) => {
-    const delegate = permissionExpected({allow: ["owner"], useEvent, getResource});
-    return (req: Request, res: Response, next: NextFunction) => {
-        const resource = getResource(req);
-        if (!resource) return next();
-        return delegate(req, res, next);
-    };
-};
-
-// requireOwner
 export const requireOwnerAPI = (getResource: GetResource = defaultGetResource, getAdditional: GetAdditional = defaultGetAdditional) =>
-    permissionAPI({allow: ["owner"], getResource, getAdditional});
+    userRoleAPI({allow: ["owner"], getResource, getAdditional});
 export const requireOwner = (getResource: GetResource = defaultGetResource, getAdditional: GetAdditional = defaultGetAdditional) =>
-    permissionExpected({allow: ["owner"], getResource, getAdditional});
-
-// requireManageRight (owner OR eventParticipant OR guestManage)
-export const requireManageRightAPI = (getResource: GetResource = defaultGetResource, getAdditional: GetAdditional = defaultGetAdditional) =>
-    permissionAPI({allow: ["owner", "eventParticipant", "guestManage"], getResource, getAdditional});
-export const requireManageRight = (getResource: GetResource = defaultGetResource, getAdditional: GetAdditional = defaultGetAdditional) =>
-    permissionExpected({allow: ["owner", "eventParticipant", "guestManage"], getResource, getAdditional});
-
-// requireAddRight (owner OR eventParticipant OR guestManage OR guestAdd)
-export const requireAddRightAPI = (getResource: GetResource = defaultGetResource, getAdditional: GetAdditional = defaultGetAdditional) =>
-    permissionAPI({allow: ["owner", "eventParticipant", "guestManage", "guestAdd"], getResource, getAdditional});
-export const requireAddRight = (getResource: GetResource = defaultGetResource, getAdditional: GetAdditional = defaultGetAdditional) =>
-    permissionExpected({allow: ["owner", "eventParticipant", "guestManage", "guestAdd"], getResource, getAdditional});
+    userRoleExpected({allow: ["owner"], getResource, getAdditional});
 
 // requireEventParticipant (owner OR eventParticipant)
 export const requireEventParticipantAPI = (getResource: GetResource = defaultGetResource, getAdditional: GetAdditional = defaultGetAdditional) =>
-    permissionAPI({allow: ["owner", "eventParticipant"], getResource, getAdditional});
+    userRoleAPI({allow: ["owner", "eventParticipant"], getResource, getAdditional});
 export const requireEventParticipant = (getResource: GetResource = defaultGetResource, getAdditional: GetAdditional = defaultGetAdditional) =>
-    permissionExpected({allow: ["owner", "eventParticipant"], getResource, getAdditional});
+    userRoleExpected({allow: ["owner", "eventParticipant"], getResource, getAdditional});
 
 /* -------------------- Unchanged auth redirect middleware -------------------- */
 export function isAuthenticated(req: Request, res: Response, next: NextFunction) {
     if (req.session.user) return next();
     req.flash("info", "You must be logged in to access this site.");
     res.redirect("/users/login");
+}
+
+/* ---------- Entity Administration ---------- */
+/** Core requirePerm, now delegates to engine.can(...) */
+function requirePermInternal(
+    getSubject: (req: Request) => Promise<Subject> | Subject,
+    requiredPerm: number,
+    err: ErrorAdapter,
+    requiredParentPerm?: number
+) {
+    return async (req: Request, _res: Response, next: NextFunction) => {
+        const subject = await getSubject(req);
+        const ok = await can(subject, req.session ?? {}, requiredPerm, requiredParentPerm);
+        if (!ok) {
+            return err.forbidden();
+        }
+        next();
+    };
+}
+
+/** Entity version */
+export function requirePermissionApi(getEntity: EntityGetter, requiredPerm: number) {
+    return requirePermInternal((req) => ({kind: 'entity', entity: getEntity(req) as any}), requiredPerm, apiErrors);
+}
+
+export function requirePermission(getEntity: EntityGetter, requiredPerm: number) {
+    return requirePermInternal((req) => ({
+        kind: 'entity',
+        entity: getEntity(req) as any
+    }), requiredPerm, expectedErrors);
+}
+
+/** Item version (with parent). You may pass a different requiredParentPerm; if omitted, same perm is checked on parent. */
+export function requireItemPermissionApi(get: ItemWithParentGetter, requiredPerm: number, requiredParentPerm?: number) {
+    return requirePermInternal((req) => ({kind: 'item', ...(get(req) as any)}), requiredPerm, apiErrors, requiredParentPerm);
+}
+
+export function requireItemPermission(get: ItemWithParentGetter, requiredPerm: number, requiredParentPerm?: number) {
+    return requirePermInternal((req) => ({kind: 'item', ...(get(req) as any)}), requiredPerm, expectedErrors, requiredParentPerm);
+}
+
+// Checks for a permission to an optional entity. getEntity must return the entity in question (will skip the check if missing).
+// getData must return the corresponding information for the entity and will be used to perform the check.
+export function optionalPermissionApi(getData: EntityGetter, requiredPerm: number, getEntity: GetResource) {
+    return (req: Request, res: Response, next: NextFunction) => {
+        const resource = getEntity(req);
+        if (!resource) return next();
+        return requirePermissionApi(getData, requiredPerm)
+    }
+}
+
+// Checks for a permission to an optional entity. getEntity must return the entity in question (will skip the check if missing).
+// getData must return the corresponding information for the entity and will be used to perform the check.
+export function optionalPermission(getData: EntityGetter, requiredPerm: number, getEntity: GetResource) {
+    return (req: Request, res: Response, next: NextFunction) => {
+        const resource = getEntity(req);
+        if (!resource) return next();
+        return requirePermission(getData, requiredPerm)(req, res, next);
+    }
+}
+
+// Checks for a permission to an optional entity. getEntity must return the entity in question (will skip the check if missing).
+// getData must return the corresponding information for the entity and will be used to perform the check.
+export function optionalItemPermissionApi(getData: ItemWithParentGetter, requiredPerm: number, getEntity: GetResource, requiredParentPerm?: number) {
+    return (req: Request, res: Response, next: NextFunction) => {
+        const resource = getEntity(req);
+        if (!resource) return next();
+        return requireItemPermissionApi(getData, requiredPerm, requiredParentPerm)
+    }
+}
+
+// Checks for a permission to an optional entity. getEntity must return the entity in question (will skip the check if missing).
+// getData must return the corresponding information for the entity and will be used to perform the check.
+export function optionalItemPermission(getData: ItemWithParentGetter, requiredPerm: number, getEntity: GetResource, requiredParentPerm?: number) {
+    return (req: Request, res: Response, next: NextFunction) => {
+        const resource = getEntity(req);
+        if (!resource) return next();
+        return requireItemPermission(getData, requiredPerm, requiredParentPerm)(req, res, next);
+    }
+}
+
+/** Build { perm: { entity, item(id), ... } } for Pug */
+export function attachPermBundle(getEntity: EntityGetter, getItems: ItemGetter) {
+    return asyncHandler(async (req, res, next) => {
+        const ent = await getEntity(req);
+        const items = await getItems(req);
+        res.locals.permData = await buildPermBundle(ent, items, req.session ?? {});
+        next();
+    });
+}
+
+export function attachPermMeta(entityType: CombEntityType, idSupplyer?: string | ((req: Request) => string)) {
+    return asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+        let id: string | undefined = undefined;
+        if (typeof idSupplyer === 'string') id = idSupplyer;
+        else if (typeof idSupplyer === 'function') id = idSupplyer(req);
+
+        res.locals.perms = {
+            permMeta: getPermMeta(),
+            defaultPerms: await getDefaultPerms(entityType, id),
+            presets: getPresets(),
+        }
+        next();
+    });
+}
+
+export function attachAdminData(entityType: CombEntityType, idSupplyer?: string | ((req: Request) => string)) {
+    return asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+        let id: string | undefined = undefined;
+        if (typeof idSupplyer === 'string') id = idSupplyer;
+        else if (typeof idSupplyer === 'function') id = idSupplyer(req);
+
+        res.locals.admins = await entityAdminService.listAdmins(entityType, id ?? "");
+        next();
+    })
 }

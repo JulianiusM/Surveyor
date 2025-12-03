@@ -3,6 +3,17 @@ import crypto from 'crypto';
 import {Request} from "express";
 
 import {APIError} from "./errors";
+import {
+    EntityDescriptor,
+    EntityGetter,
+    GetAdditional,
+    GetResource,
+    ItemDescriptor,
+    ItemGetter,
+    ItemSubject,
+    ItemWithParentGetter
+} from "../../types/PermissionTypes";
+import {EntityItemType, EntityType} from "../../types/UtilTypes";
 
 // Funktion zur Generierung eines einzigartigen Tokens
 export function generateUniqueToken() {
@@ -31,7 +42,7 @@ export function toLocalISOTime(dateObj: Date) {
     return `${y}-${m}-${d}T${h}:${min}:${sec}`;
 }
 
-export /**
+/**
  * Rewrite an ISO string into a given IANA timezone WITHOUT changing the wall-clock
  * date/time fields. Example: "2025-06-01T12:23:00Z" -> Europe/Berlin => "2025-06-01T12:23:00+02:00"
  *
@@ -39,7 +50,7 @@ export /**
  * @param {string} timeZone  - IANA timezone, e.g. "Europe/Berlin".
  * @returns {string} ISO-like string with the same Y-M-D and time, but with the correct tz offset.
  */
-function rewriteISOToZone(isoString: string, timeZone: string) {
+export function rewriteISOToZone(isoString: string, timeZone: string): string {
     // 1) Parse *fields only* (ignore original offset when rebuilding)
     const m = isoString.trim().match(
         /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(?:Z|[+-]\d{2}:?\d{2})?$/
@@ -109,6 +120,27 @@ export function fromISOtoLocal(isoDateStr: string) {
     return new Date(Date.UTC(Number(y), Number(m) - 1, Number(day), h, min, sec || 0));
 }
 
+export function now() {
+    return new Date();
+}
+
+export function coerceLimit(n: any, def = 10, max = 25) {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return def;
+    return Math.min(Math.max(v, 1), max);
+}
+
+export function maskEmail(email?: string | null) {
+    if (!email) return '';
+    const [user, domain] = email.split('@');
+    if (!domain) return email.replace(/.(?=.{2})/g, '*');
+    const u = user.length <= 2 ? user[0] + '*' : user.slice(0, 2) + '***';
+    const parts = domain.split('.');
+    const d0 = parts[0] || '';
+    const d = (d0.slice(0, 1) || '*') + '***' + (parts.length > 1 ? '.' + parts.slice(1).join('.') : '');
+    return `${u}@${d}`;
+}
+
 export async function performAPIAction(req: Request, action: {
     actionUser: (body: any, userId: number) => Promise<void>,
     actionGuest: (body: any, guestId: number) => Promise<void>,
@@ -133,6 +165,64 @@ export function isWithinWindow(start: string | Date, end: string | Date, a: stri
     return a <= d && a >= start && d <= end;
 }
 
+/**
+ * Utility: add N days to a YYYY-MM-DD string (UTC-safe).
+ */
+function addDays(dateStr: string, days: number): string {
+    const d = new Date(dateStr + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Utility: compare YYYY-MM-DD strings (lexicographic works for ISO dates).
+ */
+function minDate(a: string, b: string) {
+    return a < b ? a : b;
+}
+
+function maxDate(a: string, b: string) {
+    return a > b ? a : b;
+}
+
+/**
+ * Pure helper that builds date totals from an event window and registrations.
+ * Each registration contributes 1 to every day between arrival and departure (inclusive).
+ */
+export function buildDateTotals(
+    eventStart: string,
+    eventEnd: string,
+    regs: Array<{ arrivalDate: string | null; departureDate: string | null }>
+): Record<string, number> {
+    // Initialize all days in the event window to 0
+    const totals: Record<string, number> = {};
+    let cur = eventStart;
+    while (cur <= eventEnd) {
+        totals[cur] = 0;
+        cur = addDays(cur, 1);
+    }
+
+    // Tally each registration
+    for (const r of regs) {
+        const arr = r.arrivalDate ?? eventStart;
+        const dep = r.departureDate ?? eventEnd;
+
+        // Clamp to event window
+        let start = maxDate(arr, eventStart);
+        let end = minDate(dep, eventEnd);
+        if (start > end) continue; // outside window or invalid
+
+        // Increment each covered day
+        let d = start;
+        while (d <= end) {
+            totals[d] = (totals[d] ?? 0) + 1;
+            d = addDays(d, 1);
+        }
+    }
+
+    return totals;
+}
+
 export async function ignoreException(fct: () => any) {
     try {
         return await fct();
@@ -140,3 +230,117 @@ export async function ignoreException(fct: () => any) {
         console.warn(err);
     }
 }
+
+export function getPermFct(resFct: GetResource, entityName: EntityType): EntityGetter {
+    const permFct = (req: Request): EntityDescriptor => {
+        const resource = resFct(req);
+        return {
+            entityType: entityName,
+            entityId: resource?.id,
+            ownerUserId: resource?.ownerId,
+            eventId: entityName === "event" ? resource?.id : resource?.eventId,
+        };
+    }
+    return permFct;
+}
+
+export function getPermFctItems(resFct: GetResource, resFctItems: GetAdditional, entityName: EntityType, additionalName: EntityItemType): ItemWithParentGetter {
+    const permFctItems = (req: Request): ItemSubject => {
+        const param: any = req.params.itemId;
+        const resource = resFctItems(req).find(r => r?.id === param);
+        const parent = resFct(req);
+        const result: ItemSubject = {
+            item: {
+                entityType: additionalName,
+                entityId: resource?.id,
+                ownerUserId: resource?.ownerId ?? resource?.userId,
+                ownerGuestId: resource?.guestId,
+                eventId: parent?.eventId,
+            },
+            parent: {
+                entityType: entityName,
+                entityId: resource?.listId ?? resource?.planId ?? parent?.id,
+                ownerUserId: parent?.ownerId,
+                eventId: parent?.eventId,
+            }
+        };
+        return result;
+    }
+    return permFctItems;
+}
+
+export function getPermFctAssign(resFct: GetResource, resFctItems: GetAdditional, entityName: EntityType, additionalName: EntityItemType): ItemWithParentGetter {
+    const permFctItems = (req: Request): ItemSubject => {
+        const param: number = Number.parseInt(req.params.assignId);
+        const assign = resFctItems(req).find(r => r?.id === param);
+        const resource = assign?.item;
+        const parent = resFct(req);
+        const result: ItemSubject = {
+            item: {
+                entityType: additionalName,
+                entityId: resource?.id,
+                ownerUserId: resource?.ownerId ?? resource?.userId,
+                ownerGuestId: resource?.guestId,
+                eventId: parent?.eventId,
+            },
+            parent: {
+                entityType: entityName,
+                entityId: resource?.listId ?? resource?.planId ?? parent?.id,
+                ownerUserId: parent?.ownerId,
+                eventId: parent?.eventId,
+            }
+        };
+        return result;
+    }
+    return permFctItems;
+}
+
+export function getItemFromEntityPermFct(getItems: (id: string) => Promise<any[]>, resFct: GetResource, entityItemType?: EntityItemType): ItemGetter {
+    return async (req: Request) => {
+        if (!entityItemType) return [];
+
+        const resource = resFct(req);
+        const items = await getItems(resource?.id) ?? [];
+        const res: ItemDescriptor[] = [];
+        for (let item of items) {
+            res.push({
+                entityType: entityItemType,
+                entityId: item.id,
+                ownerUserId: item.ownerId ?? item.userId,
+                ownerGuestId: item.guestId,
+                eventId: item.eventId ?? resource?.eventId,
+            })
+        }
+        return res;
+    }
+}
+
+export function jsonReplacer(key: any, value: any) {
+    if (value instanceof Map) {
+        return {
+            dataType: 'Map',
+            value: Array.from(value.entries()), // or with spread: value: [...value]
+        };
+    } else {
+        return value;
+    }
+}
+
+export const ENTITIES: Record<string, EntityType> = {
+    ACTIVITY: 'activity',
+    DRIVERS: 'drivers',
+    EVENT: 'event',
+    PACKING: 'packing',
+    SURVEY: 'survey',
+}
+
+export const ENTITY_ITEMS: Record<string, EntityItemType> = {
+    ACTIVITY: 'activitySlot',
+    DRIVERS: 'driversItem',
+    EVENT: 'eventRegistration',
+    PACKING: 'packingItem',
+    SURVEY: 'surveyItem',
+}
+
+// simple allowlist to keep LIKE fast and avoid expensive patterns
+export const SQL_ALLOW_LIST = /^[a-z0-9._+\-@ ]{3,}$/i;

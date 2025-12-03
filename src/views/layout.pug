@@ -1,9 +1,14 @@
 //- views/layout.pug  – überarbeitetes Haupt-Layout mit Version im Footer
-// Define mixins
+//- Define mixins
 include modules/module_role_assignment_addon
 include modules/module_timezone_select
 include modules/module_entity_list
 include modules/module_entity_select
+include modules/module_perm_matrix
+include modules/module_admin_matrix
+include modules/module_admin_options
+include modules/module_registration_links
+include modules/module_event_participants
 
 doctype html
 html(lang="en")
@@ -24,7 +29,7 @@ html(lang="en")
         link(rel="stylesheet" href="/style/style.css")
         block link
 
-        script(type="module" src="/js/module_functions.gen.js")
+        script(type="module" src="/js/modules/module_functions.gen.js")
         script.
             window.Surveyor = {};
 
@@ -68,6 +73,10 @@ html(lang="en")
                                             a.dropdown-item(href="/users/dashboard")
                                                 i.bi.bi-speedometer2.me-1
                                                 | Dashboard
+                                        li
+                                            a.dropdown-item(href="/users/manage-dashboard")
+                                                i.bi.bi-speedometer2.me-1
+                                                | Managed
                                         //li
                                             a.dropdown-item(href="/users/settings")
                                                 i.bi.bi-gear-fill.me-1
