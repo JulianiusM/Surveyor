@@ -109,7 +109,7 @@ describe('Slot CRUD: add/list/update/reorder/delete/lastNumber', () => {
         const planId = uuidv4()
         const slotIdA = uuidv4()
         const slotIdB = uuidv4()
-        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-03', true, true);
+        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-03');
         await addActivitySlots(planId, [
             {id: slotIdA, title: 'A', day: '2025-01-01', pos: 1, maxAssignees: 2},
             {id: slotIdB, title: 'B', day: '2025-01-02', pos: 1, maxAssignees: 3},
@@ -133,7 +133,7 @@ describe('Slot CRUD: add/list/update/reorder/delete/lastNumber', () => {
     test('updateActivitySlot returns undefined for empty input; true for changes and persists them', async () => {
         const planId = uuidv4()
         const slotId = uuidv4()
-        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
+        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02');
         await addActivitySlot(planId, {id: slotId, title: 'X', day: '2025-01-01', pos: 1, maxAssignees: 1});
 
         const noChange = await updateActivitySlot(slotId, {});
@@ -151,7 +151,7 @@ describe('Slot CRUD: add/list/update/reorder/delete/lastNumber', () => {
         const slotIdA = uuidv4()
         const slotIdB = uuidv4()
         const slotIdC = uuidv4()
-        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
+        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02');
         await addActivitySlots(planId, [
             {id: slotIdA, title: 'A', day: '2025-01-01', pos: 1, maxAssignees: 1},
             {id: slotIdB, title: 'B', day: '2025-01-01', pos: 2, maxAssignees: 1},
@@ -178,7 +178,7 @@ describe('Slot CRUD: add/list/update/reorder/delete/lastNumber', () => {
     test('deleteActivitySlot removes slot', async () => {
         const planId = uuidv4()
         const slotId = uuidv4()
-        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
+        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02');
         await addActivitySlot(planId, {id: slotId, title: 'X', day: '2025-01-01', pos: 1, maxAssignees: 1});
         await deleteActivitySlot(slotId);
         const gone = await AppDataSource.getRepository(ActivitySlot).findOneBy({id: slotId});
@@ -194,7 +194,7 @@ describe('Assignment wrapper helpers + lookups', () => {
     test('assign/unassign for user and guest + slot assignment lookups', async () => {
         const planId = uuidv4()
         const slotId = uuidv4()
-        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02', true, true);
+        await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02');
         await addActivitySlot(planId, {id: slotId, title: 'S', day: '2025-01-01', pos: 1, maxAssignees: 2});
 
         // Role setup

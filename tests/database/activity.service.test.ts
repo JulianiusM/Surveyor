@@ -109,8 +109,6 @@ describe('Roles and assignments', () => {
                 plan.description,
                 plan.from,
                 plan.to,
-                plan.rolesEnabled,
-                plan.showContactInfo
             );
             await addActivitySlot(planId, { id: slotId, ...slot });
 
@@ -191,8 +189,6 @@ describe('Aggregates and lookups', () => {
                 plan.description,
                 plan.from,
                 plan.to,
-                plan.rolesEnabled,
-                plan.showContactInfo
             );
             await addActivitySlot(planId, { id: slotId, ...slot });
 
@@ -237,8 +233,6 @@ describe('Aggregates and lookups', () => {
                 plan.description,
                 plan.from,
                 plan.to,
-                plan.rolesEnabled,
-                plan.showContactInfo
             );
 
             await addActivitySlots(
@@ -282,8 +276,6 @@ describe('Aggregates and lookups', () => {
                 plan.description,
                 plan.from,
                 plan.to,
-                plan.rolesEnabled,
-                plan.showContactInfo
             );
             await addActivitySlot(planId, { id: slotId, ...slot });
 
@@ -315,8 +307,6 @@ describe('Aggregates and lookups', () => {
             plan.description,
             plan.from,
             plan.to,
-            plan.rolesEnabled,
-            plan.showContactInfo
         );
         await addActivitySlot(planId, { id: slotId, ...slot });
 
