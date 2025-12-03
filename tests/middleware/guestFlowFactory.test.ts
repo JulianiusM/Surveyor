@@ -67,9 +67,10 @@ jest.mock('../../src/modules/lib/util', () => ({
     getItemFromEntityPermFct: jest.fn(() => async () => []),
 }));
 
-// services only used by queryHandler(addToEvent)
+// services only used by queryHandler(addToEvent) and create route
 jest.mock('../../src/modules/database/services/EventService', () => ({
     getEventById: jest.fn(async (id: string) => ({id, title: `Event ${id}`})),
+    getActiveManagedEventsForUser: jest.fn(async () => []),
 }));
 
 // ---- Test helpers ----
@@ -143,7 +144,7 @@ describe('guestFlowRouter', () => {
 
     test(testData.getCreateRouteData.description, async () => {
         const {method, path, expected} = testData.getCreateRouteData;
-        const app = makeApp(createGuestFlowRouter(makeConfig()));
+        const app = makeApp(createGuestFlowRouter(makeConfig()), {user: {id: 1}});
         const res = await request(app)[method](path);
         expect(res.status).toBe(expected.status);
         expect(res.body.tpl).toBe(expected.tpl);
