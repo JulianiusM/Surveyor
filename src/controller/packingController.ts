@@ -37,8 +37,6 @@ function preprocessCreate(body: any): Partial<PackingList> & { items: Partial<Pa
         {
             title: body.title,
             description: body.description,
-            allowGuestAdd: Boolean(body.allowGuestAdd),
-            guestManage: Boolean(body.guestManage),
             items,
             event_id: body.event_id,
         },
