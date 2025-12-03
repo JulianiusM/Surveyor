@@ -321,6 +321,18 @@ describe('eventService (mysql)', () => {
     });
 
     test.each(eventRegistrationCheckData)('$description', async (testCase) => {
+        // Ensure clean state before this test
+        await truncateAll();
+        
+        // Recreate owner from beforeEach
+        const owner = AppDataSource.getRepository(User).create({
+            id: 1,
+            username: 'owner',
+            name: 'Owner One',
+            email: 'owner@example.com',
+        });
+        await AppDataSource.getRepository(User).save(owner);
+        
         const user2 = AppDataSource.getRepository(User).create(testCase.principals.user);
         await AppDataSource.getRepository(User).save(user2);
         const guest1 = AppDataSource.getRepository(Guest).create(testCase.principals.guest);
