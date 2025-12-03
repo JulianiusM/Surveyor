@@ -26,10 +26,22 @@ jest.mock('../../src/modules/database/services/PackingService', () => ({
 
 jest.mock('../../src/modules/lib/util', () => ({
     generateUniqueId: jest.fn(() => 'uid-123'),
+    ENTITIES: {
+        ACTIVITY: 'activity',
+        DRIVERS: 'drivers',
+        EVENT: 'event',
+        PACKING: 'packing',
+        SURVEY: 'survey',
+    },
+}));
+
+jest.mock('../../src/modules/permissionEngine', () => ({
+    saveDefaultPermsFromBody: jest.fn(),
 }));
 
 import controller from '../../src/controller/packingController';
 import * as packingService from '../../src/modules/database/services/PackingService';
+import * as permissionEngine from '../../src/modules/permissionEngine';
 import {APIError, ValidationError} from '../../src/modules/lib/errors';
 import {setupMock, verifyMockCall, verifyResult} from '../keywords/common/controllerKeywords';
 import * as testData from '../data/controller/packingData';
@@ -93,14 +105,12 @@ describe('createEntity / afterCreateItems', () => {
         expect(args[0]).toBe(userId);
         expect(args[1]).toBe(listData.title);
         expect(args[2]).toBe(listData.description);
-        expect(args[3]).toBe(listData.allowGuestAdd);
-        expect(args[4]).toBe(listData.guestManage);
-        const mappedItems = args[5];
+        const mappedItems = args[3];
         expect(mappedItems).toHaveLength(2);
         expect(mappedItems[0]).toMatchObject(expectedItems[0]);
         expect(mappedItems[1]).toMatchObject(expectedItems[1]);
 
-        await expect(afterCreateItems()).resolves.toBeUndefined();
+        await expect(afterCreateItems(expectedId, {_body: {}})).resolves.toBeUndefined();
     });
 });
 
@@ -119,7 +129,8 @@ describe('fetchForView', () => {
                 setupMock(packingService[mockFunc], mockAssignments);
             }
             
-            const res = await fetchForView(list as any, session as any);
+            const req = {session} as any;
+            const res = await fetchForView(list as any, req);
             
             verifyResult(res.items, items);
             verifyResult(res.assignments, expectedAssignments);
@@ -261,7 +272,7 @@ describe('API helpers', () => {
         const result = await updateSettings(listId, body);
         
         verifyResult(result, expectedMessage);
-        verifyMockCall(packingService.updatePackingFlags, listId, body.allowAdd, body.guestManage);
+        verifyMockCall(permissionEngine.saveDefaultPermsFromBody, 'packing', listId, body);
     });
 
     it('deleteItem passes through', async () => {

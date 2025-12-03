@@ -30,10 +30,22 @@ jest.mock('../../src/modules/database/services/DriverService', () => ({
 
 jest.mock('../../src/modules/lib/util', () => ({
     generateUniqueId: jest.fn(() => 'uid-xyz'),
+    ENTITIES: {
+        ACTIVITY: 'activity',
+        DRIVERS: 'drivers',
+        EVENT: 'event',
+        PACKING: 'packing',
+        SURVEY: 'survey',
+    },
+}));
+
+jest.mock('../../src/modules/permissionEngine', () => ({
+    saveDefaultPermsFromBody: jest.fn(),
 }));
 
 import controller from '../../src/controller/driversController';
 import * as driverService from '../../src/modules/database/services/DriverService';
+import * as permissionEngine from '../../src/modules/permissionEngine';
 import {APIError, ValidationError} from '../../src/modules/lib/errors';
 import {setupMock, verifyMockCall, verifyResult} from '../keywords/common/controllerKeywords';
 import * as testData from '../data/controller/driversData';
@@ -84,9 +96,9 @@ describe('createEntity / afterCreateItems', () => {
         const id = await createEntity(userId, listData);
         
         verifyResult(id, expectedId);
-        verifyMockCall(driverService.createDriversList, userId, listData.title, listData.description, listData.allowGuestAdd, listData.guestManage);
+        verifyMockCall(driverService.createDriversList, userId, listData.title, listData.description, listData.eventId);
 
-        await expect(afterCreateItems()).resolves.toBeUndefined();
+        await expect(afterCreateItems(expectedId, {_body: {}})).resolves.toBeUndefined();
     });
 });
 
@@ -105,7 +117,8 @@ describe('fetchForView', () => {
                 setupMock(driverService[mockFunc], mockAssignments);
             }
             
-            const out = await fetchForView(list as any, session as any);
+            const req = {session} as any;
+            const out = await fetchForView(list as any, req);
             
             if (mockArgs) {
                 verifyMockCall(driverService[mockFunc], ...mockArgs);
@@ -245,7 +258,7 @@ describe('API helpers', () => {
         const result = await updateSettings(listId, body);
         
         verifyResult(result, expectedMessage);
-        verifyMockCall(driverService.updateDriversFlags, listId, body.allowAdd, body.guestManage);
+        verifyMockCall(permissionEngine.saveDefaultPermsFromBody, 'drivers', listId, body);
     });
 
     it('deleteItem delegates and returns message', async () => {
