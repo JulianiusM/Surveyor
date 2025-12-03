@@ -183,7 +183,7 @@ export const registerAttendanceData = {
             expectedMessage: 'Registration saved',
             expectedCall: {
                 service: 'registerUser',
-                args: ['e1', 5, '2025-01-02', '2025-01-05', ['VEGAN'], 'nuts'],
+                args: ['e1', 5, '2025-01-02', '2025-01-05', ['VEGAN'], 'nuts', {ok: false}],
             },
         },
         {
@@ -199,7 +199,7 @@ export const registerAttendanceData = {
             session: {guest: {id: 9}},
             expectedCall: {
                 service: 'registerGuest',
-                args: ['e1', 9, '2025-01-03', '2025-01-04', ['FISH', 'VEGETARIAN'], null],
+                args: ['e1', 9, '2025-01-03', '2025-01-04', ['FISH', 'VEGETARIAN'], null, {ok: false}],
             },
         },
         {

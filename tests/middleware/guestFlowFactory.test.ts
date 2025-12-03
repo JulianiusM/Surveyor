@@ -32,7 +32,11 @@ jest.mock('../../src/middleware/permissionMiddleware', () => ({
         (_eventResFn: any) => (_req: any, _res: any, next: any) => next(),
     requireOwner:
         (_resFct: any) => (_req: any, _res: any, next: any) => next(),
+    requirePermission: (_getEntity: any, _requiredPerm: any) => (_req: any, _res: any, next: any) => next(),
+    optionalPermission: (_getData: any, _requiredPerm: any, _getEntity: any) => (_req: any, _res: any, next: any) => next(),
     attachPermMeta: (_entityType: any, _idSupplyer?: any) => (_req: any, _res: any, next: any) => next(),
+    attachPermBundle: (_getEntity: any, _getItems: any) => (_req: any, _res: any, next: any) => next(),
+    attachAdminData: (_entityType: any, _idSupplyer?: any) => (_req: any, _res: any, next: any) => next(),
 }));
 
 // Bind :id and ?eventId into req.resources so getResource() can pick them up.
