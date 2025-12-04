@@ -35,6 +35,12 @@ export function resolveActorLabel(session: Request['session'] | undefined | null
     return 'an organizer';
 }
 
+// Sanitize text for use in email content to prevent injection attacks
+export function sanitizeForEmail(text: string): string {
+    // Remove control characters and limit to printable characters
+    return text.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
+}
+
 // Funktion zur Generierung eines einzigartigen Tokens
 export function generateUniqueToken() {
     return crypto.randomBytes(32).toString('hex');

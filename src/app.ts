@@ -34,8 +34,6 @@ app.use(express.json());
 app.use(express.urlencoded({extended: true}));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
-// Secure invoice proof serving: DO NOT serve /uploads statically.
-// Invoice proofs are served via authenticated endpoint (see /api/event/:eventId/invoice-pools/:poolId/invoices/:invoiceId/proof)
 
 // ensure dataSource is initialized before this
 const sessionRepository = AppDataSource.getRepository(Session);

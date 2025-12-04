@@ -4,28 +4,23 @@ import fs from 'fs';
 import path from 'path';
 import Joi from 'joi';
 import {Request, Response} from 'express';
-import {parseISO, isValid, addMonths} from 'date-fns';
 
 import mailer from '../modules/email';
 import {Event} from '../modules/database/entities/event/Event';
 import * as eventService from '../modules/database/services/EventService';
 import * as invoiceService from '../modules/database/services/EventInvoiceService';
 import {APIError} from '../modules/lib/errors';
-import {formatAmount, resolveActorLabel, toAmount} from '../modules/lib/util';
-
-// Sanitize text for use in email content to prevent injection attacks
-function sanitizeForEmail(text: string): string {
-    // Remove control characters and limit to printable characters
-    return text.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
-}
+import {formatAmount, resolveActorLabel, sanitizeForEmail, toAmount} from '../modules/lib/util';
+import type {PermBundle} from '../types/PermissionTypes';
 
 // Remove stored invoice proofs once the event has been finished for more than six months.
 export async function purgeExpiredProofs(pool: Awaited<ReturnType<typeof invoiceService.getPoolWithInvoices>> | null) {
     if (!pool?.event?.endDate || !pool.invoices?.length) return;
-    // Expect endDate to be an ISO 8601 string (e.g., 'YYYY-MM-DD' or 'YYYY-MM-DDTHH:mm:ssZ')
-    const endDate = parseISO(pool.event.endDate);
-    if (!isValid(endDate)) return; // Invalid date format, skip expiry logic
-    const expiry = addMonths(endDate, 6);
+    // Parse endDate and add 6 months for expiry check
+    const endDate = new Date(pool.event.endDate);
+    if (isNaN(endDate.getTime())) return; // Invalid date format, skip expiry logic
+    const expiry = new Date(endDate);
+    expiry.setMonth(expiry.getMonth() + 6);
     if (new Date() < expiry) return;
     const expiredInvoices = pool.invoices.filter((inv) => !!inv.proofPath);
     if (!expiredInvoices.length) return;
@@ -416,19 +411,19 @@ async function markSharePaid(event: Event, poolId: string, shareId: string, isPa
 }
 
 // Serve invoice proof files securely with authentication and permission checks
-export async function serveInvoiceProof(event: Event, poolId: string, invoiceId: string, session: Request['session'], res: Response) {
+export async function serveInvoiceProof(event: Event, poolId: string, invoiceId: string, session: Request['session'], res: Response, permData?: PermBundle) {
     const pool = await ensurePool(event, poolId);
     const invoice = await invoiceService.getInvoiceWithRegistration(poolId, Number(invoiceId));
     if (!invoice || !invoice.proofPath) {
         throw new APIError('Invoice proof not found', {}, 404);
     }
     
-    // Verify user has permission: either event owner or the invoice submitter
+    // Verify user has permission: either has MANAGE_ASSIGNMENTS permission or is the invoice submitter
     const actorRegId = await getActorRegistrationId(event, session);
-    const isOwner = session.user && event.ownerId === session.user.id;
+    const hasManagePermission = permData?.entity.has('MANAGE_ASSIGNMENTS');
     const isSubmitter = actorRegId === invoice.registration.id;
     
-    if (!isOwner && !isSubmitter) {
+    if (!hasManagePermission && !isSubmitter) {
         throw new APIError('You do not have permission to view this proof', {}, 403);
     }
     

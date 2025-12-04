@@ -23,8 +23,7 @@ const proofStorage = multer.diskStorage({
         const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.pdf'];
         const ext = path.extname(file.originalname).toLowerCase();
         if (!allowedExts.includes(ext)) {
-            // Pass error; second arg is required by type signature but unused on error
-            return cb(new Error('Invalid file extension'), '');
+            return cb(new Error('Invalid file extension'), file.originalname);
         }
         cb(null, `${Date.now()}-${uuidv4()}${ext}`);
     },
@@ -163,7 +162,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/invoices/:invoiceId/proof',
         requireEventParticipantAPI(resFct),
         asyncHandler(async (req, res) => {
-            await eventPoolController.serveInvoiceProof(resFct(req), req.params.poolId, req.params.invoiceId, req.session, res);
+            await eventPoolController.serveInvoiceProof(resFct(req), req.params.poolId, req.params.invoiceId, req.session, res, permFct(req));
         })
     );
 
