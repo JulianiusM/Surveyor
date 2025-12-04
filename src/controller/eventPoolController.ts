@@ -437,13 +437,15 @@ export async function serveInvoiceProof(event: Event, poolId: string, invoiceId:
     const uploadsDir = path.resolve(process.cwd(), 'uploads');
     const fullPath = path.resolve(process.cwd(), invoice.proofPath);
     
-    // Ensure the resolved path is within the uploads directory
-    if (!fullPath.startsWith(uploadsDir + path.sep) && fullPath !== uploadsDir) {
+    // Ensure the resolved path is within the uploads directory (not the directory itself)
+    if (!fullPath.startsWith(uploadsDir + path.sep)) {
         throw new APIError('Invalid proof path', {}, 400);
     }
     
-    // Check if file exists
-    if (!fs.existsSync(fullPath)) {
+    // Check if file exists (async)
+    try {
+        await fs.promises.access(fullPath, fs.constants.R_OK);
+    } catch {
         throw new APIError('Proof file not found', {}, 404);
     }
     
