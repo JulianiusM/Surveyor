@@ -1,63 +1,44 @@
-// src/public/js(modules/event-participants.ts
+/**
+ * Event participants management module
+ * Handles participant list display, filtering, and operations
+ */
 
-import type {ParticipantRow} from "../../../types/EventTypes";
+import type { ParticipantRow } from "../../../types/EventTypes";
+import { qs, qsAll } from '../core/dom';
+import { http } from '../core/http';
+import { formatDate } from '../core/formatting';
+import { createDietaryChip, showSpinner, hideSpinner } from '../shared/ui-helpers';
+import { showInlineAlert } from '../shared/alerts';
 
-function qs<T extends Element>(sel: string, root: ParentNode | Document = document): T | null {
-    return root.querySelector(sel) as T | null;
-}
-
-function qsAll<T extends Element>(sel: string, root: ParentNode | Document = document): T[] {
-    return Array.from(root.querySelectorAll(sel)) as T[];
-}
-
-async function http(method: string, url: string, body?: any) {
-    const res = await fetch(url, {
-        method,
-        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-        credentials: 'same-origin',
-        body: body ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        throw new Error(text || `HTTP ${res.status}`);
-    }
-    const ct = res.headers.get('content-type') || '';
-    const data = ct.includes('application/json') ? await res.json() : await res.text();
-    if (data?.status !== "success") throw new Error(`${data?.status}: ${data?.message}`);
-    return data
-}
-
-function fmtDate(d?: string | null) {
-    if (!d) return '—';
-    const dt = new Date(d);
-    if (Number.isNaN(dt.getTime())) return d;
-    return dt.toLocaleDateString();
-}
-
-function chip(text: string) {
-    let txtClass = "text-bg-secondary"
-    if (text === "ALLERGIES") txtClass = "text-bg-danger"
-    return `<span class="badge rounded-pill ${txtClass} me-1">${text}</span>`;
-}
-
-function renderTotals(root: HTMLElement, sel: string, totals: Record<string, number>) {
+/**
+ * Render dietary totals as colored badges
+ * @param root Root element
+ * @param sel Selector for totals container
+ * @param totals Dietary choice totals
+ */
+function renderTotals(root: HTMLElement, sel: string, totals: Record<string, number>): void {
     const box = qs<HTMLElement>(sel, root)!;
     const chips = Object.keys(totals)
         .filter(k => (totals[k] || 0) > 0)
         .map(k => {
-            let txtClass = "text-white"
-            let brdClass = "border-primary-subtile"
+            let txtClass = "text-white";
+            let brdClass = "border-primary-subtile";
             if (k === "ALLERGIES") {
-                txtClass = "text-danger"
-                brdClass = "border-danger-subtle"
+                txtClass = "text-danger";
+                brdClass = "border-danger-subtle";
             }
-            return `<span class="badge text-bg-dark border ${brdClass} me-1"><span class="${txtClass}">${k}:</span> ${totals[k]}</span>`
+            return `<span class="badge text-bg-dark border ${brdClass} me-1"><span class="${txtClass}">${k}:</span> ${totals[k]}</span>`;
         })
         .join(' ');
     box.innerHTML = chips || '<span class="text-secondary">Totals: —</span>';
 }
 
-function renderRows(root: HTMLElement, data: any) {
+/**
+ * Render participant rows in the table
+ * @param root Root element
+ * @param data Participant data including rows and totals
+ */
+function renderRows(root: HTMLElement, data: any): void {
     const tb = qs<HTMLTableSectionElement>('tbody.js-rows', root)!;
     const cnt = qs<HTMLElement>('.js-count', root)!;
     tb.innerHTML = '';
@@ -78,10 +59,10 @@ function renderRows(root: HTMLElement, data: any) {
 
     rows.forEach(p => {
         const tr = document.createElement('tr');
-        const dietary = (p.dietaryChoices || []).map(d => d.choice)
+        const dietary = (p.dietaryChoices || []).map(d => d.choice);
         const allergiesText = (p.dietaryChoices || []).filter(d => d.choice === "ALLERGIES")
             .map(d => d.additionalInfo)
-            .join("; ")
+            .join("; ");
 
         tr.dataset.id = String(p.id);
         tr.dataset.kind = p.userId ? "user" : "guest";
@@ -91,7 +72,7 @@ function renderRows(root: HTMLElement, data: any) {
 
         const emailCell = p.email ? `<span class="d-none d-md-inline">${p.email}</span>` : '<span class="text-secondary d-none d-md-inline">—</span>';
 
-        const dietBadges = dietary.map(chip).join('') || '<span class="text-secondary">—</span>';
+        const dietBadges = dietary.map(createDietaryChip).join('') || '<span class="text-secondary">—</span>';
 
         const hasAll = dietary.includes("ALLERGIES") && !!allergiesText;
         const allergyBtn = hasAll
@@ -113,7 +94,7 @@ function renderRows(root: HTMLElement, data: any) {
       </td>
       <td class="d-none d-md-table-cell">${emailCell}</td>
       <td>
-        <div>${fmtDate(p.arrivalDate)} → ${fmtDate(p.departureDate)}</div>
+        <div>${formatDate(p.arrivalDate)} → ${formatDate(p.departureDate)}</div>
       </td>
       <td>${dietBadges}</td>
       <td class="text-end">
@@ -132,7 +113,12 @@ function renderRows(root: HTMLElement, data: any) {
     renderTotals(root, '.js-date-totals', data.dateTotals);
 }
 
-function filterRows(root: HTMLElement, q: string) {
+/**
+ * Filter participant rows based on search query
+ * @param root Root element
+ * @param q Search query
+ */
+function filterRows(root: HTMLElement, q: string): void {
     const needle = q.trim().toLowerCase();
     const rows = qsAll<HTMLTableRowElement>('tbody.js-rows > tr', root).filter(r => !r.classList.contains('js-empty'));
     if (!needle) {
@@ -148,7 +134,11 @@ function filterRows(root: HTMLElement, q: string) {
     });
 }
 
-async function refreshList(root: HTMLElement) {
+/**
+ * Refresh the participant list from the API
+ * @param root Root element
+ */
+async function refreshList(root: HTMLElement): Promise<void> {
     try {
         const rows = await http('GET', root.dataset.apiList!);
         renderRows(root, rows.data);
@@ -157,25 +147,35 @@ async function refreshList(root: HTMLElement) {
     }
 }
 
-async function deleteRegistration(root: HTMLElement, tr: HTMLTableRowElement) {
+/**
+ * Delete a participant registration
+ * @param root Root element
+ * @param tr Table row element
+ */
+async function deleteRegistration(root: HTMLElement, tr: HTMLTableRowElement): Promise<void> {
     const api = root.dataset.apiDelete!;
     const regId = tr.dataset.id!;
     if (!api) return;
     if (!confirm('Delete this registration? This cannot be undone.')) return;
 
     const btn = tr.querySelector('.btn-delete-reg') as HTMLButtonElement | null;
-    if (btn) btn.disabled = true;
+    if (btn) showSpinner(btn);
     try {
         await http('DELETE', `${api}/${encodeURIComponent(regId)}`);
         await refreshList(root);
+        showInlineAlert('success', 'Registration deleted');
     } catch (e) {
-        alert('Delete failed.');
+        showInlineAlert('error', 'Delete failed');
     } finally {
-        if (btn) btn.disabled = false;
+        if (btn) hideSpinner(btn);
     }
 }
 
-export function initEventParticipants() {
+/**
+ * Initialize event participants module
+ * Sets up list rendering, filtering, and participant operations
+ */
+export function initEventParticipants(): void {
     const roots = qsAll<HTMLElement>('.event-participants');
     roots.forEach(refreshList);
 

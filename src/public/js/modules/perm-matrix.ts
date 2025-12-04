@@ -1,9 +1,11 @@
-// src/public/js/perm-matrix.ts
-import {post, showInlineAlert} from "./module_functions";
+/**
+ * Permission matrix module - entity permission management
+ * Handles permission matrix UI for entities with audience-based permissions
+ */
 
-function qsAll<T extends Element>(sel: string, scope: ParentNode = document): T[] {
-    return Array.from(scope.querySelectorAll(sel)) as T[];
-}
+import { post, showInlineAlert } from "./module_functions";
+import { qsAll } from '../core/dom';
+import { showSpinner, hideSpinner, reloadAfterDelay } from '../shared/ui-helpers';
 
 // Find the matrix root that contains the clicked control
 function matrixRootFor(el: Element): HTMLElement | null {
@@ -83,22 +85,19 @@ export function initPermMatrix() {
             if (!api) return;
 
             // UI state: disable + spinner
-            btnUpdate.disabled = true;
-            const spinner = btnUpdate.querySelector('.spinner-border') as HTMLElement | null;
-            if (spinner) spinner.classList.remove('d-none');
+            showSpinner(btnUpdate);
 
             try {
                 const payload = collectPerms(matrixRoot);
                 await post(api, payload);
 
                 showInlineAlert('success', 'Permissions updated');
-                setTimeout(() => location.reload(), 1000);
+                reloadAfterDelay(1000);
             } catch (err) {
-                // @ts-expect-error TS(2571): Object is of type 'unknown'.
-                showInlineAlert('error', err.message);
+                const error = err as Error;
+                showInlineAlert('error', error.message);
             } finally {
-                btnUpdate.disabled = false;
-                if (spinner) spinner.classList.add('d-none');
+                hideSpinner(btnUpdate);
             }
             return;
         }

@@ -1,28 +1,29 @@
-/*  Activity-Create – no jQuery  */
-/* ─── utils ───────────────────────────────────────────────── */
-import {setCurrentNavLocation} from "./modules/module_functions";
-import {ActivitySlot} from "../../modules/database/entities/activity/ActivitySlot";
+/**
+ * Activity plan creation functionality
+ * Handles dynamic slot management with drag-and-drop reordering
+ */
 
-const ONE_DAY = 24 * 3600 * 1000;
+import { setCurrentNavLocation } from './core/navigation';
+import type { ActivitySlot } from "../../modules/database/entities/activity/ActivitySlot";
 
-export function fmtISO(date: Date) {
-    const y = date.getUTCFullYear();
-    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(date.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-}
+/**
+ * Slot storage map: dateISO -> array of slot objects
+ */
+const slotsMap: Record<string, Partial<ActivitySlot>[]> = {};
 
-export function toDate(val: string) {
-    const [y, m, d] = val.split('-').map(Number);
-    return new Date(Date.UTC(y, m - 1, d));
-}
-
-const slotsMap: Record<string, Partial<ActivitySlot>[]> = {};        // dateISO -> array of slot objects
-
+/**
+ * Sort function for slots by position
+ */
 const sortSlotFn = (a: Partial<ActivitySlot>, b: Partial<ActivitySlot>) => (a.pos || 0) - (b.pos || 0);
 
-export function updateSlotObj(dateISO: string, obj: Partial<ActivitySlot>) {
+import { formatISODate as fmtISO, parseISODate as toDate, getValidDaysInWeek } from './core/formatting';
 
+/**
+ * Update or add slot object in the map
+ * @param dateISO Date in ISO format
+ * @param obj Slot object to update/add
+ */
+export function updateSlotObj(dateISO: string, obj: Partial<ActivitySlot>): void {
     let arr = slotsMap[dateISO] || [];
     let curr = arr.findIndex((v) => v.id === obj.id);
     if (curr !== -1) {
@@ -33,44 +34,43 @@ export function updateSlotObj(dateISO: string, obj: Partial<ActivitySlot>) {
     slotsMap[dateISO] = arr.sort(sortSlotFn);
 }
 
-export function getSlotObj(dateISO: string, id: string) {
+/**
+ * Get slot object by ID and date
+ * @param dateISO Date in ISO format
+ * @param id Slot ID
+ * @returns Slot object or undefined
+ */
+export function getSlotObj(dateISO: string, id: string): Partial<ActivitySlot> | undefined {
     return (slotsMap[dateISO] || []).find((v) => v.id === id);
 }
 
-export function reIndexDay(dateISO: string) {
+/**
+ * Re-index all slots for a given day
+ * @param dateISO Date in ISO format
+ */
+export function reIndexDay(dateISO: string): void {
     (slotsMap[dateISO] || []).forEach((s, i) => {
-        s.pos = i
+        s.pos = i;
         updateSlotObj(dateISO, s);
     });
     slotsMap[dateISO].sort(sortSlotFn);
 }
 
-/* ─── build slot table(s) ─────────────────────────────────── */
-export function buildTables(dStart: Date, dEnd: Date) {
-    const slotArea = document.getElementById('slotArea');
-
-    // @ts-expect-error TS(2531): Object is possibly 'null'.
-    slotArea.innerHTML = '';           // UI reset, Map bleibt!
-    let weekStart = new Date(dStart);
-    weekStart.setDate(weekStart.getDate() - (weekStart.getDay() || 7) + 1); // monday
-
-    while (weekStart <= dEnd) {
-        const tbl = createWeekTable(weekStart, dStart, dEnd);
-
-        // @ts-expect-error TS(2531): Object is possibly 'null'.
-        slotArea.appendChild(tbl);
-        weekStart.setDate(weekStart.getDate() + 7);
-    }
-}
-
-/* ---------- Slot-Row-Factory ----------------------------------- */
-
-/* ───── slot-row factory incl. delete button ───────────────────── */
-
-/* ===== 1. Slot-Row-Factory  ====================================== */
-export function buildSlotRow(dateISO: string, pos: number, infoClb: () => void, pref: Partial<ActivitySlot> = {}) {
-
-    const id = pref.id || crypto.randomUUID();              // robuste ID
+/**
+ * Build slot row/card element
+ * @param dateISO Date in ISO format
+ * @param pos Position index
+ * @param infoClb Callback to update info display
+ * @param pref Prefilled slot data
+ * @returns HTMLDivElement
+ */
+export function buildSlotRow(
+    dateISO: string,
+    pos: number,
+    infoClb: () => void,
+    pref: Partial<ActivitySlot> = {}
+): HTMLDivElement {
+    const id = pref.id || crypto.randomUUID();
 
     const rowObj: Partial<ActivitySlot> = {
         id,
@@ -80,43 +80,42 @@ export function buildSlotRow(dateISO: string, pos: number, infoClb: () => void, 
         description: pref.description || '',
         maxAssignees: pref.maxAssignees || 1
     };
-    updateSlotObj(dateISO, rowObj);                            // → slotsMap
+    updateSlotObj(dateISO, rowObj);
 
-    /* DOM — flexibles „Kärtchen“ */
+    /* DOM - flexible card */
     const wrap = document.createElement('div');
     wrap.className = 'd-grid gap-1 mb-2 slot border border-secondary-subtle rounded p-2';
     wrap.dataset.slotDate = dateISO;
-    wrap.dataset.slotId = id;                             //  ← wichtig
-    wrap.draggable = false; //true;
+    wrap.dataset.slotId = id;
+    wrap.draggable = false;
 
-    const title = Object.assign(
-        document.createElement('input'),
-        {
-            className: 'form-control form-control-sm text-bg-dark',
-            placeholder: 'Title', required: true, value: pref.title || ''
-        });
+    const title = Object.assign(document.createElement('input'), {
+        className: 'form-control form-control-sm text-bg-dark',
+        placeholder: 'Title',
+        required: true,
+        value: pref.title || ''
+    });
 
-    const desc = Object.assign(
-        document.createElement('input'),
-        {
-            className: 'form-control form-control-sm text-bg-dark',
-            placeholder: 'Description', value: pref.description || ''
-        });
+    const desc = Object.assign(document.createElement('input'), {
+        className: 'form-control form-control-sm text-bg-dark',
+        placeholder: 'Description',
+        value: pref.description || ''
+    });
 
-    const max = Object.assign(
-        document.createElement('input'),
-        {
-            type: 'number', min: '1', value: pref.maxAssignees || 1,
-            className: 'form-control form-control-sm text-bg-dark'
-        });
+    const max = Object.assign(document.createElement('input'), {
+        type: 'number',
+        min: '1',
+        value: String(pref.maxAssignees || 1),
+        className: 'form-control form-control-sm text-bg-dark'
+    });
 
-    /* — delete button — */
+    /* Delete button */
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
     delBtn.className = 'btn btn-sm btn-outline-danger align-self-end';
     delBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
 
-    /* Sync-Handler bei Eingaben */
+    /* Sync handlers for input changes */
     title.addEventListener('input', () => {
         let obj = getSlotObj(dateISO, id)!;
         obj.title = title.value.trim();
@@ -129,7 +128,7 @@ export function buildSlotRow(dateISO: string, pos: number, infoClb: () => void, 
     });
     max.addEventListener('change', () => {
         let obj = getSlotObj(dateISO, id)!;
-        obj.maxAssignees = max.value;
+        obj.maxAssignees = parseInt(max.value);
         updateSlotObj(dateISO, obj);
     });
 
@@ -144,41 +143,43 @@ export function buildSlotRow(dateISO: string, pos: number, infoClb: () => void, 
     return wrap;
 }
 
-/* ----------  Day-Cell ------------------------------------------ */
-export function buildDayCell(slotDate: Date) {
+/**
+ * Build day cell with slot container
+ * @param slotDate Date for this cell
+ * @returns HTMLTableCellElement
+ */
+export function buildDayCell(slotDate: Date): HTMLTableCellElement {
     const dateISO = fmtISO(slotDate);
     const cell = document.createElement('td');
 
-    // container for multiple slots
+    // Container for multiple slots
     const container = document.createElement('div');
     container.className = 'slot-container';
     cell.appendChild(container);
 
-    const info = document.createElement('span')
-    info.className = 'badge w-100 text-center mb-2'
+    const info = document.createElement('span');
+    info.className = 'badge w-100 text-center mb-2';
     info.innerHTML = '<i class="bi bi-info-circle me-2"></i> No slots for this day!';
     container.appendChild(info);
 
     function infoClb() {
-        if (container.children.length === 1) {
-            info.style.display = 'block';
-        } else {
-            info.style.display = 'none';
-        }
+        info.style.display = container.children.length === 1 ? 'block' : 'none';
     }
 
-    // Vorhandene Slots rendern
-    (slotsMap[dateISO] || []).forEach((obj, i) => container.appendChild(buildSlotRow(dateISO, obj.pos || i, infoClb, obj)));
+    // Render existing slots
+    (slotsMap[dateISO] || []).forEach((obj, i) =>
+        container.appendChild(buildSlotRow(dateISO, obj.pos || i, infoClb, obj))
+    );
 
     infoClb();
 
-    // add-more button
+    // Add-more button
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
     addBtn.className = 'btn btn-sm btn-outline-info w-100 add-slot';
     addBtn.textContent = '+ Slot';
     addBtn.addEventListener('click', () => {
-        const pos = (slotsMap[dateISO] || []).length;   // next index
+        const pos = (slotsMap[dateISO] || []).length;
         container.appendChild(buildSlotRow(dateISO, pos, infoClb));
         infoClb();
     });
@@ -187,30 +188,29 @@ export function buildDayCell(slotDate: Date) {
     return cell;
 }
 
-/* ---------- Week-Table builder (replace old cell part) --------- */
-export function createWeekTable(monday: any, start: any, end: any) {
+/**
+ * Create week table for calendar view
+ * @param monday Monday of the week
+ * @param start Plan start date
+ * @param end Plan end date
+ * @returns HTMLDivElement containing table
+ */
+export function createWeekTable(monday: Date, start: Date, end: Date): HTMLDivElement {
     const tbl = document.createElement('table');
     tbl.className = 'table table-dark table-bordered align-middle activity-table';
 
     const thead = tbl.createTHead();
     const hRow = thead.insertRow();
 
-    // Nur Tage im gültigen Bereich rendern
-    const validDays = [];
-    for (let d = 0; d < 7; d++) {
-        const cur = new Date(monday);
-        cur.setDate(cur.getDate() + d);
-        if (cur < start || cur > end) continue;
-        validDays.push(cur);           // sammeln
-    }
+    // Only render days in valid range
+    const validDays = getValidDaysInWeek(monday, start, end);
 
     validDays.forEach(date => {
         const th = document.createElement('th');
         th.className = 'text-center small';
-        th.innerHTML = `${date.toLocaleDateString(undefined, {weekday: 'short'})}<br>${date.toLocaleDateString()}`;
+        th.innerHTML = `${date.toLocaleDateString(undefined, { weekday: 'short' })}<br>${date.toLocaleDateString()}`;
         hRow.appendChild(th);
     });
-
 
     const tbody = tbl.createTBody();
     const row = tbody.insertRow();
@@ -223,8 +223,31 @@ export function createWeekTable(monday: any, start: any, end: any) {
     return wrapper;
 }
 
-/* ─── auto-end-date & table generation ───────────────────── */
-export function maybeGenerate() {
+/**
+ * Build all slot tables for the date range
+ * @param dStart Start date
+ * @param dEnd End date
+ */
+export function buildTables(dStart: Date, dEnd: Date): void {
+    const slotArea = document.getElementById('slotArea');
+    // @ts-expect-error TS(2531): Object is possibly 'null'
+    slotArea.innerHTML = '';
+    
+    let weekStart = new Date(dStart);
+    weekStart.setDate(weekStart.getDate() - (weekStart.getDay() || 7) + 1); // Monday
+
+    while (weekStart <= dEnd) {
+        const tbl = createWeekTable(weekStart, dStart, dEnd);
+        // @ts-expect-error TS(2531): Object is possibly 'null'
+        slotArea.appendChild(tbl);
+        weekStart.setDate(weekStart.getDate() + 7);
+    }
+}
+
+/**
+ * Auto-end-date & table generation on date change
+ */
+export function maybeGenerate(): void {
     const startInp = document.getElementById('startDate')! as HTMLInputElement;
     const endInp = document.getElementById('endDate')! as HTMLInputElement;
 
@@ -248,7 +271,10 @@ export function maybeGenerate() {
     buildTables(dStart, dEnd);
 }
 
-export function initListeners() {
+/**
+ * Initialize date input listeners
+ */
+export function initListeners(): void {
     const startInp = document.getElementById('startDate')!;
     const endInp = document.getElementById('endDate')!;
 
@@ -256,14 +282,16 @@ export function initListeners() {
     endInp.addEventListener('change', maybeGenerate);
 }
 
-export function initSubmitHandler() {
+/**
+ * Initialize form submit handler
+ */
+export function initSubmitHandler(): void {
     const form = document.getElementById('planForm')! as HTMLFormElement;
     const hidden = document.getElementById('slotsJson')! as HTMLInputElement;
     const startInp = document.getElementById('startDate')! as HTMLInputElement;
     const endInp = document.getElementById('endDate')! as HTMLInputElement;
 
-    /* ─── submit → build JSON ----------------------------------- */
-    form.addEventListener('submit', e => {
+    form.addEventListener('submit', (e: Event) => {
         e.preventDefault();
         const payload: Record<string, Partial<ActivitySlot>[]> = {};
         const startD = toDate(startInp.value);
@@ -271,7 +299,7 @@ export function initSubmitHandler() {
 
         for (const [date, arr] of Object.entries(slotsMap)) {
             const cur = toDate(date);
-            if (cur < startD || cur > endD) continue;        // auslassen
+            if (cur < startD || cur > endD) continue;
             payload[date] = arr;
         }
 
@@ -280,70 +308,69 @@ export function initSubmitHandler() {
     });
 }
 
-/* ========  DRAG-&-DROP ORDERING  ================================= */
-export function initSlotDnD() {
-    let dragSrc: any = null;
+/**
+ * Initialize drag-and-drop ordering (commented out by default)
+ */
+export function initSlotDnD(): void {
+    let dragSrc: HTMLElement | null = null;
 
-    document.addEventListener('dragstart', e => {
-
-        // @ts-expect-error TS(2531): Object is possibly 'null'.
+    document.addEventListener('dragstart', (e: Event) => {
+        // @ts-expect-error TS(2531): Object is possibly 'null'
         if (e.target.closest('button') || e.target.closest('input')) return;
 
-        // @ts-expect-error TS(2531): Object is possibly 'null'.
+        // @ts-expect-error TS(2531): Object is possibly 'null'
         const slot = e.target.closest('.slot');
         if (!slot) return;
-        dragSrc = slot;
-        e.dataTransfer!.effectAllowed = 'move';
+        dragSrc = slot as HTMLElement;
+        (e as DragEvent).dataTransfer!.effectAllowed = 'move';
     });
 
-    document.addEventListener('dragover', e => {
-
-        // @ts-expect-error TS(2531): Object is possibly 'null'.
+    document.addEventListener('dragover', (e: Event) => {
+        // @ts-expect-error TS(2531): Object is possibly 'null'
         const slot = e.target.closest('.slot');
         if (!slot || slot === dragSrc) return;
-        const container = slot.parentElement;
-        if (container !== dragSrc.parentElement) return; // only same day
-        e.preventDefault();                               // allow drop
-        const rect = slot.getBoundingClientRect();
-        container.insertBefore(
-            dragSrc,
-            (e.clientY - rect.top) > rect.height / 2 ? slot.nextSibling : slot
+        const container = (slot as HTMLElement).parentElement;
+        if (container !== dragSrc!.parentElement) return; // only same day
+        e.preventDefault(); // allow drop
+        const rect = (slot as HTMLElement).getBoundingClientRect();
+        container!.insertBefore(
+            dragSrc!,
+            ((e as MouseEvent).clientY - rect.top) > rect.height / 2 ? (slot as HTMLElement).nextSibling : slot
         );
     });
 
     document.addEventListener('dragend', () => {
         if (!dragSrc) return;
         const cont = dragSrc.parentElement;
-        const firstSlot = cont.querySelector('.slot') as HTMLElement;
+        const firstSlot = cont!.querySelector('.slot') as HTMLElement;
         if (!firstSlot) return;
 
         const dateISO = firstSlot.dataset.slotDate || '';
         const dayArr = slotsMap[dateISO] || [];
 
-        // neue Reihenfolge anhand data-slotId
-        Array.from(cont.querySelectorAll('.slot') as HTMLElement[]).forEach((el, i) => {
-            const obj = dayArr.find((s: any) => s.id === el.dataset.slotId);
+        // New order based on data-slotId
+        Array.from(cont!.querySelectorAll('.slot')).forEach((el, i) => {
+            const obj = dayArr.find((s: any) => s.id === (el as HTMLElement).dataset.slotId);
             if (obj) obj.pos = i;
         });
         slotsMap[dateISO] = dayArr;
-
         reIndexDay(dateISO);
-
         dragSrc = null;
     });
 }
 
-export function init() {
-    setCurrentNavLocation()
+/**
+ * Initialize activity plan creation page
+ */
+export function init(): void {
+    setCurrentNavLocation();
     initListeners();
     initSubmitHandler();
-    //initSlotDnD();
+    // initSlotDnD(); // Uncomment to enable drag-and-drop
 
-
-    // @ts-expect-error TS(2339): Property 'PREFILLED_SLOTS' does not exist on type ... Remove this comment to see the full error message
+    // @ts-expect-error TS(2339): Property 'PREFILLED_SLOTS' does not exist
     if (window.PREFILLED_SLOTS) {
-
-        // @ts-expect-error TS(2339): Property 'PREFILLED_SLOTS' does not exist on type ... Remove this comment to see the full error message
+        // @ts-expect-error TS(2339): Property 'PREFILLED_SLOTS' does not exist
         Object.assign(slotsMap, window.PREFILLED_SLOTS);
         maybeGenerate();
     }

@@ -1,19 +1,21 @@
-//Main function; similar in all modules to reduce redundancy in pug code
+/**
+ * Password verification module
+ * Handles password validation UI and form submission
+ */
+
+import { setCurrentNavLocation } from './core/navigation';
 import {
     matchPassword,
     removeTooltip,
-    setCurrentNavLocation,
     validate,
     verifyPassword
-} from "./modules/module_functions";
+} from './core/password-validation';
 
-export function init() {
-    registerEvents();
-    setCurrentNavLocation();
-}
-
-export function registerEvents() {
-    //Events regarding the password field
+/**
+ * Register password verification events
+ */
+function registerEvents(): void {
+    // Events regarding the password field
     $("#password").on("keyup", function () {
         verifyPassword($("#password"), $("#password-info"));
     }).on('focusin', function () {
@@ -22,15 +24,23 @@ export function registerEvents() {
         removeTooltip($("#password"), $("#password-info"));
     });
 
-    //Events regarding password repeat field
+    // Events regarding password repeat field
     $("#password_repeat").on("keyup", function () {
         matchPassword($("#password"), $("#password_repeat"), $("#password_repeat-info"));
     });
 
-    //Events regarding submit button
+    // Events regarding submit button
     $("#form").on("submit", function (event: any) {
-        validate(event, $("#password"), $("#password_repeat"), $("#password-info"), $("#password_repeat-info"))
+        validate(event, $("#password"), $("#password_repeat"), $("#password-info"), $("#password_repeat-info"));
     });
+}
+
+/**
+ * Initialize password verification module
+ */
+export function init(): void {
+    registerEvents();
+    setCurrentNavLocation();
 }
 
 // Expose to global scope
