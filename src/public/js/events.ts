@@ -62,8 +62,7 @@ export function deadlineUpdater(): void {
         if (!isNaN(t)) {
             function tick() {
                 const ms = t - Date.now();
-                // @ts-ignore
-                deadlineCnt.textContent = `(${fmt(ms)})`;
+                deadlineCnt.textContent = `(${formatDuration(ms)})`;
             }
             tick();
             setInterval(tick, 60000);
