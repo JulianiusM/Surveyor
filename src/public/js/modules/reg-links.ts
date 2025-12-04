@@ -6,7 +6,7 @@
 import { qs, qsAll } from '../core/dom';
 import { http } from '../core/http';
 import { formatDateTime } from '../core/formatting';
-import { createBadge, showSpinner, hideSpinner, copyWithFeedback } from '../shared/ui-helpers';
+import { createBadge, showSpinner, hideSpinner, copyWithFeedback, reloadAfterDelay, confirmAction } from '../shared/ui-helpers';
 import { showInlineAlert } from '../shared/alerts';
 
 /**
@@ -121,7 +121,7 @@ async function handleRevoke(btn: HTMLButtonElement): Promise<void> {
     const root = btn.closest('.reg-links') as HTMLElement;
     const id = tr.dataset.id!;
     const api = root.dataset.apiRevoke!;
-    if (!confirm('Revoke this link? It cannot be used afterwards.')) return;
+    if (!confirmAction('Revoke this link? It cannot be used afterwards.')) return;
 
     showSpinner(btn);
     try {

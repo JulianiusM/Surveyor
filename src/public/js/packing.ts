@@ -3,13 +3,14 @@
  * Handles assignment, inline editing, reordering, and owner operations for packing lists
  */
 
-import { setCurrentNavLocation } from '../core/navigation';
-import { loadPerms } from '../core/permissions';
-import { post } from '../core/http';
-import { showInlineAlert } from '../shared/alerts';
-import { startInlineEdit, startInlineEditArea } from '../shared/inline-edit';
-import { initAssignButtons } from '../shared/entity-assign';
-import { initTableReorder } from '../shared/drag-drop';
+import { setCurrentNavLocation } from './core/navigation';
+import { loadPerms } from './core/permissions';
+import { post } from './core/http';
+import { showInlineAlert } from './shared/alerts';
+import { startInlineEdit, startInlineEditArea } from './shared/inline-edit';
+import { initAssignButtons } from './shared/entity-assign';
+import { initTableReorder } from './shared/drag-drop';
+import { reloadAfterDelay } from './shared/ui-helpers';
 import {
     initOwnerRemove,
     initOwnerFlags,
@@ -65,7 +66,7 @@ function initMarkEveryone(): void {
             
             reorderRequiredRows();
             showInlineAlert('success', 'Updated');
-            setTimeout(() => location.reload(), 100);
+            reloadAfterDelay(100);
         } catch (err) {
             sw.checked = !sw.checked;  // rollback
             // @ts-expect-error TS(2571): Object is of type 'unknown'

@@ -3,13 +3,14 @@
  * Handles slot management, assignments, inline editing, and owner operations
  */
 
-import { setCurrentNavLocation } from '../core/navigation';
-import { post } from '../core/http';
-import { showInlineAlert } from '../shared/alerts';
-import { startInlineEdit, startInlineEditArea } from '../shared/inline-edit';
-import { initCardReorder } from '../shared/drag-drop';
-import { initOwnerRemove, initOwnerFlags } from '../shared/owner-operations';
-import { getSelectValues } from '../core/form-utils';
+import { setCurrentNavLocation } from './core/navigation';
+import { post } from './core/http';
+import { showInlineAlert } from './shared/alerts';
+import { startInlineEdit, startInlineEditArea } from './shared/inline-edit';
+import { initCardReorder } from './shared/drag-drop';
+import { initOwnerRemove, initOwnerFlags } from './shared/owner-operations';
+import { getSelectValues } from './core/form-utils';
+import { reloadAfterDelay, confirmAction } from './shared/ui-helpers';
 
 /**
  * Get the activity plan ID from the window object
@@ -40,7 +41,7 @@ function initAssign(): void {
         try {
             await post(`/activity/${planId}/${act}`, { slotId, role });
             showInlineAlert('success', 'Updated');
-            setTimeout(() => location.reload(), 120);
+            reloadAfterDelay(120);
         } catch (err) {
             // @ts-expect-error TS(2571): Object is of type 'unknown'
             showInlineAlert('error', err.message);
@@ -79,7 +80,7 @@ function initSelectBox(): void {
         try {
             await post(`/activity/${planId}/slot/${slot}/addRole`, { roles: vals });
             showInlineAlert('success', 'Updated');
-            setTimeout(() => location.reload(), 120);
+            reloadAfterDelay(120);
         } catch (err) {
             // @ts-expect-error TS(2571): Object is of type 'unknown'
             showInlineAlert('error', err.message);
@@ -131,13 +132,13 @@ function initDelete(): void {
         // @ts-expect-error TS(2531): Object is possibly 'null'
         const btn = e.target.closest('[data-delete-slot]');
         if (!btn) return;
-        if (!confirm('Delete this slot?')) return;
+        if (!confirmAction('Delete this slot?')) return;
 
         const id = btn.dataset.slotid;
         try {
             await post(`/activity/${planId}/slot/${id}/delete`, {});
             showInlineAlert('success', 'Deleted');
-            setTimeout(() => location.reload(), 100);
+            reloadAfterDelay(100);
         } catch (err) {
             // @ts-expect-error TS(2571): Object is of type 'unknown'
             showInlineAlert('error', err.message);
@@ -205,7 +206,7 @@ function initAddSlot(): void {
                     maxAssignees: max.value,
                 });
                 showInlineAlert('success', 'Added');
-                setTimeout(() => location.reload(), 100);
+                reloadAfterDelay(100);
             } catch (err) {
                 // @ts-expect-error TS(2571): Object is of type 'unknown'
                 showInlineAlert('error', err.message);

@@ -5,6 +5,7 @@
 
 import { post } from '../core/http';
 import { showInlineAlert } from './alerts';
+import { reloadAfterDelay } from './ui-helpers';
 
 /**
  * Configuration for table row reordering
@@ -83,7 +84,7 @@ export function initTableReorder(config: TableReorderConfig): void {
             const error = e as Error;
             showInlineAlert('error', error.message);
             // Reload to restore original order
-            setTimeout(() => location.reload(), 1000);
+            reloadAfterDelay(1000);
         } finally {
             dragSrc = null;
             if (config.onDragEnd) config.onDragEnd();

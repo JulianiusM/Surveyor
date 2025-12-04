@@ -5,6 +5,7 @@
 
 import { post } from '../core/http';
 import { showInlineAlert } from './alerts';
+import { reloadAfterDelay, confirmAction } from './ui-helpers';
 
 /**
  * Configuration for owner remove functionality
@@ -81,7 +82,7 @@ export function initOwnerFlags(config: OwnerFlagsConfig): void {
             const error = err as Error;
             showInlineAlert('error', error.message);
             /* Reload to force consistent switches */
-            setTimeout(() => location.reload(), 800);
+            reloadAfterDelay(800);
         }
     });
 }

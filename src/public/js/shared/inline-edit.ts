@@ -5,6 +5,7 @@
 
 import { post } from '../core/http';
 import { showInlineAlert } from './alerts';
+import { reloadAfterDelay } from './ui-helpers';
 
 /**
  * Enable drag-and-drop for elements
@@ -130,7 +131,7 @@ export function startInlineEdit(elem: HTMLElement, baseUrl: string): void {
             rollback(val);
             showInlineAlert('success', 'Updated');
             if (field === 'maxAssignees') {
-                setTimeout(() => location.reload(), 100);
+                reloadAfterDelay(100);
             }
         } catch (err) {
             await rollback(old);

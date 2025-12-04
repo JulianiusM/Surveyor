@@ -82,6 +82,23 @@ export function parseJsonScript<T>(id: string): T | null {
 }
 
 /**
+ * Reload the page after a delay
+ * @param delayMs Delay in milliseconds (default: 100)
+ */
+export function reloadAfterDelay(delayMs: number = 100): void {
+    setTimeout(() => location.reload(), delayMs);
+}
+
+/**
+ * Show confirmation dialog
+ * @param message Confirmation message
+ * @returns True if confirmed, false otherwise
+ */
+export function confirmAction(message: string): boolean {
+    return confirm(message);
+}
+
+/**
  * Copy text to clipboard with visual feedback
  * @param text Text to copy
  * @param btn Optional button to show feedback on

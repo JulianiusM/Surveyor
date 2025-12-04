@@ -5,7 +5,7 @@
 
 import { post, showInlineAlert } from "./module_functions";
 import { qsAll } from '../core/dom';
-import { showSpinner, hideSpinner } from '../shared/ui-helpers';
+import { showSpinner, hideSpinner, reloadAfterDelay } from '../shared/ui-helpers';
 
 // Find the matrix root that contains the clicked control
 function matrixRootFor(el: Element): HTMLElement | null {
@@ -92,7 +92,7 @@ export function initPermMatrix() {
                 await post(api, payload);
 
                 showInlineAlert('success', 'Permissions updated');
-                setTimeout(() => location.reload(), 1000);
+                reloadAfterDelay(1000);
             } catch (err) {
                 const error = err as Error;
                 showInlineAlert('error', error.message);

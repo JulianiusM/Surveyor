@@ -8,7 +8,7 @@ import { loadPerms } from './core/permissions';
 import { post } from './core/http';
 import { showInlineAlert } from './shared/alerts';
 import { formatISOInTimeZone } from './core/formatting';
-import { parseJsonScript } from './shared/ui-helpers';
+import { parseJsonScript, reloadAfterDelay, confirmAction } from './shared/ui-helpers';
 
 /**
  * Reload delay constant
@@ -106,7 +106,7 @@ export function initRegistration(): void {
             // @ts-ignore
             await post(`/event/${window.EVENT_ID}/register`, payload);
             showInlineAlert('success', 'Registration successful.');
-            setTimeout(() => location.reload(), RELOAD_DELAY_MS);
+            reloadAfterDelay(RELOAD_DELAY_MS);
         } catch (err) {
             // @ts-expect-error TS(2571): Object is of type 'unknown'
             showInlineAlert('error', err.message);
@@ -132,7 +132,7 @@ export function initUpdate(): void {
             // @ts-ignore
             await post(`/event/${EVENT_ID}/update`, Object.fromEntries(formData));
             showInlineAlert('success', 'Updated');
-            setTimeout(() => location.reload(), RELOAD_DELAY_MS);
+            reloadAfterDelay(RELOAD_DELAY_MS);
         } catch (err) {
             // @ts-expect-error TS(2571): Object is of type 'unknown'
             showInlineAlert('error', err.message);
@@ -153,7 +153,7 @@ export function initCancelRegistration(): void {
                 // @ts-ignore
                 await post(`/event/${EVENT_ID}/register/delete`);
                 showInlineAlert('success', 'Registration cancelled!');
-                setTimeout(() => location.reload(), RELOAD_DELAY_MS);
+                reloadAfterDelay(RELOAD_DELAY_MS);
             } catch (err) {
                 // @ts-expect-error TS(2571): Object is of type 'unknown'
                 showInlineAlert('error', err.message);
@@ -221,7 +221,7 @@ export function initInvoiceAdmin(): void {
                 
                 await post((poolForm as HTMLElement).dataset.api!, payload);
                 showInlineAlert('success', 'Pool created');
-                setTimeout(() => location.reload(), RELOAD_DELAY_MS);
+                reloadAfterDelay(RELOAD_DELAY_MS);
             } catch (err) {
                 const message = err instanceof Error ? err.message : 'An error occurred';
                 showInlineAlert('error', message);
@@ -246,27 +246,27 @@ export function initInvoiceAdmin(): void {
         if (target.classList.contains('invoice-approve')) {
             await post(`/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/approve`);
             showInlineAlert('success', 'Invoice approved');
-            return setTimeout(() => location.reload(), RELOAD_DELAY_MS);
+            return reloadAfterDelay(RELOAD_DELAY_MS);
         }
         if (target.classList.contains('invoice-decline')) {
             await post(`/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/decline`);
             showInlineAlert('info', 'Invoice declined');
-            return setTimeout(() => location.reload(), RELOAD_DELAY_MS);
+            return reloadAfterDelay(RELOAD_DELAY_MS);
         }
         if (target.classList.contains('invoice-close')) {
             await post(`/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/close`);
             showInlineAlert('success', 'Invoice closed');
-            return setTimeout(() => location.reload(), RELOAD_DELAY_MS);
+            return reloadAfterDelay(RELOAD_DELAY_MS);
         }
         if (target.classList.contains('pool-close')) {
             await post(`/event/${EVENT_ID}/invoice-pools/${target.dataset.id}/close`);
             showInlineAlert('success', 'Pool closed with adjustments');
-            return setTimeout(() => location.reload(), RELOAD_DELAY_MS);
+            return reloadAfterDelay(RELOAD_DELAY_MS);
         }
         if (target.classList.contains('surcharge-remove')) {
             await post(`/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/surcharges/${target.dataset.id}/delete`);
             showInlineAlert('info', 'Surcharge removed');
-            return setTimeout(() => location.reload(), RELOAD_DELAY_MS);
+            return reloadAfterDelay(RELOAD_DELAY_MS);
         }
     });
 
@@ -282,7 +282,7 @@ export function initInvoiceAdmin(): void {
             try {
                 await post(api, payload);
                 showInlineAlert('success', 'Assignments updated');
-                setTimeout(() => location.reload(), RELOAD_DELAY_MS);
+                reloadAfterDelay(RELOAD_DELAY_MS);
             } catch (err) {
                 // @ts-expect-error
                 showInlineAlert('error', err.message);
@@ -295,7 +295,7 @@ export function initInvoiceAdmin(): void {
             try {
                 await post(api, payload);
                 showInlineAlert('success', 'Surcharge added');
-                setTimeout(() => location.reload(), RELOAD_DELAY_MS);
+                reloadAfterDelay(RELOAD_DELAY_MS);
             } catch (err) {
                 // @ts-expect-error
                 showInlineAlert('error', err.message);
@@ -428,7 +428,7 @@ function initTakeoverModal(): void {
         try {
             await post(endpoint, payload);
             showInlineAlert('success', 'Takeovers updated');
-            setTimeout(() => location.reload(), RELOAD_DELAY_MS);
+            reloadAfterDelay(RELOAD_DELAY_MS);
         } catch (err) {
             // @ts-expect-error
             showInlineAlert('error', err.message);
@@ -451,7 +451,7 @@ export function initInvoiceSubmission(): void {
             const endpoint = `/event/${EVENT_ID}/invoice-pools/${poolId}/submit`;
             await post(endpoint, formData);
             showInlineAlert('success', 'Invoice submitted');
-            setTimeout(() => location.reload(), RELOAD_DELAY_MS);
+            reloadAfterDelay(RELOAD_DELAY_MS);
         } catch (err) {
             // @ts-expect-error
             showInlineAlert('error', err.message);

@@ -6,7 +6,7 @@
 import { showInlineAlert } from "./module_functions";
 import { qs, qsAll } from '../core/dom';
 import { http } from '../core/http';
-import { showSpinner, hideSpinner } from '../shared/ui-helpers';
+import { showSpinner, hideSpinner, reloadAfterDelay, confirmAction } from '../shared/ui-helpers';
 
 /**
  * Get the admin card container for an element
@@ -70,7 +70,7 @@ async function handleUpdate(btn: HTMLButtonElement): Promise<void> {
         const perms = collectKeys(card);
         await http('PATCH', url, {perms}); // backend should map keys → mask
         showInlineAlert('success', 'Permissions updated');
-        setTimeout(() => location.reload(), 1000);
+        reloadAfterDelay(1000);
     } catch (err) {
         const error = err as Error;
         showInlineAlert('error', error.message);
@@ -91,14 +91,14 @@ async function handleRemove(btn: HTMLButtonElement): Promise<void> {
     const base = matrix.dataset.apiRemove!;
     const url = `${base}/${encodeURIComponent(userId)}`;
 
-    if (!confirm('Remove this administrator?')) return;
+    if (!confirmAction('Remove this administrator?')) return;
 
     showSpinner(btn);
     try {
         await http('DELETE', url);
         card.remove();
         showInlineAlert('success', 'Admin removed');
-        setTimeout(() => location.reload(), 1000);
+        reloadAfterDelay(1000);
     } catch (err) {
         const error = err as Error;
         showInlineAlert('error', error.message);
@@ -173,7 +173,7 @@ async function handleAdd(btn: HTMLButtonElement): Promise<void> {
         await http('POST', api, payload);
 
         showInlineAlert('success', 'Admin added');
-        setTimeout(() => location.reload(), 1000);
+        reloadAfterDelay(1000);
     } catch (err) {
         const error = err as Error;
         showInlineAlert('error', error.message);
