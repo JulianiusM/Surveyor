@@ -77,7 +77,7 @@ export function initOwnerFlags(config: OwnerFlagsConfig): void {
         try {
             await post(`${config.baseUrl}/settings`, payload);
             showInlineAlert('success', 'Settings updated');
-            setTimeout(() => location.reload(), reloadDelay);
+            reloadAfterDelay(reloadDelay);
         } catch (err) {
             const error = err as Error;
             showInlineAlert('error', error.message);
@@ -158,7 +158,7 @@ export function initQuickAdd(config: QuickAddConfig): void {
         try {
             await post(`${config.baseUrl}/items`, data);
             showInlineAlert('success', 'Added');
-            setTimeout(() => location.reload(), reloadDelay);
+            reloadAfterDelay(reloadDelay);
         } catch (err) {
             const error = err as Error;
             showInlineAlert('error', error.message);

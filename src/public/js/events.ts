@@ -104,7 +104,7 @@ export function initRegistration(): void {
             payload.dietary = formData.getAll('dietary');
             
             // @ts-ignore
-            await post(`/event/${window.EVENT_ID}/register`, payload);
+            await post(`/api/event/${window.EVENT_ID}/register`, payload);
             showInlineAlert('success', 'Registration successful.');
             reloadAfterDelay(RELOAD_DELAY_MS);
         } catch (err) {
@@ -130,7 +130,7 @@ export function initUpdate(): void {
                 formData.set(checkbox.name, checkbox.checked ? 'on' : 'off');
             }
             // @ts-ignore
-            await post(`/event/${EVENT_ID}/update`, Object.fromEntries(formData));
+            await post(`/api/event/${EVENT_ID}/update`, Object.fromEntries(formData));
             showInlineAlert('success', 'Updated');
             reloadAfterDelay(RELOAD_DELAY_MS);
         } catch (err) {
@@ -151,7 +151,7 @@ export function initCancelRegistration(): void {
         if (window.confirm("Are you sure you want to cancel your registration?")) {
             try {
                 // @ts-ignore
-                await post(`/event/${EVENT_ID}/register/delete`);
+                await post(`/api/event/${EVENT_ID}/register/delete`);
                 showInlineAlert('success', 'Registration cancelled!');
                 reloadAfterDelay(RELOAD_DELAY_MS);
             } catch (err) {
@@ -244,27 +244,27 @@ export function initInvoiceAdmin(): void {
     document.addEventListener('click', async (e: Event) => {
         const target = e.target as HTMLElement;
         if (target.classList.contains('invoice-approve')) {
-            await post(`/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/approve`);
+            await post(`/api/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/approve`);
             showInlineAlert('success', 'Invoice approved');
             return reloadAfterDelay(RELOAD_DELAY_MS);
         }
         if (target.classList.contains('invoice-decline')) {
-            await post(`/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/decline`);
+            await post(`/api/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/decline`);
             showInlineAlert('info', 'Invoice declined');
             return reloadAfterDelay(RELOAD_DELAY_MS);
         }
         if (target.classList.contains('invoice-close')) {
-            await post(`/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/close`);
+            await post(`/api/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/close`);
             showInlineAlert('success', 'Invoice closed');
             return reloadAfterDelay(RELOAD_DELAY_MS);
         }
         if (target.classList.contains('pool-close')) {
-            await post(`/event/${EVENT_ID}/invoice-pools/${target.dataset.id}/close`);
+            await post(`/api/event/${EVENT_ID}/invoice-pools/${target.dataset.id}/close`);
             showInlineAlert('success', 'Pool closed with adjustments');
             return reloadAfterDelay(RELOAD_DELAY_MS);
         }
         if (target.classList.contains('surcharge-remove')) {
-            await post(`/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/surcharges/${target.dataset.id}/delete`);
+            await post(`/api/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/surcharges/${target.dataset.id}/delete`);
             showInlineAlert('info', 'Surcharge removed');
             return reloadAfterDelay(RELOAD_DELAY_MS);
         }
@@ -321,7 +321,7 @@ export function initInvoiceAdmin(): void {
         const target = e.target as HTMLElement;
         if (target.classList.contains('share-paid')) {
             const checked = (target as HTMLInputElement).checked;
-            await post(`/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/shares/${target.dataset.id}/pay`, {
+            await post(`/api/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/shares/${target.dataset.id}/pay`, {
                 isPaid: checked ? 'on' : ''
             });
             showInlineAlert('success', 'Share updated');
