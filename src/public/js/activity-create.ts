@@ -3,7 +3,7 @@
  * Handles dynamic slot management with drag-and-drop reordering
  */
 
-import { setCurrentNavLocation } from '../core/navigation';
+import { setCurrentNavLocation } from './core/navigation';
 import type { ActivitySlot } from "../../modules/database/entities/activity/ActivitySlot";
 
 /**

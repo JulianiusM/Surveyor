@@ -3,7 +3,7 @@
  * Handles dynamic combination row management
  */
 
-import { setCurrentNavLocation } from '../core/navigation';
+import { setCurrentNavLocation } from './core/navigation';
 
 /**
  * Weekday options for survey combinations
