@@ -434,12 +434,11 @@ export async function serveInvoiceProof(event: Event, poolId: string, invoiceId:
     }
     
     // Sanitize and validate the proof path to prevent directory traversal
-    const proofPath = path.normalize(invoice.proofPath).replace(/^(\.\.[\/\\])+/, '');
-    const fullPath = path.join(process.cwd(), proofPath);
-    const uploadsDir = path.join(process.cwd(), 'uploads');
+    const uploadsDir = path.resolve(process.cwd(), 'uploads');
+    const fullPath = path.resolve(process.cwd(), invoice.proofPath);
     
     // Ensure the resolved path is within the uploads directory
-    if (!fullPath.startsWith(uploadsDir)) {
+    if (!fullPath.startsWith(uploadsDir + path.sep) && fullPath !== uploadsDir) {
         throw new APIError('Invalid proof path', {}, 400);
     }
     
