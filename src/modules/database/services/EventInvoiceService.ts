@@ -177,15 +177,16 @@ export async function updateTakeovers(
             await takeoverRepo.delete(Array.from(toDelete));
         }
 
-        // Then insert new takeovers
-        for (const takeover of takeoversToBeSaved) {
-            await takeoverRepo.save(
+        // Then insert new takeovers in a batch for better performance
+        if (takeoversToBeSaved.length > 0) {
+            const newTakeovers = takeoversToBeSaved.map(takeover =>
                 takeoverRepo.create({
                     pool: {id: poolId} as EventInvoicePool,
                     payerRegistration: {id: takeover.payerId} as EventRegistration,
                     beneficiaryRegistration: {id: takeover.beneficiaryId} as EventRegistration,
-                }),
+                })
             );
+            await takeoverRepo.save(newTakeovers);
         }
 
         return {added, removed};

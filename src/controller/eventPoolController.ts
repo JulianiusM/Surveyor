@@ -3,8 +3,7 @@
 import fs from 'fs';
 import path from 'path';
 import Joi from 'joi';
-import type {Express} from 'express';
-import {Request} from 'express';
+import {Request, Response} from 'express';
 import {parseISO, isValid, addMonths} from 'date-fns';
 
 import mailer from '../modules/email';
@@ -417,7 +416,7 @@ async function markSharePaid(event: Event, poolId: string, shareId: string, isPa
 }
 
 // Serve invoice proof files securely with authentication and permission checks
-export async function serveInvoiceProof(event: Event, poolId: string, invoiceId: string, session: Request['session'], res: any) {
+export async function serveInvoiceProof(event: Event, poolId: string, invoiceId: string, session: Request['session'], res: Response) {
     const pool = await ensurePool(event, poolId);
     const invoice = await invoiceService.getInvoiceWithRegistration(poolId, Number(invoiceId));
     if (!invoice || !invoice.proofPath) {
