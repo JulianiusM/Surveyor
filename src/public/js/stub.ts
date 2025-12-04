@@ -1,8 +1,16 @@
-//Empty js to use when no custom module js is loaded instead to prevent errors
-import {setCurrentNavLocation} from "./modules/module_functions";
+/**
+ * Stub module - Default initialization for pages without custom JS
+ * Provides basic navigation and entity list functionality
+ */
 
-export function init() {
+import { initEntityLists, setCurrentNavLocation } from "./core/navigation";
+
+/**
+ * Initialize stub module
+ */
+export function init(): void {
     setCurrentNavLocation();
+    initEntityLists();
 }
 
 // Expose to global scope

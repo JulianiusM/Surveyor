@@ -1,7 +1,14 @@
-//Empty js to use when no custom module js is loaded instead to prevent errors
-import {initEntityLists, setCurrentNavLocation} from "./modules/module_functions";
+/**
+ * User dashboard module
+ * Simple module for user dashboard functionality
+ */
 
-export function init() {
+import { initEntityLists, setCurrentNavLocation } from '../core/navigation';
+
+/**
+ * Initialize user dashboard
+ */
+export function init(): void {
     setCurrentNavLocation();
     initEntityLists();
 }

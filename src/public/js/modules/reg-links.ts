@@ -1,19 +1,18 @@
-// src/public/js/modules/reg-links.ts
-function qs<T extends Element>(sel: string, scope: ParentNode | Document = document): T | null {
-    return scope.querySelector(sel) as T | null;
-}
+/**
+ * Registration links management module
+ * Handles creation, copying, and revoking of registration links
+ */
 
-function qsAll<T extends Element>(sel: string, scope: ParentNode | Document = document): T[] {
-    return Array.from(scope.querySelectorAll(sel)) as T[];
-}
+import { qs, qsAll } from '../core/dom';
+import { http } from '../core/http';
+import { formatDateTime } from '../core/formatting';
+import { copyToClipboard } from '../core/clipboard';
 
-function fmtDate(d?: string | null) {
-    if (!d) return '—';
-    const dt = new Date(d);
-    if (Number.isNaN(dt.getTime())) return '—';
-    return dt.toLocaleString();
-}
-
+/**
+ * Create a colored badge for link status
+ * @param status Link status
+ * @returns HTML string for badge
+ */
 function badge(status: string): string {
     const map: Record<string, string> = {
         active: 'success',
@@ -25,47 +24,32 @@ function badge(status: string): string {
     return `<span class="badge bg-${cls} text-uppercase">${status}</span>`;
 }
 
-function spinnerOn(btn: HTMLButtonElement) {
+/**
+ * Show spinner and disable button
+ * @param btn Button element
+ */
+function spinnerOn(btn: HTMLButtonElement): void {
     btn.disabled = true;
     const sp = btn.querySelector('.spinner-border') as HTMLElement | null;
     if (sp) sp.classList.remove('d-none');
 }
 
-function spinnerOff(btn: HTMLButtonElement) {
+/**
+ * Hide spinner and enable button
+ * @param btn Button element
+ */
+function spinnerOff(btn: HTMLButtonElement): void {
     btn.disabled = false;
     const sp = btn.querySelector('.spinner-border') as HTMLElement | null;
     if (sp) sp.classList.add('d-none');
 }
 
-async function http(method: string, url: string, body?: any) {
-    const res = await fetch(url, {
-        method,
-        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-        credentials: 'same-origin',
-        body: body ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        throw new Error(text || `HTTP ${res.status}`);
-    }
-    const ct = res.headers.get('content-type') || '';
-    const data = ct.includes('application/json') ? await res.json() : await res.text();
-    if (data?.status !== "success") throw new Error(`${data?.status}: ${data?.message}`);
-    return data
-}
-
-function copy(text: string) {
-    if (navigator.clipboard) return navigator.clipboard.writeText(text);
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    return Promise.resolve();
-}
-
-function renderRows(root: HTMLElement, rows: any[]) {
+/**
+ * Render registration link rows in the table
+ * @param root Root element
+ * @param rows Link data
+ */
+function renderRows(root: HTMLElement, rows: any[]): void {
     const tb = qs<HTMLTableSectionElement>('tbody.js-rows', root)!;
     const cnt = qs<HTMLElement>('.js-count', root)!;
     tb.innerHTML = '';
@@ -84,8 +68,8 @@ function renderRows(root: HTMLElement, rows: any[]) {
         tr.dataset.id = r.id;
 
         const tokenCell = `<code class="text-wrap">${r.token}</code>`;
-        const created = fmtDate(r.createdAt);
-        const expires = fmtDate(r.expiresAt);
+        const created = formatDateTime(r.createdAt);
+        const expires = formatDateTime(r.expiresAt);
         const status = r.status || 'active';
 
         // Build full URL for copy
@@ -115,7 +99,11 @@ function renderRows(root: HTMLElement, rows: any[]) {
     cnt.textContent = String(rows.length);
 }
 
-async function refreshList(root: HTMLElement) {
+/**
+ * Refresh the registration links list from the API
+ * @param root Root element
+ */
+async function refreshList(root: HTMLElement): Promise<void> {
     try {
         const res = await http('GET', root.dataset.apiList!);
         renderRows(root, res.data || []);
@@ -124,7 +112,11 @@ async function refreshList(root: HTMLElement) {
     }
 }
 
-async function handleCreate(btn: HTMLButtonElement) {
+/**
+ * Handle registration link creation
+ * @param btn Create button element
+ */
+async function handleCreate(btn: HTMLButtonElement): Promise<void> {
     const modalSel = btn.dataset.modal!;
     const modal = qs<HTMLElement>(modalSel)!;
     const root = btn.closest('.reg-links') as HTMLElement;
@@ -137,13 +129,13 @@ async function handleCreate(btn: HTMLButtonElement) {
 
     spinnerOn(btn);
     try {
-        const payload: any = {maxUses};
+        const payload: any = { maxUses };
         if (expiresAt) payload.expiresAt = expiresAt.toISOString();
         const data = await http('POST', api, payload); // { id, token }
         // Optionally auto-copy the new link
         const eventId = root.dataset.eventId!;
         const url = `${location.origin}/event/${encodeURIComponent(eventId)}?regToken=${encodeURIComponent(data.token)}`;
-        await copy(url).catch(() => {
+        await copyToClipboard(url).catch(() => {
         });
         // Close modal (if bootstrap present)
         (window as any).bootstrap?.Modal.getOrCreateInstance(modal)?.hide();
@@ -155,7 +147,11 @@ async function handleCreate(btn: HTMLButtonElement) {
     }
 }
 
-async function handleRevoke(btn: HTMLButtonElement) {
+/**
+ * Handle registration link revocation
+ * @param btn Revoke button element
+ */
+async function handleRevoke(btn: HTMLButtonElement): Promise<void> {
     const tr = btn.closest('tr')!;
     const root = btn.closest('.reg-links') as HTMLElement;
     const id = tr.dataset.id!;
@@ -173,7 +169,11 @@ async function handleRevoke(btn: HTMLButtonElement) {
     }
 }
 
-export function initRegLinks() {
+/**
+ * Initialize registration links module
+ * Sets up list rendering and link operations
+ */
+export function initRegLinks(): void {
     const roots = qsAll<HTMLElement>('.reg-links');
     roots.forEach(refreshList);
 
@@ -193,7 +193,7 @@ export function initRegLinks() {
             ev.preventDefault();
             const url = btnCopy.dataset.url!;
             spinnerOn(btnCopy);
-            copy(url).catch(() => {
+            copyToClipboard(url).catch(() => {
             }); // silent
             spinnerOff(btnCopy);
             return;
