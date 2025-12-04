@@ -5,6 +5,12 @@
 
 import { setCurrentNavLocation } from './core/navigation';
 
+declare global {
+    interface Window {
+        PREFILLED_COMBINATIONS?: { weekday: number; nth_week?: number }[];
+    }
+}
+
 /**
  * Weekday options for survey combinations
  */
@@ -135,10 +141,8 @@ function initButtons(): void {
     const counter = { value: 0 };
 
     // Prefill combinations if available
-    // @ts-expect-error TS(2339): Property 'PREFILLED_COMBINATIONS' does not exist
     if (window.PREFILLED_COMBINATIONS) {
-        // @ts-expect-error TS(2339): Property 'PREFILLED_COMBINATIONS' does not exist
-        window.PREFILLED_COMBINATIONS.forEach((c: any) =>
+        window.PREFILLED_COMBINATIONS.forEach((c: { weekday: number; nth_week?: number }) =>
             addCombinationRow(tableBody, counter, c.weekday, c.nth_week)
         );
     } else {
@@ -151,10 +155,9 @@ function initButtons(): void {
 
     // Delegate removal to tbody
     tableBody.addEventListener('click', (e: Event) => {
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        if (e.target.matches('.remove-combination-btn')) {
-            // @ts-expect-error TS(2531): Object is possibly 'null'
-            const row = e.target.closest('tr');
+        const target = e.target as Element | null;
+        if (target?.matches('.remove-combination-btn')) {
+            const row = target.closest('tr');
             if (row) row.remove();
         }
     });

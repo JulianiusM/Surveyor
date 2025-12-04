@@ -1,4 +1,6 @@
 // src/types/global.d.ts
+import type { ActivitySlot } from '../modules/database/entities/activity/ActivitySlot';
+
 export {};
 
 declare global {
@@ -21,12 +23,10 @@ declare global {
         ACT_PLAN_ID?: number;
         DRIVER_LIST_ID?: number;
         EVENT_ID?: number;
-        
+
         // Prefilled data from server
         PREFILLED_ITEMS?: any;
-        PREFILLED_SLOTS?: any;
+        PREFILLED_SLOTS?: Record<string, Partial<ActivitySlot>[]>;
         
-        // Feature flags
-        IS_MANAGE?: boolean;
     }
 }

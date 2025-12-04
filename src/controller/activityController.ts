@@ -213,9 +213,8 @@ async function updateSlotDescription(slotId: string, body: any) {
 
 async function updateSlotAttr(slotId: string, body: any, permData?: PermBundle) {
     const {field, value} = body;
-    const allowed = {title: 1, description: 1, maxAssignees: 1};
+    const allowed: Record<string, boolean> = {title: true, description: true, maxAssignees: true};
 
-    // @ts-ignore
     if (!allowed[field]) throw new APIError('Invalid field', body, 400);
 
     // Permission check

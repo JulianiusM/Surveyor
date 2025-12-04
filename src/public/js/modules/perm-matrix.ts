@@ -3,8 +3,9 @@
  * Handles permission matrix UI for entities with audience-based permissions
  */
 
-import { post, showInlineAlert } from "./module_functions";
+import { post } from '../core/http';
 import { qsAll } from '../core/dom';
+import { showInlineAlert } from '../shared/alerts';
 import { showSpinner, hideSpinner, reloadAfterDelay } from '../shared/ui-helpers';
 
 // Find the matrix root that contains the clicked control

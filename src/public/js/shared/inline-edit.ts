@@ -6,17 +6,26 @@
 import { post } from '../core/http';
 import { showInlineAlert } from './alerts';
 import { reloadAfterDelay } from './ui-helpers';
+import { getPerms, requireEntityPerm, requireItemPerm } from '../core/permissions';
+import type { PermType } from '../../../types/PermissionTypes';
+
+interface InlineEditPermission {
+    scope: 'entity' | 'item';
+    key: PermType;
+    action: string;
+    itemId?: string;
+    parentKey?: PermType;
+}
 
 /**
  * Enable drag-and-drop for elements
  */
 export function enableDnD(): void {
-    // @ts-expect-error TS(2339): Property 'IS_MANAGE' does not exist on type 'Window'
-    if (!window.IS_MANAGE) return;
+    const perms = getPerms();
+    if (!perms?.entity.has('ITEM_EDIT')) return;
     const draggables = document.getElementsByClassName('draggable');
-    for (let elem of draggables) {
-        // @ts-ignore
-        elem.draggable = true;
+    for (const elem of Array.from(draggables)) {
+        (elem as HTMLElement).draggable = true;
     }
 }
 
@@ -25,9 +34,8 @@ export function enableDnD(): void {
  */
 export function disableDnD(): void {
     const draggables = document.getElementsByClassName('draggable');
-    for (let elem of draggables) {
-        // @ts-ignore
-        elem.draggable = false;
+    for (const elem of Array.from(draggables)) {
+        (elem as HTMLElement).draggable = false;
     }
 }
 
@@ -35,9 +43,28 @@ export function disableDnD(): void {
  * Start inline editing for a textarea field (e.g., description)
  * @param elem Element to edit
  * @param url API endpoint for saving
+ * @param permission Optional permission guard configuration
  */
-export function startInlineEditArea(elem: HTMLElement, url: string): void {
+export function startInlineEditArea(elem: HTMLElement, url: string, permission?: InlineEditPermission): void {
     if (!elem || elem.querySelector('textarea')) return;
+
+    const guard: InlineEditPermission = permission ?? {
+        scope: 'entity',
+        key: 'EDIT_DESC',
+        action: 'edit descriptions'
+    };
+
+    try {
+        if (guard.scope === 'item') {
+            requireItemPerm(guard.itemId || '', guard.key, guard.action, guard.parentKey);
+        } else {
+            requireEntityPerm(guard.key, guard.action);
+        }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Not allowed to edit.';
+        showInlineAlert('error', message);
+        return;
+    }
 
     const old = elem.innerText.trim();
 
@@ -66,8 +93,8 @@ export function startInlineEditArea(elem: HTMLElement, url: string): void {
             showInlineAlert('success', 'Description updated');
         } catch (err) {
             restore(old);
-            // @ts-expect-error TS(2571): Object is of type 'unknown'
-            showInlineAlert('error', err.message);
+            const message = err instanceof Error ? err.message : 'Failed to update the description.';
+            showInlineAlert('error', message);
         }
     }
 
@@ -108,6 +135,24 @@ export function startInlineEdit(elem: HTMLElement, baseUrl: string): void {
         old = elem.textContent?.trim();
     }
 
+    const fieldGuard: Record<string, InlineEditPermission> = {
+        description: { scope: 'item', key: 'EDIT_DESC', action: 'edit descriptions', itemId: id, parentKey: 'ITEM_EDIT' },
+        default: { scope: 'item', key: 'EDIT_META', action: 'edit item details', itemId: id, parentKey: 'ITEM_EDIT' }
+    };
+
+    try {
+        const guard = fieldGuard[field || ''] ?? fieldGuard.default;
+        if (guard.scope === 'item') {
+            requireItemPerm(guard.itemId || '', guard.key, guard.action, guard.parentKey);
+        } else {
+            requireEntityPerm(guard.key, guard.action);
+        }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Not allowed to edit.';
+        showInlineAlert('error', message);
+        return;
+    }
+
     const inp = document.createElement('input');
     inp.className = 'form-control form-control-sm text-bg-dark draggable-false';
     inp.type = field === 'maxAssignees' ? 'number' : 'text';
@@ -135,8 +180,8 @@ export function startInlineEdit(elem: HTMLElement, baseUrl: string): void {
             }
         } catch (err) {
             await rollback(old);
-            // @ts-expect-error TS(2571): Object is of type 'unknown'
-            showInlineAlert('error', err.message);
+            const message = err instanceof Error ? err.message : 'Failed to save changes.';
+            showInlineAlert('error', message);
         }
     }
 

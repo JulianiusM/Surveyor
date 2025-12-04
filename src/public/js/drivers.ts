@@ -4,23 +4,27 @@
  */
 
 import { setCurrentNavLocation } from './core/navigation';
-import { loadPerms } from './core/permissions';
+import { loadPerms, requireEntityPerm } from './core/permissions';
 import { startInlineEdit, startInlineEditArea } from './shared/inline-edit';
 import { initAssignButtons } from './shared/entity-assign';
 import { initTableReorder } from './shared/drag-drop';
 import {
-    initOwnerRemove,
-    initOwnerFlags,
-    initOwnerDeleteItem,
+    initAssignmentRemoval,
+    initItemDeletion,
     initQuickAdd
-} from './shared/owner-operations';
+} from './shared/list-actions';
+
+declare global {
+    interface Window {
+        DRIVERS_LIST_ID?: string;
+    }
+}
 
 /**
  * Get the drivers list ID from the window object
  */
 function getDriversListId(): string {
-    // @ts-expect-error TS(2339): Property 'DRIVERS_LIST_ID' does not exist
-    return window.DRIVERS_LIST_ID;
+    return window.DRIVERS_LIST_ID ?? '';
 }
 
 /**
@@ -37,7 +41,11 @@ function initInlineEdit(): void {
 
     document.querySelectorAll('[data-edit="planDescription"]').forEach(elem => {
         elem.addEventListener('dblclick', () => {
-            startInlineEditArea(elem as HTMLElement, `/api/drivers/${listId}/description`);
+            startInlineEditArea(elem as HTMLElement, `/api/drivers/${listId}/description`, {
+                scope: 'entity',
+                key: 'EDIT_DESC',
+                action: 'edit driver plan descriptions'
+            });
         });
     });
 }
@@ -58,11 +66,17 @@ export function init(): void {
         });
 
         // Initialize drag-and-drop reordering
-        initTableReorder({
-            tbodySelector: 'tbody[data-reorderable]',
-            apiUrl: `/drivers/${listId}/reorder`,
-            getItemId: (row) => row.dataset.itemid || '',
-        });
+        try {
+            requireEntityPerm('ITEM_EDIT', 'reorder drivers');
+            initTableReorder({
+                tbodySelector: 'tbody[data-reorderable]',
+                apiUrl: `/drivers/${listId}/reorder`,
+                getItemId: (row) => row.dataset.itemid || '',
+            });
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Reordering not permitted.';
+            console.warn(message);
+        }
 
         initInlineEdit();
 
@@ -72,16 +86,11 @@ export function init(): void {
             baseUrl: `/drivers/${listId}`,
         });
 
-        // Initialize owner operations
-        initOwnerRemove({
+        initAssignmentRemoval({
             baseUrl: `/drivers/${listId}`,
         });
 
-        initOwnerFlags({
-            baseUrl: `/drivers/${listId}`,
-        });
-
-        initOwnerDeleteItem({
+        initItemDeletion({
             baseUrl: `/drivers/${listId}`,
             confirmMessage: 'Delete this driver permanently?',
             successMessage: 'Driver deleted',

@@ -10,6 +10,7 @@ Surveyor is a TypeScript-based survey management application with a focus on mai
 - **Frontend**: Pug templates + Bootstrap + Vanilla JavaScript
 - **Testing**: Jest (unit/integration) + Playwright (E2E)
 - **Language**: TypeScript with strict type checking
+- **Frontend structure**: Reuse helpers under `src/public/js/core` and `src/public/js/shared` (see the Frontend Architecture section in README.md) instead of duplicating utilities.
 
 ## Quick Start for AI Agents
 

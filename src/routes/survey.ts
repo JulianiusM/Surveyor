@@ -21,9 +21,8 @@ function handleAction(actionFn: (req: Request) => Promise<void>, successMsg: str
             await actionFn(req);
             req.flash('success', successMsg);
         } catch (err) {
-
-            // @ts-expect-error TS(2571): Object is of type 'unknown'.
-            req.flash('error', err.message);
+            const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
+            req.flash('error', message);
         }
         res.redirect(`/survey/${surveyId}`);
     });

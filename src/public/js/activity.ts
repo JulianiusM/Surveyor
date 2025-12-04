@@ -8,16 +8,22 @@ import { post } from './core/http';
 import { showInlineAlert } from './shared/alerts';
 import { startInlineEdit, startInlineEditArea } from './shared/inline-edit';
 import { initCardReorder } from './shared/drag-drop';
-import { initOwnerRemove, initOwnerFlags } from './shared/owner-operations';
+import { initAssignmentRemoval } from './shared/list-actions';
 import { getSelectValues } from './core/form-utils';
 import { reloadAfterDelay } from './shared/ui-helpers';
+import { requireEntityPerm, requireItemPerm } from './core/permissions';
+
+declare global {
+    interface Window {
+        ACT_PLAN_ID?: string;
+    }
+}
 
 /**
  * Get the activity plan ID from the window object
  */
 function getActivityPlanId(): string {
-    // @ts-expect-error TS(2304): Cannot find name 'ACT_PLAN_ID'
-    return window.ACT_PLAN_ID;
+    return window.ACT_PLAN_ID ?? '';
 }
 
 /**
@@ -27,24 +33,23 @@ function initAssign(): void {
     const planId = getActivityPlanId();
 
     document.addEventListener('click', async (e: Event) => {
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        const btn = e.target?.closest('[data-action]');
+        const btn = (e.target as Element | null)?.closest('[data-action]') as HTMLElement | null;
         if (!btn) return;
 
-        const card = btn.closest('.slot');
+        const card = btn.closest('.slot') as HTMLElement | null;
         const slotId = card?.dataset.slotid;
         if (!slotId) return;
 
         const act = btn.dataset.action;
         const role = btn.dataset.role;
-        
+
         try {
             await post(`/api/activity/${planId}/${act}`, { slotId, role });
             showInlineAlert('success', 'Updated');
             reloadAfterDelay(120);
         } catch (err) {
-            // @ts-expect-error TS(2571): Object is of type 'unknown'
-            showInlineAlert('error', err.message);
+            const message = err instanceof Error ? err.message : 'Failed to update slot assignment.';
+            showInlineAlert('error', message);
         }
     });
 }
@@ -58,32 +63,31 @@ function initSelectBox(): void {
     $('.multiSelect').select2({
         placeholder: 'Add Roles',
         width: '100%',
-        //@ts-ignore
         selectionCssClass: 'text-bg-dark',
         dropdownCssClass: 'text-bg-dark',
     });
 
     document.addEventListener('click', async (e: Event) => {
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        const btn = e.target.closest('[data-addRoles]');
+        const btn = (e.target as Element | null)?.closest('[data-addRoles]');
         if (!btn) return;
 
         const div = btn.closest('.role-assignment');
         if (!div) return;
 
-        const sel = div.querySelector('select') as HTMLSelectElement;
+        const sel = div.querySelector('select');
         if (!sel) return;
 
         const slot = sel.dataset.id;
         const vals = getSelectValues(sel);
 
         try {
+            requireItemPerm(slot || '', 'EDIT_META', 'manage slot roles', 'ITEM_EDIT');
             await post(`/api/activity/${planId}/slot/${slot}/addRole`, { roles: vals });
             showInlineAlert('success', 'Updated');
             reloadAfterDelay(120);
         } catch (err) {
-            // @ts-expect-error TS(2571): Object is of type 'unknown'
-            showInlineAlert('error', err.message);
+            const message = err instanceof Error ? err.message : 'Unable to update roles for this slot.';
+            showInlineAlert('error', message);
         }
     });
 }
@@ -99,7 +103,11 @@ function initInlineEdit(): void {
         if (!target) return;
         
         const desc = target.closest('[data-edit="planDescription"]');
-        if (desc) return startInlineEditArea(desc, `/api/activity/${planId}/description`);
+        if (desc) return startInlineEditArea(desc, `/api/activity/${planId}/description`, {
+            scope: 'entity',
+            key: 'EDIT_DESC',
+            action: 'edit activity descriptions'
+        });
 
         const card = target.closest('.slot');
         if (!card || target.closest('button')) return;
@@ -135,6 +143,7 @@ function initDelete(): void {
 
         const id = (btn as HTMLElement).dataset.slotid;
         try {
+            requireItemPerm(id || '', 'ITEM_DELETE', 'delete slots', 'ITEM_DELETE');
             await post(`/api/activity/${planId}/slot/${id}/delete`, {});
             showInlineAlert('success', 'Deleted');
             reloadAfterDelay(100);
@@ -152,8 +161,7 @@ function initAddSlot(): void {
     const planId = getActivityPlanId();
 
     document.addEventListener('click', (e: Event) => {
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        const btn = e.target.closest('[data-add-slot]');
+        const btn = (e.target as Element | null)?.closest('[data-add-slot]');
         if (!btn) return;
 
         // hide button, replace by small inline form
@@ -198,6 +206,7 @@ function initAddSlot(): void {
 
         save.onclick = async () => {
             try {
+                requireEntityPerm('ITEM_ADD', 'add slots');
                 await post(`/api/activity/${planId}/slot/add`, {
                     date: dateISO,
                     title: title.value.trim(),
@@ -207,8 +216,8 @@ function initAddSlot(): void {
                 showInlineAlert('success', 'Added');
                 reloadAfterDelay(100);
             } catch (err) {
-                // @ts-expect-error TS(2571): Object is of type 'unknown'
-                showInlineAlert('error', err.message);
+                const message = err instanceof Error ? err.message : 'Unable to add the slot.';
+                showInlineAlert('error', message);
             }
         };
     });
@@ -219,6 +228,14 @@ function initAddSlot(): void {
  */
 function initDnD(): void {
     const planId = getActivityPlanId();
+
+    try {
+        requireEntityPerm('ITEM_EDIT', 'reorder slots');
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Reordering is not allowed.';
+        showInlineAlert('error', message);
+        return;
+    }
 
     initCardReorder({
         containerClass: 'slot-container',
@@ -235,17 +252,22 @@ function initDnD(): void {
  * Initialize date display formatting
  */
 function initDates(): void {
-    document.querySelectorAll('th[data-date]').forEach(th => {
-        // @ts-expect-error TS(2339): Property 'dataset' does not exist
-        const [y, m, day] = th.dataset.date.split('-').map(Number);
+    document.querySelectorAll('th[data-date]').forEach(el => {
+        const th = el as HTMLElement;
+        const dateValue = th.dataset.date;
+        if (!dateValue) return;
+        const [y, m, day] = dateValue.split('-').map(Number);
         const d = new Date(Date.UTC(y, m - 1, day));
 
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        th.querySelector('.day').textContent =
-            d.toLocaleDateString(undefined, { weekday: 'short' });
+        const dayEl = th.querySelector('.day');
+        if (dayEl) {
+            dayEl.textContent = d.toLocaleDateString(undefined, { weekday: 'short' });
+        }
 
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        th.querySelector('.date').textContent = d.toLocaleDateString();
+        const dateEl = th.querySelector('.date');
+        if (dateEl) {
+            dateEl.textContent = d.toLocaleDateString();
+        }
     });
 }
 
@@ -265,12 +287,7 @@ export function init(): void {
         initAddSlot();
         initDnD();
 
-        // Initialize owner operations
-        initOwnerFlags({
-            baseUrl: `/activity/${planId}`,
-        });
-
-        initOwnerRemove({
+        initAssignmentRemoval({
             baseUrl: `/activity/${planId}`,
         });
     }

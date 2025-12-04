@@ -175,6 +175,22 @@ The CI pipeline automatically:
 - `npm run typeorm` - Run TypeORM migrations
 - `npm run generate` - Generate database indexes
 
+## Frontend Architecture
+
+The frontend uses modular TypeScript organized under `src/public/js/` with reusable building blocks:
+
+- **core/** – foundational utilities (HTTP client, navigation helpers, form utilities, formatting, permission loader).
+- **shared/** – UI behaviors shared across pages (alerts, drag-and-drop, assignment helpers, inline editing, list actions, UI helpers).
+- **modules/** – feature-specific widgets (e.g., timezone-select, entity-select) composed from core/shared pieces.
+- **feature files** – page-level scripts such as `activity.ts`, `packing.ts`, and `events.ts` that orchestrate DOM bindings using the shared helpers.
+
+When adding or updating frontend code:
+
+- Reuse the core and shared helpers instead of re-implementing HTTP, drag-and-drop, inline editing, or permission checks.
+- Load permissions with `loadPerms()` and gate UI actions using `requireEntityPerm`/`requireItemPerm` before calling protected endpoints.
+- Keep new components documented with JSDoc comments and prefer type-safe DOM queries (`querySelector`/`closest` with element type casting) over `any`.
+- Expose initialization via `window.Surveyor.init` for consistent page bootstrapping.
+
 ## Project Structure
 
 - `src/` - Application source code

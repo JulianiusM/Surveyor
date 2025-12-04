@@ -4,11 +4,17 @@
  */
 
 import { setCurrentNavLocation, initEntityLists } from './core/navigation';
-import { loadPerms } from './core/permissions';
+import { loadPerms, requireEntityPerm, requireEntityPermsForForm } from './core/permissions';
 import { post } from './core/http';
 import { showInlineAlert } from './shared/alerts';
 import { formatISOInTimeZone } from './core/formatting';
 import { parseJsonScript, reloadAfterDelay, formatDuration, updateToLocalString } from './shared/ui-helpers';
+
+declare global {
+    interface Window {
+        EVENT_ID?: string;
+    }
+}
 
 /**
  * Reload delay constant
@@ -18,15 +24,18 @@ const RELOAD_DELAY_MS = 120;
 const participantsData = parseJsonScript<any[]>("participantsData") || [];
 const registrationData = parseJsonScript<{ id: number }>("registrationData");
 
+function getEventId(): string {
+    return window.EVENT_ID ?? '';
+}
+
 /**
  * Sync allergy notes requirement with checkbox
  */
 export function allergyCheck(): void {
     const allergyBox = document.getElementById('diet-allergies');
     const notes = document.getElementById('allergyNotes');
-    if (allergyBox && notes) {
+    if (allergyBox instanceof HTMLInputElement && notes instanceof HTMLInputElement) {
         function sync() {
-            // @ts-ignore
             notes.required = allergyBox.checked;
         }
         allergyBox.addEventListener('change', sync);
@@ -88,18 +97,17 @@ export function initRegistration(): void {
     form.addEventListener('submit', async (e: Event) => {
         e.preventDefault();
         try {
+            requireEntityPerm('ACCESS_REGISTRATION', 'register for this event');
             const formData = new FormData(form as HTMLFormElement);
-            // @ts-ignore
-            const payload: any = Object.fromEntries(formData);
+            const payload: Record<string, FormDataEntryValue | FormDataEntryValue[]> = Object.fromEntries(formData.entries());
             payload.dietary = formData.getAll('dietary');
-            
-            // @ts-ignore
-            await post(`/api/event/${window.EVENT_ID}/register`, payload);
+
+            await post(`/api/event/${getEventId()}/register`, payload);
             showInlineAlert('success', 'Registration successful.');
             reloadAfterDelay(RELOAD_DELAY_MS);
         } catch (err) {
-            // @ts-expect-error TS(2571): Object is of type 'unknown'
-            showInlineAlert('error', err.message);
+            const message = err instanceof Error ? err.message : 'Registration failed.';
+            showInlineAlert('error', message);
         }
     });
 }
@@ -119,13 +127,24 @@ export function initUpdate(): void {
             if (checkbox) {
                 formData.set(checkbox.name, checkbox.checked ? 'on' : 'off');
             }
-            // @ts-ignore
-            await post(`/api/event/${EVENT_ID}/update`, Object.fromEntries(formData));
+
+            requireEntityPermsForForm(formData, [
+                {
+                    fields: ['location', 'startDate', 'endDate', 'deadlineTz'],
+                    perm: 'EDIT_META',
+                    action: 'update event metadata'
+                },
+                { fields: ['title'], perm: 'EDIT_TITLE', action: 'update the event title' },
+                { fields: ['description'], perm: 'EDIT_DESC', action: 'update the description' },
+                { fields: ['requireDietaryInfo'], perm: 'MANAGE_REQUIREMENTS', action: 'change dietary settings' },
+                { fields: ['maxParticipants'], perm: 'EDIT_CAPACITY', action: 'change participant limits' },
+            ]);
+            await post(`/api/event/${getEventId()}/update`, Object.fromEntries(formData.entries()));
             showInlineAlert('success', 'Updated');
             reloadAfterDelay(RELOAD_DELAY_MS);
         } catch (err) {
-            // @ts-expect-error TS(2571): Object is of type 'unknown'
-            showInlineAlert('error', err.message);
+            const message = err instanceof Error ? err.message : 'Failed to update the event.';
+            showInlineAlert('error', message);
         }
     });
 }
@@ -140,13 +159,15 @@ export function initCancelRegistration(): void {
     btn.addEventListener('click', async () => {
         if (window.confirm("Are you sure you want to cancel your registration?")) {
             try {
-                // @ts-ignore
-                await post(`/api/event/${EVENT_ID}/register/delete`);
+                if (!registrationData?.id) {
+                    throw new Error('Only registered participants can cancel their registration.');
+                }
+                await post(`/api/event/${getEventId()}/register/delete`);
                 showInlineAlert('success', 'Registration cancelled!');
                 reloadAfterDelay(RELOAD_DELAY_MS);
             } catch (err) {
-                // @ts-expect-error TS(2571): Object is of type 'unknown'
-                showInlineAlert('error', err.message);
+                const message = err instanceof Error ? err.message : 'Cancellation failed.';
+                showInlineAlert('error', message);
             }
         }
     });
@@ -191,6 +212,10 @@ function serializeForm(form: HTMLFormElement): Record<string, any> {
     return payload;
 }
 
+function requireManageAssignments(action: string): void {
+    requireEntityPerm('MANAGE_ASSIGNMENTS', action);
+}
+
 /**
  * Initialize invoice pool administration
  */
@@ -200,6 +225,7 @@ export function initInvoiceAdmin(): void {
         poolForm.addEventListener('submit', async (e: Event) => {
             e.preventDefault();
             try {
+                requireManageAssignments('manage invoice pools');
                 const payload = serializeForm(poolForm as HTMLFormElement);
                 const checkbox = poolForm.querySelector('#assignAllPools') as HTMLInputElement | null;
                 if (checkbox) payload.assignAll = checkbox.checked ? 'on' : '';
@@ -231,27 +257,32 @@ export function initInvoiceAdmin(): void {
     document.addEventListener('click', async (e: Event) => {
         const target = e.target as HTMLElement;
         if (target.classList.contains('invoice-approve')) {
-            await post(`/api/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/approve`);
+            requireManageAssignments('approve invoices');
+            await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/approve`);
             showInlineAlert('success', 'Invoice approved');
             return reloadAfterDelay(RELOAD_DELAY_MS);
         }
         if (target.classList.contains('invoice-decline')) {
-            await post(`/api/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/decline`);
+            requireManageAssignments('decline invoices');
+            await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/decline`);
             showInlineAlert('info', 'Invoice declined');
             return reloadAfterDelay(RELOAD_DELAY_MS);
         }
         if (target.classList.contains('invoice-close')) {
-            await post(`/api/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/close`);
+            requireManageAssignments('close invoices');
+            await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/close`);
             showInlineAlert('success', 'Invoice closed');
             return reloadAfterDelay(RELOAD_DELAY_MS);
         }
         if (target.classList.contains('pool-close')) {
-            await post(`/api/event/${EVENT_ID}/invoice-pools/${target.dataset.id}/close`);
+            requireManageAssignments('close invoice pools');
+            await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.id}/close`);
             showInlineAlert('success', 'Pool closed with adjustments');
             return reloadAfterDelay(RELOAD_DELAY_MS);
         }
         if (target.classList.contains('surcharge-remove')) {
-            await post(`/api/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/surcharges/${target.dataset.id}/delete`);
+            requireManageAssignments('remove surcharges');
+            await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/surcharges/${target.dataset.id}/delete`);
             showInlineAlert('info', 'Surcharge removed');
             return reloadAfterDelay(RELOAD_DELAY_MS);
         }
@@ -267,12 +298,13 @@ export function initInvoiceAdmin(): void {
             const payload = Object.fromEntries(formData.entries());
             payload.registrations = formData.getAll('registrations');
             try {
+                requireManageAssignments('update pool assignments');
                 await post(api, payload);
                 showInlineAlert('success', 'Assignments updated');
                 reloadAfterDelay(RELOAD_DELAY_MS);
             } catch (err) {
-                // @ts-expect-error
-                showInlineAlert('error', err.message);
+                const message = err instanceof Error ? err.message : 'Unable to update assignments.';
+                showInlineAlert('error', message);
             }
         }
         if (target.classList.contains('surcharge-form')) {
@@ -280,12 +312,13 @@ export function initInvoiceAdmin(): void {
             const api = (target as HTMLElement).getAttribute('data-api')!;
             const payload = Object.fromEntries(new FormData(target as HTMLFormElement).entries());
             try {
+                requireManageAssignments('add surcharges');
                 await post(api, payload);
                 showInlineAlert('success', 'Surcharge added');
                 reloadAfterDelay(RELOAD_DELAY_MS);
             } catch (err) {
-                // @ts-expect-error
-                showInlineAlert('error', err.message);
+                const message = err instanceof Error ? err.message : 'Unable to add the surcharge.';
+                showInlineAlert('error', message);
             }
         }
     });
@@ -308,6 +341,7 @@ export function initInvoiceAdmin(): void {
         const target = e.target as HTMLElement;
         if (target.classList.contains('share-paid')) {
             const checked = (target as HTMLInputElement).checked;
+            requireManageAssignments('mark shares paid');
             await post(`/api/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/shares/${target.dataset.id}/pay`, {
                 isPaid: checked ? 'on' : ''
             });
@@ -383,6 +417,7 @@ function initTakeoverModal(): void {
         activeMode = (btn.getAttribute('data-mode') as 'admin' | 'participant') || 'participant';
         if (payerWrapper) payerWrapper.classList.toggle('d-none', activeMode === 'participant');
         if (activeMode === 'admin' && payerSelect) {
+            requireManageAssignments('manage takeovers');
             payerSelect.innerHTML = '';
             assignedIds.forEach((id) => {
                 const participant = participantsData.find((p) => p.id === id);
@@ -410,15 +445,15 @@ function initTakeoverModal(): void {
         const payload: Record<string, any> = { beneficiaries };
         if (activeMode === 'admin' && payerSelect) payload.payerId = payerSelect.value;
         const endpoint = activeMode === 'admin'
-            ? `/event/${EVENT_ID}/invoice-pools/${activePoolId}/takeovers/manage`
-            : `/event/${EVENT_ID}/invoice-pools/${activePoolId}/takeovers`;
+            ? `/event/${getEventId()}/invoice-pools/${activePoolId}/takeovers/manage`
+            : `/event/${getEventId()}/invoice-pools/${activePoolId}/takeovers`;
         try {
             await post(endpoint, payload);
             showInlineAlert('success', 'Takeovers updated');
             reloadAfterDelay(RELOAD_DELAY_MS);
         } catch (err) {
-            // @ts-expect-error
-            showInlineAlert('error', err.message);
+            const message = err instanceof Error ? err.message : 'Unable to update takeovers.';
+            showInlineAlert('error', message);
         }
     });
 }
@@ -434,14 +469,17 @@ export function initInvoiceSubmission(): void {
         const poolSelect = document.getElementById('invoicePool') as HTMLSelectElement | null;
         const poolId = poolSelect?.value;
         try {
+            if (!registrationData?.id) {
+                throw new Error('You must be registered for the event to submit invoices.');
+            }
             const formData = new FormData(form as HTMLFormElement);
-            const endpoint = `/event/${EVENT_ID}/invoice-pools/${poolId}/submit`;
+            const endpoint = `/event/${getEventId()}/invoice-pools/${poolId}/submit`;
             await post(endpoint, formData);
             showInlineAlert('success', 'Invoice submitted');
             reloadAfterDelay(RELOAD_DELAY_MS);
         } catch (err) {
-            // @ts-expect-error
-            showInlineAlert('error', err.message);
+            const message = err instanceof Error ? err.message : 'Invoice submission failed.';
+            showInlineAlert('error', message);
         }
     });
 }
@@ -462,8 +500,7 @@ export function init(): void {
     initInvoiceAdmin();
     initInvoiceSubmission();
 
-    // @ts-expect-error TS(2339): Property 'PACK_LIST_ID' does not exist
-    if (window.EVENT_ID) {
+    if (getEventId()) {
         initRegistration();
         initCancelRegistration();
         initUpdate();

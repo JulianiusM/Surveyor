@@ -142,8 +142,8 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
                 id = await createEntity(req.session.user!.id, parsed);
                 await afterCreateItems(id, parsed);
             } catch (e) {
-                // @ts-expect-error TS(2571): Object is of type 'unknown'.
-                throw new ValidationError(create, e.message, parsed);
+                const message = e instanceof Error ? e.message : 'Failed to create the resource.';
+                throw new ValidationError(create, message, parsed);
             }
             req.flash('success', `${entityType} created`);
             res.redirect(buildRedirect(id));

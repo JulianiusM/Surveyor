@@ -6,6 +6,12 @@
 import { setCurrentNavLocation } from './core/navigation';
 import type { PackingItem } from "../../modules/database/entities/packing/PackingItem";
 
+declare global {
+    interface Window {
+        PREFILLED_ITEMS?: Partial<PackingItem>[];
+    }
+}
+
 /**
  * Create a table cell with given content
  * @param child Child element to append
@@ -137,10 +143,8 @@ function createRow(pref: Partial<PackingItem> = {}, rowIdx: number = 0): void {
  * Prefill rows from window data (duplicate mode)
  */
 function prefillRows(): void {
-    // @ts-expect-error TS(2339): Property 'PREFILLED_ITEMS' does not exist
     if (!window.PREFILLED_ITEMS) return;
 
-    // @ts-expect-error TS(2339): Property 'PREFILLED_ITEMS' does not exist
     window.PREFILLED_ITEMS.forEach((it: Partial<PackingItem>, i: number) => createRow(it, i));
 }
 
@@ -158,18 +162,19 @@ function handleSubmit(evt: Event): void {
     const items: Partial<PackingItem>[] = [];
 
     tableBody?.querySelectorAll('tr').forEach(tr => {
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        const tVal = tr.querySelector(`input[name^="t_"]`).value.trim();
+        const titleInput = tr.querySelector<HTMLInputElement>('input[name^="t_"]');
+        const descInput = tr.querySelector<HTMLInputElement>('input[name^="d_"]');
+        const maxInput = tr.querySelector<HTMLInputElement>('input[name^="m_"]');
+        const requiredInput = tr.querySelector<HTMLInputElement>('input[name^="e_"]');
+
+        const tVal = titleInput?.value.trim();
         if (!tVal) return;
-        
+
         items.push({
             title: tVal,
-            // @ts-expect-error TS(2531): Object is possibly 'null'
-            description: tr.querySelector(`input[name^="d_"]`).value.trim(),
-            // @ts-expect-error TS(2531): Object is possibly 'null'
-            maxAssignees: tr.querySelector(`input[name^="m_"]`).value,
-            // @ts-expect-error TS(2531): Object is possibly 'null'
-            requiredByAll: tr.querySelector('input[name^="e_"]').checked
+            description: descInput?.value.trim(),
+            maxAssignees: maxInput?.value,
+            requiredByAll: !!requiredInput?.checked
         });
     });
 
@@ -199,9 +204,8 @@ function initListeners(): void {
 export function init(): void {
     setCurrentNavLocation();
     initListeners();
-    
+
     // Initial row or prefill
-    // @ts-expect-error TS(2339): Property 'PREFILLED_ITEMS' does not exist
     if (window.PREFILLED_ITEMS) {
         prefillRows();
     } else {

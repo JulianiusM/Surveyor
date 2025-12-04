@@ -4,7 +4,7 @@
  */
 
 import { setCurrentNavLocation } from './core/navigation';
-import { loadPerms } from './core/permissions';
+import { loadPerms, requireEntityPerm, requireItemPerm } from './core/permissions';
 import { post } from './core/http';
 import { showInlineAlert } from './shared/alerts';
 import { startInlineEdit, startInlineEditArea } from './shared/inline-edit';
@@ -12,18 +12,22 @@ import { initAssignButtons } from './shared/entity-assign';
 import { initTableReorder } from './shared/drag-drop';
 import { reloadAfterDelay } from './shared/ui-helpers';
 import {
-    initOwnerRemove,
-    initOwnerFlags,
-    initOwnerDeleteItem,
+    initAssignmentRemoval,
+    initItemDeletion,
     initQuickAdd
-} from './shared/owner-operations';
+} from './shared/list-actions';
+
+declare global {
+    interface Window {
+        PACK_LIST_ID?: string;
+    }
+}
 
 /**
  * Get the packing list ID from the window object
  */
 function getPackListId(): string {
-    // @ts-expect-error TS(2339): Property 'PACK_LIST_ID' does not exist
-    return window.PACK_LIST_ID;
+    return window.PACK_LIST_ID ?? '';
 }
 
 /**
@@ -40,7 +44,11 @@ function initInlineEdit(): void {
 
     document.querySelectorAll('[data-edit="planDescription"]').forEach(elem => {
         elem.addEventListener('dblclick', () => {
-            startInlineEditArea(elem as HTMLElement, `/api/packing/${listId}/description`);
+            startInlineEditArea(elem as HTMLElement, `/api/packing/${listId}/description`, {
+                scope: 'entity',
+                key: 'EDIT_DESC',
+                action: 'edit packing list descriptions'
+            });
         });
     });
 }
@@ -52,12 +60,12 @@ function initMarkEveryone(): void {
     const listId = getPackListId();
 
     document.addEventListener('change', async (e: Event) => {
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        const sw = e.target.closest('[data-required-toggle]');
+        const sw = (e.target as Element | null)?.closest('[data-required-toggle]') as HTMLInputElement | null;
         if (!sw) return;
 
         const itemId = sw.dataset.itemid;
         try {
+            requireItemPerm(itemId || '', 'EDIT_META', 'toggle shared requirements', 'ITEM_EDIT');
             await post(`/api/packing/${listId}/item/${itemId}/required`, { flag: sw.checked });
             
             // Visual highlighting
@@ -69,8 +77,8 @@ function initMarkEveryone(): void {
             reloadAfterDelay(100);
         } catch (err) {
             sw.checked = !sw.checked;  // rollback
-            // @ts-expect-error TS(2571): Object is of type 'unknown'
-            showInlineAlert('error', err.message);
+            const message = err instanceof Error ? err.message : 'Unable to update shared requirement.';
+            showInlineAlert('error', message);
         }
     });
 }
@@ -91,8 +99,7 @@ function reorderRequiredRows(): void {
         const bReq = b.classList.contains('table-info') ? 0 : 1;
         if (aReq !== bReq) return aReq - bReq;  // Required first
 
-        // @ts-expect-error TS(2339): Property 'dataset' does not exist
-        return Number(a.dataset.pos) - Number(b.dataset.pos); // Original order
+        return Number((a as HTMLElement).dataset.pos) - Number((b as HTMLElement).dataset.pos); // Original order
     });
     rows.forEach(r => tbody.appendChild(r));
 }
@@ -105,20 +112,21 @@ function initPackedToggle(): void {
     const prefix = `packed_${listId}_`;
 
     document.querySelectorAll('[data-packed]').forEach(cb => {
-        // @ts-expect-error TS(2339): Property 'dataset' does not exist
-        const itemId = cb.dataset.itemid;
-        const row = cb.closest('tr');
+        const checkbox = cb as HTMLInputElement;
+        const itemId = checkbox.dataset.itemid;
+        const row = checkbox.closest('tr');
         const stored = localStorage.getItem(prefix + itemId) === '1';
 
-        if (stored) markPacked(row, cb, true);
+        if (stored && row) markPacked(row, checkbox, true);
 
         cb.addEventListener('change', () => {
-            // @ts-expect-error TS(2339): Property 'checked' does not exist
-            markPacked(row, cb, cb.checked);
+            if (row) {
+                markPacked(row, checkbox, checkbox.checked);
+            }
         });
     });
 
-    function markPacked(row: any, cb: any, packed: boolean): void {
+    function markPacked(row: HTMLTableRowElement, cb: HTMLInputElement, packed: boolean): void {
         const required = row.dataset.required;
         cb.checked = packed;
 
@@ -153,11 +161,17 @@ export function init(): void {
         });
 
         // Initialize drag-and-drop reordering
-        initTableReorder({
-            tbodySelector: 'tbody[data-reorderable]',
-            apiUrl: `/packing/${listId}/reorder`,
-            getItemId: (row) => row.dataset.itemid || '',
-        });
+        try {
+            requireEntityPerm('ITEM_EDIT', 'reorder packing items');
+            initTableReorder({
+                tbodySelector: 'tbody[data-reorderable]',
+                apiUrl: `/packing/${listId}/reorder`,
+                getItemId: (row) => row.dataset.itemid || '',
+            });
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Reordering not permitted.';
+            console.warn(message);
+        }
 
         initInlineEdit();
         
@@ -167,18 +181,13 @@ export function init(): void {
             baseUrl: `/packing/${listId}`,
         });
 
-        // Initialize owner operations
-        initOwnerRemove({
+        initAssignmentRemoval({
             baseUrl: `/packing/${listId}`,
         });
 
         initMarkEveryone();
 
-        initOwnerFlags({
-            baseUrl: `/packing/${listId}`,
-        });
-
-        initOwnerDeleteItem({
+        initItemDeletion({
             baseUrl: `/packing/${listId}`,
             confirmMessage: 'Delete this item permanently?',
             successMessage: 'Item deleted',

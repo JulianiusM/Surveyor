@@ -30,8 +30,7 @@ export function initAssignButtons(config: AssignmentConfig): void {
     const reloadDelay = config.reloadDelay ?? 100;
 
     table.addEventListener('click', async (evt: Event) => {
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        const btn = evt.target.closest('button[data-action]');
+        const btn = (evt.target as Element | null)?.closest('button[data-action]');
         if (!btn) return;
 
         const tr = btn.closest('tr');
@@ -86,8 +85,8 @@ export function initAssignButtons(config: AssignmentConfig): void {
                 `Item ${action === 'assign' ? 'assigned' : 'unassigned'}`);
             setTimeout(() => location.reload(), reloadDelay);
         } catch (e) {
-            // @ts-expect-error TS(2571): Object is of type 'unknown'
-            showInlineAlert('error', e.message);
+            const message = e instanceof Error ? e.message : 'Failed to update assignment.';
+            showInlineAlert('error', message);
         }
     });
 }
