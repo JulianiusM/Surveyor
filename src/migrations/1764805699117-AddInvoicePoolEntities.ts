@@ -5,7 +5,7 @@ export class AddInvoicePoolEntities1764805699117 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<void> {
         // Create event_invoice_pools table
         await queryRunner.query(`
-            CREATE TABLE surveyor.event_invoice_pools (
+            CREATE TABLE IF NOT EXISTS event_invoice_pools (
                 id VARCHAR(36) NOT NULL,
                 event_id VARCHAR(36) NOT NULL,
                 name VARCHAR(255) NOT NULL,
@@ -23,14 +23,14 @@ export class AddInvoicePoolEntities1764805699117 implements MigrationInterface {
                 updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
                 CONSTRAINT fk_event_invoice_pool_event
-                    FOREIGN KEY (event_id) REFERENCES surveyor.events (id)
+                    FOREIGN KEY (event_id) REFERENCES events (id)
                     ON DELETE CASCADE ON UPDATE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         `);
 
         // Create event_invoices table
         await queryRunner.query(`
-            CREATE TABLE surveyor.event_invoices (
+            CREATE TABLE IF NOT EXISTS event_invoices (
                 id INT NOT NULL AUTO_INCREMENT,
                 pool_id VARCHAR(36) NOT NULL,
                 registration_id INT NOT NULL,
@@ -44,34 +44,34 @@ export class AddInvoicePoolEntities1764805699117 implements MigrationInterface {
                 updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
                 CONSTRAINT fk_event_invoice_pool
-                    FOREIGN KEY (pool_id) REFERENCES surveyor.event_invoice_pools (id)
+                    FOREIGN KEY (pool_id) REFERENCES event_invoice_pools (id)
                     ON DELETE CASCADE ON UPDATE CASCADE,
                 CONSTRAINT fk_event_invoice_registration
-                    FOREIGN KEY (registration_id) REFERENCES surveyor.event_registrations (id)
+                    FOREIGN KEY (registration_id) REFERENCES event_registrations (id)
                     ON DELETE CASCADE ON UPDATE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         `);
 
         // Create event_invoice_assignments table
         await queryRunner.query(`
-            CREATE TABLE surveyor.event_invoice_assignments (
+            CREATE TABLE IF NOT EXISTS event_invoice_assignments (
                 id INT NOT NULL AUTO_INCREMENT,
                 pool_id VARCHAR(36) NOT NULL,
                 registration_id INT NOT NULL,
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
                 CONSTRAINT fk_event_invoice_assignment_pool
-                    FOREIGN KEY (pool_id) REFERENCES surveyor.event_invoice_pools (id)
+                    FOREIGN KEY (pool_id) REFERENCES event_invoice_pools (id)
                     ON DELETE CASCADE ON UPDATE CASCADE,
                 CONSTRAINT fk_event_invoice_assignment_registration
-                    FOREIGN KEY (registration_id) REFERENCES surveyor.event_registrations (id)
+                    FOREIGN KEY (registration_id) REFERENCES event_registrations (id)
                     ON DELETE CASCADE ON UPDATE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         `);
 
         // Create event_pool_takeovers table
         await queryRunner.query(`
-            CREATE TABLE surveyor.event_pool_takeovers (
+            CREATE TABLE IF NOT EXISTS event_pool_takeovers (
                 id INT NOT NULL AUTO_INCREMENT,
                 pool_id VARCHAR(36) NOT NULL,
                 payer_registration_id INT NOT NULL,
@@ -80,20 +80,20 @@ export class AddInvoicePoolEntities1764805699117 implements MigrationInterface {
                 PRIMARY KEY (id),
                 UNIQUE INDEX uniq_pool_beneficiary (pool_id, beneficiary_registration_id),
                 CONSTRAINT fk_event_pool_takeover_pool
-                    FOREIGN KEY (pool_id) REFERENCES surveyor.event_invoice_pools (id)
+                    FOREIGN KEY (pool_id) REFERENCES event_invoice_pools (id)
                     ON DELETE CASCADE ON UPDATE CASCADE,
                 CONSTRAINT fk_event_pool_takeover_payer
-                    FOREIGN KEY (payer_registration_id) REFERENCES surveyor.event_registrations (id)
+                    FOREIGN KEY (payer_registration_id) REFERENCES event_registrations (id)
                     ON DELETE CASCADE ON UPDATE CASCADE,
                 CONSTRAINT fk_event_pool_takeover_beneficiary
-                    FOREIGN KEY (beneficiary_registration_id) REFERENCES surveyor.event_registrations (id)
+                    FOREIGN KEY (beneficiary_registration_id) REFERENCES event_registrations (id)
                     ON DELETE CASCADE ON UPDATE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         `);
 
         // Create event_invoice_shares table
         await queryRunner.query(`
-            CREATE TABLE surveyor.event_invoice_shares (
+            CREATE TABLE IF NOT EXISTS event_invoice_shares (
                 id INT NOT NULL AUTO_INCREMENT,
                 pool_id VARCHAR(36) NOT NULL,
                 registration_id INT NOT NULL,
@@ -106,17 +106,17 @@ export class AddInvoicePoolEntities1764805699117 implements MigrationInterface {
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
                 CONSTRAINT fk_event_invoice_share_pool
-                    FOREIGN KEY (pool_id) REFERENCES surveyor.event_invoice_pools (id)
+                    FOREIGN KEY (pool_id) REFERENCES event_invoice_pools (id)
                     ON DELETE CASCADE ON UPDATE CASCADE,
                 CONSTRAINT fk_event_invoice_share_registration
-                    FOREIGN KEY (registration_id) REFERENCES surveyor.event_registrations (id)
+                    FOREIGN KEY (registration_id) REFERENCES event_registrations (id)
                     ON DELETE CASCADE ON UPDATE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         `);
 
         // Create event_invoice_surcharges table
         await queryRunner.query(`
-            CREATE TABLE surveyor.event_invoice_surcharges (
+            CREATE TABLE IF NOT EXISTS event_invoice_surcharges (
                 id INT NOT NULL AUTO_INCREMENT,
                 pool_id VARCHAR(36) NOT NULL,
                 registration_id INT NOT NULL,
@@ -125,22 +125,22 @@ export class AddInvoicePoolEntities1764805699117 implements MigrationInterface {
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
                 CONSTRAINT fk_event_invoice_surcharge_pool
-                    FOREIGN KEY (pool_id) REFERENCES surveyor.event_invoice_pools (id)
+                    FOREIGN KEY (pool_id) REFERENCES event_invoice_pools (id)
                     ON DELETE CASCADE ON UPDATE CASCADE,
                 CONSTRAINT fk_event_invoice_surcharge_registration
-                    FOREIGN KEY (registration_id) REFERENCES surveyor.event_registrations (id)
+                    FOREIGN KEY (registration_id) REFERENCES event_registrations (id)
                     ON DELETE CASCADE ON UPDATE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         `);
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`DROP TABLE IF EXISTS surveyor.event_invoice_surcharges`);
-        await queryRunner.query(`DROP TABLE IF EXISTS surveyor.event_invoice_shares`);
-        await queryRunner.query(`DROP TABLE IF EXISTS surveyor.event_pool_takeovers`);
-        await queryRunner.query(`DROP TABLE IF EXISTS surveyor.event_invoice_assignments`);
-        await queryRunner.query(`DROP TABLE IF EXISTS surveyor.event_invoices`);
-        await queryRunner.query(`DROP TABLE IF EXISTS surveyor.event_invoice_pools`);
+        await queryRunner.query(`DROP TABLE IF EXISTS event_invoice_surcharges`);
+        await queryRunner.query(`DROP TABLE IF EXISTS event_invoice_shares`);
+        await queryRunner.query(`DROP TABLE IF EXISTS event_pool_takeovers`);
+        await queryRunner.query(`DROP TABLE IF EXISTS event_invoice_assignments`);
+        await queryRunner.query(`DROP TABLE IF EXISTS event_invoices`);
+        await queryRunner.query(`DROP TABLE IF EXISTS event_invoice_pools`);
     }
 
 }
