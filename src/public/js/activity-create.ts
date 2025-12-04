@@ -4,6 +4,7 @@
  */
 
 import { setCurrentNavLocation } from './core/navigation';
+import { loadPerms } from './core/permissions';
 import type { ActivitySlot } from "../../modules/database/entities/activity/ActivitySlot";
 
 /**
@@ -361,6 +362,7 @@ export function initSlotDnD(): void {
  */
 export function init(): void {
     setCurrentNavLocation();
+    loadPerms();
     initListeners();
     initSubmitHandler();
     // initSlotDnD(); // Uncomment to enable drag-and-drop

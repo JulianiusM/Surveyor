@@ -4,6 +4,7 @@
  */
 
 import { setCurrentNavLocation } from './core/navigation';
+import { loadPerms } from './core/permissions';
 import type { PackingItem } from "../../modules/database/entities/packing/PackingItem";
 
 declare global {
@@ -203,6 +204,7 @@ function initListeners(): void {
  */
 export function init(): void {
     setCurrentNavLocation();
+    loadPerms();
     initListeners();
 
     // Initial row or prefill

@@ -4,6 +4,7 @@
  */
 
 import { setCurrentNavLocation } from './core/navigation';
+import { loadPerms } from './core/permissions';
 import type { DriversItem } from "../../modules/database/entities/drivers/DriversItem";
 
 /**
@@ -52,6 +53,7 @@ function initListeners(): void {
  */
 export function init(): void {
     setCurrentNavLocation();
+    loadPerms();
     initListeners();
 }
 

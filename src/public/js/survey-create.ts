@@ -4,6 +4,7 @@
  */
 
 import { setCurrentNavLocation } from './core/navigation';
+import { loadPerms } from './core/permissions';
 
 declare global {
     interface Window {
@@ -168,6 +169,7 @@ function initButtons(): void {
  */
 export function init(): void {
     setCurrentNavLocation();
+    loadPerms();
     initButtons();
 }
 
