@@ -1,74 +1,62 @@
-// src/public/js/admin-matrix.ts
-import {showInlineAlert} from "./module_functions";
+/**
+ * Admin matrix module - user permission management
+ * Handles admin permission matrix UI and operations
+ */
 
-function qs<T extends Element>(sel: string, scope: ParentNode | Document = document): T | null {
-    return scope.querySelector(sel) as T | null;
-}
+import { showInlineAlert } from "./module_functions";
+import { qs, qsAll } from '../core/dom';
+import { http } from '../core/http';
+import { showSpinner, hideSpinner } from '../shared/ui-helpers';
 
-function qsAll<T extends Element>(sel: string, scope: ParentNode | Document = document): T[] {
-    return Array.from(scope.querySelectorAll(sel)) as T[];
-}
-
+/**
+ * Get the admin card container for an element
+ */
 function cardFor(el: Element): HTMLElement | null {
     return el.closest('.admin-card') as HTMLElement | null;
 }
 
+/**
+ * Get the admin matrix container for an element
+ */
 function matrixFor(el: Element): HTMLElement | null {
     return el.closest('.admin-matrix') as HTMLElement | null;
 }
 
+/**
+ * Get all permission checkboxes in a scope
+ */
 function permBoxes(scope: ParentNode): HTMLInputElement[] {
     return qsAll<HTMLInputElement>('input.perm-box', scope);
 }
 
+/**
+ * Collect checked permission keys from a scope
+ */
 function collectKeys(scope: ParentNode): string[] {
     return permBoxes(scope).filter(cb => cb.checked).map(cb => cb.value);
 }
 
-async function http(method: string, url: string, body?: any) {
-    const res = await fetch(url, {
-        method,
-        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-        body: body ? JSON.stringify(body) : undefined,
-        credentials: 'same-origin',
-    });
-    const text = await res.text();
-    let data: any = null;
-    try {
-        data = text ? JSON.parse(text) : null;
-    } catch {
-    }
-    if (!res.ok) {
-        const msg = (data && (data.message || data.error)) || `HTTP ${res.status}`;
-        throw new Error(msg);
-    }
-    return data;
-}
-
-function setAll(scope: ParentNode, value: boolean) {
+/**
+ * Set all permission checkboxes to a value
+ */
+function setAll(scope: ParentNode, value: boolean): void {
     permBoxes(scope).forEach(cb => (cb.checked = value));
 }
 
-function applyMask(scope: ParentNode, mask: number) {
+/**
+ * Apply a permission mask to checkboxes
+ */
+function applyMask(scope: ParentNode, mask: number): void {
     permBoxes(scope).forEach(cb => {
         const bit = Number(cb.dataset.bit ?? 0);
         cb.checked = (mask & bit) === bit;
     });
 }
 
-function spinnerOn(btn: HTMLButtonElement) {
-    btn.disabled = true;
-    const sp = btn.querySelector('.spinner-border') as HTMLElement | null;
-    if (sp) sp.classList.remove('d-none');
-}
-
-function spinnerOff(btn: HTMLButtonElement) {
-    btn.disabled = false;
-    const sp = btn.querySelector('.spinner-border') as HTMLElement | null;
-    if (sp) sp.classList.add('d-none');
-}
-
-async function handleUpdate(btn: HTMLButtonElement) {
+/**
+ * Handle permission update for a user
+ */
+async function handleUpdate(btn: HTMLButtonElement): Promise<void> {
     const card = cardFor(btn);
     if (!card) return;
     const matrix = matrixFor(btn);
@@ -77,21 +65,24 @@ async function handleUpdate(btn: HTMLButtonElement) {
     const base = matrix.dataset.apiUpdate!;
     const url = `${base}/${encodeURIComponent(userId)}`;
 
-    spinnerOn(btn);
+    showSpinner(btn);
     try {
         const perms = collectKeys(card);
         await http('PATCH', url, {perms}); // backend should map keys → mask
         showInlineAlert('success', 'Permissions updated');
         setTimeout(() => location.reload(), 1000);
     } catch (err) {
-        // @ts-expect-error TS(2571): Object is of type 'unknown'.
-        showInlineAlert('error', err.message);
+        const error = err as Error;
+        showInlineAlert('error', error.message);
     } finally {
-        spinnerOff(btn);
+        hideSpinner(btn);
     }
 }
 
-async function handleRemove(btn: HTMLButtonElement) {
+/**
+ * Handle removing an administrator
+ */
+async function handleRemove(btn: HTMLButtonElement): Promise<void> {
     const card = cardFor(btn);
     if (!card) return;
     const matrix = matrixFor(btn);
@@ -102,17 +93,17 @@ async function handleRemove(btn: HTMLButtonElement) {
 
     if (!confirm('Remove this administrator?')) return;
 
-    spinnerOn(btn);
+    showSpinner(btn);
     try {
         await http('DELETE', url);
         card.remove();
         showInlineAlert('success', 'Admin removed');
         setTimeout(() => location.reload(), 1000);
     } catch (err) {
-        // @ts-expect-error TS(2571): Object is of type 'unknown'.
-        showInlineAlert('error', err.message);
+        const error = err as Error;
+        showInlineAlert('error', error.message);
     } finally {
-        spinnerOff(btn);
+        hideSpinner(btn);
     }
 }
 
@@ -155,7 +146,10 @@ function initTypeahead(modalRoot: HTMLElement) {
     });
 }
 
-async function handleAdd(btn: HTMLButtonElement) {
+/**
+ * Handle adding a new administrator
+ */
+async function handleAdd(btn: HTMLButtonElement): Promise<void> {
     const modalSel = btn.dataset.modal!;
     const modal = qs<HTMLElement>(modalSel)!;
     const matrix = matrixFor(btn)!;
@@ -174,17 +168,17 @@ async function handleAdd(btn: HTMLButtonElement) {
     const payload: any = {userId: /^\d+$/.test(userId) ? Number(userId) : userId};
     if (presetSel && presetSel.value) payload.preset = presetSel.value;
 
-    spinnerOn(btn);
+    showSpinner(btn);
     try {
         await http('POST', api, payload);
 
         showInlineAlert('success', 'Admin added');
         setTimeout(() => location.reload(), 1000);
     } catch (err) {
-        // @ts-expect-error TS(2571): Object is of type 'unknown'.
-        showInlineAlert('error', err.message);
+        const error = err as Error;
+        showInlineAlert('error', error.message);
     } finally {
-        spinnerOff(btn);
+        hideSpinner(btn);
     }
 }
 

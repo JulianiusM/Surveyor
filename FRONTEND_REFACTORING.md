@@ -26,12 +26,13 @@ src/public/js/
 │   ├── password-validation.ts  # Password strength validation
 │   └── permissions.ts      # Permission loading and checking
 │
-├── shared/                  # Shared UI components (5 modules)
+├── shared/                  # Shared UI components (6 modules)
 │   ├── alerts.ts           # Inline alert/notification system
 │   ├── drag-drop.ts        # Drag-and-drop reordering
 │   ├── entity-assign.ts    # Assignment/unassignment logic
 │   ├── inline-edit.ts      # Reusable inline editing
-│   └── owner-operations.ts # Owner-specific operations
+│   ├── owner-operations.ts # Owner-specific operations
+│   └── ui-helpers.ts       # UI helper functions (badges, spinners, clipboard)
 │
 ├── modules/                 # Feature-specific modules
 │   ├── admin-matrix.ts

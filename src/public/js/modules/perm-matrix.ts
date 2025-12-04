@@ -1,9 +1,10 @@
-// src/public/js/perm-matrix.ts
-import {post, showInlineAlert} from "./module_functions";
+/**
+ * Permission matrix module - entity permission management
+ * Handles permission matrix UI for entities with audience-based permissions
+ */
 
-function qsAll<T extends Element>(sel: string, scope: ParentNode = document): T[] {
-    return Array.from(scope.querySelectorAll(sel)) as T[];
-}
+import { post, showInlineAlert } from "./module_functions";
+import { qsAll } from '../core/dom';
 
 // Find the matrix root that contains the clicked control
 function matrixRootFor(el: Element): HTMLElement | null {
