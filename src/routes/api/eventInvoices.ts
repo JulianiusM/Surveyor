@@ -23,7 +23,7 @@ const proofStorage = multer.diskStorage({
         const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.pdf'];
         const ext = path.extname(file.originalname).toLowerCase();
         if (!allowedExts.includes(ext)) {
-            return cb(new Error('Invalid file extension'), file.originalname);
+            return cb(new Error('Invalid file extension'), '');
         }
         cb(null, `${Date.now()}-${uuidv4()}${ext}`);
     },
