@@ -5,8 +5,8 @@
 
 import { showInlineAlert } from "./module_functions";
 import { qs, qsAll } from '../core/dom';
-import { http } from '../core/http';
-import { showSpinner, hideSpinner, reloadAfterDelay, confirmAction } from '../shared/ui-helpers';
+import { patch, del } from '../core/http';
+import { showSpinner, hideSpinner, reloadAfterDelay } from '../shared/ui-helpers';
 
 /**
  * Get the admin card container for an element
@@ -68,7 +68,7 @@ async function handleUpdate(btn: HTMLButtonElement): Promise<void> {
     showSpinner(btn);
     try {
         const perms = collectKeys(card);
-        await http('PATCH', url, {perms}); // backend should map keys → mask
+        await patch(url, {perms});
         showInlineAlert('success', 'Permissions updated');
         reloadAfterDelay(1000);
     } catch (err) {
@@ -91,11 +91,11 @@ async function handleRemove(btn: HTMLButtonElement): Promise<void> {
     const base = matrix.dataset.apiRemove!;
     const url = `${base}/${encodeURIComponent(userId)}`;
 
-    if (!confirmAction('Remove this administrator?')) return;
+    if (!confirm('Remove this administrator?')) return;
 
     showSpinner(btn);
     try {
-        await http('DELETE', url);
+        await del(url);
         card.remove();
         showInlineAlert('success', 'Admin removed');
         reloadAfterDelay(1000);
@@ -160,7 +160,7 @@ async function handleAdd(btn: HTMLButtonElement): Promise<void> {
     const userId = hiddenId.value || input.value.trim();
 
     if (!userId) {
-        alert('Please select a user');
+        showInlineAlert('error', 'Please select a user');
         return;
     }
 

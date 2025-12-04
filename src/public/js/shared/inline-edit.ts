@@ -141,10 +141,17 @@ export function startInlineEdit(elem: HTMLElement, baseUrl: string): void {
     }
 
     async function rollback(val?: string): Promise<void> {
-        if (isTd && field === 'maxAssignees')
-            elem.innerHTML = `<span data-count>${countTxt}</span> / <span data-max>${val}</span>`;
-        else
+        if (isTd && field === 'maxAssignees') {
+            const countSpan = elem.querySelector('[data-count]');
+            const maxSpan = elem.querySelector('[data-max]');
+            if (countSpan && maxSpan) {
+                maxSpan.textContent = val || '';
+            } else {
+                elem.innerHTML = `<span data-count>${countTxt}</span> / <span data-max>${val}</span>`;
+            }
+        } else {
             elem.textContent = val || '';
+        }
         enableDnD();
     }
 

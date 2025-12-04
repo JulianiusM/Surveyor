@@ -81,3 +81,25 @@ export function formatISOInTimeZone(date: Date, timeZone: string): string {
     // Compose ISO-like string
     return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}${offset}`;
 }
+
+/**
+ * Format date as ISO string (YYYY-MM-DD)
+ * @param date Date object
+ * @returns ISO formatted date string
+ */
+export function formatISODate(date: Date): string {
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(date.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+/**
+ * Convert ISO date string to Date object
+ * @param val ISO date string (YYYY-MM-DD)
+ * @returns Date object
+ */
+export function parseISODate(val: string): Date {
+    const [y, m, d] = val.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d));
+}

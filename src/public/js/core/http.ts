@@ -65,3 +65,13 @@ export async function get(url: string): Promise<any> {
 export async function del(url: string, body?: any): Promise<any> {
     return http('DELETE', url, body);
 }
+
+/**
+ * Make a PATCH request
+ * @param url Request URL (can include /api prefix or be relative)
+ * @param payload Request payload
+ * @returns Response data
+ */
+export async function patch(url: string, payload: any = {}): Promise<any> {
+    return http('PATCH', url, payload);
+}

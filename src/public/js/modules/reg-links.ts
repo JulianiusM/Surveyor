@@ -6,7 +6,7 @@
 import { qs, qsAll } from '../core/dom';
 import { http } from '../core/http';
 import { formatDateTime } from '../core/formatting';
-import { createBadge, showSpinner, hideSpinner, copyWithFeedback, reloadAfterDelay, confirmAction } from '../shared/ui-helpers';
+import { createBadge, showSpinner, hideSpinner, copyWithFeedback, reloadAfterDelay } from '../shared/ui-helpers';
 import { showInlineAlert } from '../shared/alerts';
 
 /**
@@ -106,7 +106,7 @@ async function handleCreate(btn: HTMLButtonElement): Promise<void> {
         window.bootstrap?.Modal.getOrCreateInstance(modal)?.hide();
         await refreshList(root);
     } catch (e: any) {
-        alert(`Create failed: ${e?.message || e}`);
+        showInlineAlert('error', `Create failed: ${e?.message || e}`);
     } finally {
         hideSpinner(btn);
     }
@@ -121,7 +121,7 @@ async function handleRevoke(btn: HTMLButtonElement): Promise<void> {
     const root = btn.closest('.reg-links') as HTMLElement;
     const id = tr.dataset.id!;
     const api = root.dataset.apiRevoke!;
-    if (!confirmAction('Revoke this link? It cannot be used afterwards.')) return;
+    if (!confirm('Revoke this link? It cannot be used afterwards.')) return;
 
     showSpinner(btn);
     try {

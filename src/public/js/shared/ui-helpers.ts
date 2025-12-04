@@ -23,7 +23,7 @@ export function createBadge(status: string, colorMap?: Record<string, string>): 
     
     const map = colorMap || defaultMap;
     const cls = map[status.toLowerCase()] || 'secondary';
-    return `<span class="badge bg-${cls} text-uppercase">${status}</span>`;
+    return `<span class="badge text-bg-${cls} text-uppercase">${status}</span>`;
 }
 
 /**
@@ -89,13 +89,35 @@ export function reloadAfterDelay(delayMs: number = 100): void {
     setTimeout(() => location.reload(), delayMs);
 }
 
+
+
 /**
- * Show confirmation dialog
- * @param message Confirmation message
- * @returns True if confirmed, false otherwise
+ * Update element text content to localized date string
+ * @param element Element to update
+ * @param date Date object or date string
+ * @param options Intl.DateTimeFormatOptions (default: { dateStyle: "full" })
  */
-export function confirmAction(message: string): boolean {
-    return confirm(message);
+export function updateToLocalString(
+    element: HTMLElement,
+    date: Date | string,
+    options: Intl.DateTimeFormatOptions = { dateStyle: "full" }
+): void {
+    const dateObj = typeof date === 'string' ? new Date(Date.parse(date)) : date;
+    element.textContent = dateObj.toLocaleString(undefined, options);
+}
+
+/**
+ * Format milliseconds as human-readable duration
+ * @param ms Milliseconds
+ * @returns Formatted duration string (e.g., "2d 3h 45m")
+ */
+export function formatDuration(ms: number): string {
+    if (ms <= 0) return "closed";
+    const s = Math.floor(ms / 1000);
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return `${d}d ${h}h ${m}m`;
 }
 
 /**

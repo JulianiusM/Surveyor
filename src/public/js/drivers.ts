@@ -31,13 +31,13 @@ function initInlineEdit(): void {
 
     document.querySelectorAll('td[data-edit]').forEach(td => {
         td.addEventListener('dblclick', () => {
-            startInlineEdit(td as HTMLElement, `/drivers/${listId}/item`);
+            startInlineEdit(td as HTMLElement, `/api/drivers/${listId}/item`);
         });
     });
 
     document.querySelectorAll('[data-edit="planDescription"]').forEach(elem => {
         elem.addEventListener('dblclick', () => {
-            startInlineEditArea(elem as HTMLElement, `/drivers/${listId}/description`);
+            startInlineEditArea(elem as HTMLElement, `/api/drivers/${listId}/description`);
         });
     });
 }

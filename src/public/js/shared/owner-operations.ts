@@ -5,7 +5,7 @@
 
 import { post } from '../core/http';
 import { showInlineAlert } from './alerts';
-import { reloadAfterDelay, confirmAction } from './ui-helpers';
+import { reloadAfterDelay } from './ui-helpers';
 
 /**
  * Configuration for owner remove functionality
@@ -33,10 +33,10 @@ export function initOwnerRemove(config: OwnerRemoveConfig): void {
         try {
             await post(`${config.baseUrl}/assignment/${assignId}/delete`, {});
             showInlineAlert('success', 'Removed');
-            setTimeout(() => location.reload(), reloadDelay);
+            reloadAfterDelay(reloadDelay);
         } catch (err) {
-            // @ts-expect-error TS(2571): Object is of type 'unknown'
-            showInlineAlert('error', err.message);
+            const error = err as Error;
+            showInlineAlert('error', error.message);
         }
     });
 }
@@ -119,10 +119,10 @@ export function initOwnerDeleteItem(config: OwnerDeleteItemConfig): void {
         try {
             await post(`${config.baseUrl}/item/${itemId}/delete`, {});
             showInlineAlert('success', config.successMessage);
-            setTimeout(() => location.reload(), reloadDelay);
+            reloadAfterDelay(reloadDelay);
         } catch (err) {
-            // @ts-expect-error TS(2571): Object is of type 'unknown'
-            showInlineAlert('error', err.message);
+            const error = err as Error;
+            showInlineAlert('error', error.message);
         }
     });
 }

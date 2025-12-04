@@ -34,13 +34,13 @@ function initInlineEdit(): void {
 
     document.querySelectorAll('td[data-edit]').forEach(td => {
         td.addEventListener('dblclick', () => {
-            startInlineEdit(td as HTMLElement, `/packing/${listId}/item`);
+            startInlineEdit(td as HTMLElement, `/api/packing/${listId}/item`);
         });
     });
 
     document.querySelectorAll('[data-edit="planDescription"]').forEach(elem => {
         elem.addEventListener('dblclick', () => {
-            startInlineEditArea(elem as HTMLElement, `/packing/${listId}/description`);
+            startInlineEditArea(elem as HTMLElement, `/api/packing/${listId}/description`);
         });
     });
 }
@@ -58,7 +58,7 @@ function initMarkEveryone(): void {
 
         const itemId = sw.dataset.itemid;
         try {
-            await post(`/packing/${listId}/item/${itemId}/required`, { flag: sw.checked });
+            await post(`/api/packing/${listId}/item/${itemId}/required`, { flag: sw.checked });
             
             // Visual highlighting
             const row = document.querySelector(`tr[data-itemid="${itemId}"]`);

@@ -10,7 +10,7 @@ import { startInlineEdit, startInlineEditArea } from './shared/inline-edit';
 import { initCardReorder } from './shared/drag-drop';
 import { initOwnerRemove, initOwnerFlags } from './shared/owner-operations';
 import { getSelectValues } from './core/form-utils';
-import { reloadAfterDelay, confirmAction } from './shared/ui-helpers';
+import { reloadAfterDelay } from './shared/ui-helpers';
 
 /**
  * Get the activity plan ID from the window object
@@ -39,7 +39,7 @@ function initAssign(): void {
         const role = btn.dataset.role;
         
         try {
-            await post(`/activity/${planId}/${act}`, { slotId, role });
+            await post(`/api/activity/${planId}/${act}`, { slotId, role });
             showInlineAlert('success', 'Updated');
             reloadAfterDelay(120);
         } catch (err) {
@@ -78,7 +78,7 @@ function initSelectBox(): void {
         const vals = getSelectValues(sel);
 
         try {
-            await post(`/activity/${planId}/slot/${slot}/addRole`, { roles: vals });
+            await post(`/api/activity/${planId}/slot/${slot}/addRole`, { roles: vals });
             showInlineAlert('success', 'Updated');
             reloadAfterDelay(120);
         } catch (err) {
@@ -97,7 +97,7 @@ function initInlineEdit(): void {
     document.addEventListener('dblclick', (e: Event) => {
         // @ts-expect-error TS(2531): Object is possibly 'null'
         const desc = e.target.closest('[data-edit="planDescription"]');
-        if (desc) return startInlineEditArea(desc, `/activity/${planId}/description`);
+        if (desc) return startInlineEditArea(desc, `/api/activity/${planId}/description`);
 
         // @ts-expect-error TS(2531): Object is possibly 'null'
         const card = e.target.closest('.slot');
@@ -118,7 +118,7 @@ function initInlineEdit(): void {
         if (!span)
             span = card.querySelector('[data-edit="title"]');
 
-        startInlineEdit(span, `/activity/${planId}/slot`);
+        startInlineEdit(span, `/api/activity/${planId}/slot`);
     });
 }
 
@@ -132,11 +132,11 @@ function initDelete(): void {
         // @ts-expect-error TS(2531): Object is possibly 'null'
         const btn = e.target.closest('[data-delete-slot]');
         if (!btn) return;
-        if (!confirmAction('Delete this slot?')) return;
+        if (!confirm('Delete this slot?')) return;
 
         const id = btn.dataset.slotid;
         try {
-            await post(`/activity/${planId}/slot/${id}/delete`, {});
+            await post(`/api/activity/${planId}/slot/${id}/delete`, {});
             showInlineAlert('success', 'Deleted');
             reloadAfterDelay(100);
         } catch (err) {
@@ -199,7 +199,7 @@ function initAddSlot(): void {
 
         save.onclick = async () => {
             try {
-                await post(`/activity/${planId}/slot/add`, {
+                await post(`/api/activity/${planId}/slot/add`, {
                     date: dateISO,
                     title: title.value.trim(),
                     description: desc.value.trim(),

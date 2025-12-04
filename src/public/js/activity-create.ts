@@ -16,27 +16,7 @@ const slotsMap: Record<string, Partial<ActivitySlot>[]> = {};
  */
 const sortSlotFn = (a: Partial<ActivitySlot>, b: Partial<ActivitySlot>) => (a.pos || 0) - (b.pos || 0);
 
-/**
- * Format date as ISO string (YYYY-MM-DD)
- * @param date Date object
- * @returns ISO formatted date string
- */
-export function fmtISO(date: Date): string {
-    const y = date.getUTCFullYear();
-    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(date.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-}
-
-/**
- * Convert ISO date string to Date object
- * @param val ISO date string
- * @returns Date object
- */
-export function toDate(val: string): Date {
-    const [y, m, d] = val.split('-').map(Number);
-    return new Date(Date.UTC(y, m - 1, d));
-}
+import { formatISODate as fmtISO, parseISODate as toDate } from './core/formatting';
 
 /**
  * Update or add slot object in the map

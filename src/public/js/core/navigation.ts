@@ -44,15 +44,34 @@ export function setCurrentNavLocation(): void {
 /**
  * Initialize entity list filtering
  * Adds search functionality to entity lists
+ * @param container Optional container element to search within (defaults to document)
+ * @param options Optional configuration for selectors
  */
-export function initEntityLists(): void {
-    document.querySelectorAll('[data-filter="section"]').forEach(sec => {
-        const input = sec.querySelector('input[type="search"]') as HTMLInputElement;
-        const list = sec.querySelector('.js-list');
-        const count = sec.querySelector('.js-count');
+export function initEntityLists(
+    container: HTMLElement | Document = document,
+    options: {
+        sectionSelector?: string;
+        inputSelector?: string;
+        listSelector?: string;
+        countSelector?: string;
+        itemSelector?: string;
+    } = {}
+): void {
+    const {
+        sectionSelector = '[data-filter="section"]',
+        inputSelector = 'input[type="search"]',
+        listSelector = '.js-list',
+        countSelector = '.js-count',
+        itemSelector = '.list-group-item'
+    } = options;
+
+    container.querySelectorAll(sectionSelector).forEach(sec => {
+        const input = sec.querySelector(inputSelector) as HTMLInputElement;
+        const list = sec.querySelector(listSelector);
+        const count = sec.querySelector(countSelector);
         if (!input || !list || !count) return;
         
-        const items = Array.from(list.querySelectorAll('.list-group-item'));
+        const items = Array.from(list.querySelectorAll(itemSelector));
         const total = items.length;
         
         const update = () => {

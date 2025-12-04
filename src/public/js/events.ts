@@ -8,7 +8,7 @@ import { loadPerms } from './core/permissions';
 import { post } from './core/http';
 import { showInlineAlert } from './shared/alerts';
 import { formatISOInTimeZone } from './core/formatting';
-import { parseJsonScript, reloadAfterDelay, confirmAction } from './shared/ui-helpers';
+import { parseJsonScript, reloadAfterDelay, formatDuration, updateToLocalString } from './shared/ui-helpers';
 
 /**
  * Reload delay constant
@@ -38,15 +38,6 @@ export function allergyCheck(): void {
  * Update deadline countdown display
  */
 export function deadlineUpdater(): void {
-    function fmt(ms: number): string {
-        if (ms <= 0) return "closed";
-        const s = Math.floor(ms / 1000);
-        const d = Math.floor(s / 86400);
-        const h = Math.floor((s % 86400) / 3600);
-        const m = Math.floor((s % 3600) / 60);
-        return `${d}d ${h}h ${m}m`;
-    }
-
     try {
         const deadlineCnt = document.getElementById('deadlineCountdown');
         const deadline = document.getElementById('deadlineText');
@@ -170,11 +161,8 @@ export function initDateRange(): void {
     const end = document.getElementById('endSpan');
     if (!start || !end) return;
 
-    const startDate = new Date(Date.parse(start.dataset.start!));
-    const endDate = new Date(Date.parse(end.dataset.end!));
-
-    start.textContent = startDate.toLocaleString(undefined, { dateStyle: "full" });
-    end.textContent = endDate.toLocaleString(undefined, { dateStyle: "full" });
+    updateToLocalString(start, start.dataset.start!);
+    updateToLocalString(end, end.dataset.end!);
 }
 
 /**
