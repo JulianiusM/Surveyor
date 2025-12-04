@@ -15,6 +15,7 @@ import {
 import {PERM} from "../../modules/lib/permissions";
 import type {EntityType} from "../../types/UtilTypes";
 import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
+import buildInvoiceRouter from "./eventInvoices";
 import type {ItemGetter} from "../../types/PermissionTypes";
 
 const app = express.Router();
@@ -94,5 +95,8 @@ app.delete(
         renderer.respondWithErrorJson(res)
     })
 );
+
+// Invoice pools
+app.use('/:id/invoice-pools', buildInvoiceRouter(permFct, resFct));
 
 export default app;

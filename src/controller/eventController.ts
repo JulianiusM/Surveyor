@@ -3,8 +3,10 @@
 import Joi from 'joi';
 
 import * as eventService from '../modules/database/services/EventService';
+import * as invoiceService from "../modules/database/services/EventInvoiceService";
 import {APIError, ValidationError} from '../modules/lib/errors';
 import {buildDateTotals, ENTITIES, getResource, isWithinWindow, rewriteISOToZone} from "../modules/lib/util";
+import {purgeExpiredProofs} from "./eventPoolController";
 
 import {Event} from "../modules/database/entities/event/Event";
 import type {DIETARY} from "../types/EventTypes";
@@ -103,9 +105,15 @@ async function fetchForView(event: Event, req: Request) {
         eventService.getPackingListsForEvent(event.id),
         eventService.getDriverListsForEvent(event.id),
     ]) : [[], [], []];
+    const invoicePools = shouldShowScoped ? await invoiceService.listPools(event.id) : [];
+    await Promise.all(invoicePools.map(purgeExpiredProofs));
+    const participantPools = registration ? await invoiceService.getParticipantPools(event.id, registration.id) : [];
+    const participantInvoices = registration
+        ? invoicePools.flatMap((p) => (p.invoices || []).filter((inv) => inv.registrationId === registration.id))
+        : [];
 
     // Organizers also see participants list
-    const participants = await eventService.getRegistrationsForEvent(event.id);
+    const participants = await eventService.getEventParticipants(event.id);
     const isFull = (event.maxParticipants ?? Number.MAX_SAFE_INTEGER) <= participants.length;
 
     return {
@@ -115,6 +123,9 @@ async function fetchForView(event: Event, req: Request) {
         activityPlans,
         packingLists,
         driverLists,
+        invoicePools,
+        participantPools,
+        participantInvoices,
         isFull,
         regToken: getResource(req, 'regToken'),
     };

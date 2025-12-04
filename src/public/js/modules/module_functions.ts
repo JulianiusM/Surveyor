@@ -141,10 +141,11 @@ export function padNumber(num: number) {
 }
 
 export async function post(url: string, payload: any = {}) {
+    const isFormData = typeof FormData !== 'undefined' && payload instanceof FormData;
     const res = await fetch('/api' + url, {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(payload),
+        ...(isFormData ? {} : {headers: {'Content-Type': 'application/json'}}),
+        body: isFormData ? payload : JSON.stringify(payload),
     });
 
     let data = {};
