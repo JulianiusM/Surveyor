@@ -3,7 +3,7 @@
  * Simple module for user dashboard functionality
  */
 
-import { initEntityLists, setCurrentNavLocation } from '../core/navigation';
+import { initEntityLists, setCurrentNavLocation } from './core/navigation';
 
 /**
  * Initialize user dashboard

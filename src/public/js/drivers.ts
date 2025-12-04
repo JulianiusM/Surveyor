@@ -3,17 +3,17 @@
  * Handles assignment, inline editing, reordering, and owner operations for drivers lists
  */
 
-import { setCurrentNavLocation } from '../core/navigation';
-import { loadPerms } from '../core/permissions';
-import { startInlineEdit, startInlineEditArea } from '../shared/inline-edit';
-import { initAssignButtons } from '../shared/entity-assign';
-import { initTableReorder } from '../shared/drag-drop';
+import { setCurrentNavLocation } from './core/navigation';
+import { loadPerms } from './core/permissions';
+import { startInlineEdit, startInlineEditArea } from './shared/inline-edit';
+import { initAssignButtons } from './shared/entity-assign';
+import { initTableReorder } from './shared/drag-drop';
 import {
     initOwnerRemove,
     initOwnerFlags,
     initOwnerDeleteItem,
     initQuickAdd
-} from '../shared/owner-operations';
+} from './shared/owner-operations';
 
 /**
  * Get the drivers list ID from the window object

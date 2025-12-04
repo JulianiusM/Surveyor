@@ -16,7 +16,7 @@ import {
     initOwnerFlags,
     initOwnerDeleteItem,
     initQuickAdd
-} from '../shared/owner-operations';
+} from './shared/owner-operations';
 
 /**
  * Get the packing list ID from the window object

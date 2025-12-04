@@ -3,7 +3,7 @@
  * Handles dynamic item row management and form submission
  */
 
-import { setCurrentNavLocation } from '../core/navigation';
+import { setCurrentNavLocation } from './core/navigation';
 import type { PackingItem } from "../../modules/database/entities/packing/PackingItem";
 
 /**

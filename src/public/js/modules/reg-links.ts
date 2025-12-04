@@ -6,7 +6,7 @@
 import { qs, qsAll } from '../core/dom';
 import { http } from '../core/http';
 import { formatDateTime } from '../core/formatting';
-import { createBadge, showSpinner, hideSpinner, copyWithFeedback, reloadAfterDelay } from '../shared/ui-helpers';
+import { createBadge, showSpinner, hideSpinner, copyWithFeedback } from '../shared/ui-helpers';
 import { showInlineAlert } from '../shared/alerts';
 
 /**

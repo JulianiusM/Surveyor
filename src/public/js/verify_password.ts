@@ -3,13 +3,13 @@
  * Handles password validation UI and form submission
  */
 
-import { setCurrentNavLocation } from '../core/navigation';
+import { setCurrentNavLocation } from './core/navigation';
 import {
     matchPassword,
     removeTooltip,
     validate,
     verifyPassword
-} from '../core/password-validation';
+} from './core/password-validation';
 
 /**
  * Register password verification events

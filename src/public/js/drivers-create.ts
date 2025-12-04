@@ -3,7 +3,7 @@
  * Minimal form handling for drivers list creation
  */
 
-import { setCurrentNavLocation } from '../core/navigation';
+import { setCurrentNavLocation } from './core/navigation';
 import type { DriversItem } from "../../modules/database/entities/drivers/DriversItem";
 
 /**
