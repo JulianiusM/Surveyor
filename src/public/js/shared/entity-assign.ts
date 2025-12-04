@@ -3,8 +3,8 @@
  * Provides reusable logic for assigning/unassigning items to users
  */
 
-import { post } from '../core/http';
-import { showInlineAlert } from './alerts';
+import {post} from '../core/http';
+import {showInlineAlert} from './alerts';
 
 /**
  * Configuration for assignment buttons
@@ -30,7 +30,7 @@ export function initAssignButtons(config: AssignmentConfig): void {
     const reloadDelay = config.reloadDelay ?? 100;
 
     table.addEventListener('click', async (evt: Event) => {
-        const btn = (evt.target as Element | null)?.closest('button[data-action]');
+        const btn = (evt.target as HTMLElement | null)?.closest<HTMLButtonElement>('button[data-action]');
         if (!btn) return;
 
         const tr = btn.closest('tr');
@@ -38,7 +38,7 @@ export function initAssignButtons(config: AssignmentConfig): void {
         const action = btn.dataset.action;
 
         try {
-            await post(`${config.baseUrl}/${action}`, { itemId });
+            await post(`${config.baseUrl}/${action}`, {itemId});
 
             /* --- Count / Max update ------------------- */
             const cntSpan = tr?.querySelector('[data-count]');

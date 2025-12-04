@@ -3,15 +3,15 @@
  * Handles slot management, assignments, inline editing, and owner operations
  */
 
-import { setCurrentNavLocation } from './core/navigation';
-import { post } from './core/http';
-import { showInlineAlert } from './shared/alerts';
-import { startInlineEdit, startInlineEditArea } from './shared/inline-edit';
-import { initCardReorder } from './shared/drag-drop';
-import { initAssignmentRemoval } from './shared/list-actions';
-import { getSelectValues } from './core/form-utils';
-import { reloadAfterDelay } from './shared/ui-helpers';
-import { loadPerms, requireEntityPerm, requireItemPerm } from './core/permissions';
+import {setCurrentNavLocation} from './core/navigation';
+import {post} from './core/http';
+import {showInlineAlert} from './shared/alerts';
+import {startInlineEdit, startInlineEditArea} from './shared/inline-edit';
+import {initCardReorder} from './shared/drag-drop';
+import {initAssignmentRemoval} from './shared/list-actions';
+import {getSelectValues} from './core/form-utils';
+import {reloadAfterDelay} from './shared/ui-helpers';
+import {loadPerms, requireEntityPerm, requireItemPerm} from './core/permissions';
 
 /**
  * Get the activity plan ID from the window object
@@ -38,7 +38,7 @@ function initAssign(): void {
         const role = btn.dataset.role;
 
         try {
-            await post(`/api/activity/${planId}/${act}`, { slotId, role });
+            await post(`/api/activity/${planId}/${act}`, {slotId, role});
             showInlineAlert('success', 'Updated');
             reloadAfterDelay(120);
         } catch (err) {
@@ -57,6 +57,7 @@ function initSelectBox(): void {
     $('.multiSelect').select2({
         placeholder: 'Add Roles',
         width: '100%',
+        //@ts-ignore
         selectionCssClass: 'text-bg-dark',
         dropdownCssClass: 'text-bg-dark',
     });
@@ -76,7 +77,7 @@ function initSelectBox(): void {
 
         try {
             requireItemPerm(slot || '', 'EDIT_META', 'manage slot roles', 'ITEM_EDIT');
-            await post(`/api/activity/${planId}/slot/${slot}/addRole`, { roles: vals });
+            await post(`/api/activity/${planId}/slot/${slot}/addRole`, {roles: vals});
             showInlineAlert('success', 'Updated');
             reloadAfterDelay(120);
         } catch (err) {
@@ -95,8 +96,8 @@ function initInlineEdit(): void {
     document.addEventListener('dblclick', (e: Event) => {
         const target = e.target as Element;
         if (!target) return;
-        
-        const desc = target.closest('[data-edit="planDescription"]');
+
+        const desc = target.closest<HTMLElement>('[data-edit="planDescription"]');
         if (desc) return startInlineEditArea(desc, `/api/activity/${planId}/description`, {
             scope: 'entity',
             key: 'EDIT_DESC',
@@ -107,7 +108,7 @@ function initInlineEdit(): void {
         if (!card || target.closest('button')) return;
 
         /* choose editable span */
-        let span = target.closest('[data-edit]');
+        let span = target.closest<HTMLElement>('[data-edit]');
 
         if (!span && target.closest('.badge'))
             span = card.querySelector('[data-edit="maxAssignees"]');
@@ -130,7 +131,7 @@ function initDelete(): void {
     document.addEventListener('click', async (e: Event) => {
         const target = e.target as Element;
         if (!target) return;
-        
+
         const btn = target.closest('[data-delete-slot]');
         if (!btn) return;
         if (!confirm('Delete this slot?')) return;
@@ -142,8 +143,8 @@ function initDelete(): void {
             showInlineAlert('success', 'Deleted');
             reloadAfterDelay(100);
         } catch (err) {
-            const error = err as Error;
-            showInlineAlert('error', error.message);
+            const message = err instanceof Error ? err.message : 'Failed to delete slot.';
+            showInlineAlert('error', message);
         }
     });
 }
@@ -155,12 +156,13 @@ function initAddSlot(): void {
     const planId = getActivityPlanId();
 
     document.addEventListener('click', (e: Event) => {
-        const btn = (e.target as Element | null)?.closest('[data-add-slot]');
+        const btn: HTMLButtonElement | undefined | null = (e.target as HTMLButtonElement | null)?.closest('[data-add-slot]');
         if (!btn) return;
 
         // hide button, replace by small inline form
         const dateISO = btn.dataset.date;
         const cell = btn.parentElement;
+        if (!cell) return;
         btn.remove();
 
         const wrap = document.createElement('div');
@@ -236,8 +238,8 @@ function initDnD(): void {
         cardClass: 'slot',
         apiUrl: `/activity/${planId}/slot/reorder`,
         getOrderData: (container) => {
-            return [...container.querySelectorAll('.slot')]
-                .map((el, i) => ({ slotId: el.dataset.slotid, pos: i }));
+            return [...container.querySelectorAll<HTMLElement>('.slot')]
+                .map((el, i) => ({slotId: el.dataset.slotid, pos: i}));
         },
     });
 }
@@ -255,7 +257,7 @@ function initDates(): void {
 
         const dayEl = th.querySelector('.day');
         if (dayEl) {
-            dayEl.textContent = d.toLocaleDateString(undefined, { weekday: 'short' });
+            dayEl.textContent = d.toLocaleDateString(undefined, {weekday: 'short'});
         }
 
         const dateEl = th.querySelector('.date');

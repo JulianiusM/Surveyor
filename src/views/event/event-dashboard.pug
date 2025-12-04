@@ -49,6 +49,12 @@ block content
                         label.form-label Description
                         p= ev.description
 
+            .row
+                .col-12.d-flex.justify-content-end.gap-2
+                    a.btn.btn-primary(href=`/event/${ev.id}`)
+                        i.bi.bi-calendar2-event.me-1
+                        | Event page
+
     if permData.entity.any("EDIT_TITLE", "EDIT_DESC", "EDIT_CAPACITY", "EDIT_META")
         .card.mb-2.bg-dark.text-white.border-secondary-subtle
             .card-header.py-2
@@ -205,8 +211,7 @@ block content
 
     if permData.entity.has('MANAGE_ASSIGNMENTS')
         +invoiceManagementTabs(ev, data)
-
-    +takeoverModal('takeoverModal')
+        +takeoverModal('takeoverModal')
 
     if permData.entity.has("DATA_EXPORT")
         hr
@@ -222,5 +227,5 @@ block content
 block scripts
     script(type="module" src="/js/events.gen.js")
     script.
-        window.EVENT_ID = "#{ev.id}";
+        window.Surveyor.eventId = "#{ev.id}";
     script#participantsData(type="application/json")!= JSON.stringify(data.participants || []).replace(/<\/script>/g, '<\\/script>')

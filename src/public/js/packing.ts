@@ -3,25 +3,21 @@
  * Handles assignment, inline editing, reordering, and owner operations for packing lists
  */
 
-import { setCurrentNavLocation } from './core/navigation';
-import { loadPerms, requireEntityPerm, requireItemPerm } from './core/permissions';
-import { post } from './core/http';
-import { showInlineAlert } from './shared/alerts';
-import { startInlineEdit, startInlineEditArea } from './shared/inline-edit';
-import { initAssignButtons } from './shared/entity-assign';
-import { initTableReorder } from './shared/drag-drop';
-import { reloadAfterDelay } from './shared/ui-helpers';
-import {
-    initAssignmentRemoval,
-    initItemDeletion,
-    initQuickAdd
-} from './shared/list-actions';
+import {setCurrentNavLocation} from './core/navigation';
+import {loadPerms, requireEntityPerm, requireItemPerm} from './core/permissions';
+import {post} from './core/http';
+import {showInlineAlert} from './shared/alerts';
+import {startInlineEdit, startInlineEditArea} from './shared/inline-edit';
+import {initAssignButtons} from './shared/entity-assign';
+import {initTableReorder} from './shared/drag-drop';
+import {reloadAfterDelay} from './shared/ui-helpers';
+import {initAssignmentRemoval, initItemDeletion, initQuickAdd} from './shared/list-actions';
 
 /**
  * Get the packing list ID from the window object
  */
 function getPackListId(): string {
-    return window.PACK_LIST_ID ?? '';
+    return window.Surveyor.entityId ?? '';
 }
 
 /**
@@ -60,12 +56,12 @@ function initMarkEveryone(): void {
         const itemId = sw.dataset.itemid;
         try {
             requireItemPerm(itemId || '', 'EDIT_META', 'toggle shared requirements', 'ITEM_EDIT');
-            await post(`/api/packing/${listId}/item/${itemId}/required`, { flag: sw.checked });
-            
+            await post(`/api/packing/${listId}/item/${itemId}/required`, {flag: sw.checked});
+
             // Visual highlighting
             const row = document.querySelector(`tr[data-itemid="${itemId}"]`);
             if (row) row.classList.toggle('table-info', sw.checked);
-            
+
             reorderRequiredRows();
             showInlineAlert('success', 'Updated');
             reloadAfterDelay(100);
@@ -147,7 +143,7 @@ export function init(): void {
     const listId = getPackListId();
     if (listId) {
         initPackedToggle();
-        
+
         // Initialize assignment buttons
         initAssignButtons({
             tableSelector: 'table[data-assignable]',
@@ -168,7 +164,7 @@ export function init(): void {
         }
 
         initInlineEdit();
-        
+
         // Initialize quick add form
         initQuickAdd({
             formId: 'quickAddForm',

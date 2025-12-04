@@ -3,12 +3,12 @@
  * Handles participant list display, filtering, and operations
  */
 
-import type { ParticipantRow } from "../../../types/EventTypes";
-import { qs, qsAll } from '../core/dom';
-import { http } from '../core/http';
-import { formatDate } from '../core/formatting';
-import { createDietaryChip, showSpinner, hideSpinner } from '../shared/ui-helpers';
-import { showInlineAlert } from '../shared/alerts';
+import type {ParticipantRow} from "../../../types/EventTypes";
+import {qs, qsAll} from '../core/dom';
+import {del, get} from '../core/http';
+import {formatDate} from '../core/formatting';
+import {createDietaryChip, hideSpinner, showSpinner} from '../shared/ui-helpers';
+import {showInlineAlert} from '../shared/alerts';
 
 /**
  * Render dietary totals as colored badges
@@ -140,10 +140,11 @@ function filterRows(root: HTMLElement, q: string): void {
  */
 async function refreshList(root: HTMLElement): Promise<void> {
     try {
-        const rows = await http('GET', root.dataset.apiList!);
+        const rows = await get(root.dataset.apiList!);
         renderRows(root, rows.data);
-    } catch (e) {
-        console.error(e);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to refresh participant list.';
+        showInlineAlert('error', message);
     }
 }
 
@@ -161,11 +162,12 @@ async function deleteRegistration(root: HTMLElement, tr: HTMLTableRowElement): P
     const btn = tr.querySelector('.btn-delete-reg') as HTMLButtonElement | null;
     if (btn) showSpinner(btn);
     try {
-        await http('DELETE', `${api}/${encodeURIComponent(regId)}`);
+        await del(`${api}/${encodeURIComponent(regId)}`);
         await refreshList(root);
         showInlineAlert('success', 'Registration deleted');
-    } catch (e) {
-        showInlineAlert('error', 'Delete failed');
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Delete failed.';
+        showInlineAlert('error', message);
     } finally {
         if (btn) hideSpinner(btn);
     }

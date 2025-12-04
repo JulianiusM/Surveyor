@@ -49,9 +49,9 @@
     "morgan": "^1.10.0",
     "multer": "^2.0.2",
     "mysql2": "^3.11.4",
-    "nodemailer": "^6.9.16",
+    "nodemailer": "7.0.7",
     "openid-client": "^6.7.1",
-    "typeorm": "^0.3.25",
+    "typeorm": "0.3.26",
     "uuid": "^11.0.3"
   },
   "devDependencies": {

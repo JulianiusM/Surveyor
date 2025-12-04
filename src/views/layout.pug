@@ -9,6 +9,7 @@ include modules/module_admin_matrix
 include modules/module_admin_options
 include modules/module_registration_links
 include modules/module_event_participants
+include modules/module_invoice_pool
 
 doctype html
 html(lang="en")
@@ -109,18 +110,19 @@ html(lang="en")
         //── Footer ────────────────────────────────────────────────────
         footer.bg-dark.text-white.text-center.py-2.mt-auto
             small
-                | © #{new Date().getFullYear()} Surveyor by JundM100 Development
-                | • v#{version} • All rights reserved. •&nbsp;
-                a.text-white.text-decoration-none(href="https://www.jundm100-development.de/imprint.php") Imprint
+                |  Powered by
+                a.text-white.text-decoration-none(href="https://github.com/JulianiusM/Surveyor") &nbsp;Surveyor
+                |  v#{version} • All rights reserved. •&nbsp;
+                a.text-white.text-decoration-none(href=settings.imprintUrl) Imprint
                 |  •&nbsp;
-                a.text-white.text-decoration-none(href="https://www.jundm100-development.de/privacy/surveyor.php") Privacy Policy
+                a.text-white.text-decoration-none(href=settings.privacyPolicyUrl) Privacy Policy
 
         //── JavaScript (bottom for better performance) ────────────────
         script(src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous")
         script(src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js")
         script(src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js")
-        if typeof permData !== 'undefined'
+        if permData !== undefined
             script.
-                window.PERM_DATA = !{JSON.stringify(permData)};
+                window.Surveyor.rawPermissions = !{JSON.stringify(permData)};
         block scripts
             script(type="module" src="/js/stub.gen.js")

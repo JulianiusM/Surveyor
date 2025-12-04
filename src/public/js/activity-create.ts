@@ -3,9 +3,10 @@
  * Handles dynamic slot management with drag-and-drop reordering
  */
 
-import { setCurrentNavLocation } from './core/navigation';
-import { loadPerms } from './core/permissions';
-import type { ActivitySlot } from "../../modules/database/entities/activity/ActivitySlot";
+import {setCurrentNavLocation} from './core/navigation';
+import {loadPerms} from './core/permissions';
+import type {ActivitySlot} from "../../modules/database/entities/activity/ActivitySlot";
+import {formatISODate as fmtISO, getValidDaysInWeek, parseISODate as toDate} from './core/formatting';
 
 /**
  * Slot storage map: dateISO -> array of slot objects
@@ -17,7 +18,9 @@ const slotsMap: Record<string, Partial<ActivitySlot>[]> = {};
  */
 const sortSlotFn = (a: Partial<ActivitySlot>, b: Partial<ActivitySlot>) => (a.pos || 0) - (b.pos || 0);
 
-import { formatISODate as fmtISO, parseISODate as toDate, getValidDaysInWeek } from './core/formatting';
+function getPrefilledSlots() {
+    return window.Surveyor.prefilledSlots
+}
 
 /**
  * Update or add slot object in the map
@@ -209,7 +212,7 @@ export function createWeekTable(monday: Date, start: Date, end: Date): HTMLDivEl
     validDays.forEach(date => {
         const th = document.createElement('th');
         th.className = 'text-center small';
-        th.innerHTML = `${date.toLocaleDateString(undefined, { weekday: 'short' })}<br>${date.toLocaleDateString()}`;
+        th.innerHTML = `${date.toLocaleDateString(undefined, {weekday: 'short'})}<br>${date.toLocaleDateString()}`;
         hRow.appendChild(th);
     });
 
@@ -233,7 +236,7 @@ export function buildTables(dStart: Date, dEnd: Date): void {
     const slotArea = document.getElementById('slotArea');
     if (!slotArea) return;
     slotArea.innerHTML = '';
-    
+
     let weekStart = new Date(dStart);
     weekStart.setDate(weekStart.getDate() - (weekStart.getDay() || 7) + 1); // Monday
 
@@ -367,8 +370,9 @@ export function init(): void {
     initSubmitHandler();
     // initSlotDnD(); // Uncomment to enable drag-and-drop
 
-    if (window.PREFILLED_SLOTS) {
-        Object.assign(slotsMap, window.PREFILLED_SLOTS);
+    const slots = getPrefilledSlots();
+    if (slots) {
+        Object.assign(slotsMap, slots);
         maybeGenerate();
     }
 }

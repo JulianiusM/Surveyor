@@ -10,7 +10,7 @@
  * @param container Optional container element (defaults to #liveAlerts)
  */
 export function showInlineAlert(
-    status: 'success' | 'info' | 'error', 
+    status: 'success' | 'info' | 'error',
     message: string,
     container?: HTMLElement
 ): void {
@@ -23,9 +23,14 @@ export function showInlineAlert(
         error: 'alert-danger',
     }[status] || 'alert-info';
 
-    alertBox.innerHTML = `
-      <div class="alert ${cls} alert-dismissible fade show" role="alert">
+    const alert = document.createElement('div');
+    alert.classList.add('alert', cls, 'alert-dismissible', 'fade', 'show');
+    alert.role = 'alert';
+    alert.innerHTML = `
         ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-      </div>`;
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`
+
+    alertBox.appendChild(alert);
+    alert.focus();
+    alert.scrollIntoView(true)
 }

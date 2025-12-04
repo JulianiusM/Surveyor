@@ -3,22 +3,18 @@
  * Handles assignment, inline editing, reordering, and owner operations for drivers lists
  */
 
-import { setCurrentNavLocation } from './core/navigation';
-import { loadPerms, requireEntityPerm } from './core/permissions';
-import { startInlineEdit, startInlineEditArea } from './shared/inline-edit';
-import { initAssignButtons } from './shared/entity-assign';
-import { initTableReorder } from './shared/drag-drop';
-import {
-    initAssignmentRemoval,
-    initItemDeletion,
-    initQuickAdd
-} from './shared/list-actions';
+import {setCurrentNavLocation} from './core/navigation';
+import {loadPerms, requireEntityPerm} from './core/permissions';
+import {startInlineEdit, startInlineEditArea} from './shared/inline-edit';
+import {initAssignButtons} from './shared/entity-assign';
+import {initTableReorder} from './shared/drag-drop';
+import {initAssignmentRemoval, initItemDeletion, initQuickAdd} from './shared/list-actions';
 
 /**
  * Get the drivers list ID from the window object
  */
 function getDriversListId(): string {
-    return window.DRIVERS_LIST_ID ?? '';
+    return window.Surveyor.entityId ?? '';
 }
 
 /**

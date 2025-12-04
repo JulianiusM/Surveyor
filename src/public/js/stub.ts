@@ -3,8 +3,8 @@
  * Provides basic navigation and entity list functionality
  */
 
-import { initEntityLists, setCurrentNavLocation } from "./core/navigation";
-import { loadPerms } from './core/permissions';
+import {setCurrentNavLocation} from "./core/navigation";
+import {loadPerms} from './core/permissions';
 
 /**
  * Initialize stub module
@@ -12,7 +12,6 @@ import { loadPerms } from './core/permissions';
 export function init(): void {
     setCurrentNavLocation();
     loadPerms();
-    initEntityLists();
 }
 
 // Expose to global scope

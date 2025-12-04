@@ -6,10 +6,7 @@ import {v4 as uuidv4} from "uuid";
 import {asyncHandler} from "../../modules/lib/asyncHandler";
 import renderer from "../../modules/renderer";
 import eventPoolController from "../../controller/eventPoolController";
-import {
-    requireEventParticipantAPI,
-    requirePermissionApi,
-} from "../../middleware/permissionMiddleware";
+import {requireEventParticipantAPI, requirePermissionApi,} from "../../middleware/permissionMiddleware";
 import {PERM} from "../../modules/lib/permissions";
 
 // Storage setup for invoice proofs. Files are placed in /uploads/invoices and referenced by relative path.
@@ -162,7 +159,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/invoices/:invoiceId/proof',
         requireEventParticipantAPI(resFct),
         asyncHandler(async (req, res) => {
-            await eventPoolController.serveInvoiceProof(resFct(req), req.params.poolId, req.params.invoiceId, req.session, res, permFct(req));
+            await eventPoolController.serveInvoiceProof(resFct(req), req.params.poolId, req.params.invoiceId, req.session, res, res.locals.permData);
         })
     );
 

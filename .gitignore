@@ -202,7 +202,6 @@ dist
 
 # vuepress v2.x temp and cache directory
 .temp
-.cache
 
 # Docusaurus cache and generated files
 .docusaurus
@@ -282,3 +281,5 @@ src/public/style/**/*.css.map
 src.zip
 /playwright.config.js
 /scripts/e2e.db.init.js
+/src/modules/database/__index__.ts
+/uploads/

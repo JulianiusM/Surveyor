@@ -3,10 +3,10 @@
  * Handles admin permission matrix UI and operations
  */
 
-import { qs, qsAll } from '../core/dom';
-import { http, patch, del } from '../core/http';
-import { showInlineAlert } from '../shared/alerts';
-import { showSpinner, hideSpinner, reloadAfterDelay } from '../shared/ui-helpers';
+import {qs, qsAll} from '../core/dom';
+import {del, get, patch, post} from '../core/http';
+import {showInlineAlert} from '../shared/alerts';
+import {hideSpinner, reloadAfterDelay, showSpinner} from '../shared/ui-helpers';
 
 /**
  * Get the admin card container for an element
@@ -122,7 +122,7 @@ function initTypeahead(modalRoot: HTMLElement) {
         if (!q || q === lastQ) return;
         lastQ = q;
         try {
-            const res = await http('GET', `${apiSearch}?q=${encodeURIComponent(q)}`);
+            const res = await get(`${apiSearch}?q=${encodeURIComponent(q)}`);
             // Expect: [{ id, username, email }]
             datalist.innerHTML = '';
             if (res.status === 'success') {
@@ -170,7 +170,7 @@ async function handleAdd(btn: HTMLButtonElement): Promise<void> {
 
     showSpinner(btn);
     try {
-        await http('POST', api, payload);
+        await post(api, payload);
 
         showInlineAlert('success', 'Admin added');
         reloadAfterDelay(1000);

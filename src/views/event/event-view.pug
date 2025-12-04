@@ -1,6 +1,5 @@
 //- views/event/event-view.pug — Event view + registration page
 extends ../layout
-include ../modules/module_invoice_pool.pug
 
 block meta
     - const ev = data.event || data; // tolerate different controller shapes
@@ -171,10 +170,10 @@ block content
                 +invoiceSubmission(ev.id, data.participantPools, 'participant', data.participantInvoices)
                 +participantTakeoverList(data.participantPools, data.participants)
                 +participantShareSummary(data.registration.id, data.invoicePools)
-            else
-                .alert.alert-info.mx-1
-                    i.bi.bi-info-circle.me-2
-                    | Log in or use your guest link to register for this event.
+    else
+        .alert.alert-info.mx-1
+            i.bi.bi-info-circle.me-2
+            | Log in or use your guest link to register for this event.
 
     // ─── Associated content within this event ────────────────
     if reg
@@ -261,7 +260,7 @@ block content
 block scripts
     script(type="module" src="/js/events.gen.js")
     script.
-        window.EVENT_ID = "#{ev.id}";
+        window.Surveyor.eventId = "#{ev.id}";
     script#participantsData(type="application/json")!= JSON.stringify(data.participants || []).replace(/<\/script>/g, '<\\/script>')
     if reg
         script#registrationData(type="application/json")!= JSON.stringify({id: reg.id})

@@ -3,7 +3,7 @@
  * Handles permission loading and checking
  */
 
-import type { PermBundle, PermType, PermView } from "../../../types/PermissionTypes";
+import type {PermBundle, PermType, PermView} from "../../../types/PermissionTypes";
 
 /**
  * JSON reviver for deserializing Map objects
@@ -49,12 +49,12 @@ function restorePermView(data: Partial<PermView>, parentData?: Partial<PermView>
 function restorePermBundle(data: Partial<PermBundle>): PermBundle {
     const entity = restorePermView(data.entity!);
     const itemMap = data.items!;
-    
+
     for (let key of itemMap.keys()) {
         itemMap.set(key, restorePermView(itemMap.get(key)!, entity));
     }
 
-    const empty = restorePermView({ mask: 0, parentMask: entity.mask, bits: {} }, entity);
+    const empty = restorePermView({mask: 0, parentMask: entity.mask, bits: {}}, entity);
     const getItem = (id: string) => itemMap.get(id) ?? empty;
 
     const bundle: PermBundle = {
@@ -73,8 +73,8 @@ function restorePermBundle(data: Partial<PermBundle>): PermBundle {
  * Restores permission bundle and stores it in window.PERMS
  */
 export function loadPerms(): void {
-    if (window.PERM_DATA) {
-        window.PERMS = restorePermBundle(JSON.parse(window.PERM_DATA, jsonReviver));
+    if (window.Surveyor.rawPermissions) {
+        window.Surveyor.permissions = restorePermBundle(JSON.parse(window.Surveyor.rawPermissions, jsonReviver));
     }
 }
 
@@ -83,7 +83,7 @@ export function loadPerms(): void {
  * @returns The permission bundle from window
  */
 export function getPerms(): PermBundle | undefined {
-    return window.PERMS as PermBundle | undefined;
+    return window.Surveyor.permissions as PermBundle | undefined;
 }
 
 function formatPerm(key: PermType): string {

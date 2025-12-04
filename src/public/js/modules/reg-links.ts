@@ -3,11 +3,11 @@
  * Handles creation, copying, and revoking of registration links
  */
 
-import { qs, qsAll } from '../core/dom';
-import { http } from '../core/http';
-import { formatDateTime } from '../core/formatting';
-import { createBadge, showSpinner, hideSpinner, copyWithFeedback } from '../shared/ui-helpers';
-import { showInlineAlert } from '../shared/alerts';
+import {qs, qsAll} from '../core/dom';
+import {del, get, post} from '../core/http';
+import {formatDateTime} from '../core/formatting';
+import {copyWithFeedback, createBadge, hideSpinner, showSpinner} from '../shared/ui-helpers';
+import {showInlineAlert} from '../shared/alerts';
 
 /**
  * Render registration link rows in the table
@@ -70,10 +70,11 @@ function renderRows(root: HTMLElement, rows: any[]): void {
  */
 async function refreshList(root: HTMLElement): Promise<void> {
     try {
-        const res = await http('GET', root.dataset.apiList!);
+        const res = await get(root.dataset.apiList!);
         renderRows(root, res.data || []);
-    } catch (e: any) {
-        console.error(e);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to update registration links.';
+        showInlineAlert('error', message);
     }
 }
 
@@ -94,9 +95,9 @@ async function handleCreate(btn: HTMLButtonElement): Promise<void> {
 
     showSpinner(btn);
     try {
-        const payload: any = { maxUses };
+        const payload: any = {maxUses};
         if (expiresAt) payload.expiresAt = expiresAt.toISOString();
-        const data = await http('POST', api, payload); // { id, token }
+        const data = await post(api, payload); // { id, token }
         // Optionally auto-copy the new link
         const eventId = root.dataset.eventId!;
         const url = `${location.origin}/event/${encodeURIComponent(eventId)}?regToken=${encodeURIComponent(data.token)}`;
@@ -125,11 +126,12 @@ async function handleRevoke(btn: HTMLButtonElement): Promise<void> {
 
     showSpinner(btn);
     try {
-        await http('DELETE', `${api}/${encodeURIComponent(id)}`);
+        await del(`${api}/${encodeURIComponent(id)}`);
         await refreshList(root);
         showInlineAlert('success', 'Link revoked');
-    } catch (e: any) {
-        showInlineAlert('error', e?.message || 'Revoke failed');
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Revoke failed.';
+        showInlineAlert('error', message);
     } finally {
         hideSpinner(btn);
     }

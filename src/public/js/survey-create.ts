@@ -3,8 +3,8 @@
  * Handles dynamic combination row management
  */
 
-import { setCurrentNavLocation } from './core/navigation';
-import { loadPerms } from './core/permissions';
+import {setCurrentNavLocation} from './core/navigation';
+import {loadPerms} from './core/permissions';
 
 /**
  * Weekday options for survey combinations
@@ -35,18 +35,18 @@ function createWeekdaySelect(name: string, selectedValue?: string): HTMLSelectEl
     sel.className = 'form-select text-bg-dark';
     sel.name = name;
     sel.required = true;
-    
+
     WEEKDAYS.forEach(([label, val]) => {
         const opt = document.createElement('option');
         opt.value = val;
         opt.textContent = label;
         sel.appendChild(opt);
     });
-    
+
     if (selectedValue) {
         sel.value = selectedValue;
     }
-    
+
     return sel;
 }
 
@@ -61,18 +61,18 @@ function createWeekSelect(name: string, selectedValue?: string): HTMLSelectEleme
     sel.className = 'form-select text-bg-dark';
     sel.name = name;
     sel.required = true;
-    
+
     WEEKS.forEach(val => {
         const opt = document.createElement('option');
         opt.value = val;
         opt.textContent = val === 'LAST' ? 'Last' : val;
         sel.appendChild(opt);
     });
-    
+
     if (selectedValue) {
         sel.value = selectedValue;
     }
-    
+
     return sel;
 }
 
@@ -125,6 +125,10 @@ function addCombinationRow(
     tableBody.appendChild(tr);
 }
 
+function getPrefilledCombinations() {
+    return window.Surveyor.prefilledCombinations
+}
+
 /**
  * Initialize combination row management
  */
@@ -133,11 +137,12 @@ function initButtons(): void {
     const addBtn = document.getElementById('addCombinationBtn');
     if (!tableBody || !addBtn) return;
 
-    const counter = { value: 0 };
+    const counter = {value: 0};
 
     // Prefill combinations if available
-    if (window.PREFILLED_COMBINATIONS) {
-        window.PREFILLED_COMBINATIONS.forEach((c: { weekday: number; nth_week?: number }) =>
+    const combs = getPrefilledCombinations()
+    if (combs) {
+        combs.forEach((c: { weekday: string; nth_week?: string }) =>
             addCombinationRow(tableBody, counter, c.weekday, c.nth_week)
         );
     } else {

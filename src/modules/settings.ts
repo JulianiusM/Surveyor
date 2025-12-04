@@ -35,6 +35,9 @@ export type Settings = {
     oidcClientId: string;
     oidcClientSecret: string;
     oidcRedirectUrl: string;
+    invoiceDir: string;
+    imprintUrl: string;
+    privacyPolicyUrl: string;
     initialized: boolean;
 };
 
@@ -71,6 +74,11 @@ const defaults: Settings = {
     appPort: 3000,
 
     file: "./settings.csv",
+
+    invoiceDir: "./invoices/",
+
+    imprintUrl: "http://example.com/imprint",
+    privacyPolicyUrl: "http://example.com/privacy",
 };
 
 // CSV_KEY -> settings key
@@ -98,6 +106,9 @@ const keyMap: Record<string, keyof Settings> = {
     LOCAL_LOGIN_ENABLED: "localLoginEnabled",
     SESSION_SECRET: "sessionSecret",
     APP_PORT: "appPort",
+    INVOICE_DIR: "invoiceDir",
+    IMPRINT_URL: "imprintUrl",
+    PRIVACY_POLICY_URL: "privacyPolicyUrl",
 };
 
 // per-field coercion

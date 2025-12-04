@@ -22,18 +22,16 @@ export async function http(method: string, url: string, body?: any): Promise<any
         body: isFormData ? body : (body ? JSON.stringify(body) : undefined),
     });
 
-    if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        throw new Error(text || `HTTP ${res.status}`);
+    const ct = res.headers.get('content-type') || '';
+    let data = ct.includes('application/json') ? await res.json() : await res.text().catch(() => '');
+    if (!res.ok && !data?.status) {
+        throw new Error(data || `HTTP ${res.status}`);
     }
 
-    const ct = res.headers.get('content-type') || '';
-    const data = ct.includes('application/json') ? await res.json() : await res.text();
-    
     if (data?.status === 'error') {
         throw new Error(data.message || 'Request failed');
     }
-    
+
     return data;
 }
 

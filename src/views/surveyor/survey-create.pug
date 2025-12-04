@@ -79,4 +79,4 @@ block scripts
     script(type="module" src="/js/survey-create.gen.js")
     if data && data.isDuplicate
         script.
-            window.PREFILLED_COMBINATIONS = !{JSON.stringify(parsedData)};
+            window.Surveyor.prefilledCombinations = !{JSON.stringify(parsedData)};

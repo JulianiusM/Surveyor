@@ -91,4 +91,4 @@ block scripts
     script(type="module" src="/js/activity-create.gen.js")
     if data && data.isDuplicate
         script.
-            window.PREFILLED_SLOTS = !{JSON.stringify(parsedData)};
+            window.Surveyor.prefilledSlots = !{JSON.stringify(parsedData)};

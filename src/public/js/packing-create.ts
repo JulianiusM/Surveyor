@@ -3,9 +3,9 @@
  * Handles dynamic item row management and form submission
  */
 
-import { setCurrentNavLocation } from './core/navigation';
-import { loadPerms } from './core/permissions';
-import type { PackingItem } from "../../modules/database/entities/packing/PackingItem";
+import {setCurrentNavLocation} from './core/navigation';
+import {loadPerms} from './core/permissions';
+import type {PackingItem} from "../../modules/database/entities/packing/PackingItem";
 
 /**
  * Create a table cell with given content
@@ -134,13 +134,18 @@ function createRow(pref: Partial<PackingItem> = {}, rowIdx: number = 0): void {
     tableBody.appendChild(tr);
 }
 
+function getPrefilledItems() {
+    return window.Surveyor.prefilledItems
+}
+
 /**
  * Prefill rows from window data (duplicate mode)
  */
 function prefillRows(): void {
-    if (!window.PREFILLED_ITEMS) return;
+    const items = getPrefilledItems();
+    if (!items) return;
 
-    window.PREFILLED_ITEMS.forEach((it: Partial<PackingItem>, i: number) => createRow(it, i));
+    items.forEach((it: Partial<PackingItem>, i: number) => createRow(it, i));
 }
 
 /**
@@ -151,9 +156,9 @@ function handleSubmit(evt: Event): void {
     const form = document.getElementById('packingForm') as HTMLFormElement;
     const hiddenFld = document.getElementById('itemsJson') as HTMLInputElement;
     const tableBody = document.getElementById('itemTable');
-    
+
     evt.preventDefault();
-    
+
     const items: Partial<PackingItem>[] = [];
 
     tableBody?.querySelectorAll('tr').forEach(tr => {
@@ -168,7 +173,7 @@ function handleSubmit(evt: Event): void {
         items.push({
             title: tVal,
             description: descInput?.value.trim(),
-            maxAssignees: maxInput?.value,
+            maxAssignees: Number.parseInt(maxInput?.value || "1"),
             requiredByAll: !!requiredInput?.checked
         });
     });
@@ -189,7 +194,7 @@ function initListeners(): void {
         const rowCount = tableBody.querySelectorAll('tr').length;
         createRow({}, rowCount);
     });
-    
+
     form.addEventListener('submit', handleSubmit);
 }
 
@@ -202,7 +207,7 @@ export function init(): void {
     initListeners();
 
     // Initial row or prefill
-    if (window.PREFILLED_ITEMS) {
+    if (getPrefilledItems()) {
         prefillRows();
     } else {
         createRow();

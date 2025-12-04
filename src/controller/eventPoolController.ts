@@ -60,8 +60,8 @@ async function createInvoicePool(event: Event, body: any) {
     const schema = Joi.object({
         name: Joi.string().max(255).required(),
         description: Joi.string().allow('').optional(),
-        isDefault: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on')).default(false),
-        assignAll: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on')).default(false),
+        isDefault: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on', '')).default(false),
+        assignAll: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on', '')).default(false),
         registrations: Joi.alternatives().try(
             Joi.array().items(Joi.number().integer()),
             Joi.number().integer(),
@@ -122,7 +122,10 @@ async function removePoolSurcharge(event: Event, poolId: string, surchargeId: st
 async function notifyTakeoverChanges(
     event: Event,
     pool: Awaited<ReturnType<typeof ensurePool>>,
-    changes: {added: {payerId: number; beneficiaryId: number}[]; removed: {payerId: number; beneficiaryId: number}[]},
+    changes: {
+        added: { payerId: number; beneficiaryId: number }[];
+        removed: { payerId: number; beneficiaryId: number }[]
+    },
     actorLabel: string,
 ) {
     if ((!changes.added || !changes.added.length) && (!changes.removed || !changes.removed.length)) return;
@@ -321,7 +324,7 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
     const targetIds = new Set(targetRegistrations.map((r) => r.id));
 
     // Bucket surcharges per participant so we can attribute them to a single payer later.
-    const surchargeMap = new Map<number, {amount: number; note: string}[]>();
+    const surchargeMap = new Map<number, { amount: number; note: string }[]>();
     for (const surcharge of pool.surcharges || []) {
         if (!targetIds.has(surcharge.registrationId)) continue;
         const existing = surchargeMap.get(surcharge.registrationId) || [];
@@ -338,7 +341,13 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
 
     const perPerson = targetRegistrations.length ? total / targetRegistrations.length : 0;
     // Track payer totals alongside detailed notes so breakdowns include amounts for covered beneficiaries and surcharges.
-    const payerShares = new Map<number, {base: number; surcharges: number; notes: string[]; beneficiaries: number[]; detailNotes: string[]}>();
+    const payerShares = new Map<number, {
+        base: number;
+        surcharges: number;
+        notes: string[];
+        beneficiaries: number[];
+        detailNotes: string[]
+    }>();
     for (const registration of targetRegistrations) {
         const baseShare = perPerson;
         const extras = surchargeMap.get(registration.id) || [];
@@ -346,7 +355,13 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
         const payerId = takeoverMap.get(registration.id) ?? registration.id;
         const participantLabel = participantMap.get(registration.id)?.name || `Participant #${registration.id}`;
         const beneficiaryName = payerId !== registration.id ? participantLabel : null;
-        const bucket = payerShares.get(payerId) || {base: 0, surcharges: 0, notes: [], beneficiaries: [], detailNotes: []};
+        const bucket = payerShares.get(payerId) || {
+            base: 0,
+            surcharges: 0,
+            notes: [],
+            beneficiaries: [],
+            detailNotes: []
+        };
         bucket.base += baseShare;
         bucket.surcharges += extraTotal;
         bucket.detailNotes.push(`Base share for ${beneficiaryName || 'self'}: ${formatAmount(baseShare)}`);
@@ -417,33 +432,33 @@ export async function serveInvoiceProof(event: Event, poolId: string, invoiceId:
     if (!invoice || !invoice.proofPath) {
         throw new APIError('Invoice proof not found', {}, 404);
     }
-    
+
     // Verify user has permission: either has MANAGE_ASSIGNMENTS permission or is the invoice submitter
     const actorRegId = await getActorRegistrationId(event, session);
-    const hasManagePermission = permData?.entity.has('MANAGE_ASSIGNMENTS') ?? false;
+    const hasManagePermission = permData?.entity?.has('MANAGE_ASSIGNMENTS') ?? false;
     const isSubmitter = actorRegId === invoice.registration.id;
-    
+
     if (!hasManagePermission && !isSubmitter) {
         throw new APIError('You do not have permission to view this proof', {}, 403);
     }
-    
+
     // Sanitize and validate the proof path to prevent directory traversal
     const uploadsDir = path.resolve(process.cwd(), 'uploads');
     const fullPath = path.resolve(process.cwd(), invoice.proofPath);
-    
+
     // Use path.relative to ensure the resolved path is within uploads directory
     const relativePath = path.relative(uploadsDir, fullPath);
     if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
         throw new APIError('Invalid proof path', {}, 400);
     }
-    
+
     // Check if file exists (async)
     try {
         await fs.promises.access(fullPath, fs.constants.R_OK);
     } catch {
         throw new APIError('Proof file not found', {}, 404);
     }
-    
+
     // Serve the file
     res.sendFile(fullPath);
 }

@@ -1,5 +1,5 @@
 import * as userService from "../modules/database/services/UserService";
-import {EntityItemType, EntityType} from "./UtilTypes";
+import type {EntityItemType, EntityType} from "./UtilTypes";
 
 export type OidcClaims = {
     sub: string;

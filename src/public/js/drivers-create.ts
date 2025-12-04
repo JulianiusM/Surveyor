@@ -3,9 +3,9 @@
  * Minimal form handling for drivers list creation
  */
 
-import { setCurrentNavLocation } from './core/navigation';
-import { loadPerms } from './core/permissions';
-import type { DriversItem } from "../../modules/database/entities/drivers/DriversItem";
+import {setCurrentNavLocation} from './core/navigation';
+import {loadPerms} from './core/permissions';
+import type {DriversItem} from "../../modules/database/entities/drivers/DriversItem";
 
 /**
  * Handle form submission - build JSON from form and submit
@@ -15,9 +15,9 @@ function handleSubmit(evt: Event): void {
     const form = document.getElementById('packingForm') as HTMLFormElement;
     const hiddenFld = document.getElementById('itemsJson') as HTMLInputElement;
     const tableBody = document.getElementById('itemTable');
-    
+
     evt.preventDefault();
-    
+
     const items: Partial<DriversItem>[] = [];
 
     if (tableBody) {
@@ -31,7 +31,7 @@ function handleSubmit(evt: Event): void {
             items.push({
                 title: tVal,
                 description: descInput?.value.trim(),
-                maxAssignees: maxInput?.value
+                maxAssignees: Number.parseInt(maxInput?.value || "1")
             });
         });
     }

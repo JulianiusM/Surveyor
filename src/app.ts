@@ -71,6 +71,8 @@ app.use(function (req: Request, res: Response, next: NextFunction) {
         oidcEnabled: settings.value.oidcEnabled,
         oidcName: settings.value.oidcName,
         rootUrl: settings.value.rootUrl,
+        imprintUrl: settings.value.imprintUrl,
+        privacyPolicyUrl: settings.value.privacyPolicyUrl,
     };
     next();
 });

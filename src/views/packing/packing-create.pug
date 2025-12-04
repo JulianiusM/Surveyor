@@ -92,4 +92,4 @@ block scripts
     script(type="module", src="/js/packing-create.gen.js")
     if data && data.isDuplicate
         script.
-            window.PREFILLED_ITEMS = !{JSON.stringify(parsedData)};
+            window.Surveyor.prefilledItems = !{JSON.stringify(parsedData)};

@@ -3,7 +3,7 @@
  * Common patterns for survey, packing, activity, and drivers entities
  */
 
-import {EntityType} from "../../../src/types/UtilTypes";
+import type {EntityType} from "../../../src/types/UtilTypes";
 
 /**
  * Entity-specific configuration for generating test data
