@@ -11,10 +11,27 @@
  * @param opts   optional configuration ({ value, placeholderLabel })
  * @param entities array of entity items ({ id, title, description? })
  */
+interface EntityOption {
+    id: string | number;
+    title?: string;
+    description?: string;
+    dateIso?: string;
+    name?: string;
+}
+
+interface BootstrapModalCtor {
+    getInstance: (element: Element) => BootstrapModalInstance | null;
+    new(element: Element): BootstrapModalInstance;
+}
+
+interface BootstrapModalInstance {
+    hide: () => void;
+}
+
 export function initEntitySelect(
     id: string,
-    entities: any[],
-    opts: any,
+    entities: EntityOption[],
+    opts: { value?: unknown; placeholderLabel?: string },
 ): void {
     const input = document.getElementById(id) as HTMLInputElement | null;
     const btnLabel = document.getElementById(`${id}-btn-label`) as HTMLElement | null;
@@ -34,7 +51,7 @@ export function initEntitySelect(
     }
 
     // Normalize data and options
-    const data: any[] = Array.isArray(entities) ? entities.slice() : [];
+    const data: EntityOption[] = Array.isArray(entities) ? entities.slice() : [];
     const placeholder = opts.placeholderLabel || "Select entity";
     let selectedId: string = resolveStringId(input.value || opts.value);
 
@@ -51,12 +68,10 @@ export function initEntitySelect(
 
     function setButtonLabelById(id: string): void {
         if (!id) {
-            // @ts-ignore
             btnLabel.textContent = placeholder;
             return;
         }
         const ev = findEventById(id);
-        // @ts-ignore
         btnLabel.textContent = ev?.title || placeholder;
     }
 
@@ -65,7 +80,6 @@ export function initEntitySelect(
     }
 
     function render(items: any[]): void {
-        // @ts-ignore
         list.innerHTML = "";
 
         if (!items.length) {
@@ -108,13 +122,11 @@ export function initEntitySelect(
             }
 
             li.appendChild(btn);
-            // @ts-ignore
             list.appendChild(li);
         }
     }
 
     function closeModalIfBootstrapPresent(): void {
-        //@ts-ignore
         const bs = window.bootstrap;
         const Ctor = bs?.Modal;
         if (!Ctor) return;
@@ -124,12 +136,10 @@ export function initEntitySelect(
 
     function select(id: string): void {
         selectedId = id;
-        // @ts-ignore
         input.value = selectedId;
         setButtonLabelById(selectedId);
 
         // Update active state in list
-        // @ts-ignore
         list.querySelectorAll<HTMLButtonElement>("button[data-event-id]").forEach(b => {
             if (b.dataset.eventId === selectedId) b.classList.add("active");
             else b.classList.remove("active");

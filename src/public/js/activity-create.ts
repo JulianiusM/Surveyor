@@ -4,6 +4,7 @@
  */
 
 import { setCurrentNavLocation } from './core/navigation';
+import { loadPerms } from './core/permissions';
 import type { ActivitySlot } from "../../modules/database/entities/activity/ActivitySlot";
 
 /**
@@ -230,7 +231,7 @@ export function createWeekTable(monday: Date, start: Date, end: Date): HTMLDivEl
  */
 export function buildTables(dStart: Date, dEnd: Date): void {
     const slotArea = document.getElementById('slotArea');
-    // @ts-expect-error TS(2531): Object is possibly 'null'
+    if (!slotArea) return;
     slotArea.innerHTML = '';
     
     let weekStart = new Date(dStart);
@@ -238,7 +239,6 @@ export function buildTables(dStart: Date, dEnd: Date): void {
 
     while (weekStart <= dEnd) {
         const tbl = createWeekTable(weekStart, dStart, dEnd);
-        // @ts-expect-error TS(2531): Object is possibly 'null'
         slotArea.appendChild(tbl);
         weekStart.setDate(weekStart.getDate() + 7);
     }
@@ -315,19 +315,17 @@ export function initSlotDnD(): void {
     let dragSrc: HTMLElement | null = null;
 
     document.addEventListener('dragstart', (e: Event) => {
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        if (e.target.closest('button') || e.target.closest('input')) return;
+        const target = e.target as Element | null;
+        if (target?.closest('button') || target?.closest('input')) return;
 
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        const slot = e.target.closest('.slot');
+        const slot = target?.closest('.slot');
         if (!slot) return;
         dragSrc = slot as HTMLElement;
         (e as DragEvent).dataTransfer!.effectAllowed = 'move';
     });
 
     document.addEventListener('dragover', (e: Event) => {
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        const slot = e.target.closest('.slot');
+        const slot = (e.target as Element | null)?.closest('.slot');
         if (!slot || slot === dragSrc) return;
         const container = (slot as HTMLElement).parentElement;
         if (container !== dragSrc!.parentElement) return; // only same day
@@ -364,13 +362,12 @@ export function initSlotDnD(): void {
  */
 export function init(): void {
     setCurrentNavLocation();
+    loadPerms();
     initListeners();
     initSubmitHandler();
     // initSlotDnD(); // Uncomment to enable drag-and-drop
 
-    // @ts-expect-error TS(2339): Property 'PREFILLED_SLOTS' does not exist
     if (window.PREFILLED_SLOTS) {
-        // @ts-expect-error TS(2339): Property 'PREFILLED_SLOTS' does not exist
         Object.assign(slotsMap, window.PREFILLED_SLOTS);
         maybeGenerate();
     }

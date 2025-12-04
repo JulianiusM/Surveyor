@@ -73,9 +73,89 @@ function restorePermBundle(data: Partial<PermBundle>): PermBundle {
  * Restores permission bundle and stores it in window.PERMS
  */
 export function loadPerms(): void {
-    // @ts-ignore
     if (window.PERM_DATA) {
-        // @ts-ignore
         window.PERMS = restorePermBundle(JSON.parse(window.PERM_DATA, jsonReviver));
+    }
+}
+
+/**
+ * Access the hydrated permission bundle
+ * @returns The permission bundle from window
+ */
+export function getPerms(): PermBundle | undefined {
+    return window.PERMS as PermBundle | undefined;
+}
+
+function formatPerm(key: PermType): string {
+    return key
+        .toLowerCase()
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function ensurePermData(): PermBundle {
+    const perms = getPerms();
+    if (!perms) {
+        throw new Error('Permission data is missing. Please refresh and try again.');
+    }
+    return perms;
+}
+
+/**
+ * Require an entity-level permission
+ * @param key Permission key
+ * @param action Human readable action for error messages
+ */
+export function requireEntityPerm(key: PermType, action: string): void {
+    const perms = ensurePermData();
+    if (!perms.entity.has(key)) {
+        throw new Error(`You need ${formatPerm(key)} permission to ${action}.`);
+    }
+}
+
+export interface EntityFormRule {
+    /** Permission key required for the change */
+    perm: PermType;
+    /** Human-readable action */
+    action: string;
+    /** Field names that trigger the check */
+    fields?: string[];
+    /** Custom predicate to trigger the check */
+    predicate?: (formData: FormData) => boolean;
+}
+
+/**
+ * Require entity-level permissions based on pending form changes
+ * @param formData Form data to inspect
+ * @param rules Rules mapping fields/predicates to permissions
+ */
+export function requireEntityPermsForForm(formData: FormData, rules: EntityFormRule[]): void {
+    const perms = ensurePermData();
+    for (const rule of rules) {
+        const matches = rule.predicate
+            ? rule.predicate(formData)
+            : (rule.fields ?? []).some((field) => formData.has(field));
+
+        if (matches && !perms.entity.has(rule.perm)) {
+            throw new Error(`You need ${formatPerm(rule.perm)} permission to ${rule.action}.`);
+        }
+    }
+}
+
+/**
+ * Require an item-level permission (with optional parent fallback)
+ * @param itemId Item identifier
+ * @param key Permission key to check on the item
+ * @param action Human readable action for error messages
+ * @param parentKey Optional parent permission to fall back to
+ */
+export function requireItemPerm(itemId: string, key: PermType, action: string, parentKey?: PermType): void {
+    const perms = ensurePermData();
+    if (!itemId) {
+        throw new Error('Missing item context for permission check.');
+    }
+    if (!perms.itemAllow(itemId, key, parentKey)) {
+        const permName = formatPerm(parentKey ?? key);
+        throw new Error(`You need ${permName} permission to ${action}.`);
     }
 }

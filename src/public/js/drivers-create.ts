@@ -4,6 +4,7 @@
  */
 
 import { setCurrentNavLocation } from './core/navigation';
+import { loadPerms } from './core/permissions';
 import type { DriversItem } from "../../modules/database/entities/drivers/DriversItem";
 
 /**
@@ -21,16 +22,16 @@ function handleSubmit(evt: Event): void {
 
     if (tableBody) {
         tableBody.querySelectorAll('tr').forEach(tr => {
-            // @ts-expect-error TS(2531): Object is possibly 'null'
-            const tVal = tr.querySelector(`input[name^="t_"]`)?.value.trim();
+            const titleInput = tr.querySelector<HTMLInputElement>('input[name^="t_"]');
+            const tVal = titleInput?.value.trim();
             if (!tVal) return;
-            
+
+            const descInput = tr.querySelector<HTMLInputElement>('input[name^="d_"]');
+            const maxInput = tr.querySelector<HTMLInputElement>('input[name^="m_"]');
             items.push({
                 title: tVal,
-                // @ts-expect-error TS(2531): Object is possibly 'null'
-                description: tr.querySelector(`input[name^="d_"]`)?.value.trim(),
-                // @ts-expect-error TS(2531): Object is possibly 'null'
-                maxAssignees: tr.querySelector(`input[name^="m_"]`)?.value
+                description: descInput?.value.trim(),
+                maxAssignees: maxInput?.value
             });
         });
     }
@@ -52,6 +53,7 @@ function initListeners(): void {
  */
 export function init(): void {
     setCurrentNavLocation();
+    loadPerms();
     initListeners();
 }
 

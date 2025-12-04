@@ -1,36 +1,61 @@
 /**
- * Shared owner operations
- * Provides reusable functionality for owner-specific operations
+ * Shared list actions
+ * Provides reusable functionality for list-level operations such as
+ * assignment removal, item deletion, and quick add flows.
  */
 
 import { post } from '../core/http';
 import { showInlineAlert } from './alerts';
 import { reloadAfterDelay } from './ui-helpers';
+import { requireEntityPerm, requireItemPerm } from '../core/permissions';
+import type { PermType } from '../../../types/PermissionTypes';
+
+interface PermissionGuard {
+    key: PermType;
+    action: string;
+    parentKey?: PermType;
+}
+
+function guardItemAction(itemId: string | null | undefined, guard: PermissionGuard): void {
+    requireItemPerm(itemId || '', guard.key, guard.action, guard.parentKey);
+}
+
+function guardEntityAction(guard: PermissionGuard): void {
+    requireEntityPerm(guard.key, guard.action);
+}
 
 /**
- * Configuration for owner remove functionality
+ * Configuration for assignment removal functionality
  */
-export interface OwnerRemoveConfig {
+export interface AssignmentRemovalConfig {
     /** Base API URL */
     baseUrl: string;
     /** Optional: reload delay in ms (default: 100) */
     reloadDelay?: number;
+    /** Optional: permission override */
+    guard?: PermissionGuard;
 }
 
 /**
- * Initialize owner remove assignee functionality
+ * Initialize assignee removal from list items
  * @param config Configuration object
  */
-export function initOwnerRemove(config: OwnerRemoveConfig): void {
+export function initAssignmentRemoval(config: AssignmentRemovalConfig): void {
     const reloadDelay = config.reloadDelay ?? 100;
+    const guard = config.guard ?? {
+        key: 'MANAGE_ASSIGNMENTS',
+        action: 'remove assignments',
+        parentKey: 'MANAGE_ASSIGNMENTS'
+    };
 
     document.addEventListener('click', async (e: Event) => {
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        const btn = e.target.closest('button[data-owner-remove]');
+        const btn = (e.target as Element | null)?.closest('button[data-owner-remove]');
         if (!btn) return;
-        
-        const assignId = btn.dataset.assignid;
+
+        const assignId = (btn as HTMLElement).dataset.assignid;
+        const itemId = (btn as HTMLElement).closest('[data-itemid]')?.getAttribute('data-itemid');
         try {
+            guardItemAction(itemId, guard);
             await post(`${config.baseUrl}/assignment/${assignId}/delete`, {});
             showInlineAlert('success', 'Removed');
             reloadAfterDelay(reloadDelay);
@@ -42,55 +67,9 @@ export function initOwnerRemove(config: OwnerRemoveConfig): void {
 }
 
 /**
- * Configuration for owner flags functionality
+ * Configuration for item deletion functionality
  */
-export interface OwnerFlagsConfig {
-    /** Base API URL */
-    baseUrl: string;
-    /** Optional: reload delay in ms (default: 100) */
-    reloadDelay?: number;
-    /** Optional: form element (defaults to #flagForm) */
-    formElement?: HTMLElement;
-    /** Optional: allowAdd switch element (defaults to #allowAddSwitch) */
-    allowAddElement?: HTMLInputElement;
-    /** Optional: guestManage switch element (defaults to #guestManageSwitch) */
-    guestManageElement?: HTMLInputElement;
-}
-
-/**
- * Initialize owner flags toggle functionality
- * @param config Configuration object
- */
-export function initOwnerFlags(config: OwnerFlagsConfig): void {
-    const form = config.formElement || document.getElementById('flagForm');
-    if (!form) return;
-
-    const reloadDelay = config.reloadDelay ?? 100;
-    const allowAddSwitch = config.allowAddElement || document.getElementById('allowAddSwitch') as HTMLInputElement;
-    const guestManageSwitch = config.guestManageElement || document.getElementById('guestManageSwitch') as HTMLInputElement;
-
-    form.addEventListener('change', async () => {
-        const payload = {
-            allowAdd: allowAddSwitch?.checked || false,
-            guestManage: guestManageSwitch?.checked || false,
-        };
-        try {
-            await post(`${config.baseUrl}/settings`, payload);
-            showInlineAlert('success', 'Settings updated');
-            reloadAfterDelay(reloadDelay);
-        } catch (err) {
-            const error = err as Error;
-            showInlineAlert('error', error.message);
-            /* Reload to force consistent switches */
-            reloadAfterDelay(800);
-        }
-    });
-}
-
-/**
- * Configuration for owner delete item functionality
- */
-export interface OwnerDeleteItemConfig {
+export interface ItemDeletionConfig {
     /** Base API URL */
     baseUrl: string;
     /** Confirmation message */
@@ -99,24 +78,34 @@ export interface OwnerDeleteItemConfig {
     successMessage: string;
     /** Optional: reload delay in ms (default: 100) */
     reloadDelay?: number;
+    /** Optional: permission override */
+    guard?: PermissionGuard;
+    /** Optional: selector override */
+    selector?: string;
 }
 
 /**
- * Initialize owner delete item functionality
+ * Initialize item deletion handlers
  * @param config Configuration object
  */
-export function initOwnerDeleteItem(config: OwnerDeleteItemConfig): void {
+export function initItemDeletion(config: ItemDeletionConfig): void {
     const reloadDelay = config.reloadDelay ?? 100;
+    const selector = config.selector || '[data-delete-item]';
+    const guard = config.guard ?? {
+        key: 'ITEM_DELETE',
+        action: 'delete items',
+        parentKey: 'ITEM_DELETE'
+    };
 
     document.addEventListener('click', async (e: Event) => {
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        const btn = e.target.closest('[data-delete-item]');
+        const btn = (e.target as Element | null)?.closest(selector);
         if (!btn) return;
 
         if (!confirm(config.confirmMessage)) return;
 
-        const itemId = btn.dataset.itemid;
+        const itemId = (btn as HTMLElement).dataset.itemid;
         try {
+            guardItemAction(itemId, guard);
             await post(`${config.baseUrl}/item/${itemId}/delete`, {});
             showInlineAlert('success', config.successMessage);
             reloadAfterDelay(reloadDelay);
@@ -139,6 +128,8 @@ export interface QuickAddConfig {
     formElement?: HTMLFormElement;
     /** Optional: reload delay in ms (default: 100) */
     reloadDelay?: number;
+    /** Optional: permission override */
+    guard?: PermissionGuard;
 }
 
 /**
@@ -150,9 +141,17 @@ export function initQuickAdd(config: QuickAddConfig): void {
     if (!quickForm) return;
 
     const reloadDelay = config.reloadDelay ?? 100;
+    const guard = config.guard ?? { key: 'ITEM_ADD', action: 'add new items' };
 
     quickForm.addEventListener('submit', async (e: Event) => {
         e.preventDefault();
+        try {
+            guardEntityAction(guard);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Not allowed to add items.';
+            showInlineAlert('error', message);
+            return;
+        }
         const data = Object.fromEntries(new FormData(quickForm as HTMLFormElement).entries());
 
         try {

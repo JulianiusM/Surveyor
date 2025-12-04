@@ -176,9 +176,8 @@ async function updateItemDescription(itemId: string, body: any) {
 
 async function updateItemAttr(itemId: string, body: any) {
     const {field, value} = body;
-    const allowed = {title: 1, description: 1, maxAssignees: 1};
+    const allowed: Record<string, boolean> = {title: true, description: true, maxAssignees: true};
 
-    // @ts-ignore
     if (!allowed[field]) throw new APIError('Invalid field', body, 400);
 
     if (!(await packingService.updatePackingItem(itemId, {[field]: value}))) {

@@ -4,6 +4,7 @@
  */
 
 import { setCurrentNavLocation } from './core/navigation';
+import { loadPerms } from './core/permissions';
 import {
     matchPassword,
     removeTooltip,
@@ -41,6 +42,7 @@ function registerEvents(): void {
 export function init(): void {
     registerEvents();
     setCurrentNavLocation();
+    loadPerms();
 }
 
 // Expose to global scope

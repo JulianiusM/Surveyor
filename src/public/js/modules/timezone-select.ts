@@ -1,4 +1,15 @@
 // timezone-select.ts
+interface BootstrapModal {
+    show: () => void;
+    hide: () => void;
+}
+
+interface BootstrapGlobal {
+    Modal: new (element: HTMLElement, options?: { focus?: boolean }) => BootstrapModal;
+}
+
+declare const bootstrap: BootstrapGlobal;
+
 export function initTimezoneSelect(id: number, opts: any) {
     const hid = document.getElementById(`${id}`) as HTMLInputElement;
     const btn = document.getElementById(`${id}-btn`) as HTMLButtonElement;
@@ -13,8 +24,7 @@ export function initTimezoneSelect(id: number, opts: any) {
     if (!hid || !btn || !btnLbl || !modalEl || !chipsEl || !search || !list) return;
 
     // Bootstrap Modal instance (expects Bootstrap JS included on the page)
-    // @ts-ignore
-    const modal = new bootstrap.Modal(modalEl, {focus: true});
+    const modal = new bootstrap.Modal(modalEl, { focus: true });
 
     const refDate = opts?.refDateIso ? new Date(opts.refDateIso) : new Date();
 
@@ -32,8 +42,7 @@ export function initTimezoneSelect(id: number, opts: any) {
     }
 
     const allZones: string[] =
-        // @ts-ignore
-        (Intl.supportedValuesOf?.("timeZone") as string[]) ||
+        (typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf("timeZone") as string[] : undefined) ||
         [
             "UTC", "Europe/Berlin", "Europe/London", "America/New_York", "America/Chicago",
             "America/Denver", "America/Los_Angeles", "America/Sao_Paulo", "Africa/Johannesburg",

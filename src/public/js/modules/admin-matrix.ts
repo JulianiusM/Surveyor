@@ -3,9 +3,9 @@
  * Handles admin permission matrix UI and operations
  */
 
-import { showInlineAlert } from "./module_functions";
 import { qs, qsAll } from '../core/dom';
-import { patch, del } from '../core/http';
+import { http, patch, del } from '../core/http';
+import { showInlineAlert } from '../shared/alerts';
 import { showSpinner, hideSpinner, reloadAfterDelay } from '../shared/ui-helpers';
 
 /**
