@@ -437,8 +437,9 @@ export async function serveInvoiceProof(event: Event, poolId: string, invoiceId:
     const uploadsDir = path.resolve(process.cwd(), 'uploads');
     const fullPath = path.resolve(process.cwd(), invoice.proofPath);
     
-    // Ensure the resolved path is within the uploads directory (not the directory itself)
-    if (!fullPath.startsWith(uploadsDir + path.sep)) {
+    // Use path.relative to ensure the resolved path is within uploads directory
+    const relativePath = path.relative(uploadsDir, fullPath);
+    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
         throw new APIError('Invalid proof path', {}, 400);
     }
     

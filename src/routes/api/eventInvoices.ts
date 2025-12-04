@@ -23,11 +23,10 @@ const proofStorage = multer.diskStorage({
         const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.pdf'];
         const ext = path.extname(file.originalname).toLowerCase();
         if (!allowedExts.includes(ext)) {
-            // Multer requires 2 args; pass empty string as filename since error occurred
-            cb(new Error('Invalid file extension'), '');
-        } else {
-            cb(null, `${Date.now()}-${uuidv4()}${ext}`);
+            // Pass error; second arg is required by type signature but unused on error
+            return cb(new Error('Invalid file extension'), '');
         }
+        cb(null, `${Date.now()}-${uuidv4()}${ext}`);
     },
 });
 
