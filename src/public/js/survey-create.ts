@@ -4,12 +4,7 @@
  */
 
 import { setCurrentNavLocation } from './core/navigation';
-
-declare global {
-    interface Window {
-        PREFILLED_COMBINATIONS?: { weekday: number; nth_week?: number }[];
-    }
-}
+import { loadPerms } from './core/permissions';
 
 /**
  * Weekday options for survey combinations
@@ -168,6 +163,7 @@ function initButtons(): void {
  */
 export function init(): void {
     setCurrentNavLocation();
+    loadPerms();
     initButtons();
 }
 

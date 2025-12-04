@@ -28,12 +28,6 @@ interface BootstrapModalInstance {
     hide: () => void;
 }
 
-declare global {
-    interface Window {
-        bootstrap?: { Modal: BootstrapModalCtor };
-    }
-}
-
 export function initEntitySelect(
     id: string,
     entities: EntityOption[],

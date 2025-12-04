@@ -4,12 +4,14 @@
  */
 
 import { initEntityLists, setCurrentNavLocation } from "./core/navigation";
+import { loadPerms } from './core/permissions';
 
 /**
  * Initialize stub module
  */
 export function init(): void {
     setCurrentNavLocation();
+    loadPerms();
     initEntityLists();
 }
 

@@ -11,13 +11,7 @@ import { initCardReorder } from './shared/drag-drop';
 import { initAssignmentRemoval } from './shared/list-actions';
 import { getSelectValues } from './core/form-utils';
 import { reloadAfterDelay } from './shared/ui-helpers';
-import { requireEntityPerm, requireItemPerm } from './core/permissions';
-
-declare global {
-    interface Window {
-        ACT_PLAN_ID?: string;
-    }
-}
+import { loadPerms, requireEntityPerm, requireItemPerm } from './core/permissions';
 
 /**
  * Get the activity plan ID from the window object
@@ -276,6 +270,7 @@ function initDates(): void {
  */
 export function init(): void {
     setCurrentNavLocation();
+    loadPerms();
     initDates();
     initSelectBox();
 
