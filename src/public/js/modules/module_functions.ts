@@ -1,35 +1,26 @@
-//Custom conditional class switch
+/**
+ * Legacy module_functions - Re-exports from refactored core modules
+ * This file maintains backward compatibility while new code uses the modular structure
+ */
 
-import type {PermBundle, PermType, PermView} from "../../../types/PermissionTypes";
-import {PERM} from "../../../modules/lib/permissions";
-
-export function refreshState(object: JQuery<HTMLElement>, validated: boolean, validatedClass: string, invalidatedClass: string) {
-    if (validated && !object.hasClass(validatedClass)) {
-        if (object.hasClass(invalidatedClass)) {
-            object.removeClass(invalidatedClass);
-        }
-        object.addClass(validatedClass);
-    } else if (!validated && !object.hasClass(invalidatedClass)) {
-        if (object.hasClass(validatedClass)) {
-            object.removeClass(validatedClass);
-        }
-        object.addClass(invalidatedClass);
-    }
-}
-
-//Function to set current location on navbar active
-export function setCurrentNavLocation() {
-    let path = window.location.pathname;
-
-    //Set corresponding nav items active
-    if (path.includes("/settings")) {
-        $("#settings").addClass("active");
-    } else if (path.includes("/login")) {
-        $("#login").addClass("active");
-    } else if (path.includes("/register")) {
-        $("#register").addClass("active");
-    }
-}
+// Re-export from core modules
+export { setCurrentNavLocation, initEntityLists } from '../core/navigation';
+export { loadPerms, jsonReviver } from '../core/permissions';
+export { post } from '../core/http';
+export { showInlineAlert } from '../shared/alerts';
+export { startInlineEdit, startInlineEditArea } from '../shared/inline-edit';
+export { 
+    refreshState, 
+    isPasswordValid, 
+    isPasswordRepeatValid, 
+    generateTooltip, 
+    verifyPassword, 
+    matchPassword, 
+    removeTooltip, 
+    validate 
+} from '../core/password-validation';
+export { getSelectValues, objectToArray } from '../core/form-utils';
+export { padNumber, formatISOInTimeZone } from '../core/formatting';
 
 //Verify password (GUI)
 export function verifyPassword(passwordObj: JQuery<HTMLInputElement>, infoObj: JQuery<HTMLElement>) {
