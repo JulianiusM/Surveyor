@@ -113,9 +113,9 @@ export function parseISODate(val: string): Date {
  */
 export function getValidDaysInWeek(monday: Date, start: Date, end: Date): Date[] {
     const validDays: Date[] = [];
+    const mondayTime = monday.getTime();
     for (let d = 0; d < 7; d++) {
-        const cur = new Date(monday);
-        cur.setDate(cur.getDate() + d);
+        const cur = new Date(mondayTime + d * 24 * 60 * 60 * 1000);
         if (cur < start || cur > end) continue;
         validDays.push(cur);
     }
