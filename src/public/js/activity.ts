@@ -95,30 +95,27 @@ function initInlineEdit(): void {
     const planId = getActivityPlanId();
 
     document.addEventListener('dblclick', (e: Event) => {
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        const desc = e.target.closest('[data-edit="planDescription"]');
+        const target = e.target as Element;
+        if (!target) return;
+        
+        const desc = target.closest('[data-edit="planDescription"]');
         if (desc) return startInlineEditArea(desc, `/api/activity/${planId}/description`);
 
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        const card = e.target.closest('.slot');
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        if (!card || e.target.closest('button')) return;
+        const card = target.closest('.slot');
+        if (!card || target.closest('button')) return;
 
         /* choose editable span */
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        let span = e.target.closest('[data-edit]');
+        let span = target.closest('[data-edit]');
 
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        if (!span && e.target.closest('.badge'))
+        if (!span && target.closest('.badge'))
             span = card.querySelector('[data-edit="maxAssignees"]');
 
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        if (!span && e.target.closest('small'))
+        if (!span && target.closest('small'))
             span = card.querySelector('[data-edit="description"]');
         if (!span)
             span = card.querySelector('[data-edit="title"]');
 
-        startInlineEdit(span, `/api/activity/${planId}/slot`);
+        if (span) startInlineEdit(span, `/api/activity/${planId}/slot`);
     });
 }
 
@@ -129,19 +126,21 @@ function initDelete(): void {
     const planId = getActivityPlanId();
 
     document.addEventListener('click', async (e: Event) => {
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        const btn = e.target.closest('[data-delete-slot]');
+        const target = e.target as Element;
+        if (!target) return;
+        
+        const btn = target.closest('[data-delete-slot]');
         if (!btn) return;
         if (!confirm('Delete this slot?')) return;
 
-        const id = btn.dataset.slotid;
+        const id = (btn as HTMLElement).dataset.slotid;
         try {
             await post(`/api/activity/${planId}/slot/${id}/delete`, {});
             showInlineAlert('success', 'Deleted');
             reloadAfterDelay(100);
         } catch (err) {
-            // @ts-expect-error TS(2571): Object is of type 'unknown'
-            showInlineAlert('error', err.message);
+            const error = err as Error;
+            showInlineAlert('error', error.message);
         }
     });
 }
