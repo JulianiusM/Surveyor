@@ -103,3 +103,21 @@ export function parseISODate(val: string): Date {
     const [y, m, d] = val.split('-').map(Number);
     return new Date(Date.UTC(y, m - 1, d));
 }
+
+/**
+ * Get valid days within a date range, starting from a Monday
+ * @param monday Starting Monday date
+ * @param start Earliest valid date (inclusive)
+ * @param end Latest valid date (inclusive)
+ * @returns Array of valid dates within the range
+ */
+export function getValidDaysInWeek(monday: Date, start: Date, end: Date): Date[] {
+    const validDays: Date[] = [];
+    for (let d = 0; d < 7; d++) {
+        const cur = new Date(monday);
+        cur.setDate(cur.getDate() + d);
+        if (cur < start || cur > end) continue;
+        validDays.push(cur);
+    }
+    return validDays;
+}

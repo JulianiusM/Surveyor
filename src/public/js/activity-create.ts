@@ -16,7 +16,7 @@ const slotsMap: Record<string, Partial<ActivitySlot>[]> = {};
  */
 const sortSlotFn = (a: Partial<ActivitySlot>, b: Partial<ActivitySlot>) => (a.pos || 0) - (b.pos || 0);
 
-import { formatISODate as fmtISO, parseISODate as toDate } from './core/formatting';
+import { formatISODate as fmtISO, parseISODate as toDate, getValidDaysInWeek } from './core/formatting';
 
 /**
  * Update or add slot object in the map
@@ -203,13 +203,7 @@ export function createWeekTable(monday: Date, start: Date, end: Date): HTMLDivEl
     const hRow = thead.insertRow();
 
     // Only render days in valid range
-    const validDays: Date[] = [];
-    for (let d = 0; d < 7; d++) {
-        const cur = new Date(monday);
-        cur.setDate(cur.getDate() + d);
-        if (cur < start || cur > end) continue;
-        validDays.push(cur);
-    }
+    const validDays = getValidDaysInWeek(monday, start, end);
 
     validDays.forEach(date => {
         const th = document.createElement('th');
