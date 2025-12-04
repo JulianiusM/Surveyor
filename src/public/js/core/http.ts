@@ -48,20 +48,20 @@ export async function post(url: string, payload: any = {}): Promise<any> {
 }
 
 /**
- * Make a GET request
- * @param url Request URL
+ * Make a GET request to an API endpoint (prefixed with /api)
+ * @param url API endpoint path
  * @returns Response data
  */
 export async function get(url: string): Promise<any> {
-    return http('GET', url);
+    return http('GET', '/api' + url);
 }
 
 /**
- * Make a DELETE request
- * @param url Request URL
+ * Make a DELETE request to an API endpoint (prefixed with /api)
+ * @param url API endpoint path
  * @param body Request body (optional)
  * @returns Response data
  */
 export async function del(url: string, body?: any): Promise<any> {
-    return http('DELETE', url, body);
+    return http('DELETE', '/api' + url, body);
 }

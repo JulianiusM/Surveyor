@@ -33,15 +33,17 @@ export function initTableReorder(config: TableReorderConfig): void {
     let dragSrc: HTMLTableRowElement | null = null;
 
     tbody.addEventListener('dragstart', (e: Event) => {
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        if (e.target.closest('button') || e.target.closest('input')) return;
+        const target = e.target as HTMLElement | null;
+        if (!target) return;
+        if (target.closest('button') || target.closest('input')) return;
 
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        dragSrc = e.target.closest('tr');
+        dragSrc = target.closest('tr') as HTMLTableRowElement | null;
         if (!dragSrc) return;
 
-        // @ts-expect-error TS(2339): Property 'dataTransfer' does not exist on type 'Event'
-        e.dataTransfer.effectAllowed = 'move';
+        const dragEvent = e as DragEvent;
+        if (dragEvent.dataTransfer) {
+            dragEvent.dataTransfer.effectAllowed = 'move';
+        }
         
         if (config.onDragStart) config.onDragStart();
     });
@@ -50,15 +52,19 @@ export function initTableReorder(config: TableReorderConfig): void {
         if (!dragSrc) return;
         e.preventDefault();
 
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        const tr = e.target.closest('tr');
+        const target = e.target as HTMLElement | null;
+        if (!target) return;
+        
+        const tr = target.closest('tr') as HTMLTableRowElement | null;
         if (!tr || tr === dragSrc) return;
         
         const rect = tr.getBoundingClientRect();
+        const dragEvent = e as DragEvent;
+        const clientY = dragEvent.clientY || 0;
+        
         tr.parentNode!.insertBefore(
             dragSrc,
-            // @ts-expect-error TS(2339): Property 'clientY' does not exist on type 'Event'
-            (e.clientY - rect.top) > rect.height / 2 ? tr.nextSibling : tr
+            (clientY - rect.top) > rect.height / 2 ? tr.nextSibling : tr
         );
     });
 
@@ -66,8 +72,7 @@ export function initTableReorder(config: TableReorderConfig): void {
         if (!dragSrc) return;
 
         const orders = Array.from(tbody.children).map((tr, i) => ({
-            // @ts-expect-error TS(2345): Argument of type 'Element' is not assignable
-            itemId: config.getItemId(tr),
+            itemId: config.getItemId(tr as HTMLTableRowElement),
             position: i,
         }));
         
@@ -75,8 +80,8 @@ export function initTableReorder(config: TableReorderConfig): void {
             await post(config.apiUrl, { orders });
             showInlineAlert('success', 'Order saved');
         } catch (e) {
-            // @ts-expect-error TS(2571): Object is of type 'unknown'
-            showInlineAlert('error', e.message);
+            const error = e as Error;
+            showInlineAlert('error', error.message);
             // Reload to restore original order
             setTimeout(() => location.reload(), 1000);
         } finally {
@@ -113,38 +118,43 @@ export function initCardReorder(config: CardReorderConfig): void {
 
     /* start */
     document.addEventListener('dragstart', (e: Event) => {
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        if (e.target.closest('button') || e.target.closest('input')) return;
+        const target = e.target as HTMLElement | null;
+        if (!target) return;
+        if (target.closest('button') || target.closest('input')) return;
 
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        const card = e.target.closest(`.${config.cardClass}`);
+        const card = target.closest(`.${config.cardClass}`) as HTMLElement | null;
         if (!card) return;
 
-        dragCard = card as HTMLElement;
+        dragCard = card;
         dragParent = card.parentElement;
 
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        e.dataTransfer.setData('text/plain', '');
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        e.dataTransfer.effectAllowed = 'move';
+        const dragEvent = e as DragEvent;
+        if (dragEvent.dataTransfer) {
+            dragEvent.dataTransfer.setData('text/plain', '');
+            dragEvent.dataTransfer.effectAllowed = 'move';
+        }
     });
 
     /* over – only same container */
     document.addEventListener('dragover', (e: Event) => {
         if (!dragCard) return;
 
-        // @ts-expect-error TS(2531): Object is possibly 'null'
-        const overCard = e.target.closest(`.${config.cardClass}`);
+        const target = e.target as HTMLElement | null;
+        if (!target) return;
+        
+        const overCard = target.closest(`.${config.cardClass}`) as HTMLElement | null;
         if (!overCard || overCard === dragCard) return;
         if (overCard.parentElement !== dragParent) return;  // stay in column
 
         e.preventDefault();  // allow drop
 
         const rect = overCard.getBoundingClientRect();
+        const dragEvent = e as DragEvent;
+        const clientY = dragEvent.clientY || 0;
+        
         dragParent!.insertBefore(
             dragCard,
-            // @ts-expect-error TS(2339): Property 'clientY' does not exist on type 'Event'
-            (e.clientY - rect.top) > rect.height / 2 ? overCard.nextSibling : overCard
+            (clientY - rect.top) > rect.height / 2 ? overCard.nextSibling : overCard
         );
     });
 
@@ -158,8 +168,8 @@ export function initCardReorder(config: CardReorderConfig): void {
             await post(config.apiUrl, { order });
             showInlineAlert('success', 'Reordered');
         } catch (err) {
-            // @ts-expect-error TS(2571): Object is of type 'unknown'
-            showInlineAlert('error', err.message);
+            const error = err as Error;
+            showInlineAlert('error', error.message);
         }
         
         dragCard = dragParent = null;

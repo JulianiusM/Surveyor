@@ -49,52 +49,52 @@ export function isPasswordRepeatValid(password?: string, passwordRepeat?: string
 }
 
 /**
- * Generate password requirements tooltip HTML
+ * Generate password requirements feedback HTML using Bootstrap styling
  * @param hasEight Has 8+ characters
  * @param hasLetter Has at least one letter
  * @param hasDigit Has at least one digit
- * @returns HTML string for tooltip
+ * @returns HTML string for feedback
  */
-export function generateTooltip(hasEight: boolean, hasLetter: boolean, hasDigit: boolean): string {
-    // Define tooltip parts
-    const tooltipDesc = "<p><b>Password must match the following criteria:</b></p><ul style=\"list-style-type:none\">";
-    const tooltipCritOK = "<li style=\"color:green\"><b>✓</b>";
-    const tooltipCritNO = "<li style=\"color:red\">🗙";
-    const tooltipCritEight = "At least <b>eight (8) characters</b>";
-    const tooltipCritLetter = "At least <b>one (1) letter</b>";
-    const tooltipCritDigit = "At least <b>one (1) digit</b>";
-    const tooltipCritClose = "</li>";
-    const tooltipClose = "</ul>";
+export function generatePasswordFeedback(hasEight: boolean, hasLetter: boolean, hasDigit: boolean): string {
+    const criteria = [
+        { met: hasEight, text: 'At least 8 characters' },
+        { met: hasLetter, text: 'At least one letter' },
+        { met: hasDigit, text: 'At least one digit' }
+    ];
 
-    // Generate tooltip
-    let tooltipHTML = tooltipDesc;
-    tooltipHTML += hasEight ? tooltipCritOK : tooltipCritNO;
-    tooltipHTML += (tooltipCritEight + tooltipCritClose);
-    tooltipHTML += hasLetter ? tooltipCritOK : tooltipCritNO;
-    tooltipHTML += (tooltipCritLetter + tooltipCritClose);
-    tooltipHTML += hasDigit ? tooltipCritOK : tooltipCritNO;
-    tooltipHTML += (tooltipCritDigit + tooltipCritClose);
-    tooltipHTML += tooltipClose;
+    const items = criteria.map(c => {
+        const icon = c.met 
+            ? '<i class="bi bi-check-circle-fill text-success"></i>' 
+            : '<i class="bi bi-x-circle text-danger"></i>';
+        const textClass = c.met ? 'text-success' : 'text-muted';
+        return `<li class="small ${textClass}">${icon} ${c.text}</li>`;
+    }).join('');
 
-    return tooltipHTML;
+    return `<ul class="list-unstyled mb-0 mt-1">${items}</ul>`;
 }
 
 /**
- * Verify password meets requirements and update UI
+ * Verify password meets requirements and update UI with Bootstrap validation
  * @param passwordObj Password input jQuery object
  * @param infoObj Info display jQuery object
  */
 export function verifyPassword(passwordObj: JQuery<HTMLInputElement>, infoObj: JQuery<HTMLElement>): void {
-    const isEightChars = ((passwordObj.val()?.length || 0) >= 8);
-    const hasLetter = (/[a-z,A-Z]/g.test(passwordObj.val() ?? ''));
-    const hasDigit = (/\d/g.test(passwordObj.val() ?? ''));
+    const password = passwordObj.val() ?? '';
+    const isEightChars = password.length >= 8;
+    const hasLetter = /[a-z,A-Z]/g.test(password);
+    const hasDigit = /\d/g.test(password);
+    const isValid = isPasswordValid(password);
 
-    // Show tooltip
-    infoObj.empty();
-    infoObj.append(generateTooltip(isEightChars, hasLetter, hasDigit));
+    // Update feedback display
+    infoObj.html(generatePasswordFeedback(isEightChars, hasLetter, hasDigit));
 
-    // Show field status using bootstrap
-    refreshState(passwordObj, isPasswordValid(passwordObj.val()), "is-valid", "is-invalid");
+    // Update Bootstrap validation classes
+    if (password.length > 0) {
+        refreshState(passwordObj, isValid, "is-valid", "is-invalid");
+    } else {
+        // Remove validation classes when empty
+        passwordObj.removeClass("is-valid is-invalid");
+    }
 }
 
 /**

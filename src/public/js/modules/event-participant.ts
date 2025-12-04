@@ -7,17 +7,7 @@ import type { ParticipantRow } from "../../../types/EventTypes";
 import { qs, qsAll } from '../core/dom';
 import { http } from '../core/http';
 import { formatDate } from '../core/formatting';
-
-/**
- * Create a colored badge for dietary choices
- * @param text Badge text
- * @returns HTML string for badge
- */
-function chip(text: string): string {
-    let txtClass = "text-bg-secondary";
-    if (text === "ALLERGIES") txtClass = "text-bg-danger";
-    return `<span class="badge rounded-pill ${txtClass} me-1">${text}</span>`;
-}
+import { createDietaryChip } from '../shared/ui-helpers';
 
 /**
  * Render dietary totals as colored badges
@@ -81,7 +71,7 @@ function renderRows(root: HTMLElement, data: any): void {
 
         const emailCell = p.email ? `<span class="d-none d-md-inline">${p.email}</span>` : '<span class="text-secondary d-none d-md-inline">—</span>';
 
-        const dietBadges = dietary.map(chip).join('') || '<span class="text-secondary">—</span>';
+        const dietBadges = dietary.map(createDietaryChip).join('') || '<span class="text-secondary">—</span>';
 
         const hasAll = dietary.includes("ALLERGIES") && !!allergiesText;
         const allergyBtn = hasAll

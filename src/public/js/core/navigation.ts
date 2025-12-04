@@ -5,17 +5,39 @@
 
 /**
  * Set current navigation location in navbar as active
+ * Highlights the current page in the navigation menu
  */
 export function setCurrentNavLocation(): void {
     const path = window.location.pathname;
 
-    // Set corresponding nav items active
-    if (path.includes("/settings")) {
-        $("#settings").addClass("active");
-    } else if (path.includes("/login")) {
-        $("#login").addClass("active");
-    } else if (path.includes("/register")) {
-        $("#register").addClass("active");
+    // Remove any existing active classes
+    document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+
+    // Set corresponding nav items active based on current path
+    if (path.includes("/survey")) {
+        const link = document.querySelector('a.nav-link[href*="/survey"]');
+        if (link) link.classList.add('active');
+    } else if (path.includes("/packing")) {
+        const link = document.querySelector('a.nav-link[href*="/packing"]');
+        if (link) link.classList.add('active');
+    } else if (path.includes("/activity")) {
+        const link = document.querySelector('a.nav-link[href*="/activity"]');
+        if (link) link.classList.add('active');
+    } else if (path.includes("/drivers")) {
+        const link = document.querySelector('a.nav-link[href*="/drivers"]');
+        if (link) link.classList.add('active');
+    } else if (path.includes("/users/dashboard")) {
+        const link = document.querySelector('a.dropdown-item[href="/users/dashboard"]');
+        if (link) link.classList.add('active');
+    } else if (path.includes("/users/manage-dashboard")) {
+        const link = document.querySelector('a.dropdown-item[href="/users/manage-dashboard"]');
+        if (link) link.classList.add('active');
+    } else if (path.includes("/users/login")) {
+        const link = document.querySelector('a.nav-link[href="/users/login"]');
+        if (link) link.classList.add('active');
+    } else if (path.includes("/users/register")) {
+        const link = document.querySelector('a.nav-link[href="/users/register"]');
+        if (link) link.classList.add('active');
     }
 }
 

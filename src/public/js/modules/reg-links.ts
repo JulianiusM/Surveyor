@@ -6,43 +6,7 @@
 import { qs, qsAll } from '../core/dom';
 import { http } from '../core/http';
 import { formatDateTime } from '../core/formatting';
-import { copyToClipboard } from '../core/clipboard';
-
-/**
- * Create a colored badge for link status
- * @param status Link status
- * @returns HTML string for badge
- */
-function badge(status: string): string {
-    const map: Record<string, string> = {
-        active: 'success',
-        consumed: 'warning',
-        expired: 'secondary',
-        revoked: 'danger',
-    };
-    const cls = map[status] || 'secondary';
-    return `<span class="badge bg-${cls} text-uppercase">${status}</span>`;
-}
-
-/**
- * Show spinner and disable button
- * @param btn Button element
- */
-function spinnerOn(btn: HTMLButtonElement): void {
-    btn.disabled = true;
-    const sp = btn.querySelector('.spinner-border') as HTMLElement | null;
-    if (sp) sp.classList.remove('d-none');
-}
-
-/**
- * Hide spinner and enable button
- * @param btn Button element
- */
-function spinnerOff(btn: HTMLButtonElement): void {
-    btn.disabled = false;
-    const sp = btn.querySelector('.spinner-border') as HTMLElement | null;
-    if (sp) sp.classList.add('d-none');
-}
+import { createBadge, showSpinner, hideSpinner, copyWithFeedback } from '../shared/ui-helpers';
 
 /**
  * Render registration link rows in the table
@@ -81,7 +45,7 @@ function renderRows(root: HTMLElement, rows: any[]): void {
       <td>${tokenCell}</td>
       <td>${created}</td>
       <td>${expires}</td>
-      <td>${badge(status)}</td>
+      <td>${createBadge(status)}</td>
       <td class="text-end">
         <div class="btn-group btn-group-sm" role="group">
           <button class="btn btn-outline-light btn-copy" type="button" data-url="${fullUrl}" ${disabled}>
@@ -127,7 +91,7 @@ async function handleCreate(btn: HTMLButtonElement): Promise<void> {
     const maxUses = Math.max(1, Number(usesEl.value || 1));
     const expiresAt = expEl.value ? new Date(expEl.value) : null;
 
-    spinnerOn(btn);
+    showSpinner(btn);
     try {
         const payload: any = { maxUses };
         if (expiresAt) payload.expiresAt = expiresAt.toISOString();
@@ -135,15 +99,15 @@ async function handleCreate(btn: HTMLButtonElement): Promise<void> {
         // Optionally auto-copy the new link
         const eventId = root.dataset.eventId!;
         const url = `${location.origin}/event/${encodeURIComponent(eventId)}?regToken=${encodeURIComponent(data.token)}`;
-        await copyToClipboard(url).catch(() => {
+        await copyWithFeedback(url).catch(() => {
         });
         // Close modal (if bootstrap present)
-        (window as any).bootstrap?.Modal.getOrCreateInstance(modal)?.hide();
+        window.bootstrap?.Modal.getOrCreateInstance(modal)?.hide();
         await refreshList(root);
     } catch (e: any) {
         alert(`Create failed: ${e?.message || e}`);
     } finally {
-        spinnerOff(btn);
+        hideSpinner(btn);
     }
 }
 
@@ -192,10 +156,8 @@ export function initRegLinks(): void {
         if (btnCopy) {
             ev.preventDefault();
             const url = btnCopy.dataset.url!;
-            spinnerOn(btnCopy);
-            copyToClipboard(url).catch(() => {
+            copyWithFeedback(url, btnCopy).catch(() => {
             }); // silent
-            spinnerOff(btnCopy);
             return;
         }
 

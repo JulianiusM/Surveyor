@@ -3,41 +3,17 @@
  * Handles event registration, participant management, and invoice operations
  */
 
-import { setCurrentNavLocation, initEntityLists } from '../core/navigation';
-import { loadPerms } from '../core/permissions';
-import { post } from '../core/http';
-import { showInlineAlert } from '../shared/alerts';
-import { formatISOInTimeZone } from '../core/formatting';
-
-declare global {
-    interface Window {
-        bootstrap: {
-            Modal: {
-                getOrCreateInstance(element: HTMLElement): { show(): void; hide(): void };
-            };
-        };
-    }
-}
+import { setCurrentNavLocation, initEntityLists } from './core/navigation';
+import { loadPerms } from './core/permissions';
+import { post } from './core/http';
+import { showInlineAlert } from './shared/alerts';
+import { formatISOInTimeZone } from './core/formatting';
+import { parseJsonScript } from './shared/ui-helpers';
 
 /**
  * Reload delay constant
  */
 const RELOAD_DELAY_MS = 120;
-
-/**
- * Parse JSON from script tag
- * @param id Script tag ID
- * @returns Parsed data or null
- */
-function parseJsonScript<T>(id: string): T | null {
-    const el = document.getElementById(id);
-    if (!el || !el.textContent) return null;
-    try {
-        return JSON.parse(el.textContent) as T;
-    } catch {
-        return null;
-    }
-}
 
 const participantsData = parseJsonScript<any[]>("participantsData") || [];
 const registrationData = parseJsonScript<{ id: number }>("registrationData");
