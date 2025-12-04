@@ -17,12 +17,6 @@ import {
     initQuickAdd
 } from './shared/list-actions';
 
-declare global {
-    interface Window {
-        PACK_LIST_ID?: string;
-    }
-}
-
 /**
  * Get the packing list ID from the window object
  */

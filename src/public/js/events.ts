@@ -10,12 +10,6 @@ import { showInlineAlert } from './shared/alerts';
 import { formatISOInTimeZone } from './core/formatting';
 import { parseJsonScript, reloadAfterDelay, formatDuration, updateToLocalString } from './shared/ui-helpers';
 
-declare global {
-    interface Window {
-        EVENT_ID?: string;
-    }
-}
-
 /**
  * Reload delay constant
  */

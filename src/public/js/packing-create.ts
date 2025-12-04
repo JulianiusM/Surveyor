@@ -7,12 +7,6 @@ import { setCurrentNavLocation } from './core/navigation';
 import { loadPerms } from './core/permissions';
 import type { PackingItem } from "../../modules/database/entities/packing/PackingItem";
 
-declare global {
-    interface Window {
-        PREFILLED_ITEMS?: Partial<PackingItem>[];
-    }
-}
-
 /**
  * Create a table cell with given content
  * @param child Child element to append

@@ -13,12 +13,6 @@ import { getSelectValues } from './core/form-utils';
 import { reloadAfterDelay } from './shared/ui-helpers';
 import { loadPerms, requireEntityPerm, requireItemPerm } from './core/permissions';
 
-declare global {
-    interface Window {
-        ACT_PLAN_ID?: string;
-    }
-}
-
 /**
  * Get the activity plan ID from the window object
  */

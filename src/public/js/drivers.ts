@@ -14,12 +14,6 @@ import {
     initQuickAdd
 } from './shared/list-actions';
 
-declare global {
-    interface Window {
-        DRIVERS_LIST_ID?: string;
-    }
-}
-
 /**
  * Get the drivers list ID from the window object
  */

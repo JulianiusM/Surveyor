@@ -5,13 +5,6 @@
 
 import type { PermBundle, PermType, PermView } from "../../../types/PermissionTypes";
 
-declare global {
-    interface Window {
-        PERM_DATA?: string;
-        PERMS?: PermBundle;
-    }
-}
-
 /**
  * JSON reviver for deserializing Map objects
  * @param key Property key

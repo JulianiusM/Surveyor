@@ -6,12 +6,6 @@
 import { setCurrentNavLocation } from './core/navigation';
 import { loadPerms } from './core/permissions';
 
-declare global {
-    interface Window {
-        PREFILLED_COMBINATIONS?: { weekday: number; nth_week?: number }[];
-    }
-}
-
 /**
  * Weekday options for survey combinations
  */
