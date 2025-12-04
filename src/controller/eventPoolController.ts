@@ -420,7 +420,7 @@ export async function serveInvoiceProof(event: Event, poolId: string, invoiceId:
     
     // Verify user has permission: either has MANAGE_ASSIGNMENTS permission or is the invoice submitter
     const actorRegId = await getActorRegistrationId(event, session);
-    const hasManagePermission = permData?.entity.has('MANAGE_ASSIGNMENTS');
+    const hasManagePermission = permData?.entity.has('MANAGE_ASSIGNMENTS') ?? false;
     const isSubmitter = actorRegId === invoice.registration.id;
     
     if (!hasManagePermission && !isSubmitter) {
