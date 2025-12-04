@@ -1,52 +1,75 @@
-/*  Packing-Create – Client-Logic (no jQuery)  */
-import {setCurrentNavLocation} from "./modules/module_functions";
-import {PackingItem} from "../../modules/database/entities/packing/PackingItem";
+/**
+ * Packing list creation functionality
+ * Handles dynamic item row management and form submission
+ */
 
-export function buildCell(child: any) {
+import { setCurrentNavLocation } from '../core/navigation';
+import type { PackingItem } from "../../modules/database/entities/packing/PackingItem";
+
+/**
+ * Create a table cell with given content
+ * @param child Child element to append
+ * @returns HTMLTableCellElement
+ */
+function buildCell(child: HTMLElement): HTMLTableCellElement {
     const td = document.createElement('td');
     td.appendChild(child);
     return td;
 }
 
-/* ───── Row creation / removal ──────────────────────────── */
-export function createRow(pref: Partial<PackingItem> = {}, rowIdx = 0) {
-    const tableBody = document.getElementById('itemTable')!;
-    const tr = document.createElement('tr');
+/**
+ * Create input element for item title
+ * @param rowIdx Row index for name attribute
+ * @param value Initial value
+ * @returns HTMLInputElement
+ */
+function createTitleInput(rowIdx: number, value: string = ''): HTMLInputElement {
+    const input = document.createElement('input');
+    input.className = 'form-control text-bg-dark';
+    input.name = `t_${rowIdx}`;
+    input.required = true;
+    input.value = value;
+    return input;
+}
 
-    tr.dataset.idx = String(rowIdx);
+/**
+ * Create input element for item description
+ * @param rowIdx Row index for name attribute
+ * @param value Initial value
+ * @returns HTMLInputElement
+ */
+function createDescriptionInput(rowIdx: number, value: string = ''): HTMLInputElement {
+    const input = document.createElement('input');
+    input.className = 'form-control text-bg-dark';
+    input.name = `d_${rowIdx}`;
+    input.value = value;
+    return input;
+}
 
-    // title
-    const tInput = document.createElement('input');
-    tInput.className = 'form-control text-bg-dark';
-    tInput.name = `t_${rowIdx}`;
-    tInput.required = true;
-    tInput.value = pref.title || '';
-    tr.appendChild(buildCell(tInput));
+/**
+ * Create input element for max assignees
+ * @param rowIdx Row index for name attribute
+ * @param value Initial value
+ * @returns HTMLInputElement
+ */
+function createMaxAssigneesInput(rowIdx: number, value: number = 1): HTMLInputElement {
+    const input = document.createElement('input');
+    input.className = 'form-control text-bg-dark';
+    input.type = 'number';
+    input.min = '1';
+    input.value = String(value);
+    input.name = `m_${rowIdx}`;
+    input.required = true;
+    return input;
+}
 
-    // description
-    const dInput = document.createElement('input');
-    dInput.className = 'form-control text-bg-dark';
-    dInput.name = `d_${rowIdx}`;
-    dInput.value = pref.description || '';
-    tr.appendChild(buildCell(dInput));
-
-    // maxAssignees
-    const mInput = document.createElement('input');
-    mInput.className = 'form-control text-bg-dark';
-    mInput.type = 'number';
-    mInput.min = '1';
-    mInput.value = String(pref.maxAssignees || 1);
-    mInput.name = `m_${rowIdx}`;
-    mInput.required = true;
-    const tdMax = buildCell(mInput);
-    tdMax.style.width = '110px';
-    tr.appendChild(tdMax);
-
-    /* --- Action: Switch + Remove --------------------------------- */
-    const tdAct = document.createElement('td');
-    tdAct.className = 'text-center';
-
-    // Bootstrap-Switch
+/**
+ * Create "everyone brings" switch
+ * @param rowIdx Row index for name attribute
+ * @param checked Initial checked state
+ * @returns HTMLDivElement containing switch
+ */
+function createEveryoneSwitch(rowIdx: number, checked: boolean = false): HTMLDivElement {
     const wrap = document.createElement('div');
     wrap.className = 'form-check form-switch d-inline-flex align-items-center me-3';
 
@@ -54,61 +77,98 @@ export function createRow(pref: Partial<PackingItem> = {}, rowIdx = 0) {
     sw.type = 'checkbox';
     sw.className = 'form-check-input';
     sw.name = `e_${rowIdx}`;
-    sw.checked = !!pref.requiredByAll;
+    sw.checked = checked;
     wrap.appendChild(sw);
 
     const lbl = document.createElement('span');
     lbl.className = 'ms-1 small';
     lbl.innerText = 'Everyone';
     wrap.appendChild(lbl);
-    tdAct.appendChild(wrap);
 
-    // action remove
-    const rmBtn = document.createElement('button');
-    rmBtn.type = 'button';
-    rmBtn.className = 'btn btn-sm btn-outline-danger';
-    rmBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
-    rmBtn.addEventListener('click', () => tr.remove());
-    tdAct.appendChild(rmBtn);
+    return wrap;
+}
 
+/**
+ * Create remove button
+ * @param row Row element to remove on click
+ * @returns HTMLButtonElement
+ */
+function createRemoveButton(row: HTMLTableRowElement): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-sm btn-outline-danger';
+    btn.innerHTML = '<i class="bi bi-x-lg"></i>';
+    btn.addEventListener('click', () => row.remove());
+    return btn;
+}
+
+/**
+ * Create a new item row in the table
+ * @param pref Prefilled item data (optional)
+ * @param rowIdx Row index
+ */
+function createRow(pref: Partial<PackingItem> = {}, rowIdx: number = 0): void {
+    const tableBody = document.getElementById('itemTable')!;
+    const tr = document.createElement('tr');
+    tr.dataset.idx = String(rowIdx);
+
+    // Title input
+    tr.appendChild(buildCell(createTitleInput(rowIdx, pref.title || '')));
+
+    // Description input
+    tr.appendChild(buildCell(createDescriptionInput(rowIdx, pref.description || '')));
+
+    // Max assignees input
+    const tdMax = buildCell(createMaxAssigneesInput(rowIdx, pref.maxAssignees || 1));
+    tdMax.style.width = '110px';
+    tr.appendChild(tdMax);
+
+    // Action cell with switch and remove button
+    const tdAct = document.createElement('td');
+    tdAct.className = 'text-center';
+    tdAct.appendChild(createEveryoneSwitch(rowIdx, !!pref.requiredByAll));
+    tdAct.appendChild(createRemoveButton(tr));
     tr.appendChild(tdAct);
 
     tableBody.appendChild(tr);
 }
 
-/* ───── Prefill (duplicate-mode) ────────────────────────── */
-export function prefillRows() {
-
-    // @ts-expect-error TS(2339): Property 'PREFILLED_ITEMS' does not exist on type ... Remove this comment to see the full error message
+/**
+ * Prefill rows from window data (duplicate mode)
+ */
+function prefillRows(): void {
+    // @ts-expect-error TS(2339): Property 'PREFILLED_ITEMS' does not exist
     if (!window.PREFILLED_ITEMS) return;
 
-    // @ts-expect-error TS(2339): Property 'PREFILLED_ITEMS' does not exist on type ... Remove this comment to see the full error message
-    window.PREFILLED_ITEMS.forEach((it, i) => createRow(it, i));
+    // @ts-expect-error TS(2339): Property 'PREFILLED_ITEMS' does not exist
+    window.PREFILLED_ITEMS.forEach((it: Partial<PackingItem>, i: number) => createRow(it, i));
 }
 
-/* ───── Build JSON & submit ─────────────────────────────── */
-export function handleSubmit(evt: Event) {
+/**
+ * Handle form submission - build JSON and submit
+ * @param evt Submit event
+ */
+function handleSubmit(evt: Event): void {
     const form = document.getElementById('packingForm') as HTMLFormElement;
     const hiddenFld = document.getElementById('itemsJson') as HTMLInputElement;
     const tableBody = document.getElementById('itemTable');
+    
     evt.preventDefault();
+    
     const items: Partial<PackingItem>[] = [];
 
     tableBody?.querySelectorAll('tr').forEach(tr => {
-
-        // @ts-expect-error TS(2531): Object is possibly 'null'.
+        // @ts-expect-error TS(2531): Object is possibly 'null'
         const tVal = tr.querySelector(`input[name^="t_"]`).value.trim();
         if (!tVal) return;
+        
         items.push({
             title: tVal,
-
-            // @ts-expect-error TS(2531): Object is possibly 'null'.
+            // @ts-expect-error TS(2531): Object is possibly 'null'
             description: tr.querySelector(`input[name^="d_"]`).value.trim(),
-
-            // @ts-expect-error TS(2531): Object is possibly 'null'.
+            // @ts-expect-error TS(2531): Object is possibly 'null'
             maxAssignees: tr.querySelector(`input[name^="m_"]`).value,
-
-            // @ts-expect-error TS(2531): Object is possibly 'null'.
+            // @ts-expect-error TS(2531): Object is possibly 'null'
             requiredByAll: tr.querySelector('input[name^="e_"]').checked
         });
     });
@@ -117,25 +177,36 @@ export function handleSubmit(evt: Event) {
     form.submit();
 }
 
-export function initListeners() {
+/**
+ * Initialize event listeners
+ */
+function initListeners(): void {
     const addBtn = document.getElementById('addItemBtn')!;
     const form = document.getElementById('packingForm')!;
 
-    addBtn.addEventListener('click', (e) => createRow());
+    addBtn.addEventListener('click', () => {
+        const tableBody = document.getElementById('itemTable')!;
+        const rowCount = tableBody.querySelectorAll('tr').length;
+        createRow({}, rowCount);
+    });
+    
     form.addEventListener('submit', handleSubmit);
 }
 
-
-export function init() {
+/**
+ * Initialize packing list creation page
+ */
+export function init(): void {
     setCurrentNavLocation();
     initListeners();
-    // Initial row (or prefill)
-
-    // @ts-expect-error TS(2339): Property 'PREFILLED_ITEMS' does not exist on type ... Remove this comment to see the full error message
-    if (window.PREFILLED_ITEMS)
+    
+    // Initial row or prefill
+    // @ts-expect-error TS(2339): Property 'PREFILLED_ITEMS' does not exist
+    if (window.PREFILLED_ITEMS) {
         prefillRows();
-    else
+    } else {
         createRow();
+    }
 }
 
 // Expose to global scope

@@ -1,24 +1,34 @@
-/* ========== Assign / Unassign ================================ */
+/**
+ * Event management functionality
+ * Handles event registration, participant management, and invoice operations
+ */
 
-import {
-    formatISOInTimeZone,
-    initEntityLists,
-    loadPerms,
-    post,
-    setCurrentNavLocation,
-    showInlineAlert
-} from "./modules/module_functions";
+import { setCurrentNavLocation, initEntityLists } from '../core/navigation';
+import { loadPerms } from '../core/permissions';
+import { post } from '../core/http';
+import { showInlineAlert } from '../shared/alerts';
+import { formatISOInTimeZone } from '../core/formatting';
 
 declare global {
     interface Window {
         bootstrap: {
             Modal: {
-                getOrCreateInstance(element: HTMLElement): {show(): void; hide(): void};
+                getOrCreateInstance(element: HTMLElement): { show(): void; hide(): void };
             };
         };
     }
 }
 
+/**
+ * Reload delay constant
+ */
+const RELOAD_DELAY_MS = 120;
+
+/**
+ * Parse JSON from script tag
+ * @param id Script tag ID
+ * @returns Parsed data or null
+ */
 function parseJsonScript<T>(id: string): T | null {
     const el = document.getElementById(id);
     if (!el || !el.textContent) return null;
@@ -30,10 +40,12 @@ function parseJsonScript<T>(id: string): T | null {
 }
 
 const participantsData = parseJsonScript<any[]>("participantsData") || [];
-const registrationData = parseJsonScript<{id: number}>("registrationData");
-const RELOAD_DELAY_MS = 120;
+const registrationData = parseJsonScript<{ id: number }>("registrationData");
 
-export function allergyCheck() {
+/**
+ * Sync allergy notes requirement with checkbox
+ */
+export function allergyCheck(): void {
     const allergyBox = document.getElementById('diet-allergies');
     const notes = document.getElementById('allergyNotes');
     if (allergyBox && notes) {
@@ -41,14 +53,16 @@ export function allergyCheck() {
             // @ts-ignore
             notes.required = allergyBox.checked;
         }
-
         allergyBox.addEventListener('change', sync);
         sync();
     }
 }
 
-export function deadlineUpdater() {
-    function fmt(ms: number) {
+/**
+ * Update deadline countdown display
+ */
+export function deadlineUpdater(): void {
+    function fmt(ms: number): string {
         if (ms <= 0) return "closed";
         const s = Math.floor(ms / 1000);
         const d = Math.floor(s / 86400);
@@ -61,6 +75,7 @@ export function deadlineUpdater() {
         const deadlineCnt = document.getElementById('deadlineCountdown');
         const deadline = document.getElementById('deadlineText');
         const deadlineTZ = document.getElementById('deadlineTZ');
+        
         if (!deadline || !deadlineCnt || !deadlineTZ || !deadline.dataset?.date || !deadlineTZ.dataset?.tz) {
             return;
         }
@@ -83,7 +98,6 @@ export function deadlineUpdater() {
                 // @ts-ignore
                 deadlineCnt.textContent = `(${fmt(ms)})`;
             }
-
             tick();
             setInterval(tick, 60000);
         }
@@ -94,39 +108,44 @@ export function deadlineUpdater() {
             elem.value = formatISOInTimeZone(date, deadlineTZ.dataset.tz).slice(0, 16);
         }
     } catch (e) {
+        // Silently fail if deadline elements not present
     }
 }
 
-export function initRegistration() {
+/**
+ * Initialize event registration form
+ */
+export function initRegistration(): void {
     const form = document.getElementById('registrationForm');
     if (!form) return;
 
-    form.addEventListener('submit', async e => {
+    form.addEventListener('submit', async (e: Event) => {
         e.preventDefault();
         try {
             const formData = new FormData(form as HTMLFormElement);
-            // Turn single-value fields into an object…
             // @ts-ignore
             const payload: any = Object.fromEntries(formData);
-
-            // …then explicitly collect multi-value fields:
-            payload.dietary = formData.getAll('dietary'); // <-- ARRAY of selected values
+            payload.dietary = formData.getAll('dietary');
+            
             // @ts-ignore
             await post(`/event/${window.EVENT_ID}/register`, payload);
             showInlineAlert('success', 'Registration successful.');
             setTimeout(() => location.reload(), RELOAD_DELAY_MS);
         } catch (err) {
-            // @ts-expect-error TS(2571): Object is of type 'unknown'.
+            // @ts-expect-error TS(2571): Object is of type 'unknown'
             showInlineAlert('error', err.message);
         }
     });
 }
 
-export function initUpdate() {
+/**
+ * Initialize event update form
+ */
+export function initUpdate(): void {
     const form = document.getElementById('eventUpdateForm');
     if (!form) return;
 
-    form.addEventListener('submit', async e => {
+    form.addEventListener('submit', async (e: Event) => {
         e.preventDefault();
         try {
             const formData = new FormData(form as HTMLFormElement);
@@ -139,17 +158,20 @@ export function initUpdate() {
             showInlineAlert('success', 'Updated');
             setTimeout(() => location.reload(), RELOAD_DELAY_MS);
         } catch (err) {
-            // @ts-expect-error TS(2571): Object is of type 'unknown'.
+            // @ts-expect-error TS(2571): Object is of type 'unknown'
             showInlineAlert('error', err.message);
         }
     });
 }
 
-export function initCancelRegistration() {
+/**
+ * Initialize registration cancellation
+ */
+export function initCancelRegistration(): void {
     const btn = document.getElementById('cancelRegistrationBtn');
     if (!btn) return;
 
-    btn.addEventListener('click', async e => {
+    btn.addEventListener('click', async () => {
         if (window.confirm("Are you sure you want to cancel your registration?")) {
             try {
                 // @ts-ignore
@@ -157,14 +179,17 @@ export function initCancelRegistration() {
                 showInlineAlert('success', 'Registration cancelled!');
                 setTimeout(() => location.reload(), RELOAD_DELAY_MS);
             } catch (err) {
-                // @ts-expect-error TS(2571): Object is of type 'unknown'.
+                // @ts-expect-error TS(2571): Object is of type 'unknown'
                 showInlineAlert('error', err.message);
             }
         }
-    })
+    });
 }
 
-export function initDateRange() {
+/**
+ * Initialize date range display
+ */
+export function initDateRange(): void {
     const start = document.getElementById('startSpan');
     const end = document.getElementById('endSpan');
     if (!start || !end) return;
@@ -172,15 +197,14 @@ export function initDateRange() {
     const startDate = new Date(Date.parse(start.dataset.start!));
     const endDate = new Date(Date.parse(end.dataset.end!));
 
-    start.textContent = startDate.toLocaleString(undefined, {
-        dateStyle: "full",
-    });
-    end.textContent = endDate.toLocaleString(undefined, {
-        dateStyle: "full",
-    })
+    start.textContent = startDate.toLocaleString(undefined, { dateStyle: "full" });
+    end.textContent = endDate.toLocaleString(undefined, { dateStyle: "full" });
 }
 
-export function initRegistrationDateRange() {
+/**
+ * Initialize registration date range display
+ */
+export function initRegistrationDateRange(): void {
     const start = document.getElementById('arrival');
     const end = document.getElementById('departure');
     if (!start || !end) return;
@@ -188,33 +212,37 @@ export function initRegistrationDateRange() {
     const startDate = new Date(Date.parse(start.dataset.start!));
     const endDate = new Date(Date.parse(end.dataset.end!));
 
-    start.textContent = startDate.toLocaleString(undefined, {
-        dateStyle: "full",
-    });
-    end.textContent = endDate.toLocaleString(undefined, {
-        dateStyle: "full",
-    })
+    start.textContent = startDate.toLocaleString(undefined, { dateStyle: "full" });
+    end.textContent = endDate.toLocaleString(undefined, { dateStyle: "full" });
 }
 
-function serializeForm(form: HTMLFormElement) {
+/**
+ * Serialize form data to object
+ * @param form Form element
+ * @returns Serialized data
+ */
+function serializeForm(form: HTMLFormElement): Record<string, any> {
     const formData = new FormData(form);
     const payload: Record<string, any> = Object.fromEntries(formData as any);
     payload.registrations = formData.getAll('registrations');
     return payload;
 }
 
-export function initInvoiceAdmin() {
+/**
+ * Initialize invoice pool administration
+ */
+export function initInvoiceAdmin(): void {
     const poolForm = document.getElementById('poolCreateForm');
     if (poolForm) {
-        poolForm.addEventListener('submit', async (e) => {
+        poolForm.addEventListener('submit', async (e: Event) => {
             e.preventDefault();
             try {
                 const payload = serializeForm(poolForm as HTMLFormElement);
-                // Checkbox normalization
                 const checkbox = poolForm.querySelector('#assignAllPools') as HTMLInputElement | null;
                 if (checkbox) payload.assignAll = checkbox.checked ? 'on' : '';
                 const defaultBox = poolForm.querySelector('#defaultPool') as HTMLInputElement | null;
                 if (defaultBox) payload.isDefault = defaultBox.checked ? 'on' : '';
+                
                 await post((poolForm as HTMLElement).dataset.api!, payload);
                 showInlineAlert('success', 'Pool created');
                 setTimeout(() => location.reload(), RELOAD_DELAY_MS);
@@ -236,7 +264,8 @@ export function initInvoiceAdmin() {
         syncDisabled();
     }
 
-    document.addEventListener('click', async (e) => {
+    // Invoice action handlers
+    document.addEventListener('click', async (e: Event) => {
         const target = e.target as HTMLElement;
         if (target.classList.contains('invoice-approve')) {
             await post(`/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/approve`);
@@ -254,8 +283,6 @@ export function initInvoiceAdmin() {
             return setTimeout(() => location.reload(), RELOAD_DELAY_MS);
         }
         if (target.classList.contains('pool-close')) {
-            const poolRoot = target.closest('.invoice-pool');
-            if (!poolRoot) return;
             await post(`/event/${EVENT_ID}/invoice-pools/${target.dataset.id}/close`);
             showInlineAlert('success', 'Pool closed with adjustments');
             return setTimeout(() => location.reload(), RELOAD_DELAY_MS);
@@ -267,7 +294,8 @@ export function initInvoiceAdmin() {
         }
     });
 
-    document.addEventListener('submit', async (e) => {
+    // Form submission handlers
+    document.addEventListener('submit', async (e: Event) => {
         const target = e.target as HTMLElement;
         if (target.classList.contains('pool-assignment')) {
             e.preventDefault();
@@ -299,7 +327,8 @@ export function initInvoiceAdmin() {
         }
     });
 
-    document.addEventListener('change', (e) => {
+    // Pool assignment checkbox handler
+    document.addEventListener('change', (e: Event) => {
         const target = e.target as HTMLElement;
         if (target.matches('.pool-assignment input[type="checkbox"]')) {
             const form = target.closest('.pool-assignment') as HTMLFormElement | null;
@@ -311,17 +340,23 @@ export function initInvoiceAdmin() {
         }
     });
 
-    document.addEventListener('change', async (e) => {
+    // Share paid status handler
+    document.addEventListener('change', async (e: Event) => {
         const target = e.target as HTMLElement;
         if (target.classList.contains('share-paid')) {
             const checked = (target as HTMLInputElement).checked;
-            await post(`/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/shares/${target.dataset.id}/pay`, {isPaid: checked ? 'on' : ''});
+            await post(`/event/${EVENT_ID}/invoice-pools/${target.dataset.pool}/shares/${target.dataset.id}/pay`, {
+                isPaid: checked ? 'on' : ''
+            });
             showInlineAlert('success', 'Share updated');
         }
     });
 }
 
-function initTakeoverModal() {
+/**
+ * Initialize takeover modal for invoice management
+ */
+function initTakeoverModal(): void {
     const modalEl = document.getElementById('takeoverModal');
     const form = modalEl?.querySelector('#takeoverForm') as HTMLFormElement | null;
     const payerSelect = modalEl?.querySelector('#takeoverPayer') as HTMLSelectElement | null;
@@ -374,7 +409,7 @@ function initTakeoverModal() {
     payerSelect?.addEventListener('change', () => renderBeneficiaries(Number(payerSelect?.value || 0)));
     searchInput?.addEventListener('input', filterBeneficiaries);
 
-    document.addEventListener('click', (e) => {
+    document.addEventListener('click', (e: Event) => {
         const btn = (e.target as HTMLElement).closest('.manage-takeovers') as HTMLElement | null;
         if (!btn) return;
         const poolRoot = btn.closest('.invoice-pool') || btn.closest('[data-pool]');
@@ -404,12 +439,12 @@ function initTakeoverModal() {
         modal.show();
     });
 
-    form.addEventListener('submit', async (e) => {
+    form.addEventListener('submit', async (e: Event) => {
         e.preventDefault();
         if (!activePoolId) return;
         const selected = Array.from(beneficiaryList.querySelectorAll('input[type="checkbox"]')) as HTMLInputElement[];
         const beneficiaries = selected.filter((box) => box.checked).map((box) => box.value);
-        const payload: Record<string, any> = {beneficiaries};
+        const payload: Record<string, any> = { beneficiaries };
         if (activeMode === 'admin' && payerSelect) payload.payerId = payerSelect.value;
         const endpoint = activeMode === 'admin'
             ? `/event/${EVENT_ID}/invoice-pools/${activePoolId}/takeovers/manage`
@@ -425,10 +460,13 @@ function initTakeoverModal() {
     });
 }
 
-export function initInvoiceSubmission() {
+/**
+ * Initialize invoice submission form
+ */
+export function initInvoiceSubmission(): void {
     const form = document.getElementById('invoiceSubmitForm');
     if (!form) return;
-    form.addEventListener('submit', async (e) => {
+    form.addEventListener('submit', async (e: Event) => {
         e.preventDefault();
         const poolSelect = document.getElementById('invoicePool') as HTMLSelectElement | null;
         const poolId = poolSelect?.value;
@@ -445,7 +483,10 @@ export function initInvoiceSubmission() {
     });
 }
 
-export function init() {
+/**
+ * Initialize event management page
+ */
+export function init(): void {
     setCurrentNavLocation();
     loadPerms();
     allergyCheck();
@@ -458,7 +499,7 @@ export function init() {
     initInvoiceAdmin();
     initInvoiceSubmission();
 
-    // @ts-expect-error TS(2339): Property 'PACK_LIST_ID' does not exist on type 'Wi... Remove this comment to see the full error message
+    // @ts-expect-error TS(2339): Property 'PACK_LIST_ID' does not exist
     if (window.EVENT_ID) {
         initRegistration();
         initCancelRegistration();
