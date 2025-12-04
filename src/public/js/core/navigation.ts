@@ -10,8 +10,8 @@
 export function setCurrentNavLocation(): void {
     const path = window.location.pathname;
 
-    // Remove any existing active classes
-    document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+    // Remove any existing active classes from all navigation elements
+    document.querySelectorAll('.nav-link, .dropdown-item').forEach(link => link.classList.remove('active'));
 
     // Set corresponding nav items active based on current path
     if (path.includes("/survey")) {
