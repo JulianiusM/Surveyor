@@ -48,6 +48,12 @@ export interface OwnerFlagsConfig {
     baseUrl: string;
     /** Optional: reload delay in ms (default: 100) */
     reloadDelay?: number;
+    /** Optional: form element (defaults to #flagForm) */
+    formElement?: HTMLElement;
+    /** Optional: allowAdd switch element (defaults to #allowAddSwitch) */
+    allowAddElement?: HTMLInputElement;
+    /** Optional: guestManage switch element (defaults to #guestManageSwitch) */
+    guestManageElement?: HTMLInputElement;
 }
 
 /**
@@ -55,25 +61,25 @@ export interface OwnerFlagsConfig {
  * @param config Configuration object
  */
 export function initOwnerFlags(config: OwnerFlagsConfig): void {
-    const form = document.getElementById('flagForm');
+    const form = config.formElement || document.getElementById('flagForm');
     if (!form) return;
 
     const reloadDelay = config.reloadDelay ?? 100;
+    const allowAddSwitch = config.allowAddElement || document.getElementById('allowAddSwitch') as HTMLInputElement;
+    const guestManageSwitch = config.guestManageElement || document.getElementById('guestManageSwitch') as HTMLInputElement;
 
     form.addEventListener('change', async () => {
         const payload = {
-            // @ts-expect-error TS(2531): Object is possibly 'null'
-            allowAdd: document.getElementById('allowAddSwitch').checked,
-            // @ts-expect-error TS(2531): Object is possibly 'null'
-            guestManage: document.getElementById('guestManageSwitch').checked,
+            allowAdd: allowAddSwitch?.checked || false,
+            guestManage: guestManageSwitch?.checked || false,
         };
         try {
             await post(`${config.baseUrl}/settings`, payload);
             showInlineAlert('success', 'Settings updated');
             setTimeout(() => location.reload(), reloadDelay);
         } catch (err) {
-            // @ts-expect-error TS(2571): Object is of type 'unknown'
-            showInlineAlert('error', err.message);
+            const error = err as Error;
+            showInlineAlert('error', error.message);
             /* Reload to force consistent switches */
             setTimeout(() => location.reload(), 800);
         }
@@ -126,8 +132,10 @@ export function initOwnerDeleteItem(config: OwnerDeleteItemConfig): void {
 export interface QuickAddConfig {
     /** Base API URL */
     baseUrl: string;
-    /** Form ID */
-    formId: string;
+    /** Form ID or element */
+    formId?: string;
+    /** Optional: form element */
+    formElement?: HTMLFormElement;
     /** Optional: reload delay in ms (default: 100) */
     reloadDelay?: number;
 }
@@ -137,14 +145,13 @@ export interface QuickAddConfig {
  * @param config Configuration object
  */
 export function initQuickAdd(config: QuickAddConfig): void {
-    const quickForm = document.getElementById(config.formId);
+    const quickForm = config.formElement || (config.formId ? document.getElementById(config.formId) as HTMLFormElement : null);
     if (!quickForm) return;
 
     const reloadDelay = config.reloadDelay ?? 100;
 
     quickForm.addEventListener('submit', async (e: Event) => {
         e.preventDefault();
-        // @ts-expect-error TS(2550): Property 'fromEntries' does not exist on type 'ObjectConstructor'
         const data = Object.fromEntries(new FormData(quickForm as HTMLFormElement).entries());
 
         try {
@@ -152,8 +159,8 @@ export function initQuickAdd(config: QuickAddConfig): void {
             showInlineAlert('success', 'Added');
             setTimeout(() => location.reload(), reloadDelay);
         } catch (err) {
-            // @ts-expect-error TS(2571): Object is of type 'unknown'
-            showInlineAlert('error', err.message);
+            const error = err as Error;
+            showInlineAlert('error', error.message);
         }
     });
 }

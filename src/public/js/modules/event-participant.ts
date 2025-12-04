@@ -7,7 +7,8 @@ import type { ParticipantRow } from "../../../types/EventTypes";
 import { qs, qsAll } from '../core/dom';
 import { http } from '../core/http';
 import { formatDate } from '../core/formatting';
-import { createDietaryChip } from '../shared/ui-helpers';
+import { createDietaryChip, showSpinner, hideSpinner } from '../shared/ui-helpers';
+import { showInlineAlert } from '../shared/alerts';
 
 /**
  * Render dietary totals as colored badges
@@ -158,14 +159,15 @@ async function deleteRegistration(root: HTMLElement, tr: HTMLTableRowElement): P
     if (!confirm('Delete this registration? This cannot be undone.')) return;
 
     const btn = tr.querySelector('.btn-delete-reg') as HTMLButtonElement | null;
-    if (btn) btn.disabled = true;
+    if (btn) showSpinner(btn);
     try {
         await http('DELETE', `${api}/${encodeURIComponent(regId)}`);
         await refreshList(root);
+        showInlineAlert('success', 'Registration deleted');
     } catch (e) {
-        alert('Delete failed.');
+        showInlineAlert('error', 'Delete failed');
     } finally {
-        if (btn) btn.disabled = false;
+        if (btn) hideSpinner(btn);
     }
 }
 

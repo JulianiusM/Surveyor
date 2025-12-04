@@ -7,9 +7,14 @@
  * Show an inline alert message
  * @param status Alert type (success, info, error)
  * @param message Message to display
+ * @param container Optional container element (defaults to #liveAlerts)
  */
-export function showInlineAlert(status: 'success' | 'info' | 'error', message: string): void {
-    const alertBox = document.getElementById('liveAlerts');
+export function showInlineAlert(
+    status: 'success' | 'info' | 'error', 
+    message: string,
+    container?: HTMLElement
+): void {
+    const alertBox = container || document.getElementById('liveAlerts');
     if (!alertBox) return;
 
     const cls = {

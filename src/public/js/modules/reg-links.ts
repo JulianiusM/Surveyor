@@ -7,6 +7,7 @@ import { qs, qsAll } from '../core/dom';
 import { http } from '../core/http';
 import { formatDateTime } from '../core/formatting';
 import { createBadge, showSpinner, hideSpinner, copyWithFeedback } from '../shared/ui-helpers';
+import { showInlineAlert } from '../shared/alerts';
 
 /**
  * Render registration link rows in the table
@@ -122,14 +123,15 @@ async function handleRevoke(btn: HTMLButtonElement): Promise<void> {
     const api = root.dataset.apiRevoke!;
     if (!confirm('Revoke this link? It cannot be used afterwards.')) return;
 
-    btn.disabled = true;
+    showSpinner(btn);
     try {
         await http('DELETE', `${api}/${encodeURIComponent(id)}`);
         await refreshList(root);
+        showInlineAlert('success', 'Link revoked');
     } catch (e: any) {
-        alert(`Revoke failed: ${e?.message || e}`);
+        showInlineAlert('error', e?.message || 'Revoke failed');
     } finally {
-        btn.disabled = false;
+        hideSpinner(btn);
     }
 }
 

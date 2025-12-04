@@ -6,34 +6,6 @@
 import type { PermBundle, PermType, PermView } from "../../../types/PermissionTypes";
 
 /**
- * Permission constants (duplicated from server-side for client use)
- */
-export const PERM = {
-    EDIT_TITLE: 1 << 0,
-    EDIT_DESC: 1 << 1,
-    EDIT_CAPACITY: 1 << 2,
-    EDIT_META: 1 << 3,
-
-    ITEM_ADD: 1 << 4,
-    ITEM_EDIT: 1 << 5,
-    ITEM_DELETE: 1 << 6,
-
-    MANAGE_ASSIGNMENTS: 1 << 7,
-    MANAGE_REQUIREMENTS: 1 << 8,
-    MANAGE_REGISTRATIONS: 1 << 9,
-    MANAGE_PERMISSIONS: 1 << 16,
-
-    DATA_EXPORT: 1 << 10,
-    DATA_DUPLICATE: 1 << 11,
-
-    ACCESS_REGISTRATION: 1 << 12,
-    ACCESS_VIEW: 1 << 13,
-    ACCESS_CREATE: 1 << 14,
-    ACCESS_ADMIN: 1 << 15,
-    ACCESS_PARTICIPANTS: 1 << 17,
-} as const;
-
-/**
  * JSON reviver for deserializing Map objects
  * @param key Property key
  * @param value Property value
@@ -89,8 +61,8 @@ function restorePermBundle(data: Partial<PermBundle>): PermBundle {
         entity: restorePermView(data.entity!),
         items: itemMap,
         item: getItem,
-        itemHas: (id: string, key: keyof typeof PERM) => getItem(id).has(key),
-        itemAllow: (id: string, key: keyof typeof PERM, parentKey?: keyof typeof PERM) => getItem(id).allow(key, parentKey),
+        itemHas: (id: string, key: PermType) => getItem(id).has(key),
+        itemAllow: (id: string, key: PermType, parentKey?: PermType) => getItem(id).allow(key, parentKey),
     };
 
     return bundle;

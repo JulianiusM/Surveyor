@@ -38,30 +38,30 @@ export async function http(method: string, url: string, body?: any): Promise<any
 }
 
 /**
- * Make a POST request to an API endpoint (prefixed with /api)
- * @param url API endpoint path
+ * Make a POST request
+ * @param url Request URL (can include /api prefix or be relative)
  * @param payload Request payload
  * @returns Response data
  */
 export async function post(url: string, payload: any = {}): Promise<any> {
-    return http('POST', '/api' + url, payload);
+    return http('POST', url, payload);
 }
 
 /**
- * Make a GET request to an API endpoint (prefixed with /api)
- * @param url API endpoint path
+ * Make a GET request
+ * @param url Request URL (can include /api prefix or be relative)
  * @returns Response data
  */
 export async function get(url: string): Promise<any> {
-    return http('GET', '/api' + url);
+    return http('GET', url);
 }
 
 /**
- * Make a DELETE request to an API endpoint (prefixed with /api)
- * @param url API endpoint path
+ * Make a DELETE request
+ * @param url Request URL (can include /api prefix or be relative)
  * @param body Request body (optional)
  * @returns Response data
  */
 export async function del(url: string, body?: any): Promise<any> {
-    return http('DELETE', '/api' + url, body);
+    return http('DELETE', url, body);
 }
