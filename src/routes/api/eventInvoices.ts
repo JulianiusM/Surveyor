@@ -23,10 +23,9 @@ const proofStorage = multer.diskStorage({
         const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.pdf'];
         const ext = path.extname(file.originalname).toLowerCase();
         if (!allowedExts.includes(ext)) {
-            cb(new Error('Invalid file extension'), file.originalname);
-        } else {
-            cb(null, `${Date.now()}-${uuidv4()}${ext}`);
+            return cb(new Error('Invalid file extension'), '');
         }
+        cb(null, `${Date.now()}-${uuidv4()}${ext}`);
     },
 });
 
@@ -155,6 +154,15 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
             const isPaid = req.body.isPaid === true || req.body.isPaid === 'true' || req.body.isPaid === 'on';
             await eventPoolController.markSharePaid(resFct(req), req.params.poolId, req.params.shareId, isPaid, req.session);
             renderer.respondWithSuccessJson(res, "share updated");
+        })
+    );
+
+    // Serve invoice proof files securely with authentication
+    router.get(
+        '/:poolId/invoices/:invoiceId/proof',
+        requireEventParticipantAPI(resFct),
+        asyncHandler(async (req, res) => {
+            await eventPoolController.serveInvoiceProof(resFct(req), req.params.poolId, req.params.invoiceId, req.session, res, permFct(req));
         })
     );
 

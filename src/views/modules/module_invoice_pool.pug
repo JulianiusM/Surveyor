@@ -79,14 +79,14 @@ mixin participantTakeoverList(pools, participants)
                     +takeoverOverview(pool, participantList, 'participant', {showHeading: false})
 
 //- Render a single proof link, keeping the markup consistent across admin/participant views
-mixin invoiceProofLink(inv)
+mixin invoiceProofLink(inv, eventId, poolId)
     if inv.proofPath
-        a.text-info(href=`/${inv.proofPath}` target="_blank") View
+        a.text-info(href=`/api/event/${eventId}/invoice-pools/${poolId}/invoices/${inv.id}/proof` target="_blank" rel="noopener noreferrer") View
     else
         span.text-secondary N/A
 
 //- Generic invoice table used for each admin inbox section
-mixin adminInvoiceSection(title, invoices, actions)
+mixin adminInvoiceSection(title, invoices, actions, eventId, poolId)
     h6 #{title}
     if invoices && invoices.length
         table.table.table-dark.table-sm
@@ -103,7 +103,7 @@ mixin adminInvoiceSection(title, invoices, actions)
                         td ##{inv.id}
                         td #{inv.amount}
                         td
-                            +invoiceProofLink(inv)
+                            +invoiceProofLink(inv, eventId, poolId)
                         if actions
                             td.d-flex.gap-1.flex-wrap
                                 block
@@ -111,23 +111,23 @@ mixin adminInvoiceSection(title, invoices, actions)
         p.text-secondary.small.mb-0 No invoices in this section.
 
 //- Wrapper for the three admin inbox states so invoiceOverview stays small
-mixin adminInvoiceOverview(pool)
+mixin adminInvoiceOverview(pool, eventId)
     if pool.invoices && pool.invoices.length
         .row.mt-3
             .col-md-4
-                +adminInvoiceSection('Inbox', pool.invoices.filter(i => i.status === 'NEW'))
+                +adminInvoiceSection('Inbox', pool.invoices.filter(i => i.status === 'NEW'), true, eventId, pool.id)
                     button.btn.btn-success.btn-sm.invoice-approve(type="button" data-pool=pool.id data-id=inv.id) Approve
                     button.btn.btn-outline-danger.btn-sm.invoice-decline(type="button" data-pool=pool.id data-id=inv.id) Decline
             .col-md-4
-                +adminInvoiceSection('Open invoices', pool.invoices.filter(i => i.status === 'APPROVED'))
+                +adminInvoiceSection('Open invoices', pool.invoices.filter(i => i.status === 'APPROVED'), true, eventId, pool.id)
                     button.btn.btn-outline-light.btn-sm.invoice-close(type="button" data-pool=pool.id data-id=inv.id) Close
             .col-md-4
-                +adminInvoiceSection('Closed invoices', pool.invoices.filter(i => i.status === 'CLOSED'))
+                +adminInvoiceSection('Closed invoices', pool.invoices.filter(i => i.status === 'CLOSED'), false, eventId, pool.id)
     else
         p.text-secondary.mb-0 No invoices yet.
 
 //- Participant-friendly list of submitted invoices
-mixin participantInvoiceOverview(invoices, pools)
+mixin participantInvoiceOverview(invoices, pools, eventId)
     if invoices && invoices.length
         h6.mt-3 Your invoices
         table.table.table-dark.table-sm
@@ -145,17 +145,18 @@ mixin participantInvoiceOverview(invoices, pools)
                         td #{inv.amount}
                         td #{inv.status}
                         td
-                            +invoiceProofLink(inv)
+                            +invoiceProofLink(inv, eventId, inv.poolId)
     else
         p.text-secondary.small.mb-0 You have not submitted any invoices yet.
 
 //- Invoice overview that adapts to admin and participant needs
 mixin invoiceOverview(mode, options)
     - const pools = options?.pools || [];
+    - const eventId = options?.eventId;
     if mode === 'admin' && options.pool
-        +adminInvoiceOverview(options.pool)
+        +adminInvoiceOverview(options.pool, eventId)
     else if mode === 'participant'
-        +participantInvoiceOverview(options?.invoices || [], pools)
+        +participantInvoiceOverview(options?.invoices || [], pools, eventId)
 
 //- Collapsible invoice submission area for both admins (on behalf) and participants
 mixin invoiceSubmission(eventId, pools, mode, invoices)
@@ -188,7 +189,7 @@ mixin invoiceSubmission(eventId, pools, mode, invoices)
                                 button.btn.btn-primary(type="submit")
                                     i.bi.bi-cloud-upload.me-1
                                     | Submit invoice
-                        +invoiceOverview('participant', {invoices: invoices || [], pools: pools})
+                        +invoiceOverview('participant', {invoices: invoices || [], pools: pools, eventId: eventId})
     else
         .alert.alert-info.mx-1
             i.bi.bi-info-circle.me-2
@@ -359,7 +360,7 @@ mixin poolManagementSection(ev, pool, participants)
                 +poolShareSection(pool, participants)
         if pool.status === 'OPEN'
             +poolAdjustmentSection(ev, pool, participants)
-        +invoiceOverview('admin', {pool: pool, participants: participants})
+        +invoiceOverview('admin', {pool: pool, participants: participants, eventId: ev.id})
 
 //- Management tab content for the admin dashboard
 mixin invoicePoolManageTab(ev, pools, participants)

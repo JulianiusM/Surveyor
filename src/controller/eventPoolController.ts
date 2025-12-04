@@ -3,20 +3,23 @@
 import fs from 'fs';
 import path from 'path';
 import Joi from 'joi';
-import type {Express} from 'express';
-import {Request} from 'express';
+import {Request, Response} from 'express';
 
 import mailer from '../modules/email';
 import {Event} from '../modules/database/entities/event/Event';
 import * as eventService from '../modules/database/services/EventService';
 import * as invoiceService from '../modules/database/services/EventInvoiceService';
 import {APIError} from '../modules/lib/errors';
-import {formatAmount, resolveActorLabel, toAmount} from '../modules/lib/util';
+import {formatAmount, resolveActorLabel, sanitizeForEmail, toAmount} from '../modules/lib/util';
+import type {PermBundle} from '../types/PermissionTypes';
 
 // Remove stored invoice proofs once the event has been finished for more than six months.
 export async function purgeExpiredProofs(pool: Awaited<ReturnType<typeof invoiceService.getPoolWithInvoices>> | null) {
     if (!pool?.event?.endDate || !pool.invoices?.length) return;
-    const expiry = new Date(`${pool.event.endDate}T00:00:00Z`);
+    // Parse endDate and add 6 months for expiry check
+    const endDate = new Date(pool.event.endDate);
+    if (isNaN(endDate.getTime())) return; // Invalid date format, skip expiry logic
+    const expiry = new Date(endDate);
     expiry.setMonth(expiry.getMonth() + 6);
     if (new Date() < expiry) return;
     const expiredInvoices = pool.invoices.filter((inv) => !!inv.proofPath);
@@ -260,7 +263,7 @@ async function approveInvoice(event: Event, poolId: string, invoiceId: string, s
         void mailer.sendEmail(
             email,
             'Invoice approved',
-            `Your invoice for pool "${pool.name}" has been approved by ${actor}.`,
+            `Your invoice for pool "${sanitizeForEmail(pool.name)}" has been approved by ${actor}.`,
         );
     }
 }
@@ -277,7 +280,7 @@ async function closeInvoice(event: Event, poolId: string, invoiceId: string, ses
         void mailer.sendEmail(
             email,
             'Invoice closed',
-            `Your invoice for pool "${pool.name}" has been marked as closed by ${actor}.`,
+            `Your invoice for pool "${sanitizeForEmail(pool.name)}" has been marked as closed by ${actor}.`,
         );
     }
 }
@@ -384,7 +387,7 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
         void mailer.sendEmail(
             email,
             'Invoice pool closed',
-            `You owe ${formatAmount(data.base + data.surcharges)} for pool "${pool.name}"${coverageNames ? ` (covering ${coverageNames})` : ''}.\nActioned by ${actor}.${noteText}`
+            `You owe ${formatAmount(data.base + data.surcharges)} for pool "${sanitizeForEmail(pool.name)}"${coverageNames ? ` (covering ${coverageNames})` : ''}.\nActioned by ${actor}.${noteText}`
         );
     }
 }
@@ -402,9 +405,47 @@ async function markSharePaid(event: Event, poolId: string, shareId: string, isPa
         void mailer.sendEmail(
             email,
             'Share status changed',
-            `Your share for pool ${pool.name} was ${statusText} by ${actor}.`,
+            `Your share for pool ${sanitizeForEmail(pool.name)} was ${statusText} by ${actor}.`,
         );
     }
+}
+
+// Serve invoice proof files securely with authentication and permission checks
+export async function serveInvoiceProof(event: Event, poolId: string, invoiceId: string, session: Request['session'], res: Response, permData?: PermBundle) {
+    const pool = await ensurePool(event, poolId);
+    const invoice = await invoiceService.getInvoiceWithRegistration(poolId, Number(invoiceId));
+    if (!invoice || !invoice.proofPath) {
+        throw new APIError('Invoice proof not found', {}, 404);
+    }
+    
+    // Verify user has permission: either has MANAGE_ASSIGNMENTS permission or is the invoice submitter
+    const actorRegId = await getActorRegistrationId(event, session);
+    const hasManagePermission = permData?.entity.has('MANAGE_ASSIGNMENTS') ?? false;
+    const isSubmitter = actorRegId === invoice.registration.id;
+    
+    if (!hasManagePermission && !isSubmitter) {
+        throw new APIError('You do not have permission to view this proof', {}, 403);
+    }
+    
+    // Sanitize and validate the proof path to prevent directory traversal
+    const uploadsDir = path.resolve(process.cwd(), 'uploads');
+    const fullPath = path.resolve(process.cwd(), invoice.proofPath);
+    
+    // Use path.relative to ensure the resolved path is within uploads directory
+    const relativePath = path.relative(uploadsDir, fullPath);
+    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+        throw new APIError('Invalid proof path', {}, 400);
+    }
+    
+    // Check if file exists (async)
+    try {
+        await fs.promises.access(fullPath, fs.constants.R_OK);
+    } catch {
+        throw new APIError('Proof file not found', {}, 404);
+    }
+    
+    // Serve the file
+    res.sendFile(fullPath);
 }
 
 export default {
@@ -420,4 +461,5 @@ export default {
     closePool,
     markSharePaid,
     updateTakeovers,
+    serveInvoiceProof,
 };

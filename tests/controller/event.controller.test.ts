@@ -9,6 +9,7 @@ jest.mock('../../src/modules/database/services/EventService', () => ({
     getPackingListsForEvent: jest.fn(),
     getDriverListsForEvent: jest.fn(),
     getRegistrationsForEvent: jest.fn(),
+    getEventParticipants: jest.fn(),
     deleteEvent: jest.fn(),
     isEventFull: jest.fn(),
     isRegisteredForEvent: jest.fn(),
@@ -19,6 +20,12 @@ jest.mock('../../src/modules/database/services/EventService', () => ({
     updateEventTitle: jest.fn(),
     updateEventDescription: jest.fn(),
     updateEventDates: jest.fn(),
+}));
+
+jest.mock('../../src/modules/database/services/EventInvoiceService', () => ({
+    listPools: jest.fn(() => Promise.resolve([])),
+    getMyInvoices: jest.fn(() => Promise.resolve([])),
+    getParticipantPools: jest.fn(() => Promise.resolve([])),
 }));
 
 import { mockUtil, mockPermissionEngine } from '../mocks/commonMocks';
@@ -54,6 +61,8 @@ const {
 
 beforeEach(() => {
     jest.clearAllMocks();
+    // Set default return values for new mocks
+    (eventService.getEventParticipants as jest.Mock).mockResolvedValue([]);
 });
 
 describe('preprocessCreate', () => {
@@ -112,6 +121,7 @@ describe('fetchForView', () => {
 
     beforeEach(() => {
         setupMock(eventService.getRegistrationsForEvent, registrations);
+        setupMock(eventService.getEventParticipants, registrations);
     });
 
     test.each(scenarios)(
@@ -122,6 +132,7 @@ describe('fetchForView', () => {
             
             if (customRegistrations) {
                 setupMock(eventService.getRegistrationsForEvent, customRegistrations);
+                setupMock(eventService.getEventParticipants, customRegistrations);
             }
             
             if (mockRegistration !== undefined) {

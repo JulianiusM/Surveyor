@@ -144,7 +144,7 @@ export async function post(url: string, payload: any = {}) {
     const isFormData = typeof FormData !== 'undefined' && payload instanceof FormData;
     const res = await fetch('/api' + url, {
         method: 'POST',
-        headers: isFormData ? undefined : {'Content-Type': 'application/json'},
+        ...(isFormData ? {} : {headers: {'Content-Type': 'application/json'}}),
         body: isFormData ? payload : JSON.stringify(payload),
     });
 

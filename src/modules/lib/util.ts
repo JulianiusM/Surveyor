@@ -30,10 +30,15 @@ export function formatAmount(amount: number): string {
 // This keeps email/audit messages readable without duplicating lookup logic across controllers.
 export function resolveActorLabel(session: Request['session'] | undefined | null): string {
     if (session?.user?.name) return session.user.name;
-    if ((session?.user as any)?.username) return (session?.user as any).username;
-    const guestUsername = (session?.guest as any)?.username;
-    if (guestUsername) return guestUsername;
+    if (session?.user?.username) return session.user.username;
+    if (session?.guest?.username) return session.guest.username;
     return 'an organizer';
+}
+
+// Sanitize text for use in email content to prevent injection attacks
+export function sanitizeForEmail(text: string): string {
+    // Remove control characters and limit to printable characters
+    return text.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
 }
 
 // Funktion zur Generierung eines einzigartigen Tokens
