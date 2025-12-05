@@ -4,7 +4,7 @@
  */
 
 import {setCurrentNavLocation} from './core/navigation';
-import {post} from './core/http';
+import {get, post} from './core/http';
 import {showInlineAlert} from './shared/alerts';
 import {startInlineEdit, startInlineEditArea} from './shared/inline-edit';
 import {initCardReorder} from './shared/drag-drop';
@@ -24,6 +24,19 @@ interface BootstrapGlobal {
 
 declare const bootstrap: BootstrapGlobal;
 
+declare global {
+    interface Window {
+        ACT_PLAN_ID?: string;
+        Surveyor: Record<string, any>;
+    }
+}
+
+interface RoleSummary {
+    id: number;
+    name: string;
+    description?: string | null;
+}
+
 type WarningType = "outside_attendance" | "arrival_day" | "departure_day" | "overlap" | "over_capacity";
 
 interface AssignmentWarning {
@@ -33,6 +46,40 @@ interface AssignmentWarning {
 
 interface WarningModal {
     confirm(warnings: AssignmentWarning[], slotId: string): Promise<boolean>;
+}
+
+interface RequirementConfiguration {
+    plan: {
+        assignmentMode?: 'FREE' | 'REQUIRED';
+        generalRequiredShifts?: number | null;
+        roundingMode?: 'CEIL' | 'ROUND' | 'FLOOR' | null;
+        bindingDeadline?: string | Date | null;
+        allowOverfillAfterFull?: boolean;
+    };
+    roleRequirements: {roleId: number; requiredShifts: number}[];
+    overrides: {
+        id?: number;
+        roleId?: number | null;
+        role?: RoleSummary | null;
+        userId?: number | null;
+        user?: {username: string} | null;
+        guestId?: number | null;
+        guest?: {username: string} | null;
+        requiredShifts: number;
+    }[];
+}
+
+interface RecommendationRow {
+    id?: string;
+    slot: {id: string; title: string; day?: string; startTime?: string | null; endTime?: string | null};
+    user?: {id: number; username: string} | null;
+    guest?: {id: number; username: string} | null;
+    status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'APPLIED';
+}
+
+interface RecommendationWarning {
+    recommendation: {slotId: string; userId?: number | null; guestId?: number | null};
+    warnings: AssignmentWarning[];
 }
 
 function formatTimeLabel(time?: string | null): string {
@@ -55,6 +102,14 @@ function describeSlot(slotId: string): string {
     return `${title || 'Slot'}${day ? ` on ${day}` : ''}${timePart}`;
 }
 
+function formatSlotLabel(slot: RecommendationRow['slot']): string {
+    const day = slot.day ? ` on ${slot.day}` : '';
+    const start = formatTimeLabel(slot.startTime || null);
+    const end = formatTimeLabel(slot.endTime || null);
+    const time = start || end ? ` (${start || '–'}-${end || '–'})` : '';
+    return `${slot.title || 'Slot'}${day}${time}`;
+}
+
 function describeWarning(warning: AssignmentWarning): string {
     switch (warning.type) {
     case "outside_attendance":
@@ -73,6 +128,25 @@ function describeWarning(warning: AssignmentWarning): string {
     default:
         return "Assignment warning detected.";
     }
+}
+
+function getAllRoles(): RoleSummary[] {
+    return (window.Surveyor?.allRoles || []) as RoleSummary[];
+}
+
+function toDateTimeLocalValue(date?: string | Date | null): string {
+    if (!date) return '';
+    const d = typeof date === 'string' ? new Date(date) : date;
+    if (Number.isNaN(d?.getTime?.())) return '';
+
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function toISOStringOrNull(value: string): string | null {
+    if (!value) return null;
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 function buildWarningModal(): WarningModal {
@@ -372,6 +446,259 @@ function initAddSlot(): void {
     });
 }
 
+function initRequirementPanel(): void {
+    const planId = getActivityPlanId();
+    const panel = document.getElementById('requirementPanel');
+    if (!panel || !planId) return;
+
+    const roleList = panel.querySelector<HTMLElement>('#roleRequirementList');
+    const overrideList = panel.querySelector<HTMLElement>('#overrideList');
+    const alertBox = panel.querySelector<HTMLElement>('[data-requirements-alert]');
+    const addOverrideBtn = panel.querySelector<HTMLButtonElement>('[data-add-override]');
+    const reloadBtn = panel.querySelector<HTMLButtonElement>('[data-requirements-refresh]');
+    const saveBtn = panel.querySelector<HTMLButtonElement>('[data-requirements-save]');
+    const assignmentMode = panel.querySelector<HTMLSelectElement>('#assignmentMode');
+    const generalRequired = panel.querySelector<HTMLInputElement>('#requiredShifts');
+    const roundingMode = panel.querySelector<HTMLSelectElement>('#roundingMode');
+    const bindingDeadline = panel.querySelector<HTMLInputElement>('#bindingDeadline');
+    const allowOverfill = panel.querySelector<HTMLInputElement>('#allowOverfill');
+
+    const setAlert = (message?: string, variant: 'info' | 'danger' = 'info') => {
+        if (!alertBox) return;
+        const target = alertBox.querySelector('span') || alertBox;
+        if (!message) {
+            alertBox.classList.add('d-none');
+            target.textContent = '';
+            return;
+        }
+
+        alertBox.classList.remove('d-none', 'alert-danger', 'alert-info');
+        alertBox.classList.add(variant === 'danger' ? 'alert-danger' : 'alert-info');
+        target.textContent = message;
+    };
+
+    const buildRoleRequirementInputs = (config: RequirementConfiguration) => {
+        if (!roleList) return;
+        roleList.innerHTML = '';
+
+        const defaults = new Map<number, number>();
+        config.roleRequirements.forEach((req) => defaults.set(req.roleId, req.requiredShifts));
+
+        getAllRoles().forEach((role) => {
+            const wrap = document.createElement('div');
+            wrap.className = 'col-md-3 d-grid gap-1';
+
+            const label = document.createElement('label');
+            label.className = 'form-label small mb-0';
+            label.textContent = role.name;
+
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.min = '0';
+            input.className = 'form-control form-control-sm text-bg-dark';
+            input.placeholder = '0';
+            input.dataset.roleId = String(role.id);
+            const defaultValue = defaults.get(role.id);
+            input.value = typeof defaultValue === 'number' ? String(defaultValue) : '';
+
+            wrap.append(label, input);
+            roleList.appendChild(wrap);
+        });
+    };
+
+    const buildOverrideRow = (override?: RequirementConfiguration['overrides'][number]) => {
+        if (!overrideList) return;
+        const row = document.createElement('div');
+        row.className = 'row g-2 align-items-center override-row';
+        if (override?.id) row.dataset.overrideId = String(override.id);
+
+        const colTarget = document.createElement('div');
+        colTarget.className = 'col-md-3 d-grid gap-1';
+        const targetLabel = document.createElement('label');
+        targetLabel.className = 'form-label small mb-0';
+        targetLabel.textContent = 'Participant type';
+        const targetSelect = document.createElement('select');
+        targetSelect.className = 'form-select form-select-sm text-bg-dark';
+        targetSelect.dataset.overrideTarget = 'type';
+        targetSelect.innerHTML = '<option value="user">User</option><option value="guest">Guest</option>';
+        if (override?.guestId) targetSelect.value = 'guest';
+
+        const targetId = document.createElement('input');
+        targetId.type = 'number';
+        targetId.min = '1';
+        targetId.className = 'form-control form-control-sm text-bg-dark';
+        targetId.dataset.overrideTarget = 'id';
+        targetId.placeholder = 'User/Guest ID';
+        targetId.value = override?.userId?.toString() || override?.guestId?.toString() || '';
+
+        if (override?.user?.username || override?.guest?.username) {
+            const hint = document.createElement('small');
+            hint.className = 'text-secondary';
+            hint.textContent = `Current: ${override.user?.username || override.guest?.username}`;
+            colTarget.append(targetLabel, targetSelect, targetId, hint);
+        } else {
+            colTarget.append(targetLabel, targetSelect, targetId);
+        }
+
+        const colRole = document.createElement('div');
+        colRole.className = 'col-md-4 d-grid gap-1';
+        const roleLabel = document.createElement('label');
+        roleLabel.className = 'form-label small mb-0';
+        roleLabel.textContent = 'Role (optional)';
+        const roleSelect = document.createElement('select');
+        roleSelect.className = 'form-select form-select-sm text-bg-dark';
+        roleSelect.dataset.overrideTarget = 'role';
+        roleSelect.innerHTML = '<option value="">Any role</option>' +
+            getAllRoles().map((r) => `<option value="${r.id}">${r.name}</option>`).join('');
+        if (override?.roleId) roleSelect.value = String(override.roleId);
+
+        colRole.append(roleLabel, roleSelect);
+
+        const colReq = document.createElement('div');
+        colReq.className = 'col-md-3 d-grid gap-1';
+        const reqLabel = document.createElement('label');
+        reqLabel.className = 'form-label small mb-0';
+        reqLabel.textContent = 'Required shifts';
+        const reqInput = document.createElement('input');
+        reqInput.type = 'number';
+        reqInput.min = '0';
+        reqInput.className = 'form-control form-control-sm text-bg-dark';
+        reqInput.dataset.overrideTarget = 'required';
+        reqInput.value = override?.requiredShifts != null ? String(override.requiredShifts) : '0';
+        colReq.append(reqLabel, reqInput);
+
+        const colRemove = document.createElement('div');
+        colRemove.className = 'col-md-2 d-flex align-items-end';
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn btn-sm btn-outline-danger w-100';
+        removeBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
+        removeBtn.addEventListener('click', () => row.remove());
+        colRemove.append(removeBtn);
+
+        row.append(colTarget, colRole, colReq, colRemove);
+        overrideList.appendChild(row);
+    };
+
+    const renderOverrides = (config: RequirementConfiguration) => {
+        if (!overrideList) return;
+        overrideList.innerHTML = '';
+        if (!config.overrides.length) {
+            const empty = document.createElement('div');
+            empty.className = 'text-secondary small';
+            empty.dataset.emptyState = 'true';
+            empty.textContent = 'No overrides configured';
+            overrideList.append(empty);
+            return;
+        }
+
+        config.overrides.forEach((ovr) => buildOverrideRow(ovr));
+    };
+
+    const populateForm = (config: RequirementConfiguration) => {
+        if (assignmentMode) assignmentMode.value = config.plan.assignmentMode || 'FREE';
+        if (generalRequired) {
+            const value = config.plan.generalRequiredShifts;
+            generalRequired.value = value === null || value === undefined ? '' : String(value);
+        }
+        if (roundingMode) roundingMode.value = config.plan.roundingMode || '';
+        if (bindingDeadline) bindingDeadline.value = toDateTimeLocalValue(config.plan.bindingDeadline ?? null);
+        if (allowOverfill) allowOverfill.checked = Boolean(config.plan.allowOverfillAfterFull);
+
+        buildRoleRequirementInputs(config);
+        renderOverrides(config);
+    };
+
+    const loadRequirements = async () => {
+        setAlert('Loading requirements…');
+        try {
+            const res = await get(`/api/activity/${planId}/requirements`);
+            populateForm(res as RequirementConfiguration);
+            setAlert('Requirements loaded');
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to load requirements';
+            setAlert(message, 'danger');
+        }
+    };
+
+    const collectRoleRequirements = (): {roleId: number; requiredShifts: number}[] => {
+        if (!roleList) return [];
+        return Array.from(roleList.querySelectorAll<HTMLInputElement>('input[data-role-id]'))
+            .map((input) => {
+                const value = input.value.trim();
+                if (value === '') return null;
+                const num = Number(value);
+                if (Number.isNaN(num) || num < 0) return null;
+                return {roleId: Number(input.dataset.roleId), requiredShifts: num};
+            })
+            .filter((v): v is {roleId: number; requiredShifts: number} => Boolean(v));
+    };
+
+    const collectOverrides = (): RequirementConfiguration['overrides'] => {
+        if (!overrideList) return [];
+        const entries: RequirementConfiguration['overrides'] = [];
+        overrideList.querySelectorAll<HTMLElement>('.override-row').forEach((row) => {
+            const typeSelect = row.querySelector<HTMLSelectElement>('[data-override-target="type"]');
+            const idInput = row.querySelector<HTMLInputElement>('[data-override-target="id"]');
+            const roleSelect = row.querySelector<HTMLSelectElement>('[data-override-target="role"]');
+            const reqInput = row.querySelector<HTMLInputElement>('[data-override-target="required"]');
+
+            const requiredShifts = Number(reqInput?.value ?? 0);
+            const idVal = idInput?.value.trim();
+            if (!typeSelect || !idVal) return;
+
+            const entry: any = {
+                roleId: roleSelect?.value ? Number(roleSelect.value) : null,
+                requiredShifts: Number.isNaN(requiredShifts) ? 0 : requiredShifts,
+            };
+
+            if (row.dataset.overrideId) entry.id = Number(row.dataset.overrideId);
+
+            if (typeSelect.value === 'guest') {
+                entry.guestId = Number(idVal);
+            } else {
+                entry.userId = Number(idVal);
+            }
+
+            entries.push(entry);
+        });
+        return entries;
+    };
+
+    const saveRequirements = async () => {
+        setAlert('Saving settings…');
+        try {
+            await post(`/api/activity/${planId}/requirements`, {
+                assignmentMode: assignmentMode?.value,
+                generalRequiredShifts: generalRequired?.value ? Number(generalRequired.value) : null,
+                roundingMode: roundingMode?.value || null,
+                bindingDeadline: toISOStringOrNull(bindingDeadline?.value || ''),
+                allowOverfillAfterFull: allowOverfill?.checked ?? false,
+                roleRequirements: collectRoleRequirements(),
+                overrides: collectOverrides(),
+            });
+
+            showInlineAlert('success', 'Requirement settings saved');
+            await loadRequirements();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to save requirements';
+            setAlert(message, 'danger');
+            showInlineAlert('error', message);
+        }
+    };
+
+    addOverrideBtn?.addEventListener('click', () => {
+        if (overrideList && overrideList.querySelector('[data-empty-state]')) {
+            overrideList.innerHTML = '';
+        }
+        buildOverrideRow();
+    });
+    reloadBtn?.addEventListener('click', () => void loadRequirements());
+    saveBtn?.addEventListener('click', () => void saveRequirements());
+
+    void loadRequirements();
+}
+
 /**
  * Initialize drag-and-drop for slots
  */
@@ -395,6 +722,189 @@ function initDnD(): void {
                 .map((el, i) => ({slotId: el.dataset.slotid, pos: i}));
         },
     });
+}
+
+function initRecommendationPanel(): void {
+    const planId = getActivityPlanId();
+    const panel = document.getElementById('recommendationPanel');
+    const rows = panel?.querySelector<HTMLElement>('#recommendationRows');
+    const alertBox = panel?.querySelector<HTMLElement>('[data-recommendations-alert]');
+    const refreshBtn = panel?.querySelector<HTMLButtonElement>('[data-recommendations-refresh]');
+    const autoBtn = panel?.querySelector<HTMLButtonElement>('[data-recommendations-auto]');
+    const saveBtn = panel?.querySelector<HTMLButtonElement>('[data-recommendations-save]');
+    const applyBtn = panel?.querySelector<HTMLButtonElement>('[data-recommendations-apply]');
+
+    if (!planId || !panel || !rows) return;
+
+    let warnings: RecommendationWarning[] = [];
+
+    const setAlert = (message?: string, variant: 'info' | 'danger' = 'info') => {
+        if (!alertBox) return;
+        const target = alertBox.querySelector('span') || alertBox;
+        if (!message) {
+            alertBox.classList.add('d-none');
+            target.textContent = '';
+            return;
+        }
+
+        alertBox.classList.remove('d-none', 'alert-info', 'alert-danger');
+        alertBox.classList.add(variant === 'danger' ? 'alert-danger' : 'alert-info');
+        target.textContent = message;
+    };
+
+    const warningKey = (slotId: string, userId?: number | null, guestId?: number | null) => {
+        if (userId) return `${slotId}:u${userId}`;
+        if (guestId) return `${slotId}:g${guestId}`;
+        return `${slotId}:unknown`;
+    };
+
+    const buildWarningMap = () => {
+        const map = new Map<string, AssignmentWarning[]>();
+        warnings.forEach((entry) => {
+            const key = warningKey(entry.recommendation.slotId, entry.recommendation.userId, entry.recommendation.guestId);
+            map.set(key, entry.warnings);
+        });
+        return map;
+    };
+
+    const renderRecommendations = (data: RecommendationRow[]) => {
+        rows.innerHTML = '';
+        const warningMap = buildWarningMap();
+
+        if (!data.length) {
+            const empty = document.createElement('tr');
+            empty.dataset.emptyState = 'true';
+            const cell = document.createElement('td');
+            cell.colSpan = 4;
+            cell.className = 'text-center text-secondary pt-3';
+            cell.textContent = 'No recommendations yet.';
+            empty.append(cell);
+            rows.append(empty);
+            return;
+        }
+
+        data.forEach((rec) => {
+            const row = document.createElement('tr');
+            row.dataset.recKey = warningKey(rec.slot.id, rec.user?.id, rec.guest?.id);
+            row.dataset.slotId = rec.slot.id;
+            if (rec.user?.id) row.dataset.userId = String(rec.user.id);
+            if (rec.guest?.id) row.dataset.guestId = String(rec.guest.id);
+
+            const slotCell = document.createElement('td');
+            slotCell.textContent = formatSlotLabel(rec.slot);
+
+            const participantCell = document.createElement('td');
+            participantCell.textContent = rec.user?.username || rec.guest?.username || 'Unknown';
+
+            const statusCell = document.createElement('td');
+            const statusSelect = document.createElement('select');
+            statusSelect.className = 'form-select form-select-sm text-bg-dark';
+            statusSelect.dataset.recStatus = 'true';
+            ['PENDING', 'APPROVED', 'REJECTED', 'APPLIED'].forEach((status) => {
+                const opt = document.createElement('option');
+                opt.value = status;
+                opt.textContent = status;
+                statusSelect.append(opt);
+            });
+            statusSelect.value = rec.status;
+            if (rec.status === 'APPLIED') statusSelect.disabled = true;
+            statusCell.append(statusSelect);
+
+            const warningCell = document.createElement('td');
+            const warningList = warningMap.get(row.dataset.recKey || '');
+            if (warningList && warningList.length) {
+                const list = document.createElement('ul');
+                list.className = 'mb-0 small ps-3';
+                warningList.forEach((warn) => {
+                    const li = document.createElement('li');
+                    li.textContent = describeWarning(warn);
+                    list.append(li);
+                });
+                warningCell.append(list);
+            } else {
+                const span = document.createElement('span');
+                span.className = 'text-success small';
+                span.textContent = 'No warnings';
+                warningCell.append(span);
+            }
+
+            row.append(slotCell, participantCell, statusCell, warningCell);
+            rows.append(row);
+        });
+    };
+
+    const loadRecommendations = async () => {
+        setAlert('Loading recommendations…');
+        try {
+            const res = await get(`/api/activity/${planId}/recommendations`);
+            warnings = (res?.warnings || []) as RecommendationWarning[];
+            renderRecommendations((res?.recommendations || []) as RecommendationRow[]);
+            setAlert(warnings.length ? 'Warnings detected in proposed assignments' : 'Recommendations loaded');
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to load recommendations';
+            setAlert(message, 'danger');
+            showInlineAlert('error', message);
+        }
+    };
+
+    const collectRecommendationPayload = () => {
+        return Array.from(rows.querySelectorAll<HTMLElement>('tr[data-slot-id]')).map((row) => {
+            const status = row.querySelector<HTMLSelectElement>('[data-rec-status]');
+            return {
+                slotId: row.dataset.slotId!,
+                userId: row.dataset.userId ? Number(row.dataset.userId) : null,
+                guestId: row.dataset.guestId ? Number(row.dataset.guestId) : null,
+                status: status?.value,
+            };
+        });
+    };
+
+    const saveRecommendations = async () => {
+        setAlert('Saving recommendations…');
+        try {
+            await post(`/api/activity/${planId}/recommendations`, {recommendations: collectRecommendationPayload()});
+            showInlineAlert('success', 'Recommendations saved');
+            await loadRecommendations();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to save recommendations';
+            setAlert(message, 'danger');
+            showInlineAlert('error', message);
+        }
+    };
+
+    const autoGenerate = async () => {
+        setAlert('Generating recommendations…');
+        try {
+            await post(`/api/activity/${planId}/recommendations/auto`, {});
+            showInlineAlert('success', 'Recommendations generated');
+            await loadRecommendations();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to auto-generate recommendations';
+            setAlert(message, 'danger');
+            showInlineAlert('error', message);
+        }
+    };
+
+    const applyRecommendations = async () => {
+        setAlert('Applying approved recommendations…');
+        try {
+            const res = await post(`/api/activity/${planId}/recommendations/apply`, {});
+            warnings = (res?.warnings || []) as RecommendationWarning[];
+            showInlineAlert('success', res?.message || 'Recommendations applied');
+            await loadRecommendations();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to apply recommendations';
+            setAlert(message, 'danger');
+            showInlineAlert('error', message);
+        }
+    };
+
+    refreshBtn?.addEventListener('click', () => void loadRecommendations());
+    autoBtn?.addEventListener('click', () => void autoGenerate());
+    saveBtn?.addEventListener('click', () => void saveRecommendations());
+    applyBtn?.addEventListener('click', () => void applyRecommendations());
+
+    void loadRecommendations();
 }
 
 /**
@@ -437,6 +947,8 @@ export function init(): void {
         initDelete();
         initAddSlot();
         initDnD();
+        initRequirementPanel();
+        initRecommendationPanel();
 
         initAssignmentRemoval({
             baseUrl: `/activity/${planId}`,

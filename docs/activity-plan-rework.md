@@ -32,9 +32,9 @@
 - Added assignment-warning APIs that surface overlap, attendance, and capacity warnings for participants before assigning slots.
 - Surfaced slot timeboxes in the activity plan UI and creation flow with start/end inputs and in-view time badges to support overlap awareness.
 - Added a Bootstrap-powered warning modal that consumes the new warning endpoint before users join a slot, keeping potential conflicts visible in the workflow.
+- Surfaced requirement settings, per-role counts, and participant overrides in the activity plan UI with reload/save controls, and exposed recommendation review/auto-generate/apply flows with warning visibility for managers.
 
 ## Next Steps
-- Build controller/service wiring that consumes the new requirement calculators, enforces binding deadlines, and surfaces the overrides/configuration in the UI.
-- Surface recommendation warnings and staged data in the UI for admin review/editing.
-- Hook recommendation approval flows to create assignments and enforce the binding-deadline permissions in the UI.
-- Surface plan requirement settings in the UI and flow them through the new update endpoint.
+- Connect the requirement UI to participant requirement summaries and attendance windows to highlight fulfillment progress.
+- Add inline editing for staged recommendations (participant/slot tweaks) and persist changes through the update endpoint.
+- Extend E2E coverage for requirement management, warning displays, and the recommendation approval/apply workflow.
