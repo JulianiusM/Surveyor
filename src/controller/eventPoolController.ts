@@ -552,6 +552,21 @@ export async function serveInvoiceProof(event: Event, poolId: string, invoiceId:
     res.sendFile(fullPath);
 }
 
+// Recalculate a closed pool by deleting existing shares and re-running the closePool logic
+// This allows admins to adjust pool settings after closure and recalculate shares
+async function recalculatePool(event: Event, poolId: string, body: any = {}, session?: Request['session']) {
+    const pool = await ensurePool(event, poolId);
+    if (pool.status !== 'CLOSED') {
+        throw new APIError('Only closed pools can be recalculated', {}, 400);
+    }
+
+    // Reopen the pool temporarily by setting status to OPEN
+    await invoiceService.reopenPool(poolId);
+    
+    // Re-run the close pool logic which will recalculate all shares
+    await closePool(event, poolId, body, session);
+}
+
 export default {
     purgeExpiredProofs,
     createInvoicePool,
@@ -563,6 +578,7 @@ export default {
     closeInvoice,
     declineInvoice,
     closePool,
+    recalculatePool,
     markSharePaid,
     updateTakeovers,
     serveInvoiceProof,

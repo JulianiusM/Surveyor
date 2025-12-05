@@ -306,6 +306,17 @@ export async function closePool(
     await recalcPoolTotals(poolId);
 }
 
+// Reopen a closed pool to allow recalculation of shares
+export async function reopenPool(poolId: string) {
+    const poolRepo = AppDataSource.getRepository(EventInvoicePool);
+    const pool = await poolRepo.findOne({where: {id: poolId}});
+    if (!pool) throw new Error("Pool not found");
+    if (pool.status !== "CLOSED") throw new Error("Pool is not closed");
+    
+    pool.status = "OPEN";
+    await poolRepo.save(pool);
+}
+
 export async function updateAssignments(
     poolId: string,
     isDefault: boolean,

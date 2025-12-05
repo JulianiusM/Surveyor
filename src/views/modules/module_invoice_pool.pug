@@ -443,12 +443,11 @@ mixin poolManagementSection(ev, pool, participants)
                     .col-md-4
                         +poolStats(pool)
                     .col-md-8
-                        if pool.status === 'OPEN'
-                            +poolAssignmentsForm(ev, pool, participants)
-                        else
-                            +poolShareSection(pool, participants)
-                if pool.status === 'OPEN'
-                    +poolAdjustmentSection(ev, pool, participants)
+                        +poolAssignmentsForm(ev, pool, participants)
+                        if pool.status === 'CLOSED'
+                            .mt-3
+                                +poolShareSection(pool, participants)
+                +poolAdjustmentSection(ev, pool, participants)
                 +invoiceOverview('admin', {pool: pool, participants: participants, eventId: ev.id})
                 if pool.status === 'OPEN'
                     .row.mt-2.border.border-secondary-subtle.rounded-2.pt-2
@@ -470,6 +469,21 @@ mixin poolManagementSection(ev, pool, participants)
                             button.btn.btn-sm.btn-warning.pool-close(type="button" data-id=pool.id)
                                 i.bi.bi-x-circle.me-1
                                 | Close pool
+                else if pool.status === 'CLOSED'
+                    .row.mt-2.border.border-danger.rounded-2.pt-2
+                        h6.text-danger
+                            i.bi.bi-exclamation-triangle-fill.me-1
+                            |  Danger zone
+                        p.small.mb-2
+                            strong Recalculating a closed pool will delete all existing shares and recalculate them based on current pool settings.
+                            |  This action cannot be undone. Make sure all pool settings (assignments, surcharges, takeovers) are correct before proceeding.
+                        p.text-secondary.small.mb-2
+                            strong Warning: This will notify all participants again with updated share amounts.
+                            |  Only use this if you need to adjust pool settings after closure.
+                        .d-flex.justify-content-between.align-items-end.flex-wrap.gap-2.mb-3
+                            button.btn.btn-sm.btn-danger.pool-recalculate(type="button" data-id=pool.id)
+                                i.bi.bi-arrow-clockwise.me-1
+                                | Recalculate pool
 
 //- Management tab content for the admin dashboard
 mixin invoicePoolManageTab(ev, pools, participants)
