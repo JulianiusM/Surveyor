@@ -307,10 +307,6 @@ async function deleteRegistration(event: Event, registrationId: string) {
 }
 
 async function updateRegistrationDates(event: Event, registrationId: string, body: any, permData?: PermBundle) {
-    if (!permData?.entity.has('MANAGE_REGISTRATIONS')) {
-        throw new APIError('Not allowed', body, 403);
-    }
-
     const schema = Joi.object({
         arrivalDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
         departureDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),

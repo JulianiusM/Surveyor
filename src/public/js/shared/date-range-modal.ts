@@ -59,7 +59,7 @@ export function readDateRangePayload(form: HTMLFormElement): DateRangeValues | n
     const arrival = form.querySelector<HTMLInputElement>('input[name="arrivalDate"]')?.value?.trim() || '';
     const departure = form.querySelector<HTMLInputElement>('input[name="departureDate"]')?.value?.trim() || '';
     const registrationId = form.querySelector<HTMLInputElement>('input[name="registrationId"]')?.value?.trim();
-    if (!registrationId) return null;
+    if (!registrationId || !arrival || !departure) return null;
     return {arrivalDate: arrival, departureDate: departure, registrationId};
 }
 

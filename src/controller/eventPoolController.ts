@@ -309,7 +309,7 @@ async function closeInvoice(
     const canManage = allowManageOverride && (permData?.entity?.has('MANAGE_ASSIGNMENTS') ?? false);
     const isSubmitter = actorRegId === invoice.registration.id;
     if (!canManage && !isSubmitter) {
-        throw new APIError('You may only close your own invoice', {}, 403);
+        throw new APIError('You can only close your own approved invoices, unless you are an administrator.', {}, 403);
     }
     if (!canManage && invoice.status !== 'APPROVED') {
         throw new APIError('Invoices must be approved before closing', {}, 400);
@@ -347,6 +347,8 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
     const pool = await ensurePool(event, poolId);
     if (pool.status === 'CLOSED') return;
 
+    // Include all invoices whose status is not 'NEW' (APPROVED, DECLINED, CLOSED, etc.)
+    // This is required for pool closing logic, as all non-NEW invoices must be processed.
     const approvedInvoices = (pool.invoices || []).filter((inv) => inv.status !== 'NEW');
     const total = toAmount(pool.payableAmount);
 
@@ -373,6 +375,8 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
         surchargeMap.set(surcharge.registrationId, existing);
     }
 
+    // Aggregate the total approved invoice amounts submitted by each participant.
+    // This will later be deducted from their calculated share if pool.subtractPersonalInvoices is enabled.
     const invoiceCreditMap = new Map<number, number>();
     for (const invoice of approvedInvoices) {
         if (!targetIds.has(invoice.registrationId)) continue;
@@ -422,6 +426,8 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
         const baseShare = exemptIds.has(registration.id) ? 0 : (personalCost.total || 0);
         const extras = surchargeMap.get(registration.id) || [];
         const extraTotal = extras.reduce((sum, entry) => sum + entry.amount, 0);
+        // If subtractPersonalInvoices is enabled, participants receive credit for their submitted invoices.
+        // This reduces their share by the amount they've already contributed via invoices.
         const invoiceCredit = pool.subtractPersonalInvoices ? (invoiceCreditMap.get(registration.id) || 0) : 0;
         const payerId = takeoverMap.get(registration.id) ?? registration.id;
         const participantLabel = participantMap.get(registration.id)?.name || `Participant #${registration.id}`;

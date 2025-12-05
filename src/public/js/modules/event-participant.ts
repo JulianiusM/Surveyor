@@ -282,8 +282,9 @@ export function initEventParticipants(): void {
     document.addEventListener('submit', (ev) => {
         const form = ev.target as HTMLFormElement | null;
         if (!form?.classList.contains('js-date-form')) return;
-        ev.preventDefault();
         const root = form.closest('.event-participants') as HTMLElement | null;
-        if (root) void submitDateUpdate(root, form);
+        if (!root) return; // Only handle forms within event-participants component
+        ev.preventDefault();
+        void submitDateUpdate(root, form);
     });
 }
