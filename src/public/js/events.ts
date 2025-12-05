@@ -234,6 +234,8 @@ export function initInvoiceAdmin(): void {
                 if (checkbox) payload.assignAll = checkbox.checked ? 'on' : '';
                 const defaultBox = poolForm.querySelector('#defaultPool') as HTMLInputElement | null;
                 if (defaultBox) payload.isDefault = defaultBox.checked ? 'on' : '';
+                const subtractBox = poolForm.querySelector('#subtractPersonalInvoicesCreate') as HTMLInputElement | null;
+                if (subtractBox) payload.subtractPersonalInvoices = subtractBox.checked ? 'on' : '';
 
                 await post((poolForm as HTMLElement).dataset.api!, payload);
                 showInlineAlert('success', 'Pool created');
@@ -281,11 +283,23 @@ export function initInvoiceAdmin(): void {
                 showInlineAlert('success', 'Invoice closed');
                 return reloadAfterDelay(RELOAD_DELAY_MS);
             }
+            if (target.classList.contains('invoice-close-self')) {
+                await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/close-self`);
+                showInlineAlert('success', 'Invoice closed');
+                return reloadAfterDelay(RELOAD_DELAY_MS);
+            }
             if (target.classList.contains('pool-close')) {
                 requireManageAssignments('close invoice pools');
                 if (!confirm("Are you sure you want to close the pool? This cannot be undone as shares will be calculated instantly.")) return
                 await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.id}/close`);
                 showInlineAlert('success', 'Pool closed with adjustments');
+                return reloadAfterDelay(RELOAD_DELAY_MS);
+            }
+            if (target.classList.contains('pool-recalculate')) {
+                requireManageAssignments('recalculate invoice pools');
+                if (!confirm("WARNING: This will delete all existing shares and recalculate them based on current pool settings. All participants will be notified again. This action cannot be undone. Are you sure you want to proceed?")) return;
+                await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.id}/recalculate`);
+                showInlineAlert('success', 'Pool recalculated successfully');
                 return reloadAfterDelay(RELOAD_DELAY_MS);
             }
             if (target.classList.contains('surcharge-remove')) {
@@ -305,6 +319,11 @@ export function initInvoiceAdmin(): void {
         const target = e.target as HTMLElement;
         if (target.classList.contains('pool-assignment')) {
             e.preventDefault();
+            const poolStatus = (target as HTMLElement).getAttribute('data-pool-status');
+            if (poolStatus === 'CLOSED') {
+                showInlineAlert('warning', 'Pool is closed. Use the "Recalculate pool" button to apply changes.');
+                return;
+            }
             const api = (target as HTMLElement).getAttribute('data-api')!;
             const formData = new FormData(target as HTMLFormElement);
             const payload: {
@@ -323,6 +342,11 @@ export function initInvoiceAdmin(): void {
         }
         if (target.classList.contains('surcharge-form')) {
             e.preventDefault();
+            const poolStatus = (target as HTMLElement).getAttribute('data-pool-status');
+            if (poolStatus === 'CLOSED') {
+                showInlineAlert('warning', 'Pool is closed. Use the "Recalculate pool" button to apply changes.');
+                return;
+            }
             const api = (target as HTMLElement).getAttribute('data-api')!;
             const payload = Object.fromEntries(new FormData(target as HTMLFormElement).entries());
             try {
@@ -364,6 +388,19 @@ export function initInvoiceAdmin(): void {
                         input.removeAttribute('data-original-checked');
                     }
                 }
+            });
+        }
+    });
+
+    document.addEventListener('input', (e: Event) => {
+        const target = e.target as HTMLElement;
+        if (target.classList.contains('assignment-search')) {
+            const term = (target as HTMLInputElement).value.toLowerCase();
+            const list = target.closest('.pool-assignment')?.querySelector('.assignments-list');
+            if (!list) return;
+            list.querySelectorAll<HTMLElement>('[data-search-text]').forEach((row) => {
+                const text = (row.getAttribute('data-search-text') || '').toLowerCase();
+                row.classList.toggle('d-none', !!term && !text.includes(term));
             });
         }
     });

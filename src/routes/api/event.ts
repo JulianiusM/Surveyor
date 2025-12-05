@@ -96,6 +96,15 @@ app.delete(
     })
 );
 
+app.patch(
+    '/:id/registrations/:regId',
+    requirePermissionApi(permFct, PERM.MANAGE_REGISTRATIONS),
+    asyncHandler(async (req, res) => {
+        const msg = await eventController.updateRegistrationDates(resFct(req), req.params.regId, req.body, res.locals.permData);
+        renderer.respondWithSuccessJson(res, msg);
+    })
+);
+
 // Invoice pools
 app.use('/:id/invoice-pools', buildInvoiceRouter(permFct, resFct));
 

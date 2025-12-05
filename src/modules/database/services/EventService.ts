@@ -284,6 +284,15 @@ export async function deleteRegistration(eventId: string, regId: string | number
     return res?.affected ?? 0 > 0;
 }
 
+export async function updateRegistrationDates(eventId: string, regId: number, arrivalDate: string, departureDate: string) {
+    const repo = AppDataSource.getRepository(EventRegistration);
+    const reg = await repo.findOne({where: {id: regId, event: {id: eventId}}});
+    if (!reg) throw new ExpectedError('Registration not found', 'error', 404);
+    reg.arrivalDate = arrivalDate;
+    reg.departureDate = departureDate;
+    await repo.save(reg);
+}
+
 export async function isEventFull(eventId: string): Promise<boolean> {
     const eventRepo = AppDataSource.getRepository(Event);
     const regRepo = AppDataSource.getRepository(EventRegistration);

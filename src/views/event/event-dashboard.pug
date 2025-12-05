@@ -144,10 +144,14 @@ block content
 
     if permData.entity.has('ACCESS_PARTICIPANTS')
         - const apiDelete = permData.entity.has('MANAGE_REGISTRATIONS') ? `/api/event/${ev.id}/registrations` : undefined
+        - const apiUpdate = permData.entity.has('MANAGE_REGISTRATIONS') ? `/api/event/${ev.id}/registrations` : undefined
         +eventParticipants({
             eventId: ev.id,
             apiList: `/api/event/${ev.id}/participants`,
             apiDelete: apiDelete,
+            apiUpdate: apiUpdate,
+            startDate: startDate,
+            endDate: endDate,
         })
 
     .row

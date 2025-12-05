@@ -121,7 +121,16 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/invoices/:invoiceId/close',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {
-            await eventPoolController.closeInvoice(resFct(req), req.params.poolId, req.params.invoiceId, req.session);
+            await eventPoolController.closeInvoice(resFct(req), req.params.poolId, req.params.invoiceId, req.session, res.locals.permData);
+            renderer.respondWithSuccessJson(res, "closed");
+        })
+    );
+
+    router.post(
+        '/:poolId/invoices/:invoiceId/close-self',
+        requireEventParticipantAPI(resFct),
+        asyncHandler(async (req, res) => {
+            await eventPoolController.closeInvoice(resFct(req), req.params.poolId, req.params.invoiceId, req.session, res.locals.permData, false);
             renderer.respondWithSuccessJson(res, "closed");
         })
     );
@@ -141,6 +150,15 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         asyncHandler(async (req, res) => {
             await eventPoolController.closePool(resFct(req), req.params.poolId, req.body, req.session);
             renderer.respondWithSuccessJson(res, "pool closed");
+        })
+    );
+
+    router.post(
+        '/:poolId/recalculate',
+        requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
+        asyncHandler(async (req, res) => {
+            await eventPoolController.recalculatePool(resFct(req), req.params.poolId, req.body, req.session);
+            renderer.respondWithSuccessJson(res, "pool recalculated");
         })
     );
 

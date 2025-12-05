@@ -262,6 +262,8 @@ block content
             +eventParticipants({
                 eventId: ev.id,
                 apiList: `/api/event/${ev.id}/participants`,
+                startDate: startDate,
+                endDate: endDate,
             })
 
     +takeoverModal('takeoverModal')
