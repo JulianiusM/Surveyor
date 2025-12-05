@@ -344,7 +344,7 @@ mixin poolAssignmentsForm(ev, pool, participants)
             input.form-check-input.pool-toggle(type="checkbox" name="subtractPersonalInvoices" id=`subtract-invoices-${pool.id}` checked=!!(pool.subtractPersonalInvoices))
             label.form-check-label(for=`subtract-invoices-${pool.id}`) Deduct submitter invoices from their share
         label.form-label.mt-2(for=`assign-search-${pool.id}`) Search participants
-        input.form-control.form-control-sm.assignment-search#assign-search-${pool.id}(type="search" placeholder="Filter by name or email")
+        input.form-control.form-control-sm.assignment-search(id=`assign-search-${pool.id}` type="search" placeholder="Filter by name or email")
         label.form-label.mt-2(for=`assign-list-${pool.id}`) Limit to participants (disabled when default or assign to all)
         .assignments-list.border.border-secondary-subtle.rounded-3.p-2.bg-black.text-white.overflow-auto(style="max-height: 18rem;" id=`assign-list-${pool.id}`)
             if participants && participants.length
@@ -410,7 +410,7 @@ mixin poolSurchargeForm(ev, pool, participants)
             .col-md-2
                 label.form-label.text-secondary(for=`surcharge-subtract-${pool.id}`) Offset total
                 .form-check.form-switch
-                    input.form-check-input#surcharge-subtract-${pool.id}(type="checkbox" name="subtractFromPool" checked)
+                    input.form-check-input(id=`surcharge-subtract-${pool.id}` type="checkbox" name="subtractFromPool" checked)
                     label.form-check-label(for=`surcharge-subtract-${pool.id}`) Subtract from pool
         .d-flex.justify-content-end.mt-2
             if pool.status === 'OPEN'

@@ -297,7 +297,7 @@ export function initInvoiceAdmin(): void {
             }
             if (target.classList.contains('pool-recalculate')) {
                 requireManageAssignments('recalculate invoice pools');
-                if (!confirm("WARNING: This will delete all existing shares and recalculate them based on current pool settings. All participants will be notified again. This action cannot be undone. Are you sure you want to proceed?")) return
+                if (!confirm("WARNING: This will delete all existing shares and recalculate them based on current pool settings. All participants will be notified again. This action cannot be undone. Are you sure you want to proceed?")) return;
                 await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.id}/recalculate`);
                 showInlineAlert('success', 'Pool recalculated successfully');
                 return reloadAfterDelay(RELOAD_DELAY_MS);
