@@ -234,6 +234,8 @@ export function initInvoiceAdmin(): void {
                 if (checkbox) payload.assignAll = checkbox.checked ? 'on' : '';
                 const defaultBox = poolForm.querySelector('#defaultPool') as HTMLInputElement | null;
                 if (defaultBox) payload.isDefault = defaultBox.checked ? 'on' : '';
+                const subtractBox = poolForm.querySelector('#subtractPersonalInvoicesCreate') as HTMLInputElement | null;
+                if (subtractBox) payload.subtractPersonalInvoices = subtractBox.checked ? 'on' : '';
 
                 await post((poolForm as HTMLElement).dataset.api!, payload);
                 showInlineAlert('success', 'Pool created');
@@ -278,6 +280,11 @@ export function initInvoiceAdmin(): void {
             if (target.classList.contains('invoice-close')) {
                 requireManageAssignments('close invoices');
                 await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/close`);
+                showInlineAlert('success', 'Invoice closed');
+                return reloadAfterDelay(RELOAD_DELAY_MS);
+            }
+            if (target.classList.contains('invoice-close-self')) {
+                await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/close-self`);
                 showInlineAlert('success', 'Invoice closed');
                 return reloadAfterDelay(RELOAD_DELAY_MS);
             }
@@ -364,6 +371,19 @@ export function initInvoiceAdmin(): void {
                         input.removeAttribute('data-original-checked');
                     }
                 }
+            });
+        }
+    });
+
+    document.addEventListener('input', (e: Event) => {
+        const target = e.target as HTMLElement;
+        if (target.classList.contains('assignment-search')) {
+            const term = (target as HTMLInputElement).value.toLowerCase();
+            const list = target.closest('.pool-assignment')?.querySelector('.assignments-list');
+            if (!list) return;
+            list.querySelectorAll<HTMLElement>('[data-search-text]').forEach((row) => {
+                const text = (row.getAttribute('data-search-text') || '').toLowerCase();
+                row.classList.toggle('d-none', !!term && !text.includes(term));
             });
         }
     });

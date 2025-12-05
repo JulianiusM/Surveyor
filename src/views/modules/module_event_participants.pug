@@ -2,17 +2,24 @@
 //- Collapsible admin section to display participants (dates, dietary, allergies)
 //- Params: opts = { eventId, apiList, apiDelete?: string, title?, help? }
 
+include ./mixins/modal_date_range.pug
+
 mixin eventParticipants(opts)
     - const title = opts?.title ?? 'Participants'
     - const help  = opts?.help  ?? 'Registered users and guests with their attendance window and dietary information.'
     - const accId = 'ev-part-' + Math.random().toString(36).slice(2)
     - const allowDelete = Boolean(opts?.apiDelete !== undefined)
+    - const allowUpdate = Boolean(opts?.apiUpdate !== undefined)
 
     .event-participants.text-bg-dark.border.border-secondary.rounded-2.py-1.my-2(
         data-api-list=opts.apiList
         data-event-id=opts.eventId
         data-can-delete=allowDelete ? '1' : '0'
         data-api-delete=(allowDelete ? opts.apiDelete : '')
+        data-can-update=allowUpdate ? '1' : '0'
+        data-api-update=(allowUpdate ? opts.apiUpdate : '')
+        data-start-date=opts.startDate
+        data-end-date=opts.endDate
     )
         .accordion.accordion-flush(id=accId)
             .accordion-item.bg-dark.border-secondary
@@ -69,6 +76,16 @@ mixin eventParticipants(opts)
                         button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
                     .modal-body
                         pre.js-allergy-text.mb-0(style="white-space:pre-wrap")
+
+        +dateRangeModal(`${accId}-dates`, {
+            title: 'Adjust attendance window',
+            startDate: opts.startDate,
+            endDate: opts.endDate,
+            note: 'Keep changes within the event window.',
+            submitLabel: 'Save dates',
+            modalClass: 'js-date-modal',
+            formClass: 'js-date-form',
+        })
 
     script(type="module").
         import { initEventParticipants } from "/js/modules/event-participant.gen.js";

@@ -5,10 +5,11 @@
 
 import type {ParticipantRow} from "../../../types/EventTypes";
 import {qs, qsAll} from '../core/dom';
-import {del, get} from '../core/http';
+import {del, get, patch} from '../core/http';
 import {formatDate} from '../core/formatting';
 import {createDietaryChip, hideSpinner, showSpinner} from '../shared/ui-helpers';
 import {showInlineAlert} from '../shared/alerts';
+import {populateDateRangeModal, submitDateRangeModal} from '../shared/date-range-modal';
 
 /**
  * Render dietary totals as colored badges
@@ -69,6 +70,8 @@ function renderRows(root: HTMLElement, data: any): void {
         tr.dataset.name = p.name.toLowerCase();
         tr.dataset.email = (p.email || '').toLowerCase();
         tr.dataset.dietary = dietary.join(',').toLowerCase();
+        tr.dataset.arrival = p.arrivalDate;
+        tr.dataset.departure = p.departureDate;
 
         const emailCell = p.email ? `<span class="d-none d-md-inline">${p.email}</span>` : '<span class="text-secondary d-none d-md-inline">—</span>';
 
@@ -78,6 +81,12 @@ function renderRows(root: HTMLElement, data: any): void {
         const allergyBtn = hasAll
             ? `<button type="button" class="btn btn-sm btn-outline-warning btn-show-allergies" data-text="${encodeURIComponent(allergiesText || '')}">
            <i class="bi bi-exclamation-triangle"></i> Details
+         </button>`
+            : '';
+
+        const editBtn = root.dataset.canUpdate === '1'
+            ? `<button type="button" class="btn btn-outline-info btn-edit-dates">
+           <i class="bi bi-calendar2-week"></i> Edit dates
          </button>`
             : '';
 
@@ -100,6 +109,7 @@ function renderRows(root: HTMLElement, data: any): void {
       <td class="text-end">
         <div class="btn-group btn-group-sm" role="group">
           ${allergyBtn}
+          ${editBtn}
           ${p.email ? `<button type="button" class="btn btn-outline-light btn-copy-email" data-email="${p.email}"><i class="bi bi-clipboard"></i> Copy email</button>` : ''}
           ${delBtn}
         </div>
@@ -173,6 +183,41 @@ async function deleteRegistration(root: HTMLElement, tr: HTMLTableRowElement): P
     }
 }
 
+function openDateModal(root: HTMLElement, tr: HTMLTableRowElement): void {
+    const modal = root.querySelector<HTMLElement>('.js-date-modal');
+    const form = root.querySelector<HTMLFormElement>('.js-date-form');
+    if (!modal || !form) return;
+
+    populateDateRangeModal({
+        modal,
+        form,
+        bounds: {min: root.dataset.startDate, max: root.dataset.endDate},
+        alertContainer: root.querySelector<HTMLElement>('#liveAlerts') || undefined,
+    }, {
+        arrivalDate: tr.dataset.arrival || '',
+        departureDate: tr.dataset.departure || '',
+        registrationId: tr.dataset.id || '',
+    });
+}
+
+async function submitDateUpdate(root: HTMLElement, form: HTMLFormElement): Promise<void> {
+    const api = root.dataset.apiUpdate;
+    const modal = root.querySelector<HTMLElement>('.js-date-modal');
+    if (!api || !modal) return;
+
+    await submitDateRangeModal({
+        modal,
+        form,
+        bounds: {min: root.dataset.startDate, max: root.dataset.endDate},
+        alertContainer: root.querySelector<HTMLElement>('#liveAlerts') || undefined,
+    }, async (payload) => {
+        await patch(`${api}/${encodeURIComponent(payload.registrationId)}`, payload);
+        await refreshList(root);
+    }, {
+        successMessage: 'Attendance dates updated',
+    });
+}
+
 /**
  * Initialize event participants module
  * Sets up list rendering, filtering, and participant operations
@@ -215,6 +260,15 @@ export function initEventParticipants(): void {
             return;
         }
 
+        const btnEdit = t.closest<HTMLButtonElement>('.btn-edit-dates');
+        if (btnEdit) {
+            ev.preventDefault();
+            const root = btnEdit.closest('.event-participants') as HTMLElement;
+            const tr = btnEdit.closest('tr') as HTMLTableRowElement;
+            openDateModal(root, tr);
+            return;
+        }
+
         const btnDel = t.closest<HTMLButtonElement>('.btn-delete-reg');
         if (btnDel) {
             ev.preventDefault();
@@ -223,5 +277,13 @@ export function initEventParticipants(): void {
             deleteRegistration(root, tr);
             return;
         }
+    });
+
+    document.addEventListener('submit', (ev) => {
+        const form = ev.target as HTMLFormElement | null;
+        if (!form?.classList.contains('js-date-form')) return;
+        ev.preventDefault();
+        const root = form.closest('.event-participants') as HTMLElement | null;
+        if (root) void submitDateUpdate(root, form);
     });
 }

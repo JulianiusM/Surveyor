@@ -306,6 +306,29 @@ async function deleteRegistration(event: Event, registrationId: string) {
     return await eventService.deleteRegistration(event.id, registrationId);
 }
 
+async function updateRegistrationDates(event: Event, registrationId: string, body: any, permData?: PermBundle) {
+    if (!permData?.entity.has('MANAGE_REGISTRATIONS')) {
+        throw new APIError('Not allowed', body, 403);
+    }
+
+    const schema = Joi.object({
+        arrivalDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
+        departureDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
+    });
+    const {error, value} = schema.validate(body, {abortEarly: false, allowUnknown: true});
+    if (error) {
+        const msg = error.details.map((d) => d.message).join(', ');
+        throw new APIError(msg, body, 400);
+    }
+
+    if (!isWithinWindow(event.startDate, event.endDate, value.arrivalDate, value.departureDate)) {
+        throw new APIError('Arrival/Departure must be within event dates', body, 400);
+    }
+
+    await eventService.updateRegistrationDates(event.id, Number(registrationId), value.arrivalDate, value.departureDate);
+    return 'Registration updated';
+}
+
 async function getParticipantsExtended(event: Event) {
     const participants = await eventService.getEventParticipants(event.id);
     const totals: Record<string, number> = {};
@@ -341,5 +364,6 @@ export default {
 
     getParticipants,
     deleteRegistration,
+    updateRegistrationDates,
     getParticipantsExtended,
 };

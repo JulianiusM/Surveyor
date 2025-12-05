@@ -73,6 +73,7 @@ export async function createPool(
     distribution: InvoicePoolDistribution,
     isDefault: boolean,
     assignAll: boolean,
+    subtractPersonalInvoices: boolean,
     registrationIds: number[] = [],
 ) {
     return AppDataSource.transaction("READ COMMITTED", async (manager) => {
@@ -85,12 +86,15 @@ export async function createPool(
             distributionMethod: distribution,
             isDefault,
             assignAll,
+            subtractPersonalInvoices,
             status: "OPEN" as InvoicePoolStatus,
-            totalAmount: "0",
-            openAmount: "0",
-            outstandingAmount: "0",
-            additionalAmount: "0",
-            payableAmount: "0",
+            totalAmount: 0,
+            openAmount: 0,
+            outstandingAmount: 0,
+            creditAmount: 0,
+            additionalAmount: 0,
+            surchargeOffsetAmount: 0,
+            payableAmount: 0,
         });
         const saved = await poolRepo.save(pool);
         if (!assignAll && registrationIds.length) {
@@ -264,9 +268,10 @@ export async function closePool(
     approvedInvoiceIds: number[],
     sharePayloads: {
         registrationId: number;
-        baseShareAmount: string;
-        extraAmount: string;
-        shareAmount: string;
+        baseShareAmount: number;
+        extraAmount: number;
+        invoiceCreditAmount: number;
+        shareAmount: number;
         note?: string | null;
     }[],
 ) {
@@ -286,6 +291,7 @@ export async function closePool(
                 registration: {id: payload.registrationId} as EventRegistration,
                 baseShareAmount: payload.baseShareAmount,
                 extraAmount: payload.extraAmount,
+                invoiceCreditAmount: payload.invoiceCreditAmount,
                 shareAmount: payload.shareAmount,
                 note: payload.note || null,
                 isPaid: false,
@@ -304,7 +310,9 @@ export async function updateAssignments(
     poolId: string,
     isDefault: boolean,
     assignAll: boolean,
+    subtractPersonalInvoices: boolean,
     allowedRegistrationIds: number[],
+    exemptRegistrationIds: number[],
 ) {
     await AppDataSource.transaction("READ COMMITTED", async (manager) => {
         const poolRepo = manager.getRepository(EventInvoicePool);
@@ -317,20 +325,23 @@ export async function updateAssignments(
 
         pool.isDefault = isDefault;
         pool.assignAll = assignAll;
+        pool.subtractPersonalInvoices = subtractPersonalInvoices;
+        const validIds = allowedRegistrationIds.length
+            ? allowedRegistrationIds
+            : (await manager.getRepository(EventRegistration).find({where: {event: {id: pool.eventId}}})).map((r) => r.id);
         await assignmentRepo.delete({pool: {id: poolId}});
-        if (!pool.assignAll && allowedRegistrationIds.length) {
-            const rows = allowedRegistrationIds.map((id) => assignmentRepo.create({
+        const effectiveIds = pool.assignAll && !allowedRegistrationIds.length ? validIds : allowedRegistrationIds;
+        if (effectiveIds.length) {
+            const rows = effectiveIds.map((id) => assignmentRepo.create({
                 pool: {id: poolId} as EventInvoicePool,
                 registration: {id} as EventRegistration,
+                isExempt: exemptRegistrationIds.includes(id),
             }));
             await assignmentRepo.save(rows);
         }
 
         // Keep takeover mappings consistent with the new assignment scope.
         const invalidTakeovers = await takeoverRepo.find({where: {pool: {id: poolId}}});
-        const validIds = allowedRegistrationIds.length
-            ? allowedRegistrationIds
-            : (await manager.getRepository(EventRegistration).find({where: {event: {id: pool.eventId}}})).map((r) => r.id);
         const toDrop = invalidTakeovers.filter(
             (t) => !validIds.includes(t.payerRegistrationId) || !validIds.includes(t.beneficiaryRegistrationId),
         );
@@ -351,13 +362,20 @@ export async function updateAssignments(
 }
 
 // Add a participant-specific surcharge before closing the pool.
-export async function addSurcharge(poolId: string, registrationId: number, amount: number, note: string) {
+export async function addSurcharge(
+    poolId: string,
+    registrationId: number,
+    amount: number,
+    note: string,
+    subtractFromPool: boolean,
+) {
     const repo = AppDataSource.getRepository(EventInvoiceSurcharge);
     const row = repo.create({
         pool: {id: poolId} as EventInvoicePool,
         registration: {id: registrationId} as EventRegistration,
         amount: formatAmount(amount),
         note,
+        subtractFromPool,
     });
     await repo.save(row);
     await recalcPoolTotals(poolId);
@@ -403,15 +421,24 @@ export async function recalcPoolTotals(poolId: string) {
         .filter((inv) => inv.status === "APPROVED")
         .reduce((sum, inv) => sum + toAmount(inv.amount), 0);
     const extraAmount = surcharges.reduce((sum, s) => sum + toAmount(s.amount), 0);
+    const subtractiveAmount = surcharges
+        .filter((s) => s.subtractFromPool)
+        .reduce((sum, s) => sum + toAmount(s.amount), 0);
     const outstandingAmount = shares
         .filter((s) => !s.isPaid)
-        .reduce((sum, s) => sum + toAmount(s.shareAmount), 0);
+        .reduce((sum, s) => sum + Math.max(toAmount(s.shareAmount), 0), 0);
+    const creditAmount = shares
+        .filter((s) => !s.isPaid)
+        .reduce((sum, s) => sum + Math.abs(Math.min(toAmount(s.shareAmount), 0)), 0);
 
-    pool.totalAmount = formatAmount(invoiceTotal);
-    pool.additionalAmount = formatAmount(extraAmount);
-    pool.payableAmount = formatAmount(invoiceTotal - extraAmount);
-    pool.openAmount = formatAmount(openAmount);
-    pool.outstandingAmount = formatAmount(outstandingAmount);
+    pool.totalAmount = toAmount(invoiceTotal);
+    pool.additionalAmount = toAmount(extraAmount);
+    pool.surchargeOffsetAmount = toAmount(subtractiveAmount);
+    const payable = Math.max(invoiceTotal - subtractiveAmount, 0);
+    pool.payableAmount = toAmount(payable);
+    pool.openAmount = toAmount(openAmount);
+    pool.outstandingAmount = toAmount(outstandingAmount);
+    pool.creditAmount = toAmount(creditAmount);
     await poolRepo.save(pool);
 }
 

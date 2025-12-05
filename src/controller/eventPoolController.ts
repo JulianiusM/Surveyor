@@ -65,6 +65,7 @@ async function createInvoicePool(event: Event, body: any) {
         description: Joi.string().allow('').optional(),
         isDefault: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on', '')).default(false),
         assignAll: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on', '')).default(false),
+        subtractPersonalInvoices: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on', '')).default(true),
         registrations: Joi.alternatives().try(
             Joi.array().items(Joi.number().integer()),
             Joi.number().integer(),
@@ -77,11 +78,21 @@ async function createInvoicePool(event: Event, body: any) {
     // Default pools auto-attach to future participants without forcing current pools to be "assign all".
     const isDefault = value.isDefault === true || value.isDefault === 'on';
     const assignAll = value.assignAll === true || value.assignAll === 'on';
+    const subtractPersonalInvoices = value.subtractPersonalInvoices === true || value.subtractPersonalInvoices === 'on';
     const regIdsRaw = Array.isArray(value.registrations) ? value.registrations : (value.registrations ? [value.registrations] : []);
     const allowedIds = (await eventService.getRegistrationsForEvent(event.id)).map((r) => r.id);
     const regIds = assignAll ? allowedIds : regIdsRaw.filter((id: number) => allowedIds.includes(Number(id))).map(Number);
 
-    return invoiceService.createPool(event.id, value.name, value.description, value.distribution, isDefault, assignAll, regIds);
+    return invoiceService.createPool(
+        event.id,
+        value.name,
+        value.description,
+        value.distribution,
+        isDefault,
+        assignAll,
+        subtractPersonalInvoices,
+        regIds,
+    );
 }
 
 // Update pool assignments before closure, respecting default/assign-all toggles and allowed participants.
@@ -90,10 +101,15 @@ async function updatePoolAssignments(event: Event, poolId: string, body: any) {
     if (pool.status === 'CLOSED') throw new APIError('Pool is closed', body, 400);
     const isDefault = body.isDefault === true || body.isDefault === 'on';
     const assignAll = body.assignAll === true || body.assignAll === 'on';
+    const subtractPersonalInvoices = body.subtractPersonalInvoices === undefined
+        ? pool.subtractPersonalInvoices
+        : body.subtractPersonalInvoices === true || body.subtractPersonalInvoices === 'on';
     const regIdsRaw = Array.isArray(body.registrations) ? body.registrations : (body.registrations ? [body.registrations] : []);
+    const exemptIdsRaw = Array.isArray(body.exemptions) ? body.exemptions : (body.exemptions ? [body.exemptions] : []);
     const allowedIds = (await eventService.getRegistrationsForEvent(event.id)).map((r) => r.id);
     const regIds = assignAll ? allowedIds : regIdsRaw.map((id: any) => Number(id)).filter((id: number) => allowedIds.includes(id));
-    await invoiceService.updateAssignments(poolId, isDefault, assignAll, regIds);
+    const exemptIds = exemptIdsRaw.map((id: any) => Number(id)).filter((id: number) => allowedIds.includes(id));
+    await invoiceService.updateAssignments(poolId, isDefault, assignAll, subtractPersonalInvoices, regIds, exemptIds);
 }
 
 // Create a participant-specific surcharge that will be factored in during pool closure.
@@ -104,6 +120,7 @@ async function addPoolSurcharge(event: Event, poolId: string, body: any) {
         registrationId: Joi.number().integer().required(),
         amount: Joi.number().positive().required(),
         note: Joi.string().required(),
+        subtractFromPool: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on', '')).default(true),
     });
     const {error, value} = schema.validate(body, {abortEarly: false, allowUnknown: true});
     if (error) throw new APIError(error.message, body, 400);
@@ -112,7 +129,8 @@ async function addPoolSurcharge(event: Event, poolId: string, body: any) {
     const cleanedNote = (value.note as string).trim();
     if (!cleanedNote) throw new APIError('Note is required', body, 400);
     await assertRegistrationAllowed(pool, registrationId);
-    await invoiceService.addSurcharge(poolId, registrationId, Number(value.amount), cleanedNote);
+    const subtractFromPool = value.subtractFromPool === true || value.subtractFromPool === 'on';
+    await invoiceService.addSurcharge(poolId, registrationId, Number(value.amount), cleanedNote, subtractFromPool);
 }
 
 // Remove a surcharge so admins can correct mistakes before the pool closes.
@@ -276,10 +294,27 @@ async function approveInvoice(event: Event, poolId: string, invoiceId: string, s
 }
 
 // Close an approved invoice and inform the creator who performed the action.
-async function closeInvoice(event: Event, poolId: string, invoiceId: string, session: Request['session']) {
+async function closeInvoice(
+    event: Event,
+    poolId: string,
+    invoiceId: string,
+    session: Request['session'],
+    permData?: PermBundle,
+    allowManageOverride = true,
+) {
     const pool = await ensurePool(event, poolId);
     const invoice = await invoiceService.getInvoiceWithRegistration(poolId, Number(invoiceId));
     if (!invoice) throw new APIError('Invoice not found', {}, 404);
+    const actorRegId = await getActorRegistrationId(event, session);
+    const canManage = allowManageOverride && (permData?.entity?.has('MANAGE_ASSIGNMENTS') ?? false);
+    const isSubmitter = actorRegId === invoice.registration.id;
+    if (!canManage && !isSubmitter) {
+        throw new APIError('You may only close your own invoice', {}, 403);
+    }
+    if (!canManage && invoice.status !== 'APPROVED') {
+        throw new APIError('Invoices must be approved before closing', {}, 400);
+    }
+
     await invoiceService.closeInvoice(poolId, Number(invoiceId));
     const email = invoice.registration.user?.email || invoice.registration.guest?.email;
     if (email) {
@@ -312,8 +347,8 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
     const pool = await ensurePool(event, poolId);
     if (pool.status === 'CLOSED') return;
 
-    const approvedInvoices = (pool.invoices || []).filter((inv) => inv.status === 'APPROVED');
-    const total = Number.parseFloat(pool.payableAmount);
+    const approvedInvoices = (pool.invoices || []).filter((inv) => inv.status !== 'NEW');
+    const total = toAmount(pool.payableAmount);
 
     // Pull full participant list once so we can reuse it for lookups and notifications
     const participants = await eventService.getEventParticipants(event.id);
@@ -326,6 +361,8 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
     if (!targetRegistrations.length) throw new APIError('No participants assigned to this pool', {}, 400);
 
     const targetIds = new Set(targetRegistrations.map((r) => r.id));
+    const exemptIds = new Set((pool.assignments || []).filter((a) => a.isExempt).map((a) => a.registrationId));
+    const billableRegistrations = targetRegistrations.filter((reg) => !exemptIds.has(reg.id));
 
     // Bucket surcharges per participant so we can attribute them to a single payer later.
     const surchargeMap = new Map<number, { amount: number; note: string }[]>();
@@ -334,6 +371,13 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
         const existing = surchargeMap.get(surcharge.registrationId) || [];
         existing.push({amount: toAmount(surcharge.amount), note: surcharge.note});
         surchargeMap.set(surcharge.registrationId, existing);
+    }
+
+    const invoiceCreditMap = new Map<number, number>();
+    for (const invoice of approvedInvoices) {
+        if (!targetIds.has(invoice.registrationId)) continue;
+        const running = invoiceCreditMap.get(invoice.registrationId) || 0;
+        invoiceCreditMap.set(invoice.registrationId, running + toAmount(invoice.amount));
     }
 
     // Respect pre-agreed takeovers; beneficiaries cannot also cover others by service validation
@@ -347,6 +391,7 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
     const payerShares = new Map<number, {
         base: number;
         surcharges: number;
+        invoiceCredits: number;
         notes: string[];
         beneficiaries: number[];
         detailNotes: string[]
@@ -354,19 +399,19 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
 
     let individualCosts;
     if (pool.distributionMethod === ("TIME_BASED" as InvoicePoolDistribution)) {
-        const individualDays = targetRegistrations.reduce((acc, reg) => {
+        const individualDays = billableRegistrations.reduce((acc, reg) => {
             acc.set(reg.id, differenceInCalendarDays(reg.departureDate, reg.arrivalDate) + 1)
             return acc;
         }, new Map<number, number>());
         const totalDays = Array.from(individualDays.values()).reduce((total, val) => total + val, 0);
-        const costPerDay = total / totalDays;
+        const costPerDay = totalDays ? total / totalDays : 0;
         individualCosts = Array.from(individualDays.entries()).reduce((acc, reg) => {
             acc.set(reg[0], {total: costPerDay * reg[1], days: reg[1]});
             return acc;
         }, new Map());
     } else if (pool.distributionMethod === ("EQUAL" as InvoicePoolDistribution)) {
-        const perPerson = targetRegistrations.length ? total / targetRegistrations.length : 0;
-        individualCosts = targetRegistrations.reduce((acc, reg) => {
+        const perPerson = billableRegistrations.length ? total / billableRegistrations.length : 0;
+        individualCosts = billableRegistrations.reduce((acc, reg) => {
             acc.set(reg.id, {total: perPerson});
             return acc;
         }, new Map())
@@ -374,22 +419,26 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
 
     for (const registration of targetRegistrations) {
         const personalCost = individualCosts?.get(registration.id) || {};
-        const baseShare = personalCost.total || 0;
+        const baseShare = exemptIds.has(registration.id) ? 0 : (personalCost.total || 0);
         const extras = surchargeMap.get(registration.id) || [];
         const extraTotal = extras.reduce((sum, entry) => sum + entry.amount, 0);
+        const invoiceCredit = pool.subtractPersonalInvoices ? (invoiceCreditMap.get(registration.id) || 0) : 0;
         const payerId = takeoverMap.get(registration.id) ?? registration.id;
         const participantLabel = participantMap.get(registration.id)?.name || `Participant #${registration.id}`;
         const beneficiaryName = payerId !== registration.id ? participantLabel : null;
         const bucket = payerShares.get(payerId) || {
             base: 0,
             surcharges: 0,
+            invoiceCredits: 0,
             notes: [],
             beneficiaries: [],
             detailNotes: []
         };
         bucket.base += baseShare;
         bucket.surcharges += extraTotal;
+        bucket.invoiceCredits += invoiceCredit;
         bucket.detailNotes.push(`Base share for ${beneficiaryName || 'self'}: ${formatAmount(baseShare)}`);
+        if (exemptIds.has(registration.id)) bucket.detailNotes.push('Exempt from automatic share');
         if (personalCost.days) bucket.detailNotes.push(`(for ${personalCost.days} days)`);
         if (beneficiaryName) {
             bucket.beneficiaries.push(registration.id);
@@ -401,15 +450,20 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
             bucket.detailNotes.push(`Surcharge for ${detailLabel}: ${formatAmount(entry.amount)}`);
             if (entry.note) bucket.notes.push(`Surcharge for ${adjustmentTarget}: ${entry.note}`);
         });
+        if (invoiceCredit) {
+            bucket.detailNotes.push(`Invoice credit for ${beneficiaryName || 'self'}: -${formatAmount(invoiceCredit)}`);
+        }
         payerShares.set(payerId, bucket);
     }
 
     const sharePayloads = Array.from(payerShares.entries()).map(([registrationId, data]) => {
-        const baseShareAmount = formatAmount(data.base);
-        const extraAmount = formatAmount(data.surcharges);
-        const shareAmount = formatAmount(data.base + data.surcharges);
+        const baseShareAmount = toAmount(data.base);
+        const extraAmount = toAmount(data.surcharges);
+        const invoiceCreditAmount = toAmount(data.invoiceCredits);
+        const shareValue = data.base + data.surcharges - data.invoiceCredits;
+        const shareAmount = toAmount(shareValue);
         const note = data.detailNotes.filter(Boolean).join(' • ') || undefined;
-        return {registrationId, baseShareAmount, extraAmount, shareAmount, note};
+        return {registrationId, baseShareAmount, extraAmount, invoiceCreditAmount, shareAmount, note};
     });
 
     await invoiceService.closePool(poolId, approvedInvoices.map((inv) => inv.id), sharePayloads);
@@ -425,10 +479,13 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
             .join(', ');
         const detailLines = data.detailNotes.map((n) => `- ${n}`).join('\n');
         const noteText = data.detailNotes.length ? `\nBreakdown:\n${detailLines}` : '';
+        const totalDue = data.base + data.surcharges - data.invoiceCredits;
+        const verb = totalDue < 0 ? 'are owed' : 'owe';
+        const formattedTotal = formatAmount(Math.abs(totalDue));
         void mailer.sendEmail(
             email,
             'Invoice pool closed',
-            `You owe ${formatAmount(data.base + data.surcharges)} for pool "${sanitizeForEmail(pool.name)}"${coverageNames ? ` (covering ${coverageNames})` : ''}.\nActioned by ${actor}.${noteText}`
+            `You ${verb} ${formattedTotal} for pool "${sanitizeForEmail(pool.name)}"${coverageNames ? ` (covering ${coverageNames})` : ''}.\nActioned by ${actor}.${noteText}`
         );
     }
 }

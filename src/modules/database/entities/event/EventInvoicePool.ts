@@ -7,6 +7,13 @@ import {EventPoolTakeover} from "./EventPoolTakeover";
 import {EventInvoiceSurcharge} from "./EventInvoiceSurcharge";
 import type {InvoicePoolDistribution, InvoicePoolStatus} from "../../../../types/InvoicePoolTypes";
 
+import {formatAmount, toAmount} from "../../../lib/util";
+
+const currencyTransformer = {
+    to: (value: number | string) => formatAmount(toAmount(value)),
+    from: (value: string) => Number(value),
+};
+
 export const InvoicePoolDistributions = ['EQUAL', 'TIME_BASED'];
 
 @Entity("event_invoice_pools", {schema: "surveyor"})
@@ -40,22 +47,34 @@ export class EventInvoicePool {
     @Column("tinyint", {name: "assign_all", width: 1, default: 1})
     assignAll!: boolean;
 
-    @Column("decimal", {name: "total_amount", precision: 10, scale: 2, default: "0.00"})
-    totalAmount!: string;
+    // Toggle whether the submitter's invoices reduce their own share during distribution
+    @Column("tinyint", {name: "subtract_personal_invoices", width: 1, default: 1})
+    subtractPersonalInvoices!: boolean;
 
-    @Column("decimal", {name: "open_amount", precision: 10, scale: 2, default: "0.00"})
-    openAmount!: string;
+    @Column("decimal", {name: "total_amount", precision: 10, scale: 2, default: "0.00", transformer: currencyTransformer})
+    totalAmount!: number;
 
-    @Column("decimal", {name: "outstanding_amount", precision: 10, scale: 2, default: "0.00"})
-    outstandingAmount!: string;
+    @Column("decimal", {name: "open_amount", precision: 10, scale: 2, default: "0.00", transformer: currencyTransformer})
+    openAmount!: number;
+
+    @Column("decimal", {name: "outstanding_amount", precision: 10, scale: 2, default: "0.00", transformer: currencyTransformer})
+    outstandingAmount!: number;
+
+    // Portion of unpaid shares where participants have overpaid and are owed a payout
+    @Column("decimal", {name: "credit_amount", precision: 10, scale: 2, default: "0.00", transformer: currencyTransformer})
+    creditAmount!: number;
 
     // Additional per-participant charges added before closing the pool
-    @Column("decimal", {name: "additional_amount", precision: 10, scale: 2, default: "0.00"})
-    additionalAmount!: string;
+    @Column("decimal", {name: "additional_amount", precision: 10, scale: 2, default: "0.00", transformer: currencyTransformer})
+    additionalAmount!: number;
+
+    // Portion of the surcharges that is removed from the shared pool total
+    @Column("decimal", {name: "surcharge_offset_amount", precision: 10, scale: 2, default: "0.00", transformer: currencyTransformer})
+    surchargeOffsetAmount!: number;
 
     // Sum of invoices plus additional per-person charges
-    @Column("decimal", {name: "payable_amount", precision: 10, scale: 2, default: "0.00"})
-    payableAmount!: string;
+    @Column("decimal", {name: "payable_amount", precision: 10, scale: 2, default: "0.00", transformer: currencyTransformer})
+    payableAmount!: number;
 
     @Column("timestamp", {name: "closed_at", nullable: true})
     closedAt?: Date | null;
