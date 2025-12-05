@@ -349,7 +349,7 @@ export function initInvoiceAdmin(): void {
             const disable = !!(assignAll?.checked || isDefault?.checked);
             registrations.forEach((input) => {
                 if (disable) {
-                    // Store original state before modifying
+                    // Store original state before modifying (only if not already stored)
                     if (!input.hasAttribute('data-original-checked')) {
                         input.setAttribute('data-original-checked', String(input.checked));
                     }
@@ -359,7 +359,8 @@ export function initInvoiceAdmin(): void {
                     // Restore original state when re-enabling
                     input.disabled = false;
                     if (input.hasAttribute('data-original-checked')) {
-                        input.checked = input.getAttribute('data-original-checked') === 'true';
+                        const originalState = input.getAttribute('data-original-checked') ?? 'false';
+                        input.checked = originalState === 'true';
                         input.removeAttribute('data-original-checked');
                     }
                 }
