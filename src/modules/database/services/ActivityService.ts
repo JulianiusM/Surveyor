@@ -245,7 +245,10 @@ export async function getActivitySlotsFlat(planId: string) {
             (qb) => qb.where("a.plan_id = :planId", {planId})
         )
         .where("s.plan_id = :planId", {planId})
-        .orderBy("s.pos", "ASC")
+        .orderBy("s.day", "ASC")
+        .addOrderBy("s.start_time IS NULL", "ASC")
+        .addOrderBy("s.start_time", "ASC")
+        .addOrderBy("s.pos", "ASC")
         .getMany(); // entities now have s.assignedCount
 
     // Type hint: (ActivitySlot & { assignedCount: number })[]
