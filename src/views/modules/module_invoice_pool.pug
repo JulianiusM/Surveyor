@@ -169,7 +169,7 @@ mixin invoiceSubmission(eventId, pools, mode, invoices, allPools = [])
     .accordion.accordion-dark.mb-3#invoiceSubmission
         .accordion-item.bg-dark.text-white.border-secondary-subtle
             h2.accordion-header
-                button.accordion-button.collapsed.text-white(type="button" data-bs-toggle="collapse" data-bs-target="#invoicePoolCollapse" aria-expanded="false")
+                button.accordion-button.collapsed.text-white(type="button" data-bs-toggle="collapse" data-bs-target="#invoicePoolCollapse" aria-expanded="false" aria-controls="invoicePoolCollapse")
                     i.bi.bi-receipt.me-2
                     | Submit an invoice & history
             #invoicePoolCollapse.accordion-collapse.collapse
@@ -311,7 +311,7 @@ mixin poolAssignmentsForm(ev, pool, participants)
             input.form-check-input.pool-toggle(type="checkbox" name="isDefault" id=`default-${pool.id}` checked=!!(pool.isDefault))
             label.form-check-label(for=`default-${pool.id}`) Default for new participants
         label.form-label.mt-2(for=`assign-list-${pool.id}`) Limit to participants (disabled when default or assign to all)
-        .assignments-list.border.border-secondary-subtle.rounded-3.p-2.bg-black.text-white#`assign-list-${pool.id}`
+        .assignments-list.border.border-secondary-subtle.rounded-3.p-2.bg-black.text-white(id=`assign-list-${pool.id}`)
             if participants && participants.length
                 each p in participants
                     - const selected = pool.assignments?.some(a => a.registration?.id === p.id)
