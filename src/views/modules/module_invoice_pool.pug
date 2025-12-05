@@ -410,7 +410,7 @@ mixin poolSurchargeForm(ev, pool, participants)
             .col-md-2
                 label.form-label.text-secondary(for=`surcharge-subtract-${pool.id}`) Offset total
                 .form-check.form-switch
-                    input.form-check-input#surcharge-subtract-${pool.id}(type="checkbox" name="subtractFromPool" checked)
+                    input.form-check-input(id=`surcharge-subtract-${pool.id}` type="checkbox" name="subtractFromPool" checked)
                     label.form-check-label(for=`surcharge-subtract-${pool.id}`) Subtract from pool
         .d-flex.justify-content-end.mt-2
             if pool.status === 'OPEN'
