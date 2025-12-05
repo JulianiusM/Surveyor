@@ -348,8 +348,21 @@ export function initInvoiceAdmin(): void {
             const registrations = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="registrations"]'));
             const disable = !!(assignAll?.checked || isDefault?.checked);
             registrations.forEach((input) => {
-                input.disabled = disable;
-                if (disable) input.checked = true;
+                if (disable) {
+                    // Store original state before modifying
+                    if (!input.hasAttribute('data-original-checked')) {
+                        input.setAttribute('data-original-checked', String(input.checked));
+                    }
+                    input.disabled = true;
+                    input.checked = true;
+                } else {
+                    // Restore original state when re-enabling
+                    input.disabled = false;
+                    if (input.hasAttribute('data-original-checked')) {
+                        input.checked = input.getAttribute('data-original-checked') === 'true';
+                        input.removeAttribute('data-original-checked');
+                    }
+                }
             });
         }
     });
