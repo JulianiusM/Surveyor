@@ -26,6 +26,8 @@ For general AI agent guidance, see [AGENTS.md](../AGENTS.md).
 2. **Database**: Always create migrations, never use synchronize in production
 3. **Testing**: Use data-driven and keyword-driven approaches (see TESTING.md)
 4. **Security**: Never commit secrets, validate all input, hash passwords
+5. **Following Directions**: Always follow user directions. If you are not sure, make reasonable assumptions. Interpret requirements conservatively.
+6. **Generic approach**: If the user asks you to fix all tests, fix all tests including database and e2e tests. Fix all issues including those that are not influenced or caused by your changes.
 
 ## Testing Approach
 
