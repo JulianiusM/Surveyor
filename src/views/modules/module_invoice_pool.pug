@@ -60,7 +60,7 @@ mixin takeoverOverview(pool, participants, mode, options)
                         span.badge.bg-secondary Covers
     else
         p.text-secondary.small.mb-2 No takeovers configured yet.
-    button.btn.btn-outline-light.btn-sm.manage-takeovers(type="button" data-id=pool.id data-mode=mode)
+    button.btn.btn-outline-light.btn-sm.manage-takeovers.align-self-end.mt-2(type="button" data-id=pool.id data-mode=mode)
         i.bi.bi-person-check.me-1
         | Manage takeovers
 
@@ -260,10 +260,10 @@ mixin poolHeaderSummary(pool)
                 if pool.isDefault
                     span.badge.bg-primary.text-dark Default
             small.text-secondary.mb-0 #{pool.description || 'No description provided'}
-        .d-flex.flex-column.align-items-end
+        .d-flex.flex-column.align-items-end.me-2
             span.badge.bg-info.text-dark.mb-1 #{pool.status}
             small.text-secondary.d-block.text-uppercase.fw-semibold.small Full total
-            span.fs-5.fw-bold #{pool.payableAmount}
+            span.fs-5.fw-bold #{pool.totalAmount}
 
 //- Static stats list to keep amounts readable and reusable
 mixin poolStats(pool)
@@ -272,7 +272,7 @@ mixin poolStats(pool)
         .d-flex.justify-content-between.align-items-start.gap-3
             .flex-grow-1
                 small.text-secondary.text-uppercase.fw-semibold.mb-1.d-block Full total
-                div.fs-2.fw-bold.text-white #{pool.payableAmount}
+                div.fs-2.fw-bold.text-white #{pool.totalAmount}
                 p.text-secondary.small.mb-0 A summary of everything owed in this pool.
             .text-end
                 span.badge.bg-info.text-dark #{pool.status}
@@ -286,12 +286,18 @@ mixin poolStats(pool)
                         strong Open invoices:
                         |  #{pool.openAmount}
                     li.mb-1
-                        strong Additional charges:
+                        strong Assigned charges:
                         |  #{pool.additionalAmount}
+                    li.mb-1
+                        strong Distribution mode:
+                        if pool.distributionMethod === "EQUAL"
+                            |  Equally among participants
+                        else if pool.distributionMethod === "TIME_BASED"
+                            |  Days attended
             .col-sm-6
                 ul.list-unstyled.mb-0.small
                     li.mb-1
-                        strong Payable total:
+                        strong Distributable total:
                         |  #{pool.payableAmount}
                     li.mb-1
                         strong Outstanding payments:
@@ -366,8 +372,11 @@ mixin poolSurchargeForm(ev, pool, participants)
 //- Charges and takeovers configured before closing a pool
 mixin poolAdjustmentSection(ev, pool, participants)
     .mt-3
-        h6.mb-2 Pre-close adjustments
-        p.text-secondary.small.mb-2 Add surcharges with notes before closing. These amounts are paid only by the participant or their covering payer.
+        h6.mb-2 Manual surcharge assignment (do before closing)
+        p.text-secondary.small.mb-2
+            |  Add surcharges with notes before closing.&nbsp;
+            strong Surcharges will be subtracted from the total distributed among all participants.
+            |  These amounts are paid only by the participant or their covering payer in addition to the automatically calculated share.
         +poolSurchargeList(pool, participants)
         +poolSurchargeForm(ev, pool, participants)
         .mt-4
@@ -388,12 +397,6 @@ mixin poolManagementSection(ev, pool, participants)
                 +poolHeaderSummary(pool)
         .accordion-collapse.collapse(id=`pool-${pool.id}-body`)
             .accordion-body
-                .d-flex.justify-content-between.align-items-start.flex-wrap.gap-2.mb-3
-                    +poolHeader(pool)
-                    if pool.status === 'OPEN'
-                        button.btn.btn-sm.btn-warning.pool-close(type="button" data-id=pool.id)
-                            i.bi.bi-x-circle.me-1
-                            | Close pool
                 .row.mt-2
                     .col-md-4
                         +poolStats(pool)
@@ -405,6 +408,26 @@ mixin poolManagementSection(ev, pool, participants)
                 if pool.status === 'OPEN'
                     +poolAdjustmentSection(ev, pool, participants)
                 +invoiceOverview('admin', {pool: pool, participants: participants, eventId: ev.id})
+                if pool.status === 'OPEN'
+                    .row.mt-2.border.border-secondary-subtle.rounded-2.pt-2
+                        h6.text-danger
+                            i.bi.bi-exclamation-triangle-fill.me-1
+                            |  Danger zone
+                        p.small.mb-2
+                            strong Be careful with the following options since they cannot be undone.
+                            |  Read the following warnings carefully before proceeding.
+                        p.text-secondary.small.mb-2
+                            strong  Closing a pool will automatically calculate each participants share of the total.
+                            |  This means that after that, you will not be able to make any changes to the pool except tracking which share was paid.
+                        p.text-secondary.small.mb-2
+                            strong  Manually applied surcharges will reduce the open invoice amount to be distributed.
+                            |  This is useful e.g. for making sure that consumables contained in this pool like drinks, which should not be paid for by all participants, are correctly distributed.
+                        p.text-secondary.small.mb-2
+                            strong  Check and adjust the participant attendance periods before closing the pool when using the "Days Attended" distribution mode.
+                        .d-flex.justify-content-between.align-items-end.flex-wrap.gap-2.mb-3
+                            button.btn.btn-sm.btn-warning.pool-close(type="button" data-id=pool.id)
+                                i.bi.bi-x-circle.me-1
+                                | Close pool
 
 //- Management tab content for the admin dashboard
 mixin invoicePoolManageTab(ev, pools, participants)
@@ -425,6 +448,12 @@ mixin invoicePoolCreateModal(ev, participants)
                     button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
                 form#poolCreateForm(data-api=`/api/event/${ev.id}/invoice-pools`)
                     .modal-body
+                        .row.g-3
+                            .col-md-6
+                                label.form-label(for="poolDistribution") Share distribution mode
+                                select#poolDistribution.form-select.text-bg-dark(name="distribution" required)
+                                    option(value="TIME_BASED") Distribute among days attended
+                                    option(value="EQUAL") Distribute among participants
                         .row.g-3
                             .col-md-4
                                 label.form-label(for="poolName") Pool name

@@ -1,20 +1,13 @@
-import {
-    Column,
-    Entity,
-    JoinColumn,
-    ManyToOne,
-    OneToMany,
-    PrimaryGeneratedColumn,
-    RelationId,
-} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
 import {Event} from "./Event";
 import {EventInvoice} from "./EventInvoice";
 import {EventPoolAssignment} from "./EventPoolAssignment";
 import {EventInvoiceShare} from "./EventInvoiceShare";
 import {EventPoolTakeover} from "./EventPoolTakeover";
 import {EventInvoiceSurcharge} from "./EventInvoiceSurcharge";
+import {InvoicePoolDistribution, InvoicePoolStatus} from "../../../../types/InvoicePoolTypes";
 
-export type InvoicePoolStatus = 'OPEN' | 'CLOSED';
+export const InvoicePoolDistributions = ['EQUAL', 'TIME_BASED'];
 
 @Entity("event_invoice_pools", {schema: "surveyor"})
 export class EventInvoicePool {
@@ -37,6 +30,9 @@ export class EventInvoicePool {
 
     @Column("enum", {name: "status", enum: ["OPEN", "CLOSED"], default: "OPEN"})
     status!: InvoicePoolStatus;
+
+    @Column("enum", {name: "distribution_method", enum: InvoicePoolDistributions, default: "EQUAL"})
+    distributionMethod!: InvoicePoolDistribution;
 
     @Column("tinyint", {name: "is_default", width: 1, default: 0})
     isDefault!: boolean;

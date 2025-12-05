@@ -1,8 +1,7 @@
-import {In} from "typeorm";
 import fs from "fs";
 import path from "path";
 import {AppDataSource} from "../dataSource";
-import {EventInvoicePool, InvoicePoolStatus} from "../entities/event/EventInvoicePool";
+import {EventInvoicePool} from "../entities/event/EventInvoicePool";
 import {EventInvoice, InvoiceStatus} from "../entities/event/EventInvoice";
 import {EventPoolAssignment} from "../entities/event/EventPoolAssignment";
 import {EventInvoiceShare} from "../entities/event/EventInvoiceShare";
@@ -11,6 +10,7 @@ import {Event} from "../entities/event/Event";
 import {EventPoolTakeover} from "../entities/event/EventPoolTakeover";
 import {EventInvoiceSurcharge} from "../entities/event/EventInvoiceSurcharge";
 import {formatAmount, toAmount} from "../../lib/util";
+import type {InvoicePoolDistribution, InvoicePoolStatus} from "../../../types/InvoicePoolTypes";
 
 // Centralized pool loader to keep relation loading consistent across controllers
 async function loadPool(poolId: string) {
@@ -70,6 +70,7 @@ export async function createPool(
     eventId: string,
     name: string,
     description: string | undefined,
+    distribution: InvoicePoolDistribution,
     isDefault: boolean,
     assignAll: boolean,
     registrationIds: number[] = [],
@@ -81,6 +82,7 @@ export async function createPool(
             event: {id: eventId} as Event,
             name,
             description: description || null,
+            distributionMethod: distribution,
             isDefault,
             assignAll,
             status: "OPEN" as InvoicePoolStatus,
@@ -129,8 +131,8 @@ export async function updateTakeovers(
 
         // Keep track of current mappings after applying removals so conflict checks stay accurate.
         const normalizedBeneficiaries = Array.from(new Set(beneficiaryIds.map(Number)));
-        const removed: {payerId: number; beneficiaryId: number}[] = [];
-        const added: {payerId: number; beneficiaryId: number}[] = [];
+        const removed: { payerId: number; beneficiaryId: number }[] = [];
+        const added: { payerId: number; beneficiaryId: number }[] = [];
         const toDelete = new Set<number>();
 
         for (const takeover of existing) {
@@ -138,7 +140,10 @@ export async function updateTakeovers(
             const beneficiaryDesired = normalizedBeneficiaries.includes(takeover.beneficiaryRegistrationId);
             const conflictingClaim = allowReassign && beneficiaryDesired && takeover.payerRegistrationId !== payerRegistrationId;
             if ((isPayer && !beneficiaryDesired) || conflictingClaim) {
-                removed.push({payerId: takeover.payerRegistrationId, beneficiaryId: takeover.beneficiaryRegistrationId});
+                removed.push({
+                    payerId: takeover.payerRegistrationId,
+                    beneficiaryId: takeover.beneficiaryRegistrationId
+                });
                 toDelete.add(takeover.id);
             }
         }
@@ -153,13 +158,16 @@ export async function updateTakeovers(
 
         // Ensure uniqueness per beneficiary by removing conflicting rows before inserting the new mapping when allowed.
         // First pass: identify conflicting rows and prepare new takeovers
-        const takeoversToBeSaved: Array<{payerId: number; beneficiaryId: number}> = [];
+        const takeoversToBeSaved: Array<{ payerId: number; beneficiaryId: number }> = [];
         for (const beneficiaryId of normalizedBeneficiaries) {
             const conflicting = remaining.find(
                 (t) => t.beneficiaryRegistrationId === beneficiaryId && t.payerRegistrationId !== payerRegistrationId,
             );
             if (conflicting && allowReassign) {
-                removed.push({payerId: conflicting.payerRegistrationId, beneficiaryId: conflicting.beneficiaryRegistrationId});
+                removed.push({
+                    payerId: conflicting.payerRegistrationId,
+                    beneficiaryId: conflicting.beneficiaryRegistrationId
+                });
                 toDelete.add(conflicting.id);
             }
 
@@ -198,7 +206,7 @@ export async function submitInvoice(
     registrationId: number,
     amount: number,
     description: string | null,
-    proof: {path: string; originalName: string; mimeType: string} | null,
+    proof: { path: string; originalName: string; mimeType: string } | null,
 ) {
     const invoiceRepo = AppDataSource.getRepository(EventInvoice);
     const invoice = invoiceRepo.create({
@@ -270,16 +278,6 @@ export async function closePool(
         const pool = await poolRepo.findOne({where: {id: poolId}});
         if (!pool) throw new Error("Pool not found");
         if (pool.status === "CLOSED") return;
-
-        if (approvedInvoiceIds.length) {
-            const invoices = await invoiceRepo.find({
-                where: {id: In(approvedInvoiceIds)},
-            });
-            invoices.forEach((inv) => {
-                inv.status = "CLOSED";
-            });
-            await invoiceRepo.save(invoices);
-        }
 
         await shareRepo.delete({pool: {id: poolId}});
         if (sharePayloads.length) {
@@ -399,7 +397,8 @@ export async function recalcPoolTotals(poolId: string) {
     ]);
     if (!pool) return;
 
-    const invoiceTotal = invoices.reduce((sum, inv) => sum + toAmount(inv.amount), 0);
+    const invoiceTotal = invoices.filter(inv => inv.status !== "NEW")
+        .reduce((sum, inv) => sum + toAmount(inv.amount), 0);
     const openAmount = invoices
         .filter((inv) => inv.status === "APPROVED")
         .reduce((sum, inv) => sum + toAmount(inv.amount), 0);
@@ -410,7 +409,7 @@ export async function recalcPoolTotals(poolId: string) {
 
     pool.totalAmount = formatAmount(invoiceTotal);
     pool.additionalAmount = formatAmount(extraAmount);
-    pool.payableAmount = formatAmount(invoiceTotal + extraAmount);
+    pool.payableAmount = formatAmount(invoiceTotal - extraAmount);
     pool.openAmount = formatAmount(openAmount);
     pool.outstandingAmount = formatAmount(outstandingAmount);
     await poolRepo.save(pool);

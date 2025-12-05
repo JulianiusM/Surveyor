@@ -32,5 +32,5 @@ export function showInlineAlert(
 
     alertBox.appendChild(alert);
     alert.focus();
-    alert.scrollIntoView(true)
+    alertBox.scrollIntoView(true)
 }
