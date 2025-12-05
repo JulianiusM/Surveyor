@@ -12,6 +12,14 @@ export interface ParticipantAttendance {
     roleIds?: number[];
 }
 
+export interface RequirementOverrideInput {
+    id?: number;
+    roleId?: number | null;
+    userId?: number | null;
+    guestId?: number | null;
+    requiredShifts: number;
+}
+
 export interface ParticipantRequirementResult {
     participantKey: string;
     requiredShifts: number;
@@ -77,6 +85,30 @@ export function toParticipantKey(participant: ParticipantAttendance): string {
     if (participant.userId) return `user:${participant.userId}`;
     if (participant.guestId) return `guest:${participant.guestId}`;
     return "participant:unknown";
+}
+
+export function normalizeOverrideInput(input: RequirementOverrideInput): RequirementOverrideInput {
+    const normalized: RequirementOverrideInput = {
+        id: input.id,
+        roleId: input.roleId ?? null,
+        userId: input.userId ?? null,
+        guestId: input.guestId ?? null,
+        requiredShifts: input.requiredShifts,
+    };
+
+    if (!normalized.userId && !normalized.guestId) {
+        throw new Error("Override requires a userId or guestId");
+    }
+
+    if (normalized.requiredShifts == null || Number.isNaN(normalized.requiredShifts)) {
+        throw new Error("Override required shifts must be defined");
+    }
+
+    if (normalized.requiredShifts < 0) {
+        throw new Error("Override required shifts must be non-negative");
+    }
+
+    return normalized;
 }
 
 function selectOverride(participant: ParticipantAttendance, overrides: ActivityPlanRequirementOverride[]): ActivityPlanRequirementOverride | undefined {

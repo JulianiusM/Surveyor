@@ -21,6 +21,7 @@
 - Introduced timebox utilities to standardize slot ordering and overlap detection to support upcoming automatic assignment and UX warnings.
 - Updated slot retrieval to order by start time (when available) to align with the new timeboxing expectations.
 - Added schema support for participant- and role-specific required shift overrides alongside reusable calculators for proportional requirements and override resolution.
+- Added validation helpers and database service endpoints to manage per-participant override persistence and plan-level role requirements in one transactional call.
 
 ## Next Steps
 - Wire the timebox utilities into assignment validation to surface overlap/availability warnings in the UI.
