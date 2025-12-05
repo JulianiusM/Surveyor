@@ -8,6 +8,7 @@ import * as activityService from "../modules/database/services/ActivityService";
 import * as userService from "../modules/database/services/UserService";
 import * as requirementService from "../modules/database/services/ActivityRequirementService";
 import * as recommendationService from "../modules/database/services/ActivityRecommendationService";
+import * as eventService from "../modules/database/services/EventService";
 import {ActivitySlot} from "../modules/database/entities/activity/ActivitySlot";
 import {ActivityPlan} from "../modules/database/entities/activity/ActivityPlan";
 import {Request} from "express";
@@ -15,6 +16,7 @@ import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
 import type {PermBundle} from "../types/PermissionTypes";
 import {buildRecommendationWarnings} from "../modules/activity/recommendations";
 import {generatePlanRecommendations} from "../modules/activity/autoAssignment";
+import {ParticipantAttendance, toParticipantKey} from "../modules/activity/requirements";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'activity/activity-create';
@@ -146,7 +148,7 @@ function preprocessRecommendationUpdate(body: any) {
                     slotId: Joi.string().uuid().required(),
                     userId: Joi.number().integer().positive().allow(null),
                     guestId: Joi.number().integer().positive().allow(null),
-                    status: Joi.string().valid("PENDING", "APPROVED", "REJECTED").optional(),
+                    status: Joi.string().valid("PENDING", "APPROVED", "REJECTED", "APPLIED").optional(),
                 }).custom((value, helpers) => {
                     if (!value.userId && !value.guestId) {
                         return helpers.error("any.custom", {message: "Recommendation requires a userId or guestId"});
@@ -343,16 +345,84 @@ async function updateRequirements(planId: string, body: any) {
 }
 
 async function collectRecommendationWarnings(planId: string, recommendations: {slotId: string; userId?: number | null; guestId?: number | null; status?: string}[]) {
-    const [slots, existingAssignments] = await Promise.all([
+    const [plan, slots, existingAssignments] = await Promise.all([
+        activityService.getActivityPlanById(planId),
         activityService.getActivitySlotsFlat(planId),
         activityService.getParticipantAssignmentsWithSlots(planId),
     ]);
+
+    const slotCapacities: Record<string, number> = {};
+    if (plan && !plan.allowOverfillAfterFull) {
+        const assignedCounts: Record<string, number> = {};
+        Object.values(existingAssignments).forEach((assignments) => {
+            assignments.forEach((assignment) => {
+                assignedCounts[assignment.id] = (assignedCounts[assignment.id] ?? 0) + 1;
+            });
+        });
+
+        slots.forEach((slot) => {
+            if (slot.maxAssignees != null) {
+                slotCapacities[slot.id] = Math.max((slot.maxAssignees ?? 0) - (assignedCounts[slot.id] ?? 0), 0);
+            }
+        });
+    }
 
     return buildRecommendationWarnings({
         slots,
         recommendations,
         existingAssignments,
+        slotCapacities,
+        allowOverfill: Boolean(plan?.allowOverfillAfterFull),
     });
+}
+
+function buildParticipantAttendanceMap(
+    plan: ActivityPlan,
+    overrides: Awaited<ReturnType<typeof requirementService.getRequirementConfiguration>>["overrides"],
+    existingAssignments: Record<string, {id: string; day: string; startTime?: string | null; endTime?: string | null; pos: number}[]>,
+    recommendations: {slotId: string; userId?: number | null; guestId?: number | null}[],
+    eventParticipants: Awaited<ReturnType<typeof eventService.getEventParticipants>> = [],
+): Record<string, ParticipantAttendance> {
+    const attendance: Record<string, ParticipantAttendance> = {};
+
+    const upsert = (participant: ParticipantAttendance) => {
+        const key = toParticipantKey(participant);
+        if (!key) return;
+        if (!attendance[key]) attendance[key] = participant;
+    };
+
+    eventParticipants.forEach((participant) => {
+        upsert({
+            userId: participant.userId ?? undefined,
+            guestId: participant.guestId ?? undefined,
+            arrivalDate: participant.arrivalDate ?? undefined,
+            departureDate: participant.departureDate ?? undefined,
+        });
+    });
+
+    for (const override of overrides) {
+        upsert({
+            userId: override.userId ?? undefined,
+            guestId: override.guestId ?? undefined,
+            roleIds: override.roleId ? [override.roleId] : undefined,
+        });
+    }
+
+    Object.keys(existingAssignments).forEach((key) => {
+        const [type, id] = key.split(":");
+        if (type === "user") {
+            upsert({userId: Number(id)});
+        }
+        if (type === "guest") {
+            upsert({guestId: Number(id)});
+        }
+    });
+
+    for (const rec of recommendations) {
+        upsert({userId: rec.userId ?? undefined, guestId: rec.guestId ?? undefined});
+    }
+
+    return attendance;
 }
 
 async function getRecommendations(planId: string) {
@@ -380,6 +450,99 @@ async function autoGenerateRecommendations(planId: string) {
     await recommendationService.replaceRecommendations(planId, recommendations);
     const warnings = await collectRecommendationWarnings(planId, recommendations);
     return {message: 'Recommendations generated', warnings};
+}
+
+async function applyRecommendations(planId: string) {
+    const [plan, requirementConfig, slots, recommendations, existingAssignments] = await Promise.all([
+        activityService.getActivityPlanById(planId),
+        requirementService.getRequirementConfiguration(planId),
+        activityService.getActivitySlotsFlat(planId),
+        recommendationService.getRecommendations(planId),
+        activityService.getParticipantAssignmentsWithSlots(planId),
+    ]);
+
+    if (!plan) {
+        throw new APIError('Activity plan not found', {planId}, 404);
+    }
+
+    const approved = recommendations.filter((rec) => rec.status === "APPROVED");
+    if (!approved.length) {
+        return {message: 'No approved recommendations to apply', applied: 0, warnings: []};
+    }
+
+    const normalized = approved.map((rec) => ({
+        id: rec.id,
+        slotId: rec.slot.id,
+        userId: rec.user?.id ?? null,
+        guestId: rec.guest?.id ?? null,
+        status: rec.status,
+    }));
+
+    const eventParticipants = plan.event ? await eventService.getEventParticipants(plan.event.id) : [];
+
+    const slotCapacity: Record<string, number> = {};
+    if (!plan.allowOverfillAfterFull) {
+        const assignedCounts: Record<string, number> = {};
+        Object.values(existingAssignments).forEach((assignments) => {
+            assignments.forEach((assignment) => {
+                assignedCounts[assignment.id] = (assignedCounts[assignment.id] ?? 0) + 1;
+            });
+        });
+
+        slots.forEach((slot) => {
+            if (slot.maxAssignees != null) {
+                const remaining = Math.max((slot.maxAssignees ?? 0) - (assignedCounts[slot.id] ?? 0), 0);
+                slotCapacity[slot.id] = remaining;
+            }
+        });
+    }
+
+    const participantAttendance = buildParticipantAttendanceMap(
+        plan,
+        requirementConfig.overrides,
+        existingAssignments,
+        normalized,
+        eventParticipants,
+    );
+
+    const warnings = buildRecommendationWarnings({
+        slots,
+        recommendations: normalized,
+        existingAssignments,
+        participantAttendance,
+        slotCapacities: slotCapacity,
+        allowOverfill: Boolean(plan.allowOverfillAfterFull),
+    });
+
+    const blockedIds = new Set(
+        warnings
+            .filter((warning) =>
+                warning.warnings.some(
+                    (w) => w.type === "outside_attendance" || w.type === "overlap" || w.type === "over_capacity",
+                ),
+            )
+            .map((warning) => warning.recommendation.id)
+            .filter(Boolean) as string[],
+    );
+
+    const applicable = normalized.filter((rec) => !rec.id || !blockedIds.has(rec.id));
+    for (const rec of applicable) {
+        if (rec.userId) {
+            await activityService.assignActivitySlotToUser(rec.slotId, rec.userId);
+        } else if (rec.guestId) {
+            await activityService.assignActivitySlotToGuest(rec.slotId, rec.guestId);
+        }
+    }
+
+    const appliedIds = applicable.map((rec) => rec.id).filter(Boolean) as string[];
+    await recommendationService.markRecommendationsApplied(planId, appliedIds);
+
+    return {
+        message: `Applied ${appliedIds.length} recommendation${appliedIds.length === 1 ? '' : 's'}`,
+        applied: appliedIds.length,
+        skipped: blockedIds.size,
+        warnings,
+    };
 }
 
 async function deleteSlot(slotId: string) {
@@ -437,6 +600,7 @@ export default {
     getRecommendations,
     updateRecommendations,
     autoGenerateRecommendations,
+    applyRecommendations,
     deleteSlot,
     addSlotRole,
 

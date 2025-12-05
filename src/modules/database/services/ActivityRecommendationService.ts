@@ -1,7 +1,9 @@
 import {AppDataSource} from "../dataSource";
 import {ActivityAssignmentRecommendation, RecommendationStatus} from "../entities/activity/ActivityAssignmentRecommendation";
+import {In} from "typeorm";
 
 export interface RecommendationInput {
+    id?: string;
     slotId: string;
     userId?: number | null;
     guestId?: number | null;
@@ -25,6 +27,7 @@ export function normalizeRecommendationInput(input: RecommendationInput): Recomm
     }
 
     return {
+        id: input.id,
         slotId: input.slotId,
         userId: hasUser ? Number(input.userId) : null,
         guestId: hasGuest ? Number(input.guestId) : null,
@@ -37,6 +40,15 @@ export async function getRecommendations(planId: string) {
         where: {plan: {id: planId}},
         relations: {slot: true, user: true, guest: true},
     });
+}
+
+export async function markRecommendationsApplied(planId: string, ids: string[]): Promise<void> {
+    if (!ids.length) return;
+
+    await AppDataSource.getRepository(ActivityAssignmentRecommendation).update(
+        {id: In(ids), plan: {id: planId}},
+        {status: "APPLIED"},
+    );
 }
 
 export async function replaceRecommendations(planId: string, recommendations: RecommendationInput[]): Promise<void> {

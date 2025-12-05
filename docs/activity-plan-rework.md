@@ -27,6 +27,7 @@
 - Created staging support for assignment recommendations (schema, entity, and normalization helpers) to back the upcoming auto-assignment review flow.
 - Added recommendation management endpoints with warning generation (overlap-aware) for staged assignments to prepare the admin review workflow.
 - Implemented automatic recommendation generation that balances outstanding shift requirements, respects attendance/overlap rules, and persists generated recommendations through a dedicated API endpoint.
+- Added recommendation application flow with capacity-aware warnings, attendance/overlap enforcement, and an API endpoint to convert approved recommendations into applied assignments.
 
 ## Next Steps
 - Wire the timebox utilities into assignment validation responses and UI warnings.

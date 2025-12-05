@@ -8,7 +8,7 @@ export interface AttendanceCheck {
 }
 
 export interface AssignmentWarning {
-    type: "outside_attendance" | "arrival_day" | "departure_day" | "overlap";
+    type: "outside_attendance" | "arrival_day" | "departure_day" | "overlap" | "over_capacity";
     conflicts?: string[];
 }
 

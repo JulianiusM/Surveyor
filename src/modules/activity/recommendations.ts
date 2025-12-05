@@ -13,6 +13,8 @@ export interface RecommendationWarningOptions {
     recommendations: RecommendationInput[];
     existingAssignments?: Record<string, AssignmentCandidate[]>;
     participantAttendance?: Record<string, ParticipantAttendance>;
+    slotCapacities?: Record<string, number>;
+    allowOverfill?: boolean;
 }
 
 export function buildRecommendationWarnings({
@@ -20,6 +22,8 @@ export function buildRecommendationWarnings({
     recommendations,
     existingAssignments = {},
     participantAttendance = {},
+    slotCapacities = {},
+    allowOverfill = false,
 }: RecommendationWarningOptions): RecommendationWarningResult[] {
     const slotMap = new Map<string, ActivitySlot>();
     for (const slot of slots) {
@@ -27,6 +31,7 @@ export function buildRecommendationWarnings({
     }
 
     const participantQueue = new Map<string, AssignmentCandidate[]>();
+    const slotUsage = new Map<string, number>();
     const results: RecommendationWarningResult[] = [];
 
     for (const rec of recommendations.map(normalizeRecommendationInput)) {
@@ -42,6 +47,17 @@ export function buildRecommendationWarnings({
 
         const candidate = toAssignmentCandidate(slot);
         const warnings = collectAssignmentWarnings(candidate, attendance, [...existing, ...prior]);
+
+        if (!allowOverfill) {
+            const capacity = slotCapacities[slot.id];
+            if (capacity !== undefined) {
+                const used = slotUsage.get(slot.id) ?? 0;
+                if (used >= capacity) {
+                    warnings.push({type: "over_capacity"});
+                }
+                slotUsage.set(slot.id, used + 1);
+            }
+        }
 
         results.push({recommendation: rec, warnings});
 

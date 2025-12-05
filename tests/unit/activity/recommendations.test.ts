@@ -13,8 +13,8 @@ describe("normalizeRecommendationInput", () => {
     });
 
     test("defaults to pending status", () => {
-        const normalized = normalizeRecommendationInput({slotId: "slot", userId: 5});
-        expect(normalized).toEqual({slotId: "slot", userId: 5, guestId: null, status: "PENDING"});
+        const normalized = normalizeRecommendationInput({id: "abc", slotId: "slot", userId: 5});
+        expect(normalized).toEqual({id: "abc", slotId: "slot", userId: 5, guestId: null, status: "PENDING"});
     });
 });
 
@@ -49,5 +49,18 @@ describe("buildRecommendationWarnings", () => {
         expect(warnings[1].warnings).toEqual([
             {type: "overlap", conflicts: ["a"]},
         ]);
+    });
+
+    test("flags over-capacity assignments when the slot is full", () => {
+        const warnings = buildRecommendationWarnings({
+            slots,
+            recommendations: [
+                {slotId: "a", userId: 1},
+                {slotId: "a", userId: 2},
+            ],
+            slotCapacities: {a: 1},
+        });
+
+        expect(warnings[1].warnings).toEqual([{type: "over_capacity"}]);
     });
 });
