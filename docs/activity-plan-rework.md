@@ -20,8 +20,9 @@
 - Documented the rework plan and captured the incremental workflow for upcoming work.
 - Introduced timebox utilities to standardize slot ordering and overlap detection to support upcoming automatic assignment and UX warnings.
 - Updated slot retrieval to order by start time (when available) to align with the new timeboxing expectations.
+- Added schema support for participant- and role-specific required shift overrides alongside reusable calculators for proportional requirements and override resolution.
 
 ## Next Steps
 - Wire the timebox utilities into assignment validation to surface overlap/availability warnings in the UI.
 - Extend the data model with migration(s) for per-role requirements, manual overrides, and recommendation staging.
-- Build the required-shift calculation service and begin exposing the new plan settings through the controller/API.
+- Build controller/service wiring that consumes the new requirement calculators, enforces binding deadlines, and exposes overrides via the API.

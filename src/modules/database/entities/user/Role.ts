@@ -2,6 +2,7 @@ import {Column, Entity, Index, OneToMany, PrimaryGeneratedColumn,} from "typeorm
 import {ActivityAssignmentRole} from "../activity/ActivityAssignmentRole";
 import {ActivitySlotRole} from "../activity/ActivitySlotRole";
 import {ActivityPlanRequirement} from "../activity/ActivityPlanRequirement";
+import {ActivityPlanRequirementOverride} from "../activity/ActivityPlanRequirementOverride";
 
 @Index("name", ["name"], {unique: true})
 @Entity("roles", {schema: "surveyor"})
@@ -35,4 +36,10 @@ export class Role {
         (activityPlanRequirements) => activityPlanRequirements.role
     )
     activityPlanRequirements: ActivityPlanRequirement[];
+
+    @OneToMany(
+        () => ActivityPlanRequirementOverride,
+        (activityPlanRequirementOverrides) => activityPlanRequirementOverrides.role
+    )
+    activityPlanRequirementOverrides: ActivityPlanRequirementOverride[];
 }

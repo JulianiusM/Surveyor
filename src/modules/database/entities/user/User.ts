@@ -12,6 +12,7 @@ import {Event} from "../event/Event";
 import {EventRegistration} from "../event/EventRegistration";
 import {EntityAdminAssignment} from "../permissions/EntityAdminAssignment";
 import {EventRegBypassLink} from "../event/EventRegBypassLink";
+import {ActivityPlanRequirementOverride} from "../activity/ActivityPlanRequirementOverride";
 
 @Index("email", ["email"], {unique: true})
 @Index("username", ["username"], {unique: true})
@@ -117,6 +118,12 @@ export class User {
 
     @OneToMany(() => EventRegBypassLink, (link) => link.user)
     eventRegBypassLinksUsed: EventRegBypassLink[];
+
+    @OneToMany(
+        () => ActivityPlanRequirementOverride,
+        (activityPlanRequirementOverrides) => activityPlanRequirementOverrides.user
+    )
+    activityPlanRequirementOverrides: ActivityPlanRequirementOverride[];
 
     @BeforeInsert()
     @BeforeUpdate()

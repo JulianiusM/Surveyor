@@ -3,6 +3,7 @@ import {ActivityAssignment} from "./ActivityAssignment";
 import {User} from "../user/User";
 import {ActivitySlot} from "./ActivitySlot";
 import {ActivityPlanRequirement} from "./ActivityPlanRequirement";
+import {ActivityPlanRequirementOverride} from "./ActivityPlanRequirementOverride";
 import {Event} from "../event/Event";
 
 @Entity("activity_plans", {schema: "surveyor"})
@@ -85,4 +86,10 @@ export class ActivityPlan {
         (activityPlanRequirements) => activityPlanRequirements.plan
     )
     activityPlanRequirements: ActivityPlanRequirement[];
+
+    @OneToMany(
+        () => ActivityPlanRequirementOverride,
+        (activityPlanRequirementOverrides) => activityPlanRequirementOverrides.plan
+    )
+    activityPlanRequirementOverrides: ActivityPlanRequirementOverride[];
 }
