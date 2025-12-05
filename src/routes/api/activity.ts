@@ -21,7 +21,7 @@ import controller from '../../controller/activityController';
 import {PERM} from "../../modules/lib/permissions";
 import type {EntityItemType, EntityType} from "../../types/UtilTypes";
 import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
-import type {ItemGetter} from "../../types/PermissionTypes";
+import type {ItemGetter, PermBundle} from "../../types/PermissionTypes";
 
 const app = express.Router();
 const entityName: EntityType = ENTITIES.ACTIVITY;
@@ -46,6 +46,20 @@ app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), asyn
     const msg = await controller.updateDescription(resFct(req).id, req.body);
     renderer.respondWithSuccessJson(res, msg);
 })
+
+app.post(
+    '/:id/slot/:slotId/warnings',
+    asyncHandler(async (req: Request, res: Response) => {
+        const warnings = await controller.getAssignmentWarnings(
+            resFct(req).id,
+            req.params.slotId,
+            req.session,
+            res.locals.permData as PermBundle | undefined,
+            req.body,
+        );
+        renderer.respondWithSuccessJson(res, {warnings});
+    }),
+);
 
 app.get(
     '/:id/requirements',

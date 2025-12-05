@@ -17,6 +17,8 @@ import type {PermBundle} from "../types/PermissionTypes";
 import {buildRecommendationWarnings} from "../modules/activity/recommendations";
 import {generatePlanRecommendations} from "../modules/activity/autoAssignment";
 import {ParticipantAttendance, toParticipantKey} from "../modules/activity/requirements";
+import {collectAssignmentWarnings, toAssignmentCandidate} from "../modules/activity/availability";
+import {PERM} from "../modules/lib/permissions";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'activity/activity-create';
@@ -446,6 +448,69 @@ function buildParticipantAttendanceMap(
     return attendance;
 }
 
+function resolveWarningTarget(
+    session: Request["session"],
+    permData: PermBundle | undefined,
+    body: {userId?: number | null; guestId?: number | null} = {},
+) {
+    if (body.userId || body.guestId) {
+        const isManager = permData?.entity?.has(PERM.MANAGE_ASSIGNMENTS);
+        if (!isManager) {
+            throw new APIError("Insufficient permissions to inspect participant warnings", body, 403);
+        }
+        return {userId: body.userId ?? undefined, guestId: body.guestId ?? undefined};
+    }
+
+    if (session?.user?.id) return {userId: session.user.id};
+    if (session?.guest?.id) return {guestId: session.guest.id};
+
+    throw new APIError("Unknown user", body, 401);
+}
+
+async function getAssignmentWarnings(
+    planId: string,
+    slotId: string,
+    session: Request["session"],
+    permData?: PermBundle,
+    body?: {userId?: number | null; guestId?: number | null},
+) {
+    const target = resolveWarningTarget(session, permData, body);
+    const participantKey = toParticipantKey(target);
+    if (!participantKey) {
+        throw new APIError("Unable to resolve participant", body, 400);
+    }
+
+    const [plan, slot, requirementConfig, assignments, assignees] = await Promise.all([
+        activityService.getActivityPlanById(planId),
+        activityService.getActivitySlotById(slotId),
+        requirementService.getRequirementConfiguration(planId),
+        activityService.getParticipantAssignmentsWithSlots(planId),
+        activityService.getActivitySlotAssignees(planId),
+    ]);
+
+    if (!plan || !slot) {
+        throw new APIError("Activity plan or slot not found", {planId, slotId}, 404);
+    }
+
+    const eventParticipants = plan.event ? await eventService.getEventParticipants(plan.event.id) : [];
+    const attendance = buildParticipantAttendanceMap(plan, requirementConfig.overrides, assignments, [], eventParticipants);
+
+    const warnings = collectAssignmentWarnings(
+        toAssignmentCandidate(slot),
+        attendance[participantKey] ?? target,
+        assignments[participantKey] ?? [],
+    );
+
+    if (!plan.allowOverfillAfterFull && typeof slot.maxAssignees === "number") {
+        const currentCount = assignees[slot.id]?.length ?? 0;
+        if (currentCount >= slot.maxAssignees) {
+            warnings.push({type: "over_capacity"});
+        }
+    }
+
+    return warnings;
+}
+
 async function getRecommendations(planId: string) {
     const recommendations = await recommendationService.getRecommendations(planId);
     const normalized = recommendations.map((rec) => ({
@@ -625,6 +690,7 @@ export default {
     deleteSlot,
     addSlotRole,
 
+    getAssignmentWarnings,
     getAssignmentAccessMapping,
     getRoleAccessMapping,
 };

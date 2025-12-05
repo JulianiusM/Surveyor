@@ -29,9 +29,10 @@
 - Implemented automatic recommendation generation that balances outstanding shift requirements, respects attendance/overlap rules, and persists generated recommendations through a dedicated API endpoint.
 - Added recommendation application flow with capacity-aware warnings, attendance/overlap enforcement, and an API endpoint to convert approved recommendations into applied assignments.
 - Added validation for plan-level requirement settings (mode, rounding, deadlines, capacity bypass) alongside transactional updates and enforced binding-deadline locks on assignment mutations.
+- Added assignment-warning APIs that surface overlap, attendance, and capacity warnings for participants before assigning slots.
 
 ## Next Steps
-- Wire the timebox utilities into assignment validation responses and UI warnings.
+- Surface assignment warnings in the UI using the new API.
 - Build controller/service wiring that consumes the new requirement calculators, enforces binding deadlines, and surfaces the overrides/configuration in the UI.
 - Surface recommendation warnings and staged data in the UI for admin review/editing.
 - Hook recommendation approval flows to create assignments and enforce the binding-deadline permissions in the UI.
