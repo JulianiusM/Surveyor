@@ -5,7 +5,7 @@ import {EventPoolAssignment} from "./EventPoolAssignment";
 import {EventInvoiceShare} from "./EventInvoiceShare";
 import {EventPoolTakeover} from "./EventPoolTakeover";
 import {EventInvoiceSurcharge} from "./EventInvoiceSurcharge";
-import {InvoicePoolDistribution, InvoicePoolStatus} from "../../../../types/InvoicePoolTypes";
+import type {InvoicePoolDistribution, InvoicePoolStatus} from "../../../../types/InvoicePoolTypes";
 
 export const InvoicePoolDistributions = ['EQUAL', 'TIME_BASED'];
 
