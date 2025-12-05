@@ -307,14 +307,18 @@ export async function closePool(
 }
 
 // Reopen a closed pool to allow recalculation of shares
+// Uses transaction to prevent race conditions during concurrent recalculation attempts
 export async function reopenPool(poolId: string) {
-    const poolRepo = AppDataSource.getRepository(EventInvoicePool);
-    const pool = await poolRepo.findOne({where: {id: poolId}});
-    if (!pool) throw new Error("Pool not found");
-    if (pool.status !== "CLOSED") throw new Error("Pool is not closed");
-    
-    pool.status = "OPEN";
-    await poolRepo.save(pool);
+    await AppDataSource.transaction("SERIALIZABLE", async (manager) => {
+        const poolRepo = manager.getRepository(EventInvoicePool);
+        const pool = await poolRepo.findOne({where: {id: poolId}, lock: {mode: "pessimistic_write"}});
+        if (!pool) throw new Error("Pool not found");
+        if (pool.status !== "CLOSED") throw new Error("Pool is not closed");
+        
+        pool.status = "OPEN";
+        pool.closedAt = null; // Clear closed timestamp for consistency
+        await poolRepo.save(pool);
+    });
 }
 
 export async function updateAssignments(

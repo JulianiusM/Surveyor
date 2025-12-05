@@ -554,17 +554,25 @@ export async function serveInvoiceProof(event: Event, poolId: string, invoiceId:
 
 // Recalculate a closed pool by deleting existing shares and re-running the closePool logic
 // This allows admins to adjust pool settings after closure and recalculate shares
+// The reopenPool and closePool operations use transactions with locks to prevent race conditions
 async function recalculatePool(event: Event, poolId: string, body: any = {}, session?: Request['session']) {
     const pool = await ensurePool(event, poolId);
     if (pool.status !== 'CLOSED') {
         throw new APIError('Only closed pools can be recalculated', {}, 400);
     }
 
-    // Reopen the pool temporarily by setting status to OPEN
-    await invoiceService.reopenPool(poolId);
-    
-    // Re-run the close pool logic which will recalculate all shares
-    await closePool(event, poolId, body, session);
+    try {
+        // Reopen the pool (uses SERIALIZABLE transaction with pessimistic write lock)
+        await invoiceService.reopenPool(poolId);
+        
+        // Re-run the close pool logic which will recalculate all shares
+        // closePool also uses transactions (READ COMMITTED) for share deletion and creation
+        await closePool(event, poolId, body, session);
+    } catch (error) {
+        // If recalculation fails after reopening, the pool will remain open
+        // Admins can fix issues and try closing again
+        throw error;
+    }
 }
 
 export default {
