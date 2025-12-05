@@ -13,6 +13,7 @@ import {ensureOneByObjectsAuthed, findOneByObjectsAuthed} from "../utils/relatio
 import * as entityAdminService from "./EntityAdminService";
 import {EventRegBypassLink} from "../entities/event/EventRegBypassLink";
 import {ExpectedError} from "../../lib/errors";
+import {registerForDefaultPools} from "./EventInvoiceService";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Events (CRUD)
@@ -183,6 +184,7 @@ export async function register(
             const ok = await consumeDeadlineBypassToken(bypass.linkId, actor);
             if (!ok) throw new ExpectedError('This link has already been used', 'error', 409);
         }
+        await registerForDefaultPools(manager, reg)
         return reg.id;
     });
 }
@@ -314,7 +316,7 @@ export async function isRegisteredForEvent(actor: { userId?: number; guestId?: n
     if (!actor.userId && !actor.guestId) return false;
 
     const repo = AppDataSource.getRepository(EventRegistration);
-    
+
     // Check if user or guest is registered (use separate queries for clarity)
     let isRegistered = false;
     if (actor.userId) {
@@ -326,14 +328,14 @@ export async function isRegisteredForEvent(actor: { userId?: number; guestId?: n
             where: {event: {id: eventId}, guest: {id: actor.guestId}}
         });
     }
-    
+
     // Also check if user is the event owner
     if (!isRegistered && actor.userId) {
         isRegistered = await AppDataSource.getRepository(Event).exists({
             where: {id: eventId, owner: {id: actor.userId}}
         });
     }
-    
+
     return isRegistered;
 }
 

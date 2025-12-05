@@ -10,9 +10,9 @@ html(lang="en")
     body
         .sheet
             .wrap
-                .toolbar.no-print
+                .toolbar
                     h1= data.event.title
-                    button.btn(type="button" onclick="window.print()") Print
+                    button.btn.no-print(type="button" onclick="window.print()") Print
 
                 h2 Event info
                 .meta

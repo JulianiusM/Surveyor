@@ -3,44 +3,45 @@ include mixins/helpers.pug
 //- Render the outstanding shares table with surcharge notes included for clarity.
 mixin invoiceShareTable(pool, participants, admin = false)
     if pool.shares && pool.shares.length
-        label.form-label.text-secondary.mb-1 Outstanding shares
-        table.table.table-dark.table-sm.mb-0
-            thead
-                tr
-                    th Payer
-                    th Covers
-                    th Base
-                    th Extra
-                    th Invoice credit
-                    th Total
-                    th Notes
-                    th Paid
-            tbody
-                each share in pool.shares
-                    -
-                        const payerName = (participants || []).find(pt => pt.id === share.registration?.id)?.name || `Participant #${share.registration?.id}`
-                        const covered = (pool.takeovers || [])
-                                .filter(t => t.payerRegistrationId === share.registration?.id)
-                                .map(t => (participants || []).find(pt => pt.id === t.beneficiaryRegistrationId)?.name || `Participant #${t.beneficiaryRegistrationId}`)
-                                .join(', ');
-                        const notes = (share.note || '').split(' • ').filter(Boolean);
+        .table-responsive.invoice-scroll
+            label.form-label.text-secondary.mb-1 Outstanding shares
+            table.table.table-striped.table-hover.table-bordered.table-dark.table-sm.mb-0
+                thead
                     tr
-                        td #{payerName}
-                        td #{covered || 'Self'}
-                        td #{share.baseShareAmount}
-                        td #{share.extraAmount}
-                        td #{share.invoiceCreditAmount || '0.00'}
-                        td #{share.shareAmount}
-                        td
-                            if notes.length
-                                ul.list-unstyled.mb-0
-                                    each note in notes
-                                        li.text-secondary.small= note
-                            else
-                                span.text-secondary.small No notes
-                        td
-                            .form-check.form-switch
-                                input.form-check-input.share-paid(type="checkbox" data-pool=pool.id data-id=share.id checked=!!(share.isPaid) enabled=admin)
+                        th Payer
+                        th Covers
+                        th Base
+                        th Extra
+                        th Invoice credit
+                        th Total
+                        th Notes
+                        th Paid
+                tbody
+                    each share in pool.shares
+                        -
+                            const payerName = (participants || []).find(pt => pt.id === share.registration?.id)?.name || `Participant #${share.registration?.id}`
+                            const covered = (pool.takeovers || [])
+                                    .filter(t => t.payerRegistrationId === share.registration?.id)
+                                    .map(t => (participants || []).find(pt => pt.id === t.beneficiaryRegistrationId)?.name || `Participant #${t.beneficiaryRegistrationId}`)
+                                    .join(', ');
+                            const notes = (share.note || '').split(' • ').filter(Boolean);
+                        tr
+                            td #{payerName}
+                            td #{covered || 'Self'}
+                            td #{share.baseShareAmount || '0.00'}
+                            td #{share.extraAmount || '0.00'}
+                            td #{share.invoiceCreditAmount || '0.00'}
+                            td #{share.shareAmount || '0.00'}
+                            td
+                                if notes.length
+                                    ul.list-unstyled.mb-0
+                                        each note in notes
+                                            li.text-secondary.small= note
+                                else
+                                    span.text-secondary.small No notes
+                            td
+                                .form-check.form-switch
+                                    input.form-check-input.share-paid(type="checkbox" data-pool=pool.id data-id=share.id checked=!!(share.isPaid) enabled=admin)
 
 //- Takeover summary with consistent layout and manage button
 mixin takeoverOverview(pool, participants, mode, options)
@@ -81,7 +82,7 @@ mixin participantTakeoverList(pools, participants)
                 .d-flex.justify-content-between.align-items-center.flex-wrap.gap-2
                     .d-flex.flex-column
                         strong #{pool.name}
-                        small.text-secondary Covers #{pool.assignAll || pool.isDefault ? 'all participants' : assignments.length}
+                        small.text-secondary Covers #{pool.assignAll ? 'all participants' : assignments.length}
                     +takeoverOverview(pool, participantList, 'participant', {showHeading: false})
 
 //- Render a single proof link, keeping the markup consistent across admin/participant views
@@ -296,12 +297,12 @@ mixin poolStats(pool)
                 ul.list-unstyled.mb-0.small
                     li.mb-1
                         strong Total invoices:
-                        |  #{fmtMoney(pool.totalAmount)}
+                        |  #{fmtMoney(pool.invoiceAmount)}
                     li.mb-1
                         strong Open invoices:
                         |  #{fmtMoney(pool.openAmount)}
                     li.mb-1
-                        strong Assigned charges:
+                        strong Extra charges:
                         |  #{fmtMoney(pool.additionalAmount)}
                     li.mb-1
                         strong Surcharges reducing pool:
@@ -349,11 +350,11 @@ mixin poolAssignmentsForm(ev, pool, participants)
         .assignments-list.border.border-secondary-subtle.rounded-3.p-2.bg-black.text-white.overflow-auto(style="max-height: 18rem;" id=`assign-list-${pool.id}`)
             if participants && participants.length
                 each p in participants
-                    - const selected = pool.assignAll || pool.isDefault || (pool.assignments || []).some(a => (a.registrationId || a.registration?.id) === p.id)
+                    - const selected = pool.assignAll || (pool.assignments || []).some(a => (a.registrationId || a.registration?.id) === p.id)
                     - const exempt = (pool.assignments || []).some(a => (a.registrationId || a.registration?.id) === p.id && a.isExempt)
                     .d-flex.justify-content-between.align-items-center.gap-2.py-1.px-2.rounded-2(data-search-text=`${String(p.name || '').toLowerCase()} ${String(p.email || '').toLowerCase()}`)
                         .form-check.mb-0
-                            input.form-check-input(type="checkbox" name="registrations" value=p.id id=`pool-${pool.id}-reg-${p.id}` checked=selected disabled=!!(pool.assignAll || pool.isDefault))
+                            input.form-check-input(type="checkbox" name="registrations" value=p.id id=`pool-${pool.id}-reg-${p.id}` checked=selected disabled=!!(pool.assignAll))
                             label.form-check-label(for=`pool-${pool.id}-reg-${p.id}`)= `${p.name} (${p.email})`
                         .form-check.form-switch.mb-0
                             input.form-check-input(type="checkbox" name="exemptions" value=p.id id=`pool-${pool.id}-exempt-${p.id}` checked=exempt)
@@ -425,9 +426,9 @@ mixin poolSurchargeForm(ev, pool, participants)
 //- Charges and takeovers configured before closing a pool
 mixin poolAdjustmentSection(ev, pool, participants)
     .mt-3
-        h6.mb-2 Manual surcharge assignment (do before closing)
+        h6.mb-2 Manual surcharge assignment
         p.text-secondary.small.mb-2
-            |  Add surcharges with notes before closing and choose whether they reduce the shared pool or only apply to the participant.
+            |  Add surcharges with notes and choose whether they reduce the shared total or is an extra charge to the participant.
             |  These amounts are paid only by the participant or their covering payer in addition to the automatically calculated share.
         +poolSurchargeList(pool, participants)
         +poolSurchargeForm(ev, pool, participants)
@@ -459,8 +460,8 @@ mixin poolManagementSection(ev, pool, participants)
                                 +poolShareSection(pool, participants)
                 +poolAdjustmentSection(ev, pool, participants)
                 +invoiceOverview('admin', {pool: pool, participants: participants, eventId: ev.id})
-                if pool.status === 'OPEN'
-                    .row.mt-2.border.border-secondary-subtle.rounded-2.pt-2
+                .row.mt-2.border.border-danger.rounded-2.pt-2
+                    if pool.status === 'OPEN'
                         h6.text-danger
                             i.bi.bi-exclamation-triangle-fill.me-1
                             |  Danger zone
@@ -469,18 +470,18 @@ mixin poolManagementSection(ev, pool, participants)
                             |  Read the following warnings carefully before proceeding.
                         p.text-secondary.small.mb-2
                             strong  Closing a pool will automatically calculate each participants share of the total.
-                            |  This means that after that, you will not be able to make any changes to the pool except tracking which share was paid.
+                            |  All changes after that require explicit recalculation and will delete all previous shares.
                         p.text-secondary.small.mb-2
-                            strong  Manually applied surcharges will reduce the open invoice amount to be distributed.
+                            strong  Manually applied surcharges might reduce the open invoice amount to be distributed.
                             |  Only surcharges marked to offset the pool total will reduce the shared cost; others are added on top of the payer's share.
                         p.text-secondary.small.mb-2
                             strong  Check and adjust the participant attendance periods before closing the pool when using the "Days Attended" distribution mode.
+                            |  This way you ensure a fair distribution of the costs among all participants-
                         .d-flex.justify-content-between.align-items-end.flex-wrap.gap-2.mb-3
                             button.btn.btn-sm.btn-warning.pool-close(type="button" data-id=pool.id)
                                 i.bi.bi-x-circle.me-1
                                 | Close pool
-                else if pool.status === 'CLOSED'
-                    .row.mt-2.border.border-danger.rounded-2.pt-2
+                    else if pool.status === 'CLOSED'
                         h6.text-danger
                             i.bi.bi-exclamation-triangle-fill.me-1
                             |  Danger zone

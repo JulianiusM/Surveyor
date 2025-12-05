@@ -1,4 +1,5 @@
 import {DataSource} from "typeorm";
+import {entities, migrations, subscribers} from "./src/modules/database/__index__";
 
 export const AppDataSource = new DataSource({
     type: (process.env.DB_TYPE as "mariadb" | "mysql") || 'mysql',
@@ -7,7 +8,8 @@ export const AppDataSource = new DataSource({
     username: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'test',
-    entities: ['src/modules/database/entities/**/*.ts'],
-    migrations: ['src/migrations/*.ts'],
+    entities: entities,
+    migrations: migrations,
+    subscribers: subscribers,
     synchronize: false,
 });

@@ -19,15 +19,11 @@ async function main() {
 
         const typeormProcess = spawn(
             'npx',
-            ['ts-node', './node_modules/typeorm/cli.js', cmd as string, '-d', ...cliArgs],
+            ['ts-node', '--project ./tsconfig.server.json', './node_modules/typeorm/cli.js', cmd as string, '-d', ...cliArgs],
             {stdio: 'inherit', shell: true, env: process.env}
         );
 
         typeormProcess.on('exit', code => process.exit(code));
-
-        typeormProcess.on('exit', (code) => {
-            process.exit(code);
-        });
     } catch (err) {
         console.error('Error:', err);
         process.exit(1);

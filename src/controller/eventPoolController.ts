@@ -136,7 +136,6 @@ async function addPoolSurcharge(event: Event, poolId: string, body: any, allowCl
 // Remove a surcharge so admins can correct mistakes before the pool closes.
 async function removePoolSurcharge(event: Event, poolId: string, surchargeId: string) {
     const pool = await ensurePool(event, poolId);
-    if (pool.status === 'CLOSED') throw new APIError('Pool is closed', {}, 400);
     await invoiceService.removeSurcharge(poolId, Number(surchargeId));
 }
 
@@ -208,8 +207,6 @@ async function updateTakeovers(event: Event, poolId: string, body: any, session:
     if (!allowReassign && actorRegistrationId && payerId !== actorRegistrationId) {
         throw new APIError('Not allowed to assign takeovers for other participants', body, 403);
     }
-
-    if (pool.status === 'CLOSED') throw new APIError('Pool is closed', body, 400);
 
     const beneficiaries: number[] = Array.isArray(value.beneficiaries)
         ? value.beneficiaries.map(Number)
@@ -347,7 +344,7 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
     const pool = await ensurePool(event, poolId);
     if (pool.status === 'CLOSED') return;
 
-    // Include all invoices whose status is not 'NEW' (APPROVED, DECLINED, CLOSED, etc.)
+    // Include all invoices whose status is not 'NEW' (APPROVED, CLOSED, etc.)
     // This is required for pool closing logic, as all non-NEW invoices must be processed.
     const approvedInvoices = (pool.invoices || []).filter((inv) => inv.status !== 'NEW');
     const total = toAmount(pool.payableAmount);
@@ -573,7 +570,7 @@ async function recalculatePool(event: Event, poolId: string, body: any = {}, ses
 
         // Reopen the pool (uses SERIALIZABLE transaction with pessimistic write lock)
         await invoiceService.reopenPool(poolId);
-        
+
         // Re-run the close pool logic which will recalculate all shares
         // closePool also uses transactions (READ COMMITTED) for share deletion and creation
         await closePool(event, poolId, body, session);
@@ -598,5 +595,5 @@ export default {
     recalculatePool,
     markSharePaid,
     updateTakeovers,
-    serveInvoiceProof,
+    serveInvoiceProof
 };

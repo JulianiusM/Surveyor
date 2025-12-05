@@ -247,17 +247,15 @@ export function initInvoiceAdmin(): void {
         });
 
         const assignAll = poolForm.querySelector('#assignAllPools') as HTMLInputElement | null;
-        const defaultBox = poolForm.querySelector('#defaultPool') as HTMLInputElement | null;
         const registrations = Array.from(poolForm.querySelectorAll<HTMLInputElement>('input[name="registrations"]'));
         const syncDisabled = () => {
-            const disable = !!(assignAll?.checked || defaultBox?.checked);
+            const disable = !!(assignAll?.checked);
             registrations.forEach((input) => {
                 input.disabled = disable;
                 if (disable) input.checked = true;
             });
         };
         assignAll?.addEventListener('change', syncDisabled);
-        defaultBox?.addEventListener('change', syncDisabled);
         syncDisabled();
     }
 
@@ -307,6 +305,8 @@ export function initInvoiceAdmin(): void {
                     const assignments: Record<string, FormDataEntryValue | FormDataEntryValue[]> = Object.fromEntries(formData.entries());
                     assignments.registrations = formData.getAll('registrations');
                     assignments.exemptions = formData.getAll('exemptions');
+                    const subtract = formData.get('subtractPersonalInvoices') === "on"
+                    assignments.subtractPersonalInvoices = subtract ? 'on' : '';
                     payload.assignments = assignments;
                 }
 
@@ -316,6 +316,8 @@ export function initInvoiceAdmin(): void {
                     const registrationId = formData.get('registrationId');
                     const amount = formData.get('amount');
                     const note = formData.get('note');
+                    const subtract = formData.get('subtractFromPool') === "on"
+                    formData.set('subtractFromPool', subtract ? 'on' : '');
                     if (registrationId && amount && note) {
                         payload.surcharge = Object.fromEntries(formData.entries());
                     }
@@ -344,7 +346,7 @@ export function initInvoiceAdmin(): void {
             e.preventDefault();
             const poolStatus = (target as HTMLElement).getAttribute('data-pool-status');
             if (poolStatus === 'CLOSED') {
-                showInlineAlert('warning', 'Pool is closed. Use the "Recalculate pool" button to apply changes.');
+                showInlineAlert('error', 'Pool is closed. Use the "Recalculate pool" button to apply changes.');
                 return;
             }
             const api = (target as HTMLElement).getAttribute('data-api')!;
@@ -367,11 +369,14 @@ export function initInvoiceAdmin(): void {
             e.preventDefault();
             const poolStatus = (target as HTMLElement).getAttribute('data-pool-status');
             if (poolStatus === 'CLOSED') {
-                showInlineAlert('warning', 'Pool is closed. Use the "Recalculate pool" button to apply changes.');
+                showInlineAlert('error', 'Pool is closed. Use the "Recalculate pool" button to apply changes.');
                 return;
             }
             const api = (target as HTMLElement).getAttribute('data-api')!;
-            const payload = Object.fromEntries(new FormData(target as HTMLFormElement).entries());
+            const formData = new FormData(target as HTMLFormElement);
+            const subtract = formData.get('subtractFromPool') === "on"
+            formData.set('subtractFromPool', subtract ? 'on' : '');
+            const payload = Object.fromEntries(formData);
             try {
                 requireManageAssignments('add surcharges');
                 await post(api, payload);
@@ -393,7 +398,7 @@ export function initInvoiceAdmin(): void {
             const assignAll = form.querySelector('input[name="assignAll"]') as HTMLInputElement | null;
             const isDefault = form.querySelector('input[name="isDefault"]') as HTMLInputElement | null;
             const registrations = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="registrations"]'));
-            const disable = !!(assignAll?.checked || isDefault?.checked);
+            const disable = !!(assignAll?.checked);
             registrations.forEach((input) => {
                 if (disable) {
                     // Store original state before modifying (only if not already stored)

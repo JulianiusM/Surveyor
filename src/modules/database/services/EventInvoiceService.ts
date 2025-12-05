@@ -11,6 +11,7 @@ import {EventPoolTakeover} from "../entities/event/EventPoolTakeover";
 import {EventInvoiceSurcharge} from "../entities/event/EventInvoiceSurcharge";
 import {formatAmount, toAmount} from "../../lib/util";
 import type {InvoicePoolDistribution, InvoicePoolStatus} from "../../../types/InvoicePoolTypes";
+import {EntityManager} from "typeorm";
 
 // Centralized pool loader to keep relation loading consistent across controllers
 async function loadPool(poolId: string) {
@@ -314,7 +315,7 @@ export async function reopenPool(poolId: string) {
         const pool = await poolRepo.findOne({where: {id: poolId}, lock: {mode: "pessimistic_write"}});
         if (!pool) throw new Error("Pool not found");
         if (pool.status !== "CLOSED") throw new Error("Pool is not closed");
-        
+
         pool.status = "OPEN";
         pool.closedAt = null; // Clear closed timestamp for consistency
         await poolRepo.save(pool);
@@ -435,7 +436,9 @@ export async function recalcPoolTotals(poolId: string) {
     const openAmount = invoices
         .filter((inv) => inv.status === "APPROVED")
         .reduce((sum, inv) => sum + toAmount(inv.amount), 0);
-    const extraAmount = surcharges.reduce((sum, s) => sum + toAmount(s.amount), 0);
+    const extraAmount = surcharges
+        .filter(s => !s.subtractFromPool)
+        .reduce((sum, s) => sum + toAmount(s.amount), 0);
     const subtractiveAmount = surcharges
         .filter((s) => s.subtractFromPool)
         .reduce((sum, s) => sum + toAmount(s.amount), 0);
@@ -446,7 +449,7 @@ export async function recalcPoolTotals(poolId: string) {
         .filter((s) => !s.isPaid)
         .reduce((sum, s) => sum + Math.abs(Math.min(toAmount(s.shareAmount), 0)), 0);
 
-    pool.totalAmount = toAmount(invoiceTotal);
+    pool.invoiceAmount = toAmount(invoiceTotal);
     pool.additionalAmount = toAmount(extraAmount);
     pool.surchargeOffsetAmount = toAmount(subtractiveAmount);
     const payable = Math.max(invoiceTotal - subtractiveAmount, 0);
@@ -454,12 +457,13 @@ export async function recalcPoolTotals(poolId: string) {
     pool.openAmount = toAmount(openAmount);
     pool.outstandingAmount = toAmount(outstandingAmount);
     pool.creditAmount = toAmount(creditAmount);
+    pool.totalAmount = pool.invoiceAmount + pool.additionalAmount
     await poolRepo.save(pool);
 }
 
 export async function getParticipantPools(eventId: string, registrationId: number) {
     const pools = await listPools(eventId);
-    return pools.filter((p) => p.status === "OPEN" && (p.assignAll || p.isDefault || p.assignments.some((a) => a.registrationId === registrationId)));
+    return pools.filter((p) => p.status === "OPEN" && (p.assignAll || p.assignments.some((a) => a.registrationId === registrationId)));
 }
 
 export async function getPoolWithInvoices(poolId: string) {
@@ -482,4 +486,45 @@ export async function getShareWithRegistration(poolId: string, shareId: number) 
         where: {id: shareId, pool: {id: poolId}},
         relations: {registration: {user: true, guest: true}},
     });
+}
+
+/**
+ * Create an EventPoolAssignment for each EventInvoicePool with isDefault = true
+ * for the given eventId.
+ */
+export async function registerForDefaultPools(
+    manager: EntityManager,
+    reg: EventRegistration
+): Promise<EventPoolAssignment[]> {
+    const poolRepo = manager.getRepository(EventInvoicePool);
+    const assignmentRepo = manager.getRepository(EventPoolAssignment);
+
+    // 1. Load all default pools
+    const defaultPools = await poolRepo.find({
+        where: {isDefault: true, event: {id: reg.event.id}},
+    });
+
+    if (defaultPools.length === 0) {
+        return [];
+    }
+
+    // (Optional) If you want to avoid duplicates per event, load existing assignments
+    // const existing = await assignmentRepo.find({
+    //     where: { event: { id: eventId } },
+    //     relations: { pool: true },
+    // });
+    // const existingPoolIds = new Set(existing.map(a => a.pool.id));
+
+    // 2. Create assignments in memory
+    const assignments = defaultPools
+        // .filter(pool => !existingPoolIds.has(pool.id)) // uncomment if you want deduplication
+        .map(pool =>
+            assignmentRepo.create({
+                registration: reg,
+                pool,
+            }),
+        );
+
+    // 3. Save in one batch
+    return assignmentRepo.save(assignments);
 }
