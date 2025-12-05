@@ -6,13 +6,7 @@ import {EventInvoiceShare} from "./EventInvoiceShare";
 import {EventPoolTakeover} from "./EventPoolTakeover";
 import {EventInvoiceSurcharge} from "./EventInvoiceSurcharge";
 import type {InvoicePoolDistribution, InvoicePoolStatus} from "../../../../types/InvoicePoolTypes";
-
-import {formatAmount, toAmount} from "../../../lib/util";
-
-const currencyTransformer = {
-    to: (value: number | string) => formatAmount(toAmount(value)),
-    from: (value: string) => Number(value),
-};
+import {currencyTransformer} from "../../transformers";
 
 export const InvoicePoolDistributions = ['EQUAL', 'TIME_BASED'];
 

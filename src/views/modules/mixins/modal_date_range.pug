@@ -12,10 +12,10 @@ mixin dateRangeModal(id, opts)
                         input(type="hidden" name="registrationId")
                         .mb-3
                             label.form-label(for=`${id}-arrival`) #{opts.arrivalLabel || 'Arrival date'}
-                            input.form-control.text-bg-dark#`${id}-arrival`(type="date" name="arrivalDate" required min=opts.startDate max=opts.endDate)
+                            input.form-control.text-bg-dark(id=`${id}-arrival` type="date" name="arrivalDate" required min=opts.startDate max=opts.endDate)
                         .mb-0
                             label.form-label(for=`${id}-departure`) #{opts.departureLabel || 'Departure date'}
-                            input.form-control.text-bg-dark#`${id}-departure`(type="date" name="departureDate" required min=opts.startDate max=opts.endDate)
+                            input.form-control.text-bg-dark(id=`${id}-departure` type="date" name="departureDate" required min=opts.startDate max=opts.endDate)
                     .modal-footer.d-flex.justify-content-between
                         small.text-secondary #{opts.note || ''}
                         .d-flex.gap-2

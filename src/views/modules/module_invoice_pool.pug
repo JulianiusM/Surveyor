@@ -1,5 +1,5 @@
 //- Common invoice pool fragments reused by admin and participant pages
-- const fmtMoney = (val) => Number(val ?? 0).toFixed(2)
+include mixins/helpers.pug
 //- Render the outstanding shares table with surcharge notes included for clarity.
 mixin invoiceShareTable(pool, participants, admin = false)
     if pool.shares && pool.shares.length
@@ -332,7 +332,7 @@ mixin poolStats(pool)
 
 //- Assignment form kept separate so both admin tabs and future reuse can pull it in
 mixin poolAssignmentsForm(ev, pool, participants)
-    form.pool-assignment(data-api=`/api/event/${ev.id}/invoice-pools/${pool.id}/assignments`)
+    form.pool-assignment(data-api=`/api/event/${ev.id}/invoice-pools/${pool.id}/assignments` data-pool-status=pool.status)
         label.form-label.text-secondary.mb-1 Update assignment
         .form-check
             input.form-check-input.pool-toggle(type="checkbox" name="assignAll" id=`assign-${pool.id}` checked=!!(pool.assignAll))
@@ -351,7 +351,7 @@ mixin poolAssignmentsForm(ev, pool, participants)
                 each p in participants
                     - const selected = pool.assignAll || pool.isDefault || (pool.assignments || []).some(a => (a.registrationId || a.registration?.id) === p.id)
                     - const exempt = (pool.assignments || []).some(a => (a.registrationId || a.registration?.id) === p.id && a.isExempt)
-                    .d-flex.justify-content-between.align-items-center.gap-2.py-1.px-2.rounded-2(data-search-text=`${(p.name || '').toLowerCase()} ${String(p.email || '').toLowerCase()}`)
+                    .d-flex.justify-content-between.align-items-center.gap-2.py-1.px-2.rounded-2(data-search-text=`${String(p.name || '').toLowerCase()} ${String(p.email || '').toLowerCase()}`)
                         .form-check.mb-0
                             input.form-check-input(type="checkbox" name="registrations" value=p.id id=`pool-${pool.id}-reg-${p.id}` checked=selected disabled=!!(pool.assignAll || pool.isDefault))
                             label.form-check-label(for=`pool-${pool.id}-reg-${p.id}`)= `${p.name} (${p.email})`
@@ -360,9 +360,14 @@ mixin poolAssignmentsForm(ev, pool, participants)
                             label.form-check-label(for=`pool-${pool.id}-exempt-${p.id}`) Exempt
             else
                 p.text-secondary.small.mb-0 No participants yet.
-        button.btn.btn-outline-light.btn-sm.mt-2(type="submit")
-            i.bi.bi-save.me-1
-            | Save assignments
+        if pool.status === 'OPEN'
+            button.btn.btn-outline-light.btn-sm.mt-2(type="submit")
+                i.bi.bi-save.me-1
+                | Save assignments
+        else
+            p.text-warning.small.mt-2.mb-0
+                i.bi.bi-info-circle.me-1
+                | Changes will only be applied when you click "Recalculate pool" below
 
 //- Render surcharges grouped per participant so admins see what will be charged
 mixin poolSurchargeList(pool, participants)
@@ -388,7 +393,7 @@ mixin poolSurchargeList(pool, participants)
 
 //- Form to add a new surcharge before closing a pool
 mixin poolSurchargeForm(ev, pool, participants)
-    form.surcharge-form(data-api=`/api/event/${ev.id}/invoice-pools/${pool.id}/surcharges`)
+    form.surcharge-form(data-api=`/api/event/${ev.id}/invoice-pools/${pool.id}/surcharges` data-pool-status=pool.status)
         .row.g-2.align-items-end
             .col-md-4
                 label.form-label.text-secondary(for=`surcharge-target-${pool.id}`) Participant
@@ -408,9 +413,14 @@ mixin poolSurchargeForm(ev, pool, participants)
                     input.form-check-input#surcharge-subtract-${pool.id}(type="checkbox" name="subtractFromPool" checked)
                     label.form-check-label(for=`surcharge-subtract-${pool.id}`) Subtract from pool
         .d-flex.justify-content-end.mt-2
-            button.btn.btn-outline-light.btn-sm(type="submit")
-                i.bi.bi-plus-circle.me-1
-                | Add surcharge
+            if pool.status === 'OPEN'
+                button.btn.btn-outline-light.btn-sm(type="submit")
+                    i.bi.bi-plus-circle.me-1
+                    | Add surcharge
+            else
+                p.text-warning.small.mb-0
+                    i.bi.bi-info-circle.me-1
+                    | Changes will only be applied when you click "Recalculate pool" below
 
 //- Charges and takeovers configured before closing a pool
 mixin poolAdjustmentSection(ev, pool, participants)
@@ -443,12 +453,11 @@ mixin poolManagementSection(ev, pool, participants)
                     .col-md-4
                         +poolStats(pool)
                     .col-md-8
-                        if pool.status === 'OPEN'
-                            +poolAssignmentsForm(ev, pool, participants)
-                        else
-                            +poolShareSection(pool, participants)
-                if pool.status === 'OPEN'
-                    +poolAdjustmentSection(ev, pool, participants)
+                        +poolAssignmentsForm(ev, pool, participants)
+                        if pool.status === 'CLOSED'
+                            .mt-3
+                                +poolShareSection(pool, participants)
+                +poolAdjustmentSection(ev, pool, participants)
                 +invoiceOverview('admin', {pool: pool, participants: participants, eventId: ev.id})
                 if pool.status === 'OPEN'
                     .row.mt-2.border.border-secondary-subtle.rounded-2.pt-2
@@ -470,6 +479,21 @@ mixin poolManagementSection(ev, pool, participants)
                             button.btn.btn-sm.btn-warning.pool-close(type="button" data-id=pool.id)
                                 i.bi.bi-x-circle.me-1
                                 | Close pool
+                else if pool.status === 'CLOSED'
+                    .row.mt-2.border.border-danger.rounded-2.pt-2
+                        h6.text-danger
+                            i.bi.bi-exclamation-triangle-fill.me-1
+                            |  Danger zone
+                        p.small.mb-2
+                            strong Recalculating a closed pool will delete all existing shares and recalculate them based on current pool settings.
+                            |  This action cannot be undone. Make sure all pool settings (assignments, surcharges, takeovers) are correct before proceeding.
+                        p.text-secondary.small.mb-2
+                            strong Warning: This will notify all participants again with updated share amounts.
+                            |  Only use this if you need to adjust pool settings after closure.
+                        .d-flex.justify-content-between.align-items-end.flex-wrap.gap-2.mb-3
+                            button.btn.btn-sm.btn-danger.pool-recalculate(type="button" data-id=pool.id)
+                                i.bi.bi-arrow-clockwise.me-1
+                                | Recalculate pool
 
 //- Management tab content for the admin dashboard
 mixin invoicePoolManageTab(ev, pools, participants)

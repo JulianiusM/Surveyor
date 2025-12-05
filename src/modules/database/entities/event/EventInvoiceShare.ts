@@ -1,12 +1,7 @@
 import {Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId} from "typeorm";
 import {EventInvoicePool} from "./EventInvoicePool";
 import {EventRegistration} from "./EventRegistration";
-import {formatAmount, toAmount} from "../../../lib/util";
-
-const currencyTransformer = {
-    to: (value: number | string) => formatAmount(toAmount(value)),
-    from: (value: string) => Number(value),
-};
+import {currencyTransformer} from "../../transformers";
 
 @Entity("event_invoice_shares", {schema: "surveyor"})
 export class EventInvoiceShare {

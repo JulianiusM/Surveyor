@@ -2,6 +2,16 @@
  * Controller unit tests for eventPoolController (services mocked).
  */
 
+// Mock the database connection to avoid TypeORM initialization issues
+jest.mock('../../src/modules/database/dataSource', () => ({
+    AppDataSource: {
+        getRepository: jest.fn(),
+        transaction: jest.fn(),
+        query: jest.fn(),
+    },
+    initDataSource: jest.fn(),
+}));
+
 jest.mock('../../src/modules/database/services/EventService', () => ({
     getRegistrationFor: jest.fn(),
     getRegistrationsForEvent: jest.fn(),
@@ -18,6 +28,7 @@ jest.mock('../../src/modules/database/services/EventInvoiceService', () => ({
     declineInvoice: jest.fn(),
     closeInvoice: jest.fn(),
     closePool: jest.fn(),
+    reopenPool: jest.fn(),
     clearInvoiceProofs: jest.fn(),
     markPaid: jest.fn(),
 }));
@@ -44,11 +55,18 @@ jest.mock('../../src/modules/email', () => ({
     send: jest.fn(),
 }));
 
+// Mock EventInvoicePool entity to prevent TypeORM initialization
+jest.mock('../../src/modules/database/entities/event/EventInvoicePool', () => ({
+    EventInvoicePool: class EventInvoicePool {},
+    InvoicePoolDistributions: ['EQUAL', 'TIME_BASED'],
+}));
+
 import {purgeExpiredProofs} from '../../src/controller/eventPoolController';
 import * as eventService from '../../src/modules/database/services/EventService';
 import * as invoiceService from '../../src/modules/database/services/EventInvoiceService';
 import {setupMock, verifyMockCall} from '../keywords/common/controllerKeywords';
 import * as testData from '../data/controller/eventPoolData';
+import {APIError} from '../../src/modules/lib/errors';
 
 beforeEach(() => {
     jest.clearAllMocks();

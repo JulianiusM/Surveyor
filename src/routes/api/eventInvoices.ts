@@ -154,6 +154,15 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
     );
 
     router.post(
+        '/:poolId/recalculate',
+        requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
+        asyncHandler(async (req, res) => {
+            await eventPoolController.recalculatePool(resFct(req), req.params.poolId, req.body, req.session);
+            renderer.respondWithSuccessJson(res, "pool recalculated");
+        })
+    );
+
+    router.post(
         '/:poolId/shares/:shareId/pay',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {

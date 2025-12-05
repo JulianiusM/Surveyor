@@ -295,6 +295,13 @@ export function initInvoiceAdmin(): void {
                 showInlineAlert('success', 'Pool closed with adjustments');
                 return reloadAfterDelay(RELOAD_DELAY_MS);
             }
+            if (target.classList.contains('pool-recalculate')) {
+                requireManageAssignments('recalculate invoice pools');
+                if (!confirm("WARNING: This will delete all existing shares and recalculate them based on current pool settings. All participants will be notified again. This action cannot be undone. Are you sure you want to proceed?")) return
+                await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.id}/recalculate`);
+                showInlineAlert('success', 'Pool recalculated successfully');
+                return reloadAfterDelay(RELOAD_DELAY_MS);
+            }
             if (target.classList.contains('surcharge-remove')) {
                 requireManageAssignments('remove surcharges');
                 await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/surcharges/${target.dataset.id}/delete`);
@@ -312,6 +319,11 @@ export function initInvoiceAdmin(): void {
         const target = e.target as HTMLElement;
         if (target.classList.contains('pool-assignment')) {
             e.preventDefault();
+            const poolStatus = (target as HTMLElement).getAttribute('data-pool-status');
+            if (poolStatus === 'CLOSED') {
+                showInlineAlert('warning', 'Pool is closed. Use the "Recalculate pool" button to apply changes.');
+                return;
+            }
             const api = (target as HTMLElement).getAttribute('data-api')!;
             const formData = new FormData(target as HTMLFormElement);
             const payload: {
@@ -330,6 +342,11 @@ export function initInvoiceAdmin(): void {
         }
         if (target.classList.contains('surcharge-form')) {
             e.preventDefault();
+            const poolStatus = (target as HTMLElement).getAttribute('data-pool-status');
+            if (poolStatus === 'CLOSED') {
+                showInlineAlert('warning', 'Pool is closed. Use the "Recalculate pool" button to apply changes.');
+                return;
+            }
             const api = (target as HTMLElement).getAttribute('data-api')!;
             const payload = Object.fromEntries(new FormData(target as HTMLFormElement).entries());
             try {
