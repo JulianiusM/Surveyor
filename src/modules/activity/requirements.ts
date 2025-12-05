@@ -20,6 +20,11 @@ export interface RequirementOverrideInput {
     requiredShifts: number;
 }
 
+export interface RoleRequirementInput {
+    roleId: number;
+    requiredShifts: number;
+}
+
 export interface ParticipantRequirementResult {
     participantKey: string;
     requiredShifts: number;
@@ -104,8 +109,45 @@ export function normalizeOverrideInput(input: RequirementOverrideInput): Require
         throw new Error("Override required shifts must be defined");
     }
 
+    if (!Number.isFinite(normalized.requiredShifts)) {
+        throw new Error("Override required shifts must be finite");
+    }
+
+    if (!Number.isInteger(normalized.requiredShifts)) {
+        throw new Error("Override required shifts must be an integer");
+    }
+
     if (normalized.requiredShifts < 0) {
         throw new Error("Override required shifts must be non-negative");
+    }
+
+    return normalized;
+}
+
+export function normalizeRoleRequirementInput(input: RoleRequirementInput): RoleRequirementInput {
+    const normalized: RoleRequirementInput = {
+        roleId: input.roleId,
+        requiredShifts: input.requiredShifts,
+    };
+
+    if (!Number.isInteger(normalized.roleId) || normalized.roleId <= 0) {
+        throw new Error("Role id must be a positive integer");
+    }
+
+    if (normalized.requiredShifts == null || Number.isNaN(normalized.requiredShifts)) {
+        throw new Error("Role required shifts must be defined");
+    }
+
+    if (!Number.isFinite(normalized.requiredShifts)) {
+        throw new Error("Role required shifts must be finite");
+    }
+
+    if (!Number.isInteger(normalized.requiredShifts)) {
+        throw new Error("Role required shifts must be an integer");
+    }
+
+    if (normalized.requiredShifts < 0) {
+        throw new Error("Role required shifts must be non-negative");
     }
 
     return normalized;

@@ -47,6 +47,24 @@ app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), asyn
     renderer.respondWithSuccessJson(res, msg);
 })
 
+app.get(
+    '/:id/requirements',
+    requirePermissionApi(permFct, PERM.MANAGE_REQUIREMENTS),
+    asyncHandler(async (req: Request, res: Response) => {
+        const requirements = await controller.getRequirements(resFct(req).id);
+        renderer.respondWithSuccessJson(res, requirements);
+    })
+);
+
+app.post(
+    '/:id/requirements',
+    requirePermissionApi(permFct, PERM.MANAGE_REQUIREMENTS),
+    asyncHandler(async (req: Request, res: Response) => {
+        const msg = await controller.updateRequirements(resFct(req).id, req.body);
+        renderer.respondWithSuccessJson(res, msg);
+    })
+);
+
 /* Assign / Unassign identical to packing routes … */
 /* ───────────────── ASSIGN / UNASSIGN (JSON) ───────────────── */
 

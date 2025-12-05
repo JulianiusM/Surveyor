@@ -6,6 +6,7 @@ import {ENTITIES, fromISOtoLocal, generateUniqueId} from '../modules/lib/util';
 import {APIError, ValidationError} from '../modules/lib/errors';
 import * as activityService from "../modules/database/services/ActivityService";
 import * as userService from "../modules/database/services/UserService";
+import * as requirementService from "../modules/database/services/ActivityRequirementService";
 import {ActivitySlot} from "../modules/database/entities/activity/ActivitySlot";
 import {ActivityPlan} from "../modules/database/entities/activity/ActivityPlan";
 import {Request} from "express";
@@ -81,6 +82,39 @@ function preprocessCreate(body: any): Partial<ActivityPlan> & { slots: Partial<A
         slots: flattenedSlots,
         eventId: value.event_id || null,
     };
+}
+
+function preprocessRequirementUpdate(body: any) {
+    const roleRequirementSchema = Joi.object({
+        roleId: Joi.number().integer().positive().required(),
+        requiredShifts: Joi.number().integer().min(0).required(),
+    });
+
+    const overrideSchema = Joi.object({
+        id: Joi.number().integer().positive().optional(),
+        roleId: Joi.number().integer().positive().allow(null),
+        userId: Joi.number().integer().positive().allow(null),
+        guestId: Joi.number().integer().positive().allow(null),
+        requiredShifts: Joi.number().integer().min(0).required(),
+    }).custom((value, helpers) => {
+        if (!value.userId && !value.guestId) {
+            return helpers.error("any.custom", {message: "Override requires a userId or guestId"});
+        }
+        return value;
+    });
+
+    const schema = Joi.object({
+        roleRequirements: Joi.array().items(roleRequirementSchema).default([]),
+        overrides: Joi.array().items(overrideSchema).default([]),
+    });
+
+    const {error, value} = schema.validate(body, {abortEarly: false, allowUnknown: true});
+    if (error) {
+        const msg = error.details.map((d: any) => d.message).join(', ');
+        throw new APIError(msg, body, 400);
+    }
+
+    return value as {roleRequirements: {roleId: number; requiredShifts: number}[]; overrides: any[]};
 }
 
 /**
@@ -246,6 +280,16 @@ async function updateSettings(id: string, body: any) {
     return 'Settings saved';
 }
 
+async function getRequirements(planId: string) {
+    return await requirementService.getRequirementConfiguration(planId);
+}
+
+async function updateRequirements(planId: string, body: any) {
+    const {roleRequirements, overrides} = preprocessRequirementUpdate(body);
+    await requirementService.replaceRequirements(planId, roleRequirements, overrides);
+    return 'Requirements updated';
+}
+
 async function deleteSlot(slotId: string) {
     await activityService.deleteActivitySlot(slotId);
     return 'Slot deleted';
@@ -296,6 +340,8 @@ export default {
     updateSlotAttr,
     deleteAssignment,
     updateSettings,
+    getRequirements,
+    updateRequirements,
     deleteSlot,
     addSlotRole,
 
