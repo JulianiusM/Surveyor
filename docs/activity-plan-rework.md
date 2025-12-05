@@ -23,8 +23,11 @@
 - Added schema support for participant- and role-specific required shift overrides alongside reusable calculators for proportional requirements and override resolution.
 - Added validation helpers and database service endpoints to manage per-participant override persistence and plan-level role requirements in one transactional call.
 - Added validation and API endpoints to fetch and replace role requirements and participant overrides under the manage-requirements permission guard.
+- Added availability helpers to surface overlap and attendance-window warnings and wired slot creation to accept timeboxes for forthcoming UI/assignment checks.
+- Created staging support for assignment recommendations (schema, entity, and normalization helpers) to back the upcoming auto-assignment review flow.
 
 ## Next Steps
-- Wire the timebox utilities into assignment validation to surface overlap/availability warnings in the UI.
-- Extend the data model with migration(s) for recommendation staging to back the assignment suggestions workflow.
+- Wire the timebox utilities into assignment validation responses and UI warnings.
 - Build controller/service wiring that consumes the new requirement calculators, enforces binding deadlines, and surfaces the overrides/configuration in the UI.
+- Add recommendation persistence wiring into controllers and expose warning metadata to the front end for admin review/editing.
+- Implement automatic recommendation generation respecting availability/overlap rules and hook approval flows to create assignments.

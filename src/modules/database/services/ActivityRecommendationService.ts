@@ -1,0 +1,63 @@
+import {AppDataSource} from "../dataSource";
+import {ActivityAssignmentRecommendation, RecommendationStatus} from "../entities/activity/ActivityAssignmentRecommendation";
+
+export interface RecommendationInput {
+    slotId: string;
+    userId?: number | null;
+    guestId?: number | null;
+    status?: RecommendationStatus;
+}
+
+export function normalizeRecommendationInput(input: RecommendationInput): RecommendationInput {
+    if (!input.slotId) {
+        throw new Error("Recommendation requires a slotId");
+    }
+
+    const hasUser = input.userId != null;
+    const hasGuest = input.guestId != null;
+
+    if (!hasUser && !hasGuest) {
+        throw new Error("Recommendation requires a userId or guestId");
+    }
+
+    if (hasUser && hasGuest) {
+        throw new Error("Recommendation cannot target both user and guest");
+    }
+
+    return {
+        slotId: input.slotId,
+        userId: hasUser ? Number(input.userId) : null,
+        guestId: hasGuest ? Number(input.guestId) : null,
+        status: input.status ?? "PENDING",
+    };
+}
+
+export async function getRecommendations(planId: string) {
+    return await AppDataSource.getRepository(ActivityAssignmentRecommendation).find({
+        where: {plan: {id: planId}},
+        relations: {slot: true, user: true, guest: true},
+    });
+}
+
+export async function replaceRecommendations(planId: string, recommendations: RecommendationInput[]): Promise<void> {
+    await AppDataSource.transaction(async (manager) => {
+        const repo = manager.getRepository(ActivityAssignmentRecommendation);
+        const normalized = recommendations.map(normalizeRecommendationInput);
+
+        await repo.delete({plan: {id: planId}});
+
+        if (!normalized.length) return;
+
+        const rows = normalized.map((rec) =>
+            repo.create({
+                plan: {id: planId},
+                slot: {id: rec.slotId},
+                user: rec.userId ? {id: rec.userId} : undefined,
+                guest: rec.guestId ? {id: rec.guestId} : undefined,
+                status: rec.status ?? "PENDING",
+            })
+        );
+
+        await repo.save(rows);
+    });
+}

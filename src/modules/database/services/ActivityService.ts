@@ -148,6 +148,8 @@ export async function createActivityPlanTx(
                     description: s.description,
                     day: s.day,
                     pos: s.pos,
+                    startTime: s.startTime,
+                    endTime: s.endTime,
                     maxAssignees: s.maxAssignees,
                 })
             );
@@ -211,6 +213,8 @@ export async function addActivitySlot(planId: string, slot: Partial<ActivitySlot
         description: slot.description,
         day: slot.day,
         pos: slot.pos,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
         maxAssignees: slot.maxAssignees,
     });
     await repo.save(slotEntity);
@@ -226,6 +230,8 @@ export async function addActivitySlots(planId: string, slots: Partial<ActivitySl
             description: s.description,
             day: s.day,
             pos: s.pos,
+            startTime: s.startTime,
+            endTime: s.endTime,
             maxAssignees: s.maxAssignees,
         })
     );
@@ -287,6 +293,9 @@ export async function updateActivitySlot(slotId: string, fields: Partial<Activit
     if (fields.description !== undefined) updateData.description = fields.description;
     if (fields.maxAssignees !== undefined) updateData.maxAssignees = fields.maxAssignees;
     if (fields.pos !== undefined) updateData.pos = fields.pos;
+    if (fields.startTime !== undefined) updateData.startTime = fields.startTime;
+    if (fields.endTime !== undefined) updateData.endTime = fields.endTime;
+    if (fields.day !== undefined) updateData.day = fields.day;
 
     if (Object.keys(updateData).length === 0) return;
 

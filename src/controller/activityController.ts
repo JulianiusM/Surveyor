@@ -31,13 +31,22 @@ function preprocessCreate(body: any): Partial<ActivityPlan> & { slots: Partial<A
     }
 
     // Define Joi schema for body & slots
+    const timePattern = /^\d{2}:\d{2}(?::\d{2})?$/;
+
     const slotSchema = Joi.object({
         id: Joi.string().guid({version: ['uuidv4', 'uuidv5']}).required(),
         day: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
         pos: Joi.number().integer().required(),
         title: Joi.string().max(255).required(),
         description: Joi.string().allow(''),
+        startTime: Joi.string().pattern(timePattern).allow(null),
+        endTime: Joi.string().pattern(timePattern).allow(null),
         maxAssignees: Joi.number().integer().min(1).required()
+    }).custom((value, helpers) => {
+        if (value.startTime && value.endTime && value.startTime >= value.endTime) {
+            return helpers.error('any.custom', {message: 'Slot end time must be after start time'});
+        }
+        return value;
     });
 
     const schema = Joi.object({
@@ -62,7 +71,16 @@ function preprocessCreate(body: any): Partial<ActivityPlan> & { slots: Partial<A
     }
 
     // Flatten slots arrays and return sanitized data
-    const flattenedSlots: Partial<ActivitySlot>[] = Object.values(value.slots).flat() as Partial<ActivitySlot>[];
+    const flattenedSlots: Partial<ActivitySlot>[] = Object.values(value.slots).flat().map((slot: any) => ({
+        id: slot.id,
+        day: slot.day,
+        pos: slot.pos,
+        title: slot.title,
+        description: slot.description ?? null,
+        maxAssignees: slot.maxAssignees,
+        startTime: slot.startTime ?? null,
+        endTime: slot.endTime ?? null,
+    }));
 
     // Ensure each slot date is within the start/end range
     const startDate = fromISOtoLocal(value.startDate);
