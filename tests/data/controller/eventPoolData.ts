@@ -157,3 +157,66 @@ export const proofCleanupData = [
         shouldCleanup: false,
     },
 ];
+
+export const closeInvoiceData = [
+    {
+        description: 'submitter can close their own approved invoice',
+        invoice: {
+            id: 1,
+            status: 'APPROVED',
+            registration: {id: 5},
+        },
+        actorRegId: 5,
+        permData: {entity: new Map()},
+        allowManageOverride: true,
+        expectedSuccess: true,
+    },
+    {
+        description: 'admin can close any invoice',
+        invoice: {
+            id: 2,
+            status: 'APPROVED',
+            registration: {id: 10},
+        },
+        actorRegId: 5,
+        permData: {entity: new Map([['MANAGE_ASSIGNMENTS', true]])},
+        allowManageOverride: true,
+        expectedSuccess: true,
+    },
+    {
+        description: 'submitter cannot close unapproved invoice',
+        invoice: {
+            id: 3,
+            status: 'NEW',
+            registration: {id: 5},
+        },
+        actorRegId: 5,
+        permData: {entity: new Map()},
+        allowManageOverride: true,
+        shouldThrow: 'Invoices must be approved before closing',
+    },
+    {
+        description: 'non-submitter cannot close others invoice without admin',
+        invoice: {
+            id: 4,
+            status: 'APPROVED',
+            registration: {id: 10},
+        },
+        actorRegId: 5,
+        permData: {entity: new Map()},
+        allowManageOverride: true,
+        shouldThrow: 'You can only close your own approved invoices, unless you are an administrator.',
+    },
+    {
+        description: 'admin can close unapproved invoice',
+        invoice: {
+            id: 5,
+            status: 'NEW',
+            registration: {id: 10},
+        },
+        actorRegId: 5,
+        permData: {entity: new Map([['MANAGE_ASSIGNMENTS', true]])},
+        allowManageOverride: true,
+        expectedSuccess: true,
+    },
+];

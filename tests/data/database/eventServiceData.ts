@@ -303,3 +303,63 @@ export const eventRegistrationCheckData = [
         },
     },
 ];
+
+export const updateRegistrationDatesData = [
+    {
+        description: 'updates registration dates successfully',
+        event: {
+            ownerId: 1,
+            title: 'Date Update Event',
+            description: null,
+            startDate: '2025-11-01',
+            endDate: '2025-11-05',
+            location: null,
+            bindingDeadline: null,
+            requireDietaryInfo: false,
+            maxParticipants: null,
+            timezone: null,
+        },
+        user: {
+            id: 5,
+            username: 'u5',
+            name: 'User Five',
+            email: 'u5@example.com',
+        },
+        initialRegistration: {
+            userId: 5,
+            arrivalDate: '2025-11-01',
+            departureDate: '2025-11-03',
+        },
+        update: {
+            arrivalDate: '2025-11-02',
+            departureDate: '2025-11-05',
+        },
+        expected: {
+            arrivalDate: '2025-11-02',
+            departureDate: '2025-11-05',
+        },
+    },
+    {
+        description: 'throws error for non-existent registration',
+        event: {
+            ownerId: 1,
+            title: 'Missing Reg Event',
+            description: null,
+            startDate: '2025-11-01',
+            endDate: '2025-11-05',
+            location: null,
+            bindingDeadline: null,
+            requireDietaryInfo: false,
+            maxParticipants: null,
+            timezone: null,
+        },
+        update: {
+            nonExistentRegId: 99999,
+            arrivalDate: '2025-11-02',
+            departureDate: '2025-11-04',
+        },
+        expected: {
+            error: 'Registration not found',
+        },
+    },
+];

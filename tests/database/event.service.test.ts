@@ -26,6 +26,7 @@ import {
     updateEventDescription,
     updateEventMeta,
     updateEventTitle,
+    updateRegistrationDates,
 } from '../../src/modules/database/services/EventService';
 
 import {AppDataSource, initDataSource} from '../../src/modules/database/dataSource';
@@ -45,6 +46,7 @@ import {
     registeredEventsData,
     eventFullData,
     eventRegistrationCheckData,
+    updateRegistrationDatesData,
 } from '../data/database/eventServiceData';
 
 // Helper to clear relevant tables between tests (order matters due to FKs)
@@ -360,5 +362,57 @@ describe('eventService (mysql)', () => {
 
         await registerGuest(eid, testCase.registrations.guest.guestId, testCase.registrations.guest.arrivalDate, testCase.registrations.guest.departureDate, null, null);
         expect(await isRegisteredForEvent({guestId: testCase.principals.guest.id}, eid)).toBe(testCase.expected.guestAfterRegistration);
+    });
+
+    test.each(updateRegistrationDatesData)('$description', async (testCase) => {
+        if (testCase.expected.error) {
+            // Test error case - non-existent registration
+            const eid = await createEventTx(
+                testCase.event.ownerId,
+                testCase.event.title,
+                testCase.event.description,
+                testCase.event.startDate,
+                testCase.event.endDate,
+                testCase.event.location,
+                testCase.event.bindingDeadline,
+                testCase.event.requireDietaryInfo,
+                testCase.event.maxParticipants,
+                testCase.event.timezone
+            );
+            await expect(updateRegistrationDates(eid, testCase.update.nonExistentRegId, testCase.update.arrivalDate, testCase.update.departureDate))
+                .rejects.toThrow(testCase.expected.error);
+        } else {
+            // Test successful update
+            const user = AppDataSource.getRepository(User).create(testCase.user);
+            await AppDataSource.getRepository(User).save(user);
+
+            const eid = await createEventTx(
+                testCase.event.ownerId,
+                testCase.event.title,
+                testCase.event.description,
+                testCase.event.startDate,
+                testCase.event.endDate,
+                testCase.event.location,
+                testCase.event.bindingDeadline,
+                testCase.event.requireDietaryInfo,
+                testCase.event.maxParticipants,
+                testCase.event.timezone
+            );
+
+            const regId = await registerUser(
+                eid,
+                testCase.initialRegistration.userId,
+                testCase.initialRegistration.arrivalDate,
+                testCase.initialRegistration.departureDate,
+                null,
+                null
+            );
+
+            await updateRegistrationDates(eid, regId, testCase.update.arrivalDate, testCase.update.departureDate);
+
+            const updated = await getRegistrationFor({userId: testCase.user.id}, eid);
+            expect(updated?.arrivalDate).toBe(testCase.expected.arrivalDate);
+            expect(updated?.departureDate).toBe(testCase.expected.departureDate);
+        }
     });
 });

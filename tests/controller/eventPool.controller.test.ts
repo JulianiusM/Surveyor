@@ -44,11 +44,13 @@ jest.mock('../../src/modules/email', () => ({
     send: jest.fn(),
 }));
 
+import controller from '../../src/controller/eventPoolController';
 import {purgeExpiredProofs} from '../../src/controller/eventPoolController';
 import * as eventService from '../../src/modules/database/services/EventService';
 import * as invoiceService from '../../src/modules/database/services/EventInvoiceService';
 import {setupMock, verifyMockCall} from '../keywords/common/controllerKeywords';
 import * as testData from '../data/controller/eventPoolData';
+import {APIError} from '../../src/modules/lib/errors';
 
 beforeEach(() => {
     jest.clearAllMocks();

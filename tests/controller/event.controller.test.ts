@@ -20,6 +20,7 @@ jest.mock('../../src/modules/database/services/EventService', () => ({
     updateEventTitle: jest.fn(),
     updateEventDescription: jest.fn(),
     updateEventDates: jest.fn(),
+    updateRegistrationDates: jest.fn(),
 }));
 
 jest.mock('../../src/modules/database/services/EventInvoiceService', () => ({
@@ -263,6 +264,44 @@ describe('updateEventSettings', () => {
                 if (expectNotCalled) {
                     expectNotCalled.forEach(serviceName => {
                         expect(eventService[serviceName]).not.toHaveBeenCalled();
+                    });
+                }
+            }
+        }
+    );
+});
+
+describe('updateRegistrationDates', () => {
+    const {updateRegistrationDates} = controller as any;
+    
+    test.each(testData.updateRegistrationDatesData)(
+        '$description',
+        async ({body, event, registrationId, expectedMessage, expectedCalls, expectNotCalled, shouldThrow, datesOutsideWindow}: any) => {
+            const mockEvent = {id: 'e1', ...event} as any;
+            
+            // Set up isWithinWindow mock based on test expectations
+            (isWithinWindow as jest.Mock).mockReturnValue(!datesOutsideWindow);
+            
+            if (shouldThrow) {
+                await expect(
+                    updateRegistrationDates(mockEvent, registrationId, body)
+                ).rejects.toThrow(shouldThrow === 'APIError' ? APIError : Error);
+                
+                if (expectNotCalled) {
+                    expectNotCalled.forEach(serviceName => {
+                        expect(eventService[serviceName]).not.toHaveBeenCalled();
+                    });
+                }
+            } else {
+                const msg = await updateRegistrationDates(mockEvent, registrationId, body);
+                
+                if (expectedMessage) {
+                    verifyResult(msg, expectedMessage);
+                }
+                
+                if (expectedCalls) {
+                    Object.keys(expectedCalls).forEach(serviceName => {
+                        verifyMockCall(eventService[serviceName], ...expectedCalls[serviceName]);
                     });
                 }
             }

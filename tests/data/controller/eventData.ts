@@ -337,3 +337,64 @@ export const updateEventSettingsData = {
         },
     ],
 };
+
+export const updateRegistrationDatesData = [
+    {
+        description: 'updates registration dates with valid data',
+        body: {
+            arrivalDate: '2025-06-02',
+            departureDate: '2025-06-04',
+        },
+        event: {
+            startDate: '2025-06-01',
+            endDate: '2025-06-05',
+        },
+        registrationId: '1',
+        expectedMessage: 'Registration updated',
+        expectedCalls: {
+            updateRegistrationDates: ['e1', 1, '2025-06-02', '2025-06-04'],
+        },
+    },
+    {
+        description: 'rejects dates outside event window',
+        body: {
+            arrivalDate: '2025-05-31',
+            departureDate: '2025-06-04',
+        },
+        event: {
+            startDate: '2025-06-01',
+            endDate: '2025-06-05',
+        },
+        registrationId: '1',
+        shouldThrow: 'APIError',
+        expectNotCalled: ['updateRegistrationDates'],
+        datesOutsideWindow: true,
+    },
+    {
+        description: 'rejects invalid date format',
+        body: {
+            arrivalDate: 'invalid-date',
+            departureDate: '2025-06-04',
+        },
+        event: {
+            startDate: '2025-06-01',
+            endDate: '2025-06-05',
+        },
+        registrationId: '1',
+        shouldThrow: 'APIError',
+        expectNotCalled: ['updateRegistrationDates'],
+    },
+    {
+        description: 'rejects missing dates',
+        body: {
+            arrivalDate: '2025-06-02',
+        },
+        event: {
+            startDate: '2025-06-01',
+            endDate: '2025-06-05',
+        },
+        registrationId: '1',
+        shouldThrow: 'APIError',
+        expectNotCalled: ['updateRegistrationDates'],
+    },
+];
