@@ -306,6 +306,8 @@ async function deleteRegistration(event: Event, registrationId: string) {
     return await eventService.deleteRegistration(event.id, registrationId);
 }
 
+// Update registration arrival and departure dates
+// Note: Permission check for MANAGE_REGISTRATIONS is enforced at the route level
 async function updateRegistrationDates(event: Event, registrationId: string, body: any, permData?: PermBundle) {
     const schema = Joi.object({
         arrivalDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
