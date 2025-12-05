@@ -332,7 +332,7 @@ mixin poolStats(pool)
 
 //- Assignment form kept separate so both admin tabs and future reuse can pull it in
 mixin poolAssignmentsForm(ev, pool, participants)
-    form.pool-assignment(data-api=`/api/event/${ev.id}/invoice-pools/${pool.id}/assignments`)
+    form.pool-assignment(data-api=`/api/event/${ev.id}/invoice-pools/${pool.id}/assignments` data-pool-status=pool.status)
         label.form-label.text-secondary.mb-1 Update assignment
         .form-check
             input.form-check-input.pool-toggle(type="checkbox" name="assignAll" id=`assign-${pool.id}` checked=!!(pool.assignAll))
@@ -360,9 +360,14 @@ mixin poolAssignmentsForm(ev, pool, participants)
                             label.form-check-label(for=`pool-${pool.id}-exempt-${p.id}`) Exempt
             else
                 p.text-secondary.small.mb-0 No participants yet.
-        button.btn.btn-outline-light.btn-sm.mt-2(type="submit")
-            i.bi.bi-save.me-1
-            | Save assignments
+        if pool.status === 'OPEN'
+            button.btn.btn-outline-light.btn-sm.mt-2(type="submit")
+                i.bi.bi-save.me-1
+                | Save assignments
+        else
+            p.text-warning.small.mt-2.mb-0
+                i.bi.bi-info-circle.me-1
+                | Changes will only be applied when you click "Recalculate pool" below
 
 //- Render surcharges grouped per participant so admins see what will be charged
 mixin poolSurchargeList(pool, participants)
@@ -388,7 +393,7 @@ mixin poolSurchargeList(pool, participants)
 
 //- Form to add a new surcharge before closing a pool
 mixin poolSurchargeForm(ev, pool, participants)
-    form.surcharge-form(data-api=`/api/event/${ev.id}/invoice-pools/${pool.id}/surcharges`)
+    form.surcharge-form(data-api=`/api/event/${ev.id}/invoice-pools/${pool.id}/surcharges` data-pool-status=pool.status)
         .row.g-2.align-items-end
             .col-md-4
                 label.form-label.text-secondary(for=`surcharge-target-${pool.id}`) Participant
@@ -408,9 +413,14 @@ mixin poolSurchargeForm(ev, pool, participants)
                     input.form-check-input#surcharge-subtract-${pool.id}(type="checkbox" name="subtractFromPool" checked)
                     label.form-check-label(for=`surcharge-subtract-${pool.id}`) Subtract from pool
         .d-flex.justify-content-end.mt-2
-            button.btn.btn-outline-light.btn-sm(type="submit")
-                i.bi.bi-plus-circle.me-1
-                | Add surcharge
+            if pool.status === 'OPEN'
+                button.btn.btn-outline-light.btn-sm(type="submit")
+                    i.bi.bi-plus-circle.me-1
+                    | Add surcharge
+            else
+                p.text-warning.small.mb-0
+                    i.bi.bi-info-circle.me-1
+                    | Changes will only be applied when you click "Recalculate pool" below
 
 //- Charges and takeovers configured before closing a pool
 mixin poolAdjustmentSection(ev, pool, participants)

@@ -319,6 +319,11 @@ export function initInvoiceAdmin(): void {
         const target = e.target as HTMLElement;
         if (target.classList.contains('pool-assignment')) {
             e.preventDefault();
+            const poolStatus = (target as HTMLElement).getAttribute('data-pool-status');
+            if (poolStatus === 'CLOSED') {
+                showInlineAlert('warning', 'Pool is closed. Use the "Recalculate pool" button to apply changes.');
+                return;
+            }
             const api = (target as HTMLElement).getAttribute('data-api')!;
             const formData = new FormData(target as HTMLFormElement);
             const payload: {
@@ -337,6 +342,11 @@ export function initInvoiceAdmin(): void {
         }
         if (target.classList.contains('surcharge-form')) {
             e.preventDefault();
+            const poolStatus = (target as HTMLElement).getAttribute('data-pool-status');
+            if (poolStatus === 'CLOSED') {
+                showInlineAlert('warning', 'Pool is closed. Use the "Recalculate pool" button to apply changes.');
+                return;
+            }
             const api = (target as HTMLElement).getAttribute('data-api')!;
             const payload = Object.fromEntries(new FormData(target as HTMLFormElement).entries());
             try {
