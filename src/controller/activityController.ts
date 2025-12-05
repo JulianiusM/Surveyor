@@ -7,11 +7,13 @@ import {APIError, ValidationError} from '../modules/lib/errors';
 import * as activityService from "../modules/database/services/ActivityService";
 import * as userService from "../modules/database/services/UserService";
 import * as requirementService from "../modules/database/services/ActivityRequirementService";
+import * as recommendationService from "../modules/database/services/ActivityRecommendationService";
 import {ActivitySlot} from "../modules/database/entities/activity/ActivitySlot";
 import {ActivityPlan} from "../modules/database/entities/activity/ActivityPlan";
 import {Request} from "express";
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
 import type {PermBundle} from "../types/PermissionTypes";
+import {buildRecommendationWarnings} from "../modules/activity/recommendations";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'activity/activity-create';
@@ -133,6 +135,37 @@ function preprocessRequirementUpdate(body: any) {
     }
 
     return value as {roleRequirements: {roleId: number; requiredShifts: number}[]; overrides: any[]};
+}
+
+function preprocessRecommendationUpdate(body: any) {
+    const schema = Joi.object({
+        recommendations: Joi.array()
+            .items(
+                Joi.object({
+                    slotId: Joi.string().uuid().required(),
+                    userId: Joi.number().integer().positive().allow(null),
+                    guestId: Joi.number().integer().positive().allow(null),
+                    status: Joi.string().valid("PENDING", "APPROVED", "REJECTED").optional(),
+                }).custom((value, helpers) => {
+                    if (!value.userId && !value.guestId) {
+                        return helpers.error("any.custom", {message: "Recommendation requires a userId or guestId"});
+                    }
+                    if (value.userId && value.guestId) {
+                        return helpers.error("any.custom", {message: "Recommendation cannot target both user and guest"});
+                    }
+                    return value;
+                })
+            )
+            .default([]),
+    });
+
+    const {error, value} = schema.validate(body, {abortEarly: false, allowUnknown: true});
+    if (error) {
+        const msg = error.details.map((d: any) => d.message).join(', ');
+        throw new APIError(msg, body, 400);
+    }
+
+    return value as {recommendations: {slotId: string; userId?: number | null; guestId?: number | null; status?: string}[]};
 }
 
 /**
@@ -308,6 +341,39 @@ async function updateRequirements(planId: string, body: any) {
     return 'Requirements updated';
 }
 
+async function collectRecommendationWarnings(planId: string, recommendations: {slotId: string; userId?: number | null; guestId?: number | null; status?: string}[]) {
+    const [slots, existingAssignments] = await Promise.all([
+        activityService.getActivitySlotsFlat(planId),
+        activityService.getParticipantAssignmentsWithSlots(planId),
+    ]);
+
+    return buildRecommendationWarnings({
+        slots,
+        recommendations,
+        existingAssignments,
+    });
+}
+
+async function getRecommendations(planId: string) {
+    const recommendations = await recommendationService.getRecommendations(planId);
+    const normalized = recommendations.map((rec) => ({
+        slotId: rec.slot.id,
+        userId: rec.user?.id ?? null,
+        guestId: rec.guest?.id ?? null,
+        status: rec.status,
+    }));
+
+    const warnings = await collectRecommendationWarnings(planId, normalized);
+    return {recommendations, warnings};
+}
+
+async function updateRecommendations(planId: string, body: any) {
+    const {recommendations} = preprocessRecommendationUpdate(body);
+    await recommendationService.replaceRecommendations(planId, recommendations);
+    const warnings = await collectRecommendationWarnings(planId, recommendations);
+    return {message: 'Recommendations updated', warnings};
+}
+
 async function deleteSlot(slotId: string) {
     await activityService.deleteActivitySlot(slotId);
     return 'Slot deleted';
@@ -360,6 +426,8 @@ export default {
     updateSettings,
     getRequirements,
     updateRequirements,
+    getRecommendations,
+    updateRecommendations,
     deleteSlot,
     addSlotRole,
 

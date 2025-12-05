@@ -10,6 +10,8 @@ import type {PlanParticipant, PlanParticipantRow, SlotAssignmentMap} from "../..
 import {ensureOneByObjectsAuthed} from "../utils/relation-upsert";
 import * as entityAdminService from "./EntityAdminService";
 import {In} from "typeorm";
+import {AssignmentCandidate} from "../../activity/availability";
+import {toParticipantKey} from "../../activity/requirements";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Role & Assignment helpers
@@ -397,6 +399,35 @@ export async function getActivitySlotAssignmentsForGuest(planId: string, guestId
     });
 
     return assignments.map(a => a.slot.id);
+}
+
+export async function getParticipantAssignmentsWithSlots(planId: string): Promise<Record<string, AssignmentCandidate[]>> {
+    const repo = AppDataSource.getRepository(ActivityAssignment);
+    const assignments = await repo.find({
+        where: {plan: {id: planId}},
+        relations: {slot: true, user: true, guest: true},
+        select: {
+            id: true,
+            slot: {id: true, day: true, startTime: true, endTime: true, pos: true},
+            user: {id: true},
+            guest: {id: true},
+        },
+    });
+
+    const map: Record<string, AssignmentCandidate[]> = {};
+    for (const assignment of assignments) {
+        const participantKey = toParticipantKey({userId: assignment.user?.id, guestId: assignment.guest?.id});
+        if (!map[participantKey]) map[participantKey] = [];
+        map[participantKey].push({
+            id: assignment.slot.id,
+            day: assignment.slot.day,
+            startTime: assignment.slot.startTime,
+            endTime: assignment.slot.endTime,
+            pos: assignment.slot.pos,
+        });
+    }
+
+    return map;
 }
 
 export async function getActivitySlotAssignmentById(assignId: number) {
