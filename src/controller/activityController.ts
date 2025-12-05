@@ -14,6 +14,7 @@ import {Request} from "express";
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
 import type {PermBundle} from "../types/PermissionTypes";
 import {buildRecommendationWarnings} from "../modules/activity/recommendations";
+import {generatePlanRecommendations} from "../modules/activity/autoAssignment";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'activity/activity-create';
@@ -374,6 +375,13 @@ async function updateRecommendations(planId: string, body: any) {
     return {message: 'Recommendations updated', warnings};
 }
 
+async function autoGenerateRecommendations(planId: string) {
+    const recommendations = await generatePlanRecommendations(planId);
+    await recommendationService.replaceRecommendations(planId, recommendations);
+    const warnings = await collectRecommendationWarnings(planId, recommendations);
+    return {message: 'Recommendations generated', warnings};
+}
+
 async function deleteSlot(slotId: string) {
     await activityService.deleteActivitySlot(slotId);
     return 'Slot deleted';
@@ -428,6 +436,7 @@ export default {
     updateRequirements,
     getRecommendations,
     updateRecommendations,
+    autoGenerateRecommendations,
     deleteSlot,
     addSlotRole,
 

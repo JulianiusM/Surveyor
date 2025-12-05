@@ -83,6 +83,15 @@ app.post(
     })
 );
 
+app.post(
+    '/:id/recommendations/auto',
+    requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
+    asyncHandler(async (req: Request, res: Response) => {
+        const data = await controller.autoGenerateRecommendations(resFct(req).id);
+        renderer.respondWithSuccessJson(res, data);
+    })
+);
+
 /* Assign / Unassign identical to packing routes … */
 /* ───────────────── ASSIGN / UNASSIGN (JSON) ───────────────── */
 
