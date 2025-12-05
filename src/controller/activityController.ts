@@ -127,6 +127,19 @@ function preprocessRequirementUpdate(body: any) {
     });
 
     const schema = Joi.object({
+        assignmentMode: Joi.string().valid("FREE", "REQUIRED").optional(),
+        generalRequiredShifts: Joi.number().integer().min(0).allow(null).optional(),
+        roundingMode: Joi.string().valid("CEIL", "ROUND", "FLOOR").allow(null).optional(),
+        bindingDeadline: Joi.alternatives()
+            .try(Joi.date().iso(), Joi.string().allow(null, ""))
+            .optional()
+            .custom((value, helpers) => {
+                if (typeof value === "string" && value.trim() === "") {
+                    return null;
+                }
+                return value;
+            }),
+        allowOverfillAfterFull: Joi.boolean().optional(),
         roleRequirements: Joi.array().items(roleRequirementSchema).default([]),
         overrides: Joi.array().items(overrideSchema).default([]),
     });
@@ -137,7 +150,15 @@ function preprocessRequirementUpdate(body: any) {
         throw new APIError(msg, body, 400);
     }
 
-    return value as {roleRequirements: {roleId: number; requiredShifts: number}[]; overrides: any[]};
+    return value as {
+        assignmentMode?: 'FREE' | 'REQUIRED';
+        generalRequiredShifts?: number | null;
+        roundingMode?: 'CEIL' | 'ROUND' | 'FLOOR' | null;
+        bindingDeadline?: string | Date | null;
+        allowOverfillAfterFull?: boolean;
+        roleRequirements: {roleId: number; requiredShifts: number}[];
+        overrides: any[];
+    };
 }
 
 function preprocessRecommendationUpdate(body: any) {
@@ -339,8 +360,8 @@ async function getRequirements(planId: string) {
 }
 
 async function updateRequirements(planId: string, body: any) {
-    const {roleRequirements, overrides} = preprocessRequirementUpdate(body);
-    await requirementService.replaceRequirements(planId, roleRequirements, overrides);
+    const {roleRequirements, overrides, ...planSettings} = preprocessRequirementUpdate(body);
+    await requirementService.replaceRequirements(planId, roleRequirements, overrides, planSettings);
     return 'Requirements updated';
 }
 

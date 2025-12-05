@@ -9,8 +9,28 @@ import {
     RoleRequirementInput,
 } from "../../activity/requirements";
 
+export type PlanRequirementSettings = Partial<Pick<
+    ActivityPlan,
+    |
+    "assignmentMode"
+    | "generalRequiredShifts"
+    | "roundingMode"
+    | "bindingDeadline"
+    | "allowOverfillAfterFull"
+>>;
+
 export interface RequirementConfiguration {
-    plan: Pick<ActivityPlan, "id" | "assignmentMode" | "generalRequiredShifts" | "roundingMode" | "startDate" | "endDate">;
+    plan: Pick<
+        ActivityPlan,
+        | "id"
+        | "assignmentMode"
+        | "generalRequiredShifts"
+        | "roundingMode"
+        | "startDate"
+        | "endDate"
+        | "bindingDeadline"
+        | "allowOverfillAfterFull"
+    >;
     roleRequirements: ActivityPlanRequirement[];
     overrides: ActivityPlanRequirementOverride[];
 }
@@ -26,6 +46,8 @@ export async function getRequirementConfiguration(planId: string): Promise<Requi
             "roundingMode",
             "startDate",
             "endDate",
+            "bindingDeadline",
+            "allowOverfillAfterFull",
         ],
         relations: {
             activityPlanRequirements: {role: true},
@@ -90,17 +112,41 @@ export async function replaceRequirements(
     planId: string,
     roleRequirements: RoleRequirementInput[],
     overrides: RequirementOverrideInput[],
+    planSettings?: PlanRequirementSettings,
 ): Promise<void> {
     await AppDataSource.transaction(async (manager) => {
         const roleRepo = manager.getRepository(ActivityPlanRequirement);
         const overrideRepo = manager.getRepository(ActivityPlanRequirementOverride);
+        const planRepo = manager.getRepository(ActivityPlan);
         const normalizedRoles = roleRequirements.map(normalizeRoleRequirementInput);
         const normalizedOverrides = overrides.map(normalizeOverrideInput);
+
+        const planPatch: PlanRequirementSettings = {};
+
+        if (planSettings?.assignmentMode !== undefined) {
+            planPatch.assignmentMode = planSettings.assignmentMode;
+        }
+        if (planSettings?.generalRequiredShifts !== undefined) {
+            planPatch.generalRequiredShifts = planSettings.generalRequiredShifts;
+        }
+        if (planSettings?.roundingMode !== undefined) {
+            planPatch.roundingMode = planSettings.roundingMode;
+        }
+        if (planSettings?.bindingDeadline !== undefined) {
+            planPatch.bindingDeadline = planSettings.bindingDeadline;
+        }
+        if (planSettings?.allowOverfillAfterFull !== undefined) {
+            planPatch.allowOverfillAfterFull = planSettings.allowOverfillAfterFull;
+        }
 
         await Promise.all([
             roleRepo.delete({plan: {id: planId}}),
             overrideRepo.delete({plan: {id: planId}}),
         ]);
+
+        if (Object.keys(planPatch).length) {
+            await planRepo.update({id: planId}, planPatch);
+        }
 
         if (normalizedRoles.length) {
             const roleRows = normalizedRoles.map((req) =>
