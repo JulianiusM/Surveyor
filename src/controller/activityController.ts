@@ -294,12 +294,23 @@ async function reorderSlots(id: string, order: { slotId: string, pos: number }[]
 }
 
 async function quickAddSlot(plan: ActivityPlan, body: any) {
-    const {date, title = '', description = '', maxAssignees = 1} = body;
+    const {date, title = '', description = '', startTime, endTime, maxAssignees = 1} = body;
     const d = fromISOtoLocal(date);
     if (d < fromISOtoLocal(plan.startDate) || d > fromISOtoLocal(plan.endDate))
         throw new APIError('Date outside range', body, 400);
 
     if (!title) throw new APIError('Title required', body, 400);
+
+    const timePattern = /^\d{2}:\d{2}(?::\d{2})?$/;
+    if (startTime && !timePattern.test(startTime)) {
+        throw new APIError('Invalid start time', body, 400);
+    }
+    if (endTime && !timePattern.test(endTime)) {
+        throw new APIError('Invalid end time', body, 400);
+    }
+    if (startTime && endTime && startTime >= endTime) {
+        throw new APIError('End time must be after start time', body, 400);
+    }
 
     const last = Number(await activityService.getLastActivitySlotNumber(plan.id, date)) || 0;
     const slot: Partial<ActivitySlot> = {
@@ -307,6 +318,8 @@ async function quickAddSlot(plan: ActivityPlan, body: any) {
         day: date,
         title,
         description,
+        startTime: startTime || null,
+        endTime: endTime || null,
         maxAssignees: Number(maxAssignees) || 1,
         pos: last + 1
     };

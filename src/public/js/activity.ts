@@ -13,6 +13,126 @@ import {getSelectValues} from './core/form-utils';
 import {reloadAfterDelay} from './shared/ui-helpers';
 import {loadPerms, requireEntityPerm, requireItemPerm} from './core/permissions';
 
+interface BootstrapModal {
+    show: () => void;
+    hide: () => void;
+}
+
+interface BootstrapGlobal {
+    Modal: new (element: HTMLElement, options?: {focus?: boolean}) => BootstrapModal;
+}
+
+declare const bootstrap: BootstrapGlobal;
+
+type WarningType = "outside_attendance" | "arrival_day" | "departure_day" | "overlap" | "over_capacity";
+
+interface AssignmentWarning {
+    type: WarningType;
+    conflicts?: string[];
+}
+
+interface WarningModal {
+    confirm(warnings: AssignmentWarning[], slotId: string): Promise<boolean>;
+}
+
+function formatTimeLabel(time?: string | null): string {
+    if (!time) return "";
+    return time.slice(0, 5);
+}
+
+function describeSlot(slotId: string): string {
+    const slotEl = document.querySelector<HTMLElement>(`.slot[data-slotid="${slotId}"]`);
+    if (!slotEl) return `slot ${slotId}`;
+
+    const title = slotEl.querySelector<HTMLElement>('[data-edit="title"]')?.textContent?.trim();
+    const day = slotEl.dataset.day
+        || slotEl.closest<HTMLElement>('.slot-container')?.dataset.date
+        || '';
+    const start = formatTimeLabel(slotEl.dataset.start || null);
+    const end = formatTimeLabel(slotEl.dataset.end || null);
+
+    const timePart = start || end ? ` (${start || '–'}-${end || '–'})` : '';
+    return `${title || 'Slot'}${day ? ` on ${day}` : ''}${timePart}`;
+}
+
+function describeWarning(warning: AssignmentWarning): string {
+    switch (warning.type) {
+    case "outside_attendance":
+        return "This slot is outside your attendance window.";
+    case "arrival_day":
+        return "This slot is on your arrival day.";
+    case "departure_day":
+        return "This slot is on your departure day.";
+    case "over_capacity":
+        return "This slot is already full.";
+    case "overlap": {
+        const conflicts = (warning.conflicts || []).map(describeSlot);
+        const detail = conflicts.length ? `: ${conflicts.join(', ')}` : '';
+        return `This slot overlaps with another assignment${detail}`;
+    }
+    default:
+        return "Assignment warning detected.";
+    }
+}
+
+function buildWarningModal(): WarningModal {
+    const modalEl = document.getElementById('assignmentWarningModal');
+    const list = document.getElementById('assignmentWarningList');
+    const titleEl = document.getElementById('assignmentWarningSlot');
+    const confirmBtn = document.getElementById('assignmentWarningConfirm') as HTMLButtonElement | null;
+    const cancelBtn = document.getElementById('assignmentWarningCancel') as HTMLButtonElement | null;
+
+    const modal = modalEl && typeof bootstrap !== 'undefined'
+        ? new bootstrap.Modal(modalEl, {focus: true})
+        : null;
+
+    async function confirm(warnings: AssignmentWarning[], slotId: string): Promise<boolean> {
+        if (!warnings.length) return true;
+        if (!modal || !modalEl || !list || !confirmBtn || !cancelBtn) {
+            const proceed = window.confirm(
+                `Warnings detected for this assignment. Proceed?\n${warnings.map(describeWarning).join('\n')}`,
+            );
+            return Promise.resolve(proceed);
+        }
+
+        const title = describeSlot(slotId);
+        if (titleEl) titleEl.textContent = title;
+
+        list.innerHTML = '';
+        warnings.forEach((warning) => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item text-bg-dark d-flex align-items-start gap-2';
+            li.innerHTML = `<i class="bi bi-exclamation-triangle text-warning"></i><span>${describeWarning(warning)}</span>`;
+            list.appendChild(li);
+        });
+
+        return await new Promise((resolve) => {
+            let settled = false;
+
+            function cleanup(result: boolean) {
+                if (settled) return;
+                settled = true;
+                confirmBtn.disabled = false;
+                modal.hide();
+                resolve(result);
+            }
+
+            const onHidden = () => cleanup(false);
+            modalEl.addEventListener('hidden.bs.modal', onHidden, {once: true});
+
+            confirmBtn.onclick = async () => {
+                confirmBtn.disabled = true;
+                cleanup(true);
+            };
+
+            cancelBtn.onclick = () => cleanup(false);
+            modal.show();
+        });
+    }
+
+    return {confirm};
+}
+
 /**
  * Get the activity plan ID from the window object
  */
@@ -23,8 +143,17 @@ function getActivityPlanId(): string {
 /**
  * Initialize assign/unassign slot functionality
  */
-function initAssign(): void {
+function initAssign(warningModal: WarningModal): void {
     const planId = getActivityPlanId();
+
+    async function fetchWarnings(slotId: string): Promise<AssignmentWarning[]> {
+        try {
+            const res = await post(`/api/activity/${planId}/slot/${slotId}/warnings`, {});
+            return res?.data?.warnings || [];
+        } catch {
+            return [];
+        }
+    }
 
     document.addEventListener('click', async (e: Event) => {
         const btn = (e.target as Element | null)?.closest('[data-action]') as HTMLElement | null;
@@ -37,10 +166,20 @@ function initAssign(): void {
         const act = btn.dataset.action;
         const role = btn.dataset.role;
 
-        try {
+        const performUpdate = async () => {
             await post(`/api/activity/${planId}/${act}`, {slotId, role});
             showInlineAlert('success', 'Updated');
             reloadAfterDelay(120);
+        };
+
+        try {
+            if (act === 'assign') {
+                const warnings = await fetchWarnings(slotId);
+                const proceed = await warningModal.confirm(warnings, slotId);
+                if (!proceed) return;
+            }
+
+            await performUpdate();
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to update slot assignment.';
             showInlineAlert('error', message);
@@ -177,6 +316,16 @@ function initAddSlot(): void {
         desc.className = 'form-control form-control-sm text-bg-dark';
         desc.placeholder = 'Description';
 
+        const startTime = document.createElement('input');
+        startTime.type = 'time';
+        startTime.className = 'form-control form-control-sm text-bg-dark';
+        startTime.placeholder = 'Start';
+
+        const endTime = document.createElement('input');
+        endTime.type = 'time';
+        endTime.className = 'form-control form-control-sm text-bg-dark';
+        endTime.placeholder = 'End';
+
         const max = document.createElement('input');
         max.type = 'number';
         max.min = '1';
@@ -192,7 +341,7 @@ function initAddSlot(): void {
         cancel.className = 'btn btn-sm btn-outline-secondary mt-1';
         cancel.textContent = '×';
 
-        wrap.append(title, desc, max, save, cancel);
+        wrap.append(title, desc, startTime, endTime, max, save, cancel);
         cell.appendChild(wrap);
 
         cancel.onclick = () => {
@@ -203,10 +352,14 @@ function initAddSlot(): void {
         save.onclick = async () => {
             try {
                 requireEntityPerm('ITEM_ADD', 'add slots');
+                const startVal = startTime.value ? `${startTime.value}:00` : null;
+                const endVal = endTime.value ? `${endTime.value}:00` : null;
                 await post(`/api/activity/${planId}/slot/add`, {
                     date: dateISO,
                     title: title.value.trim(),
                     description: desc.value.trim(),
+                    startTime: startVal,
+                    endTime: endVal,
                     maxAssignees: max.value,
                 });
                 showInlineAlert('success', 'Added');
@@ -278,7 +431,8 @@ export function init(): void {
 
     const planId = getActivityPlanId();
     if (planId) {
-        initAssign();
+        const warningModal = buildWarningModal();
+        initAssign(warningModal);
         initInlineEdit();
         initDelete();
         initAddSlot();

@@ -30,9 +30,10 @@
 - Added recommendation application flow with capacity-aware warnings, attendance/overlap enforcement, and an API endpoint to convert approved recommendations into applied assignments.
 - Added validation for plan-level requirement settings (mode, rounding, deadlines, capacity bypass) alongside transactional updates and enforced binding-deadline locks on assignment mutations.
 - Added assignment-warning APIs that surface overlap, attendance, and capacity warnings for participants before assigning slots.
+- Surfaced slot timeboxes in the activity plan UI and creation flow with start/end inputs and in-view time badges to support overlap awareness.
+- Added a Bootstrap-powered warning modal that consumes the new warning endpoint before users join a slot, keeping potential conflicts visible in the workflow.
 
 ## Next Steps
-- Surface assignment warnings in the UI using the new API.
 - Build controller/service wiring that consumes the new requirement calculators, enforces binding deadlines, and surfaces the overrides/configuration in the UI.
 - Surface recommendation warnings and staged data in the UI for admin review/editing.
 - Hook recommendation approval flows to create assignments and enforce the binding-deadline permissions in the UI.

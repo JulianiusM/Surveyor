@@ -119,10 +119,23 @@ block content
                                 if daySlots.length > 0
                                     each slot, idx in daySlots
                                         - const my = data.assignments.includes(slot.id)
-                                        .slot.border.rounded.p-2.mb-2.d-grid.gap-1.draggable(data-slotid=slot.id draggable=permData.entity.has('ITEM_EDIT') ? 'true' : null)
+                                        - const startTime = slot.startTime ? slot.startTime.slice(0, 5) : null
+                                        - const endTime = slot.endTime ? slot.endTime.slice(0, 5) : null
+                                        .slot.border.rounded.p-2.mb-2.d-grid.gap-1.draggable(
+                                            data-slotid=slot.id
+                                            data-day=slot.day
+                                            data-start=slot.startTime
+                                            data-end=slot.endTime
+                                            draggable=permData.entity.has('ITEM_EDIT') ? 'true' : null)
 
                                             // editable title
                                             span.fw-bold.text-center(data-edit="title" data-id=slot.id)= slot.title
+                                            if startTime || endTime
+                                                small.text-info.text-center(data-time-range)
+                                                    i.bi.bi-clock-history.me-1
+                                                    | #{startTime || '??'}
+                                                    |  – 
+                                                    | #{endTime || '??'}
                                             hr.m-0
 
                                             // editable description
@@ -207,6 +220,25 @@ block content
                                 for role in part.roles
                                     if role !== 'default'
                                         p.my-1 #{role}
+
+    // Assignment warnings modal
+    #assignmentWarningModal.modal.fade(tabindex="-1" aria-labelledby="assignmentWarningTitle" aria-hidden="true")
+        .modal-dialog
+            .modal-content.text-bg-dark
+                .modal-header
+                    h5#assignmentWarningTitle.modal-title
+                        i.bi.bi-exclamation-triangle.me-2
+                        | Assignment warnings
+                    button.btn-close(data-bs-dismiss="modal" aria-label="Close")
+                .modal-body
+                    p.small.text-secondary.mb-2 Potential issues were detected for this slot:
+                    strong#assignmentWarningSlot.d-block.mb-2
+                    ul#assignmentWarningList.list-group.list-group-flush
+                .modal-footer
+                    button#assignmentWarningCancel.btn.btn-outline-secondary(type="button" data-bs-dismiss="modal") Cancel
+                    button#assignmentWarningConfirm.btn.btn-warning(type="button")
+                        i.bi.bi-check2.me-1
+                        | Continue anyway
 
 
 block scripts

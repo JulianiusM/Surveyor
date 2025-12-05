@@ -82,6 +82,8 @@ export function buildSlotRow(
         day: dateISO,
         title: pref.title || '',
         description: pref.description || '',
+        startTime: pref.startTime || null,
+        endTime: pref.endTime || null,
         maxAssignees: pref.maxAssignees || 1
     };
     updateSlotObj(dateISO, rowObj);
@@ -104,6 +106,20 @@ export function buildSlotRow(
         className: 'form-control form-control-sm text-bg-dark',
         placeholder: 'Description',
         value: pref.description || ''
+    });
+
+    const startTime = Object.assign(document.createElement('input'), {
+        type: 'time',
+        className: 'form-control form-control-sm text-bg-dark',
+        placeholder: 'Start time',
+        value: (pref.startTime || '').slice(0, 5),
+    });
+
+    const endTime = Object.assign(document.createElement('input'), {
+        type: 'time',
+        className: 'form-control form-control-sm text-bg-dark',
+        placeholder: 'End time',
+        value: (pref.endTime || '').slice(0, 5),
     });
 
     const max = Object.assign(document.createElement('input'), {
@@ -130,6 +146,16 @@ export function buildSlotRow(
         obj.description = desc.value.trim();
         updateSlotObj(dateISO, obj);
     });
+    startTime.addEventListener('change', () => {
+        let obj = getSlotObj(dateISO, id)!;
+        obj.startTime = startTime.value ? `${startTime.value}:00` : null;
+        updateSlotObj(dateISO, obj);
+    });
+    endTime.addEventListener('change', () => {
+        let obj = getSlotObj(dateISO, id)!;
+        obj.endTime = endTime.value ? `${endTime.value}:00` : null;
+        updateSlotObj(dateISO, obj);
+    });
     max.addEventListener('change', () => {
         let obj = getSlotObj(dateISO, id)!;
         obj.maxAssignees = parseInt(max.value);
@@ -143,7 +169,7 @@ export function buildSlotRow(
         infoClb();
     });
 
-    wrap.append(title, desc, max, delBtn);
+    wrap.append(title, desc, startTime, endTime, max, delBtn);
     return wrap;
 }
 
