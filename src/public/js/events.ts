@@ -298,7 +298,30 @@ export function initInvoiceAdmin(): void {
             if (target.classList.contains('pool-recalculate')) {
                 requireManageAssignments('recalculate invoice pools');
                 if (!confirm("WARNING: This will delete all existing shares and recalculate them based on current pool settings. All participants will be notified again. This action cannot be undone. Are you sure you want to proceed?")) return;
-                await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.id}/recalculate`);
+                const poolRoot = target.closest('.invoice-pool');
+                const payload: Record<string, unknown> = {};
+
+                const assignmentForm = poolRoot?.querySelector('form.pool-assignment') as HTMLFormElement | null;
+                if (assignmentForm) {
+                    const formData = new FormData(assignmentForm);
+                    const assignments: Record<string, FormDataEntryValue | FormDataEntryValue[]> = Object.fromEntries(formData.entries());
+                    assignments.registrations = formData.getAll('registrations');
+                    assignments.exemptions = formData.getAll('exemptions');
+                    payload.assignments = assignments;
+                }
+
+                const surchargeForm = poolRoot?.querySelector('form.surcharge-form') as HTMLFormElement | null;
+                if (surchargeForm) {
+                    const formData = new FormData(surchargeForm);
+                    const registrationId = formData.get('registrationId');
+                    const amount = formData.get('amount');
+                    const note = formData.get('note');
+                    if (registrationId && amount && note) {
+                        payload.surcharge = Object.fromEntries(formData.entries());
+                    }
+                }
+
+                await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.id}/recalculate`, payload);
                 showInlineAlert('success', 'Pool recalculated successfully');
                 return reloadAfterDelay(RELOAD_DELAY_MS);
             }

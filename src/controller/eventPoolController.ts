@@ -96,9 +96,9 @@ async function createInvoicePool(event: Event, body: any) {
 }
 
 // Update pool assignments before closure, respecting default/assign-all toggles and allowed participants.
-async function updatePoolAssignments(event: Event, poolId: string, body: any) {
+async function updatePoolAssignments(event: Event, poolId: string, body: any, allowClosed = false) {
     const pool = await ensurePool(event, poolId);
-    if (pool.status === 'CLOSED') throw new APIError('Pool is closed', body, 400);
+    if (pool.status === 'CLOSED' && !allowClosed) throw new APIError('Pool is closed', body, 400);
     const isDefault = body.isDefault === true || body.isDefault === 'on';
     const assignAll = body.assignAll === true || body.assignAll === 'on';
     const subtractPersonalInvoices = body.subtractPersonalInvoices === undefined
@@ -113,9 +113,9 @@ async function updatePoolAssignments(event: Event, poolId: string, body: any) {
 }
 
 // Create a participant-specific surcharge that will be factored in during pool closure.
-async function addPoolSurcharge(event: Event, poolId: string, body: any) {
+async function addPoolSurcharge(event: Event, poolId: string, body: any, allowClosed = false) {
     const pool = await ensurePool(event, poolId);
-    if (pool.status === 'CLOSED') throw new APIError('Pool is closed', body, 400);
+    if (pool.status === 'CLOSED' && !allowClosed) throw new APIError('Pool is closed', body, 400);
     const schema = Joi.object({
         registrationId: Joi.number().integer().required(),
         amount: Joi.number().positive().required(),
@@ -562,6 +562,15 @@ async function recalculatePool(event: Event, poolId: string, body: any = {}, ses
     }
 
     try {
+        // Persist any pending assignment or surcharge updates submitted with the recalculation request
+        if (body.assignments) {
+            await updatePoolAssignments(event, poolId, body.assignments, true);
+        }
+
+        if (body.surcharge) {
+            await addPoolSurcharge(event, poolId, body.surcharge, true);
+        }
+
         // Reopen the pool (uses SERIALIZABLE transaction with pessimistic write lock)
         await invoiceService.reopenPool(poolId);
         
