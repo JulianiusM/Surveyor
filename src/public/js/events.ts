@@ -246,10 +246,13 @@ export function initInvoiceAdmin(): void {
 
         const assignAll = poolForm.querySelector('#assignAllPools') as HTMLInputElement | null;
         const defaultBox = poolForm.querySelector('#defaultPool') as HTMLInputElement | null;
-        const registrations = poolForm.querySelector('#poolRegistrations') as HTMLSelectElement | null;
+        const registrations = Array.from(poolForm.querySelectorAll<HTMLInputElement>('input[name="registrations"]'));
         const syncDisabled = () => {
-            if (!registrations) return;
-            registrations.disabled = !!(assignAll?.checked || defaultBox?.checked);
+            const disable = !!(assignAll?.checked || defaultBox?.checked);
+            registrations.forEach((input) => {
+                input.disabled = disable;
+                if (disable) input.checked = true;
+            });
         };
         assignAll?.addEventListener('change', syncDisabled);
         defaultBox?.addEventListener('change', syncDisabled);
@@ -337,13 +340,31 @@ export function initInvoiceAdmin(): void {
     // Pool assignment checkbox handler
     document.addEventListener('change', (e: Event) => {
         const target = e.target as HTMLElement;
-        if (target.matches('.pool-assignment input[type="checkbox"]')) {
+        if (target.matches('.pool-assignment .pool-toggle')) {
             const form = target.closest('.pool-assignment') as HTMLFormElement | null;
             if (!form) return;
             const assignAll = form.querySelector('input[name="assignAll"]') as HTMLInputElement | null;
             const isDefault = form.querySelector('input[name="isDefault"]') as HTMLInputElement | null;
-            const select = form.querySelector('select[name="registrations"]') as HTMLSelectElement | null;
-            if (select) select.disabled = !!(assignAll?.checked || isDefault?.checked);
+            const registrations = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="registrations"]'));
+            const disable = !!(assignAll?.checked || isDefault?.checked);
+            registrations.forEach((input) => {
+                if (disable) {
+                    // Store original state before modifying (only if not already stored)
+                    if (!input.hasAttribute('data-original-checked')) {
+                        input.setAttribute('data-original-checked', String(input.checked));
+                    }
+                    input.disabled = true;
+                    input.checked = true;
+                } else {
+                    // Restore original state when re-enabling
+                    input.disabled = false;
+                    if (input.hasAttribute('data-original-checked')) {
+                        const originalState = input.getAttribute('data-original-checked') ?? 'false';
+                        input.checked = originalState === 'true';
+                        input.removeAttribute('data-original-checked');
+                    }
+                }
+            });
         }
     });
 

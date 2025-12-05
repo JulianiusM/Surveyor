@@ -166,10 +166,20 @@ block content
                                 i.bi.bi-x-circle.me-1
                                 | Cancel registration
 
-            if data.participantPools && data.participantPools.length
-                +invoiceSubmission(ev.id, data.participantPools, 'participant', data.participantInvoices)
-                +participantTakeoverList(data.participantPools, data.participants)
-                +participantShareSummary(data.registration.id, data.invoicePools)
+            if data.invoicePools && data.invoicePools.length
+                .accordion.accordion-dark.mb-3#participantInvoiceAccordion
+                    .accordion-item.bg-dark.text-white.border-secondary-subtle
+                        h2.accordion-header
+                            button.accordion-button.collapsed.text-white(type="button" data-bs-toggle="collapse" data-bs-target="#participantInvoiceCollapse" aria-expanded="false" aria-controls="participantInvoiceCollapse")
+                                i.bi.bi-cash-coin.me-2
+                                | Invoice pools & payments
+                        #participantInvoiceCollapse.accordion-collapse.collapse
+                            .accordion-body
+                                +invoiceSubmission(ev.id, data.participantPools, 'participant', data.participantInvoices, data.invoicePools)
+                                if data.participantPools && data.participantPools.length
+                                    .mt-4
+                                        +participantTakeoverList(data.participantPools, data.participants)
+                                +participantShareSummary(data.registration.id, data.invoicePools)
     else
         .alert.alert-info.mx-1
             i.bi.bi-info-circle.me-2
