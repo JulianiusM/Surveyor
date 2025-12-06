@@ -32,6 +32,8 @@ describe("getAssignmentWarnings", () => {
         activityService.getActivityPlanById.mockResolvedValue({
             id: "plan-1",
             allowOverfillAfterFull: false,
+            allowArrivalDayEvening: false,
+            allowDepartureDayMorning: true,
             event: {id: "event-1"},
         });
         activityService.getActivitySlotById.mockResolvedValue({
@@ -60,6 +62,7 @@ describe("getAssignmentWarnings", () => {
         expect(warnings).toEqual(
             expect.arrayContaining([
                 {type: "arrival_day"},
+                {type: "arrival_time_restricted"},
                 {type: "over_capacity"},
                 {type: "overlap", conflicts: ["slot-existing"]},
             ]),

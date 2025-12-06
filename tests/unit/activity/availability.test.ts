@@ -68,4 +68,30 @@ describe("collectAssignmentWarnings", () => {
 
         expect(warnings).toEqual([{type: "outside_attendance"}]);
     });
+
+    test("respects arrival and departure day time restrictions", () => {
+        const arrivalWarnings = collectAssignmentWarnings(
+            baseSlot("candidate", "2024-01-02", "18:00", "19:00"),
+            {arrivalDate: "2024-01-02", departureDate: "2024-01-04"},
+            [],
+            {allowArrivalDayEvening: false},
+        );
+
+        expect(arrivalWarnings).toEqual([
+            {type: "arrival_day"},
+            {type: "arrival_time_restricted"},
+        ]);
+
+        const departureWarnings = collectAssignmentWarnings(
+            baseSlot("candidate", "2024-01-04", "08:00", "09:00"),
+            {arrivalDate: "2024-01-02", departureDate: "2024-01-04"},
+            [],
+            {allowDepartureDayMorning: false},
+        );
+
+        expect(departureWarnings).toEqual([
+            {type: "departure_day"},
+            {type: "departure_time_restricted"},
+        ]);
+    });
 });

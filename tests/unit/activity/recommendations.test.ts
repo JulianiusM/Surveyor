@@ -63,4 +63,22 @@ describe("buildRecommendationWarnings", () => {
 
         expect(warnings[1].warnings).toEqual([{type: "over_capacity"}]);
     });
+
+    test("honors arrival-day evening restriction when provided", () => {
+        const warnings = buildRecommendationWarnings({
+            slots,
+            recommendations: [
+                {slotId: "a", userId: 1},
+            ],
+            participantAttendance: {
+                "user:1": {userId: 1, arrivalDate: "2024-05-01", departureDate: "2024-05-03"},
+            },
+            attendancePolicy: {allowArrivalDayEvening: false},
+        });
+
+        expect(warnings[0].warnings).toEqual([
+            {type: "arrival_day"},
+            {type: "arrival_time_restricted"},
+        ]);
+    });
 });

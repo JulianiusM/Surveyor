@@ -10,6 +10,8 @@ describe('generateAutoRecommendations', () => {
         startDate: '2024-01-01',
         endDate: '2024-01-02',
         allowOverfillAfterFull: false,
+        allowArrivalDayEvening: true,
+        allowDepartureDayMorning: true,
     };
 
     function buildContext(overrides: Partial<AutoAssignmentContext> = {}): AutoAssignmentContext {
@@ -67,5 +69,23 @@ describe('generateAutoRecommendations', () => {
 
         const recommendations = generateAutoRecommendations(context);
         expect(recommendations).toHaveLength(0);
+    });
+
+    it('skips arrival-evening slots when the plan disables them', () => {
+        const context = buildContext({
+            plan: {...basePlan, allowArrivalDayEvening: false},
+            participants: [
+                {userId: 1, arrivalDate: '2024-01-01', departureDate: '2024-01-02'},
+            ],
+            slots: [
+                {id: 'evening', day: '2024-01-01', startTime: '18:00', endTime: '19:00', pos: 1, maxAssignees: 1} as any,
+                {id: 'next-day', day: '2024-01-02', startTime: '08:00', endTime: '09:00', pos: 2, maxAssignees: 1} as any,
+            ],
+        });
+
+        const recommendations = generateAutoRecommendations(context);
+
+        expect(recommendations).toHaveLength(1);
+        expect(recommendations[0]).toMatchObject({slotId: 'next-day', userId: 1});
     });
 });

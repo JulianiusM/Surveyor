@@ -37,7 +37,14 @@ interface RoleSummary {
     description?: string | null;
 }
 
-type WarningType = "outside_attendance" | "arrival_day" | "departure_day" | "overlap" | "over_capacity";
+type WarningType =
+    | "outside_attendance"
+    | "arrival_day"
+    | "departure_day"
+    | "arrival_time_restricted"
+    | "departure_time_restricted"
+    | "overlap"
+    | "over_capacity";
 
 interface AssignmentWarning {
     type: WarningType;
@@ -55,6 +62,8 @@ interface RequirementConfiguration {
         roundingMode?: 'CEIL' | 'ROUND' | 'FLOOR' | null;
         bindingDeadline?: string | Date | null;
         allowOverfillAfterFull?: boolean;
+        allowArrivalDayEvening?: boolean;
+        allowDepartureDayMorning?: boolean;
     };
     roleRequirements: {roleId: number; requiredShifts: number}[];
     overrides: {
@@ -144,8 +153,12 @@ function describeWarning(warning: AssignmentWarning): string {
         return "This slot is outside your attendance window.";
     case "arrival_day":
         return "This slot is on your arrival day.";
+    case "arrival_time_restricted":
+        return "Evening arrival-day assignments are disabled for this plan.";
     case "departure_day":
         return "This slot is on your departure day.";
+    case "departure_time_restricted":
+        return "Morning departure-day assignments are disabled for this plan.";
     case "over_capacity":
         return "This slot is already full.";
     case "overlap": {
@@ -497,6 +510,8 @@ function initRequirementPanel(): void {
     const roundingMode = panel.querySelector<HTMLSelectElement>('#roundingMode');
     const bindingDeadline = panel.querySelector<HTMLInputElement>('#bindingDeadline');
     const allowOverfill = panel.querySelector<HTMLInputElement>('#allowOverfill');
+    const allowArrivalEvening = panel.querySelector<HTMLInputElement>('#allowArrivalEvening');
+    const allowDepartureMorning = panel.querySelector<HTMLInputElement>('#allowDepartureMorning');
 
     const setAlert = (message?: string, variant: 'info' | 'danger' = 'info') => {
         if (!alertBox) return;
@@ -696,6 +711,8 @@ function initRequirementPanel(): void {
         if (roundingMode) roundingMode.value = config.plan.roundingMode || '';
         if (bindingDeadline) bindingDeadline.value = toDateTimeLocalValue(config.plan.bindingDeadline ?? null);
         if (allowOverfill) allowOverfill.checked = Boolean(config.plan.allowOverfillAfterFull);
+        if (allowArrivalEvening) allowArrivalEvening.checked = Boolean(config.plan.allowArrivalDayEvening ?? true);
+        if (allowDepartureMorning) allowDepartureMorning.checked = Boolean(config.plan.allowDepartureDayMorning ?? true);
 
         buildRoleRequirementInputs(config);
         renderOverrides(config);
@@ -767,6 +784,8 @@ function initRequirementPanel(): void {
                 roundingMode: roundingMode?.value || null,
                 bindingDeadline: toISOStringOrNull(bindingDeadline?.value || ''),
                 allowOverfillAfterFull: allowOverfill?.checked ?? false,
+                allowArrivalDayEvening: allowArrivalEvening?.checked ?? true,
+                allowDepartureDayMorning: allowDepartureMorning?.checked ?? true,
                 roleRequirements: collectRoleRequirements(),
                 overrides: collectOverrides(),
             });

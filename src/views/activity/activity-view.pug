@@ -125,6 +125,15 @@ block content
                     .form-check.form-switch.my-3
                         input#allowOverfill.form-check-input(type="checkbox" role="switch")
                         label.form-check-label(for="allowOverfill") Allow assignments beyond slot capacity
+                    .row.g-3
+                        .col-md-6
+                            .form-check.form-switch
+                                input#allowArrivalEvening.form-check-input(type="checkbox" role="switch")
+                                label.form-check-label(for="allowArrivalEvening") Allow arrival-day evening assignments
+                        .col-md-6
+                            .form-check.form-switch
+                                input#allowDepartureMorning.form-check-input(type="checkbox" role="switch")
+                                label.form-check-label(for="allowDepartureMorning") Allow departure-day morning assignments
 
                     hr
                     h6.d-flex.justify-content-between.align-items-center

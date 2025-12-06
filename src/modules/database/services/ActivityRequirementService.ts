@@ -17,6 +17,8 @@ export type PlanRequirementSettings = Partial<Pick<
     | "roundingMode"
     | "bindingDeadline"
     | "allowOverfillAfterFull"
+    | "allowArrivalDayEvening"
+    | "allowDepartureDayMorning"
 >>;
 
 export interface RequirementConfiguration {
@@ -30,6 +32,8 @@ export interface RequirementConfiguration {
         | "endDate"
         | "bindingDeadline"
         | "allowOverfillAfterFull"
+        | "allowArrivalDayEvening"
+        | "allowDepartureDayMorning"
     >;
     roleRequirements: ActivityPlanRequirement[];
     overrides: ActivityPlanRequirementOverride[];
@@ -48,6 +52,8 @@ export async function getRequirementConfiguration(planId: string): Promise<Requi
             "endDate",
             "bindingDeadline",
             "allowOverfillAfterFull",
+            "allowArrivalDayEvening",
+            "allowDepartureDayMorning",
         ],
         relations: {
             activityPlanRequirements: {role: true},
@@ -137,6 +143,12 @@ export async function replaceRequirements(
         }
         if (planSettings?.allowOverfillAfterFull !== undefined) {
             planPatch.allowOverfillAfterFull = planSettings.allowOverfillAfterFull;
+        }
+        if (planSettings?.allowArrivalDayEvening !== undefined) {
+            planPatch.allowArrivalDayEvening = planSettings.allowArrivalDayEvening;
+        }
+        if (planSettings?.allowDepartureDayMorning !== undefined) {
+            planPatch.allowDepartureDayMorning = planSettings.allowDepartureDayMorning;
         }
 
         await Promise.all([

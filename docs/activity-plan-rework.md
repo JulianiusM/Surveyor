@@ -36,6 +36,7 @@
 - Added participant requirement summaries (required vs. assigned, attendance, and source) to the requirement panel, powered by requirement calculations and attendance-aware aggregation.
 - Enabled inline editing of staged recommendations with participant/slot selectors sourced from plan data while keeping warning visibility and dirty-state hints in the review panel.
 - Automatically trigger recommendation generation after the binding deadline when no proposals exist, and surface the auto-generation notice in the recommendation review UI.
+- Added plan settings and enforcement for arrival-day evening and departure-day morning assignment restrictions across the warning API, auto-assignment engine, and manager UI.
 
 ## Next Steps
-- Extend E2E coverage for requirement management, warning displays, and the recommendation approval/apply workflow.
+- Extend E2E coverage for requirement management, warning displays, and the recommendation approval/apply workflow when the test runtime is available.

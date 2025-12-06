@@ -1,5 +1,5 @@
 import {ActivitySlot} from "../database/entities/activity/ActivitySlot";
-import {AssignmentCandidate, collectAssignmentWarnings, toAssignmentCandidate} from "./availability";
+import {AssignmentCandidate, AttendancePolicy, collectAssignmentWarnings, toAssignmentCandidate} from "./availability";
 import {normalizeRecommendationInput, RecommendationInput} from "../database/services/ActivityRecommendationService";
 import {ParticipantAttendance, toParticipantKey} from "./requirements";
 
@@ -15,6 +15,7 @@ export interface RecommendationWarningOptions {
     participantAttendance?: Record<string, ParticipantAttendance>;
     slotCapacities?: Record<string, number>;
     allowOverfill?: boolean;
+    attendancePolicy?: AttendancePolicy;
 }
 
 export function buildRecommendationWarnings({
@@ -24,6 +25,7 @@ export function buildRecommendationWarnings({
     participantAttendance = {},
     slotCapacities = {},
     allowOverfill = false,
+    attendancePolicy,
 }: RecommendationWarningOptions): RecommendationWarningResult[] {
     const slotMap = new Map<string, ActivitySlot>();
     for (const slot of slots) {
@@ -46,7 +48,7 @@ export function buildRecommendationWarnings({
         const prior = participantQueue.get(participantKey) ?? [];
 
         const candidate = toAssignmentCandidate(slot);
-        const warnings = collectAssignmentWarnings(candidate, attendance, [...existing, ...prior]);
+        const warnings = collectAssignmentWarnings(candidate, attendance, [...existing, ...prior], attendancePolicy);
 
         if (!allowOverfill) {
             const capacity = slotCapacities[slot.id];

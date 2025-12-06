@@ -142,6 +142,8 @@ function preprocessRequirementUpdate(body: any) {
                 return value;
             }),
         allowOverfillAfterFull: Joi.boolean().optional(),
+        allowArrivalDayEvening: Joi.boolean().optional(),
+        allowDepartureDayMorning: Joi.boolean().optional(),
         roleRequirements: Joi.array().items(roleRequirementSchema).default([]),
         overrides: Joi.array().items(overrideSchema).default([]),
     });
@@ -158,6 +160,8 @@ function preprocessRequirementUpdate(body: any) {
         roundingMode?: 'CEIL' | 'ROUND' | 'FLOOR' | null;
         bindingDeadline?: string | Date | null;
         allowOverfillAfterFull?: boolean;
+        allowArrivalDayEvening?: boolean;
+        allowDepartureDayMorning?: boolean;
         roleRequirements: {roleId: number; requiredShifts: number}[];
         overrides: any[];
     };
@@ -437,6 +441,10 @@ async function collectRecommendationWarnings(planId: string, recommendations: {s
         existingAssignments,
         slotCapacities,
         allowOverfill: Boolean(plan?.allowOverfillAfterFull),
+        attendancePolicy: {
+            allowArrivalDayEvening: plan?.allowArrivalDayEvening,
+            allowDepartureDayMorning: plan?.allowDepartureDayMorning,
+        },
     });
 }
 
@@ -565,6 +573,10 @@ async function getAssignmentWarnings(
         toAssignmentCandidate(slot),
         attendance[participantKey] ?? target,
         assignments[participantKey] ?? [],
+        {
+            allowArrivalDayEvening: plan.allowArrivalDayEvening,
+            allowDepartureDayMorning: plan.allowDepartureDayMorning,
+        },
     );
 
     if (!plan.allowOverfillAfterFull && typeof slot.maxAssignees === "number") {

@@ -1,4 +1,4 @@
-import {AssignmentCandidate, collectAssignmentWarnings, toAssignmentCandidate} from "./availability";
+import {AssignmentCandidate, AttendancePolicy, collectAssignmentWarnings, toAssignmentCandidate} from "./availability";
 import {compareActivitySlots} from "./timebox";
 import {calculateRequirementsForParticipants, ParticipantAttendance, toParticipantKey} from "./requirements";
 import {ActivityPlanRequirement} from "../database/entities/activity/ActivityPlanRequirement";
@@ -13,7 +13,15 @@ import * as eventService from "../database/services/EventService";
 interface AutoAssignmentPlan
     extends Pick<
         ActivityPlan,
-        "assignmentMode" | "generalRequiredShifts" | "roundingMode" | "startDate" | "endDate" | "allowOverfillAfterFull"
+        |
+        "assignmentMode"
+        | "generalRequiredShifts"
+        | "roundingMode"
+        | "startDate"
+        | "endDate"
+        | "allowOverfillAfterFull"
+        | "allowArrivalDayEvening"
+        | "allowDepartureDayMorning"
     > {}
 
 interface AutoAssignmentSlot extends ActivitySlot {
@@ -102,9 +110,16 @@ function scoreParticipant(a: ParticipantState, b: ParticipantState): number {
     return a.participantKey.localeCompare(b.participantKey);
 }
 
-function canAssign(candidate: AssignmentCandidate, participant: ParticipantAttendance, existing: AssignmentCandidate[]): boolean {
-    const warnings = collectAssignmentWarnings(candidate, participant, existing);
-    return warnings.every((w) => w.type !== "outside_attendance" && w.type !== "overlap");
+function canAssign(
+    candidate: AssignmentCandidate,
+    participant: ParticipantAttendance,
+    existing: AssignmentCandidate[],
+    attendancePolicy: AttendancePolicy,
+): boolean {
+    const warnings = collectAssignmentWarnings(candidate, participant, existing, attendancePolicy);
+    return warnings.every(
+        (w) => !["outside_attendance", "overlap", "arrival_time_restricted", "departure_time_restricted"].includes(w.type)
+    );
 }
 
 export function generateAutoRecommendations(ctx: AutoAssignmentContext): RecommendationInput[] {
@@ -116,6 +131,11 @@ export function generateAutoRecommendations(ctx: AutoAssignmentContext): Recomme
 
     const recommendations: RecommendationInput[] = [];
 
+    const attendancePolicy: AttendancePolicy = {
+        allowArrivalDayEvening: ctx.plan.allowArrivalDayEvening,
+        allowDepartureDayMorning: ctx.plan.allowDepartureDayMorning,
+    };
+
     for (const slot of slotCapacities) {
         if (slot.remaining === 0) continue;
 
@@ -125,7 +145,7 @@ export function generateAutoRecommendations(ctx: AutoAssignmentContext): Recomme
             if (slot.remaining === 0) break;
 
             const participantAssignments = assignmentMap[state.participantKey] ?? [];
-            if (!canAssign(slot.candidate, state.participant, participantAssignments)) {
+            if (!canAssign(slot.candidate, state.participant, participantAssignments, attendancePolicy)) {
                 continue;
             }
 
@@ -224,6 +244,8 @@ export async function generatePlanRecommendations(planId: string): Promise<Recom
             startDate: plan.startDate,
             endDate: plan.endDate,
             allowOverfillAfterFull: plan.allowOverfillAfterFull,
+            allowArrivalDayEvening: plan.allowArrivalDayEvening,
+            allowDepartureDayMorning: plan.allowDepartureDayMorning,
         },
         slots,
         participants,
