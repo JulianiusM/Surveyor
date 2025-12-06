@@ -283,3 +283,4 @@ src.zip
 /scripts/e2e.db.init.js
 /src/modules/database/__index__.ts
 /uploads/
+test_output.txt

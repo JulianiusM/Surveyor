@@ -60,7 +60,7 @@ export async function enforcePlanBindingDeadline(req: Request, permData?: PermBu
     const now = new Date();
     if (deadline > now) return;
 
-    const isAdmin = Boolean(permData?.entity?.has(PERM.MANAGE_ASSIGNMENTS));
+    const isAdmin = Boolean(permData?.entity?.has('MANAGE_ASSIGNMENTS'));
     if (!isAdmin) {
         throw new APIError('Assignments are locked after the binding deadline', req.body, 403);
     }

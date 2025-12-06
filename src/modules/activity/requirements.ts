@@ -116,6 +116,10 @@ export function normalizeOverrideInput(input: RequirementOverrideInput): Require
         throw new Error("Override requires a userId or guestId");
     }
 
+    if (normalized.userId && normalized.guestId) {
+        throw new Error("Override cannot target both user and guest");
+    }
+
     if (normalized.requiredShifts == null || Number.isNaN(normalized.requiredShifts)) {
         throw new Error("Override required shifts must be defined");
     }

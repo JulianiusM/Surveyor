@@ -84,6 +84,8 @@ export function slotsOverlap(a: SlotTimeboxCandidate, b: SlotTimeboxCandidate): 
         return false;
     }
 
+    // Touching boundaries (e.g., slot A ends at 10:00, slot B starts at 10:00) are NOT considered overlaps.
+    // This is intentional and tested: only slots with actual time overlap return true.
     return aStart < bEnd && bStart < aEnd;
 }
 

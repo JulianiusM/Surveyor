@@ -1,4 +1,4 @@
-import {Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId} from "typeorm";
+import {Check, Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId} from "typeorm";
 import {ActivityPlan} from "./ActivityPlan";
 import {ActivitySlot} from "./ActivitySlot";
 import {User} from "../user/User";
@@ -7,6 +7,7 @@ import {Guest} from "../user/Guest";
 export type RecommendationStatus = "PENDING" | "APPROVED" | "APPLIED" | "REJECTED";
 
 @Entity("activity_assignment_recommendations", {schema: "surveyor"})
+@Check(`(user_id IS NOT NULL AND guest_id IS NULL) OR (user_id IS NULL AND guest_id IS NOT NULL)`)
 export class ActivityAssignmentRecommendation {
     @PrimaryGeneratedColumn("uuid", {name: "id"})
     id!: string;

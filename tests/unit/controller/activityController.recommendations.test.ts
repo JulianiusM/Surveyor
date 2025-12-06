@@ -11,10 +11,14 @@ jest.mock("../../../src/modules/database/services/ActivityRequirementService", (
     getRequirementConfiguration: jest.fn(),
 }));
 
-jest.mock("../../../src/modules/database/services/ActivityRecommendationService", () => ({
-    getRecommendations: jest.fn(),
-    replaceRecommendations: jest.fn(),
-}));
+jest.mock("../../../src/modules/database/services/ActivityRecommendationService", () => {
+    const actual = jest.requireActual("../../../src/modules/database/services/ActivityRecommendationService");
+    return {
+        getRecommendations: jest.fn(),
+        replaceRecommendations: jest.fn(),
+        normalizeRecommendationInput: actual.normalizeRecommendationInput,
+    };
+});
 
 jest.mock("../../../src/modules/database/services/EventService", () => ({
     getEventParticipants: jest.fn(),
