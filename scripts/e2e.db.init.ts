@@ -50,7 +50,7 @@ async function main() {
 
     console.log("Purged...")
 
-    // Recreate via migrations
+    // Recreate via synchronize, then run migrations (now idempotent)
     await E2EDataSource.synchronize(true)
     console.log("Synced...")
     await E2EDataSource.runMigrations();

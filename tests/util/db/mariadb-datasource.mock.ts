@@ -23,18 +23,16 @@ export const AppDataSource = new DataSource({
     entities: ['src/modules/database/entities/**/*.ts'],
     migrations: ['src/migrations/*.ts'],
     subscribers: ['src/modules/database/subscribers/**/*.ts'],
-    synchronize: false,
+    // Enable synchronize for tests to automatically create schema
+    // This works around the need for initial migration
+    synchronize: true,
 });
 
 export async function initDataSource() {
     if (!AppDataSource.isInitialized) {
         await AppDataSource.initialize();
-        try {
-            await AppDataSource.runMigrations();
-        } catch (err) {
-            console.warn('[tests] runMigrations failed on MariaDB, falling back to synchronize:', (err as any)?.message || err);
-            await AppDataSource.synchronize(true);
-            await AppDataSource.runMigrations();
-        }
+        // Synchronize is enabled in config above
+        // After sync, run migrations (now idempotent with IF NOT EXISTS clauses)
+        await AppDataSource.runMigrations();
     }
 }

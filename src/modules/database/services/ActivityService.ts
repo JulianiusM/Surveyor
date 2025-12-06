@@ -10,6 +10,8 @@ import type {PlanParticipant, PlanParticipantRow, SlotAssignmentMap} from "../..
 import {ensureOneByObjectsAuthed} from "../utils/relation-upsert";
 import * as entityAdminService from "./EntityAdminService";
 import {In} from "typeorm";
+import {AssignmentCandidate} from "../../activity/availability";
+import {toParticipantKey} from "../../activity/requirements";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Role & Assignment helpers
@@ -148,6 +150,8 @@ export async function createActivityPlanTx(
                     description: s.description,
                     day: s.day,
                     pos: s.pos,
+                    startTime: s.startTime,
+                    endTime: s.endTime,
                     maxAssignees: s.maxAssignees,
                 })
             );
@@ -211,6 +215,8 @@ export async function addActivitySlot(planId: string, slot: Partial<ActivitySlot
         description: slot.description,
         day: slot.day,
         pos: slot.pos,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
         maxAssignees: slot.maxAssignees,
     });
     await repo.save(slotEntity);
@@ -226,6 +232,8 @@ export async function addActivitySlots(planId: string, slots: Partial<ActivitySl
             description: s.description,
             day: s.day,
             pos: s.pos,
+            startTime: s.startTime,
+            endTime: s.endTime,
             maxAssignees: s.maxAssignees,
         })
     );
@@ -245,7 +253,10 @@ export async function getActivitySlotsFlat(planId: string) {
             (qb) => qb.where("a.plan_id = :planId", {planId})
         )
         .where("s.plan_id = :planId", {planId})
-        .orderBy("s.pos", "ASC")
+        .orderBy("s.day", "ASC")
+        .addOrderBy("s.start_time IS NULL", "ASC")
+        .addOrderBy("s.start_time", "ASC")
+        .addOrderBy("s.pos", "ASC")
         .getMany(); // entities now have s.assignedCount
 
     // Type hint: (ActivitySlot & { assignedCount: number })[]
@@ -284,6 +295,9 @@ export async function updateActivitySlot(slotId: string, fields: Partial<Activit
     if (fields.description !== undefined) updateData.description = fields.description;
     if (fields.maxAssignees !== undefined) updateData.maxAssignees = fields.maxAssignees;
     if (fields.pos !== undefined) updateData.pos = fields.pos;
+    if (fields.startTime !== undefined) updateData.startTime = fields.startTime;
+    if (fields.endTime !== undefined) updateData.endTime = fields.endTime;
+    if (fields.day !== undefined) updateData.day = fields.day;
 
     if (Object.keys(updateData).length === 0) return;
 
@@ -385,6 +399,35 @@ export async function getActivitySlotAssignmentsForGuest(planId: string, guestId
     });
 
     return assignments.map(a => a.slot.id);
+}
+
+export async function getParticipantAssignmentsWithSlots(planId: string): Promise<Record<string, AssignmentCandidate[]>> {
+    const repo = AppDataSource.getRepository(ActivityAssignment);
+    const assignments = await repo.find({
+        where: {plan: {id: planId}},
+        relations: {slot: true, user: true, guest: true},
+        select: {
+            id: true,
+            slot: {id: true, day: true, startTime: true, endTime: true, pos: true},
+            user: {id: true},
+            guest: {id: true},
+        },
+    });
+
+    const map: Record<string, AssignmentCandidate[]> = {};
+    for (const assignment of assignments) {
+        const participantKey = toParticipantKey({userId: assignment.user?.id, guestId: assignment.guest?.id});
+        if (!map[participantKey]) map[participantKey] = [];
+        map[participantKey].push({
+            id: assignment.slot.id,
+            day: assignment.slot.day,
+            startTime: assignment.slot.startTime,
+            endTime: assignment.slot.endTime,
+            pos: assignment.slot.pos,
+        });
+    }
+
+    return map;
 }
 
 export async function getActivitySlotAssignmentById(assignId: number) {

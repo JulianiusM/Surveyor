@@ -162,6 +162,8 @@ export const quickAddSlotData = {
                 description: 'Bar',
                 maxAssignees: 3,
                 pos: 3,
+                startTime: null,
+                endTime: null,
             },
         },
         {

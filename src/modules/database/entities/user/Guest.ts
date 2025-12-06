@@ -7,6 +7,7 @@ import {PackingAssignment} from "../packing/PackingAssignment";
 import {SurveyResponse} from "../surveys/SurveyResponse";
 import {EventRegistration} from "../event/EventRegistration";
 import {EventRegBypassLink} from "../event/EventRegBypassLink";
+import {ActivityPlanRequirementOverride} from "../activity/ActivityPlanRequirementOverride";
 
 @Entity("guests", {schema: "surveyor"})
 export class Guest {
@@ -63,4 +64,10 @@ export class Guest {
 
     @OneToMany(() => EventRegBypassLink, (link) => link.guest)
     eventRegBypassLinksUsed: EventRegBypassLink[];
+
+    @OneToMany(
+        () => ActivityPlanRequirementOverride,
+        (activityPlanRequirementOverrides) => activityPlanRequirementOverrides.guest
+    )
+    activityPlanRequirementOverrides: ActivityPlanRequirementOverride[];
 }

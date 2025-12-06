@@ -21,7 +21,7 @@ import controller from '../../controller/activityController';
 import {PERM} from "../../modules/lib/permissions";
 import type {EntityItemType, EntityType} from "../../types/UtilTypes";
 import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
-import type {ItemGetter} from "../../types/PermissionTypes";
+import type {ItemGetter, PermBundle} from "../../types/PermissionTypes";
 
 const app = express.Router();
 const entityName: EntityType = ENTITIES.ACTIVITY;
@@ -46,6 +46,74 @@ app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), asyn
     const msg = await controller.updateDescription(resFct(req).id, req.body);
     renderer.respondWithSuccessJson(res, msg);
 })
+
+app.post(
+    '/:id/slot/:slotId/warnings',
+    asyncHandler(async (req: Request, res: Response) => {
+        const warnings = await controller.getAssignmentWarnings(
+            resFct(req).id,
+            req.params.slotId,
+            req.session,
+            res.locals.permData as PermBundle | undefined,
+            req.body,
+        );
+        renderer.respondWithSuccessDataJson(res, undefined, {warnings});
+    }),
+);
+
+app.get(
+    '/:id/requirements',
+    requirePermissionApi(permFct, PERM.MANAGE_REQUIREMENTS),
+    asyncHandler(async (req: Request, res: Response) => {
+        const requirements = await controller.getRequirements(resFct(req).id);
+        renderer.respondWithSuccessDataJson(res, undefined, requirements);
+    })
+);
+
+app.post(
+    '/:id/requirements',
+    requirePermissionApi(permFct, PERM.MANAGE_REQUIREMENTS),
+    asyncHandler(async (req: Request, res: Response) => {
+        const msg = await controller.updateRequirements(resFct(req).id, req.body);
+        renderer.respondWithSuccessJson(res, msg);
+    })
+);
+
+app.get(
+    '/:id/recommendations',
+    requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
+    asyncHandler(async (req: Request, res: Response) => {
+        const data = await controller.getRecommendations(resFct(req).id);
+        renderer.respondWithSuccessDataJson(res, undefined, data);
+    })
+);
+
+app.post(
+    '/:id/recommendations',
+    requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
+    asyncHandler(async (req: Request, res: Response) => {
+        const data = await controller.updateRecommendations(resFct(req).id, req.body);
+        renderer.respondWithSuccessDataJson(res, data.message, {warnings: data.warnings});
+    })
+);
+
+app.post(
+    '/:id/recommendations/auto',
+    requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
+    asyncHandler(async (req: Request, res: Response) => {
+        const data = await controller.autoGenerateRecommendations(resFct(req).id);
+        renderer.respondWithSuccessDataJson(res, data.message, {warnings: data.warnings});
+    })
+);
+
+app.post(
+    '/:id/recommendations/apply',
+    requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
+    asyncHandler(async (req: Request, res: Response) => {
+        const data = await controller.applyRecommendations(resFct(req).id);
+        renderer.respondWithSuccessDataJson(res, data.message, data.skipped !== undefined ? {applied: data.applied, skipped: data.skipped, warnings: data.warnings} : {applied: data.applied, warnings: data.warnings});
+    })
+);
 
 /* Assign / Unassign identical to packing routes … */
 /* ───────────────── ASSIGN / UNASSIGN (JSON) ───────────────── */

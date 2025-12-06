@@ -87,6 +87,87 @@ block content
                 i.bi.bi-slash-circle.me-1
                 | #{data.counters.empty} unassigned
 
+    if permData.entity.has('MANAGE_REQUIREMENTS')
+        .card.text-bg-dark.border.border-secondary-subtle.mb-3#requirementPanel
+            .card-header.d-flex.justify-content-between.align-items-center
+                span.d-flex.align-items-center.gap-2
+                    i.bi.bi-gear-wide-connected
+                    span Requirement settings
+                .d-flex.gap-2
+                    button.btn.btn-sm.btn-outline-secondary(type="button" data-requirements-refresh)
+                        i.bi.bi-arrow-clockwise.me-1
+                        | Reload
+                    button.btn.btn-sm.btn-success(type="button" data-requirements-save)
+                        i.bi.bi-save.me-1
+                        | Save settings
+            .card-body
+                p.text-secondary.small.mb-3 Define required shifts, rounding, and optional overrides for participants. Leave counts empty to skip enforcement.
+                form#requirementForm
+                    .row.g-3
+                        .col-md-3
+                            label.form-label(for="assignmentMode") Assignment mode
+                            select#assignmentMode.form-select.form-select-sm.text-bg-dark
+                                option(value="FREE") Free
+                                option(value="REQUIRED") Required
+                        .col-md-3
+                            label.form-label(for="requiredShifts") General required shifts
+                            input#requiredShifts.form-control.form-control-sm.text-bg-dark(type="number" min="0" placeholder="e.g. 2")
+                        .col-md-3
+                            label.form-label(for="roundingMode") Rounding mode
+                            select#roundingMode.form-select.form-select-sm.text-bg-dark
+                                option(value="") None
+                                option(value="CEIL") Ceil
+                                option(value="ROUND") Round
+                                option(value="FLOOR") Floor
+                        .col-md-3
+                            label.form-label(for="bindingDeadline") Binding deadline
+                            input#bindingDeadline.form-control.form-control-sm.text-bg-dark(type="datetime-local" placeholder="optional")
+                    .form-check.form-switch.my-3
+                        input#allowOverfill.form-check-input(type="checkbox" role="switch")
+                        label.form-check-label(for="allowOverfill") Allow assignments beyond slot capacity
+                    .row.g-3
+                        .col-md-6
+                            .form-check.form-switch
+                                input#allowArrivalEvening.form-check-input(type="checkbox" role="switch")
+                                label.form-check-label(for="allowArrivalEvening") Allow arrival-day evening assignments
+                        .col-md-6
+                            .form-check.form-switch
+                                input#allowDepartureMorning.form-check-input(type="checkbox" role="switch")
+                                label.form-check-label(for="allowDepartureMorning") Allow departure-day morning assignments
+
+                    hr
+                    h6.d-flex.justify-content-between.align-items-center
+                        span Role requirements
+                        small.text-secondary Set per-role required shift counts
+                    .row.g-2#roleRequirementList
+                    hr
+                    h6.d-flex.justify-content-between.align-items-center
+                        span Participant overrides
+                        button.btn.btn-sm.btn-outline-info(type="button" data-add-override)
+                            i.bi.bi-plus-lg.me-1
+                            | Add override
+                    p.text-secondary.small.mb-2 Specify user/guest IDs and optional roles to override shift counts for specific participants.
+                    .d-grid.gap-2#overrideList
+                    hr
+                    h6.d-flex.justify-content-between.align-items-center
+                        span Participant requirements
+                        small.text-secondary Remaining vs assigned per attendee
+                    .table-responsive
+                        table.table.table-dark.table-bordered.mb-0
+                            thead
+                                tr
+                                    th Participant
+                                    th.text-center Required / Assigned
+                                    th.text-center Remaining
+                                    th.text-center Attendance
+                                    th.text-center Source
+                            tbody#requirementSummaryBody
+                                tr(data-empty-state)
+                                    td.colspan-5.text-center.text-secondary.pt-3 No participants yet.
+                .alert.alert-info.py-2.px-3.mt-3.d-none(role="alert" data-requirements-alert)
+                    i.bi.bi-exclamation-circle.me-2
+                    span
+
     each week in weeks
         h4.mt-4.mb-2 Week of #{fmtISO(week)}
         .table-responsive
@@ -119,10 +200,23 @@ block content
                                 if daySlots.length > 0
                                     each slot, idx in daySlots
                                         - const my = data.assignments.includes(slot.id)
-                                        .slot.border.rounded.p-2.mb-2.d-grid.gap-1.draggable(data-slotid=slot.id draggable=permData.entity.has('ITEM_EDIT') ? 'true' : null)
+                                        - const startTime = slot.startTime ? slot.startTime.slice(0, 5) : null
+                                        - const endTime = slot.endTime ? slot.endTime.slice(0, 5) : null
+                                        .slot.border.rounded.p-2.mb-2.d-grid.gap-1.draggable(
+                                            data-slotid=slot.id
+                                            data-day=slot.day
+                                            data-start=slot.startTime
+                                            data-end=slot.endTime
+                                            draggable=permData.entity.has('ITEM_EDIT') ? 'true' : null)
 
                                             // editable title
                                             span.fw-bold.text-center(data-edit="title" data-id=slot.id)= slot.title
+                                            if startTime || endTime
+                                                small.text-info.text-center(data-time-range)
+                                                    i.bi.bi-clock-history.me-1
+                                                    | #{startTime || '??'}
+                                                    |  – 
+                                                    | #{endTime || '??'}
                                             hr.m-0
 
                                             // editable description
@@ -188,6 +282,43 @@ block content
                                     button.btn.btn-sm.btn-outline-info.w-100(data-add-slot data-date=fmtISO(cur)) + Slot
                             - }
                             // @formatter:on
+
+    if permData.entity.has('MANAGE_ASSIGNMENTS')
+        hr
+        .card.text-bg-dark.border.border-secondary-subtle#recommendationPanel
+            .card-header.d-flex.justify-content-between.align-items-center
+                span.d-flex.align-items-center.gap-2
+                    i.bi.bi-magic.me-1
+                    span Assignment recommendations
+                .d-flex.gap-2
+                    button.btn.btn-sm.btn-outline-secondary(type="button" data-recommendations-refresh)
+                        i.bi.bi-arrow-clockwise.me-1
+                        | Reload
+                    button.btn.btn-sm.btn-outline-primary(type="button" data-recommendations-auto)
+                        i.bi.bi-stars.me-1
+                        | Auto-generate
+                    button.btn.btn-sm.btn-success(type="button" data-recommendations-save)
+                        i.bi.bi-save.me-1
+                        | Save edits
+                    button.btn.btn-sm.btn-warning(type="button" data-recommendations-apply)
+                        i.bi.bi-check2-circle.me-1
+                        | Apply approved
+            .card-body
+                p.text-secondary.small.mb-3 Review automatically generated or manually edited assignments before applying them to slots.
+                .alert.alert-info.py-2.px-3.d-none(role="alert" data-recommendations-alert)
+                    i.bi.bi-info-circle.me-2
+                    span
+                .table-responsive
+                    table.table.table-dark.table-bordered.mb-0
+                        thead
+                            tr
+                                th Slot
+                                th Participant
+                                th Status
+                                th Warnings
+                        tbody#recommendationRows
+                            tr(data-empty-state)
+                                td.colspan-4.text-center.text-secondary.pt-3 No recommendations yet.
     if data.participantList && data.participantList.length > 0
         hr
         h4.mt-2 Participants
@@ -208,8 +339,28 @@ block content
                                     if role !== 'default'
                                         p.my-1 #{role}
 
+    // Assignment warnings modal
+    #assignmentWarningModal.modal.fade(tabindex="-1" aria-labelledby="assignmentWarningTitle" aria-hidden="true")
+        .modal-dialog
+            .modal-content.text-bg-dark
+                .modal-header
+                    h5#assignmentWarningTitle.modal-title
+                        i.bi.bi-exclamation-triangle.me-2
+                        | Assignment warnings
+                    button.btn-close(data-bs-dismiss="modal" aria-label="Close")
+                .modal-body
+                    p.small.text-secondary.mb-2 Potential issues were detected for this slot:
+                    strong#assignmentWarningSlot.d-block.mb-2
+                    ul#assignmentWarningList.list-group.list-group-flush
+                .modal-footer
+                    button#assignmentWarningCancel.btn.btn-outline-secondary(type="button" data-bs-dismiss="modal") Cancel
+                    button#assignmentWarningConfirm.btn.btn-warning(type="button")
+                        i.bi.bi-check2.me-1
+                        | Continue anyway
+
 
 block scripts
     script(type="module" src="/js/activity.gen.js")
     script.
         window.Surveyor.entityId = "#{data.plan.id}";
+        window.Surveyor.allRoles = !{JSON.stringify(data.roles.allRoles || []).replace(/</g, '\\u003c')};
