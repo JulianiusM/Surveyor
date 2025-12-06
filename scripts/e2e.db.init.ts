@@ -57,7 +57,7 @@ async function main() {
         await E2EDataSource.runMigrations();
         console.log("Migrated...")
     } catch (err) {
-        console.log("Migrations skipped (tables may already exist from synchronize):", (err as any)?.message || err);
+        console.log("Migration errors ignored (tables already exist from synchronize):", (err as any)?.message || err);
     }
 
     // ---- Seed minimal fixture data ----

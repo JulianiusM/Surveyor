@@ -36,7 +36,7 @@ export async function initDataSource() {
         try {
             await AppDataSource.runMigrations();
         } catch (err) {
-            console.warn('[tests] runMigrations failed (may be expected if migrations assume manual changes):', (err as any)?.message || err);
+            console.warn('[tests] runMigrations failed (expected when synchronize already created schema):', (err as any)?.message || err);
         }
     }
 }
