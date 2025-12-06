@@ -5,7 +5,6 @@ import {asyncHandler} from '../modules/lib/asyncHandler';
 import renderer from '../modules/renderer';
 import {performAPIAction} from '../modules/lib/util';
 import {Request, Response, Router} from "express";
-import {PERM} from "../modules/lib/permissions";
 import type {PermBundle} from "../types/PermissionTypes";
 import {APIError} from "../modules/lib/errors";
 import * as activityService from "../modules/database/services/ActivityService";

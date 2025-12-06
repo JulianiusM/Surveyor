@@ -157,10 +157,9 @@ export async function replaceRequirements(
             planPatch.allowDepartureDayMorning = planSettings.allowDepartureDayMorning;
         }
 
-        await Promise.all([
-            roleRepo.delete({plan: {id: planId}}),
-            overrideRepo.delete({plan: {id: planId}}),
-        ]);
+        // Delete old requirements and overrides sequentially
+        await roleRepo.delete({plan: {id: planId}});
+        await overrideRepo.delete({plan: {id: planId}});
 
         if (Object.keys(planPatch).length) {
             await planRepo.update({id: planId}, planPatch);

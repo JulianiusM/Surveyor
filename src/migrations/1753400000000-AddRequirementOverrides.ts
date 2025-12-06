@@ -32,8 +32,8 @@ export class AddRequirementOverrides1753400000000 implements MigrationInterface 
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`DROP INDEX uk_apro_plan_participant_role ON activity_plan_requirement_overrides;`);
-        await queryRunner.query(`DROP TABLE activity_plan_requirement_overrides;`);
+        await queryRunner.query(`DROP INDEX IF EXISTS uk_apro_plan_participant_role ON activity_plan_requirement_overrides;`);
+        await queryRunner.query(`DROP TABLE IF EXISTS activity_plan_requirement_overrides;`);
     }
 
 }

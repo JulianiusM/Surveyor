@@ -24,17 +24,12 @@ export class CreateAssignmentRecommendations1753400000001 implements MigrationIn
             );
         `);
 
-        await queryRunner.query(`
-            CREATE INDEX IF NOT EXISTS idx_aar_plan ON activity_assignment_recommendations(plan_id);
-        `);
-        await queryRunner.query(`
-            CREATE INDEX IF NOT EXISTS idx_aar_slot ON activity_assignment_recommendations(slot_id);
-        `);
+        // Note: Indexes for foreign keys are created automatically by MySQL/MariaDB
+        // No need to explicitly create idx_aar_plan and idx_aar_slot
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`DROP INDEX idx_aar_slot ON activity_assignment_recommendations;`);
-        await queryRunner.query(`DROP INDEX idx_aar_plan ON activity_assignment_recommendations;`);
-        await queryRunner.query(`DROP TABLE activity_assignment_recommendations;`);
+        // No need to drop indexes explicitly - they will be dropped with the table
+        await queryRunner.query(`DROP TABLE IF EXISTS activity_assignment_recommendations;`);
     }
 }

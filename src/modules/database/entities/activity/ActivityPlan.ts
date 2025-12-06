@@ -39,10 +39,10 @@ export class ActivityPlan {
     @Column("timestamp", {name: "binding_deadline", nullable: true})
     bindingDeadline?: Date | null;
 
-    @Column("tinyint", {name: "allow_arrival_day_evening", width: 1, default: () => 1})
+    @Column("tinyint", {name: "allow_arrival_day_evening", width: 1, default: () => "1"})
     allowArrivalDayEvening!: boolean;
 
-    @Column("tinyint", {name: "allow_departure_day_morning", width: 1, default: () => 1})
+    @Column("tinyint", {name: "allow_departure_day_morning", width: 1, default: () => "1"})
     allowDepartureDayMorning!: boolean;
 
     @Column("timestamp", {

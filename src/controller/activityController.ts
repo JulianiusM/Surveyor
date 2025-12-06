@@ -19,7 +19,6 @@ import {buildRecommendationWarnings} from "../modules/activity/recommendations";
 import {generatePlanRecommendations} from "../modules/activity/autoAssignment";
 import {ParticipantAttendance, summarizeParticipantRequirements, toParticipantKey} from "../modules/activity/requirements";
 import {collectAssignmentWarnings, toAssignmentCandidate} from "../modules/activity/availability";
-import {PERM} from "../modules/lib/permissions";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'activity/activity-create';
