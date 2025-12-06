@@ -35,6 +35,7 @@
 - Surfaced requirement settings, per-role counts, and participant overrides in the activity plan UI with reload/save controls, and exposed recommendation review/auto-generate/apply flows with warning visibility for managers.
 - Added participant requirement summaries (required vs. assigned, attendance, and source) to the requirement panel, powered by requirement calculations and attendance-aware aggregation.
 - Enabled inline editing of staged recommendations with participant/slot selectors sourced from plan data while keeping warning visibility and dirty-state hints in the review panel.
+- Automatically trigger recommendation generation after the binding deadline when no proposals exist, and surface the auto-generation notice in the recommendation review UI.
 
 ## Next Steps
 - Extend E2E coverage for requirement management, warning displays, and the recommendation approval/apply workflow.
