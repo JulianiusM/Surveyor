@@ -499,6 +499,19 @@ export async function registerForDefaultPools(
     const poolRepo = manager.getRepository(EventInvoicePool);
     const assignmentRepo = manager.getRepository(EventPoolAssignment);
 
+    // Load the registration with event relation if not already loaded
+    if (!reg.event) {
+        const regRepo = manager.getRepository(EventRegistration);
+        const fullReg = await regRepo.findOne({
+            where: {id: reg.id},
+            relations: {event: true}
+        });
+        if (!fullReg || !fullReg.event) {
+            return [];
+        }
+        reg = fullReg;
+    }
+
     // 1. Load all default pools
     const defaultPools = await poolRepo.find({
         where: {isDefault: true, event: {id: reg.event.id}},
