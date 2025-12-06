@@ -50,15 +50,11 @@ async function main() {
 
     console.log("Purged...")
 
-    // Recreate via migrations
+    // Recreate via synchronize, then run migrations (now idempotent)
     await E2EDataSource.synchronize(true)
     console.log("Synced...")
-    try {
-        await E2EDataSource.runMigrations();
-        console.log("Migrated...")
-    } catch (err) {
-        console.log("Migration errors ignored (tables already exist from synchronize):", (err as any)?.message || err);
-    }
+    await E2EDataSource.runMigrations();
+    console.log("Migrated...")
 
     // ---- Seed minimal fixture data ----
     // Example: create a test admin user. Replace with your own seeder logic.

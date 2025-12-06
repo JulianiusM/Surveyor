@@ -32,11 +32,7 @@ export async function initDataSource() {
     if (!AppDataSource.isInitialized) {
         await AppDataSource.initialize();
         // Synchronize is enabled in config above
-        // After sync, run any additional migrations
-        try {
-            await AppDataSource.runMigrations();
-        } catch (err) {
-            console.warn('[tests] runMigrations failed (expected when synchronize already created schema):', (err as any)?.message || err);
-        }
+        // After sync, run migrations (now idempotent with IF NOT EXISTS clauses)
+        await AppDataSource.runMigrations();
     }
 }

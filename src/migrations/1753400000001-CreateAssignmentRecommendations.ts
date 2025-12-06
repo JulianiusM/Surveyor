@@ -3,7 +3,7 @@ import {MigrationInterface, QueryRunner} from "typeorm";
 export class CreateAssignmentRecommendations1753400000001 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`
-            CREATE TABLE activity_assignment_recommendations (
+            CREATE TABLE IF NOT EXISTS activity_assignment_recommendations (
                 id CHAR(36) NOT NULL,
                 plan_id CHAR(36) NOT NULL,
                 slot_id CHAR(36) NOT NULL,
@@ -25,10 +25,10 @@ export class CreateAssignmentRecommendations1753400000001 implements MigrationIn
         `);
 
         await queryRunner.query(`
-            CREATE INDEX idx_aar_plan ON activity_assignment_recommendations(plan_id);
+            CREATE INDEX IF NOT EXISTS idx_aar_plan ON activity_assignment_recommendations(plan_id);
         `);
         await queryRunner.query(`
-            CREATE INDEX idx_aar_slot ON activity_assignment_recommendations(slot_id);
+            CREATE INDEX IF NOT EXISTS idx_aar_slot ON activity_assignment_recommendations(slot_id);
         `);
     }
 

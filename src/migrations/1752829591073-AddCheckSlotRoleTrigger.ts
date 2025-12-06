@@ -3,6 +3,9 @@ import {MigrationInterface, QueryRunner} from "typeorm";
 export class AddCheckSlotRoleTrigger1752829591073 implements MigrationInterface {
 
     public async up(queryRunner: QueryRunner): Promise<void> {
+        // Drop trigger if exists to make migration idempotent
+        await queryRunner.query(`DROP TRIGGER IF EXISTS trg_check_slot_role_limit`);
+        
         await queryRunner.query(`
       CREATE TRIGGER trg_check_slot_role_limit
       BEFORE INSERT ON activity_assignment_roles
