@@ -1,6 +1,5 @@
 import type {Request} from "express";
 import controller from "../../../src/controller/activityController";
-import {PERM} from "../../../src/modules/lib/permissions";
 
 jest.mock("../../../src/modules/database/services/ActivityService", () => ({
     getActivityPlanById: jest.fn(),

@@ -4,7 +4,7 @@
 
 export const parseTimeToMinutesData = [
     {description: 'parses HH:MM format', input: '08:30', expected: 510},
-    {description: 'parses HH:MM:SS format with fractional minutes', input: '08:30:30', expected: 510.5},
+    {description: 'parses HH:MM:SS format with rounding', input: '08:30:30', expected: 511},
     {description: 'returns null for null input', input: null, expected: null},
     {description: 'returns null for invalid format', input: 'invalid', expected: null},
 ];

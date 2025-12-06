@@ -30,7 +30,7 @@ export function parseTimeToMinutes(time?: string | null): number | null {
         return null;
     }
 
-    return hours * 60 + minutes + seconds / 60;
+    return Math.round(hours * 60 + minutes + seconds / 60);
 }
 
 /**
