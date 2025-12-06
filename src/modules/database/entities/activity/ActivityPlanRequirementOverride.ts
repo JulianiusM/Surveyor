@@ -15,7 +15,7 @@ import {Role} from "../user/Role";
 
 @Entity("activity_plan_requirement_overrides", {schema: "surveyor"})
 @Index("uk_plan_participant_role", ["plan", "user", "guest", "role"], {unique: true})
-@Check(`user_id IS NOT NULL OR guest_id IS NOT NULL`)
+@Check(`(user_id IS NOT NULL AND guest_id IS NULL) OR (user_id IS NULL AND guest_id IS NOT NULL)`)
 export class ActivityPlanRequirementOverride {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
     id!: number;

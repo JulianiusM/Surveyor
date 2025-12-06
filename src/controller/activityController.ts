@@ -11,6 +11,7 @@ import * as recommendationService from "../modules/database/services/ActivityRec
 import * as eventService from "../modules/database/services/EventService";
 import {ActivitySlot} from "../modules/database/entities/activity/ActivitySlot";
 import {ActivityPlan} from "../modules/database/entities/activity/ActivityPlan";
+import {RecommendationStatus} from "../modules/database/entities/activity/ActivityAssignmentRecommendation";
 import {Request} from "express";
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
 import type {PermBundle} from "../types/PermissionTypes";
@@ -125,6 +126,9 @@ function preprocessRequirementUpdate(body: any) {
         if (!value.userId && !value.guestId) {
             return helpers.error("any.custom", {message: "Override requires a userId or guestId"});
         }
+        if (value.userId && value.guestId) {
+            return helpers.error("any.custom", {message: "Override cannot target both user and guest"});
+        }
         return value;
     });
 
@@ -175,7 +179,7 @@ function preprocessRecommendationUpdate(body: any) {
                     slotId: Joi.string().uuid().required(),
                     userId: Joi.number().integer().positive().allow(null),
                     guestId: Joi.number().integer().positive().allow(null),
-                    status: Joi.string().valid("PENDING", "APPROVED", "REJECTED", "APPLIED").optional(),
+                    status: Joi.string().valid("PENDING", "APPROVED", "APPLIED", "REJECTED").optional(),
                 }).custom((value, helpers) => {
                     if (!value.userId && !value.guestId) {
                         return helpers.error("any.custom", {message: "Recommendation requires a userId or guestId"});
@@ -195,7 +199,7 @@ function preprocessRecommendationUpdate(body: any) {
         throw new APIError(msg, body, 400);
     }
 
-    return value as {recommendations: {slotId: string; userId?: number | null; guestId?: number | null; status?: "PENDING" | "APPROVED" | "REJECTED" | "APPLIED"}[]};
+    return value as {recommendations: {slotId: string; userId?: number | null; guestId?: number | null; status?: RecommendationStatus}[]};
 }
 
 /**
@@ -428,7 +432,7 @@ async function updateRequirements(planId: string, body: any) {
     return 'Requirements updated';
 }
 
-async function collectRecommendationWarnings(planId: string, recommendations: {slotId: string; userId?: number | null; guestId?: number | null; status?: "PENDING" | "APPROVED" | "REJECTED" | "APPLIED"}[]) {
+async function collectRecommendationWarnings(planId: string, recommendations: {slotId: string; userId?: number | null; guestId?: number | null; status?: RecommendationStatus}[]) {
     const [plan, slots, existingAssignments] = await Promise.all([
         activityService.getActivityPlanById(planId),
         activityService.getActivitySlotsFlat(planId),
