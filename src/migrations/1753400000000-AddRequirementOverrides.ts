@@ -18,7 +18,10 @@ export class AddRequirementOverrides1753400000000 implements MigrationInterface 
                 CONSTRAINT fk_apro_role FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE RESTRICT ON UPDATE CASCADE,
                 CONSTRAINT fk_apro_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 CONSTRAINT fk_apro_guest FOREIGN KEY (guest_id) REFERENCES guests(id) ON DELETE CASCADE,
-                CONSTRAINT chk_apro_participant CHECK (user_id IS NOT NULL OR guest_id IS NOT NULL)
+                CONSTRAINT chk_apro_participant CHECK (
+                    (user_id IS NOT NULL AND guest_id IS NULL) OR
+                    (user_id IS NULL AND guest_id IS NOT NULL)
+                )
             );
         `);
 

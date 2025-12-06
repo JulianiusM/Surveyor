@@ -519,7 +519,7 @@ function resolveWarningTarget(
     if (body.userId || body.guestId) {
         const isManager = permData?.entity?.has(PERM.MANAGE_ASSIGNMENTS);
         if (!isManager) {
-            throw new APIError("Insufficient permissions to inspect participant warnings", body, 403);
+            throw new APIError("Insufficient permissions to view warnings for other participants", body, 403);
         }
         return {userId: body.userId ?? undefined, guestId: body.guestId ?? undefined};
     }
