@@ -1,6 +1,6 @@
 import {Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId, Unique} from "typeorm";
 import {ActivityAssignment} from "./ActivityAssignment";
-import {Role} from "../user/Role";
+import {ActivityRole} from "./ActivityRole";
 
 @Unique("unique_act_ass_role_map", ["assignment", "role"])
 @Entity("activity_assignment_roles", {schema: "surveyor"})
@@ -36,10 +36,10 @@ export class ActivityAssignmentRole {
     @RelationId((aa: ActivityAssignmentRole) => aa.role)
     roleId!: number;
 
-    @ManyToOne(() => Role, (roles) => roles.activityAssignmentRoles, {
+    @ManyToOne(() => ActivityRole, (roles) => roles.activityAssignmentRoles, {
         onDelete: "RESTRICT",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "role_id", referencedColumnName: "id"}])
-    role!: Role;
+    role!: ActivityRole;
 }

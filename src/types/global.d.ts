@@ -22,6 +22,8 @@ declare global {
             // Serialized permissions bundle
             rawPermissions?: string;
             permissions?: PermBundle;
+
+            allRoles?: string;
         };
 
         // Bootstrap types

@@ -6,6 +6,7 @@ import {ActivityPlanRequirement} from "./ActivityPlanRequirement";
 import {ActivityPlanRequirementOverride} from "./ActivityPlanRequirementOverride";
 import {ActivityAssignmentRecommendation} from "./ActivityAssignmentRecommendation";
 import {Event} from "../event/Event";
+import {ActivityRole} from "./ActivityRole";
 
 @Entity("activity_plans", {schema: "surveyor"})
 export class ActivityPlan {
@@ -87,6 +88,9 @@ export class ActivityPlan {
 
     @OneToMany(() => ActivitySlot, (activitySlots) => activitySlots.plan)
     activitySlots: ActivitySlot[];
+
+    @OneToMany(() => ActivityRole, (role) => role.plan)
+    roles?: ActivityRole[];
 
     @OneToMany(
         () => ActivityPlanRequirement,

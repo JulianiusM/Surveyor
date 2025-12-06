@@ -19,17 +19,10 @@ interface BootstrapModal {
 }
 
 interface BootstrapGlobal {
-    Modal: new (element: HTMLElement, options?: {focus?: boolean}) => BootstrapModal;
+    Modal: new (element: HTMLElement, options?: { focus?: boolean }) => BootstrapModal;
 }
 
 declare const bootstrap: BootstrapGlobal;
-
-declare global {
-    interface Window {
-        ACT_PLAN_ID?: string;
-        Surveyor: Record<string, any>;
-    }
-}
 
 interface RoleSummary {
     id: number;
@@ -65,15 +58,15 @@ interface RequirementConfiguration {
         allowArrivalDayEvening?: boolean;
         allowDepartureDayMorning?: boolean;
     };
-    roleRequirements: {roleId: number; requiredShifts: number}[];
+    roleRequirements: { roleId: number; requiredShifts: number }[];
     overrides: {
         id?: number;
         roleId?: number | null;
         role?: RoleSummary | null;
         userId?: number | null;
-        user?: {username: string} | null;
+        user?: { username: string } | null;
         guestId?: number | null;
-        guest?: {username: string} | null;
+        guest?: { username: string } | null;
         requiredShifts: number;
     }[];
     participants?: RequirementParticipantSummary[];
@@ -81,14 +74,14 @@ interface RequirementConfiguration {
 
 interface RecommendationRow {
     id?: string;
-    slot: {id: string; title: string; day?: string; startTime?: string | null; endTime?: string | null};
-    user?: {id: number; username: string} | null;
-    guest?: {id: number; username: string} | null;
+    slot: { id: string; title: string; day?: string; startTime?: string | null; endTime?: string | null };
+    user?: { id: number; username: string } | null;
+    guest?: { id: number; username: string } | null;
     status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'APPLIED';
 }
 
 interface RecommendationWarning {
-    recommendation: {slotId: string; userId?: number | null; guestId?: number | null};
+    recommendation: { slotId: string; userId?: number | null; guestId?: number | null };
     warnings: AssignmentWarning[];
 }
 
@@ -99,7 +92,7 @@ interface RequirementParticipantSummary {
     assignedShifts: number;
     remainingShifts: number;
     source: 'none' | 'general' | 'role' | 'override';
-    attendance?: {arrivalDate?: string | null; departureDate?: string | null};
+    attendance?: { arrivalDate?: string | null; departureDate?: string | null };
 }
 
 interface RecommendationSlotOption {
@@ -149,25 +142,25 @@ function formatSlotLabel(slot: RecommendationRow['slot']): string {
 
 function describeWarning(warning: AssignmentWarning): string {
     switch (warning.type) {
-    case "outside_attendance":
-        return "This slot is outside your attendance window.";
-    case "arrival_day":
-        return "This slot is on your arrival day.";
-    case "arrival_time_restricted":
-        return "Evening arrival-day assignments are disabled for this plan.";
-    case "departure_day":
-        return "This slot is on your departure day.";
-    case "departure_time_restricted":
-        return "Morning departure-day assignments are disabled for this plan.";
-    case "over_capacity":
-        return "This slot is already full.";
-    case "overlap": {
-        const conflicts = (warning.conflicts || []).map(describeSlot);
-        const detail = conflicts.length ? `: ${conflicts.join(', ')}` : '';
-        return `This slot overlaps with another assignment${detail}`;
-    }
-    default:
-        return "Assignment warning detected.";
+        case "outside_attendance":
+            return "This slot is outside your attendance window.";
+        case "arrival_day":
+            return "This slot is on your arrival day.";
+        case "arrival_time_restricted":
+            return "Evening arrival-day assignments are disabled for this plan.";
+        case "departure_day":
+            return "This slot is on your departure day.";
+        case "departure_time_restricted":
+            return "Morning departure-day assignments are disabled for this plan.";
+        case "over_capacity":
+            return "This slot is already full.";
+        case "overlap": {
+            const conflicts = (warning.conflicts || []).map(describeSlot);
+            const detail = conflicts.length ? `: ${conflicts.join(', ')}` : '';
+            return `This slot overlaps with another assignment${detail}`;
+        }
+        default:
+            return "Assignment warning detected.";
     }
 }
 
@@ -233,8 +226,8 @@ function buildWarningModal(): WarningModal {
             function cleanup(result: boolean) {
                 if (settled) return;
                 settled = true;
-                confirmBtn.disabled = false;
-                modal.hide();
+                confirmBtn!.disabled = false;
+                modal!.hide();
                 resolve(result);
             }
 
@@ -258,7 +251,7 @@ function buildWarningModal(): WarningModal {
  * Get the activity plan ID from the window object
  */
 function getActivityPlanId(): string {
-    return window.ACT_PLAN_ID ?? '';
+    return window.Surveyor.entityId ?? '';
 }
 
 /**
@@ -723,7 +716,7 @@ function initRequirementPanel(): void {
         setAlert('Loading requirements…');
         try {
             const res = await get(`/api/activity/${planId}/requirements`);
-            populateForm(res as RequirementConfiguration);
+            populateForm(res.data as RequirementConfiguration);
             setAlert('Requirements loaded');
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to load requirements';
@@ -731,7 +724,7 @@ function initRequirementPanel(): void {
         }
     };
 
-    const collectRoleRequirements = (): {roleId: number; requiredShifts: number}[] => {
+    const collectRoleRequirements = (): { roleId: number; requiredShifts: number }[] => {
         if (!roleList) return [];
         return Array.from(roleList.querySelectorAll<HTMLInputElement>('input[data-role-id]'))
             .map((input) => {
@@ -741,7 +734,7 @@ function initRequirementPanel(): void {
                 if (Number.isNaN(num) || num < 0) return null;
                 return {roleId: Number(input.dataset.roleId), requiredShifts: num};
             })
-            .filter((v): v is {roleId: number; requiredShifts: number} => Boolean(v));
+            .filter((v): v is { roleId: number; requiredShifts: number } => Boolean(v));
     };
 
     const collectOverrides = (): RequirementConfiguration['overrides'] => {
@@ -1051,7 +1044,7 @@ function initRecommendationPanel(): void {
     const loadRecommendations = async () => {
         setAlert('Loading recommendations…');
         try {
-            const res = await get(`/api/activity/${planId}/recommendations`);
+            const res = (await get(`/api/activity/${planId}/recommendations`))?.data;
             const autoGenerated = Boolean(res?.autoGenerated);
             warnings = (res?.warnings || []) as RecommendationWarning[];
             slotOptions = (res?.slots || []) as RecommendationSlotOption[];

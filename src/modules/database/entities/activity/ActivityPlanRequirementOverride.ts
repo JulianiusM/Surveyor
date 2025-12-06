@@ -1,17 +1,8 @@
-import {
-    Check,
-    Column,
-    Entity,
-    Index,
-    JoinColumn,
-    ManyToOne,
-    PrimaryGeneratedColumn,
-    RelationId,
-} from "typeorm";
+import {Check, Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId,} from "typeorm";
 import {User} from "../user/User";
 import {Guest} from "../user/Guest";
 import {ActivityPlan} from "./ActivityPlan";
-import {Role} from "../user/Role";
+import {ActivityRole} from "./ActivityRole";
 
 @Entity("activity_plan_requirement_overrides", {schema: "surveyor"})
 @Index("uk_plan_participant_role", ["plan", "user", "guest", "role"], {unique: true})
@@ -50,13 +41,13 @@ export class ActivityPlanRequirementOverride {
     @RelationId((override: ActivityPlanRequirementOverride) => override.role)
     roleId?: number | null;
 
-    @ManyToOne(() => Role, (role) => role.activityPlanRequirementOverrides, {
+    @ManyToOne(() => ActivityRole, (role) => role.activityPlanRequirementOverrides, {
         onDelete: "RESTRICT",
         onUpdate: "CASCADE",
         nullable: true,
     })
     @JoinColumn([{name: "role_id", referencedColumnName: "id"}])
-    role?: Role | null;
+    role?: ActivityRole | null;
 
     @RelationId((override: ActivityPlanRequirementOverride) => override.user)
     userId?: number | null;

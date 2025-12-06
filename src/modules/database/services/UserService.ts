@@ -4,7 +4,6 @@ import {coerceLimit, generateUniqueToken, maskEmail, SQL_ALLOW_LIST} from '../..
 import {User} from '../entities/user/User';
 import {Guest} from '../entities/user/Guest';
 import {GuestLink} from '../entities/user/GuestLink';
-import {Role} from '../entities/user/Role';
 import {MoreThan} from "typeorm";
 import type {OidcClaims, UserInfo} from "../../../types/UserTypes";
 
@@ -148,11 +147,6 @@ export async function getGuestLinkToken(entityType: string, entityId: string, gu
         .select(['gl.token'])
         .getOne();
     return link?.token || null;
-}
-
-export async function getAllRoles() {
-    const repo = AppDataSource.getRepository(Role);
-    return await repo.find();
 }
 
 /**

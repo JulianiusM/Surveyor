@@ -34,20 +34,20 @@ import {AppDataSource, initDataSource} from '../../src/modules/database/dataSour
 import {User} from '../../src/modules/database/entities/user/User';
 import {Guest} from '../../src/modules/database/entities/user/Guest';
 import {GuestLink} from '../../src/modules/database/entities/user/GuestLink';
-import {Role} from '../../src/modules/database/entities/user/Role';
+import {Role} from '../../src/modules/database/entities/activity/ActivityRole';
 
 // Test data
 import {
-    userRegistrationData,
     activationTokenData,
-    passwordResetData,
     guestCreationData,
     guestRegistrationData,
-    rolesData,
     oidcExactMatchData,
-    oidcLinkByEmailData,
     oidcJitProvisioningData,
+    oidcLinkByEmailData,
     oidcNoLinkByEmailData,
+    passwordResetData,
+    rolesData,
+    userRegistrationData,
 } from '../data/database/userServiceData';
 
 async function truncateAll() {
@@ -298,19 +298,19 @@ describe('OIDC / SSO', () => {
     test.each(oidcNoLinkByEmailData)(
         '$description',
         async ({
-            localUsername,
-            localName,
-            localEmail,
-            localPassword,
-            localIsActive,
-            oidcIssuer,
-            oidcSub,
-            oidcEmail,
-            oidcPreferredUsername,
-            oidcName,
-            linkByEmail,
-            expectedActive,
-        }) => {
+                   localUsername,
+                   localName,
+                   localEmail,
+                   localPassword,
+                   localIsActive,
+                   oidcIssuer,
+                   oidcSub,
+                   oidcEmail,
+                   oidcPreferredUsername,
+                   oidcName,
+                   linkByEmail,
+                   expectedActive,
+               }) => {
             // Local account with same email, but we disable linkByEmail
             const local = AppDataSource.getRepository(User).create({
                 username: localUsername,

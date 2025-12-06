@@ -49,7 +49,7 @@ mixin permissionManagement(admins, permMeta, defaults, presets=[], opts={}, audi
                         span.text-capitalize Administration Options
                 // only one open at a time
                 .accordion-collapse.collapse#permMgmntBody
-                    .accordion-body.text-bg-dark.pt-2.px-0.py-0
+                    .accordion-body.text-bg-dark.pt-2.px-2
                         if !(opts.disablePermMatrix)
                             .mb-2
                                 +permMatrix(audiences, permMeta, defaults, presets, fieldBase, opts)

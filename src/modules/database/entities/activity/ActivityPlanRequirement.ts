@@ -1,5 +1,5 @@
 import {Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId} from "typeorm";
-import {Role} from "../user/Role";
+import {ActivityRole} from "./ActivityRole";
 import {ActivityPlan} from "./ActivityPlan";
 
 @Entity("activity_plan_requirements", {schema: "surveyor"})
@@ -14,12 +14,12 @@ export class ActivityPlanRequirement {
     @RelationId((a: ActivityPlanRequirement) => a.role)
     roleId!: string;
 
-    @ManyToOne(() => Role, (roles) => roles.activitySlotRoles, {
+    @ManyToOne(() => ActivityRole, (roles) => roles.activitySlotRoles, {
         onDelete: "RESTRICT",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "role_id", referencedColumnName: "id"}])
-    role!: Role;
+    role!: ActivityRole;
 
     @RelationId((a: ActivityPlanRequirement) => a.plan)
     planId!: string;

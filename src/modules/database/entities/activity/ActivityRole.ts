@@ -1,12 +1,13 @@
-import {Column, Entity, Index, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
-import {ActivityAssignmentRole} from "../activity/ActivityAssignmentRole";
-import {ActivitySlotRole} from "../activity/ActivitySlotRole";
-import {ActivityPlanRequirement} from "../activity/ActivityPlanRequirement";
-import {ActivityPlanRequirementOverride} from "../activity/ActivityPlanRequirementOverride";
+import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
+import {ActivityAssignmentRole} from "./ActivityAssignmentRole";
+import {ActivitySlotRole} from "./ActivitySlotRole";
+import {ActivityPlanRequirement} from "./ActivityPlanRequirement";
+import {ActivityPlanRequirementOverride} from "./ActivityPlanRequirementOverride";
+import {ActivityPlan} from "./ActivityPlan";
 
 @Index("name", ["name"], {unique: true})
-@Entity("roles", {schema: "surveyor"})
-export class Role {
+@Entity("activity_roles", {schema: "surveyor"})
+export class ActivityRole {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
     id!: number;
 
@@ -18,6 +19,17 @@ export class Role {
 
     @Column("tinyint", {name: "is_default", width: 1, default: () => "'0'"})
     isDefault: boolean;
+
+    @RelationId((role: ActivityRole) => role.plan)
+    planId!: string;
+
+    @ManyToOne(
+        () => ActivityPlan,
+        (activityPlans) => activityPlans.roles,
+        {onDelete: "CASCADE", onUpdate: "NO ACTION"}
+    )
+    @JoinColumn([{name: "plan_id", referencedColumnName: "id"}])
+    plan!: ActivityPlan;
 
     @OneToMany(
         () => ActivityAssignmentRole,

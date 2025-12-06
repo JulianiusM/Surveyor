@@ -3,7 +3,7 @@ import {ActivityPlan} from "../entities/activity/ActivityPlan";
 import {ActivitySlot} from "../entities/activity/ActivitySlot";
 import {ActivityAssignment} from "../entities/activity/ActivityAssignment";
 import {ActivityAssignmentRole} from "../entities/activity/ActivityAssignmentRole";
-import {Role} from "../entities/user/Role";
+import {ActivityRole} from "../entities/activity/ActivityRole";
 import {generateUniqueId} from "../../lib/util";
 import {ActivitySlotRole} from "../entities/activity/ActivitySlotRole";
 import type {PlanParticipant, PlanParticipantRow, SlotAssignmentMap} from "../../../types/ActivityTypes";
@@ -18,7 +18,7 @@ import {toParticipantKey} from "../../activity/requirements";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function ensureRoleId(roleName = "default"): Promise<number> {
-    const repo = AppDataSource.getRepository(Role);
+    const repo = AppDataSource.getRepository(ActivityRole);
     const role = await repo.findOne({where: {name: roleName}});
     if (role) return role.id;
 
@@ -74,7 +74,7 @@ export async function assignRole(assignmentId: number, roleName: string) {
 }
 
 export async function doUnassignRole(assignmentId: number, roleName: string) {
-    const role = await AppDataSource.getRepository(Role).findOne({
+    const role = await AppDataSource.getRepository(ActivityRole).findOne({
         where: {name: roleName},
     });
     if (!role) return false;
@@ -89,6 +89,10 @@ export async function doUnassignRole(assignmentId: number, roleName: string) {
     }
 
     return true;
+}
+
+export async function getAllRoles(planId: string) {
+    return AppDataSource.getRepository(ActivityRole).findBy({plan: {id: planId}});
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -5,7 +5,6 @@ import Joi from 'joi';
 import {ENTITIES, fromISOtoLocal, generateUniqueId} from '../modules/lib/util';
 import {APIError, ValidationError} from '../modules/lib/errors';
 import * as activityService from "../modules/database/services/ActivityService";
-import * as userService from "../modules/database/services/UserService";
 import * as requirementService from "../modules/database/services/ActivityRequirementService";
 import * as recommendationService from "../modules/database/services/ActivityRecommendationService";
 import * as eventService from "../modules/database/services/EventService";
@@ -17,7 +16,11 @@ import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
 import type {PermBundle} from "../types/PermissionTypes";
 import {buildRecommendationWarnings} from "../modules/activity/recommendations";
 import {generatePlanRecommendations} from "../modules/activity/autoAssignment";
-import {ParticipantAttendance, summarizeParticipantRequirements, toParticipantKey} from "../modules/activity/requirements";
+import {
+    ParticipantAttendance,
+    summarizeParticipantRequirements,
+    toParticipantKey
+} from "../modules/activity/requirements";
 import {collectAssignmentWarnings, toAssignmentCandidate} from "../modules/activity/availability";
 
 // Template constant for create errors
@@ -165,7 +168,7 @@ function preprocessRequirementUpdate(body: any) {
         allowOverfillAfterFull?: boolean;
         allowArrivalDayEvening?: boolean;
         allowDepartureDayMorning?: boolean;
-        roleRequirements: {roleId: number; requiredShifts: number}[];
+        roleRequirements: { roleId: number; requiredShifts: number }[];
         overrides: any[];
     };
 }
@@ -198,7 +201,14 @@ function preprocessRecommendationUpdate(body: any) {
         throw new APIError(msg, body, 400);
     }
 
-    return value as {recommendations: {slotId: string; userId?: number | null; guestId?: number | null; status?: RecommendationStatus}[]};
+    return value as {
+        recommendations: {
+            slotId: string;
+            userId?: number | null;
+            guestId?: number | null;
+            status?: RecommendationStatus
+        }[]
+    };
 }
 
 /**
@@ -245,7 +255,7 @@ async function fetchForView(plan: ActivityPlan, req: Request) {
         assignPromise,
         activityService.getActivitySlotAssignees(plan.id),
         activityService.getActivityPlanParticipants(plan.id),
-        userService.getAllRoles(),
+        activityService.getAllRoles(plan.id),
         activityService.getActivitySlotRoles(plan.id)
     ]);
 
@@ -420,18 +430,23 @@ async function updateRequirements(planId: string, body: any) {
         allowArrivalDayEvening: planSettings.allowArrivalDayEvening,
         allowDepartureDayMorning: planSettings.allowDepartureDayMorning,
     };
-    
+
     if (planSettings.bindingDeadline !== undefined) {
-        normalizedSettings.bindingDeadline = planSettings.bindingDeadline === null 
-            ? null 
+        normalizedSettings.bindingDeadline = planSettings.bindingDeadline === null
+            ? null
             : (typeof planSettings.bindingDeadline === 'string' ? new Date(planSettings.bindingDeadline) : planSettings.bindingDeadline);
     }
-    
+
     await requirementService.replaceRequirements(planId, roleRequirements, overrides, normalizedSettings);
     return 'Requirements updated';
 }
 
-async function collectRecommendationWarnings(planId: string, recommendations: {slotId: string; userId?: number | null; guestId?: number | null; status?: RecommendationStatus}[]) {
+async function collectRecommendationWarnings(planId: string, recommendations: {
+    slotId: string;
+    userId?: number | null;
+    guestId?: number | null;
+    status?: RecommendationStatus
+}[]) {
     const [plan, slots, existingAssignments] = await Promise.all([
         activityService.getActivityPlanById(planId),
         activityService.getActivitySlotsFlat(planId),
@@ -470,8 +485,14 @@ async function collectRecommendationWarnings(planId: string, recommendations: {s
 function buildParticipantAttendanceMap(
     plan: ActivityPlan,
     overrides: Awaited<ReturnType<typeof requirementService.getRequirementConfiguration>>["overrides"],
-    existingAssignments: Record<string, {id: string; day: string; startTime?: string | null; endTime?: string | null; pos?: number | null}[]>,
-    recommendations: {slotId: string; userId?: number | null; guestId?: number | null}[],
+    existingAssignments: Record<string, {
+        id: string;
+        day: string;
+        startTime?: string | null;
+        endTime?: string | null;
+        pos?: number | null
+    }[]>,
+    recommendations: { slotId: string; userId?: number | null; guestId?: number | null }[],
     eventParticipants: Awaited<ReturnType<typeof eventService.getEventParticipants>> = [],
 ): Record<string, ParticipantAttendance> {
     const attendance: Record<string, ParticipantAttendance> = {};
@@ -533,7 +554,7 @@ function buildParticipantAttendanceMap(
 function resolveWarningTarget(
     session: Request["session"],
     permData: PermBundle | undefined,
-    body: {userId?: number | null; guestId?: number | null} = {},
+    body: { userId?: number | null; guestId?: number | null } = {},
 ) {
     if (body.userId || body.guestId) {
         const isManager = permData?.entity?.has('MANAGE_ASSIGNMENTS');
@@ -565,7 +586,7 @@ async function getAssignmentWarnings(
     slotId: string,
     session: Request["session"],
     permData?: PermBundle,
-    body?: {userId?: number | null; guestId?: number | null},
+    body?: { userId?: number | null; guestId?: number | null },
 ) {
     const target = resolveWarningTarget(session, permData, body);
     const participantKey = toParticipantKey(target);

@@ -34,60 +34,7 @@ block content
             monday.setDate(monday.getDate() + 7);
         }
 
-    // ─── Description (editable) ──────────────────────────────
-    if permData.entity.has('EDIT_DESC')
-        // manager sees pointer
-        small.text-info.fst-italic.fw-light Double click to edit
-        p#planDesc.border.border-secondary.rounded.p-1(
-            style="cursor:pointer"
-            data-edit="planDescription"
-        )
-            if data.plan.description
-                - const lines = data.plan.description.split('\n')
-                each line, i in lines
-                    | #{line}
-                    if i < lines.length - 1
-                        br
-            else
-                em.text-secondary double-click to add description
-        hr.mb-1.mt-0
-    else if data.plan.description
-        p#planDesc.mb-0.mt-2
-            - const lines = data.plan.description.split('\n')
-            each line, i in lines
-                | #{line}
-                if i < lines.length - 1
-                    br
-        hr.mb-1.mt-0
-
-    // Owner settings toggles
-    if permData.entity.has('MANAGE_PERMISSIONS')
-        +permissionManagement(admins, perms.permMeta, perms.defaultPerms, perms.presets, {
-            entityType: 'activity',
-            entityId: data.plan.id
-        })
-
-    //Erste Zeile: Metainfos / Badge
-    .d-flex.justify-content-between.align-items-center.mb-3
-        //- Titel / Hauptlabel links
-        span.fs-6.fw-semibold
-            i.bi.bi-people-fill.me-1
-            | Participants:
-            span.badge.bg-light.text-dark.ms-1 #{data.counters.participants}
-
-        //── Items + Offene / Leere
-        span.fs-6.fw-semibold
-            i.bi.bi-card-checklist.me-1
-            | Slots:
-            span.badge.bg-light.text-dark.ms-1 #{data.slots.length}
-            span.badge.bg-secondary-subtle.text-secondary-emphasis.ms-1
-                i.bi.bi-box-arrow-up-right.me-1
-                | #{data.counters.open} open
-            span.badge.bg-danger-subtle.text-danger-emphasis.ms-1
-                i.bi.bi-slash-circle.me-1
-                | #{data.counters.empty} unassigned
-
-    if permData.entity.has('MANAGE_REQUIREMENTS')
+    if permData.entity.has('MANAGE_REQUIREMENTS') && data.plan.eventId
         .card.text-bg-dark.border.border-secondary-subtle.mb-3#requirementPanel
             .card-header.d-flex.justify-content-between.align-items-center
                 span.d-flex.align-items-center.gap-2
@@ -167,6 +114,59 @@ block content
                 .alert.alert-info.py-2.px-3.mt-3.d-none(role="alert" data-requirements-alert)
                     i.bi.bi-exclamation-circle.me-2
                     span
+
+    // ─── Description (editable) ──────────────────────────────
+    if permData.entity.has('EDIT_DESC')
+        // manager sees pointer
+        small.text-info.fst-italic.fw-light Double click to edit
+        p#planDesc.border.border-secondary.rounded.p-1(
+            style="cursor:pointer"
+            data-edit="planDescription"
+        )
+            if data.plan.description
+                - const lines = data.plan.description.split('\n')
+                each line, i in lines
+                    | #{line}
+                    if i < lines.length - 1
+                        br
+            else
+                em.text-secondary double-click to add description
+        hr.mb-1.mt-0
+    else if data.plan.description
+        p#planDesc.mb-0.mt-2
+            - const lines = data.plan.description.split('\n')
+            each line, i in lines
+                | #{line}
+                if i < lines.length - 1
+                    br
+        hr.mb-1.mt-0
+
+    // Owner settings toggles
+    if permData.entity.has('MANAGE_PERMISSIONS')
+        +permissionManagement(admins, perms.permMeta, perms.defaultPerms, perms.presets, {
+            entityType: 'activity',
+            entityId: data.plan.id
+        })
+
+    //Erste Zeile: Metainfos / Badge
+    .d-flex.justify-content-between.align-items-center.mb-3
+        //- Titel / Hauptlabel links
+        span.fs-6.fw-semibold
+            i.bi.bi-people-fill.me-1
+            | Participants:
+            span.badge.bg-light.text-dark.ms-1 #{data.counters.participants}
+
+        //── Items + Offene / Leere
+        span.fs-6.fw-semibold
+            i.bi.bi-card-checklist.me-1
+            | Slots:
+            span.badge.bg-light.text-dark.ms-1 #{data.slots.length}
+            span.badge.bg-secondary-subtle.text-secondary-emphasis.ms-1
+                i.bi.bi-box-arrow-up-right.me-1
+                | #{data.counters.open} open
+            span.badge.bg-danger-subtle.text-danger-emphasis.ms-1
+                i.bi.bi-slash-circle.me-1
+                | #{data.counters.empty} unassigned
 
     each week in weeks
         h4.mt-4.mb-2 Week of #{fmtISO(week)}
@@ -283,7 +283,7 @@ block content
                             - }
                             // @formatter:on
 
-    if permData.entity.has('MANAGE_ASSIGNMENTS')
+    if permData.entity.has('MANAGE_ASSIGNMENTS') && data.plan.eventId
         hr
         .card.text-bg-dark.border.border-secondary-subtle#recommendationPanel
             .card-header.d-flex.justify-content-between.align-items-center
