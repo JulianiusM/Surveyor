@@ -67,6 +67,7 @@ interface RequirementConfiguration {
         guest?: {username: string} | null;
         requiredShifts: number;
     }[];
+    participants?: RequirementParticipantSummary[];
 }
 
 interface RecommendationRow {
@@ -80,6 +81,33 @@ interface RecommendationRow {
 interface RecommendationWarning {
     recommendation: {slotId: string; userId?: number | null; guestId?: number | null};
     warnings: AssignmentWarning[];
+}
+
+interface RequirementParticipantSummary {
+    participantKey: string;
+    name?: string | null;
+    requiredShifts: number;
+    assignedShifts: number;
+    remainingShifts: number;
+    source: 'none' | 'general' | 'role' | 'override';
+    attendance?: {arrivalDate?: string | null; departureDate?: string | null};
+}
+
+interface RecommendationSlotOption {
+    id: string;
+    title: string;
+    day?: string;
+    startTime?: string | null;
+    endTime?: string | null;
+}
+
+interface RecommendationParticipantOption {
+    key: string;
+    label: string;
+    userId?: number | null;
+    guestId?: number | null;
+    arrivalDate?: string | null;
+    departureDate?: string | null;
 }
 
 function formatTimeLabel(time?: string | null): string {
@@ -128,6 +156,12 @@ function describeWarning(warning: AssignmentWarning): string {
     default:
         return "Assignment warning detected.";
     }
+}
+
+function formatDateLabel(date?: string | null): string {
+    if (!date) return '';
+    const d = new Date(date);
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString();
 }
 
 function getAllRoles(): RoleSummary[] {
@@ -457,6 +491,7 @@ function initRequirementPanel(): void {
     const addOverrideBtn = panel.querySelector<HTMLButtonElement>('[data-add-override]');
     const reloadBtn = panel.querySelector<HTMLButtonElement>('[data-requirements-refresh]');
     const saveBtn = panel.querySelector<HTMLButtonElement>('[data-requirements-save]');
+    const summaryBody = panel.querySelector<HTMLElement>('#requirementSummaryBody');
     const assignmentMode = panel.querySelector<HTMLSelectElement>('#assignmentMode');
     const generalRequired = panel.querySelector<HTMLInputElement>('#requiredShifts');
     const roundingMode = panel.querySelector<HTMLSelectElement>('#roundingMode');
@@ -475,6 +510,63 @@ function initRequirementPanel(): void {
         alertBox.classList.remove('d-none', 'alert-danger', 'alert-info');
         alertBox.classList.add(variant === 'danger' ? 'alert-danger' : 'alert-info');
         target.textContent = message;
+    };
+
+    const renderRequirementSummary = (summary: RequirementParticipantSummary[] = []) => {
+        if (!summaryBody) return;
+        summaryBody.innerHTML = '';
+
+        if (!summary.length) {
+            const row = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.colSpan = 5;
+            cell.className = 'text-center text-secondary pt-3';
+            cell.textContent = 'No participants yet.';
+            row.append(cell);
+            summaryBody.append(row);
+            return;
+        }
+
+        summary.forEach((entry) => {
+            const row = document.createElement('tr');
+
+            const nameCell = document.createElement('td');
+            nameCell.textContent = entry.name || entry.participantKey;
+
+            const requiredCell = document.createElement('td');
+            requiredCell.className = 'text-center';
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-secondary-subtle text-secondary-emphasis';
+            badge.textContent = `${entry.requiredShifts} required / ${entry.assignedShifts} assigned`;
+            requiredCell.append(badge);
+
+            const remainingCell = document.createElement('td');
+            remainingCell.className = 'text-center';
+            const remainingBadge = document.createElement('span');
+            remainingBadge.className = entry.remainingShifts > 0
+                ? 'badge bg-warning-subtle text-warning-emphasis'
+                : 'badge bg-success-subtle text-success-emphasis';
+            remainingBadge.textContent = `${entry.remainingShifts} remaining`;
+            remainingCell.append(remainingBadge);
+
+            const attendanceCell = document.createElement('td');
+            attendanceCell.className = 'text-center small';
+            const arrival = entry.attendance?.arrivalDate ? formatDateLabel(entry.attendance.arrivalDate) : '';
+            const departure = entry.attendance?.departureDate ? formatDateLabel(entry.attendance.departureDate) : '';
+            attendanceCell.textContent = arrival || departure
+                ? `${arrival || 'start'} – ${departure || 'end'}`
+                : '—';
+
+            const sourceCell = document.createElement('td');
+            sourceCell.className = 'text-center';
+            const sourceBadge = document.createElement('span');
+            sourceBadge.className = 'badge bg-info-subtle text-info-emphasis text-uppercase';
+            sourceBadge.textContent = entry.source;
+            sourceCell.append(sourceBadge);
+
+            row.append(nameCell, requiredCell, remainingCell, attendanceCell, sourceCell);
+            summaryBody.append(row);
+        });
     };
 
     const buildRoleRequirementInputs = (config: RequirementConfiguration) => {
@@ -607,6 +699,7 @@ function initRequirementPanel(): void {
 
         buildRoleRequirementInputs(config);
         renderOverrides(config);
+        renderRequirementSummary(config.participants || []);
     };
 
     const loadRequirements = async () => {
@@ -767,6 +860,70 @@ function initRecommendationPanel(): void {
         return map;
     };
 
+    let slotOptions: RecommendationSlotOption[] = [];
+    let participantOptions: RecommendationParticipantOption[] = [];
+
+    const formatParticipantLabel = (option: RecommendationParticipantOption) => {
+        const arrival = formatDateLabel(option.arrivalDate ?? null);
+        const departure = formatDateLabel(option.departureDate ?? null);
+        const attendance = arrival || departure ? ` (${arrival || 'start'} – ${departure || 'end'})` : '';
+        return `${option.label}${attendance}`;
+    };
+
+    const participantValue = (option: RecommendationParticipantOption) =>
+        option.userId ? `user:${option.userId}` : `guest:${option.guestId}`;
+
+    const setParticipantDataset = (row: HTMLElement, value: string) => {
+        delete row.dataset.userId;
+        delete row.dataset.guestId;
+        if (value.startsWith('user:')) {
+            row.dataset.userId = value.replace('user:', '');
+        } else if (value.startsWith('guest:')) {
+            row.dataset.guestId = value.replace('guest:', '');
+        }
+    };
+
+    const currentRecKey = (row: HTMLElement) => warningKey(
+        row.dataset.slotId || '',
+        row.dataset.userId ? Number(row.dataset.userId) : null,
+        row.dataset.guestId ? Number(row.dataset.guestId) : null,
+    );
+
+    const markDirty = (row: HTMLElement) => {
+        row.dataset.dirty = 'true';
+        row.classList.add('table-warning');
+    };
+
+    const renderWarningCell = (row: HTMLElement, warningMap: Map<string, AssignmentWarning[]>) => {
+        const warningCell = row.querySelector<HTMLElement>('td[data-warning]');
+        if (!warningCell) return;
+        warningCell.innerHTML = '';
+
+        const warningList = warningMap.get(row.dataset.recKey || '');
+        if (warningList && warningList.length) {
+            const list = document.createElement('ul');
+            list.className = 'mb-0 small ps-3';
+            warningList.forEach((warn) => {
+                const li = document.createElement('li');
+                li.textContent = describeWarning(warn);
+                list.append(li);
+            });
+            warningCell.append(list);
+            return;
+        }
+
+        const span = document.createElement('span');
+        span.className = 'small';
+        if (row.dataset.dirty === 'true') {
+            span.classList.add('text-secondary');
+            span.textContent = 'Save to refresh warnings';
+        } else {
+            span.classList.add('text-success');
+            span.textContent = 'No warnings';
+        }
+        warningCell.append(span);
+    };
+
     const renderRecommendations = (data: RecommendationRow[]) => {
         rows.innerHTML = '';
         const warningMap = buildWarningMap();
@@ -785,16 +942,68 @@ function initRecommendationPanel(): void {
 
         data.forEach((rec) => {
             const row = document.createElement('tr');
-            row.dataset.recKey = warningKey(rec.slot.id, rec.user?.id, rec.guest?.id);
             row.dataset.slotId = rec.slot.id;
             if (rec.user?.id) row.dataset.userId = String(rec.user.id);
             if (rec.guest?.id) row.dataset.guestId = String(rec.guest.id);
+            row.dataset.recKey = warningKey(rec.slot.id, rec.user?.id, rec.guest?.id);
+            delete row.dataset.dirty;
+            row.classList.remove('table-warning');
 
             const slotCell = document.createElement('td');
-            slotCell.textContent = formatSlotLabel(rec.slot);
+            const slotSelect = document.createElement('select');
+            slotSelect.className = 'form-select form-select-sm text-bg-dark';
+            const slotList = [...slotOptions];
+            if (!slotList.some((opt) => opt.id === rec.slot.id)) slotList.push(rec.slot);
+            slotList.forEach((opt) => {
+                const option = document.createElement('option');
+                option.value = opt.id;
+                option.textContent = formatSlotLabel(opt);
+                slotSelect.append(option);
+            });
+            slotSelect.value = rec.slot.id;
+            slotSelect.addEventListener('change', () => {
+                row.dataset.slotId = slotSelect.value;
+                row.dataset.recKey = currentRecKey(row);
+                markDirty(row);
+                renderWarningCell(row, warningMap);
+            });
+            slotCell.append(slotSelect);
 
             const participantCell = document.createElement('td');
-            participantCell.textContent = rec.user?.username || rec.guest?.username || 'Unknown';
+            const participantSelect = document.createElement('select');
+            participantSelect.className = 'form-select form-select-sm text-bg-dark';
+            const participantList = [...participantOptions];
+            const selectedValue = rec.user?.id ? `user:${rec.user.id}` : rec.guest?.id ? `guest:${rec.guest.id}` : '';
+            if (selectedValue && !participantList.some((opt) => participantValue(opt) === selectedValue)) {
+                participantList.push({
+                    key: selectedValue,
+                    label: rec.user?.username || rec.guest?.username || selectedValue,
+                    userId: rec.user?.id ?? null,
+                    guestId: rec.guest?.id ?? null,
+                });
+            }
+
+            participantList.forEach((opt) => {
+                const option = document.createElement('option');
+                option.value = participantValue(opt);
+                option.textContent = formatParticipantLabel(opt);
+                participantSelect.append(option);
+            });
+            participantSelect.value = selectedValue;
+            if (!participantSelect.value && participantList.length) {
+                participantSelect.value = participantValue(participantList[0]);
+            }
+            if (participantSelect.value) {
+                setParticipantDataset(row, participantSelect.value);
+                row.dataset.recKey = currentRecKey(row);
+            }
+            participantSelect.addEventListener('change', () => {
+                setParticipantDataset(row, participantSelect.value);
+                row.dataset.recKey = currentRecKey(row);
+                markDirty(row);
+                renderWarningCell(row, warningMap);
+            });
+            participantCell.append(participantSelect);
 
             const statusCell = document.createElement('td');
             const statusSelect = document.createElement('select');
@@ -808,25 +1017,12 @@ function initRecommendationPanel(): void {
             });
             statusSelect.value = rec.status;
             if (rec.status === 'APPLIED') statusSelect.disabled = true;
+            statusSelect.addEventListener('change', () => markDirty(row));
             statusCell.append(statusSelect);
 
             const warningCell = document.createElement('td');
-            const warningList = warningMap.get(row.dataset.recKey || '');
-            if (warningList && warningList.length) {
-                const list = document.createElement('ul');
-                list.className = 'mb-0 small ps-3';
-                warningList.forEach((warn) => {
-                    const li = document.createElement('li');
-                    li.textContent = describeWarning(warn);
-                    list.append(li);
-                });
-                warningCell.append(list);
-            } else {
-                const span = document.createElement('span');
-                span.className = 'text-success small';
-                span.textContent = 'No warnings';
-                warningCell.append(span);
-            }
+            warningCell.dataset.warning = 'true';
+            renderWarningCell(row, warningMap);
 
             row.append(slotCell, participantCell, statusCell, warningCell);
             rows.append(row);
@@ -838,6 +1034,8 @@ function initRecommendationPanel(): void {
         try {
             const res = await get(`/api/activity/${planId}/recommendations`);
             warnings = (res?.warnings || []) as RecommendationWarning[];
+            slotOptions = (res?.slots || []) as RecommendationSlotOption[];
+            participantOptions = (res?.participants || []) as RecommendationParticipantOption[];
             renderRecommendations((res?.recommendations || []) as RecommendationRow[]);
             setAlert(warnings.length ? 'Warnings detected in proposed assignments' : 'Recommendations loaded');
         } catch (err) {

@@ -33,8 +33,8 @@
 - Surfaced slot timeboxes in the activity plan UI and creation flow with start/end inputs and in-view time badges to support overlap awareness.
 - Added a Bootstrap-powered warning modal that consumes the new warning endpoint before users join a slot, keeping potential conflicts visible in the workflow.
 - Surfaced requirement settings, per-role counts, and participant overrides in the activity plan UI with reload/save controls, and exposed recommendation review/auto-generate/apply flows with warning visibility for managers.
+- Added participant requirement summaries (required vs. assigned, attendance, and source) to the requirement panel, powered by requirement calculations and attendance-aware aggregation.
+- Enabled inline editing of staged recommendations with participant/slot selectors sourced from plan data while keeping warning visibility and dirty-state hints in the review panel.
 
 ## Next Steps
-- Connect the requirement UI to participant requirement summaries and attendance windows to highlight fulfillment progress.
-- Add inline editing for staged recommendations (participant/slot tweaks) and persist changes through the update endpoint.
 - Extend E2E coverage for requirement management, warning displays, and the recommendation approval/apply workflow.

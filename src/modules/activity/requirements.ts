@@ -10,6 +10,7 @@ export interface ParticipantAttendance {
     arrivalDate?: string | null;
     departureDate?: string | null;
     roleIds?: number[];
+    name?: string | null;
 }
 
 export interface RequirementOverrideInput {
@@ -37,6 +38,16 @@ export interface ParticipantRequirementResult {
         roleRequirement?: number;
         overrideRequirement?: number;
     };
+}
+
+export interface ParticipantRequirementSummary {
+    participantKey: string;
+    name?: string | null;
+    requiredShifts: number;
+    assignedShifts: number;
+    remainingShifts: number;
+    source: ParticipantRequirementResult["source"];
+    attendance?: {arrivalDate?: string | null; departureDate?: string | null};
 }
 
 interface DaysWindow {
@@ -266,4 +277,33 @@ export function calculateRequirementsForParticipants(
         result[requirement.participantKey] = requirement;
     }
     return result;
+}
+
+export function summarizeParticipantRequirements(
+    plan: Pick<ActivityPlan, "assignmentMode" | "generalRequiredShifts" | "roundingMode" | "startDate" | "endDate">,
+    participants: ParticipantAttendance[],
+    roleRequirements: ActivityPlanRequirement[],
+    overrides: ActivityPlanRequirementOverride[],
+    assignments: Record<string, unknown[]>,
+): ParticipantRequirementSummary[] {
+    const requirementMap = calculateRequirementsForParticipants(plan, participants, roleRequirements, overrides);
+
+    return participants.map((participant) => {
+        const participantKey = toParticipantKey(participant);
+        const requirement = requirementMap[participantKey];
+        const requiredShifts = requirement?.requiredShifts ?? 0;
+        const assignedShifts = assignments[participantKey]?.length ?? 0;
+
+        return {
+            participantKey,
+            name: participant.name ?? null,
+            requiredShifts,
+            assignedShifts,
+            remainingShifts: Math.max(requiredShifts - assignedShifts, 0),
+            source: requirement?.source ?? "none",
+            attendance: participant.arrivalDate || participant.departureDate
+                ? {arrivalDate: participant.arrivalDate, departureDate: participant.departureDate}
+                : undefined,
+        };
+    });
 }

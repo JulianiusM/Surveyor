@@ -16,7 +16,7 @@ import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
 import type {PermBundle} from "../types/PermissionTypes";
 import {buildRecommendationWarnings} from "../modules/activity/recommendations";
 import {generatePlanRecommendations} from "../modules/activity/autoAssignment";
-import {ParticipantAttendance, toParticipantKey} from "../modules/activity/requirements";
+import {ParticipantAttendance, summarizeParticipantRequirements, toParticipantKey} from "../modules/activity/requirements";
 import {collectAssignmentWarnings, toAssignmentCandidate} from "../modules/activity/availability";
 import {PERM} from "../modules/lib/permissions";
 
@@ -371,7 +371,35 @@ async function updateSettings(id: string, body: any) {
 }
 
 async function getRequirements(planId: string) {
-    return await requirementService.getRequirementConfiguration(planId);
+    const [plan, requirementConfig, assignments] = await Promise.all([
+        activityService.getActivityPlanById(planId),
+        requirementService.getRequirementConfiguration(planId),
+        activityService.getParticipantAssignmentsWithSlots(planId),
+    ]);
+
+    if (!plan) {
+        throw new APIError('Activity plan not found', {planId}, 404);
+    }
+
+    const eventParticipants = plan.event ? await eventService.getEventParticipants(plan.event.id) : [];
+
+    const attendance = buildParticipantAttendanceMap(
+        plan,
+        requirementConfig.overrides,
+        assignments,
+        [],
+        eventParticipants,
+    );
+
+    const participants = summarizeParticipantRequirements(
+        plan,
+        Object.values(attendance),
+        requirementConfig.roleRequirements,
+        requirementConfig.overrides,
+        assignments,
+    );
+
+    return {...requirementConfig, participants};
 }
 
 async function updateRequirements(planId: string, body: any) {
@@ -424,7 +452,19 @@ function buildParticipantAttendanceMap(
     const upsert = (participant: ParticipantAttendance) => {
         const key = toParticipantKey(participant);
         if (!key) return;
-        if (!attendance[key]) attendance[key] = participant;
+        if (!attendance[key]) {
+            attendance[key] = participant;
+            return;
+        }
+
+        const existing = attendance[key];
+        attendance[key] = {
+            ...existing,
+            arrivalDate: participant.arrivalDate ?? existing.arrivalDate,
+            departureDate: participant.departureDate ?? existing.departureDate,
+            roleIds: participant.roleIds ?? existing.roleIds,
+            name: participant.name ?? existing.name,
+        };
     };
 
     eventParticipants.forEach((participant) => {
@@ -433,6 +473,7 @@ function buildParticipantAttendanceMap(
             guestId: participant.guestId ?? undefined,
             arrivalDate: participant.arrivalDate ?? undefined,
             departureDate: participant.departureDate ?? undefined,
+            name: participant.name ?? undefined,
         });
     });
 
@@ -441,6 +482,7 @@ function buildParticipantAttendanceMap(
             userId: override.userId ?? undefined,
             guestId: override.guestId ?? undefined,
             roleIds: override.roleId ? [override.roleId] : undefined,
+            name: override.user?.username ?? override.guest?.username ?? undefined,
         });
     }
 
@@ -525,7 +567,18 @@ async function getAssignmentWarnings(
 }
 
 async function getRecommendations(planId: string) {
-    const recommendations = await recommendationService.getRecommendations(planId);
+    const [plan, requirementConfig, recommendations, slots, assignments] = await Promise.all([
+        activityService.getActivityPlanById(planId),
+        requirementService.getRequirementConfiguration(planId),
+        recommendationService.getRecommendations(planId),
+        activityService.getActivitySlotsFlat(planId),
+        activityService.getParticipantAssignmentsWithSlots(planId),
+    ]);
+
+    if (!plan) {
+        throw new APIError('Activity plan not found', {planId}, 404);
+    }
+
     const normalized = recommendations.map((rec) => ({
         slotId: rec.slot.id,
         userId: rec.user?.id ?? null,
@@ -534,7 +587,34 @@ async function getRecommendations(planId: string) {
     }));
 
     const warnings = await collectRecommendationWarnings(planId, normalized);
-    return {recommendations, warnings};
+    const eventParticipants = plan.event ? await eventService.getEventParticipants(plan.event.id) : [];
+    const attendance = buildParticipantAttendanceMap(
+        plan,
+        requirementConfig.overrides,
+        assignments,
+        normalized,
+        eventParticipants,
+    );
+
+    const participants = Object.values(attendance).map((participant) => ({
+        key: toParticipantKey(participant),
+        userId: participant.userId ?? null,
+        guestId: participant.guestId ?? null,
+        label: participant.name
+            || (participant.userId ? `User #${participant.userId}` : participant.guestId ? `Guest #${participant.guestId}` : 'Participant'),
+        arrivalDate: participant.arrivalDate ?? null,
+        departureDate: participant.departureDate ?? null,
+    }));
+
+    const slotOptions = slots.map((slot) => ({
+        id: slot.id,
+        title: slot.title,
+        day: slot.day,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+    }));
+
+    return {recommendations, warnings, participants, slots: slotOptions};
 }
 
 async function updateRecommendations(planId: string, body: any) {

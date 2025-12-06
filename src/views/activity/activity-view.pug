@@ -139,6 +139,22 @@ block content
                             | Add override
                     p.text-secondary.small.mb-2 Specify user/guest IDs and optional roles to override shift counts for specific participants.
                     .d-grid.gap-2#overrideList
+                    hr
+                    h6.d-flex.justify-content-between.align-items-center
+                        span Participant requirements
+                        small.text-secondary Remaining vs assigned per attendee
+                    .table-responsive
+                        table.table.table-dark.table-bordered.mb-0
+                            thead
+                                tr
+                                    th Participant
+                                    th.text-center Required / Assigned
+                                    th.text-center Remaining
+                                    th.text-center Attendance
+                                    th.text-center Source
+                            tbody#requirementSummaryBody
+                                tr(data-empty-state)
+                                    td.colspan-5.text-center.text-secondary.pt-3 No participants yet.
                 .alert.alert-info.py-2.px-3.mt-3.d-none(role="alert" data-requirements-alert)
                     i.bi.bi-exclamation-circle.me-2
                     span
