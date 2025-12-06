@@ -9,6 +9,12 @@ import {
     RoleRequirementInput,
 } from "../../activity/requirements";
 
+/**
+ * Persistence layer for requirement settings. This service centralizes transactional updates
+ * for plan-level defaults, role-based requirements, and participant overrides so controllers
+ * and UI flows can keep the configuration consistent.
+ */
+
 export type PlanRequirementSettings = Partial<Pick<
     ActivityPlan,
     |

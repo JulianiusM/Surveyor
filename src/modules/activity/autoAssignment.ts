@@ -10,6 +10,13 @@ import * as requirementService from "../database/services/ActivityRequirementSer
 import * as activityService from "../database/services/ActivityService";
 import * as eventService from "../database/services/EventService";
 
+/**
+ * Core automatic recommendation generator for activity plans. The engine balances required
+ * shifts per participant, respects attendance policies and overlap rules, and emits staged
+ * recommendations that managers can review before applying. Keep business rules centralized
+ * here to avoid divergence across controllers and UI clients.
+ */
+
 interface AutoAssignmentPlan
     extends Pick<
         ActivityPlan,

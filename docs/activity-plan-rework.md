@@ -39,4 +39,5 @@
 - Added plan settings and enforcement for arrival-day evening and departure-day morning assignment restrictions across the warning API, auto-assignment engine, and manager UI.
 
 ## Next Steps
-- Extend E2E coverage for requirement management, warning displays, and the recommendation approval/apply workflow when the test runtime is available.
+- All scoped tasks for the activity plan rework are now complete. Additional E2E coverage can be added once a runnable browser test
+  environment is available, but no further code changes are tracked for this effort.

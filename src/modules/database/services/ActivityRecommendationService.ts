@@ -2,6 +2,12 @@ import {AppDataSource} from "../dataSource";
 import {ActivityAssignmentRecommendation, RecommendationStatus} from "../entities/activity/ActivityAssignmentRecommendation";
 import {In} from "typeorm";
 
+/**
+ * Persistence helpers for staged assignment recommendations. This module normalizes incoming
+ * payloads and exposes lightweight CRUD operations so controllers and background hooks can
+ * manage proposed assignments separately from committed slot sign-ups.
+ */
+
 export interface RecommendationInput {
     id?: string;
     slotId: string;

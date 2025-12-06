@@ -3,6 +3,12 @@ import {AssignmentCandidate, AttendancePolicy, collectAssignmentWarnings, toAssi
 import {normalizeRecommendationInput, RecommendationInput} from "../database/services/ActivityRecommendationService";
 import {ParticipantAttendance, toParticipantKey} from "./requirements";
 
+/**
+ * Shared helpers for staging and validating assignment recommendations. The functions here
+ * normalize recommendation payloads, attach warnings for overlaps/attendance/capacity, and
+ * keep per-participant queues consistent across the UI and controller layers.
+ */
+
 export interface RecommendationWarningResult {
     recommendation: RecommendationInput;
     warnings: ReturnType<typeof collectAssignmentWarnings>;

@@ -2,6 +2,12 @@ import {ActivitySlot} from "../database/entities/activity/ActivitySlot";
 import {parseTimeToMinutes, slotsOverlap, SlotTimeboxCandidate} from "./timebox";
 import {ParticipantAttendance} from "./requirements";
 
+/**
+ * Availability helpers for assignment warnings. These utilities normalize slot assignments
+ * into candidate structures, check attendance and overlap policies, and surface structured
+ * warnings that the UI and recommendation engine can reuse.
+ */
+
 export interface AttendanceCheck {
     allowed: boolean;
     boundary?: "arrival" | "departure" | "before" | "after";
