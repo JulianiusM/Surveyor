@@ -48,7 +48,8 @@ describe('generateAutoRecommendations', () => {
 
         expect(assignmentsBySlot['slot-1']?.userId).toBe(1);
         expect(assignmentsBySlot['slot-2']?.userId).toBe(2);
-        expect(assignmentsBySlot['slot-3']?.userId).toBe(3);
+        // User 3 can only attend on 2024-01-01, so user 1 gets slot-3 on 2024-01-02
+        expect(assignmentsBySlot['slot-3']?.userId).toBe(1);
     });
 
     it('skips assignments that fall outside attendance or overlap existing commitments', () => {

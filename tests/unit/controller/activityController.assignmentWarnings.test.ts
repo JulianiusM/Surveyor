@@ -39,15 +39,15 @@ describe("getAssignmentWarnings", () => {
         activityService.getActivitySlotById.mockResolvedValue({
             id: "slot-1",
             day: "2025-01-01",
-            startTime: "10:00",
-            endTime: "11:00",
+            startTime: "18:00",
+            endTime: "19:00",
             pos: 1,
             maxAssignees: 1,
         });
         requirementService.getRequirementConfiguration.mockResolvedValue({overrides: []});
         activityService.getParticipantAssignmentsWithSlots.mockResolvedValue({
             "user:1": [
-                {id: "slot-existing", day: "2025-01-01", startTime: "10:30", endTime: "11:30", pos: 2},
+                {id: "slot-existing", day: "2025-01-01", startTime: "18:30", endTime: "19:30", pos: 2},
             ],
         });
         activityService.getActivitySlotAssignees.mockResolvedValue({
@@ -74,7 +74,7 @@ describe("getAssignmentWarnings", () => {
             controller.getAssignmentWarnings("plan-1", "slot-1", session, undefined, {userId: 2}),
         ).rejects.toMatchObject({status: 403});
 
-        const permData = {entity: {has: (perm: number) => perm === PERM.MANAGE_ASSIGNMENTS}} as any;
+        const permData = {entity: {has: (perm: string) => perm === 'MANAGE_ASSIGNMENTS'}} as any;
         activityService.getActivityPlanById.mockResolvedValue({id: "plan-1", allowOverfillAfterFull: true});
         activityService.getActivitySlotById.mockResolvedValue({
             id: "slot-1",

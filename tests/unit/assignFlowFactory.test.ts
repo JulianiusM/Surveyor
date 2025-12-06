@@ -56,7 +56,7 @@ describe("enforcePlanBindingDeadline", () => {
         });
 
         const permData = {
-            entity: {has: (perm: number) => perm === PERM.MANAGE_ASSIGNMENTS},
+            entity: {has: (perm: string) => perm === 'MANAGE_ASSIGNMENTS'},
         } as any;
 
         await expect(enforcePlanBindingDeadline(baseReq, permData)).resolves.toBeUndefined();

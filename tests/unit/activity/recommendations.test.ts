@@ -23,6 +23,7 @@ describe("buildRecommendationWarnings", () => {
         {id: "a", day: "2024-05-01", startTime: "08:00", endTime: "09:00", pos: 1} as ActivitySlot,
         {id: "b", day: "2024-05-01", startTime: "08:30", endTime: "10:00", pos: 2} as ActivitySlot,
         {id: "c", day: "2024-05-02", startTime: "07:00", endTime: "08:00", pos: 1} as ActivitySlot,
+        {id: "d", day: "2024-05-01", startTime: "18:00", endTime: "19:00", pos: 3} as ActivitySlot,
     ];
 
     test("returns no warnings when assignments do not conflict", () => {
@@ -68,7 +69,7 @@ describe("buildRecommendationWarnings", () => {
         const warnings = buildRecommendationWarnings({
             slots,
             recommendations: [
-                {slotId: "a", userId: 1},
+                {slotId: "d", userId: 1},
             ],
             participantAttendance: {
                 "user:1": {userId: 1, arrivalDate: "2024-05-01", departureDate: "2024-05-03"},
