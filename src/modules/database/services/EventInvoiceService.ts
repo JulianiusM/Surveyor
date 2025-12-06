@@ -499,22 +499,28 @@ export async function registerForDefaultPools(
     const poolRepo = manager.getRepository(EventInvoicePool);
     const assignmentRepo = manager.getRepository(EventPoolAssignment);
 
-    // Load the registration with event relation if not already loaded
-    if (!reg.event) {
-        const regRepo = manager.getRepository(EventRegistration);
-        const fullReg = await regRepo.findOne({
-            where: {id: reg.id},
-            relations: {event: true}
-        });
-        if (!fullReg || !fullReg.event) {
+    // Get eventId - load event relation only if needed
+    let eventId: string;
+    if (reg.event) {
+        eventId = reg.event.id;
+    } else {
+        // Query just for the event relation
+        const regWithEvent = await manager
+            .createQueryBuilder(EventRegistration, 'reg')
+            .select('reg.id')
+            .leftJoinAndSelect('reg.event', 'event')
+            .where('reg.id = :id', {id: reg.id})
+            .getOne();
+        
+        if (!regWithEvent?.event) {
             return [];
         }
-        reg = fullReg;
+        eventId = regWithEvent.event.id;
     }
 
     // 1. Load all default pools
     const defaultPools = await poolRepo.find({
-        where: {isDefault: true, event: {id: reg.event.id}},
+        where: {isDefault: true, event: {id: eventId}},
     });
 
     if (defaultPools.length === 0) {
