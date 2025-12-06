@@ -57,7 +57,7 @@ app.post(
             res.locals.permData as PermBundle | undefined,
             req.body,
         );
-        renderer.respondWithSuccessJson(res, {warnings});
+        renderer.respondWithSuccessDataJson(res, undefined, {warnings});
     }),
 );
 
@@ -66,7 +66,7 @@ app.get(
     requirePermissionApi(permFct, PERM.MANAGE_REQUIREMENTS),
     asyncHandler(async (req: Request, res: Response) => {
         const requirements = await controller.getRequirements(resFct(req).id);
-        renderer.respondWithSuccessJson(res, requirements);
+        renderer.respondWithSuccessDataJson(res, undefined, requirements);
     })
 );
 
@@ -84,7 +84,7 @@ app.get(
     requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
     asyncHandler(async (req: Request, res: Response) => {
         const data = await controller.getRecommendations(resFct(req).id);
-        renderer.respondWithSuccessJson(res, data);
+        renderer.respondWithSuccessDataJson(res, undefined, data);
     })
 );
 
@@ -93,7 +93,7 @@ app.post(
     requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
     asyncHandler(async (req: Request, res: Response) => {
         const data = await controller.updateRecommendations(resFct(req).id, req.body);
-        renderer.respondWithSuccessJson(res, data);
+        renderer.respondWithSuccessDataJson(res, data.message, {warnings: data.warnings});
     })
 );
 
@@ -102,7 +102,7 @@ app.post(
     requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
     asyncHandler(async (req: Request, res: Response) => {
         const data = await controller.autoGenerateRecommendations(resFct(req).id);
-        renderer.respondWithSuccessJson(res, data);
+        renderer.respondWithSuccessDataJson(res, data.message, {warnings: data.warnings});
     })
 );
 
@@ -111,7 +111,7 @@ app.post(
     requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
     asyncHandler(async (req: Request, res: Response) => {
         const data = await controller.applyRecommendations(resFct(req).id);
-        renderer.respondWithSuccessJson(res, data);
+        renderer.respondWithSuccessDataJson(res, data.message, data.skipped !== undefined ? {applied: data.applied, skipped: data.skipped, warnings: data.warnings} : {applied: data.applied, warnings: data.warnings});
     })
 );
 

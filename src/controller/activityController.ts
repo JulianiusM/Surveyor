@@ -195,7 +195,7 @@ function preprocessRecommendationUpdate(body: any) {
         throw new APIError(msg, body, 400);
     }
 
-    return value as {recommendations: {slotId: string; userId?: number | null; guestId?: number | null; status?: string}[]};
+    return value as {recommendations: {slotId: string; userId?: number | null; guestId?: number | null; status?: "PENDING" | "APPROVED" | "REJECTED" | "APPLIED"}[]};
 }
 
 /**
@@ -408,11 +408,27 @@ async function getRequirements(planId: string) {
 
 async function updateRequirements(planId: string, body: any) {
     const {roleRequirements, overrides, ...planSettings} = preprocessRequirementUpdate(body);
-    await requirementService.replaceRequirements(planId, roleRequirements, overrides, planSettings);
+    // Convert bindingDeadline string to Date if present
+    const normalizedSettings: Partial<Pick<ActivityPlan, "assignmentMode" | "generalRequiredShifts" | "roundingMode" | "bindingDeadline" | "allowOverfillAfterFull" | "allowArrivalDayEvening" | "allowDepartureDayMorning">> = {
+        assignmentMode: planSettings.assignmentMode,
+        generalRequiredShifts: planSettings.generalRequiredShifts,
+        roundingMode: planSettings.roundingMode,
+        allowOverfillAfterFull: planSettings.allowOverfillAfterFull,
+        allowArrivalDayEvening: planSettings.allowArrivalDayEvening,
+        allowDepartureDayMorning: planSettings.allowDepartureDayMorning,
+    };
+    
+    if (planSettings.bindingDeadline !== undefined) {
+        normalizedSettings.bindingDeadline = planSettings.bindingDeadline === null 
+            ? null 
+            : (typeof planSettings.bindingDeadline === 'string' ? new Date(planSettings.bindingDeadline) : planSettings.bindingDeadline);
+    }
+    
+    await requirementService.replaceRequirements(planId, roleRequirements, overrides, normalizedSettings);
     return 'Requirements updated';
 }
 
-async function collectRecommendationWarnings(planId: string, recommendations: {slotId: string; userId?: number | null; guestId?: number | null; status?: string}[]) {
+async function collectRecommendationWarnings(planId: string, recommendations: {slotId: string; userId?: number | null; guestId?: number | null; status?: "PENDING" | "APPROVED" | "REJECTED" | "APPLIED"}[]) {
     const [plan, slots, existingAssignments] = await Promise.all([
         activityService.getActivityPlanById(planId),
         activityService.getActivitySlotsFlat(planId),
@@ -451,7 +467,7 @@ async function collectRecommendationWarnings(planId: string, recommendations: {s
 function buildParticipantAttendanceMap(
     plan: ActivityPlan,
     overrides: Awaited<ReturnType<typeof requirementService.getRequirementConfiguration>>["overrides"],
-    existingAssignments: Record<string, {id: string; day: string; startTime?: string | null; endTime?: string | null; pos: number}[]>,
+    existingAssignments: Record<string, {id: string; day: string; startTime?: string | null; endTime?: string | null; pos?: number | null}[]>,
     recommendations: {slotId: string; userId?: number | null; guestId?: number | null}[],
     eventParticipants: Awaited<ReturnType<typeof eventService.getEventParticipants>> = [],
 ): Record<string, ParticipantAttendance> {
@@ -517,7 +533,7 @@ function resolveWarningTarget(
     body: {userId?: number | null; guestId?: number | null} = {},
 ) {
     if (body.userId || body.guestId) {
-        const isManager = permData?.entity?.has(PERM.MANAGE_ASSIGNMENTS);
+        const isManager = permData?.entity?.has('MANAGE_ASSIGNMENTS');
         if (!isManager) {
             throw new APIError("Insufficient permissions to view warnings for other participants", body, 403);
         }
