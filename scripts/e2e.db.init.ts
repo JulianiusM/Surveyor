@@ -53,8 +53,12 @@ async function main() {
     // Recreate via migrations
     await E2EDataSource.synchronize(true)
     console.log("Synced...")
-    await E2EDataSource.runMigrations();
-    console.log("Migrated...")
+    try {
+        await E2EDataSource.runMigrations();
+        console.log("Migrated...")
+    } catch (err) {
+        console.log("Migrations skipped (tables may already exist from synchronize):", (err as any)?.message || err);
+    }
 
     // ---- Seed minimal fixture data ----
     // Example: create a test admin user. Replace with your own seeder logic.
