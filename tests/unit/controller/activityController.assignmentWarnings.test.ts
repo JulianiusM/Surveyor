@@ -74,6 +74,7 @@ describe("getAssignmentWarnings", () => {
             controller.getAssignmentWarnings("plan-1", "slot-1", session, undefined, {userId: 2}),
         ).rejects.toMatchObject({status: 403});
 
+        // Mock entity with MANAGE_ASSIGNMENTS permission
         const permData = {entity: {has: (perm: string) => perm === 'MANAGE_ASSIGNMENTS'}} as any;
         activityService.getActivityPlanById.mockResolvedValue({id: "plan-1", allowOverfillAfterFull: true});
         activityService.getActivitySlotById.mockResolvedValue({

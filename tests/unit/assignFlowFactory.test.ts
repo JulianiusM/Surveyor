@@ -55,6 +55,7 @@ describe("enforcePlanBindingDeadline", () => {
             bindingDeadline: new Date("2025-01-01T00:00:00Z"),
         });
 
+        // Mock entity with MANAGE_ASSIGNMENTS permission
         const permData = {
             entity: {has: (perm: string) => perm === 'MANAGE_ASSIGNMENTS'},
         } as any;
