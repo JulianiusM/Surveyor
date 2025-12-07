@@ -105,11 +105,15 @@ afterEach(async () => {
 // Core functionality tests
 describe('Roles and assignments', () => {
     test.each(roleTestData)('$description', async ({roleName, expectedCreations}) => {
-        const id1 = await ensureRoleId(roleName);
-        const id2 = await ensureRoleId(roleName);
-        expect(id1).toBe(id2);
+        // Create a test plan
+        const planId = uuidv4();
+        await createActivityPlan(planId, 1, 'Test Plan', 'desc', '2025-01-01', '2025-01-02');
+        
+        const roles1 = await ensureRoleId(planId, roleName);
+        const roles2 = await ensureRoleId(planId, roleName);
+        expect(roles1[0].id).toBe(roles2[0].id);
 
-        const roles = await AppDataSource.getRepository(ActivityRole).find();
+        const roles = await AppDataSource.getRepository(ActivityRole).find({where: {plan: {id: planId}}});
         expect(roles).toHaveLength(expectedCreations);
         expect(roles[0]).toEqual(expect.objectContaining({name: roleName, isDefault: 1}));
     });
@@ -215,7 +219,7 @@ describe('Aggregates and lookups', () => {
                 AppDataSource.getRepository(User).create(user)
             );
 
-            await ensureRoleId(roleName);
+            await ensureRoleId(planId, roleName);
 
             // Create assignment
             const assignId = await ensureAssignment(slotId, userEntity.id, undefined);
@@ -264,7 +268,7 @@ describe('Aggregates and lookups', () => {
 
             // Ensure all roles exist
             for (const roleName of roles) {
-                await ensureRoleId(roleName);
+                await ensureRoleId(planId, roleName);
             }
 
             // Create assignments with roles
@@ -300,8 +304,8 @@ describe('Aggregates and lookups', () => {
             // Ensure roles and get IDs
             const roleIds = [];
             for (const roleName of roleNames) {
-                const roleId = await ensureRoleId(roleName);
-                roleIds.push(roleId);
+                const roles = await ensureRoleId(planId, roleName);
+                roleIds.push(roles[0].id);
             }
 
             await addActivitySlotRoles(slotId, roleIds);
@@ -384,7 +388,7 @@ describe('Slot CRUD: add/list/update/reorder/delete/lastNumber', () => {
         const user = await AppDataSource.getRepository(User).save(AppDataSource.getRepository(User).create({
             username: 'bob', email: 'b@b',
         }));
-        await ensureRoleId('default');
+        await ensureRoleId(planId, 'default');
         const assignId = await ensureAssignment(slotIdA, user.id);
         await assignRole(assignId, 'default');
 
@@ -463,8 +467,8 @@ describe('Assignment wrapper helpers + lookups', () => {
         await addActivitySlot(planId, {id: slotId, title: 'S', day: '2025-01-01', pos: 1, maxAssignees: 2});
 
         // Role setup
-        await ensureRoleId('helper');
-        await ensureRoleId('default');
+        await ensureRoleId(planId, 'helper');
+        await ensureRoleId(planId, 'default');
 
         // User assignment via wrapper
         await assignActivityAssignmentRoleToUser(slotId, 1, 'helper');
@@ -494,8 +498,10 @@ describe('Assignment wrapper helpers + lookups', () => {
 // Edge cases and additional scenarios
 describe('Edge cases & additional scenarios', () => {
     test('ensureRoleId for non-default marks isDefault=false', async () => {
-        const rid = await ensureRoleId('helper');
-        const role = await AppDataSource.getRepository(ActivityRole).findOneByOrFail({id: rid});
+        const planId = uuidv4();
+        await createActivityPlan(planId, 1, 'Test Plan', 'desc', '2025-01-01', '2025-01-02');
+        const roles = await ensureRoleId(planId, 'helper');
+        const role = await AppDataSource.getRepository(ActivityRole).findOneByOrFail({id: roles[0].id});
         expect(role).toEqual(expect.objectContaining({name: 'helper', isDefault: 0}));
     });
 
@@ -525,7 +531,7 @@ describe('Edge cases & additional scenarios', () => {
         const slotId = uuidv4()
         await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02');
         await addActivitySlot(planId, {id: slotId, title: 'S', day: '2025-01-01', pos: 1, maxAssignees: 2});
-        await ensureRoleId('lead');
+        await ensureRoleId(planId, 'lead');
         const aid = await ensureAssignment(slotId, 1, undefined);
 
         await assignRole(aid, 'lead');
@@ -546,8 +552,8 @@ describe('Edge cases & additional scenarios', () => {
         const slotId = uuidv4()
         await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02');
         await addActivitySlot(planId, {id: slotId, title: 'S', day: '2025-01-01', pos: 1, maxAssignees: 2});
-        await ensureRoleId('lead');
-        await ensureRoleId('helper');
+        await ensureRoleId(planId, 'lead');
+        await ensureRoleId(planId, 'helper');
         const aid = await ensureAssignment(slotId, 1, undefined);
         await assignRole(aid, 'lead');
         await assignRole(aid, 'helper');
@@ -639,8 +645,8 @@ describe('Edge cases & additional scenarios', () => {
         }));
         const guest = await AppDataSource.getRepository(Guest).save(AppDataSource.getRepository(Guest).create({username: 'guestB'}));
 
-        await ensureRoleId('lead');
-        await ensureRoleId('helper');
+        await ensureRoleId(planId, 'lead');
+        await ensureRoleId(planId, 'helper');
 
         const aUser = await ensureAssignment(slotId, user.id, undefined);
         await assignRole(aUser, 'lead');
@@ -669,8 +675,8 @@ describe('Edge cases & additional scenarios', () => {
         }));
         const guest = await AppDataSource.getRepository(Guest).save(AppDataSource.getRepository(Guest).create({username: 'sam'}));
 
-        await ensureRoleId('alpha');
-        await ensureRoleId('beta');
+        await ensureRoleId(planId, 'alpha');
+        await ensureRoleId(planId, 'beta');
 
         const a1 = await ensureAssignment(slotIdA, user.id, undefined);
         await assignRole(a1, 'alpha');
