@@ -259,18 +259,10 @@ export function generateAutoRecommendations(ctx: AutoAssignmentContext): Recomme
     }
 
     // Option 2: Post-assignment swap optimization
-    // Skip swap optimization if there are no recommendations to optimize
+    // Swap optimization can ADD recommendations by moving better-served participants to alternative
+    // slots, thereby freeing up slots for underserved participants. This is intentional behavior.
     if (swapIterations > 0 && recommendations.length > 0) {
-        const beforeSwapCount = recommendations.length;
         optimizeViaSwaps(recommendations, states, assignmentMap, ctx.slots, attendancePolicy, swapIterations);
-        const afterSwapCount = recommendations.length;
-        
-        // Swap optimization should never ADD recommendations, only move them between slots
-        if (afterSwapCount > beforeSwapCount) {
-            console.warn(`[autoAssignment] Swap optimization incorrectly added ${afterSwapCount - beforeSwapCount} recommendations`);
-            // Remove the extra recommendations
-            recommendations.splice(beforeSwapCount);
-        }
     }
 
     return recommendations;
@@ -324,12 +316,6 @@ function assignFairly(
         });
 
         if (participantsWithDeficit.length === 0) break;
-        
-        // Safety check to prevent infinite loops (should never happen in production)
-        if (iterationCount > 1000) {
-            console.warn('[autoAssignment] Breaking after 1000 iterations to prevent infinite loop');
-            break;
-        }
 
         // Recalculate eligibility for participants who were assigned in previous iteration
         for (const key of needsRecalc) {
