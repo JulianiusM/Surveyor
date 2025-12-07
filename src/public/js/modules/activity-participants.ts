@@ -3,7 +3,7 @@
  * Handles filtering and search functionality for the participants list
  */
 
-type ParticipantFilter = 'all' | 'assigned' | 'unassigned';
+import type {ParticipantFilter} from './activity-types';
 
 /**
  * Initialize participants tab with search and filter functionality

@@ -7,20 +7,8 @@ import {get, post} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
 import {reloadAfterDelay} from '../shared/ui-helpers';
 import {requireEntityPerm} from '../core/permissions';
-import {describeWarning as descWarn, type AssignmentWarning} from './activity-assignments';
-
-interface RecommendationRow {
-    id?: string;
-    slot: { id: string; title: string; day?: string; startTime?: string | null; endTime?: string | null };
-    user?: { id: number; username: string } | null;
-    guest?: { id: number; username: string } | null;
-    status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'APPLIED';
-}
-
-interface RecommendationWarning {
-    recommendation: { slotId: string; userId?: number | null; guestId?: number | null };
-    warnings: AssignmentWarning[];
-}
+import {describeWarning as descWarn} from './activity-assignments';
+import type {AssignmentWarning, RecommendationRow, RecommendationWarning} from './activity-types';
 
 function formatTimeLabel(time?: string | null): string {
     if (!time) return "";

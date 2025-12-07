@@ -7,41 +7,7 @@ import {get, post} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
 import {reloadAfterDelay} from '../shared/ui-helpers';
 import {requireEntityPerm} from '../core/permissions';
-import {type RoleSummary} from './activity-roles';
-
-interface RequirementParticipantSummary {
-    participantKey: string;
-    name?: string | null;
-    requiredShifts: number;
-    assignedShifts: number;
-    remainingShifts: number;
-    source: 'none' | 'general' | 'role' | 'override';
-    attendance?: { arrivalDate?: string | null; departureDate?: string | null };
-}
-
-interface RequirementConfiguration {
-    plan: {
-        assignmentMode?: 'FREE' | 'REQUIRED';
-        generalRequiredShifts?: number | null;
-        roundingMode?: 'CEIL' | 'ROUND' | 'FLOOR' | null;
-        bindingDeadline?: string | Date | null;
-        allowOverfillAfterFull?: boolean;
-        allowArrivalDayEvening?: boolean;
-        allowDepartureDayMorning?: boolean;
-    };
-    roleRequirements: { roleId: number; requiredShifts: number }[];
-    overrides: {
-        id?: number;
-        roleId?: number | null;
-        role?: RoleSummary | null;
-        userId?: number | null;
-        user?: { username: string } | null;
-        guestId?: number | null;
-        guest?: { username: string } | null;
-        requiredShifts: number;
-    }[];
-    participants?: RequirementParticipantSummary[];
-}
+import type {RoleSummary, RequirementParticipantSummary, RequirementConfiguration} from './activity-types';
 
 function toDateTimeLocalValue(date?: string | Date | null): string {
     if (!date) return '';

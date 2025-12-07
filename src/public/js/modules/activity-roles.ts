@@ -7,28 +7,19 @@ import {post} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
 import {reloadAfterDelay} from '../shared/ui-helpers';
 import {requireEntityPerm} from '../core/permissions';
-
-interface BootstrapModal {
-    show: () => void;
-    hide: () => void;
-}
-
-interface BootstrapGlobal {
-    Modal: new (element: HTMLElement, options?: { focus?: boolean }) => BootstrapModal;
-}
+import type {
+    BootstrapGlobal,
+    BootstrapModal,
+    RoleSummary,
+    SlotRolesMap,
+} from './activity-types';
 
 declare const bootstrap: BootstrapGlobal;
 
-export interface RoleSummary {
-    id: number;
-    name: string;
-    description?: string | null;
-}
+// Re-export RoleSummary for backward compatibility
+export type {RoleSummary};
 
-interface SlotRolesMap {
-    [slotId: string]: RoleSummary[];
-}
-
+// Local types specific to this module
 interface SlotParticipant {
     id: string;
     name: string;

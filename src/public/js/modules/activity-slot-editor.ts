@@ -7,20 +7,10 @@ import {post} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
 import {reloadAfterDelay} from '../shared/ui-helpers';
 import {requireEntityPerm} from '../core/permissions';
-import {getAllRoles, getSlotRolesForSlot, addRoleToGlobal, type RoleSummary} from './activity-roles';
-
-interface BootstrapModal {
-    show: () => void;
-    hide: () => void;
-}
-
-interface BootstrapGlobal {
-    Modal: new (element: HTMLElement, options?: { focus?: boolean }) => BootstrapModal;
-}
+import {getAllRoles, getSlotRolesForSlot, addRoleToGlobal} from './activity-roles';
+import type {BootstrapGlobal, BootstrapModal, RoleSummary, SlotEditorMode} from './activity-types';
 
 declare const bootstrap: BootstrapGlobal;
-
-type SlotEditorMode = 'create' | 'edit';
 
 /**
  * Format time for display (HH:MM)

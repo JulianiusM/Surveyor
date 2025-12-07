@@ -6,35 +6,18 @@
 import {post} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
 import {reloadAfterDelay} from '../shared/ui-helpers';
-
-interface BootstrapModal {
-    show: () => void;
-    hide: () => void;
-}
-
-interface BootstrapGlobal {
-    Modal: new (element: HTMLElement, options?: { focus?: boolean }) => BootstrapModal;
-}
+import type {
+    BootstrapGlobal,
+    BootstrapModal,
+    WarningType,
+    AssignmentWarning,
+    WarningModal,
+} from './activity-types';
 
 declare const bootstrap: BootstrapGlobal;
 
-export type WarningType =
-    | "outside_attendance"
-    | "arrival_day"
-    | "departure_day"
-    | "arrival_time_restricted"
-    | "departure_time_restricted"
-    | "overlap"
-    | "over_capacity";
-
-export interface AssignmentWarning {
-    type: WarningType;
-    conflicts?: string[];
-}
-
-export interface WarningModal {
-    confirm(warnings: AssignmentWarning[], slotId: string): Promise<boolean>;
-}
+// Re-export types for backward compatibility
+export type {WarningType, AssignmentWarning, WarningModal};
 
 /**
  * Describe an assignment warning in human-readable format
