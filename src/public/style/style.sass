@@ -48,6 +48,39 @@
   .activity-table
     thead th
       font-size: 0.75rem
+
+// Extra small button variant
+.btn-xs
+  padding: 0.125rem 0.375rem
+  font-size: 0.75rem
+  line-height: 1.2
+  border-radius: 0.15rem
+
+// Fix badge readability on colored backgrounds
+.bg-success-subtle
+  .badge
+    &.bg-success
+      background-color: #198754 !important
+      color: #fff !important
+
+.bg-warning-subtle
+  .badge
+    &.bg-warning
+      background-color: #ffc107 !important
+      color: #000 !important
+
+.bg-danger-subtle
+  .badge
+    &.bg-danger
+      background-color: #dc3545 !important
+      color: #fff !important
+
+// Ensure text color classes work properly
+.badge
+  &.text-dark
+    color: #000 !important
+  &.text-white
+    color: #fff !important
       padding: .25rem .3rem
 
     .slot

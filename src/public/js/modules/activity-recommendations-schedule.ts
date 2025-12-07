@@ -258,7 +258,7 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
 
     const loadRecommendations = async () => {
         try {
-            const url = `/api/activity-plan/${planId}/recommendations`;
+            const url = `/api/activity/${planId}/recommendations`;
             const resp = await get<{
                 recommendations: RecommendationRow[];
                 warnings: RecommendationWarning[];
@@ -280,7 +280,7 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
     const generateRecommendations = async () => {
         try {
             setAlert('Generating recommendations...', 'info');
-            await post(`/api/activity-plan/${planId}/recommendations/auto`, {});
+            await post(`/api/activity/${planId}/recommendations/auto`, {});
             setAlert('Recommendations generated successfully.', 'info');
             await loadRecommendations();
         } catch (err) {
@@ -298,12 +298,13 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
 
         try {
             setAlert('Applying approved recommendations...', 'info');
-            await post(`/api/activity-plan/${planId}/recommendations/apply`, {});
+            await post(`/api/activity/${planId}/recommendations/apply`, {});
             setAlert('Recommendations applied successfully!', 'info');
             // Store active tab before reload
-            const activeTab = document.querySelector('.nav-link.active');
-            if (activeTab?.getAttribute('data-bs-target')) {
-                sessionStorage.setItem('activityActiveTab', activeTab.getAttribute('data-bs-target') || '');
+            const activeTabEl = document.querySelector<HTMLElement>('.nav-link.active[data-bs-target]');
+            if (activeTabEl) {
+                const targetId = activeTabEl.getAttribute('data-bs-target') || '';
+                sessionStorage.setItem('activityActiveTab', targetId);
             }
             reloadAfterDelay(1000);
         } catch (err) {
@@ -354,12 +355,37 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
 
             if (!participant) return;
 
+            // Find slot information from existing recommendations or from DOM
+            let slot = recommendations.find((r) => r.slot.id === slotId)?.slot;
+            if (!slot) {
+                // Try to get slot title from DOM
+                const slotElement = scheduleView.querySelector(`[data-slot-id="${slotId}"]`);
+                const slotTitle = slotElement?.querySelector('.fw-bold')?.textContent?.trim() || 'Unknown slot';
+                slot = {
+                    id: slotId,
+                    title: slotTitle,
+                };
+            }
+
+            // Check for duplicates before adding
+            const isDuplicate = recommendations.some(r =>
+                r.slot.id === slotId &&
+                r.user?.id === userId &&
+                r.guest?.id === guestId
+            );
+
+            if (isDuplicate) {
+                if (addWarningBox) {
+                    addWarningBox.classList.remove('d-none');
+                    const span = addWarningBox.querySelector('span');
+                    if (span) span.textContent = 'This recommendation already exists.';
+                }
+                return;
+            }
+
             // Create new recommendation
             const newRec: RecommendationRow = {
-                slot: recommendations.find((r) => r.slot.id === slotId)?.slot || {
-                    id: slotId,
-                    title: 'Unknown slot',
-                },
+                slot,
                 user: userId ? {id: userId, username: participant.label} : null,
                 guest: guestId ? {id: guestId, username: participant.label} : null,
                 status: 'APPROVED',

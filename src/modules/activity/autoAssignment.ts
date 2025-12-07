@@ -50,6 +50,7 @@ interface ParticipantState {
     participantKey: string;
     required: number;
     assigned: number;
+    existingCount?: number;  // Track existing assignments separately for swap optimization
 }
 
 interface SlotCapacity {
@@ -96,6 +97,7 @@ function buildParticipantStates(
             participantKey,
             required: requirements[participantKey]?.requiredShifts ?? 0,
             assigned: existing.length,
+            existingCount: existing.length,
         });
     }
 
@@ -332,6 +334,14 @@ function assignFairly(
             for (const slot of slots) {
                 // F4/F5: Check capacity
                 if (!allowOvercapacity && slot.remaining <= 0) continue;
+
+                // Check if this (participant, slot) pair is already in recommendations (F8: prevent duplicates)
+                const alreadyRecommended = recommendations.some(r =>
+                    r.slotId === slot.slot.id &&
+                    r.userId === (state.participant.userId ?? null) &&
+                    r.guestId === (state.participant.guestId ?? null)
+                );
+                if (alreadyRecommended) continue;
 
                 // F6, F7, F8: Check eligibility
                 if (!canAssign(slot.candidate, state.participant, existingAssignments, attendancePolicy)) {
@@ -589,9 +599,9 @@ function optimizeViaSwaps(
                         // Add new recommendation for underserved participant
                         const newRec: RecommendationInput = {
                             slotId: slot.id,
-                            userId: underservedState.participant.userId ?? undefined,
-                            guestId: underservedState.participant.guestId ?? undefined,
-                            planId: recUsingThisSlot.planId,
+                            userId: underservedState.participant.userId ?? null,
+                            guestId: underservedState.participant.guestId ?? null,
+                            status: "PENDING",
                         };
                         recommendations.push(newRec);
                         

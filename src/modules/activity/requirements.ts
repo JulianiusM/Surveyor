@@ -257,17 +257,22 @@ export function calculateParticipantRequirement(
             baseRequirement = applyRounding(plan.generalRequiredShifts * ratio, roundingMode);
         }
 
-        // Apply priority: override > role > general
-        if (roleRequirement > 0) {
+        // Apply priority: override > role > general (override applied later)
+        if (requirementFromOverride != null) {
+            // Override takes absolute priority
+            requiredShifts = requirementFromOverride;
+            source = "override";
+        } else if (roleRequirement > 0) {
+            // Role requirement is used if present
             requiredShifts = roleRequirement;
             source = "role";
         } else if (baseRequirement > 0) {
+            // General requirement is the fallback
             requiredShifts = baseRequirement;
             source = "general";
         }
-    }
-
-    if (requirementFromOverride != null) {
+    } else if (requirementFromOverride != null) {
+        // Even in non-REQUIRED mode, overrides are respected
         requiredShifts = requirementFromOverride;
         source = "override";
     }

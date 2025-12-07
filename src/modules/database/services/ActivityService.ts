@@ -593,7 +593,7 @@ export async function getActivityPlanParticipants(planId: string): Promise<PlanP
         const eventParticipants = await eventService.getEventParticipants(plan.event.id);
         
         for (const ep of eventParticipants) {
-            const name = ep.name || ep.user?.username || ep.guest?.username || 'Unknown';
+            const name = ep.name || 'Unknown';
             if (!participantMap.has(name)) {
                 // Add event participant who hasn't been assigned yet
                 participantMap.set(name, {
