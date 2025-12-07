@@ -552,7 +552,7 @@ export async function getActivityPlanParticipants(planId: string): Promise<PlanP
         .leftJoin("ar.role", "role")
         .where("aa.plan_id = :planId", {planId})
         .select([
-            `COALESCE(user.username, guest.username) AS name`,
+            `COALESCE(user.name, user.username, guest.username) AS name`,
             `COUNT(DISTINCT aa.id) AS count`,
             `GROUP_CONCAT(DISTINCT role.name ORDER BY role.name) AS roles`
         ])

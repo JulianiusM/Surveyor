@@ -14,6 +14,7 @@ import {
     doUnassignRole,
     ensureAssignment,
     ensureRoleId,
+    getAllRoles,
     getActivityPlanById,
     getActivityPlanParticipants,
     getActivityPlansByUserId,
@@ -700,6 +701,19 @@ describe('Edge cases & additional scenarios', () => {
         const result = await deleteActivitySlotAssignment(id);
         expect(result).toHaveProperty('affected');
         expect((result as any).affected).toBe(1);
+    });
+
+    test('getAllRoles returns all roles for a plan', async () => {
+        const planId = uuidv4();
+        await createActivityPlan(planId, 1, 'Test Plan', 'desc', '2025-01-01', '2025-01-02');
+        
+        // Create some roles
+        await ensureRoleId(planId, 'Admin');
+        await ensureRoleId(planId, 'Member');
+        
+        const allRoles = await getAllRoles(planId);
+        const roleNames = allRoles.map(r => r.name).sort();
+        expect(roleNames).toEqual(['Admin', 'Member']);
     });
 });
 

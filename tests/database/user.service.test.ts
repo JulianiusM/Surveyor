@@ -27,7 +27,6 @@ import {
     verifyPassword,
     verifyPasswordResetToken,
 } from '../../src/modules/database/services/UserService';
-import {getAllRoles} from '../../src/modules/database/services/ActivityService';
 import {AppDataSource, initDataSource} from '../../src/modules/database/dataSource';
 
 // Entities used for setup/cleanup
@@ -46,7 +45,6 @@ import {
     oidcLinkByEmailData,
     oidcNoLinkByEmailData,
     passwordResetData,
-    rolesData,
     userRegistrationData,
 } from '../data/database/userServiceData';
 
@@ -199,19 +197,6 @@ describe('Guests & guest links', () => {
             expect(byToken).toMatchObject({id: guestId, username});
         }
     );
-});
-
-describe('Roles', () => {
-    test.each(rolesData)('$description', async ({roles, expectedNames}) => {
-        const roleEntities = roles.map(r =>
-            AppDataSource.getRepository(ActivityRole).create(r)
-        );
-        await AppDataSource.getRepository(ActivityRole).save(roleEntities);
-
-        const allRoles = await getAllRoles();
-        const titles = allRoles.map(r => r.name).sort();
-        expect(titles).toEqual(expectedNames);
-    });
 });
 
 describe('OIDC / SSO', () => {
