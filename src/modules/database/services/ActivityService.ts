@@ -95,8 +95,17 @@ export async function assignRole(assignmentId: number, roleName: string[] | stri
 }
 
 export async function doUnassignRole(assignmentId: number, roleName: string) {
+    // Get assignment to find planId
+    const assignment = await AppDataSource.getRepository(ActivityAssignment).findOne({
+        where: {id: assignmentId},
+        relations: {plan: true},
+        select: {id: true, plan: {id: true}},
+    });
+    if (!assignment) return false;
+
+    // Find role by name AND planId to avoid cross-plan conflicts
     const role = await AppDataSource.getRepository(ActivityRole).findOne({
-        where: {name: roleName},
+        where: {name: roleName, plan: {id: assignment.plan.id}},
     });
     if (!role) return false;
 
