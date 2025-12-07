@@ -474,7 +474,7 @@ export async function getParticipantAssignmentsWithSlots(planId: string): Promis
         relations: {slot: true, user: true, guest: true},
         select: {
             id: true,
-            slot: {id: true, day: true, startTime: true, endTime: true, pos: true},
+            slot: {id: true, day: true, startTime: true, endTime: true, pos: true, isArrivalEvening: true, isDepartureMorning: true},
             user: {id: true},
             guest: {id: true},
         },
@@ -490,6 +490,8 @@ export async function getParticipantAssignmentsWithSlots(planId: string): Promis
             startTime: assignment.slot.startTime,
             endTime: assignment.slot.endTime,
             pos: assignment.slot.pos,
+            isArrivalEvening: assignment.slot.isArrivalEvening,
+            isDepartureMorning: assignment.slot.isDepartureMorning,
         });
     }
 

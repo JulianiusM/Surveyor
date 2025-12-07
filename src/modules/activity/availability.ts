@@ -29,6 +29,8 @@ export interface AssignmentWarning {
 
 export interface AssignmentCandidate extends SlotTimeboxCandidate {
     id: string;
+    isArrivalEvening?: boolean;
+    isDepartureMorning?: boolean;
 }
 
 function isBefore(a: string, b: string): boolean {
@@ -110,12 +112,16 @@ export function collectAssignmentWarnings(
         warnings.push({type: "outside_attendance"});
     } else if (attendance.boundary === "arrival") {
         warnings.push({type: "arrival_day"});
-        if (!attendancePolicy.allowArrivalDayEvening && isEveningSlot(slot)) {
+        // Check explicit slot flag first, fall back to time-based heuristic
+        const isEvening = slot.isArrivalEvening !== undefined ? slot.isArrivalEvening : isEveningSlot(slot);
+        if (!attendancePolicy.allowArrivalDayEvening && isEvening) {
             warnings.push({type: "arrival_time_restricted"});
         }
     } else if (attendance.boundary === "departure") {
         warnings.push({type: "departure_day"});
-        if (!attendancePolicy.allowDepartureDayMorning && isMorningSlot(slot)) {
+        // Check explicit slot flag first, fall back to time-based heuristic
+        const isMorning = slot.isDepartureMorning !== undefined ? slot.isDepartureMorning : isMorningSlot(slot);
+        if (!attendancePolicy.allowDepartureDayMorning && isMorning) {
             warnings.push({type: "departure_time_restricted"});
         }
     }
@@ -135,5 +141,7 @@ export function toAssignmentCandidate(slot: ActivitySlot): AssignmentCandidate {
         startTime: slot.startTime,
         endTime: slot.endTime,
         pos: slot.pos,
+        isArrivalEvening: slot.isArrivalEvening,
+        isDepartureMorning: slot.isDepartureMorning,
     };
 }
