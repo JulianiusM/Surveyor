@@ -1,0 +1,382 @@
+/**
+ * Activity Recommendations Schedule Module
+ * Handles the enhanced schedule-based recommendations view
+ */
+
+import {get, post, del} from '../core/http';
+import {showInlineAlert} from '../shared/alerts';
+import {describeWarning} from './activity-assignments';
+import {reloadAfterDelay} from '../shared/ui-helpers';
+import type {
+    AssignmentWarning,
+    RecommendationParticipantOption,
+    RecommendationRow,
+    RecommendationWarning,
+    BootstrapModal,
+    BootstrapGlobal
+} from './activity-types';
+import {formatDateLabel} from "../core/formatting";
+
+declare const bootstrap: BootstrapGlobal;
+
+export function initRecommendationScheduleView(planId: string, describeSlot: (slotId: string) => string): void {
+    const panel = document.getElementById('recommendationPanel');
+    const scheduleView = panel?.querySelector<HTMLElement>('#recommendationScheduleView');
+    const alertBox = panel?.querySelector<HTMLElement>('[data-recommendations-alert]');
+    const refreshBtn = panel?.querySelector<HTMLButtonElement>('[data-recommendations-refresh]');
+    const autoBtn = panel?.querySelector<HTMLButtonElement>('[data-recommendations-auto]');
+    const applyBtn = panel?.querySelector<HTMLButtonElement>('[data-recommendations-apply]');
+    const summaryStats = panel?.querySelector<HTMLElement>('#recommendationSummaryStats');
+
+    if (!planId || !panel || !scheduleView) return;
+
+    let recommendations: RecommendationRow[] = [];
+    let warnings: RecommendationWarning[] = [];
+    let participantOptions: RecommendationParticipantOption[] = [];
+
+    // Add recommendation modal
+    const addModal = document.getElementById('addRecommendationModal');
+    const addSlotIdInput = addModal?.querySelector<HTMLInputElement>('#addRecommendationSlotId');
+    const addParticipantSelect = addModal?.querySelector<HTMLSelectElement>('#addRecommendationParticipant');
+    const addConfirmBtn = addModal?.querySelector<HTMLButtonElement>('#addRecommendationConfirm');
+    const addWarningBox = addModal?.querySelector<HTMLElement>('[data-add-warning]');
+    let addModalInstance: BootstrapModal | null = null;
+
+    if (addModal) {
+        addModalInstance = new bootstrap.Modal(addModal, {focus: true});
+    }
+
+    const setAlert = (message?: string, variant: 'info' | 'danger' = 'info') => {
+        if (!alertBox) return;
+        const target = alertBox.querySelector('span') || alertBox;
+        if (!message) {
+            alertBox.classList.add('d-none');
+            target.textContent = '';
+            return;
+        }
+
+        alertBox.classList.remove('d-none', 'alert-info', 'alert-danger');
+        alertBox.classList.add(variant === 'danger' ? 'alert-danger' : 'alert-info');
+        target.textContent = message;
+    };
+
+    const formatParticipantLabel = (option: RecommendationParticipantOption) => {
+        const arrival = formatDateLabel(option.arrivalDate ?? null);
+        const departure = formatDateLabel(option.departureDate ?? null);
+        const attendance = arrival || departure ? ` (${arrival || 'start'} – ${departure || 'end'})` : '';
+        return `${option.label}${attendance}`;
+    };
+
+    const participantValue = (option: RecommendationParticipantOption) =>
+        option.userId ? `user:${option.userId}` : `guest:${option.guestId}`;
+
+    const updateSummaryStats = () => {
+        if (!summaryStats) return;
+        summaryStats.innerHTML = '';
+
+        if (!recommendations.length) {
+            const span = document.createElement('span');
+            span.className = 'text-secondary';
+            span.textContent = 'No recommendations loaded.';
+            summaryStats.append(span);
+            return;
+        }
+
+        const counts: Record<string, number> = {
+            PENDING: 0,
+            APPROVED: 0,
+            REJECTED: 0,
+        };
+
+        recommendations.forEach((rec) => {
+            if (rec.status && counts[rec.status] !== undefined) {
+                counts[rec.status] += 1;
+            }
+        });
+
+        const pieces: { label: string; key: keyof typeof counts; className: string }[] = [
+            {label: 'Pending', key: 'PENDING', className: 'badge bg-secondary-subtle text-secondary-emphasis me-1'},
+            {label: 'Approved', key: 'APPROVED', className: 'badge bg-success-subtle text-success-emphasis me-1'},
+            {label: 'Rejected', key: 'REJECTED', className: 'badge bg-danger-subtle text-danger-emphasis me-1'},
+        ];
+
+        pieces.forEach(({label, key, className}) => {
+            const value = counts[key];
+            const span = document.createElement('span');
+            span.className = className;
+            span.textContent = `${label}: ${value}`;
+            summaryStats.append(span);
+        });
+    };
+
+    const renderRecommendation = (rec: RecommendationRow, container: HTMLElement) => {
+        const recDiv = document.createElement('div');
+        recDiv.className = 'd-flex align-items-center gap-2 mb-1 p-1 border rounded';
+        recDiv.dataset.recId = rec.id || '';
+        recDiv.dataset.slotId = rec.slot.id;
+        if (rec.user?.id) recDiv.dataset.userId = String(rec.user.id);
+        if (rec.guest?.id) recDiv.dataset.guestId = String(rec.guest.id);
+
+        // Status-based styling
+        if (rec.status === 'APPROVED') {
+            recDiv.classList.add('bg-success-subtle');
+        } else if (rec.status === 'REJECTED') {
+            recDiv.classList.add('bg-danger-subtle');
+        } else {
+            recDiv.classList.add('bg-warning-subtle');
+        }
+
+        // Icon
+        const icon = document.createElement('i');
+        icon.className = rec.status === 'APPROVED' ? 'bi bi-check-circle-fill text-success' : 
+                         rec.status === 'REJECTED' ? 'bi bi-x-circle-fill text-danger' :
+                         'bi bi-clock-fill text-warning';
+        recDiv.append(icon);
+
+        // Participant name
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'flex-grow-1 small';
+        nameSpan.textContent = rec.user?.username || rec.guest?.username || 'Unknown';
+        recDiv.append(nameSpan);
+
+        // Status badge
+        const badge = document.createElement('span');
+        badge.className = 'badge small';
+        if (rec.status === 'APPROVED') {
+            badge.classList.add('bg-success', 'text-white');
+            badge.textContent = 'Approved';
+        } else if (rec.status === 'REJECTED') {
+            badge.classList.add('bg-danger', 'text-white');
+            badge.textContent = 'Rejected';
+        } else {
+            badge.classList.add('bg-warning', 'text-dark');
+            badge.textContent = 'Pending';
+        }
+        recDiv.append(badge);
+
+        // Action buttons
+        if (rec.status === 'PENDING') {
+            const approveBtn = document.createElement('button');
+            approveBtn.className = 'btn btn-xs btn-success';
+            approveBtn.type = 'button';
+            approveBtn.title = 'Approve';
+            approveBtn.innerHTML = '<i class="bi bi-check"></i>';
+            approveBtn.addEventListener('click', () => approveRecommendation(rec));
+            recDiv.append(approveBtn);
+
+            const rejectBtn = document.createElement('button');
+            rejectBtn.className = 'btn btn-xs btn-danger';
+            rejectBtn.type = 'button';
+            rejectBtn.title = 'Reject';
+            rejectBtn.innerHTML = '<i class="bi bi-x"></i>';
+            rejectBtn.addEventListener('click', () => rejectRecommendation(rec));
+            recDiv.append(rejectBtn);
+        } else if (rec.status === 'APPROVED') {
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'btn btn-xs btn-outline-danger';
+            removeBtn.type = 'button';
+            removeBtn.title = 'Remove';
+            removeBtn.innerHTML = '<i class="bi bi-trash"></i>';
+            removeBtn.addEventListener('click', () => removeRecommendation(rec));
+            recDiv.append(removeBtn);
+        } else if (rec.status === 'REJECTED') {
+            const approveBtn = document.createElement('button');
+            approveBtn.className = 'btn btn-xs btn-outline-success';
+            approveBtn.type = 'button';
+            approveBtn.title = 'Approve';
+            approveBtn.innerHTML = '<i class="bi bi-check"></i>';
+            approveBtn.addEventListener('click', () => approveRecommendation(rec));
+            recDiv.append(approveBtn);
+        }
+
+        container.append(recDiv);
+    };
+
+    const renderAllRecommendations = () => {
+        // Clear all recommendation containers
+        const containers = scheduleView.querySelectorAll<HTMLElement>('[data-slot-recommendations]');
+        containers.forEach((container) => {
+            container.innerHTML = '';
+        });
+
+        // Group recommendations by slot
+        const bySlot = new Map<string, RecommendationRow[]>();
+        recommendations.forEach((rec) => {
+            const slotId = rec.slot.id;
+            if (!bySlot.has(slotId)) {
+                bySlot.set(slotId, []);
+            }
+            bySlot.get(slotId)!.push(rec);
+        });
+
+        // Render recommendations in their respective slots
+        bySlot.forEach((recs, slotId) => {
+            const container = scheduleView.querySelector<HTMLElement>(`[data-slot-recommendations="${slotId}"]`);
+            if (container) {
+                recs.forEach((rec) => renderRecommendation(rec, container));
+            }
+        });
+
+        updateSummaryStats();
+    };
+
+    const approveRecommendation = async (rec: RecommendationRow) => {
+        const idx = recommendations.findIndex((r) =>
+            r.slot.id === rec.slot.id &&
+            r.user?.id === rec.user?.id &&
+            r.guest?.id === rec.guest?.id
+        );
+        if (idx !== -1) {
+            recommendations[idx].status = 'APPROVED';
+            renderAllRecommendations();
+        }
+    };
+
+    const rejectRecommendation = async (rec: RecommendationRow) => {
+        const idx = recommendations.findIndex((r) =>
+            r.slot.id === rec.slot.id &&
+            r.user?.id === rec.user?.id &&
+            r.guest?.id === rec.guest?.id
+        );
+        if (idx !== -1) {
+            recommendations[idx].status = 'REJECTED';
+            renderAllRecommendations();
+        }
+    };
+
+    const removeRecommendation = async (rec: RecommendationRow) => {
+        const idx = recommendations.findIndex((r) =>
+            r.slot.id === rec.slot.id &&
+            r.user?.id === rec.user?.id &&
+            r.guest?.id === rec.guest?.id
+        );
+        if (idx !== -1) {
+            recommendations.splice(idx, 1);
+            renderAllRecommendations();
+        }
+    };
+
+    const loadRecommendations = async () => {
+        try {
+            const url = `/api/activity-plan/${planId}/recommendations`;
+            const resp = await get<{
+                recommendations: RecommendationRow[];
+                warnings: RecommendationWarning[];
+                participantOptions: RecommendationParticipantOption[];
+            }>(url);
+
+            recommendations = resp.recommendations || [];
+            warnings = resp.warnings || [];
+            participantOptions = resp.participantOptions || [];
+
+            renderAllRecommendations();
+            setAlert();
+        } catch (err) {
+            console.error('Failed to load recommendations:', err);
+            setAlert('Failed to load recommendations.', 'danger');
+        }
+    };
+
+    const generateRecommendations = async () => {
+        try {
+            setAlert('Generating recommendations...', 'info');
+            await post(`/api/activity-plan/${planId}/recommendations/auto`, {});
+            setAlert('Recommendations generated successfully.', 'info');
+            await loadRecommendations();
+        } catch (err) {
+            console.error('Failed to generate recommendations:', err);
+            setAlert('Failed to generate recommendations.', 'danger');
+        }
+    };
+
+    const applyRecommendations = async () => {
+        const approved = recommendations.filter((r) => r.status === 'APPROVED');
+        if (!approved.length) {
+            setAlert('No approved recommendations to apply.', 'info');
+            return;
+        }
+
+        try {
+            setAlert('Applying approved recommendations...', 'info');
+            await post(`/api/activity-plan/${planId}/recommendations/apply`, {});
+            setAlert('Recommendations applied successfully!', 'info');
+            // Store active tab before reload
+            const activeTab = document.querySelector('.nav-link.active');
+            if (activeTab?.getAttribute('data-bs-target')) {
+                sessionStorage.setItem('activityActiveTab', activeTab.getAttribute('data-bs-target') || '');
+            }
+            reloadAfterDelay(1000);
+        } catch (err) {
+            console.error('Failed to apply recommendations:', err);
+            setAlert('Failed to apply recommendations.', 'danger');
+        }
+    };
+
+    // Add recommendation handlers
+    scheduleView.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        const btn = target.closest('[data-add-recommendation]') as HTMLButtonElement;
+        if (!btn) return;
+
+        const slotId = btn.dataset.slotId;
+        if (!slotId || !addModal || !addModalInstance) return;
+
+        // Populate modal
+        if (addSlotIdInput) addSlotIdInput.value = slotId;
+        if (addParticipantSelect) {
+            addParticipantSelect.innerHTML = '<option value="">Choose a participant...</option>';
+            participantOptions.forEach((opt) => {
+                const option = document.createElement('option');
+                option.value = participantValue(opt);
+                option.textContent = formatParticipantLabel(opt);
+                addParticipantSelect.append(option);
+            });
+        }
+        if (addWarningBox) addWarningBox.classList.add('d-none');
+
+        addModalInstance.show();
+    });
+
+    if (addConfirmBtn) {
+        addConfirmBtn.addEventListener('click', async () => {
+            const slotId = addSlotIdInput?.value;
+            const participantValue = addParticipantSelect?.value;
+            if (!slotId || !participantValue) return;
+
+            const [type, idStr] = participantValue.split(':');
+            const id = parseInt(idStr, 10);
+            const userId = type === 'user' ? id : null;
+            const guestId = type === 'guest' ? id : null;
+
+            const participant = participantOptions.find((p) =>
+                (userId && p.userId === userId) || (guestId && p.guestId === guestId)
+            );
+
+            if (!participant) return;
+
+            // Create new recommendation
+            const newRec: RecommendationRow = {
+                slot: recommendations.find((r) => r.slot.id === slotId)?.slot || {
+                    id: slotId,
+                    title: 'Unknown slot',
+                },
+                user: userId ? {id: userId, username: participant.label} : null,
+                guest: guestId ? {id: guestId, username: participant.label} : null,
+                status: 'APPROVED',
+            };
+
+            recommendations.push(newRec);
+            renderAllRecommendations();
+
+            if (addModalInstance) addModalInstance.hide();
+        });
+    }
+
+    // Button handlers
+    refreshBtn?.addEventListener('click', loadRecommendations);
+    autoBtn?.addEventListener('click', generateRecommendations);
+    applyBtn?.addEventListener('click', applyRecommendations);
+
+    // Initial load
+    loadRecommendations();
+}

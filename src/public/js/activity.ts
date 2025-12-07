@@ -18,7 +18,7 @@ import {initDates, initSlotFilters} from './modules/activity-filters';
 import {initDelete, initDnD, initInlineEdit} from './modules/activity-slot-operations';
 import {initSlotEditorModal} from './modules/activity-slot-editor';
 import {initRequirementPanel} from './modules/activity-requirements';
-import {initRecommendationPanel} from './modules/activity-recommendations';
+import {initRecommendationScheduleView} from './modules/activity-recommendations-schedule';
 import type {AssignmentWarning, RecommendationRow} from "./modules/activity-types";
 
 
@@ -125,7 +125,7 @@ export function init(): void {
         initSlotEditorModal(planId);
         initDnD(planId);
         initRequirementPanel(planId);
-        initRecommendationPanel(planId, describeSlot);
+        initRecommendationScheduleView(planId, describeSlot);
         initSlotFilters();
         initParticipantsTab();
         initSlotRoleAdminModal(planId, describeSlot);
