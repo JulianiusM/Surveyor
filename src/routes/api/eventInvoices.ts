@@ -8,9 +8,10 @@ import renderer from "../../modules/renderer";
 import eventPoolController from "../../controller/eventPoolController";
 import {requireEventParticipantAPI, requirePermissionApi,} from "../../middleware/permissionMiddleware";
 import {PERM} from "../../modules/lib/permissions";
+import settings from "../../modules/settings";
 
 // Storage setup for invoice proofs. Files are placed in /uploads/invoices and referenced by relative path.
-const proofDir = path.join(process.cwd(), "uploads", "invoices");
+const proofDir = path.join(process.cwd(), settings.value.invoiceDir);
 const proofStorage = multer.diskStorage({
     destination: (_req, _file, cb) => {
         fs.mkdirSync(proofDir, {recursive: true});

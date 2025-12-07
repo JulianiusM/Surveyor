@@ -75,7 +75,7 @@ const defaults: Settings = {
 
     file: "./settings.csv",
 
-    invoiceDir: "./invoices/",
+    invoiceDir: "uploads/invoices/",
 
     imprintUrl: "http://example.com/imprint",
     privacyPolicyUrl: "http://example.com/privacy",

@@ -609,3 +609,30 @@ export async function addActivitySlotRoles(slotId: string, roles: number[]) {
     );
     await repo.save(entries);
 }
+
+export async function updateActivitySlotRoles(slotId: string, roles: number[]) {
+    await AppDataSource.transaction(async (manager) => {
+        const repo = manager.getRepository(ActivitySlotRole);
+
+        // 1. Get all roles for this slot
+        const currentRoles = await repo.find({
+            where: {slot: {id: slotId}}, // relations ARE allowed in find()
+            select: ["id", "role"],
+            relations: ["role"]
+        });
+
+        const toDelete = currentRoles.filter(r => !roles.includes(r.id));
+        const toCreate = roles.filter(id => !currentRoles.map(r => r.roleId).includes(id))
+
+        if (toDelete.length > 0) {
+            await repo.remove(toDelete);
+        }
+
+        const newRoles: ActivitySlotRole[] = [];
+        for (const roleId of toCreate) {
+            newRoles.push(repo.create({slot: {id: slotId}, role: {id: roleId}, maxQty: 1}));
+        }
+
+        await repo.save(newRoles);
+    });
+}

@@ -23,7 +23,7 @@ export class ActivitySlotRole {
     slot!: ActivitySlot;
 
     @RelationId((a: ActivitySlotRole) => a.role)
-    roleId!: string;
+    roleId!: number;
 
     @ManyToOne(() => ActivityRole, (roles) => roles.activitySlotRoles, {
         onDelete: "RESTRICT",

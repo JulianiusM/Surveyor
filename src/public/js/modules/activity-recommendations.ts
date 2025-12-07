@@ -5,15 +5,15 @@
 
 import {get, post} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
-import {reloadAfterDelay} from '../shared/ui-helpers';
-import {requireEntityPerm} from '../core/permissions';
-import {describeWarning as descWarn} from './activity-assignments';
-import type {AssignmentWarning, RecommendationRow, RecommendationWarning} from './activity-types';
-
-function formatTimeLabel(time?: string | null): string {
-    if (!time) return "";
-    return time.slice(0, 5);
-}
+import {describeWarning} from './activity-assignments';
+import type {
+    AssignmentWarning,
+    RecommendationParticipantOption,
+    RecommendationRow,
+    RecommendationSlotOption,
+    RecommendationWarning
+} from './activity-types';
+import {formatDateLabel, formatTimeLabel} from "../core/formatting";
 
 function formatSlotLabel(slot: RecommendationRow['slot']): string {
     const day = slot.day ? ` on ${slot.day}` : '';
@@ -27,7 +27,7 @@ function formatSlotLabel(slot: RecommendationRow['slot']): string {
  * Initialize the recommendations panel
  */
 export function initRecommendationPanel(planId: string, describeSlot: (slotId: string) => string): void {
-    
+
     const panel = document.getElementById('recommendationPanel');
     const rows = panel?.querySelector<HTMLElement>('#recommendationRows');
     const alertBox = panel?.querySelector<HTMLElement>('[data-recommendations-alert]');
@@ -115,7 +115,7 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
             list.className = 'mb-0 small ps-3';
             warningList.forEach((warn) => {
                 const li = document.createElement('li');
-                li.textContent = describeWarning(warn);
+                li.textContent = describeWarning(warn, describeSlot);
                 list.append(li);
             });
             warningCell.append(list);

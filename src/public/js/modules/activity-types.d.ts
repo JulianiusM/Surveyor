@@ -50,11 +50,11 @@ export type ParticipantFilter = 'all' | 'assigned' | 'unassigned';
 // Recommendation types
 export interface RecommendationRow {
     id?: string;
-    slot: { 
-        id: string; 
-        title: string; 
-        day?: string; 
-        startTime?: string | null; 
+    slot: {
+        id: string;
+        title: string;
+        day?: string;
+        startTime?: string | null;
         endTime?: string | null;
     };
     user?: { id: number; username: string } | null;
@@ -63,9 +63,9 @@ export interface RecommendationRow {
 }
 
 export interface RecommendationWarning {
-    recommendation: { 
-        slotId: string; 
-        userId?: number | null; 
+    recommendation: {
+        slotId: string;
+        userId?: number | null;
         guestId?: number | null;
     };
     warnings: AssignmentWarning[];
@@ -79,8 +79,8 @@ export interface RequirementParticipantSummary {
     assignedShifts: number;
     remainingShifts: number;
     source: 'none' | 'general' | 'role' | 'override';
-    attendance?: { 
-        arrivalDate?: string | null; 
+    attendance?: {
+        arrivalDate?: string | null;
         departureDate?: string | null;
     };
 }
@@ -112,4 +112,29 @@ export interface RequirementConfiguration {
 // Slot roles mapping type
 export interface SlotRolesMap {
     [slotId: string]: RoleSummary[];
+}
+
+export interface RecommendationRow {
+    id?: string;
+    slot: { id: string; title: string; day?: string; startTime?: string | null; endTime?: string | null };
+    user?: { id: number; username: string } | null;
+    guest?: { id: number; username: string } | null;
+    status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'APPLIED';
+}
+
+export interface RecommendationSlotOption {
+    id: string;
+    title: string;
+    day?: string;
+    startTime?: string | null;
+    endTime?: string | null;
+}
+
+export interface RecommendationParticipantOption {
+    key: string;
+    label: string;
+    userId?: number | null;
+    guestId?: number | null;
+    arrivalDate?: string | null;
+    departureDate?: string | null;
 }

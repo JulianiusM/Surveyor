@@ -7,7 +7,8 @@ import {post} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
 import {startInlineEdit, startInlineEditArea} from '../shared/inline-edit';
 import {reloadAfterDelay} from '../shared/ui-helpers';
-import {requireItemPerm} from '../core/permissions';
+import {requireEntityPerm, requireItemPerm} from '../core/permissions';
+import {initCardReorder} from "../shared/drag-drop";
 
 /**
  * Initialize inline editing for slots and plan description
@@ -60,5 +61,28 @@ export function initDelete(planId: string): void {
             const message = err instanceof Error ? err.message : 'Failed to delete slot.';
             showInlineAlert('error', message);
         }
+    });
+}
+
+/**
+ * Initialize drag-and-drop for slots
+ */
+export function initDnD(planId: string): void {
+    try {
+        requireEntityPerm('ITEM_EDIT', 'reorder slots');
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Reordering is not allowed.';
+        showInlineAlert('error', message);
+        return;
+    }
+
+    initCardReorder({
+        containerClass: 'slot-container',
+        cardClass: 'slot',
+        apiUrl: `/api/activity/${planId}/slot/reorder`,
+        getOrderData: (container) => {
+            return [...container.querySelectorAll<HTMLElement>('.slot')]
+                .map((el, i) => ({slotId: el.dataset.slotid, pos: i}));
+        },
     });
 }

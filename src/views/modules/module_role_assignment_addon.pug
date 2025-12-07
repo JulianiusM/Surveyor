@@ -20,16 +20,7 @@ mixin roleAssignmentAddon(dataId, roleName, roleDisplayName, assignees, user, gu
                     data-id=dataId) Leave
         else
             span.flex-grow-1.fw-5 No #{roleDisplayName} assigned
-            if my
-                button.btn.btn-sm.btn-outline-primary(
-                    data-action="take-role"
-                    data-role=roleName
-                    data-id=dataId) Take
-
-// Legacy creator – UI hidden, kept for backwards compatibility with old JS
-mixin roleAssignmentSlotCreator(dataId, roles)
-    .role-assignment.d-none
-        select.multiSelect(multiple size=1 data-id=dataId)
-            for role in roles
-                option.text-bg-dark(value=role.id) #{role.name}
-        button.btn.btn-sm.btn-outline-success(data-addRoles, data-id=dataId) +
+            button.btn.btn-sm.btn-outline-primary(
+                data-action="take-role"
+                data-role=roleName
+                data-id=dataId) Take

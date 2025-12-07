@@ -365,6 +365,7 @@ async function updateSlotAttr(slotId: string, body: any, permData?: PermBundle) 
         || (body.title !== undefined && !permData.itemAllow(slotId, "EDIT_TITLE", "ITEM_EDIT"))
         || (body.description !== undefined && !permData.itemAllow(slotId, "EDIT_DESC", "ITEM_EDIT"))
         || (body.maxAssignees !== undefined && !permData.itemAllow(slotId, "EDIT_CAPACITY", "ITEM_EDIT"))
+        || (body.roles !== undefined && !permData.itemAllow(slotId, "MANAGE_ASSIGNMENTS", "MANAGE_ASSIGNMENTS"))
     ) {
         throw new APIError("Not allowed", body, 403);
     }
@@ -379,6 +380,11 @@ async function updateSlotAttr(slotId: string, body: any, permData?: PermBundle) 
     if (!(await activityService.updateActivitySlot(slotId, staged))) {
         throw new APIError('Unknown error while saving', body, 500);
     }
+
+    if (!body.roles !== undefined) {
+        await activityService.updateActivitySlotRoles(slotId, body.roles);
+    }
+
     return 'Slot updated';
 }
 

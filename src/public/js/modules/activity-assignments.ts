@@ -6,18 +6,9 @@
 import {post} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
 import {reloadAfterDelay} from '../shared/ui-helpers';
-import type {
-    BootstrapGlobal,
-    BootstrapModal,
-    WarningType,
-    AssignmentWarning,
-    WarningModal,
-} from './activity-types';
+import type {AssignmentWarning, BootstrapGlobal, WarningModal,} from './activity-types';
 
 declare const bootstrap: BootstrapGlobal;
-
-// Re-export types for backward compatibility
-export type {WarningType, AssignmentWarning, WarningModal};
 
 /**
  * Describe an assignment warning in human-readable format

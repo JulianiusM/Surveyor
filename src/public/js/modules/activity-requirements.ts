@@ -5,30 +5,15 @@
 
 import {get, post} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
-import {reloadAfterDelay} from '../shared/ui-helpers';
-import {requireEntityPerm} from '../core/permissions';
-import type {RoleSummary, RequirementParticipantSummary, RequirementConfiguration} from './activity-types';
-
-function toDateTimeLocalValue(date?: string | Date | null): string {
-    if (!date) return '';
-    const d = typeof date === 'string' ? new Date(date) : date;
-    if (Number.isNaN(d.getTime())) return '';
-
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function toISOStringOrNull(value: string): string | null {
-    if (!value) return null;
-    const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
+import type {RequirementConfiguration, RequirementParticipantSummary} from './activity-types';
+import {formatDateLabel, toDateTimeLocalValue, toISOStringOrNull} from "../core/formatting";
+import {getAllRoles} from "./activity-roles";
 
 /**
  * Initialize the requirements panel
  */
 export function initRequirementPanel(planId: string): void {
-    
+
     const panel = document.getElementById('requirementPanel');
     if (!panel) return;
 
@@ -387,30 +372,5 @@ export function initRequirementPanel(planId: string): void {
     saveBtn?.addEventListener('click', () => void saveRequirements());
 
     void loadRequirements();
-}
-
-/**
- * Initialize drag-and-drop for slots
- */
-function initDnD(): void {
-    
-
-    try {
-        requireEntityPerm('ITEM_EDIT', 'reorder slots');
-    } catch (err) {
-        const message = err instanceof Error ? err.message : 'Reordering is not allowed.';
-        showInlineAlert('error', message);
-        return;
-    }
-
-    initCardReorder({
-        containerClass: 'slot-container',
-        cardClass: 'slot',
-        apiUrl: `/api/activity/${planId}/slot/reorder`,
-        getOrderData: (container) => {
-            return [...container.querySelectorAll<HTMLElement>('.slot')]
-                .map((el, i) => ({slotId: el.dataset.slotid, pos: i}));
-        },
-    });
 }
 

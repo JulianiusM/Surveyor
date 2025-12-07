@@ -4,105 +4,25 @@
  */
 
 import {setCurrentNavLocation} from './core/navigation';
-import {get, post} from './core/http';
-import {showInlineAlert} from './shared/alerts';
-import {initCardReorder} from './shared/drag-drop';
 import {initAssignmentRemoval} from './shared/list-actions';
-import {reloadAfterDelay} from './shared/ui-helpers';
-import {loadPerms, requireEntityPerm} from './core/permissions';
+import {loadPerms} from './core/permissions';
 import {initParticipantsTab} from './modules/activity-participants';
-import {initSlotRoleAdminModal, getAllRoles as getRoles, getSlotRolesForSlot as getSlotRoles, addRoleToGlobal as addRole, type RoleSummary as RoleType} from './modules/activity-roles';
-import {buildWarningModal, initAssign, describeWarning as descWarn, type AssignmentWarning, type WarningModal} from './modules/activity-assignments';
+import {
+    addRoleToGlobal as addRole,
+    getAllRoles as getRoles,
+    getSlotRolesForSlot as getSlotRoles,
+    initSlotRoleAdminModal
+} from './modules/activity-roles';
+import {buildWarningModal, describeWarning as descWarn, initAssign} from './modules/activity-assignments';
 import {initDates, initSlotFilters} from './modules/activity-filters';
-import {initInlineEdit, initDelete} from './modules/activity-slot-operations';
+import {initDelete, initDnD, initInlineEdit} from './modules/activity-slot-operations';
 import {initSlotEditorModal} from './modules/activity-slot-editor';
 import {initRequirementPanel} from './modules/activity-requirements';
 import {initRecommendationPanel} from './modules/activity-recommendations';
+import type {AssignmentWarning, RecommendationRow} from "./modules/activity-types";
 
-interface BootstrapModal {
-    show: () => void;
-    hide: () => void;
-}
-
-interface BootstrapGlobal {
-    Modal: new (element: HTMLElement, options?: { focus?: boolean }) => BootstrapModal;
-}
-
-declare const bootstrap: BootstrapGlobal;
-
-// Re-export RoleSummary from modules for backward compatibility
-type RoleSummary = RoleType;
-
-
-type SlotEditorMode = 'create' | 'edit';
 
 // Assignment warning types moved to modules/activity-assignments.ts
-
-interface RequirementConfiguration {
-    plan: {
-        assignmentMode?: 'FREE' | 'REQUIRED';
-        generalRequiredShifts?: number | null;
-        roundingMode?: 'CEIL' | 'ROUND' | 'FLOOR' | null;
-        bindingDeadline?: string | Date | null;
-        allowOverfillAfterFull?: boolean;
-        allowArrivalDayEvening?: boolean;
-        allowDepartureDayMorning?: boolean;
-    };
-    roleRequirements: { roleId: number; requiredShifts: number }[];
-    overrides: {
-        id?: number;
-        roleId?: number | null;
-        role?: RoleSummary | null;
-        userId?: number | null;
-        user?: { username: string } | null;
-        guestId?: number | null;
-        guest?: { username: string } | null;
-        requiredShifts: number;
-    }[];
-    participants?: RequirementParticipantSummary[];
-}
-
-interface RecommendationRow {
-    id?: string;
-    slot: { id: string; title: string; day?: string; startTime?: string | null; endTime?: string | null };
-    user?: { id: number; username: string } | null;
-    guest?: { id: number; username: string } | null;
-    status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'APPLIED';
-}
-
-interface RecommendationWarning {
-    recommendation: { slotId: string; userId?: number | null; guestId?: number | null };
-    warnings: AssignmentWarning[];
-}
-
-interface RequirementParticipantSummary {
-    participantKey: string;
-    name?: string | null;
-    requiredShifts: number;
-    assignedShifts: number;
-    remainingShifts: number;
-    source: 'none' | 'general' | 'role' | 'override';
-    attendance?: { arrivalDate?: string | null; departureDate?: string | null };
-}
-
-interface RecommendationSlotOption {
-    id: string;
-    title: string;
-    day?: string;
-    startTime?: string | null;
-    endTime?: string | null;
-}
-
-interface RecommendationParticipantOption {
-    key: string;
-    label: string;
-    userId?: number | null;
-    guestId?: number | null;
-    arrivalDate?: string | null;
-    departureDate?: string | null;
-}
-
-type SlotRolesMap = Record<string, RoleSummary[]>;
 
 function formatTimeLabel(time?: string | null): string {
     if (!time) return "";
@@ -135,12 +55,6 @@ function formatSlotLabel(slot: RecommendationRow['slot']): string {
 // describeWarning moved to modules/activity-assignments.ts
 function describeWarning(warning: AssignmentWarning): string {
     return descWarn(warning, describeSlot);
-}
-
-function formatDateLabel(date?: string | null): string {
-    if (!date) return '';
-    const d = new Date(date);
-    return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString();
 }
 
 // Role functions moved to modules/activity-roles.ts
@@ -194,8 +108,8 @@ export function init(): void {
         initAssign(planId, warningModal);
         initInlineEdit(planId);
         initDelete(planId);
-        initSlotEditorModal(planId, describeSlot);
-        initDnD();
+        initSlotEditorModal(planId);
+        initDnD(planId);
         initRequirementPanel(planId);
         initRecommendationPanel(planId, describeSlot);
         initSlotFilters();

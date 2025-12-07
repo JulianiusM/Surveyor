@@ -7,17 +7,9 @@ import {post} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
 import {reloadAfterDelay} from '../shared/ui-helpers';
 import {requireEntityPerm} from '../core/permissions';
-import type {
-    BootstrapGlobal,
-    BootstrapModal,
-    RoleSummary,
-    SlotRolesMap,
-} from './activity-types';
+import type {BootstrapGlobal, BootstrapModal, RoleSummary, SlotRolesMap,} from './activity-types';
 
 declare const bootstrap: BootstrapGlobal;
-
-// Re-export RoleSummary for backward compatibility
-export type {RoleSummary};
 
 // Local types specific to this module
 interface SlotParticipant {

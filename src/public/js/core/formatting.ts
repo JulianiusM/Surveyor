@@ -121,3 +121,38 @@ export function getValidDaysInWeek(monday: Date, start: Date, end: Date): Date[]
     }
     return validDays;
 }
+
+export function formatDateLabel(date?: string | null): string {
+    if (!date) return '';
+    const d = new Date(date);
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString();
+}
+
+/**
+ * Format time for display (HH:MM)
+ */
+export function formatTimeLabel(time?: string | null): string {
+    if (!time) return "";
+    return time.slice(0, 5);
+}
+
+/**
+ * Convert Date to datetime-local input value
+ */
+export function toDateTimeLocalValue(date?: string | Date | null): string {
+    if (!date) return '';
+    const d = typeof date === 'string' ? new Date(date) : date;
+    if (Number.isNaN(d.getTime())) return '';
+
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/**
+ * Convert datetime-local value to ISO string
+ */
+export function toISOStringOrNull(value: string): string | null {
+    if (!value) return null;
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}

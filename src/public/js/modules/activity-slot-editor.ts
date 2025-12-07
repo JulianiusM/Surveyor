@@ -6,45 +6,16 @@
 import {post} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
 import {reloadAfterDelay} from '../shared/ui-helpers';
-import {requireEntityPerm} from '../core/permissions';
-import {getAllRoles, getSlotRolesForSlot, addRoleToGlobal} from './activity-roles';
-import type {BootstrapGlobal, BootstrapModal, RoleSummary, SlotEditorMode} from './activity-types';
+import {requireEntityPerm, requireItemPerm} from '../core/permissions';
+import {addRoleToGlobal, getAllRoles, getSlotRolesForSlot} from './activity-roles';
+import type {BootstrapGlobal, RoleSummary, SlotEditorMode} from './activity-types';
 
 declare const bootstrap: BootstrapGlobal;
 
 /**
- * Format time for display (HH:MM)
- */
-function formatTimeLabel(time?: string | null): string {
-    if (!time) return "";
-    return time.slice(0, 5);
-}
-
-/**
- * Convert Date to datetime-local input value
- */
-function toDateTimeLocalValue(date?: string | Date | null): string {
-    if (!date) return '';
-    const d = typeof date === 'string' ? new Date(date) : date;
-    if (Number.isNaN(d.getTime())) return '';
-
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-/**
- * Convert datetime-local value to ISO string
- */
-function toISOStringOrNull(value: string): string | null {
-    if (!value) return null;
-    const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
-
-/**
  * Initialize the slot editor modal (used for both create and edit)
  */
-export function initSlotEditorModal(planId: string, describeSlot: (slotId: string) => string): void {
+export function initSlotEditorModal(planId: string): void {
     if (!planId) return;
 
     const modalEl = document.getElementById('slotEditorModal') as HTMLElement | null;
@@ -117,238 +88,387 @@ export function initSlotEditorModal(planId: string, describeSlot: (slotId: strin
 
     const renderRoleChips = () => {
         if (!roleChips) return;
-        roleChips.innerHTML = '';
 
+        roleChips.innerHTML = '';
         if (selectedRoleIds.size === 0) {
             const span = document.createElement('span');
-            span.className = 'text-secondary';
-            span.textContent = 'No roles assigned yet';
+            span.className = 'text-secondary small';
+            span.textContent = 'No roles assigned yet.';
             roleChips.appendChild(span);
             return;
         }
 
         const allRoles = getAllRoles();
-        const sorted = Array.from(selectedRoleIds)
-            .map((id) => allRoles.find((r) => r.id === id))
-            .filter((r) => r !== undefined) as RoleSummary[];
+        const frag = document.createDocumentFragment();
 
-        sorted.forEach((role) => {
-            const chip = document.createElement('span');
-            chip.className = 'badge bg-primary me-1';
-            chip.innerHTML = `
-                ${role.name}
-                <button type="button" class="btn-close btn-close-white ms-1" data-remove-role="${role.id}" style="font-size:0.7em"></button>
-            `;
-            roleChips.appendChild(chip);
+        selectedRoleIds.forEach((id) => {
+            const role = allRoles.find((r) => r.id === id);
+            const label = role?.name ?? `Role #${id}`;
+
+            const badge = document.createElement('span');
+            badge.className =
+                'badge text-bg-secondary me-1 mb-1 d-inline-flex align-items-center gap-1';
+
+            const textSpan = document.createElement('span');
+            textSpan.textContent = label;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn btn-sm btn-outline-light px-1 py-0';
+            removeBtn.dataset.roleChipRemove = '1';
+            removeBtn.dataset.roleId = String(id);
+            removeBtn.title = 'Remove role from this slot';
+            removeBtn.innerHTML = '<i class="bi bi-x"></i>';
+
+            badge.append(textSpan, removeBtn);
+            frag.appendChild(badge);
         });
+
+        roleChips.appendChild(frag);
+    };
+
+    const clearRoleInput = () => {
+        if (roleInput) {
+            roleInput.value = '';
+        }
+    };
+
+    const hideRoleSuggestions = () => {
+        if (!roleSuggestions) return;
+        roleSuggestions.innerHTML = '';
+        roleSuggestions.classList.add('d-none');
     };
 
     const updateRoleSuggestions = () => {
-        if (!roleSuggestions) return;
+        if (!roleInput || !roleSuggestions) return;
+
+        const termRaw = roleInput.value || '';
+        const term = termRaw.trim();
         roleSuggestions.innerHTML = '';
 
-        const query = roleInput?.value?.trim().toLowerCase() || '';
-        const allRoles = getAllRoles();
+        // If no search term, don't show anything – but DO NOT hide on blur, only when empty.
+        if (!term) {
+            roleSuggestions.classList.add('d-none');
+            return;
+        }
 
-        const filtered = allRoles.filter(
+        const allRoles = getAllRoles();
+        const lower = term.toLowerCase();
+
+        const available = allRoles.filter(
             (r) =>
                 !selectedRoleIds.has(r.id) &&
-                r.name.toLowerCase().includes(query)
+                (r.name.toLowerCase().includes(lower) ||
+                    (r.description ?? '').toLowerCase().includes(lower)),
         );
 
-        if (!filtered.length && query) {
-            // offer create
+        const frag = document.createDocumentFragment();
+
+        if (available.length > 0) {
+            available.slice(0, 10).forEach((role) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className =
+                    'list-group-item list-group-item-action d-flex align-items-center justify-content-between text-bg-dark';
+                btn.dataset.roleId = String(role.id);
+
+                const labelSpan = document.createElement('span');
+                labelSpan.textContent = `Add role "${role.name}" to this slot`;
+
+                const icon = document.createElement('i');
+                icon.className = 'bi bi-plus-circle';
+
+                btn.append(labelSpan, icon);
+                frag.appendChild(btn);
+            });
+        } else {
+            // No existing roles match – suggest creating a new one
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'dropdown-item text-success';
-            btn.textContent = `+ Create role "${query}"`;
-            btn.dataset.createRole = query;
-            roleSuggestions.appendChild(btn);
-            return;
+            btn.className =
+                'list-group-item list-group-item-action d-flex align-items-center justify-content-between text-bg-dark';
+            btn.dataset.createRole = '1';
+
+            const labelSpan = document.createElement('span');
+            labelSpan.textContent = `Create new role "${term}"`;
+
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-magic';
+
+            btn.append(labelSpan, icon);
+            frag.appendChild(btn);
         }
 
-        filtered.forEach((role) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'dropdown-item';
-            btn.textContent = role.name;
-            btn.dataset.addRoleId = String(role.id);
-            roleSuggestions.appendChild(btn);
-        });
+        roleSuggestions.appendChild(frag);
+        roleSuggestions.classList.remove('d-none');
     };
 
-    // handle chip removal
-    roleChips?.addEventListener('click', (e: Event) => {
-        const btn = (e.target as HTMLElement).closest('[data-remove-role]') as HTMLElement | null;
-        if (!btn) return;
-        const id = parseInt(btn.dataset.removeRole || '0', 10);
-        if (id) {
-            selectedRoleIds.delete(id);
-            renderRoleChips();
-            updateRoleSuggestions();
-        }
-    });
-
-    // handle role input changes
-    roleInput?.addEventListener('input', () => {
-        updateRoleSuggestions();
-        if (roleSuggestions) {
-            roleSuggestions.classList.toggle('d-none', roleSuggestions.children.length === 0);
-        }
-    });
-
-    // handle suggestion click
-    roleSuggestions?.addEventListener('click', async (e: Event) => {
-        const btn = (e.target as HTMLElement).closest('button') as HTMLButtonElement | null;
-        if (!btn) return;
-
-        const addId = btn.dataset.addRoleId;
-        if (addId) {
-            const id = parseInt(addId, 10);
-            selectedRoleIds.add(id);
-            renderRoleChips();
-            if (roleInput) roleInput.value = '';
-            updateRoleSuggestions();
-            if (roleSuggestions) roleSuggestions.classList.add('d-none');
-            return;
-        }
-
-        const createName = btn.dataset.createRole;
-        if (createName) {
-            // Create new role
-            try {
-                const res = await post(`/api/activity/${planId}/role`, {name: createName});
-                const newRole = res?.data?.role;
-                if (newRole) {
-                    addRoleToGlobal(newRole);
-                    selectedRoleIds.add(newRole.id);
-                    renderRoleChips();
-                    if (roleInput) roleInput.value = '';
-                    updateRoleSuggestions();
-                    if (roleSuggestions) roleSuggestions.classList.add('d-none');
-                }
-            } catch (err) {
-                const message = err instanceof Error ? err.message : 'Failed to create role';
-                setError(message);
-            }
-        }
-    });
-
-    // Handle opening in CREATE mode
-    document.addEventListener('click', (e: Event) => {
-        const target = e.target as Element | null;
-        if (!target) return;
-
-        const btn = target.closest('[data-add-slot]') as HTMLElement | null;
-        if (!btn) return;
-
-        try {
-            requireEntityPerm('ITEM_CREATE', 'create slots');
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'You cannot create slots.';
-            showInlineAlert('error', message);
-            return;
-        }
-
-        const dateStr = btn.dataset.date || '';
-        if (!dateStr) return;
-
+    const openCreate = (dateISO: string) => {
         mode = 'create';
-        if (titleEl) titleEl.textContent = 'Create Slot';
-
         slotIdInput.value = '';
-        dateInput.value = dateStr;
+        dateInput.value = dateISO;
         titleInput.value = '';
         if (descInput) descInput.value = '';
         startInput.value = '';
         endInput.value = '';
         capacityInput.value = '1';
-
         setSelectedRoles([]);
 
-        if (metaSpan) metaSpan.textContent = `Creating for ${formatDateLabel(dateStr)}`;
         setError();
+
+        if (titleEl) titleEl.textContent = 'Create slot';
+        if (metaSpan) metaSpan.textContent = `Day: ${dateISO}`;
+
+        clearRoleInput();
+        hideRoleSuggestions();
+
         modal.show();
-    });
+        titleInput.focus();
+    };
 
-    // Handle opening in EDIT mode
-    document.addEventListener('click', async (e: Event) => {
-        const target = e.target as Element | null;
-        if (!target) return;
-
-        const btn = target.closest('[data-slot-edit]') as HTMLElement | null;
-        if (!btn) return;
-
-        const slotId = btn.dataset.slotid || '';
-        if (!slotId) return;
-
+    const openEdit = (slotEl: HTMLElement) => {
         mode = 'edit';
-        if (titleEl) titleEl.textContent = 'Edit Slot';
 
-        const slotEl = document.querySelector<HTMLElement>(`.slot[data-slotid="${slotId}"]`);
-        if (!slotEl) return;
-
-        const day = slotEl.dataset.day || slotEl.closest<HTMLElement>('.slot-container')?.dataset.date || '';
-        const titleText = slotEl.querySelector<HTMLElement>('[data-edit="title"]')?.textContent?.trim() || '';
-        const descText = slotEl.querySelector<HTMLElement>('[data-edit="description"]')?.textContent?.trim() || '';
-        const start = slotEl.dataset.start || null;
-        const end = slotEl.dataset.end || null;
-        const capacity = slotEl.dataset.max || '1';
+        const slotId = slotEl.dataset.slotid;
+        const date = slotEl.closest<HTMLElement>('.slot-container')?.dataset.date || '';
+        if (!slotId || !date) return;
 
         slotIdInput.value = slotId;
-        dateInput.value = day;
-        titleInput.value = titleText;
-        if (descInput) descInput.value = descText;
-        startInput.value = toTimeInputValue(start);
-        endInput.value = toTimeInputValue(end);
-        capacityInput.value = capacity;
+        dateInput.value = date;
 
+        const titleSpan = slotEl.querySelector<HTMLElement>('[data-edit="title"]');
+        const descSpan = slotEl.querySelector<HTMLElement>('[data-edit="description"]');
+        const maxSpan = slotEl.querySelector<HTMLElement>('[data-edit="maxAssignees"]');
+
+        titleInput.value = titleSpan?.textContent?.trim() || '';
+        if (descInput) descInput.value = descSpan?.textContent?.trim() || '';
+
+        const startRaw = slotEl.dataset.start || '';
+        const endRaw = slotEl.dataset.end || '';
+        startInput.value = toTimeInputValue(startRaw);
+        endInput.value = toTimeInputValue(endRaw);
+        capacityInput.value = maxSpan?.textContent?.trim() || '1';
+
+        // Load current roles from window.Surveyor.slotRoles
         const currentRoles = getSlotRolesForSlot(slotId);
         setSelectedRoles(currentRoles.map((r) => r.id));
 
-        if (metaSpan) metaSpan.textContent = `Editing: ${describeSlot(slotId)}`;
         setError();
+
+        if (titleEl) titleEl.textContent = 'Edit slot';
+        if (metaSpan) {
+            const parts: string[] = [];
+            if (startInput.value) parts.push(startInput.value);
+            if (endInput.value) parts.push(endInput.value);
+            const range = parts.length ? ` (${parts.join(' – ')})` : '';
+            metaSpan.textContent = `Day: ${date}${range}`;
+        }
+
+        clearRoleInput();
+        hideRoleSuggestions();
+
         modal.show();
-    });
+        titleInput.focus();
+    };
 
-    form.addEventListener('submit', async (e: Event) => {
-        e.preventDefault();
+    const createRoleOnServer = async (name: string): Promise<RoleSummary> => {
+        const trimmed = name.trim();
+        if (!trimmed) {
+            throw new Error('Role name must not be empty.');
+        }
+
+        // if it already exists, just return existing
+        const existing = getAllRoles().find(
+            (r) => r.name.toLowerCase() === trimmed.toLowerCase(),
+        );
+        if (existing) return existing;
+
+        requireEntityPerm('EDIT_META', 'create roles for this plan');
+
+        const res = await post(`/api/activity/${planId}/roles`, {
+            name: trimmed,
+        });
+
+        const role: RoleSummary | undefined = (res?.data ?? [undefined])[0];
+        if (!role) {
+            throw new Error('Server did not return the created role.');
+        }
+
+        addRoleToGlobal(role);
+        return role;
+    };
+
+    form.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
         setError();
 
-        const id = slotIdInput.value;
-        const day = dateInput.value;
-        const title = titleInput.value.trim();
-        const description = descInput?.value?.trim() || '';
-        const start = toDbTime(startInput.value || null);
-        const end = toDbTime(endInput.value || null);
-        const capacity = parseInt(capacityInput.value, 10);
+        const titleValue = titleInput.value.trim();
+        if (!titleValue) {
+            setError('Title is required.');
+            titleInput.focus();
+            return;
+        }
 
-        const payload = {
-            id: id || undefined,
-            day,
-            title,
-            description,
-            startTime: start,
-            endTime: end,
-            maxAssignees: capacity,
-            roles: Array.from(selectedRoleIds),
-        };
+        const startVal = toDbTime(startInput.value);
+        const endVal = toDbTime(endInput.value);
+        const roleIds = Array.from(selectedRoleIds);
 
         try {
-            const endpoint = mode === 'create' ? `/api/activity/${planId}/slot` : `/api/activity/${planId}/slot/${id}`;
-            await post(endpoint, payload);
-            showInlineAlert('success', mode === 'create' ? 'Slot created' : 'Slot updated');
+            if (mode === 'create') {
+                requireEntityPerm('ITEM_ADD', 'add slots');
+                await post(`/api/activity/${planId}/slot/add`, {
+                    date: dateInput.value,
+                    title: titleValue,
+                    description: descInput?.value?.trim() || '',
+                    startTime: startVal,
+                    endTime: endVal,
+                    maxAssignees: capacityInput.value,
+                    roles: roleIds,
+                });
+                showInlineAlert('success', 'Slot created');
+            } else {
+                const slotId = slotIdInput.value;
+                requireItemPerm(slotId, 'ITEM_EDIT', 'edit slots', 'ITEM_EDIT');
+                await post(`/api/activity/${planId}/slot/${slotId}/attr`, {
+                    title: titleValue,
+                    description: descInput?.value?.trim() || '',
+                    startTime: startVal,
+                    endTime: endVal,
+                    maxAssignees: capacityInput.value,
+                    roles: roleIds,
+                });
+                showInlineAlert('success', 'Slot updated');
+            }
+
             modal.hide();
             reloadAfterDelay(150);
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to save slot';
+            const message =
+                err instanceof Error ? err.message : 'Failed to save slot.';
             setError(message);
         }
     });
-}
 
-function formatDateLabel(date?: string | null): string {
-    if (!date) return '';
-    const d = new Date(date);
-    return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString();
+    if (roleChips) {
+        roleChips.addEventListener('click', (ev) => {
+            const btn = (ev.target as HTMLElement | null)?.closest<HTMLButtonElement>(
+                '[data-role-chip-remove]',
+            );
+            if (!btn) return;
+            const id = Number(btn.dataset.roleId || '');
+            if (!id) return;
+            selectedRoleIds.delete(id);
+            renderRoleChips();
+            updateRoleSuggestions();
+        });
+    }
+
+    if (roleInput) {
+        roleInput.addEventListener('input', () => {
+            setError();
+            updateRoleSuggestions();
+        });
+
+        roleInput.addEventListener('keydown', async (ev: KeyboardEvent) => {
+            if (ev.key === 'Enter') {
+                ev.preventDefault();
+                if (!roleSuggestions || !roleSuggestions.firstElementChild) {
+                    return;
+                }
+                const btn = roleSuggestions
+                    .firstElementChild as HTMLButtonElement | null;
+                if (!btn) return;
+
+                if (btn.dataset.roleId) {
+                    const id = Number(btn.dataset.roleId);
+                    if (id && !selectedRoleIds.has(id)) {
+                        selectedRoleIds.add(id);
+                        renderRoleChips();
+                    }
+                    clearRoleInput();
+                    hideRoleSuggestions(); // explicit choice
+                } else if (btn.dataset.createRole) {
+                    try {
+                        const role = await createRoleOnServer(roleInput.value);
+                        selectedRoleIds.add(role.id);
+                        renderRoleChips();
+                        clearRoleInput();
+                        hideRoleSuggestions();
+                    } catch (err) {
+                        const message =
+                            err instanceof Error
+                                ? err.message
+                                : 'Unable to create role.';
+                        setError(message);
+                    }
+                }
+            } else if (ev.key === 'Escape') {
+                // ESC clears search + suggestions, but does NOT close the modal
+                clearRoleInput();
+                hideRoleSuggestions();
+            }
+        });
+    }
+
+    if (roleSuggestions) {
+        roleSuggestions.addEventListener('click', async (ev) => {
+            const btn = (ev.target as HTMLElement | null)?.closest<HTMLButtonElement>(
+                'button',
+            );
+            if (!btn) return;
+
+            if (btn.dataset.roleId) {
+                const id = Number(btn.dataset.roleId);
+                if (id && !selectedRoleIds.has(id)) {
+                    selectedRoleIds.add(id);
+                    renderRoleChips();
+                }
+                clearRoleInput();
+                hideRoleSuggestions();
+            } else if (btn.dataset.createRole) {
+                try {
+                    const role = await createRoleOnServer(roleInput?.value || '');
+                    selectedRoleIds.add(role.id);
+                    renderRoleChips();
+                    clearRoleInput();
+                    hideRoleSuggestions();
+                } catch (err) {
+                    const message =
+                        err instanceof Error
+                            ? err.message
+                            : 'Unable to create role.';
+                    setError(message);
+                }
+            }
+        });
+    }
+
+    // IMPORTANT: we DO NOT hide suggestions when the input loses focus.
+    // No click-outside handler here on purpose – suggestions remain usable
+    // while the modal is open, until the user clears the input or selects something.
+
+    // Open in "create" mode from +Slot buttons
+    document.addEventListener('click', (ev) => {
+        const btn = (ev.target as HTMLElement | null)?.closest<HTMLElement>(
+            '[data-add-slot]',
+        );
+        if (!btn) return;
+
+        const date = btn.dataset.date;
+        if (!date) return;
+        openCreate(date);
+    });
+
+    // Open in "edit" mode from pencil buttons on slots
+    document.addEventListener('click', (ev) => {
+        const btn = (ev.target as HTMLElement | null)?.closest<HTMLElement>(
+            '[data-slot-edit]',
+        );
+        if (!btn) return;
+
+        const slot = btn.closest<HTMLElement>('.slot');
+        if (!slot) return;
+
+        openEdit(slot);
+    });
 }
