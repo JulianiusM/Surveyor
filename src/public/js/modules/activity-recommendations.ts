@@ -6,6 +6,7 @@
 import {get, post} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
 import {describeWarning} from './activity-assignments';
+import { reloadAfterDelay } from '../shared/ui-helpers';
 import type {
     AssignmentWarning,
     RecommendationParticipantOption,
@@ -360,7 +361,7 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
             }
             
             // Reload the page to show updated assignments
-            setTimeout(() => window.location.reload(), 1000);
+            reloadAfterDelay(1000);
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to apply recommendations';
             setAlert(message, 'danger');
