@@ -141,7 +141,7 @@ export async function updateRoleAssignments(slotId: string, assign: {
 
         for (const part of assign) {
             if (!part.assignmentId) continue;
-            const ass = assRepo.findOneBy({id: part.assignmentId, slot: {id: slotId}});
+            const ass = await assRepo.findOneBy({id: part.assignmentId, slot: {id: slotId}});
             if (!ass) throw new Error("Assignment not found");
             await assignRole(part.assignmentId, part.role, manager);
         }
