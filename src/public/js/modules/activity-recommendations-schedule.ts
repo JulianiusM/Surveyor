@@ -154,7 +154,7 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
         }
         recDiv.append(badge);
 
-        // Action buttons
+        // Action buttons - all states are reversible
         if (rec.status === 'PENDING') {
             const approveBtn = document.createElement('button');
             approveBtn.className = 'btn btn-xs btn-success';
@@ -172,14 +172,16 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             rejectBtn.addEventListener('click', () => rejectRecommendation(rec));
             recDiv.append(rejectBtn);
         } else if (rec.status === 'APPROVED') {
-            const removeBtn = document.createElement('button');
-            removeBtn.className = 'btn btn-xs btn-outline-danger';
-            removeBtn.type = 'button';
-            removeBtn.title = 'Remove';
-            removeBtn.innerHTML = '<i class="bi bi-trash"></i>';
-            removeBtn.addEventListener('click', () => removeRecommendation(rec));
-            recDiv.append(removeBtn);
+            // Can revert to pending (acts as "undo approve")
+            const revertBtn = document.createElement('button');
+            revertBtn.className = 'btn btn-xs btn-outline-secondary';
+            revertBtn.type = 'button';
+            revertBtn.title = 'Revert to Pending';
+            revertBtn.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i>';
+            revertBtn.addEventListener('click', () => removeRecommendation(rec));
+            recDiv.append(revertBtn);
         } else if (rec.status === 'REJECTED') {
+            // Can approve (revert rejection)
             const approveBtn = document.createElement('button');
             approveBtn.className = 'btn btn-xs btn-outline-success';
             approveBtn.type = 'button';
@@ -187,6 +189,15 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             approveBtn.innerHTML = '<i class="bi bi-check"></i>';
             approveBtn.addEventListener('click', () => approveRecommendation(rec));
             recDiv.append(approveBtn);
+            
+            // Can also revert to pending
+            const revertBtn = document.createElement('button');
+            revertBtn.className = 'btn btn-xs btn-outline-secondary';
+            revertBtn.type = 'button';
+            revertBtn.title = 'Revert to Pending';
+            revertBtn.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i>';
+            revertBtn.addEventListener('click', () => removeRecommendation(rec));
+            recDiv.append(revertBtn);
         }
 
         container.append(recDiv);
@@ -245,13 +256,14 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
     };
 
     const removeRecommendation = async (rec: RecommendationRow) => {
+        // Revert to PENDING instead of deleting
         const idx = recommendations.findIndex((r) =>
             r.slot.id === rec.slot.id &&
             r.user?.id === rec.user?.id &&
             r.guest?.id === rec.guest?.id
         );
         if (idx !== -1) {
-            recommendations.splice(idx, 1);
+            recommendations[idx].status = 'PENDING';
             renderAllRecommendations();
         }
     };
@@ -260,10 +272,13 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
         try {
             const url = `/api/activity/${planId}/recommendations`;
             const resp = await get(url);
+            
+            // Extract data from {status, data, message} format
+            const data = resp.data || resp;
 
-            recommendations = resp.recommendations || [];
-            warnings = resp.warnings || [];
-            participantOptions = resp.participantOptions || [];
+            recommendations = data.recommendations || [];
+            warnings = data.warnings || [];
+            participantOptions = data.participantOptions || [];
 
             renderAllRecommendations();
             setAlert();
@@ -286,16 +301,19 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
     };
 
     const applyRecommendations = async () => {
-        const approved = recommendations.filter((r) => r.status === 'APPROVED');
-        if (!approved.length) {
-            setAlert('No approved recommendations to apply.', 'info');
-            return;
-        }
+        // Apply = Save all current statuses
+        // Send all recommendations with their current status
+        const payload = recommendations.map(r => ({
+            slotId: r.slot.id,
+            userId: r.user?.id || null,
+            guestId: r.guest?.id || null,
+            status: r.status
+        }));
 
         try {
-            setAlert('Applying approved recommendations...', 'info');
-            await post(`/api/activity/${planId}/recommendations/apply`, {});
-            setAlert('Recommendations applied successfully!', 'info');
+            setAlert('Saving recommendations...', 'info');
+            await post(`/api/activity/${planId}/recommendations/apply`, {recommendations: payload});
+            setAlert('Recommendations saved successfully!', 'info');
             // Store active tab before reload
             const activeTabEl = document.querySelector<HTMLElement>('.nav-link.active[data-bs-target]');
             if (activeTabEl) {
@@ -304,8 +322,8 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             }
             reloadAfterDelay(1000);
         } catch (err) {
-            console.error('Failed to apply recommendations:', err);
-            setAlert('Failed to apply recommendations.', 'danger');
+            console.error('Failed to save recommendations:', err);
+            setAlert('Failed to save recommendations.', 'danger');
         }
     };
 
