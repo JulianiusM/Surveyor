@@ -11,7 +11,7 @@ export class ActivityRole {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
     id!: number;
 
-    @Column("varchar", {name: "name", unique: true, length: 50})
+    @Column("varchar", {name: "name", length: 50})
     name!: string;
 
     @Column("text", {name: "description", nullable: true})

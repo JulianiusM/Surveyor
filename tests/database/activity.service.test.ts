@@ -33,7 +33,7 @@ import {
 import {AppDataSource, initDataSource} from '../../src/modules/database/dataSource';
 
 // Entities used to set up data quickly
-import {Role} from '../../src/modules/database/entities/activity/ActivityRole';
+import {ActivityRole} from '../../src/modules/database/entities/activity/ActivityRole';
 import {ActivityPlan} from '../../src/modules/database/entities/activity/ActivityPlan';
 import {ActivitySlot} from '../../src/modules/database/entities/activity/ActivitySlot';
 import {ActivityAssignment} from '../../src/modules/database/entities/activity/ActivityAssignment';
@@ -74,7 +74,7 @@ async function truncateAll() {
     await AppDataSource.createQueryBuilder().delete().from(ActivityAssignment).execute();
     await AppDataSource.createQueryBuilder().delete().from(ActivitySlot).execute();
     await AppDataSource.createQueryBuilder().delete().from(ActivityPlan).execute();
-    await AppDataSource.createQueryBuilder().delete().from(Role).execute();
+    await AppDataSource.createQueryBuilder().delete().from(ActivityRole).execute();
     await AppDataSource.createQueryBuilder().delete().from(User).execute();
     await AppDataSource.createQueryBuilder().delete().from(Guest).execute();
 
@@ -109,7 +109,7 @@ describe('Roles and assignments', () => {
         const id2 = await ensureRoleId(roleName);
         expect(id1).toBe(id2);
 
-        const roles = await AppDataSource.getRepository(Role).find();
+        const roles = await AppDataSource.getRepository(ActivityRole).find();
         expect(roles).toHaveLength(expectedCreations);
         expect(roles[0]).toEqual(expect.objectContaining({name: roleName, isDefault: 1}));
     });
@@ -495,7 +495,7 @@ describe('Assignment wrapper helpers + lookups', () => {
 describe('Edge cases & additional scenarios', () => {
     test('ensureRoleId for non-default marks isDefault=false', async () => {
         const rid = await ensureRoleId('helper');
-        const role = await AppDataSource.getRepository(Role).findOneByOrFail({id: rid});
+        const role = await AppDataSource.getRepository(ActivityRole).findOneByOrFail({id: rid});
         expect(role).toEqual(expect.objectContaining({name: 'helper', isDefault: 0}));
     });
 
@@ -531,7 +531,7 @@ describe('Edge cases & additional scenarios', () => {
         await assignRole(aid, 'lead');
         await assignRole(aid, 'lead'); // idempotent
 
-        const role = await AppDataSource.getRepository(Role).findOneByOrFail({name: 'lead'});
+        const role = await AppDataSource.getRepository(ActivityRole).findOneByOrFail({name: 'lead'});
         const cnt = await AppDataSource.getRepository(ActivityAssignmentRole).count({
             where: {
                 assignment: {id: aid},

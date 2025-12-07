@@ -14,7 +14,6 @@ import {
     findOrCreateUserFromOidc,
     generateActivationToken,
     generatePasswordResetToken,
-    getAllRoles,
     getGuestByToken,
     getGuestInternal,
     getGuestLinkToken,
@@ -28,13 +27,14 @@ import {
     verifyPassword,
     verifyPasswordResetToken,
 } from '../../src/modules/database/services/UserService';
+import {getAllRoles} from '../../src/modules/database/services/ActivityService';
 import {AppDataSource, initDataSource} from '../../src/modules/database/dataSource';
 
 // Entities used for setup/cleanup
 import {User} from '../../src/modules/database/entities/user/User';
 import {Guest} from '../../src/modules/database/entities/user/Guest';
 import {GuestLink} from '../../src/modules/database/entities/user/GuestLink';
-import {Role} from '../../src/modules/database/entities/activity/ActivityRole';
+import {ActivityRole} from '../../src/modules/database/entities/activity/ActivityRole';
 
 // Test data
 import {
@@ -55,7 +55,7 @@ async function truncateAll() {
 
     await AppDataSource.createQueryBuilder().delete().from(GuestLink).execute();
     await AppDataSource.createQueryBuilder().delete().from(Guest).execute();
-    await AppDataSource.createQueryBuilder().delete().from(Role).execute();
+    await AppDataSource.createQueryBuilder().delete().from(ActivityRole).execute();
     await AppDataSource.createQueryBuilder().delete().from(User).execute();
 
     await AppDataSource.query('SET FOREIGN_KEY_CHECKS=1');
@@ -204,9 +204,9 @@ describe('Guests & guest links', () => {
 describe('Roles', () => {
     test.each(rolesData)('$description', async ({roles, expectedNames}) => {
         const roleEntities = roles.map(r =>
-            AppDataSource.getRepository(Role).create(r)
+            AppDataSource.getRepository(ActivityRole).create(r)
         );
-        await AppDataSource.getRepository(Role).save(roleEntities);
+        await AppDataSource.getRepository(ActivityRole).save(roleEntities);
 
         const allRoles = await getAllRoles();
         const titles = allRoles.map(r => r.name).sort();
