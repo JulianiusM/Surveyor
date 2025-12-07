@@ -46,6 +46,12 @@ export class ActivityPlan {
     @Column("tinyint", {name: "allow_departure_day_morning", width: 1, default: () => "1"})
     allowDepartureDayMorning!: boolean;
 
+    @Column("decimal", {name: "availability_weight", precision: 3, scale: 2, nullable: true, default: () => "0.30"})
+    availabilityWeight?: number | null;
+
+    @Column("smallint", {name: "swap_optimization_iterations", nullable: true, default: () => "10"})
+    swapOptimizationIterations?: number | null;
+
     @Column("timestamp", {
         name: "created_at",
         nullable: true,

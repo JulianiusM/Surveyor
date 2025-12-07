@@ -29,6 +29,8 @@ interface AutoAssignmentPlan
         | "allowOverfillAfterFull"
         | "allowArrivalDayEvening"
         | "allowDepartureDayMorning"
+        | "availabilityWeight"
+        | "swapOptimizationIterations"
     > {}
 
 interface AutoAssignmentSlot extends ActivitySlot {
@@ -172,6 +174,34 @@ function scoreParticipantWithAvailability(
     return a.participantKey.localeCompare(b.participantKey);
 }
 
+/**
+ * Weighted scoring that blends fairness and availability
+ * Option 1: Allows tuning the balance between fair distribution and limited availability
+ * 
+ * @param availabilityWeight - Weight for availability (0-1). 0.3 means 70% fairness, 30% availability
+ */
+function scoreParticipantWeighted(
+    participant: ParticipantState,
+    eligibleSlots: number,
+    totalSlots: number,
+    availabilityWeight: number
+): number {
+    // Fairness score: ratio of assigned/required (lower is more underserved)
+    const fairnessScore = participant.required > 0 
+        ? participant.assigned / participant.required 
+        : (participant.assigned > 0 ? 1 : 0);
+    
+    // Availability score: normalized by total slots (lower eligible = higher priority = higher score)
+    const availabilityScore = totalSlots > 0 
+        ? 1 - (eligibleSlots / totalSlots)
+        : 0;
+    
+    // Combined score: lower is better (will be assigned first)
+    // fairnessWeight + availabilityWeight = 1.0
+    const fairnessWeight = 1 - availabilityWeight;
+    return (fairnessScore * fairnessWeight) + (availabilityScore * availabilityWeight);
+}
+
 function canAssign(
     candidate: AssignmentCandidate,
     participant: ParticipantAttendance,
@@ -196,9 +226,15 @@ function canAssign(
  * - F8: No overlapping slots per participant
  * - F9: Fair distribution across participants with limited availability priority
  * - F10: Returns proposed assignments
+ * 
+ * Enhanced with:
+ * - Option 1: Weighted scoring (configurable via availabilityWeight)
+ * - Option 2: Post-assignment swap optimization (configurable via swapOptimizationIterations)
  */
 export function generateAutoRecommendations(ctx: AutoAssignmentContext): RecommendationInput[] {
     const allowOverfill = Boolean(ctx.plan.allowOverfillAfterFull);
+    const availabilityWeight = ctx.plan.availabilityWeight ?? 0.30;
+    const swapIterations = ctx.plan.swapOptimizationIterations ?? 10;
     const {states, assignmentMap} = buildParticipantStates(ctx);
 
     if (!states.size) return [];
@@ -212,12 +248,17 @@ export function generateAutoRecommendations(ctx: AutoAssignmentContext): Recomme
 
     // F5 Phase 1: Fill free capacity first
     const phase1Slots = buildSlotCapacities(ctx.slots, false);
-    assignFairly(phase1Slots, states, assignmentMap, attendancePolicy, recommendations, false);
+    assignFairly(phase1Slots, states, assignmentMap, attendancePolicy, recommendations, false, availabilityWeight);
 
     // F5 Phase 2: If overfill allowed and participants still have deficit, allow overcapacity
     if (allowOverfill) {
         const phase2Slots = buildSlotCapacities(ctx.slots, true);
-        assignFairly(phase2Slots, states, assignmentMap, attendancePolicy, recommendations, true);
+        assignFairly(phase2Slots, states, assignmentMap, attendancePolicy, recommendations, true, availabilityWeight);
+    }
+
+    // Option 2: Post-assignment swap optimization
+    if (swapIterations > 0) {
+        optimizeViaSwaps(recommendations, states, assignmentMap, ctx.slots, attendancePolicy, swapIterations);
     }
 
     return recommendations;
@@ -226,6 +267,8 @@ export function generateAutoRecommendations(ctx: AutoAssignmentContext): Recomme
 /**
  * Assign participants to slots fairly, one assignment at a time
  * This ensures fair distribution across both participants AND slots
+ * 
+ * @param availabilityWeight - Weight for limited availability (0-1). 0.3 means 70% fairness, 30% availability
  */
 function assignFairly(
     slots: SlotCapacity[],
@@ -233,7 +276,8 @@ function assignFairly(
     assignmentMap: Record<string, AssignmentCandidate[]>,
     attendancePolicy: AttendancePolicy,
     recommendations: RecommendationInput[],
-    allowOvercapacity: boolean = false
+    allowOvercapacity: boolean = false,
+    availabilityWeight: number = 0.30
 ): void {
     // Track slot assignment counts for fair distribution (cached and updated incrementally)
     const slotAssignmentCounts = new Map<string, number>();
@@ -293,12 +337,10 @@ function assignFairly(
                 }
 
                 // Calculate fairness score for this (participant, slot) pair
-                const participantScore = scoreParticipantForSlot(
-                    state,
-                    eligibleCount,
-                    participantsWithDeficit,
-                    participantEligibility
-                );
+                // Use weighted scoring if availabilityWeight is configured
+                const participantScore = availabilityWeight > 0 && availabilityWeight < 1
+                    ? scoreParticipantWeighted(state, eligibleCount, slots.length, availabilityWeight)
+                    : scoreParticipantForSlot(state, eligibleCount, participantsWithDeficit, participantEligibility);
 
                 // Slot fairness: consider filling degree, competition, and deficit
                 // Lower score = better (prefer balanced distribution)
@@ -398,6 +440,133 @@ function scoreParticipantForSlot(
     }
     
     return score;
+}
+
+/**
+ * Option 2: Post-assignment swap optimization
+ * Iteratively tries to find swaps that improve overall fairness
+ * 
+ * A swap is beneficial if it reduces the maximum deficit across all participants
+ * or improves the fairness distribution
+ */
+function optimizeViaSwaps(
+    recommendations: RecommendationInput[],
+    states: Map<string, ParticipantState>,
+    assignmentMap: Record<string, AssignmentCandidate[]>,
+    slots: AutoAssignmentSlot[],
+    attendancePolicy: AttendancePolicy,
+    maxIterations: number
+): void {
+    // Build lookup maps for efficient access
+    const slotMap = new Map<string, AutoAssignmentSlot>();
+    for (const slot of slots) {
+        slotMap.set(slot.id, slot);
+    }
+    
+    const recByParticipant = new Map<string, RecommendationInput[]>();
+    for (const rec of recommendations) {
+        const key = rec.userId ? `user:${rec.userId}` : `guest:${rec.guestId}`;
+        const existing = recByParticipant.get(key) ?? [];
+        existing.push(rec);
+        recByParticipant.set(key, existing);
+    }
+    
+    // Calculate current fairness metric (lower is better)
+    function calculateFairnessMetric(): number {
+        let maxDeficit = 0;
+        let totalSquaredDeficit = 0;
+        
+        for (const state of states.values()) {
+            const deficit = Math.max(state.required - state.assigned, 0);
+            maxDeficit = Math.max(maxDeficit, deficit);
+            totalSquaredDeficit += deficit * deficit;
+        }
+        
+        // Combine max deficit (primary) and sum of squared deficits (secondary)
+        return maxDeficit * 1000 + totalSquaredDeficit;
+    }
+    
+    let currentMetric = calculateFairnessMetric();
+    
+    // Try swaps for n iterations
+    for (let iter = 0; iter < maxIterations; iter++) {
+        let improvedThisIteration = false;
+        
+        // Try swapping assignments between pairs of participants
+        const participantKeys = Array.from(states.keys());
+        
+        for (let i = 0; i < participantKeys.length; i++) {
+            for (let j = i + 1; j < participantKeys.length; j++) {
+                const keyA = participantKeys[i];
+                const keyB = participantKeys[j];
+                
+                const stateA = states.get(keyA);
+                const stateB = states.get(keyB);
+                
+                if (!stateA || !stateB) continue;
+                
+                const recsA = recByParticipant.get(keyA) ?? [];
+                const recsB = recByParticipant.get(keyB) ?? [];
+                
+                if (recsA.length === 0 || recsB.length === 0) continue;
+                
+                // Try swapping each assignment from A with each from B
+                for (const recA of recsA) {
+                    for (const recB of recsB) {
+                        // Check if swap is valid (no conflicts)
+                        const slotA = slotMap.get(recA.slotId);
+                        const slotB = slotMap.get(recB.slotId);
+                        
+                        if (!slotA || !slotB) continue;
+                        
+                        const candidateA = toAssignmentCandidate(slotA);
+                        const candidateB = toAssignmentCandidate(slotB);
+                        
+                        // Check if A can take B's slot and B can take A's slot
+                        const assignmentsA = assignmentMap[keyA] ?? [];
+                        const assignmentsB = assignmentMap[keyB] ?? [];
+                        
+                        // Filter out the slots being swapped
+                        const assignmentsAWithoutRecA = assignmentsA.filter(a => a.id !== recA.slotId);
+                        const assignmentsBWithoutRecB = assignmentsB.filter(a => a.id !== recB.slotId);
+                        
+                        const aCanTakeB = canAssign(candidateB, stateA.participant, assignmentsAWithoutRecA, attendancePolicy);
+                        const bCanTakeA = canAssign(candidateA, stateB.participant, assignmentsBWithoutRecB, attendancePolicy);
+                        
+                        if (!aCanTakeB || !bCanTakeA) continue;
+                        
+                        // Temporarily perform the swap
+                        const temp = recA.slotId;
+                        recA.slotId = recB.slotId;
+                        recB.slotId = temp;
+                        
+                        // Recalculate fairness
+                        const newMetric = calculateFairnessMetric();
+                        
+                        if (newMetric < currentMetric) {
+                            // Swap improves fairness - keep it
+                            currentMetric = newMetric;
+                            improvedThisIteration = true;
+                            
+                            // Update assignment maps
+                            assignmentMap[keyA] = [...assignmentsAWithoutRecA, candidateB];
+                            assignmentMap[keyB] = [...assignmentsBWithoutRecB, candidateA];
+                        } else {
+                            // Revert swap
+                            const revertTemp = recA.slotId;
+                            recA.slotId = recB.slotId;
+                            recB.slotId = revertTemp;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // If no improvement found in this iteration, stop early
+        if (!improvedThisIteration) {
+            break;
+        }
+    }
 }
 
 function mergeParticipants(
