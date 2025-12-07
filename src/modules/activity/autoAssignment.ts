@@ -101,6 +101,9 @@ function buildParticipantStates(
     return {states, assignmentMap};
 }
 
+// Epsilon for floating-point comparison in ratio calculations
+const RATIO_COMPARISON_EPSILON = 0.0001;
+
 /**
  * F9: Fair distribution scoring
  * - Priority 1: Lowest ratio of assigned/required (most underserved)
@@ -113,7 +116,7 @@ function scoreParticipant(a: ParticipantState, b: ParticipantState): number {
     const ratioB = b.required > 0 ? b.assigned / b.required : (b.assigned > 0 ? Number.POSITIVE_INFINITY : 0);
 
     // Priority 1: Lowest ratio (most underserved)
-    if (Math.abs(ratioA - ratioB) > 0.0001) {
+    if (Math.abs(ratioA - ratioB) > RATIO_COMPARISON_EPSILON) {
         return ratioA - ratioB;
     }
 
