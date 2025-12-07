@@ -39,6 +39,8 @@ export type Settings = {
     imprintUrl: string;
     privacyPolicyUrl: string;
     initialized: boolean;
+    activityAvailabilityWeight: number;
+    activitySwapOptimizationIterations: number;
 };
 
 const defaults: Settings = {
@@ -79,6 +81,9 @@ const defaults: Settings = {
 
     imprintUrl: "http://example.com/imprint",
     privacyPolicyUrl: "http://example.com/privacy",
+    
+    activityAvailabilityWeight: 0.30,
+    activitySwapOptimizationIterations: 10,
 };
 
 // CSV_KEY -> settings key
@@ -109,6 +114,8 @@ const keyMap: Record<string, keyof Settings> = {
     INVOICE_DIR: "invoiceDir",
     IMPRINT_URL: "imprintUrl",
     PRIVACY_POLICY_URL: "privacyPolicyUrl",
+    ACTIVITY_AVAILABILITY_WEIGHT: "activityAvailabilityWeight",
+    ACTIVITY_SWAP_OPTIMIZATION_ITERATIONS: "activitySwapOptimizationIterations",
 };
 
 // per-field coercion
@@ -120,6 +127,8 @@ const coerce: Partial<Record<keyof Settings, (v: string) => any>> = {
     smtpSecure: (v) => /^(1|true|yes|on)$/i.test(v),
     localLoginEnabled: (v) => /^(1|true|yes|on)$/i.test(v),
     oidcEnabled: (v) => /^(1|true|yes|on)$/i.test(v),
+    activityAvailabilityWeight: (v) => Number(v),
+    activitySwapOptimizationIterations: (v) => Number(v),
 };
 
 // Apply environment variable overrides AFTER reading CSV.

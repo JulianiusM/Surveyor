@@ -9,6 +9,7 @@ import {RecommendationInput} from "../database/services/ActivityRecommendationSe
 import * as requirementService from "../database/services/ActivityRequirementService";
 import * as activityService from "../database/services/ActivityService";
 import * as eventService from "../database/services/EventService";
+import settingsStore from "../settings";
 
 /**
  * Core automatic recommendation generator for activity plans. The engine balances required
@@ -29,8 +30,6 @@ interface AutoAssignmentPlan
         | "allowOverfillAfterFull"
         | "allowArrivalDayEvening"
         | "allowDepartureDayMorning"
-        | "availabilityWeight"
-        | "swapOptimizationIterations"
     > {}
 
 interface AutoAssignmentSlot extends ActivitySlot {
@@ -233,8 +232,8 @@ function canAssign(
  */
 export function generateAutoRecommendations(ctx: AutoAssignmentContext): RecommendationInput[] {
     const allowOverfill = Boolean(ctx.plan.allowOverfillAfterFull);
-    const availabilityWeight = ctx.plan.availabilityWeight ?? 0.30;
-    const swapIterations = ctx.plan.swapOptimizationIterations ?? 10;
+    const availabilityWeight = settingsStore.value.activityAvailabilityWeight;
+    const swapIterations = settingsStore.value.activitySwapOptimizationIterations;
     const {states, assignmentMap} = buildParticipantStates(ctx);
 
     if (!states.size) return [];
@@ -444,10 +443,14 @@ function scoreParticipantForSlot(
 
 /**
  * Option 2: Post-assignment swap optimization
- * Iteratively tries to find swaps that improve overall fairness
+ * 
+ * Implements two scenarios for improving fairness:
+ * 1. Help underserved participants: Try to move other participants to different slots
+ *    to free up slots within the underserved participant's attendance window
+ * 2. Balance slot filling: In overfill scenarios, redistribute participants from
+ *    overfilled slots to underfilled slots
  * 
  * A swap is beneficial if it reduces the maximum deficit across all participants
- * or improves the fairness distribution
  */
 function optimizeViaSwaps(
     recommendations: RecommendationInput[],
@@ -457,6 +460,8 @@ function optimizeViaSwaps(
     attendancePolicy: AttendancePolicy,
     maxIterations: number
 ): void {
+    if (maxIterations <= 0) return;
+    
     // Build lookup maps for efficient access
     const slotMap = new Map<string, AutoAssignmentSlot>();
     for (const slot of slots) {
@@ -471,95 +476,144 @@ function optimizeViaSwaps(
         recByParticipant.set(key, existing);
     }
     
-    // Calculate current fairness metric (lower is better)
-    function calculateFairnessMetric(): number {
+    // Helper: Calculate deficit for a specific participant
+    const getDeficit = (key: string): number => {
+        const state = states.get(key);
+        if (!state) return 0;
+        const assignedCount = (recByParticipant.get(key) ?? []).length + (state.existingCount ?? 0);
+        return Math.max(state.required - assignedCount, 0);
+    };
+    
+    // Helper: Calculate overall fairness metric (lower is better)
+    const calculateFairnessMetric = (): number => {
         let maxDeficit = 0;
         let totalSquaredDeficit = 0;
         
-        for (const state of states.values()) {
-            const deficit = Math.max(state.required - state.assigned, 0);
+        for (const key of states.keys()) {
+            const deficit = getDeficit(key);
             maxDeficit = Math.max(maxDeficit, deficit);
             totalSquaredDeficit += deficit * deficit;
         }
         
         // Combine max deficit (primary) and sum of squared deficits (secondary)
         return maxDeficit * 1000 + totalSquaredDeficit;
-    }
+    };
+    
+    // Helper: Check if participant can be assigned to a slot
+    const canParticipantTakeSlot = (participantKey: string, slot: AutoAssignmentSlot, excludeSlotId?: string): boolean => {
+        const state = states.get(participantKey);
+        if (!state) return false;
+        
+        const assignments = assignmentMap[participantKey] ?? [];
+        const filteredAssignments = excludeSlotId 
+            ? assignments.filter(a => a.id !== excludeSlotId)
+            : assignments;
+        
+        // Add currently recommended slots (except the one being swapped out)
+        const currentRecs = recByParticipant.get(participantKey) ?? [];
+        for (const rec of currentRecs) {
+            if (rec.slotId === excludeSlotId) continue;
+            const recSlot = slotMap.get(rec.slotId);
+            if (recSlot) {
+                filteredAssignments.push(toAssignmentCandidate(recSlot));
+            }
+        }
+        
+        const candidate = toAssignmentCandidate(slot);
+        return canAssign(candidate, state.participant, filteredAssignments, attendancePolicy);
+    };
     
     let currentMetric = calculateFairnessMetric();
     
-    // Try swaps for n iterations
+    // Scenario 1: Help underserved participants by finding slots within their attendance window
+    // Try to swap assignments so underserved participants can fill their deficits
     for (let iter = 0; iter < maxIterations; iter++) {
         let improvedThisIteration = false;
         
-        // Try swapping assignments between pairs of participants
         const participantKeys = Array.from(states.keys());
         
-        for (let i = 0; i < participantKeys.length; i++) {
-            for (let j = i + 1; j < participantKeys.length; j++) {
-                const keyA = participantKeys[i];
-                const keyB = participantKeys[j];
+        // Sort by deficit (most underserved first)
+        participantKeys.sort((a, b) => getDeficit(b) - getDeficit(a));
+        
+        for (const underservedKey of participantKeys) {
+            const underservedDeficit = getDeficit(underservedKey);
+            if (underservedDeficit === 0) break; // No more underserved participants
+            
+            const underservedState = states.get(underservedKey);
+            if (!underservedState) continue;
+            
+            // Find slots that the underserved participant could use
+            for (const slot of slots) {
+                if (!canParticipantTakeSlot(underservedKey, slot)) continue;
                 
-                const stateA = states.get(keyA);
-                const stateB = states.get(keyB);
-                
-                if (!stateA || !stateB) continue;
-                
-                const recsA = recByParticipant.get(keyA) ?? [];
-                const recsB = recByParticipant.get(keyB) ?? [];
-                
-                if (recsA.length === 0 || recsB.length === 0) continue;
-                
-                // Try swapping each assignment from A with each from B
-                for (const recA of recsA) {
-                    for (const recB of recsB) {
-                        // Check if swap is valid (no conflicts)
-                        const slotA = slotMap.get(recA.slotId);
-                        const slotB = slotMap.get(recB.slotId);
+                // Check if this slot is currently assigned to someone else in recommendations
+                for (const [otherKey, otherRecs] of recByParticipant.entries()) {
+                    if (otherKey === underservedKey) continue;
+                    
+                    const recUsingThisSlot = otherRecs.find(r => r.slotId === slot.id);
+                    if (!recUsingThisSlot) continue;
+                    
+                    const otherDeficit = getDeficit(otherKey);
+                    
+                    // Only swap if the other participant has a lower deficit (is better served)
+                    if (otherDeficit >= underservedDeficit) continue;
+                    
+                    // Try to find an alternative slot for the other participant
+                    for (const alternativeSlot of slots) {
+                        if (alternativeSlot.id === slot.id) continue;
                         
-                        if (!slotA || !slotB) continue;
+                        // Check if other participant can take the alternative slot
+                        if (!canParticipantTakeSlot(otherKey, alternativeSlot, slot.id)) continue;
                         
-                        const candidateA = toAssignmentCandidate(slotA);
-                        const candidateB = toAssignmentCandidate(slotB);
+                        // Perform the swap: move other participant to alternative slot,
+                        // free up original slot for underserved participant
+                        recUsingThisSlot.slotId = alternativeSlot.id;
                         
-                        // Check if A can take B's slot and B can take A's slot
-                        const assignmentsA = assignmentMap[keyA] ?? [];
-                        const assignmentsB = assignmentMap[keyB] ?? [];
+                        // Add new recommendation for underserved participant
+                        const newRec: RecommendationInput = {
+                            slotId: slot.id,
+                            userId: underservedState.participant.userId ?? undefined,
+                            guestId: underservedState.participant.guestId ?? undefined,
+                            planId: recUsingThisSlot.planId,
+                        };
+                        recommendations.push(newRec);
                         
-                        // Filter out the slots being swapped
-                        const assignmentsAWithoutRecA = assignmentsA.filter(a => a.id !== recA.slotId);
-                        const assignmentsBWithoutRecB = assignmentsB.filter(a => a.id !== recB.slotId);
+                        const underservedRecs = recByParticipant.get(underservedKey) ?? [];
+                        underservedRecs.push(newRec);
+                        recByParticipant.set(underservedKey, underservedRecs);
                         
-                        const aCanTakeB = canAssign(candidateB, stateA.participant, assignmentsAWithoutRecA, attendancePolicy);
-                        const bCanTakeA = canAssign(candidateA, stateB.participant, assignmentsBWithoutRecB, attendancePolicy);
+                        // Update assignment map for underserved participant
+                        const underservedAssignments = assignmentMap[underservedKey] ?? [];
+                        assignmentMap[underservedKey] = [...underservedAssignments, toAssignmentCandidate(slot)];
                         
-                        if (!aCanTakeB || !bCanTakeA) continue;
+                        // Update assignment map for other participant
+                        const otherAssignments = (assignmentMap[otherKey] ?? []).filter(a => a.id !== slot.id);
+                        assignmentMap[otherKey] = [...otherAssignments, toAssignmentCandidate(alternativeSlot)];
                         
-                        // Temporarily perform the swap
-                        const temp = recA.slotId;
-                        recA.slotId = recB.slotId;
-                        recB.slotId = temp;
-                        
-                        // Recalculate fairness
+                        // Check if this improved fairness
                         const newMetric = calculateFairnessMetric();
                         
                         if (newMetric < currentMetric) {
-                            // Swap improves fairness - keep it
                             currentMetric = newMetric;
                             improvedThisIteration = true;
-                            
-                            // Update assignment maps
-                            assignmentMap[keyA] = [...assignmentsAWithoutRecA, candidateB];
-                            assignmentMap[keyB] = [...assignmentsBWithoutRecB, candidateA];
+                            break; // Found a good swap, move to next underserved participant
                         } else {
-                            // Revert swap
-                            const revertTemp = recA.slotId;
-                            recA.slotId = recB.slotId;
-                            recB.slotId = revertTemp;
+                            // Revert the changes
+                            recUsingThisSlot.slotId = slot.id;
+                            recommendations.pop();
+                            underservedRecs.pop();
+                            assignmentMap[underservedKey] = underservedAssignments;
+                            assignmentMap[otherKey] = [...otherAssignments.filter(a => a.id !== alternativeSlot.id), toAssignmentCandidate(slot)];
                         }
                     }
+                    
+                    if (improvedThisIteration) break;
                 }
+                
+                if (improvedThisIteration) break;
             }
+            
+            if (improvedThisIteration) break;
         }
         
         // If no improvement found in this iteration, stop early
