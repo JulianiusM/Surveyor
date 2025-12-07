@@ -259,8 +259,18 @@ export function generateAutoRecommendations(ctx: AutoAssignmentContext): Recomme
     }
 
     // Option 2: Post-assignment swap optimization
-    if (swapIterations > 0) {
+    // Skip swap optimization if there are no recommendations to optimize
+    if (swapIterations > 0 && recommendations.length > 0) {
+        const beforeSwapCount = recommendations.length;
         optimizeViaSwaps(recommendations, states, assignmentMap, ctx.slots, attendancePolicy, swapIterations);
+        const afterSwapCount = recommendations.length;
+        
+        // Swap optimization should never ADD recommendations, only move them between slots
+        if (afterSwapCount > beforeSwapCount) {
+            console.warn(`[autoAssignment] Swap optimization incorrectly added ${afterSwapCount - beforeSwapCount} recommendations`);
+            // Remove the extra recommendations
+            recommendations.splice(beforeSwapCount);
+        }
     }
 
     return recommendations;
@@ -303,7 +313,10 @@ function assignFairly(
     }
 
     // Continue making assignments until no more can be made
+    let iterationCount = 0;
     while (true) {
+        iterationCount++;
+        
         // F3: Get participants with deficit > 0
         const participantsWithDeficit = [...states.values()].filter(state => {
             const deficit = Math.max(state.required - state.assigned, 0);
@@ -311,6 +324,12 @@ function assignFairly(
         });
 
         if (participantsWithDeficit.length === 0) break;
+        
+        // Safety check to prevent infinite loops (should never happen in production)
+        if (iterationCount > 1000) {
+            console.warn('[autoAssignment] Breaking after 1000 iterations to prevent infinite loop');
+            break;
+        }
 
         // Recalculate eligibility for participants who were assigned in previous iteration
         for (const key of needsRecalc) {
@@ -407,7 +426,10 @@ function assignFairly(
         }
 
         // If no valid assignment found, break
-        if (!bestMatch) break;
+        if (!bestMatch) {
+            // All participants have deficit but no valid slots available - this is expected with limited capacity
+            break;
+        }
 
         // Make the assignment
         const {participant, slot} = bestMatch;
