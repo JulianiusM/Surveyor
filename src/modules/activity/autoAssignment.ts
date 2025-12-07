@@ -133,10 +133,10 @@ function countEligibleSlots(
 }
 
 /**
- * F9: Fair distribution scoring with limited availability prioritization
- * - Priority 1: Participants with more limited availability (fewer eligible slots)
- * - Priority 2: Lowest ratio of assigned/required (most underserved)
- * - Priority 3: Largest absolute deficit
+ * F9: Fair distribution scoring with balanced availability consideration
+ * - Priority 1: Lowest ratio of assigned/required (most underserved) - FAIRNESS FIRST
+ * - Priority 2: Largest absolute deficit
+ * - Priority 3: Limited availability (fewer eligible slots) - tie-breaker for equal need
  * - Priority 4: Deterministic tie-breaker by participant key
  */
 function scoreParticipantWithAvailability(
@@ -145,26 +145,27 @@ function scoreParticipantWithAvailability(
     aEligibleSlots: number,
     bEligibleSlots: number
 ): number {
-    // Priority 1: Limited availability (fewer eligible slots = higher priority)
-    if (aEligibleSlots !== bEligibleSlots) {
-        return aEligibleSlots - bEligibleSlots;
-    }
-
     // Calculate ratios (lower is more underserved)
     const ratioA = a.required > 0 ? a.assigned / a.required : (a.assigned > 0 ? Number.POSITIVE_INFINITY : 0);
     const ratioB = b.required > 0 ? b.assigned / b.required : (b.assigned > 0 ? Number.POSITIVE_INFINITY : 0);
 
-    // Priority 2: Lowest ratio (most underserved)
+    // Priority 1: Lowest ratio (most underserved) - FAIRNESS FIRST
     if (Math.abs(ratioA - ratioB) > RATIO_COMPARISON_EPSILON) {
         return ratioA - ratioB;
     }
 
-    // Priority 3: Largest absolute deficit
+    // Priority 2: Largest absolute deficit
     const deficitA = Math.max(a.required - a.assigned, 0);
     const deficitB = Math.max(b.required - b.assigned, 0);
     
     if (deficitA !== deficitB) {
         return deficitB - deficitA;
+    }
+
+    // Priority 3: Limited availability as tie-breaker (fewer eligible slots = higher priority)
+    // Only applies when participants have equal need
+    if (aEligibleSlots !== bEligibleSlots) {
+        return aEligibleSlots - bEligibleSlots;
     }
 
     // Priority 4: Deterministic tie-breaker
@@ -299,7 +300,7 @@ function assignFairly(
                     participantEligibility
                 );
 
-                // Slot fairness: consider filling degree and assignment deficit
+                // Slot fairness: consider filling degree, competition, and deficit
                 // Lower score = better (prefer balanced distribution)
                 const slotCount = slotAssignmentCounts.get(slot.slot.id) ?? 0;
                 const capacity = slot.slot.maxAssignees ?? Number.POSITIVE_INFINITY;
@@ -307,20 +308,24 @@ function assignFairly(
                 // Calculate filling degree (0 = empty, 1 = full, >1 = overfilled)
                 const fillingDegree = capacity !== Number.POSITIVE_INFINITY ? slotCount / capacity : slotCount / 100;
                 
-                // Calculate total deficit for participants who could use this slot
-                // This helps prioritize slots where many participants need assignments
+                // Calculate competition: how many other participants could use this slot
+                // Higher competition means slot is more contested
+                let competition = 0;
                 let slotDeficit = 0;
                 for (const p of participantsWithDeficit) {
                     const pAssignments = assignmentMap[p.participantKey] ?? [];
                     if (p.participantKey !== state.participantKey && 
                         canAssign(slot.candidate, p.participant, pAssignments, attendancePolicy)) {
+                        competition++;
                         slotDeficit += Math.max(p.required - p.assigned, 0);
                     }
                 }
                 
-                // Prefer slots with lower filling degree (primary), higher deficit means more need (secondary)
-                // Scale deficit down so filling degree is the primary factor
-                const slotScore = fillingDegree * 100 - (slotDeficit * 0.1);
+                // Slot scoring:
+                // 1. Filling degree (primary): prefer less-filled slots
+                // 2. Competition (secondary): prefer less-contested slots when filling degree is similar
+                // 3. Deficit (tertiary): prefer slots where participants have higher need
+                const slotScore = fillingDegree * 100 + (competition * 0.5) - (slotDeficit * 0.05);
 
                 // Combined score (lower is better)
                 // Participant score is weighted heavily to prioritize participant fairness over slot balance

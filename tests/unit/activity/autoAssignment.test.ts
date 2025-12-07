@@ -42,23 +42,20 @@ describe('generateAutoRecommendations', () => {
 
         const recommendations = generateAutoRecommendations(context);
 
-        // 3 slots available for 3 participants
         expect(recommendations).toHaveLength(3);
-        
-        // User 3 has limited availability (only day 1, slots 1 and 2), so should be prioritized
-        // Users 1 and 2 have broader availability (all 3 slots)
-        const user3Assignments = recommendations.filter(r => r.userId === 3);
+        const assignmentsBySlot: Record<string, RecommendationInput | undefined> = {};
+        recommendations.forEach((rec) => assignmentsBySlot[rec.slotId] = rec);
+
+        // Fairness test: All 3 participants should get at least 1 assignment
+        // With 3 slots for 3 participants needing 2 each, fair distribution is 1-1-1
         const user1Assignments = recommendations.filter(r => r.userId === 1);
         const user2Assignments = recommendations.filter(r => r.userId === 2);
+        const user3Assignments = recommendations.filter(r => r.userId === 3);
         
-        // User 3 should get at least one assignment on their only available day
-        expect(user3Assignments.length).toBeGreaterThan(0);
-        
-        // With 3 slots and 3 participants needing 2 each, not all can be fully satisfied
-        // But the algorithm should distribute fairly - participants with limited availability get priority
-        // At minimum, each participant should have been considered
-        const totalAssignments = user1Assignments.length + user2Assignments.length + user3Assignments.length;
-        expect(totalAssignments).toBe(3);
+        // Each participant should get exactly 1 assignment for fair distribution
+        expect(user1Assignments.length).toBe(1);
+        expect(user2Assignments.length).toBe(1);
+        expect(user3Assignments.length).toBe(1);
     });
 
     it('skips assignments that fall outside attendance or overlap existing commitments', () => {
@@ -199,8 +196,8 @@ describe('generateAutoRecommendations', () => {
         expect(recommendations[0]?.userId).toBe(2);
     });
 
-    // F9: Limited availability prioritization
-    it('prioritizes participants with limited availability first', () => {
+    // F9: Limited availability as tie-breaker for equal need
+    it('uses limited availability as tie-breaker when participants have equal need', () => {
         const context = buildContext({
             plan: {...basePlan, generalRequiredShifts: 2},
             participants: [
@@ -215,10 +212,17 @@ describe('generateAutoRecommendations', () => {
 
         const recommendations = generateAutoRecommendations(context);
 
-        // User 2 has more limited availability, so should be assigned first to slot-1
-        const firstAssignment = recommendations[0];
-        expect(firstAssignment?.userId).toBe(2);
-        expect(firstAssignment?.slotId).toBe('slot-1');
+        // Both users have equal need (0/2 ratio), so limited availability acts as tie-breaker
+        // User 2 has more limited availability (1 eligible slot vs 2), so gets priority
+        const user1Assignments = recommendations.filter(r => r.userId === 1);
+        const user2Assignments = recommendations.filter(r => r.userId === 2);
+        
+        // User 2 should get slot-1 (their only option)
+        expect(user2Assignments.some(r => r.slotId === 'slot-1')).toBe(true);
+        
+        // Both should get 1 assignment for fair distribution
+        expect(user1Assignments.length).toBe(1);
+        expect(user2Assignments.length).toBe(1);
     });
 
     // F9: Fair distribution - largest deficit on tie
