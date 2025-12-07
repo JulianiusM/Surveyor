@@ -29,8 +29,8 @@ export interface AssignmentWarning {
 
 export interface AssignmentCandidate extends SlotTimeboxCandidate {
     id: string;
-    isArrivalEvening?: boolean;
-    isDepartureMorning?: boolean;
+    isArrivalEvening?: boolean | null;
+    isDepartureMorning?: boolean | null;
 }
 
 function isBefore(a: string, b: string): boolean {
