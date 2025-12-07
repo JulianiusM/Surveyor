@@ -11,6 +11,8 @@ import {initCardReorder} from './shared/drag-drop';
 import {initAssignmentRemoval} from './shared/list-actions';
 import {reloadAfterDelay} from './shared/ui-helpers';
 import {loadPerms, requireEntityPerm, requireItemPerm} from './core/permissions';
+import {initParticipantsTab} from './modules/activity-participants';
+import {initSlotRoleAdminModal, getAllRoles as getRoles, getSlotRolesForSlot as getSlotRoles, addRoleToGlobal as addRole, type RoleSummary as RoleType} from './modules/activity-roles';
 
 interface BootstrapModal {
     show: () => void;
@@ -23,11 +25,8 @@ interface BootstrapGlobal {
 
 declare const bootstrap: BootstrapGlobal;
 
-interface RoleSummary {
-    id: number;
-    name: string;
-    description?: string | null;
-}
+// Re-export RoleSummary from modules for backward compatibility
+type RoleSummary = RoleType;
 
 
 type SlotEditorMode = 'create' | 'edit';
@@ -174,26 +173,10 @@ function formatDateLabel(date?: string | null): string {
     return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString();
 }
 
-function getAllRoles(): RoleSummary[] {
-    return (window.Surveyor?.allRoles || []) as RoleSummary[];
-}
-
-function getSlotRolesForSlot(slotId: string): RoleSummary[] {
-    const map = (window.Surveyor?.slotRoles || {}) as SlotRolesMap;
-    return map[slotId] || [];
-}
-
-function addRoleToGlobal(role: RoleSummary): void {
-    const list = getAllRoles();
-    if (!list.some((r) => r.id === role.id)) {
-        list.push(role);
-    }
-    // keep window.Surveyor in sync
-    if (!window.Surveyor) {
-        window.Surveyor = {} as any;
-    }
-    window.Surveyor.allRoles = list;
-}
+// Role functions moved to modules/activity-roles.ts
+const getAllRoles = getRoles;
+const getSlotRolesForSlot = getSlotRoles;
+const addRoleToGlobal = addRole;
 
 function toDateTimeLocalValue(date?: string | Date | null): string {
     if (!date) return '';
@@ -854,194 +837,7 @@ function initSlotEditorModal(): void {
     });
 }
 
-function initSlotRoleAdminModal(): void {
-    const planId = getActivityPlanId();
-    if (!planId) return;
-
-    const modalEl = document.getElementById('slotRoleAdminModal') as HTMLElement | null;
-    const bodyEl = document.getElementById('slotRoleAdminBody') as HTMLElement | null;
-    const titleEl = document.getElementById('slotRoleAdminTitle') as HTMLElement | null;
-    const slotIdInput = document.getElementById('slotRoleAdminSlotId') as HTMLInputElement | null;
-    const errorEl = document.getElementById('slotRoleAdminError') as HTMLElement | null;
-    const saveBtn = document.getElementById('slotRoleAdminSave') as HTMLButtonElement | null;
-
-    if (!modalEl || !bodyEl || !slotIdInput || !saveBtn) return;
-
-    const modal: BootstrapModal | null =
-        typeof bootstrap !== 'undefined'
-            ? new bootstrap.Modal(modalEl, {focus: true})
-            : null;
-
-    let currentSlotId: string | null = null;
-
-    interface SlotParticipant {
-        id: string;
-        name: string;
-    }
-
-    interface SlotRoleRow {
-        roleName: string;
-        roleLabel: string;
-        assignmentId: string | null;
-    }
-
-    const setError = (message?: string) => {
-        if (!errorEl) return;
-        if (!message) {
-            errorEl.textContent = '';
-            errorEl.classList.add('d-none');
-        } else {
-            errorEl.textContent = message;
-            errorEl.classList.remove('d-none');
-        }
-    };
-
-    const collectParticipants = (slotEl: HTMLElement): SlotParticipant[] => {
-        const result: SlotParticipant[] = [];
-        const lis = slotEl.querySelectorAll<HTMLLIElement>('ul.list-unstyled li');
-        lis.forEach((li) => {
-            const btn = li.querySelector<HTMLElement>('[data-assignid]');
-            const nameSpan = li.querySelector<HTMLElement>('span.flex-grow-1');
-            const id = btn?.dataset.assignid || '';
-            const name = nameSpan?.textContent?.trim() || '';
-            if (!id || !name) return;
-            result.push({id, name});
-        });
-        return result;
-    };
-
-    const collectRoles = (slotEl: HTMLElement): SlotRoleRow[] => {
-        const rows: SlotRoleRow[] = [];
-        const roleEls = slotEl.querySelectorAll<HTMLElement>('.role-assignment[data-role-name]');
-        roleEls.forEach((el) => {
-            const roleName = el.dataset.roleName;
-            if (!roleName) return;
-            const roleLabel = el.dataset.roleLabel || roleName;
-            const assignmentId = el.dataset.assignmentId || null;
-            rows.push({roleName, roleLabel, assignmentId});
-        });
-        return rows;
-    };
-
-    const renderTable = (participants: SlotParticipant[], roles: SlotRoleRow[]) => {
-        bodyEl.innerHTML = '';
-
-        if (!roles.length) {
-            const tr = document.createElement('tr');
-            tr.dataset.emptyState = '1';
-
-            const td = document.createElement('td');
-            td.colSpan = 2;
-            td.className = 'text-center text-secondary pt-3';
-            td.textContent = 'No roles for this slot.';
-
-            tr.appendChild(td);
-            bodyEl.appendChild(tr);
-            saveBtn.disabled = true;
-            return;
-        }
-
-        saveBtn.disabled = false;
-
-        roles.forEach((role) => {
-            const tr = document.createElement('tr');
-            tr.dataset.roleName = role.roleName;
-
-            const tdRole = document.createElement('td');
-            tdRole.className = 'align-middle';
-            tdRole.textContent = role.roleLabel;
-
-            const tdParticipant = document.createElement('td');
-            const select = document.createElement('select');
-            select.className = 'form-select form-select-sm text-bg-dark';
-            select.dataset.slotRoleAdminSelect = '1';
-            select.dataset.roleName = role.roleName;
-
-            const optNone = document.createElement('option');
-            optNone.value = '';
-            optNone.textContent = '-- None --';
-            select.appendChild(optNone);
-
-            participants.forEach((p) => {
-                const opt = document.createElement('option');
-                opt.value = p.id;
-                opt.textContent = p.name;
-                if (role.assignmentId && role.assignmentId === p.id) {
-                    opt.selected = true;
-                }
-                select.appendChild(opt);
-            });
-
-            tdParticipant.appendChild(select);
-            tr.append(tdRole, tdParticipant);
-            bodyEl.appendChild(tr);
-        });
-    };
-
-    document.addEventListener('click', (e: Event) => {
-        const target = e.target as Element | null;
-        if (!target) return;
-
-        const btn = target.closest<HTMLElement>('[data-slot-role-admin]');
-        if (!btn) return;
-
-        const slotId = btn.dataset.slotid;
-        if (!slotId) return;
-
-        const slotEl = document.querySelector<HTMLElement>(`.slot[data-slotid="${slotId}"]`);
-        if (!slotEl) return;
-
-        currentSlotId = slotId;
-        slotIdInput.value = slotId;
-        setError();
-
-        const title = describeSlot(slotId);
-        if (titleEl) {
-            titleEl.textContent = `Manage role assignments – ${title}`;
-        }
-
-        const participants = collectParticipants(slotEl);
-        const roles = collectRoles(slotEl);
-
-        renderTable(participants, roles);
-        modal?.show();
-    });
-
-    saveBtn.addEventListener('click', async () => {
-        if (!currentSlotId) return;
-        setError();
-
-        const selects = bodyEl.querySelectorAll<HTMLSelectElement>(
-            'select[data-slot-role-admin-select]',
-        );
-        const assignments: { role: string; assignmentId: string | null }[] = [];
-
-        selects.forEach((select) => {
-            const roleName = select.dataset.roleName;
-            if (!roleName) return;
-            const value = select.value || '';
-            assignments.push({
-                role: roleName,
-                assignmentId: value || null,
-            });
-        });
-
-        try {
-            requireEntityPerm('MANAGE_ASSIGNMENTS', 'manage role assignments');
-            await post(`/api/activity/${planId}/slot/${currentSlotId}/roles/admin`, {
-                assignments,
-            });
-            showInlineAlert('success', 'Role assignments updated');
-            modal?.hide();
-            reloadAfterDelay(150);
-        } catch (err) {
-            const message =
-                err instanceof Error ? err.message : 'Failed to update role assignments.';
-            setError(message);
-            showInlineAlert('error', message);
-        }
-    });
-}
+// initSlotRoleAdminModal moved to modules/activity-roles.ts
 
 function initRequirementPanel(): void {
     const planId = getActivityPlanId();
@@ -1843,67 +1639,7 @@ function initSlotFilters(): void {
     applyFilter('all');
 }
 
-function initParticipantsTab(): void {
-    const tab = document.getElementById('tab-participants');
-    if (!tab) return;
-
-    const searchInput = tab.querySelector<HTMLInputElement>('#participant-search');
-    const filterButtons = Array.from(
-        tab.querySelectorAll<HTMLButtonElement>('[data-participant-filter]')
-    );
-    const rows = Array.from(
-        tab.querySelectorAll<HTMLTableRowElement>('[data-participant-row]')
-    );
-
-    if (!rows.length) return;
-
-    type ParticipantFilter = 'all' | 'assigned' | 'unassigned';
-
-    let currentFilter: ParticipantFilter = 'all';
-    let currentSearch = '';
-
-    const applyFilters = () => {
-        const search = currentSearch.trim().toLowerCase();
-
-        rows.forEach((row) => {
-            const name = (row.dataset.participantName || '').toLowerCase();
-            const assigned = row.dataset.participantAssigned === '1';
-
-            let visible = true;
-
-            if (search && !name.includes(search)) {
-                visible = false;
-            }
-
-            if (currentFilter === 'assigned' && !assigned) {
-                visible = false;
-            } else if (currentFilter === 'unassigned' && assigned) {
-                visible = false;
-            }
-
-            row.classList.toggle('d-none', !visible);
-        });
-    };
-
-    searchInput?.addEventListener('input', () => {
-        currentSearch = searchInput.value || '';
-        applyFilters();
-    });
-
-    filterButtons.forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const mode = btn.getAttribute('data-participant-filter') as ParticipantFilter | null;
-            if (!mode) return;
-
-            currentFilter = mode;
-            filterButtons.forEach((b) => b.classList.toggle('active', b === btn));
-            applyFilters();
-        });
-    });
-
-    // Initial state
-    applyFilters();
-}
+// initParticipantsTab moved to modules/activity-participants.ts
 
 /**
  * Initialize all activity plan functionality
@@ -1925,7 +1661,7 @@ export function init(): void {
         initRecommendationPanel();
         initSlotFilters();
         initParticipantsTab();
-        initSlotRoleAdminModal();
+        initSlotRoleAdminModal(planId, describeSlot);
 
         initAssignmentRemoval({
             baseUrl: `/api/activity/${planId}`,
