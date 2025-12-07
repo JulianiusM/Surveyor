@@ -7,6 +7,7 @@ import {APIError, ValidationError} from '../modules/lib/errors';
 import * as activityService from "../modules/database/services/ActivityService";
 import * as requirementService from "../modules/database/services/ActivityRequirementService";
 import * as recommendationService from "../modules/database/services/ActivityRecommendationService";
+import {RecommendationInput} from "../modules/database/services/ActivityRecommendationService";
 import * as eventService from "../modules/database/services/EventService";
 import {ActivitySlot} from "../modules/database/entities/activity/ActivitySlot";
 import {ActivityPlan} from "../modules/database/entities/activity/ActivityPlan";
@@ -725,7 +726,7 @@ async function autoGenerateRecommendations(planId: string) {
     return {message: 'Recommendations generated', warnings};
 }
 
-async function applyRecommendations(planId: string) {
+async function applyRecommendations(planId: string, body?: any) {
     const [plan, requirementConfig, slots, recommendations, existingAssignments] = await Promise.all([
         activityService.getActivityPlanById(planId),
         requirementService.getRequirementConfiguration(planId),
@@ -738,9 +739,51 @@ async function applyRecommendations(planId: string) {
         throw new APIError('Activity plan not found', {planId}, 404);
     }
 
-    const approved = recommendations.filter((rec) => rec.status === "APPROVED");
+    // If body contains recommendations array with statuses, use that (new format)
+    // Otherwise fall back to filtering database recommendations for APPROVED (legacy)
+    let approved: any[];
+    let statusUpdates: {pending: any[], rejected: any[], approved: any[]} = {pending: [], rejected: [], approved: []};
+    
+    if (body?.recommendations && Array.isArray(body.recommendations)) {
+        // New format: {recommendations: [{slotId, userId, guestId, status}]}
+        const withStatus = body.recommendations;
+        
+        // Group by status
+        withStatus.forEach((r: any) => {
+            if (r.status === 'APPROVED') statusUpdates.approved.push(r);
+            else if (r.status === 'REJECTED') statusUpdates.rejected.push(r);
+            else if (r.status === 'PENDING') statusUpdates.pending.push(r);
+        });
+        
+        // Update recommendation statuses in database
+        // Create new input array from current recommendations, updating statuses from body
+        const updatedRecommendations: RecommendationInput[] = withStatus.map((r: any) => ({
+            slotId: r.slotId,
+            userId: r.userId || null,
+            guestId: r.guestId || null,
+            status: r.status as RecommendationStatus,
+        }));
+        
+        // Replace all recommendations with updated statuses
+        await recommendationService.replaceRecommendations(planId, updatedRecommendations);
+        
+        // Get approved ones for processing
+        approved = statusUpdates.approved.map((r: any) => {
+            // Find full recommendation data from database
+            const dbRec = recommendations.find(rec =>
+                rec.slot.id === r.slotId &&
+                rec.user?.id === r.userId &&
+                rec.guest?.id === r.guestId
+            );
+            return dbRec || r; // Fallback to body data if not in DB
+        });
+    } else {
+        // Legacy format: filter database recommendations
+        approved = recommendations.filter((rec) => rec.status === "APPROVED");
+    }
+    
     if (!approved.length) {
-        return {message: 'No approved recommendations to apply', applied: 0, warnings: []};
+        return {message: 'No approved recommendations to save', applied: 0, warnings: []};
     }
 
     const normalized = approved.map((rec) => ({
