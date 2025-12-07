@@ -14,6 +14,7 @@ import {loadPerms, requireEntityPerm, requireItemPerm} from './core/permissions'
 import {initParticipantsTab} from './modules/activity-participants';
 import {initSlotRoleAdminModal, getAllRoles as getRoles, getSlotRolesForSlot as getSlotRoles, addRoleToGlobal as addRole, type RoleSummary as RoleType} from './modules/activity-roles';
 import {buildWarningModal, initAssign, describeWarning as descWarn, type AssignmentWarning, type WarningModal} from './modules/activity-assignments';
+import {initDates, initSlotFilters} from './modules/activity-filters';
 
 interface BootstrapModal {
     show: () => void;
@@ -1436,73 +1437,9 @@ function initRecommendationPanel(): void {
 /**
  * Initialize date display formatting
  */
-function initDates(): void {
-    document.querySelectorAll('th[data-date]').forEach(el => {
-        const th = el as HTMLElement;
-        const dateValue = th.dataset.date;
-        if (!dateValue) return;
-        const [y, m, day] = dateValue.split('-').map(Number);
-        const d = new Date(Date.UTC(y, m - 1, day));
+// initDates moved to modules/activity-filters.ts
 
-        const dayEl = th.querySelector('.day');
-        if (dayEl) {
-            dayEl.textContent = d.toLocaleDateString(undefined, {weekday: 'short'});
-        }
-
-        const dateEl = th.querySelector('.date');
-        if (dateEl) {
-            dateEl.textContent = d.toLocaleDateString();
-        }
-    });
-}
-
-/**
- * Initialize filter buttons for the schedule (All / My / Open)
- */
-function initSlotFilters(): void {
-    const filterButtons = Array.from(
-        document.querySelectorAll<HTMLButtonElement>('[data-slot-filter]')
-    );
-    if (!filterButtons.length) return;
-
-    type FilterMode = 'all' | 'mine' | 'open';
-
-    const applyFilter = (mode: FilterMode) => {
-        const slots = document.querySelectorAll<HTMLElement>('.slot');
-        slots.forEach((slot) => {
-            // always start visible
-            slot.classList.remove('d-none');
-
-            if (mode === 'mine') {
-                if (slot.dataset.my !== '1') {
-                    slot.classList.add('d-none');
-                }
-            } else if (mode === 'open') {
-                if (slot.dataset.open !== '1') {
-                    slot.classList.add('d-none');
-                }
-            }
-            // mode === 'all' → nothing to filter
-        });
-    };
-
-    filterButtons.forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const mode = btn.getAttribute('data-slot-filter') as FilterMode | null;
-            if (!mode) return;
-
-            // visual active state
-            filterButtons.forEach((b) => {
-                b.classList.toggle('active', b === btn);
-            });
-
-            applyFilter(mode);
-        });
-    });
-
-    // initial state
-    applyFilter('all');
-}
+// initSlotFilters moved to modules/activity-filters.ts
 
 // initParticipantsTab moved to modules/activity-participants.ts
 
