@@ -14,7 +14,6 @@ import {
     findOrCreateUserFromOidc,
     generateActivationToken,
     generatePasswordResetToken,
-    getAllRoles,
     getGuestByToken,
     getGuestInternal,
     getGuestLinkToken,
@@ -34,7 +33,7 @@ import {AppDataSource, initDataSource} from '../../src/modules/database/dataSour
 import {User} from '../../src/modules/database/entities/user/User';
 import {Guest} from '../../src/modules/database/entities/user/Guest';
 import {GuestLink} from '../../src/modules/database/entities/user/GuestLink';
-import {Role} from '../../src/modules/database/entities/activity/ActivityRole';
+import {ActivityRole} from '../../src/modules/database/entities/activity/ActivityRole';
 
 // Test data
 import {
@@ -46,7 +45,6 @@ import {
     oidcLinkByEmailData,
     oidcNoLinkByEmailData,
     passwordResetData,
-    rolesData,
     userRegistrationData,
 } from '../data/database/userServiceData';
 
@@ -55,7 +53,7 @@ async function truncateAll() {
 
     await AppDataSource.createQueryBuilder().delete().from(GuestLink).execute();
     await AppDataSource.createQueryBuilder().delete().from(Guest).execute();
-    await AppDataSource.createQueryBuilder().delete().from(Role).execute();
+    await AppDataSource.createQueryBuilder().delete().from(ActivityRole).execute();
     await AppDataSource.createQueryBuilder().delete().from(User).execute();
 
     await AppDataSource.query('SET FOREIGN_KEY_CHECKS=1');
@@ -199,19 +197,6 @@ describe('Guests & guest links', () => {
             expect(byToken).toMatchObject({id: guestId, username});
         }
     );
-});
-
-describe('Roles', () => {
-    test.each(rolesData)('$description', async ({roles, expectedNames}) => {
-        const roleEntities = roles.map(r =>
-            AppDataSource.getRepository(Role).create(r)
-        );
-        await AppDataSource.getRepository(Role).save(roleEntities);
-
-        const allRoles = await getAllRoles();
-        const titles = allRoles.map(r => r.name).sort();
-        expect(titles).toEqual(expectedNames);
-    });
 });
 
 describe('OIDC / SSO', () => {

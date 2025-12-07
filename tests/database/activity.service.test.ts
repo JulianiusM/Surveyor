@@ -14,6 +14,7 @@ import {
     doUnassignRole,
     ensureAssignment,
     ensureRoleId,
+    getAllRoles,
     getActivityPlanById,
     getActivityPlanParticipants,
     getActivityPlansByUserId,
@@ -33,7 +34,7 @@ import {
 import {AppDataSource, initDataSource} from '../../src/modules/database/dataSource';
 
 // Entities used to set up data quickly
-import {Role} from '../../src/modules/database/entities/activity/ActivityRole';
+import {ActivityRole} from '../../src/modules/database/entities/activity/ActivityRole';
 import {ActivityPlan} from '../../src/modules/database/entities/activity/ActivityPlan';
 import {ActivitySlot} from '../../src/modules/database/entities/activity/ActivitySlot';
 import {ActivityAssignment} from '../../src/modules/database/entities/activity/ActivityAssignment';
@@ -74,7 +75,7 @@ async function truncateAll() {
     await AppDataSource.createQueryBuilder().delete().from(ActivityAssignment).execute();
     await AppDataSource.createQueryBuilder().delete().from(ActivitySlot).execute();
     await AppDataSource.createQueryBuilder().delete().from(ActivityPlan).execute();
-    await AppDataSource.createQueryBuilder().delete().from(Role).execute();
+    await AppDataSource.createQueryBuilder().delete().from(ActivityRole).execute();
     await AppDataSource.createQueryBuilder().delete().from(User).execute();
     await AppDataSource.createQueryBuilder().delete().from(Guest).execute();
 
@@ -105,11 +106,15 @@ afterEach(async () => {
 // Core functionality tests
 describe('Roles and assignments', () => {
     test.each(roleTestData)('$description', async ({roleName, expectedCreations}) => {
-        const id1 = await ensureRoleId(roleName);
-        const id2 = await ensureRoleId(roleName);
-        expect(id1).toBe(id2);
+        // Create a test plan
+        const planId = uuidv4();
+        await createActivityPlan(planId, 1, 'Test Plan', 'desc', '2025-01-01', '2025-01-02');
+        
+        const roles1 = await ensureRoleId(planId, roleName);
+        const roles2 = await ensureRoleId(planId, roleName);
+        expect(roles1[0].id).toBe(roles2[0].id);
 
-        const roles = await AppDataSource.getRepository(Role).find();
+        const roles = await AppDataSource.getRepository(ActivityRole).find({where: {plan: {id: planId}}});
         expect(roles).toHaveLength(expectedCreations);
         expect(roles[0]).toEqual(expect.objectContaining({name: roleName, isDefault: 1}));
     });
@@ -215,7 +220,7 @@ describe('Aggregates and lookups', () => {
                 AppDataSource.getRepository(User).create(user)
             );
 
-            await ensureRoleId(roleName);
+            await ensureRoleId(planId, roleName);
 
             // Create assignment
             const assignId = await ensureAssignment(slotId, userEntity.id, undefined);
@@ -264,7 +269,7 @@ describe('Aggregates and lookups', () => {
 
             // Ensure all roles exist
             for (const roleName of roles) {
-                await ensureRoleId(roleName);
+                await ensureRoleId(planId, roleName);
             }
 
             // Create assignments with roles
@@ -300,8 +305,8 @@ describe('Aggregates and lookups', () => {
             // Ensure roles and get IDs
             const roleIds = [];
             for (const roleName of roleNames) {
-                const roleId = await ensureRoleId(roleName);
-                roleIds.push(roleId);
+                const roles = await ensureRoleId(planId, roleName);
+                roleIds.push(roles[0].id);
             }
 
             await addActivitySlotRoles(slotId, roleIds);
@@ -384,7 +389,7 @@ describe('Slot CRUD: add/list/update/reorder/delete/lastNumber', () => {
         const user = await AppDataSource.getRepository(User).save(AppDataSource.getRepository(User).create({
             username: 'bob', email: 'b@b',
         }));
-        await ensureRoleId('default');
+        await ensureRoleId(planId, 'default');
         const assignId = await ensureAssignment(slotIdA, user.id);
         await assignRole(assignId, 'default');
 
@@ -463,8 +468,8 @@ describe('Assignment wrapper helpers + lookups', () => {
         await addActivitySlot(planId, {id: slotId, title: 'S', day: '2025-01-01', pos: 1, maxAssignees: 2});
 
         // Role setup
-        await ensureRoleId('helper');
-        await ensureRoleId('default');
+        await ensureRoleId(planId, 'helper');
+        await ensureRoleId(planId, 'default');
 
         // User assignment via wrapper
         await assignActivityAssignmentRoleToUser(slotId, 1, 'helper');
@@ -494,8 +499,10 @@ describe('Assignment wrapper helpers + lookups', () => {
 // Edge cases and additional scenarios
 describe('Edge cases & additional scenarios', () => {
     test('ensureRoleId for non-default marks isDefault=false', async () => {
-        const rid = await ensureRoleId('helper');
-        const role = await AppDataSource.getRepository(Role).findOneByOrFail({id: rid});
+        const planId = uuidv4();
+        await createActivityPlan(planId, 1, 'Test Plan', 'desc', '2025-01-01', '2025-01-02');
+        const roles = await ensureRoleId(planId, 'helper');
+        const role = await AppDataSource.getRepository(ActivityRole).findOneByOrFail({id: roles[0].id});
         expect(role).toEqual(expect.objectContaining({name: 'helper', isDefault: 0}));
     });
 
@@ -525,13 +532,13 @@ describe('Edge cases & additional scenarios', () => {
         const slotId = uuidv4()
         await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02');
         await addActivitySlot(planId, {id: slotId, title: 'S', day: '2025-01-01', pos: 1, maxAssignees: 2});
-        await ensureRoleId('lead');
+        await ensureRoleId(planId, 'lead');
         const aid = await ensureAssignment(slotId, 1, undefined);
 
         await assignRole(aid, 'lead');
         await assignRole(aid, 'lead'); // idempotent
 
-        const role = await AppDataSource.getRepository(Role).findOneByOrFail({name: 'lead'});
+        const role = await AppDataSource.getRepository(ActivityRole).findOneByOrFail({name: 'lead'});
         const cnt = await AppDataSource.getRepository(ActivityAssignmentRole).count({
             where: {
                 assignment: {id: aid},
@@ -546,8 +553,8 @@ describe('Edge cases & additional scenarios', () => {
         const slotId = uuidv4()
         await createActivityPlan(planId, 1, 'T', 'D', '2025-01-01', '2025-01-02');
         await addActivitySlot(planId, {id: slotId, title: 'S', day: '2025-01-01', pos: 1, maxAssignees: 2});
-        await ensureRoleId('lead');
-        await ensureRoleId('helper');
+        await ensureRoleId(planId, 'lead');
+        await ensureRoleId(planId, 'helper');
         const aid = await ensureAssignment(slotId, 1, undefined);
         await assignRole(aid, 'lead');
         await assignRole(aid, 'helper');
@@ -639,8 +646,8 @@ describe('Edge cases & additional scenarios', () => {
         }));
         const guest = await AppDataSource.getRepository(Guest).save(AppDataSource.getRepository(Guest).create({username: 'guestB'}));
 
-        await ensureRoleId('lead');
-        await ensureRoleId('helper');
+        await ensureRoleId(planId, 'lead');
+        await ensureRoleId(planId, 'helper');
 
         const aUser = await ensureAssignment(slotId, user.id, undefined);
         await assignRole(aUser, 'lead');
@@ -669,8 +676,8 @@ describe('Edge cases & additional scenarios', () => {
         }));
         const guest = await AppDataSource.getRepository(Guest).save(AppDataSource.getRepository(Guest).create({username: 'sam'}));
 
-        await ensureRoleId('alpha');
-        await ensureRoleId('beta');
+        await ensureRoleId(planId, 'alpha');
+        await ensureRoleId(planId, 'beta');
 
         const a1 = await ensureAssignment(slotIdA, user.id, undefined);
         await assignRole(a1, 'alpha');
@@ -694,6 +701,19 @@ describe('Edge cases & additional scenarios', () => {
         const result = await deleteActivitySlotAssignment(id);
         expect(result).toHaveProperty('affected');
         expect((result as any).affected).toBe(1);
+    });
+
+    test('getAllRoles returns all roles for a plan', async () => {
+        const planId = uuidv4();
+        await createActivityPlan(planId, 1, 'Test Plan', 'desc', '2025-01-01', '2025-01-02');
+        
+        // Create some roles
+        await ensureRoleId(planId, 'Admin');
+        await ensureRoleId(planId, 'Member');
+        
+        const allRoles = await getAllRoles(planId);
+        const roleNames = allRoles.map(r => r.name).sort();
+        expect(roleNames).toEqual(['Admin', 'Member']);
     });
 });
 

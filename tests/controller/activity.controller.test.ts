@@ -10,6 +10,7 @@ jest.mock('../../src/modules/database/services/ActivityService', () => ({
     getActivitySlotAssignmentsForGuest: jest.fn(),
     getActivitySlotAssignees: jest.fn(),
     getActivityPlanParticipants: jest.fn(),
+    getAllRoles: jest.fn(),
     getActivitySlotRoles: jest.fn(),
     updateActivityPlanDescription: jest.fn(),
     reorderActivitySlots: jest.fn(),
@@ -241,7 +242,8 @@ describe('API helpers', () => {
                 
                 // Mock permData with all necessary permissions
                 const mockPermData = {
-                    entity: new Set(['EDIT_META', 'EDIT_TITLE', 'EDIT_DESC', 'MANAGE_REQUIREMENTS', 'EDIT_CAPACITY'])
+                    entity: new Set(['EDIT_META', 'EDIT_TITLE', 'EDIT_DESC', 'MANAGE_REQUIREMENTS', 'EDIT_CAPACITY']),
+                    itemAllow: jest.fn(() => true)
                 };
                 
                 if (shouldThrow) {

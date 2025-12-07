@@ -95,8 +95,17 @@ export async function assignRole(assignmentId: number, roleName: string[] | stri
 }
 
 export async function doUnassignRole(assignmentId: number, roleName: string) {
+    // Get assignment to find planId
+    const assignment = await AppDataSource.getRepository(ActivityAssignment).findOne({
+        where: {id: assignmentId},
+        relations: {plan: true},
+        select: {id: true, plan: {id: true}},
+    });
+    if (!assignment) return false;
+
+    // Find role by name AND planId to avoid cross-plan conflicts
     const role = await AppDataSource.getRepository(ActivityRole).findOne({
-        where: {name: roleName},
+        where: {name: roleName, plan: {id: assignment.plan.id}},
     });
     if (!role) return false;
 
@@ -141,7 +150,7 @@ export async function updateRoleAssignments(slotId: string, assign: {
 
         for (const part of assign) {
             if (!part.assignmentId) continue;
-            const ass = assRepo.findOneBy({id: part.assignmentId, slot: {id: slotId}});
+            const ass = await assRepo.findOneBy({id: part.assignmentId, slot: {id: slotId}});
             if (!ass) throw new Error("Assignment not found");
             await assignRole(part.assignmentId, part.role, manager);
         }
@@ -552,8 +561,7 @@ export async function getActivityPlanParticipants(planId: string): Promise<PlanP
         .leftJoin("ar.role", "role")
         .where("aa.plan_id = :planId", {planId})
         .select([
-            `user.name AS name`,
-            `COALESCE(user.username, guest.username) AS username`,
+            `COALESCE(user.name, user.username, guest.username) AS name`,
             `COUNT(DISTINCT aa.id) AS count`,
             `GROUP_CONCAT(DISTINCT role.name ORDER BY role.name) AS roles`
         ])
