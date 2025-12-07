@@ -113,14 +113,14 @@ export function collectAssignmentWarnings(
     } else if (attendance.boundary === "arrival") {
         warnings.push({type: "arrival_day"});
         // Check explicit slot flag first, fall back to time-based heuristic
-        const isEvening = slot.isArrivalEvening !== undefined ? slot.isArrivalEvening : isEveningSlot(slot);
+        const isEvening = slot.isArrivalEvening != null ? slot.isArrivalEvening : isEveningSlot(slot);
         if (!attendancePolicy.allowArrivalDayEvening && isEvening) {
             warnings.push({type: "arrival_time_restricted"});
         }
     } else if (attendance.boundary === "departure") {
         warnings.push({type: "departure_day"});
         // Check explicit slot flag first, fall back to time-based heuristic
-        const isMorning = slot.isDepartureMorning !== undefined ? slot.isDepartureMorning : isMorningSlot(slot);
+        const isMorning = slot.isDepartureMorning != null ? slot.isDepartureMorning : isMorningSlot(slot);
         if (!attendancePolicy.allowDepartureDayMorning && isMorning) {
             warnings.push({type: "departure_time_restricted"});
         }

@@ -12,8 +12,7 @@ export class AddActivitySlotArrivalDepartureFlags1733587200000 implements Migrat
                     name: "is_arrival_evening",
                     type: "tinyint",
                     width: 1,
-                    default: 0,
-                    isNullable: false,
+                    isNullable: true,
                 })
             );
         }
@@ -25,8 +24,7 @@ export class AddActivitySlotArrivalDepartureFlags1733587200000 implements Migrat
                     name: "is_departure_morning",
                     type: "tinyint",
                     width: 1,
-                    default: 0,
-                    isNullable: false,
+                    isNullable: true,
                 })
             );
         }
