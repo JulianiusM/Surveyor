@@ -75,7 +75,7 @@ each week in weeks
                                         if permData.entity.has("ACCESS_PARTICIPANTS")
                                             div(data-slot-existing=slot.id)
                                                 each asg in data.assigneeLists[slot.id] || []
-                                                    .d-flex.align-items-center.gap-2.mb-1.p-1.border.rounded.bg-success-subtle
+                                                    .d-flex.align-items-center.gap-2.mb-1.p-1.border.border-success.rounded
                                                         i.bi.bi-person-check-fill.text-success
                                                         span.flex-grow-1.small= asg.name || asg.username
                                                         span.badge.bg-success.text-white.small Confirmed

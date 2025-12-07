@@ -95,9 +95,9 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
         });
 
         const pieces: { label: string; key: keyof typeof counts; className: string }[] = [
-            {label: 'Pending', key: 'PENDING', className: 'badge bg-secondary-subtle text-secondary-emphasis me-1'},
-            {label: 'Approved', key: 'APPROVED', className: 'badge bg-success-subtle text-success-emphasis me-1'},
-            {label: 'Rejected', key: 'REJECTED', className: 'badge bg-danger-subtle text-danger-emphasis me-1'},
+            {label: 'Pending', key: 'PENDING', className: 'badge bg-secondary text-white me-1'},
+            {label: 'Approved', key: 'APPROVED', className: 'badge bg-success text-white me-1'},
+            {label: 'Rejected', key: 'REJECTED', className: 'badge bg-danger text-white me-1'},
         ];
 
         pieces.forEach(({label, key, className}) => {
@@ -119,11 +119,11 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
 
         // Status-based styling
         if (rec.status === 'APPROVED') {
-            recDiv.classList.add('bg-success-subtle');
+            recDiv.classList.add('border-success');
         } else if (rec.status === 'REJECTED') {
-            recDiv.classList.add('bg-danger-subtle');
+            recDiv.classList.add('border-danger');
         } else {
-            recDiv.classList.add('bg-warning-subtle');
+            recDiv.classList.add('border-warning');
         }
 
         // Icon
@@ -259,11 +259,7 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
     const loadRecommendations = async () => {
         try {
             const url = `/api/activity/${planId}/recommendations`;
-            const resp = await get<{
-                recommendations: RecommendationRow[];
-                warnings: RecommendationWarning[];
-                participantOptions: RecommendationParticipantOption[];
-            }>(url);
+            const resp = await get(url);
 
             recommendations = resp.recommendations || [];
             warnings = resp.warnings || [];
@@ -304,7 +300,7 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             const activeTabEl = document.querySelector<HTMLElement>('.nav-link.active[data-bs-target]');
             if (activeTabEl) {
                 const targetId = activeTabEl.getAttribute('data-bs-target') || '';
-                sessionStorage.setItem('activityActiveTab', targetId);
+                sessionStorage.setItem('activity-active-tab', targetId);
             }
             reloadAfterDelay(1000);
         } catch (err) {

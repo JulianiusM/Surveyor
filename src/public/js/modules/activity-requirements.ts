@@ -75,10 +75,10 @@ export function initRequirementPanel(planId: string): void {
         const total = summary.length;
 
         const pieces: { label: string; value: number; className: string }[] = [
-            {label: 'Total', value: total, className: 'badge bg-secondary-subtle text-secondary-emphasis me-1'},
-            {label: 'Satisfied', value: ok, className: 'badge bg-success-subtle text-success-emphasis me-1'},
-            {label: 'Under-assigned', value: under, className: 'badge bg-warning-subtle text-warning-emphasis me-1'},
-            {label: 'Over-assigned', value: over, className: 'badge bg-danger-subtle text-danger-emphasis me-1'},
+            {label: 'Total', value: total, className: 'badge bg-secondary text-white me-1'},
+            {label: 'Satisfied', value: ok, className: 'badge bg-success text-white me-1'},
+            {label: 'Under-assigned', value: under, className: 'badge bg-warning text-dark me-1'},
+            {label: 'Over-assigned', value: over, className: 'badge bg-danger text-white me-1'},
         ];
 
         pieces.forEach(({label, value, className}) => {
@@ -114,7 +114,7 @@ export function initRequirementPanel(planId: string): void {
             const requiredCell = document.createElement('td');
             requiredCell.className = 'text-center';
             const badge = document.createElement('span');
-            badge.className = 'badge bg-secondary-subtle text-secondary-emphasis';
+            badge.className = 'badge bg-secondary text-white';
             badge.textContent = `${entry.requiredShifts} required / ${entry.assignedShifts} assigned`;
             requiredCell.append(badge);
 
@@ -122,8 +122,8 @@ export function initRequirementPanel(planId: string): void {
             remainingCell.className = 'text-center';
             const remainingBadge = document.createElement('span');
             remainingBadge.className = entry.remainingShifts > 0
-                ? 'badge bg-warning-subtle text-warning-emphasis'
-                : 'badge bg-success-subtle text-success-emphasis';
+                ? 'badge bg-warning text-dark'
+                : 'badge bg-success text-white';
             remainingBadge.textContent = `${entry.remainingShifts} remaining`;
             remainingCell.append(remainingBadge);
 
@@ -138,7 +138,7 @@ export function initRequirementPanel(planId: string): void {
             const sourceCell = document.createElement('td');
             sourceCell.className = 'text-center';
             const sourceBadge = document.createElement('span');
-            sourceBadge.className = 'badge bg-info-subtle text-info-emphasis text-uppercase';
+            sourceBadge.className = 'badge bg-info text-white text-uppercase';
             sourceBadge.textContent = entry.source;
             sourceCell.append(sourceBadge);
 

@@ -162,10 +162,10 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
         });
 
         const pieces: { label: string; key: keyof typeof counts; className: string }[] = [
-            {label: 'Pending', key: 'PENDING', className: 'badge bg-secondary-subtle text-secondary-emphasis me-1'},
-            {label: 'Approved', key: 'APPROVED', className: 'badge bg-success-subtle text-success-emphasis me-1'},
-            {label: 'Rejected', key: 'REJECTED', className: 'badge bg-warning-subtle text-warning-emphasis me-1'},
-            {label: 'Applied', key: 'APPLIED', className: 'badge bg-info-subtle text-info-emphasis me-1'},
+            {label: 'Pending', key: 'PENDING', className: 'badge bg-secondary text-white me-1'},
+            {label: 'Approved', key: 'APPROVED', className: 'badge bg-success text-white me-1'},
+            {label: 'Rejected', key: 'REJECTED', className: 'badge bg-warning text-dark me-1'},
+            {label: 'Applied', key: 'APPLIED', className: 'badge bg-info text-white me-1'},
         ];
 
         pieces.forEach(({label, key, className}) => {

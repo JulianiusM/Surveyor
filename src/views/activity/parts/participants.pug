@@ -42,16 +42,16 @@ if data.participantList && data.participantList.length > 0
                                 span.fw-semibold #{part.name}
                             td.text-center
                                 if part.count > 0
-                                    span.badge.bg-success-subtle.text-success-emphasis Assigned
+                                    span.badge.bg-success.text-white Assigned
                                 else
-                                    span.badge.bg-secondary-subtle.text-secondary-emphasis Not assigned
+                                    span.badge.bg-secondary.text-white Not assigned
                             td.text-center
                                 | #{part.count}
                             td
                                 if part.roles && part.roles.length
                                     each role in part.roles
                                         if role !== 'default'
-                                            span.badge.bg-info-subtle.text-info-emphasis.me-1.mb-1= role
+                                            span.badge.bg-info.text-white.me-1.mb-1= role
                                 else
                                     span.text-secondary.small No roles
 else
