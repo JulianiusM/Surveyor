@@ -413,7 +413,7 @@ async function getRequirements(planId: string) {
 
     const eventParticipants = plan.event ? await eventService.getEventParticipants(plan.event.id) : [];
 
-    const attendance = buildParticipantAttendanceMap(
+    const attendance = await buildParticipantAttendanceMap(
         plan,
         requirementConfig.overrides,
         assignments,
@@ -495,7 +495,7 @@ async function collectRecommendationWarnings(planId: string, recommendations: {
     });
 }
 
-function buildParticipantAttendanceMap(
+async function buildParticipantAttendanceMap(
     plan: ActivityPlan,
     overrides: Awaited<ReturnType<typeof requirementService.getRequirementConfiguration>>["overrides"],
     existingAssignments: Record<string, {
@@ -507,7 +507,7 @@ function buildParticipantAttendanceMap(
     }[]>,
     recommendations: { slotId: string; userId?: number | null; guestId?: number | null }[],
     eventParticipants: Awaited<ReturnType<typeof eventService.getEventParticipants>> = [],
-): Record<string, ParticipantAttendance> {
+): Promise<Record<string, ParticipantAttendance>> {
     const attendance: Record<string, ParticipantAttendance> = {};
 
     const upsert = (participant: ParticipantAttendance) => {
@@ -559,6 +559,14 @@ function buildParticipantAttendanceMap(
 
     for (const rec of recommendations) {
         upsert({userId: rec.userId ?? undefined, guestId: rec.guestId ?? undefined});
+    }
+
+    // Load roleIds from ActivityAssignmentRole for each participant
+    const participantRoles = await activityService.getParticipantRolesForPlan(plan.id);
+    for (const {participantKey, roleIds} of participantRoles) {
+        if (attendance[participantKey] && roleIds.length > 0) {
+            attendance[participantKey].roleIds = [...new Set([...(attendance[participantKey].roleIds || []), ...roleIds])];
+        }
     }
 
     return attendance;
@@ -620,7 +628,7 @@ async function getAssignmentWarnings(
     }
 
     const eventParticipants = plan.event ? await eventService.getEventParticipants(plan.event.id) : [];
-    const attendance = buildParticipantAttendanceMap(plan, requirementConfig.overrides, assignments, [], eventParticipants);
+    const attendance = await buildParticipantAttendanceMap(plan, requirementConfig.overrides, assignments, [], eventParticipants);
 
     const warnings = collectAssignmentWarnings(
         toAssignmentCandidate(slot),
@@ -674,7 +682,7 @@ async function getRecommendations(planId: string) {
 
     const warnings = await collectRecommendationWarnings(planId, normalized);
     const eventParticipants = plan.event ? await eventService.getEventParticipants(plan.event.id) : [];
-    const attendance = buildParticipantAttendanceMap(
+    const attendance = await buildParticipantAttendanceMap(
         plan,
         requirementConfig.overrides,
         assignments,
@@ -762,7 +770,7 @@ async function applyRecommendations(planId: string) {
         });
     }
 
-    const participantAttendance = buildParticipantAttendanceMap(
+    const participantAttendance = await buildParticipantAttendanceMap(
         plan,
         requirementConfig.overrides,
         existingAssignments,

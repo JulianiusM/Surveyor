@@ -608,6 +608,43 @@ export async function getActivityPlanParticipants(planId: string): Promise<PlanP
     return Array.from(participantMap.values());
 }
 
+export async function getParticipantRolesForPlan(planId: string): Promise<{participantKey: string; roleIds: number[]}[]> {
+    const assignments = await AppDataSource
+        .getRepository(ActivityAssignment)
+        .find({
+            where: {plan: {id: planId}},
+            relations: ['user', 'guest', 'activityAssignmentRoles', 'activityAssignmentRoles.role'],
+        });
+
+    const roleMap = new Map<string, Set<number>>();
+
+    for (const assignment of assignments) {
+        let participantKey: string | null = null;
+        if (assignment.user?.id) {
+            participantKey = `user:${assignment.user.id}`;
+        } else if (assignment.guest?.id) {
+            participantKey = `guest:${assignment.guest.id}`;
+        }
+
+        if (!participantKey) continue;
+
+        if (!roleMap.has(participantKey)) {
+            roleMap.set(participantKey, new Set());
+        }
+
+        for (const assignmentRole of assignment.activityAssignmentRoles || []) {
+            if (assignmentRole.role?.id) {
+                roleMap.get(participantKey)!.add(Number(assignmentRole.role.id));
+            }
+        }
+    }
+
+    return Array.from(roleMap.entries()).map(([participantKey, roleIds]) => ({
+        participantKey,
+        roleIds: Array.from(roleIds),
+    }));
+}
+
 export async function deleteActivitySlotAssignment(assignId: number) {
     return await AppDataSource.getRepository(ActivityAssignment).delete(assignId);
 }
