@@ -104,17 +104,27 @@ function buildParticipantStates(
 // Epsilon for floating-point comparison in ratio calculations
 const RATIO_COMPARISON_EPSILON = 0.0001;
 
+// Weight to prioritize participant fairness over slot balance in combined scoring
+const PARTICIPANT_SCORE_WEIGHT = 10000;
+
 /**
  * Calculate how many eligible slots a participant has available
+ * Only counts slots that can actually be assigned (have capacity or overfill is allowed)
  */
 function countEligibleSlots(
     participant: ParticipantAttendance,
     slots: SlotCapacity[],
     existingAssignments: AssignmentCandidate[],
-    attendancePolicy: AttendancePolicy
+    attendancePolicy: AttendancePolicy,
+    allowOvercapacity: boolean
 ): number {
     let count = 0;
     for (const slot of slots) {
+        // Skip slots that are full if overfill is not allowed
+        if (!allowOvercapacity && slot.remaining <= 0) {
+            continue;
+        }
+        
         if (canAssign(slot.candidate, participant, existingAssignments, attendancePolicy)) {
             count++;
         }
@@ -239,7 +249,7 @@ function assignFairly(
     // Initial calculation for all participants
     for (const state of states.values()) {
         const existingAssignments = assignmentMap[state.participantKey] ?? [];
-        const eligible = countEligibleSlots(state.participant, slots, existingAssignments, attendancePolicy);
+        const eligible = countEligibleSlots(state.participant, slots, existingAssignments, attendancePolicy, allowOvercapacity);
         participantEligibility.set(state.participantKey, eligible);
     }
 
@@ -258,7 +268,7 @@ function assignFairly(
             const state = states.get(key);
             if (state) {
                 const existingAssignments = assignmentMap[state.participantKey] ?? [];
-                const eligible = countEligibleSlots(state.participant, slots, existingAssignments, attendancePolicy);
+                const eligible = countEligibleSlots(state.participant, slots, existingAssignments, attendancePolicy, allowOvercapacity);
                 participantEligibility.set(state.participantKey, eligible);
             }
         }
@@ -289,14 +299,32 @@ function assignFairly(
                     participantEligibility
                 );
 
-                // Slot fairness: prefer slots with fewer assignments for balanced distribution
-                // Lower score = better (less filled = preferred)
+                // Slot fairness: consider filling degree and assignment deficit
+                // Lower score = better (prefer balanced distribution)
                 const slotCount = slotAssignmentCounts.get(slot.slot.id) ?? 0;
-                const slotScore = slotCount;  // Prefer slots with fewer total assignments
+                const capacity = slot.slot.maxAssignees ?? Number.POSITIVE_INFINITY;
+                
+                // Calculate filling degree (0 = empty, 1 = full, >1 = overfilled)
+                const fillingDegree = capacity !== Number.POSITIVE_INFINITY ? slotCount / capacity : slotCount / 100;
+                
+                // Calculate total deficit for participants who could use this slot
+                // This helps prioritize slots where many participants need assignments
+                let slotDeficit = 0;
+                for (const p of participantsWithDeficit) {
+                    const pAssignments = assignmentMap[p.participantKey] ?? [];
+                    if (p.participantKey !== state.participantKey && 
+                        canAssign(slot.candidate, p.participant, pAssignments, attendancePolicy)) {
+                        slotDeficit += Math.max(p.required - p.assigned, 0);
+                    }
+                }
+                
+                // Prefer slots with lower filling degree (primary), higher deficit means more need (secondary)
+                // Scale deficit down so filling degree is the primary factor
+                const slotScore = fillingDegree * 100 - (slotDeficit * 0.1);
 
                 // Combined score (lower is better)
                 // Participant score is weighted heavily to prioritize participant fairness over slot balance
-                const combinedScore = participantScore * 10000 + slotScore;
+                const combinedScore = participantScore * PARTICIPANT_SCORE_WEIGHT + slotScore;
 
                 if (combinedScore < bestScore) {
                     bestScore = combinedScore;
