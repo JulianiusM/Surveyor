@@ -41,6 +41,7 @@ export type Settings = {
     initialized: boolean;
     activityAvailabilityWeight: number;
     activitySwapOptimizationIterations: number;
+    activityArrivalDeparturePenalty: number;
 };
 
 const defaults: Settings = {
@@ -84,6 +85,7 @@ const defaults: Settings = {
     
     activityAvailabilityWeight: 0.30,
     activitySwapOptimizationIterations: 10,
+    activityArrivalDeparturePenalty: 0.2,
 };
 
 // CSV_KEY -> settings key
@@ -116,6 +118,7 @@ const keyMap: Record<string, keyof Settings> = {
     PRIVACY_POLICY_URL: "privacyPolicyUrl",
     ACTIVITY_AVAILABILITY_WEIGHT: "activityAvailabilityWeight",
     ACTIVITY_SWAP_OPTIMIZATION_ITERATIONS: "activitySwapOptimizationIterations",
+    ACTIVITY_ARRIVAL_DEPARTURE_PENALTY: "activityArrivalDeparturePenalty",
 };
 
 // per-field coercion
@@ -129,6 +132,7 @@ const coerce: Partial<Record<keyof Settings, (v: string) => any>> = {
     oidcEnabled: (v) => /^(1|true|yes|on)$/i.test(v),
     activityAvailabilityWeight: (v) => Number(v),
     activitySwapOptimizationIterations: (v) => Number(v),
+    activityArrivalDeparturePenalty: (v) => Number(v),
 };
 
 // Apply environment variable overrides AFTER reading CSV.

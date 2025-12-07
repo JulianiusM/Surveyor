@@ -101,6 +101,20 @@ export function init(): void {
     setCurrentNavLocation();
     loadPerms();
     initDates();
+    
+    // Restore active tab from session storage after page reload
+    const savedTabId = sessionStorage.getItem('activity-active-tab');
+    if (savedTabId) {
+        sessionStorage.removeItem('activity-active-tab');
+        const tabTrigger = document.querySelector(`[data-bs-target="${savedTabId}"]`);
+        if (tabTrigger) {
+            const bootstrap = (window as any).bootstrap;
+            if (bootstrap && bootstrap.Tab) {
+                const tab = new bootstrap.Tab(tabTrigger);
+                tab.show();
+            }
+        }
+    }
 
     const planId = getActivityPlanId();
     if (planId) {

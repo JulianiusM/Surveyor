@@ -554,6 +554,12 @@ export async function getActivitySlotAssignees(planId: string): Promise<SlotAssi
 }
 
 export async function getActivityPlanParticipants(planId: string): Promise<PlanParticipant[]> {
+    const plan = await AppDataSource.getRepository(ActivityPlan).findOne({
+        where: {id: planId},
+        relations: ['event']
+    });
+    
+    // Get assigned participants
     const qb = AppDataSource
         .getRepository(ActivityAssignment)
         .createQueryBuilder("aa")
@@ -569,13 +575,37 @@ export async function getActivityPlanParticipants(planId: string): Promise<PlanP
         ])
         .groupBy("name");
 
-    const raw: PlanParticipantRow[] = await qb.getRawMany();
-
-    return raw.map((r) => ({
-        name: r.name,
-        count: Number(r.count),
-        roles: r.roles ? r.roles.split(",") : [],
-    }));
+    const assignedRaw: PlanParticipantRow[] = await qb.getRawMany();
+    const participantMap = new Map<string, PlanParticipant>();
+    
+    // Add assigned participants to map
+    for (const r of assignedRaw) {
+        participantMap.set(r.name, {
+            name: r.name,
+            count: Number(r.count),
+            roles: r.roles ? r.roles.split(",") : [],
+        });
+    }
+    
+    // If plan is associated with an event, also include all event participants
+    if (plan?.event?.id) {
+        const eventService = await import("./EventService");
+        const eventParticipants = await eventService.getEventParticipants(plan.event.id);
+        
+        for (const ep of eventParticipants) {
+            const name = ep.name || ep.user?.username || ep.guest?.username || 'Unknown';
+            if (!participantMap.has(name)) {
+                // Add event participant who hasn't been assigned yet
+                participantMap.set(name, {
+                    name,
+                    count: 0,
+                    roles: [],
+                });
+            }
+        }
+    }
+    
+    return Array.from(participantMap.values());
 }
 
 export async function deleteActivitySlotAssignment(assignId: number) {

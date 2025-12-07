@@ -351,7 +351,16 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
             const res = await post(`/api/activity/${planId}/recommendations/apply`, {});
             warnings = (res?.warnings || []) as RecommendationWarning[];
             showInlineAlert('success', res?.message || 'Recommendations applied');
-            await loadRecommendations();
+            
+            // Store current tab before reload
+            const activeTab = document.querySelector('.nav-link.active');
+            const activeTabId = activeTab?.getAttribute('data-bs-target');
+            if (activeTabId) {
+                sessionStorage.setItem('activity-active-tab', activeTabId);
+            }
+            
+            // Reload the page to show updated assignments
+            setTimeout(() => window.location.reload(), 1000);
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to apply recommendations';
             setAlert(message, 'danger');

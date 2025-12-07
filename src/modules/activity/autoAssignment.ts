@@ -234,6 +234,7 @@ export function generateAutoRecommendations(ctx: AutoAssignmentContext): Recomme
     const allowOverfill = Boolean(ctx.plan.allowOverfillAfterFull);
     const availabilityWeight = settingsStore.value.activityAvailabilityWeight;
     const swapIterations = settingsStore.value.activitySwapOptimizationIterations;
+    const arrivalDeparturePenalty = settingsStore.value.activityArrivalDeparturePenalty;
     const {states, assignmentMap} = buildParticipantStates(ctx);
 
     if (!states.size) return [];
@@ -247,12 +248,12 @@ export function generateAutoRecommendations(ctx: AutoAssignmentContext): Recomme
 
     // F5 Phase 1: Fill free capacity first
     const phase1Slots = buildSlotCapacities(ctx.slots, false);
-    assignFairly(phase1Slots, states, assignmentMap, attendancePolicy, recommendations, false, availabilityWeight);
+    assignFairly(phase1Slots, states, assignmentMap, attendancePolicy, recommendations, false, availabilityWeight, arrivalDeparturePenalty);
 
     // F5 Phase 2: If overfill allowed and participants still have deficit, allow overcapacity
     if (allowOverfill) {
         const phase2Slots = buildSlotCapacities(ctx.slots, true);
-        assignFairly(phase2Slots, states, assignmentMap, attendancePolicy, recommendations, true, availabilityWeight);
+        assignFairly(phase2Slots, states, assignmentMap, attendancePolicy, recommendations, true, availabilityWeight, arrivalDeparturePenalty);
     }
 
     // Option 2: Post-assignment swap optimization
@@ -268,6 +269,7 @@ export function generateAutoRecommendations(ctx: AutoAssignmentContext): Recomme
  * This ensures fair distribution across both participants AND slots
  * 
  * @param availabilityWeight - Weight for limited availability (0-1). 0.3 means 70% fairness, 30% availability
+ * @param arrivalDeparturePenalty - Penalty for slots on arrival/departure days (0-1). 0.2 means 20% penalty
  */
 function assignFairly(
     slots: SlotCapacity[],
@@ -276,7 +278,8 @@ function assignFairly(
     attendancePolicy: AttendancePolicy,
     recommendations: RecommendationInput[],
     allowOvercapacity: boolean = false,
-    availabilityWeight: number = 0.30
+    availabilityWeight: number = 0.30,
+    arrivalDeparturePenalty: number = 0.2
 ): void {
     // Track slot assignment counts for fair distribution (cached and updated incrementally)
     const slotAssignmentCounts = new Map<string, number>();
@@ -362,11 +365,25 @@ function assignFairly(
                     }
                 }
                 
+                // Check if this slot is on the participant's arrival or departure day
+                let arrivalDeparturePenaltyValue = 0;
+                if (arrivalDeparturePenalty > 0) {
+                    const slotDay = slot.slot.day;
+                    const arrival = state.participant.arrivalDate;
+                    const departure = state.participant.departureDate;
+                    
+                    if ((arrival && slotDay === arrival) || (departure && slotDay === departure)) {
+                        // Apply penalty to discourage assignments on arrival/departure days
+                        arrivalDeparturePenaltyValue = arrivalDeparturePenalty * 100;
+                    }
+                }
+                
                 // Slot scoring:
                 // 1. Filling degree (primary): prefer less-filled slots
                 // 2. Competition (secondary): prefer less-contested slots when filling degree is similar
                 // 3. Deficit (tertiary): prefer slots where participants have higher need
-                const slotScore = fillingDegree * 100 + (competition * 0.5) - (slotDeficit * 0.05);
+                // 4. Arrival/departure penalty: discourage slots on arrival/departure days
+                const slotScore = fillingDegree * 100 + (competition * 0.5) - (slotDeficit * 0.05) + arrivalDeparturePenaltyValue;
 
                 // Combined score (lower is better)
                 // Participant score is weighted heavily to prioritize participant fairness over slot balance
