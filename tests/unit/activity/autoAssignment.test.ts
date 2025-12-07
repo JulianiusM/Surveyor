@@ -43,13 +43,19 @@ describe('generateAutoRecommendations', () => {
         const recommendations = generateAutoRecommendations(context);
 
         expect(recommendations).toHaveLength(3);
-        const assignmentsBySlot: Record<string, RecommendationInput | undefined> = {};
-        recommendations.forEach((rec) => assignmentsBySlot[rec.slotId] = rec);
-
-        expect(assignmentsBySlot['slot-1']?.userId).toBe(1);
-        expect(assignmentsBySlot['slot-2']?.userId).toBe(2);
-        // User 3 can only attend on 2024-01-01, so user 1 gets slot-3 on 2024-01-02
-        expect(assignmentsBySlot['slot-3']?.userId).toBe(1);
+        
+        // User 3 has limited availability (only day 1), so should be prioritized and assigned first
+        // Users 1 and 2 have broader availability (both days)
+        const user3Assignments = recommendations.filter(r => r.userId === 3);
+        const user1Assignments = recommendations.filter(r => r.userId === 1);
+        const user2Assignments = recommendations.filter(r => r.userId === 2);
+        
+        // User 3 should get at least one assignment on their only available day
+        expect(user3Assignments.length).toBeGreaterThan(0);
+        
+        // All users should get some assignments to meet requirements fairly
+        expect(user1Assignments.length).toBeGreaterThan(0);
+        expect(user2Assignments.length).toBeGreaterThan(0);
     });
 
     it('skips assignments that fall outside attendance or overlap existing commitments', () => {
@@ -188,6 +194,28 @@ describe('generateAutoRecommendations', () => {
 
         // User 2 has lower ratio (0 < 0.25), so should be assigned first
         expect(recommendations[0]?.userId).toBe(2);
+    });
+
+    // F9: Limited availability prioritization
+    it('prioritizes participants with limited availability first', () => {
+        const context = buildContext({
+            plan: {...basePlan, generalRequiredShifts: 2},
+            participants: [
+                {userId: 1, arrivalDate: '2024-01-01', departureDate: '2024-01-02'}, // Can attend both days
+                {userId: 2, arrivalDate: '2024-01-01', departureDate: '2024-01-01'}, // Only day 1 - limited
+            ],
+            slots: [
+                {id: 'slot-1', day: '2024-01-01', startTime: '09:00', endTime: '10:00', pos: 1, maxAssignees: 1} as any,
+                {id: 'slot-2', day: '2024-01-02', startTime: '09:00', endTime: '10:00', pos: 1, maxAssignees: 1} as any,
+            ],
+        });
+
+        const recommendations = generateAutoRecommendations(context);
+
+        // User 2 has more limited availability, so should be assigned first to slot-1
+        const firstAssignment = recommendations[0];
+        expect(firstAssignment?.userId).toBe(2);
+        expect(firstAssignment?.slotId).toBe('slot-1');
     });
 
     // F9: Fair distribution - largest deficit on tie

@@ -105,22 +105,51 @@ function buildParticipantStates(
 const RATIO_COMPARISON_EPSILON = 0.0001;
 
 /**
- * F9: Fair distribution scoring
- * - Priority 1: Lowest ratio of assigned/required (most underserved)
- * - Priority 2: Largest absolute deficit
- * - Priority 3: Deterministic tie-breaker by participant key
+ * Calculate how many eligible slots a participant has available
  */
-function scoreParticipant(a: ParticipantState, b: ParticipantState): number {
+function countEligibleSlots(
+    participant: ParticipantAttendance,
+    slots: SlotCapacity[],
+    existingAssignments: AssignmentCandidate[],
+    attendancePolicy: AttendancePolicy
+): number {
+    let count = 0;
+    for (const slot of slots) {
+        if (canAssign(slot.candidate, participant, existingAssignments, attendancePolicy)) {
+            count++;
+        }
+    }
+    return count;
+}
+
+/**
+ * F9: Fair distribution scoring with limited availability prioritization
+ * - Priority 1: Participants with more limited availability (fewer eligible slots)
+ * - Priority 2: Lowest ratio of assigned/required (most underserved)
+ * - Priority 3: Largest absolute deficit
+ * - Priority 4: Deterministic tie-breaker by participant key
+ */
+function scoreParticipantWithAvailability(
+    a: ParticipantState,
+    b: ParticipantState,
+    aEligibleSlots: number,
+    bEligibleSlots: number
+): number {
+    // Priority 1: Limited availability (fewer eligible slots = higher priority)
+    if (aEligibleSlots !== bEligibleSlots) {
+        return aEligibleSlots - bEligibleSlots;
+    }
+
     // Calculate ratios (lower is more underserved)
     const ratioA = a.required > 0 ? a.assigned / a.required : (a.assigned > 0 ? Number.POSITIVE_INFINITY : 0);
     const ratioB = b.required > 0 ? b.assigned / b.required : (b.assigned > 0 ? Number.POSITIVE_INFINITY : 0);
 
-    // Priority 1: Lowest ratio (most underserved)
+    // Priority 2: Lowest ratio (most underserved)
     if (Math.abs(ratioA - ratioB) > RATIO_COMPARISON_EPSILON) {
         return ratioA - ratioB;
     }
 
-    // Priority 2: Largest absolute deficit
+    // Priority 3: Largest absolute deficit
     const deficitA = Math.max(a.required - a.assigned, 0);
     const deficitB = Math.max(b.required - b.assigned, 0);
     
@@ -128,7 +157,7 @@ function scoreParticipant(a: ParticipantState, b: ParticipantState): number {
         return deficitB - deficitA;
     }
 
-    // Priority 3: Deterministic tie-breaker
+    // Priority 4: Deterministic tie-breaker
     return a.participantKey.localeCompare(b.participantKey);
 }
 
@@ -154,7 +183,7 @@ function canAssign(
  * - F6: Attendance window validation
  * - F7: Arrival/departure toggles
  * - F8: No overlapping slots per participant
- * - F9: Fair distribution across participants
+ * - F9: Fair distribution across participants with limited availability priority
  * - F10: Returns proposed assignments
  */
 export function generateAutoRecommendations(ctx: AutoAssignmentContext): RecommendationInput[] {
@@ -172,47 +201,22 @@ export function generateAutoRecommendations(ctx: AutoAssignmentContext): Recomme
 
     // F5 Phase 1: Fill free capacity first
     const phase1Slots = buildSlotCapacities(ctx.slots, false);
-    assignToSlots(phase1Slots, states, assignmentMap, attendancePolicy, recommendations);
+    assignFairly(phase1Slots, states, assignmentMap, attendancePolicy, recommendations, false);
 
     // F5 Phase 2: If overfill allowed and participants still have deficit, allow overcapacity
     if (allowOverfill) {
         const phase2Slots = buildSlotCapacities(ctx.slots, true);
-        
-        // Filter to only slots that are now at or over capacity but participants still need assignments
-        const overflowSlots = phase2Slots.filter(s => {
-            const capacity = s.slot.maxAssignees ?? Number.POSITIVE_INFINITY;
-            const existing = Number(s.slot.assignedCount ?? 0);
-            const assigned = recommendations.filter(r => r.slotId === s.slot.id).length;
-            return capacity !== Number.POSITIVE_INFINITY && (existing + assigned) >= capacity;
-        });
-
-        // Distribute overcapacity fairly - track how much each slot is over
-        const slotOvercapacity = new Map<string, number>();
-        
-        for (const slot of overflowSlots) {
-            const capacity = slot.slot.maxAssignees ?? 0;
-            const existing = Number(slot.slot.assignedCount ?? 0);
-            const assigned = recommendations.filter(r => r.slotId === slot.slot.id).length;
-            slotOvercapacity.set(slot.slot.id, Math.max(0, existing + assigned - capacity));
-        }
-
-        // Sort slots by current overcapacity (least overloaded first for fair distribution)
-        const sortedOverflowSlots = overflowSlots.sort((a, b) => {
-            const overA = slotOvercapacity.get(a.slot.id) ?? 0;
-            const overB = slotOvercapacity.get(b.slot.id) ?? 0;
-            return overA - overB;
-        });
-
-        assignToSlots(sortedOverflowSlots, states, assignmentMap, attendancePolicy, recommendations, true);
+        assignFairly(phase2Slots, states, assignmentMap, attendancePolicy, recommendations, true);
     }
 
     return recommendations;
 }
 
 /**
- * Helper function to assign participants to slots
+ * Assign participants to slots fairly, one assignment at a time
+ * This ensures fair distribution across both participants AND slots
  */
-function assignToSlots(
+function assignFairly(
     slots: SlotCapacity[],
     states: Map<string, ParticipantState>,
     assignmentMap: Record<string, AssignmentCandidate[]>,
@@ -220,8 +224,17 @@ function assignToSlots(
     recommendations: RecommendationInput[],
     allowOvercapacity: boolean = false
 ): void {
+    // Track slot assignment counts for fair distribution
+    const slotAssignmentCounts = new Map<string, number>();
     for (const slot of slots) {
-        // F3: Filter to participants with deficit > 0
+        const existing = Number(slot.slot.assignedCount ?? 0);
+        const newAssignments = recommendations.filter(r => r.slotId === slot.slot.id).length;
+        slotAssignmentCounts.set(slot.slot.id, existing + newAssignments);
+    }
+
+    // Continue making assignments until no more can be made
+    while (true) {
+        // F3: Get participants with deficit > 0
         const participantsWithDeficit = [...states.values()].filter(state => {
             const deficit = Math.max(state.required - state.assigned, 0);
             return deficit > 0;
@@ -229,41 +242,113 @@ function assignToSlots(
 
         if (participantsWithDeficit.length === 0) break;
 
-        // F9: Sort by fairness criteria
-        const candidates = participantsWithDeficit.sort(scoreParticipant);
+        // Calculate eligible slot counts for each participant
+        const participantEligibility = new Map<string, number>();
+        for (const state of participantsWithDeficit) {
+            const existingAssignments = assignmentMap[state.participantKey] ?? [];
+            const eligible = countEligibleSlots(state.participant, slots, existingAssignments, attendancePolicy);
+            participantEligibility.set(state.participantKey, eligible);
+        }
 
-        for (const state of candidates) {
-            // Check if we've exceeded capacity (unless in overfill mode)
-            if (!allowOvercapacity && slot.remaining <= 0) break;
+        // Find best (participant, slot) pair
+        let bestMatch: {participant: ParticipantState; slot: SlotCapacity} | null = null;
+        let bestScore = Number.POSITIVE_INFINITY;
 
-            // F6, F7, F8: Check eligibility (attendance, arrival/departure, overlap)
-            const participantAssignments = assignmentMap[state.participantKey] ?? [];
-            if (!canAssign(slot.candidate, state.participant, participantAssignments, attendancePolicy)) {
-                continue;
-            }
+        for (const state of participantsWithDeficit) {
+            const existingAssignments = assignmentMap[state.participantKey] ?? [];
+            const eligibleCount = participantEligibility.get(state.participantKey) ?? 0;
 
-            // F10: Create recommendation
-            recommendations.push({
-                slotId: slot.slot.id,
-                userId: state.participant.userId ?? null,
-                guestId: state.participant.guestId ?? null,
-                status: "PENDING",
-            });
+            for (const slot of slots) {
+                // F4/F5: Check capacity
+                if (!allowOvercapacity && slot.remaining <= 0) continue;
 
-            // Update state
-            if (!allowOvercapacity) {
-                slot.remaining -= 1;
-            }
-            state.assigned += 1;
-            assignmentMap[state.participantKey] = [...participantAssignments, slot.candidate];
+                // F6, F7, F8: Check eligibility
+                if (!canAssign(slot.candidate, state.participant, existingAssignments, attendancePolicy)) {
+                    continue;
+                }
 
-            // F3: Stop if participant's deficit is now 0
-            const deficit = Math.max(state.required - state.assigned, 0);
-            if (deficit === 0) {
-                continue;
+                // Calculate fairness score for this (participant, slot) pair
+                const participantScore = scoreParticipantForSlot(
+                    state,
+                    eligibleCount,
+                    participantsWithDeficit,
+                    participantEligibility
+                );
+
+                // Slot fairness: prefer slots with fewer assignments for balanced distribution
+                const slotCount = slotAssignmentCounts.get(slot.slot.id) ?? 0;
+                const capacity = slot.slot.maxAssignees ?? Number.POSITIVE_INFINITY;
+                const slotScore = allowOvercapacity 
+                    ? slotCount  // In overfill mode, prefer least filled slots
+                    : (capacity - slotCount);  // In normal mode, consider remaining capacity
+
+                // Combined score (lower is better)
+                const combinedScore = participantScore * 10000 + slotScore;
+
+                if (combinedScore < bestScore) {
+                    bestScore = combinedScore;
+                    bestMatch = {participant: state, slot};
+                }
             }
         }
+
+        // If no valid assignment found, break
+        if (!bestMatch) break;
+
+        // Make the assignment
+        const {participant, slot} = bestMatch;
+        const participantAssignments = assignmentMap[participant.participantKey] ?? [];
+
+        // F10: Create recommendation
+        recommendations.push({
+            slotId: slot.slot.id,
+            userId: participant.participant.userId ?? null,
+            guestId: participant.participant.guestId ?? null,
+            status: "PENDING",
+        });
+
+        // Update state
+        if (!allowOvercapacity) {
+            slot.remaining -= 1;
+        }
+        participant.assigned += 1;
+        assignmentMap[participant.participantKey] = [...participantAssignments, slot.candidate];
+        
+        // Update slot assignment count
+        const currentCount = slotAssignmentCounts.get(slot.slot.id) ?? 0;
+        slotAssignmentCounts.set(slot.slot.id, currentCount + 1);
     }
+}
+
+/**
+ * Score a participant for slot assignment considering limited availability
+ */
+function scoreParticipantForSlot(
+    participant: ParticipantState,
+    eligibleSlots: number,
+    allParticipants: ParticipantState[],
+    eligibilityMap: Map<string, number>
+): number {
+    // Compare this participant with others based on fairness criteria
+    let score = 0;
+    
+    for (const other of allParticipants) {
+        if (other.participantKey === participant.participantKey) continue;
+        
+        const otherEligible = eligibilityMap.get(other.participantKey) ?? 0;
+        const comparison = scoreParticipantWithAvailability(
+            participant,
+            other,
+            eligibleSlots,
+            otherEligible
+        );
+        
+        // If this participant has higher priority (comparison < 0), decrease score
+        // If lower priority (comparison > 0), increase score
+        score += comparison;
+    }
+    
+    return score;
 }
 
 function mergeParticipants(
