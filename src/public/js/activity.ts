@@ -13,6 +13,7 @@ import {reloadAfterDelay} from './shared/ui-helpers';
 import {loadPerms, requireEntityPerm, requireItemPerm} from './core/permissions';
 import {initParticipantsTab} from './modules/activity-participants';
 import {initSlotRoleAdminModal, getAllRoles as getRoles, getSlotRolesForSlot as getSlotRoles, addRoleToGlobal as addRole, type RoleSummary as RoleType} from './modules/activity-roles';
+import {buildWarningModal, initAssign, describeWarning as descWarn, type AssignmentWarning, type WarningModal} from './modules/activity-assignments';
 
 interface BootstrapModal {
     show: () => void;
@@ -31,23 +32,7 @@ type RoleSummary = RoleType;
 
 type SlotEditorMode = 'create' | 'edit';
 
-type WarningType =
-    | "outside_attendance"
-    | "arrival_day"
-    | "departure_day"
-    | "arrival_time_restricted"
-    | "departure_time_restricted"
-    | "overlap"
-    | "over_capacity";
-
-interface AssignmentWarning {
-    type: WarningType;
-    conflicts?: string[];
-}
-
-interface WarningModal {
-    confirm(warnings: AssignmentWarning[], slotId: string): Promise<boolean>;
-}
+// Assignment warning types moved to modules/activity-assignments.ts
 
 interface RequirementConfiguration {
     plan: {
@@ -143,28 +128,9 @@ function formatSlotLabel(slot: RecommendationRow['slot']): string {
     return `${slot.title || 'Slot'}${day}${time}`;
 }
 
+// describeWarning moved to modules/activity-assignments.ts
 function describeWarning(warning: AssignmentWarning): string {
-    switch (warning.type) {
-        case "outside_attendance":
-            return "This slot is outside your attendance window.";
-        case "arrival_day":
-            return "This slot is on your arrival day.";
-        case "arrival_time_restricted":
-            return "Evening arrival-day assignments are disabled for this plan.";
-        case "departure_day":
-            return "This slot is on your departure day.";
-        case "departure_time_restricted":
-            return "Morning departure-day assignments are disabled for this plan.";
-        case "over_capacity":
-            return "This slot is already full.";
-        case "overlap": {
-            const conflicts = (warning.conflicts || []).map(describeSlot);
-            const detail = conflicts.length ? `: ${conflicts.join(', ')}` : '';
-            return `This slot overlaps with another assignment${detail}`;
-        }
-        default:
-            return "Assignment warning detected.";
-    }
+    return descWarn(warning, describeSlot);
 }
 
 function formatDateLabel(date?: string | null): string {
@@ -193,63 +159,7 @@ function toISOStringOrNull(value: string): string | null {
     return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-function buildWarningModal(): WarningModal {
-    const modalEl = document.getElementById('assignmentWarningModal');
-    const list = document.getElementById('assignmentWarningList');
-    const titleEl = document.getElementById('assignmentWarningSlot');
-    const confirmBtn = document.getElementById('assignmentWarningConfirm') as HTMLButtonElement | null;
-    const cancelBtn = document.getElementById('assignmentWarningCancel') as HTMLButtonElement | null;
-
-    const modal = modalEl && typeof bootstrap !== 'undefined'
-        ? new bootstrap.Modal(modalEl, {focus: true})
-        : null;
-
-    async function confirm(warnings: AssignmentWarning[], slotId: string): Promise<boolean> {
-        if (!warnings.length) return true;
-        if (!modal || !modalEl || !list || !confirmBtn || !cancelBtn) {
-            const proceed = window.confirm(
-                `Warnings detected for this assignment. Proceed?\n${warnings.map(describeWarning).join('\n')}`,
-            );
-            return Promise.resolve(proceed);
-        }
-
-        const title = describeSlot(slotId);
-        if (titleEl) titleEl.textContent = title;
-
-        list.innerHTML = '';
-        warnings.forEach((warning) => {
-            const li = document.createElement('li');
-            li.className = 'list-group-item text-bg-dark d-flex align-items-start gap-2';
-            li.innerHTML = `<i class="bi bi-exclamation-triangle text-warning"></i><span>${describeWarning(warning)}</span>`;
-            list.appendChild(li);
-        });
-
-        return await new Promise((resolve) => {
-            let settled = false;
-
-            function cleanup(result: boolean) {
-                if (settled) return;
-                settled = true;
-                confirmBtn!.disabled = false;
-                modal!.hide();
-                resolve(result);
-            }
-
-            const onHidden = () => cleanup(false);
-            modalEl.addEventListener('hidden.bs.modal', onHidden, {once: true});
-
-            confirmBtn.onclick = async () => {
-                confirmBtn.disabled = true;
-                cleanup(true);
-            };
-
-            cancelBtn.onclick = () => cleanup(false);
-            modal.show();
-        });
-    }
-
-    return {confirm};
-}
+// buildWarningModal moved to modules/activity-assignments.ts
 
 /**
  * Get the activity plan ID from the window object
@@ -258,52 +168,7 @@ function getActivityPlanId(): string {
     return window.Surveyor.entityId ?? '';
 }
 
-/**
- * Initialize assign/unassign slot functionality
- */
-function initAssign(warningModal: WarningModal): void {
-    const planId = getActivityPlanId();
-
-    async function fetchWarnings(slotId: string): Promise<AssignmentWarning[]> {
-        try {
-            const res = await post(`/api/activity/${planId}/slot/${slotId}/warnings`, {});
-            return res?.data?.warnings || [];
-        } catch {
-            return [];
-        }
-    }
-
-    document.addEventListener('click', async (e: Event) => {
-        const btn = (e.target as Element | null)?.closest('[data-action]') as HTMLElement | null;
-        if (!btn) return;
-
-        const card = btn.closest('.slot') as HTMLElement | null;
-        const slotId = card?.dataset.slotid;
-        if (!slotId) return;
-
-        const act = btn.dataset.action;
-        const role = btn.dataset.role;
-
-        const performUpdate = async () => {
-            await post(`/api/activity/${planId}/${act}`, {slotId, role});
-            showInlineAlert('success', 'Updated');
-            reloadAfterDelay(120);
-        };
-
-        try {
-            if (act === 'assign') {
-                const warnings = await fetchWarnings(slotId);
-                const proceed = await warningModal.confirm(warnings, slotId);
-                if (!proceed) return;
-            }
-
-            await performUpdate();
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to update slot assignment.';
-            showInlineAlert('error', message);
-        }
-    });
-}
+// initAssign moved to modules/activity-assignments.ts
 
 /**
  * Initialize inline editing for slots and plan description
@@ -1651,8 +1516,8 @@ export function init(): void {
 
     const planId = getActivityPlanId();
     if (planId) {
-        const warningModal = buildWarningModal();
-        initAssign(warningModal);
+        const warningModal = buildWarningModal(describeSlot);
+        initAssign(planId, warningModal);
         initInlineEdit();
         initDelete();
         initSlotEditorModal();
