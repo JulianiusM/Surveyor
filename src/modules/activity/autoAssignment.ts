@@ -224,12 +224,23 @@ function assignFairly(
     recommendations: RecommendationInput[],
     allowOvercapacity: boolean = false
 ): void {
-    // Track slot assignment counts for fair distribution
+    // Track slot assignment counts for fair distribution (cached and updated incrementally)
     const slotAssignmentCounts = new Map<string, number>();
     for (const slot of slots) {
         const existing = Number(slot.slot.assignedCount ?? 0);
         const newAssignments = recommendations.filter(r => r.slotId === slot.slot.id).length;
         slotAssignmentCounts.set(slot.slot.id, existing + newAssignments);
+    }
+
+    // Cache eligible slot counts (only recalculated when participant gets assigned)
+    const participantEligibility = new Map<string, number>();
+    const needsRecalc = new Set<string>();
+    
+    // Initial calculation for all participants
+    for (const state of states.values()) {
+        const existingAssignments = assignmentMap[state.participantKey] ?? [];
+        const eligible = countEligibleSlots(state.participant, slots, existingAssignments, attendancePolicy);
+        participantEligibility.set(state.participantKey, eligible);
     }
 
     // Continue making assignments until no more can be made
@@ -242,13 +253,16 @@ function assignFairly(
 
         if (participantsWithDeficit.length === 0) break;
 
-        // Calculate eligible slot counts for each participant
-        const participantEligibility = new Map<string, number>();
-        for (const state of participantsWithDeficit) {
-            const existingAssignments = assignmentMap[state.participantKey] ?? [];
-            const eligible = countEligibleSlots(state.participant, slots, existingAssignments, attendancePolicy);
-            participantEligibility.set(state.participantKey, eligible);
+        // Recalculate eligibility for participants who were assigned in previous iteration
+        for (const key of needsRecalc) {
+            const state = states.get(key);
+            if (state) {
+                const existingAssignments = assignmentMap[state.participantKey] ?? [];
+                const eligible = countEligibleSlots(state.participant, slots, existingAssignments, attendancePolicy);
+                participantEligibility.set(state.participantKey, eligible);
+            }
         }
+        needsRecalc.clear();
 
         // Find best (participant, slot) pair
         let bestMatch: {participant: ParticipantState; slot: SlotCapacity} | null = null;
@@ -276,13 +290,12 @@ function assignFairly(
                 );
 
                 // Slot fairness: prefer slots with fewer assignments for balanced distribution
+                // Lower score = better (less filled = preferred)
                 const slotCount = slotAssignmentCounts.get(slot.slot.id) ?? 0;
-                const capacity = slot.slot.maxAssignees ?? Number.POSITIVE_INFINITY;
-                const slotScore = allowOvercapacity 
-                    ? slotCount  // In overfill mode, prefer least filled slots
-                    : (capacity - slotCount);  // In normal mode, consider remaining capacity
+                const slotScore = slotCount;  // Prefer slots with fewer total assignments
 
                 // Combined score (lower is better)
+                // Participant score is weighted heavily to prioritize participant fairness over slot balance
                 const combinedScore = participantScore * 10000 + slotScore;
 
                 if (combinedScore < bestScore) {
@@ -317,6 +330,9 @@ function assignFairly(
         // Update slot assignment count
         const currentCount = slotAssignmentCounts.get(slot.slot.id) ?? 0;
         slotAssignmentCounts.set(slot.slot.id, currentCount + 1);
+        
+        // Mark this participant for eligibility recalculation in next iteration
+        needsRecalc.add(participant.participantKey);
     }
 }
 
