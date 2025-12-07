@@ -1,11 +1,11 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId, Unique,} from "typeorm";
 import {ActivityAssignmentRole} from "./ActivityAssignmentRole";
 import {ActivitySlotRole} from "./ActivitySlotRole";
 import {ActivityPlanRequirement} from "./ActivityPlanRequirement";
 import {ActivityPlanRequirementOverride} from "./ActivityPlanRequirementOverride";
 import {ActivityPlan} from "./ActivityPlan";
 
-@Index("name", ["name"], {unique: true})
+@Unique("act_roles_name_plan", ["name", "plan"])
 @Entity("activity_roles", {schema: "surveyor"})
 export class ActivityRole {
     @PrimaryGeneratedColumn({type: "int", name: "id"})

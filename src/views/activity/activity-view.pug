@@ -34,87 +34,6 @@ block content
             monday.setDate(monday.getDate() + 7);
         }
 
-    if permData.entity.has('MANAGE_REQUIREMENTS') && data.plan.eventId
-        .card.text-bg-dark.border.border-secondary-subtle.mb-3#requirementPanel
-            .card-header.d-flex.justify-content-between.align-items-center
-                span.d-flex.align-items-center.gap-2
-                    i.bi.bi-gear-wide-connected
-                    span Requirement settings
-                .d-flex.gap-2
-                    button.btn.btn-sm.btn-outline-secondary(type="button" data-requirements-refresh)
-                        i.bi.bi-arrow-clockwise.me-1
-                        | Reload
-                    button.btn.btn-sm.btn-success(type="button" data-requirements-save)
-                        i.bi.bi-save.me-1
-                        | Save settings
-            .card-body
-                p.text-secondary.small.mb-3 Define required shifts, rounding, and optional overrides for participants. Leave counts empty to skip enforcement.
-                form#requirementForm
-                    .row.g-3
-                        .col-md-3
-                            label.form-label(for="assignmentMode") Assignment mode
-                            select#assignmentMode.form-select.form-select-sm.text-bg-dark
-                                option(value="FREE") Free
-                                option(value="REQUIRED") Required
-                        .col-md-3
-                            label.form-label(for="requiredShifts") General required shifts
-                            input#requiredShifts.form-control.form-control-sm.text-bg-dark(type="number" min="0" placeholder="e.g. 2")
-                        .col-md-3
-                            label.form-label(for="roundingMode") Rounding mode
-                            select#roundingMode.form-select.form-select-sm.text-bg-dark
-                                option(value="") None
-                                option(value="CEIL") Ceil
-                                option(value="ROUND") Round
-                                option(value="FLOOR") Floor
-                        .col-md-3
-                            label.form-label(for="bindingDeadline") Binding deadline
-                            input#bindingDeadline.form-control.form-control-sm.text-bg-dark(type="datetime-local" placeholder="optional")
-                    .form-check.form-switch.my-3
-                        input#allowOverfill.form-check-input(type="checkbox" role="switch")
-                        label.form-check-label(for="allowOverfill") Allow assignments beyond slot capacity
-                    .row.g-3
-                        .col-md-6
-                            .form-check.form-switch
-                                input#allowArrivalEvening.form-check-input(type="checkbox" role="switch")
-                                label.form-check-label(for="allowArrivalEvening") Allow arrival-day evening assignments
-                        .col-md-6
-                            .form-check.form-switch
-                                input#allowDepartureMorning.form-check-input(type="checkbox" role="switch")
-                                label.form-check-label(for="allowDepartureMorning") Allow departure-day morning assignments
-
-                    hr
-                    h6.d-flex.justify-content-between.align-items-center
-                        span Role requirements
-                        small.text-secondary Set per-role required shift counts
-                    .row.g-2#roleRequirementList
-                    hr
-                    h6.d-flex.justify-content-between.align-items-center
-                        span Participant overrides
-                        button.btn.btn-sm.btn-outline-info(type="button" data-add-override)
-                            i.bi.bi-plus-lg.me-1
-                            | Add override
-                    p.text-secondary.small.mb-2 Specify user/guest IDs and optional roles to override shift counts for specific participants.
-                    .d-grid.gap-2#overrideList
-                    hr
-                    h6.d-flex.justify-content-between.align-items-center
-                        span Participant requirements
-                        small.text-secondary Remaining vs assigned per attendee
-                    .table-responsive
-                        table.table.table-dark.table-bordered.mb-0
-                            thead
-                                tr
-                                    th Participant
-                                    th.text-center Required / Assigned
-                                    th.text-center Remaining
-                                    th.text-center Attendance
-                                    th.text-center Source
-                            tbody#requirementSummaryBody
-                                tr(data-empty-state)
-                                    td.colspan-5.text-center.text-secondary.pt-3 No participants yet.
-                .alert.alert-info.py-2.px-3.mt-3.d-none(role="alert" data-requirements-alert)
-                    i.bi.bi-exclamation-circle.me-2
-                    span
-
     // ─── Description (editable) ──────────────────────────────
     if permData.entity.has('EDIT_DESC')
         // manager sees pointer
@@ -141,203 +60,105 @@ block content
                     br
         hr.mb-1.mt-0
 
-    // Owner settings toggles
-    if permData.entity.has('MANAGE_PERMISSIONS')
-        +permissionManagement(admins, perms.permMeta, perms.defaultPerms, perms.presets, {
-            entityType: 'activity',
-            entityId: data.plan.id
-        })
+    // ─── Tabs & panes for schedule, participants, rules, settings ─────────────
+    -
+        const hasRulesTab =
+                (permData.entity.has('MANAGE_REQUIREMENTS') && data.plan.eventId)
+                || (permData.entity.has('MANAGE_ASSIGNMENTS') && data.plan.eventId);
+        const hasParticipantsTab = !!(data.participantList && data.participantList.length > 0);
+        const hasSettingsTab = permData.entity.has('MANAGE_PERMISSIONS');
 
-    //Erste Zeile: Metainfos / Badge
-    .d-flex.justify-content-between.align-items-center.mb-3
-        //- Titel / Hauptlabel links
-        span.fs-6.fw-semibold
-            i.bi.bi-people-fill.me-1
-            | Participants:
-            span.badge.bg-light.text-dark.ms-1 #{data.counters.participants}
+    // Nav tabs (Schedule is always present)
+    ul.nav.nav-tabs.mb-3(role="tablist")
+        li.nav-item
+            button.nav-link.active(
+                type="button"
+                data-bs-toggle="tab"
+                data-bs-target="#tab-schedule"
+                role="tab"
+                aria-selected="true")
+                i.bi.bi-calendar3.me-1
+                | Schedule
+        if hasParticipantsTab
+            li.nav-item
+                button.nav-link(
+                    type="button"
+                    data-bs-toggle="tab"
+                    data-bs-target="#tab-participants"
+                    role="tab"
+                    aria-selected="false")
+                    i.bi.bi-people-fill.me-1
+                    | Participants
+        if hasRulesTab
+            li.nav-item
+                button.nav-link(
+                    type="button"
+                    data-bs-toggle="tab"
+                    data-bs-target="#tab-rules"
+                    role="tab"
+                    aria-selected="false")
+                    i.bi.bi-sliders.me-1
+                    | Rules & auto-assign
+        if hasSettingsTab
+            li.nav-item
+                button.nav-link(
+                    type="button"
+                    data-bs-toggle="tab"
+                    data-bs-target="#tab-settings"
+                    role="tab"
+                    aria-selected="false")
+                    i.bi.bi-gear.me-1
+                    | Settings
 
-        //── Items + Offene / Leere
-        span.fs-6.fw-semibold
-            i.bi.bi-card-checklist.me-1
-            | Slots:
-            span.badge.bg-light.text-dark.ms-1 #{data.slots.length}
-            span.badge.bg-secondary-subtle.text-secondary-emphasis.ms-1
-                i.bi.bi-box-arrow-up-right.me-1
-                | #{data.counters.open} open
-            span.badge.bg-danger-subtle.text-danger-emphasis.ms-1
-                i.bi.bi-slash-circle.me-1
-                | #{data.counters.empty} unassigned
+    .tab-content
+        // ─── Schedule tab ───────────────────────────────────────
+        .tab-pane.fade.show.active#tab-schedule(role="tabpanel")
+            include ./parts/schedule
 
-    each week in weeks
-        h4.mt-4.mb-2 Week of #{fmtISO(week)}
-        .table-responsive
-            if permData.entity.has('ITEM_EDIT')
-                small.text-info.fst-italic.fw-light Double click to edit, drag to reorder
-            table.table.table-dark.table-bordered.activity-table
-                thead
-                    tr
-                        // @formatter:off
-                        - for (let i = 0; i < 7; i++) {
-                        -   const cur = new Date(week); cur.setDate(cur.getDate() + i);
-                        -   if (cur < start || cur > end) continue;
-                            th.text-center.small(data-date=fmtISO(cur))
-                                span.day #{dayNames[i]}
-                                br
-                                span.date #{fmtISO(cur)}
-                        - }
-                        // @formatter:on
-                tbody
-                    //- figure out how many rows we need
-                    // @formatter:off
-                    // iterate 7 weekdays once
-                    - for (let i = 0; i < 7; i++) {
-                    - const cur = new Date(week); cur.setDate(cur.getDate() + i)
-                    - if (cur < start || cur > end) continue;
-                        td
-                            // ▶ every slot now shares this parent
-                            .slot-container(data-date=fmtISO(cur))
-                                - const daySlots = (data.slots[fmtISO(cur)] || []);
-                                if daySlots.length > 0
-                                    each slot, idx in daySlots
-                                        - const my = data.assignments.includes(slot.id)
-                                        - const startTime = slot.startTime ? slot.startTime.slice(0, 5) : null
-                                        - const endTime = slot.endTime ? slot.endTime.slice(0, 5) : null
-                                        .slot.border.rounded.p-2.mb-2.d-grid.gap-1.draggable(
-                                            data-slotid=slot.id
-                                            data-day=slot.day
-                                            data-start=slot.startTime
-                                            data-end=slot.endTime
-                                            draggable=permData.entity.has('ITEM_EDIT') ? 'true' : null)
+        // ─── Participants tab ───────────────────────────────────
+        if hasParticipantsTab
+            .tab-pane.fade#tab-participants(role="tabpanel")
+                include ./parts/participants
 
-                                            // editable title
-                                            span.fw-bold.text-center(data-edit="title" data-id=slot.id)= slot.title
-                                            if startTime || endTime
-                                                small.text-info.text-center(data-time-range)
-                                                    i.bi.bi-clock-history.me-1
-                                                    | #{startTime || '??'}
-                                                    |  – 
-                                                    | #{endTime || '??'}
-                                            hr.m-0
+        // ─── Rules & auto-assign tab ───────────────────────────
+        if hasRulesTab
+            .tab-pane.fade#tab-rules(role="tabpanel")
+                include ./parts/assignments
 
-                                            // editable description
-                                            if permData.itemAllow(slot.id, 'EDIT_DESC', 'ITEM_EDIT')
-                                                span.border.border-secondary.rounded.p-1.fw-5(data-edit="description" data-id=slot.id)= slot.description || ''
-                                            else
-                                                span.fw-5(data-edit="description" data-id=slot.id)= slot.description || ''
+        // ─── Settings tab ──────────────────────────────────────
+        if hasSettingsTab
+            .tab-pane.fade#tab-settings(role="tabpanel")
+                include ./parts/settings
 
-                                            - const slotRoles = (data.roles.slotRoles ? data.roles.slotRoles[slot.id] || [] : []);
-                                            if slotRoles.length > 0
-                                                for slotRole in slotRoles
-                                                    +roleAssignmentAddon(slot.id, slotRole.name, slotRole.description || slotRole.name, data.assigneeLists[slot.id], user, guest)
-
-                                            // badge + editable max
-                                            span.badge.bg-secondary.w-100.text-center
-                                                span(data-count)= slot.assignedCount
-                                                |  /&nbsp;
-                                                span(data-edit="maxAssignees" data-id=slot.id data-max)= slot.maxAssignees
-
-                                            // assignees
-                                            ul.list-unstyled.mb-0
-                                                each asg in data.assigneeLists[slot.id] || []
-                                                    li.d-flex.align-items-center.gap-1
-                                                        i.bi.bi-person-fill
-                                                        span.flex-grow-1= asg.name
-                                                        if manage
-                                                            button.btn.btn-sm.btn-outline-danger.ms-1(
-                                                                data-owner-remove
-                                                                data-assignid=asg.id) ×
-
-                                            // actions
-                                            .d-flex.gap-2.mt-1
-                                                if my
-                                                    button.btn.btn-sm.btn-outline-danger.flex-grow-1(
-                                                        data-action="unassign") Leave
-                                                else if slot.assignedCount < slot.maxAssignees
-                                                    button.btn.btn-sm.btn-outline-success.flex-grow-1(
-                                                        data-action="assign") Join
-                                                else
-                                                    span.badge.bg-secondary.flex-grow-1.text-center Full
-                                                if permData.itemAllow(slot.id, 'ITEM_DELETE', 'ITEM_DELETE')
-                                                    button.btn.btn-sm.btn-outline-danger(
-                                                        data-delete-slot data-slotid=slot.id
-                                                        draggable="false")
-                                                        i.bi.bi-trash
-                                            if permData.itemAllow(slot.id, 'EDIT_META', 'ITEM_EDIT')
-                                                +roleAssignmentSlotCreator(slot.id, data.roles.allRoles)
-                                else
-                                    span.badge.w-100.text-center
-                                        i.bi.bi-info-circle.me-2
-                                        | No slots for this day!
-                    - }
-                    // @formatter:on
-                // ★ add-slot buttons row
-                if permData.entity.has('ITEM_ADD')
-                    tfoot
-                        tr
-                            // @formatter:off
-                            - for(let i=0;i<7;i++){
-                            - const cur=new Date(week);cur.setDate(cur.getDate() + i)
-                            - if(cur<start||cur>end) continue;
-                                td.text-center
-                                    button.btn.btn-sm.btn-outline-info.w-100(data-add-slot data-date=fmtISO(cur)) + Slot
-                            - }
-                            // @formatter:on
-
-    if permData.entity.has('MANAGE_ASSIGNMENTS') && data.plan.eventId
-        hr
-        .card.text-bg-dark.border.border-secondary-subtle#recommendationPanel
-            .card-header.d-flex.justify-content-between.align-items-center
-                span.d-flex.align-items-center.gap-2
-                    i.bi.bi-magic.me-1
-                    span Assignment recommendations
-                .d-flex.gap-2
-                    button.btn.btn-sm.btn-outline-secondary(type="button" data-recommendations-refresh)
-                        i.bi.bi-arrow-clockwise.me-1
-                        | Reload
-                    button.btn.btn-sm.btn-outline-primary(type="button" data-recommendations-auto)
-                        i.bi.bi-stars.me-1
-                        | Auto-generate
-                    button.btn.btn-sm.btn-success(type="button" data-recommendations-save)
+    // Admin: manage role assignments per slot
+    #slotRoleAdminModal.modal.fade(tabindex="-1" aria-labelledby="slotRoleAdminTitle" aria-hidden="true")
+        .modal-dialog.modal-lg
+            .modal-content.text-bg-dark
+                .modal-header
+                    h5#slotRoleAdminTitle.modal-title
+                        i.bi.bi-people-fill.me-2
+                        | Manage role assignments
+                    button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
+                .modal-body
+                    input#slotRoleAdminSlotId(type="hidden")
+                    p.text-secondary.small.mb-3
+                        | Assign each role in this slot to one of the currently assigned participants.
+                        |  Changes are only saved when you click “Save changes”.
+                    .table-responsive
+                        table.table.table-sm.table-dark.table-bordered.mb-0
+                            thead
+                                tr
+                                    th.w-25 Role
+                                    th Participant
+                            tbody#slotRoleAdminBody
+                                tr(data-empty-state)
+                                    td.colspan-2.text-center.text-secondary.pt-3 No roles for this slot.
+                    small#slotRoleAdminError.text-danger.d-block.mt-2.d-none
+                .modal-footer
+                    button.btn.btn-sm.btn-outline-secondary(type="button" data-bs-dismiss="modal") Cancel
+                    button#slotRoleAdminSave.btn.btn-sm.btn-primary(type="button")
                         i.bi.bi-save.me-1
-                        | Save edits
-                    button.btn.btn-sm.btn-warning(type="button" data-recommendations-apply)
-                        i.bi.bi-check2-circle.me-1
-                        | Apply approved
-            .card-body
-                p.text-secondary.small.mb-3 Review automatically generated or manually edited assignments before applying them to slots.
-                .alert.alert-info.py-2.px-3.d-none(role="alert" data-recommendations-alert)
-                    i.bi.bi-info-circle.me-2
-                    span
-                .table-responsive
-                    table.table.table-dark.table-bordered.mb-0
-                        thead
-                            tr
-                                th Slot
-                                th Participant
-                                th Status
-                                th Warnings
-                        tbody#recommendationRows
-                            tr(data-empty-state)
-                                td.colspan-4.text-center.text-secondary.pt-3 No recommendations yet.
-    if data.participantList && data.participantList.length > 0
-        hr
-        h4.mt-2 Participants
-        .table-responsive
-            table.table.table-dark.table-bordered
-                thead
-                    tr
-                        th.text-center Name
-                        th.text-center # Assigned
-                        th.text-center Roles
-                tbody
-                    for part in data.participantList
-                        tr
-                            td.text-center #{part.name}
-                            td.text-center #{part.count}
-                            td.text-center
-                                for role in part.roles
-                                    if role !== 'default'
-                                        p.my-1 #{role}
+                        | Save changes
 
     // Assignment warnings modal
     #assignmentWarningModal.modal.fade(tabindex="-1" aria-labelledby="assignmentWarningTitle" aria-hidden="true")
@@ -358,9 +179,78 @@ block content
                         i.bi.bi-check2.me-1
                         | Continue anyway
 
+    // Slot editor modal (create / edit)
+    #slotEditorModal.modal.fade(tabindex="-1" aria-labelledby="slotEditorTitle" aria-hidden="true")
+        .modal-dialog
+            .modal-content.text-bg-dark
+                .modal-header
+                    h5#slotEditorTitle.modal-title
+                        i.bi.bi-pencil-square.me-2
+                        | Edit slot
+                    button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
+                .modal-body
+                    form#slotEditorForm
+                        // hidden fields for state
+                        input#slotEditorSlotId(type="hidden")
+                        input#slotEditorDate(type="hidden")
+
+                        .mb-3
+                            label.form-label(for="slotEditorTitleInput") Title
+                            input#slotEditorTitleInput.form-control.form-control-sm.text-bg-dark(
+                                type="text"
+                                required)
+
+                        .row.g-3
+                            .col-md-6
+                                label.form-label(for="slotEditorStartTime") Start time
+                                input#slotEditorStartTime.form-control.form-control-sm.text-bg-dark(
+                                    type="time")
+                            .col-md-6
+                                label.form-label(for="slotEditorEndTime") End time
+                                input#slotEditorEndTime.form-control.form-control-sm.text-bg-dark(
+                                    type="time")
+
+                        .mb-3
+                            label.form-label(for="slotEditorCapacity") Max participants
+                            input#slotEditorCapacity.form-control.form-control-sm.text-bg-dark(
+                                type="number"
+                                min="1")
+
+                        .mb-3
+                            label.form-label(for="slotEditorDescription") Description
+                            textarea#slotEditorDescription.form-control.form-control-sm.text-bg-dark(
+                                rows="3")
+
+                        // NEW: Role chips + dynamic search
+                        .mb-3
+                            label.form-label(for="slotEditorRoleInput") Roles for this slot
+                            #slotEditorRoleChips.border.rounded.p-2.minh-38
+                                span.text-secondary.small No roles assigned yet.
+
+                            .input-group.input-group-sm.mt-2
+                                span.input-group-text
+                                    i.bi.bi-search
+                                input#slotEditorRoleInput.form-control.form-control-sm.text-bg-dark(
+                                    type="text"
+                                    autocomplete="off"
+                                    placeholder="Type to search or create a role…")
+
+                            // Suggestions stay visible; JS only hides when there is nothing to show
+                            #slotEditorRoleSuggestions.list-group.mt-1
+                                // populated by JS
+
+                        .small.text-secondary
+                            span#slotEditorMeta
+
+                .modal-footer
+                    span#slotEditorError.text-danger.me-auto.small.d-none
+                    button.btn.btn-sm.btn-outline-secondary(type="button" data-bs-dismiss="modal") Cancel
+                    button#slotEditorSave.btn.btn-sm.btn-primary(type="submit" form="slotEditorForm") Save
+
 
 block scripts
     script(type="module" src="/js/activity.gen.js")
     script.
         window.Surveyor.entityId = "#{data.plan.id}";
         window.Surveyor.allRoles = !{JSON.stringify(data.roles.allRoles || []).replace(/</g, '\\u003c')};
+        window.Surveyor.slotRoles = !{JSON.stringify(data.roles.slotRoles || {}).replace(/</g, '\\u003c')};

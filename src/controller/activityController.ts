@@ -311,7 +311,7 @@ async function reorderSlots(id: string, order: { slotId: string, pos: number }[]
 }
 
 async function quickAddSlot(plan: ActivityPlan, body: any) {
-    const {date, title = '', description = '', startTime, endTime, maxAssignees = 1} = body;
+    const {date, title = '', description = '', startTime, endTime, maxAssignees = 1, roles = []} = body;
     const d = fromISOtoLocal(date);
     if (d < fromISOtoLocal(plan.startDate) || d > fromISOtoLocal(plan.endDate))
         throw new APIError('Date outside range', body, 400);
@@ -342,6 +342,10 @@ async function quickAddSlot(plan: ActivityPlan, body: any) {
     };
 
     await activityService.addActivitySlot(plan.id, slot);
+
+    if (roles.length > 0) {
+        await activityService.ensureRoleId(plan.id, roles);
+    }
     return 'Slot added';
 }
 
@@ -354,22 +358,25 @@ async function updateSlotDescription(slotId: string, body: any) {
 
 async function updateSlotAttr(slotId: string, body: any, permData?: PermBundle) {
     const {field, value} = body;
-    const allowed: Record<string, boolean> = {title: true, description: true, maxAssignees: true};
-
-    if (!allowed[field]) throw new APIError('Invalid field', body, 400);
-
+    if (field !== undefined && value !== undefined) body[field] = value;
     // Permission check
     if (!permData ||
-        ((body.location !== undefined || body.start !== undefined || body.end !== undefined || body.deadlineTz !== undefined) && !permData.entity.has("EDIT_META"))
-        || (body.title !== undefined && !permData.entity.has("EDIT_TITLE"))
-        || (body.description !== undefined && !permData.entity.has("EDIT_DESC"))
-        || (body.requireDietaryInfo !== undefined && !permData.entity.has("MANAGE_REQUIREMENTS"))
-        || (body.maxParticipants !== undefined && !permData.entity.has("EDIT_CAPACITY"))
+        ((body.startTime !== undefined || body.endTime !== undefined) && !permData.itemAllow(slotId, "EDIT_META", "ITEM_EDIT"))
+        || (body.title !== undefined && !permData.itemAllow(slotId, "EDIT_TITLE", "ITEM_EDIT"))
+        || (body.description !== undefined && !permData.itemAllow(slotId, "EDIT_DESC", "ITEM_EDIT"))
+        || (body.maxAssignees !== undefined && !permData.itemAllow(slotId, "EDIT_CAPACITY", "ITEM_EDIT"))
     ) {
         throw new APIError("Not allowed", body, 403);
     }
 
-    if (!(await activityService.updateActivitySlot(slotId, {[field]: value}))) {
+    const staged: Partial<ActivitySlot> = {};
+    if (body.startTime !== undefined) staged.startTime = body.startTime || null;
+    if (body.endTime !== undefined) staged.endTime = body.endTime || null;
+    if (body.title !== undefined) staged.title = body.title;
+    if (body.description !== undefined) staged.description = body.description || null;
+    if (body.maxAssignees !== undefined) staged.maxAssignees = Number(body.maxAssignees) || null;
+
+    if (!(await activityService.updateActivitySlot(slotId, staged))) {
         throw new APIError('Unknown error while saving', body, 500);
     }
     return 'Slot updated';
@@ -812,6 +819,22 @@ async function addSlotRole(slotId: string, body: any) {
     return 'Roles added';
 }
 
+async function addActivityRole(plan: ActivityPlan, body: any) {
+    const {name, description, isDefault} = body;
+    if (!name) throw new APIError('Missing name', body, 400);
+    return activityService.ensureRoleId(plan.id, name, isDefault === 'on', description);
+}
+
+async function updateRoleAssignments(slotId: string, body: any) {
+    const {assignments} = body
+    if (!Array.isArray(assignments)) throw new APIError('Not an array', body, 400);
+    const parsed: { assignmentId: number | null, role: string }[] = assignments.map(v => {
+        v.assignmentId = v.assignmentId !== null ? Number.parseInt(v.assignmentId) || null : null;
+        return v
+    });
+    await activityService.updateRoleAssignments(slotId, parsed);
+    return "Assignments updated";
+}
 
 function getAssignmentAccessMapping() {
     return {
@@ -855,6 +878,8 @@ export default {
     applyRecommendations,
     deleteSlot,
     addSlotRole,
+    addActivityRole,
+    updateRoleAssignments,
 
     getAssignmentWarnings,
     getAssignmentAccessMapping,

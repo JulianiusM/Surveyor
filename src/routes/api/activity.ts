@@ -47,6 +47,11 @@ app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), asyn
     renderer.respondWithSuccessJson(res, msg);
 })
 
+app.post('/:id/roles', requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS), async (req: Request, res: Response) => {
+    const roles = await controller.addActivityRole(resFct(req), req.body);
+    renderer.respondWithSuccessDataJson(res, "Role(s) added", roles);
+})
+
 app.post(
     '/:id/slot/:slotId/warnings',
     asyncHandler(async (req: Request, res: Response) => {
@@ -111,7 +116,11 @@ app.post(
     requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
     asyncHandler(async (req: Request, res: Response) => {
         const data = await controller.applyRecommendations(resFct(req).id);
-        renderer.respondWithSuccessDataJson(res, data.message, data.skipped !== undefined ? {applied: data.applied, skipped: data.skipped, warnings: data.warnings} : {applied: data.applied, warnings: data.warnings});
+        renderer.respondWithSuccessDataJson(res, data.message, data.skipped !== undefined ? {
+            applied: data.applied,
+            skipped: data.skipped,
+            warnings: data.warnings
+        } : {applied: data.applied, warnings: data.warnings});
     })
 );
 
@@ -143,7 +152,7 @@ app.post('/:id/slot/:slotId/description', requireItemPermissionApi(permFctItems,
 
 /* ---------- PATCH einzelnes Attribut -------------------------------- */
 app.post('/:id/slot/:slotId/attr', requireItemPermissionApi(permFctItems, PERM.EDIT_META, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.updateSlotAttr(req.params.slotId, req.body);
+    const msg = await controller.updateSlotAttr(req.params.slotId, req.body, res.locals.permData);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
@@ -165,6 +174,11 @@ app.post('/:id/slot/:slotId/delete', requireItemPermissionApi(permFctItems, PERM
 
 app.post('/:id/slot/:slotId/addRole', requireItemPermissionApi(permFctItems, PERM.EDIT_META, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.addSlotRole(req.params.slotId, req.body);
+    renderer.respondWithSuccessJson(res, msg);
+}));
+
+app.post('/:id/slot/:slotId/roles/admin', requireItemPermissionApi(permFctItems, PERM.MANAGE_ASSIGNMENTS, PERM.MANAGE_ASSIGNMENTS), asyncHandler(async (req: Request, res: Response) => {
+    const msg = await controller.updateRoleAssignments(req.params.slotId, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 

@@ -23,7 +23,8 @@ declare global {
             rawPermissions?: string;
             permissions?: PermBundle;
 
-            allRoles?: string;
+            allRoles?: RoleSummary[];
+            slotRoles?: string;
         };
 
         // Bootstrap types

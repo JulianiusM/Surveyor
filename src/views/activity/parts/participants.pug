@@ -1,0 +1,58 @@
+if data.participantList && data.participantList.length > 0
+    .d-flex.flex-wrap.justify-content-between.align-items-center.mb-3
+        h4.mb-2.mb-sm-0 Participants
+        .d-flex.flex-wrap.gap-2.align-items-center
+            .input-group.input-group-sm
+                span.input-group-text
+                    i.bi.bi-search
+                input#participant-search.form-control.form-control-sm.text-bg-dark(
+                    type="search"
+                    placeholder="Search participant…"
+                    autocomplete="off")
+            .btn-group.btn-group-sm(role="group" aria-label="Participant filters")
+                button.btn.btn-outline-light.active(
+                    type="button"
+                    data-participant-filter="all") All
+                button.btn.btn-outline-light(
+                    type="button"
+                    data-participant-filter="assigned") With assignments
+                button.btn.btn-outline-light(
+                    type="button"
+                    data-participant-filter="unassigned") Without assignments
+
+    .table-responsive
+        if data.participantList && data.participantList.length > 0
+            table.table.table-dark.table-bordered.mb-0#participant-table
+                thead
+                    tr
+                        th.text-start Name
+                        th.text-center Status
+                        th.text-center # Assigned
+                        th.text-start Roles
+                tbody
+                    for part in data.participantList
+                        -
+                            const participantKey = (part.participantKey || part.id || '');
+                        tr(
+                            data-participant-row
+                            data-participant-name=part.name
+                            data-participant-key=participantKey
+                            data-participant-assigned=(part.count > 0 ? '1' : '0'))
+                            td
+                                span.fw-semibold #{part.name}
+                            td.text-center
+                                if part.count > 0
+                                    span.badge.bg-success-subtle.text-success-emphasis Assigned
+                                else
+                                    span.badge.bg-secondary-subtle.text-secondary-emphasis Not assigned
+                            td.text-center
+                                | #{part.count}
+                            td
+                                if part.roles && part.roles.length
+                                    each role in part.roles
+                                        if role !== 'default'
+                                            span.badge.bg-info-subtle.text-info-emphasis.me-1.mb-1= role
+                                else
+                                    span.text-secondary.small No roles
+else
+    p.text-secondary.small.mb-0 No participants yet.

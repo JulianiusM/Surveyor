@@ -11,7 +11,7 @@ export function setCurrentNavLocation(): void {
     const path = window.location.pathname;
 
     // Remove any existing active classes from all navigation elements
-    document.querySelectorAll('.nav-link, .dropdown-item').forEach(link => link.classList.remove('active'));
+    //document.querySelectorAll('.nav-link, .dropdown-item').forEach(link => link.classList.remove('active'));
 
     // Set corresponding nav items active based on current path
     if (path.includes("/survey")) {
@@ -70,10 +70,10 @@ export function initEntityLists(
         const list = sec.querySelector(listSelector);
         const count = sec.querySelector(countSelector);
         if (!input || !list || !count) return;
-        
+
         const items = Array.from(list.querySelectorAll(itemSelector));
         const total = items.length;
-        
+
         const update = () => {
             const q = (input.value || '').trim().toLowerCase();
             let visible = 0;
@@ -85,7 +85,7 @@ export function initEntityLists(
             });
             count.textContent = `${visible}/${total}`;
         };
-        
+
         // mark section for script
         sec.setAttribute('data-filter', 'section');
         input.addEventListener('input', update);

@@ -9,7 +9,6 @@ import {showInlineAlert} from './shared/alerts';
 import {startInlineEdit, startInlineEditArea} from './shared/inline-edit';
 import {initCardReorder} from './shared/drag-drop';
 import {initAssignmentRemoval} from './shared/list-actions';
-import {getSelectValues} from './core/form-utils';
 import {reloadAfterDelay} from './shared/ui-helpers';
 import {loadPerms, requireEntityPerm, requireItemPerm} from './core/permissions';
 
@@ -29,6 +28,9 @@ interface RoleSummary {
     name: string;
     description?: string | null;
 }
+
+
+type SlotEditorMode = 'create' | 'edit';
 
 type WarningType =
     | "outside_attendance"
@@ -112,6 +114,8 @@ interface RecommendationParticipantOption {
     departureDate?: string | null;
 }
 
+type SlotRolesMap = Record<string, RoleSummary[]>;
+
 function formatTimeLabel(time?: string | null): string {
     if (!time) return "";
     return time.slice(0, 5);
@@ -172,6 +176,23 @@ function formatDateLabel(date?: string | null): string {
 
 function getAllRoles(): RoleSummary[] {
     return (window.Surveyor?.allRoles || []) as RoleSummary[];
+}
+
+function getSlotRolesForSlot(slotId: string): RoleSummary[] {
+    const map = (window.Surveyor?.slotRoles || {}) as SlotRolesMap;
+    return map[slotId] || [];
+}
+
+function addRoleToGlobal(role: RoleSummary): void {
+    const list = getAllRoles();
+    if (!list.some((r) => r.id === role.id)) {
+        list.push(role);
+    }
+    // keep window.Surveyor in sync
+    if (!window.Surveyor) {
+        window.Surveyor = {} as any;
+    }
+    window.Surveyor.allRoles = list;
 }
 
 function toDateTimeLocalValue(date?: string | Date | null): string {
@@ -302,76 +323,34 @@ function initAssign(warningModal: WarningModal): void {
 }
 
 /**
- * Initialize select2 for role selection
- */
-function initSelectBox(): void {
-    const planId = getActivityPlanId();
-
-    $('.multiSelect').select2({
-        placeholder: 'Add Roles',
-        width: '100%',
-        //@ts-ignore
-        selectionCssClass: 'text-bg-dark',
-        dropdownCssClass: 'text-bg-dark',
-    });
-
-    document.addEventListener('click', async (e: Event) => {
-        const btn = (e.target as Element | null)?.closest('[data-addRoles]');
-        if (!btn) return;
-
-        const div = btn.closest('.role-assignment');
-        if (!div) return;
-
-        const sel = div.querySelector('select');
-        if (!sel) return;
-
-        const slot = sel.dataset.id;
-        const vals = getSelectValues(sel);
-
-        try {
-            requireItemPerm(slot || '', 'EDIT_META', 'manage slot roles', 'ITEM_EDIT');
-            await post(`/api/activity/${planId}/slot/${slot}/addRole`, {roles: vals});
-            showInlineAlert('success', 'Updated');
-            reloadAfterDelay(120);
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Unable to update roles for this slot.';
-            showInlineAlert('error', message);
-        }
-    });
-}
-
-/**
  * Initialize inline editing for slots and plan description
+ * (double-click on editable fields only; pencil uses the modal)
  */
 function initInlineEdit(): void {
     const planId = getActivityPlanId();
 
     document.addEventListener('dblclick', (e: Event) => {
-        const target = e.target as Element;
+        const target = e.target as Element | null;
         if (!target) return;
 
+        // Plan description
         const desc = target.closest<HTMLElement>('[data-edit="planDescription"]');
-        if (desc) return startInlineEditArea(desc, `/api/activity/${planId}/description`, {
-            scope: 'entity',
-            key: 'EDIT_DESC',
-            action: 'edit activity descriptions'
-        });
+        if (desc) {
+            return startInlineEditArea(desc, `/api/activity/${planId}/description`, {
+                scope: 'entity',
+                key: 'EDIT_DESC',
+                action: 'edit activity descriptions',
+            });
+        }
 
-        const card = target.closest('.slot');
-        if (!card || target.closest('button')) return;
+        // For slots: allow double-click only on actual editable elements
+        const editable = target.closest<HTMLElement>('.slot [data-edit]');
+        if (!editable) return;
 
-        /* choose editable span */
-        let span = target.closest<HTMLElement>('[data-edit]');
+        // Ignore double-click on buttons
+        if (target.closest('button')) return;
 
-        if (!span && target.closest('.badge'))
-            span = card.querySelector('[data-edit="maxAssignees"]');
-
-        if (!span && target.closest('small'))
-            span = card.querySelector('[data-edit="description"]');
-        if (!span)
-            span = card.querySelector('[data-edit="title"]');
-
-        if (span) startInlineEdit(span, `/api/activity/${planId}/slot`);
+        startInlineEdit(editable, `/api/activity/${planId}/slot`);
     });
 }
 
@@ -403,86 +382,664 @@ function initDelete(): void {
 }
 
 /**
- * Initialize add slot functionality
+ * Legacy hook for slot creation – actual behaviour is now in initSlotEditorModal.
+ * Kept as a no-op for backwards compatibility.
  */
 function initAddSlot(): void {
+    // intentionally empty – slot creation is handled via the slot editor modal
+}
+
+/**
+ * Initialize the slot editor modal (used for both create and edit).
+ * - Pencil button ([data-slot-edit]) opens in "edit" mode
+ * - "+ Slot" button ([data-add-slot]) opens in "create" mode
+ * - Roles are edited via a chips + search/create UI and saved only on submit
+ */
+function initSlotEditorModal(): void {
     const planId = getActivityPlanId();
+    if (!planId) return;
 
-    document.addEventListener('click', (e: Event) => {
-        const btn: HTMLButtonElement | undefined | null = (e.target as HTMLButtonElement | null)?.closest('[data-add-slot]');
-        if (!btn) return;
+    const modalEl = document.getElementById('slotEditorModal') as HTMLElement | null;
+    const form = document.getElementById('slotEditorForm') as HTMLFormElement | null;
+    const titleEl = document.getElementById('slotEditorTitle') as HTMLElement | null;
+    const slotIdInput = document.getElementById('slotEditorSlotId') as HTMLInputElement | null;
+    const dateInput = document.getElementById('slotEditorDate') as HTMLInputElement | null;
+    const titleInput = document.getElementById('slotEditorTitleInput') as HTMLInputElement | null;
+    const descInput = document.getElementById('slotEditorDescription') as HTMLTextAreaElement | null;
+    const startInput = document.getElementById('slotEditorStartTime') as HTMLInputElement | null;
+    const endInput = document.getElementById('slotEditorEndTime') as HTMLInputElement | null;
+    const capacityInput = document.getElementById('slotEditorCapacity') as HTMLInputElement | null;
+    const metaSpan = document.getElementById('slotEditorMeta') as HTMLElement | null;
+    const errorSpan = document.getElementById('slotEditorError') as HTMLElement | null;
 
-        // hide button, replace by small inline form
-        const dateISO = btn.dataset.date;
-        const cell = btn.parentElement;
-        if (!cell) return;
-        btn.remove();
+    const roleChips = document.getElementById('slotEditorRoleChips') as HTMLElement | null;
+    const roleInput = document.getElementById('slotEditorRoleInput') as HTMLInputElement | null;
+    const roleSuggestions = document.getElementById('slotEditorRoleSuggestions') as HTMLElement | null;
 
-        const wrap = document.createElement('div');
-        wrap.className = 'd-grid gap-1';
+    if (
+        !modalEl ||
+        !form ||
+        !slotIdInput ||
+        !dateInput ||
+        !titleInput ||
+        !startInput ||
+        !endInput ||
+        !capacityInput
+    ) {
+        return;
+    }
 
-        const title = document.createElement('input');
-        title.className = 'form-control form-control-sm text-bg-dark';
-        title.placeholder = 'Title';
-        title.required = true;
+    const modal = new bootstrap.Modal(modalEl, {focus: true});
+    let mode: SlotEditorMode = 'create';
+    let selectedRoleIds = new Set<number>();
 
-        const desc = document.createElement('input');
-        desc.className = 'form-control form-control-sm text-bg-dark';
-        desc.placeholder = 'Description';
+    const setError = (message?: string) => {
+        if (!errorSpan) return;
+        if (!message) {
+            errorSpan.textContent = '';
+            errorSpan.classList.add('d-none');
+        } else {
+            errorSpan.textContent = message;
+            errorSpan.classList.remove('d-none');
+        }
+    };
 
-        const startTime = document.createElement('input');
-        startTime.type = 'time';
-        startTime.className = 'form-control form-control-sm text-bg-dark';
-        startTime.placeholder = 'Start';
+    const toTimeInputValue = (dbTime?: string | null): string => {
+        if (!dbTime) return '';
+        const parts = dbTime.split(':');
+        if (parts.length >= 2) {
+            const hh = parts[0].padStart(2, '0');
+            const mm = parts[1].padStart(2, '0');
+            return `${hh}:${mm}`;
+        }
+        return '';
+    };
 
-        const endTime = document.createElement('input');
-        endTime.type = 'time';
-        endTime.className = 'form-control form-control-sm text-bg-dark';
-        endTime.placeholder = 'End';
+    const toDbTime = (value?: string | null): string | null => {
+        if (!value) return null;
+        // HTML time input returns "HH:MM"
+        return `${value}:00`;
+    };
 
-        const max = document.createElement('input');
-        max.type = 'number';
-        max.min = '1';
-        max.value = '1';
-        max.className = 'form-control form-control-sm text-bg-dark';
+    const setSelectedRoles = (ids: number[]) => {
+        selectedRoleIds = new Set(ids);
+        renderRoleChips();
+        updateRoleSuggestions();
+    };
 
-        const save = document.createElement('button');
-        save.className = 'btn btn-sm btn-success mt-1';
-        save.textContent = 'Add';
+    const renderRoleChips = () => {
+        if (!roleChips) return;
 
-        const cancel = document.createElement('button');
-        cancel.type = 'button';
-        cancel.className = 'btn btn-sm btn-outline-secondary mt-1';
-        cancel.textContent = '×';
+        roleChips.innerHTML = '';
+        if (selectedRoleIds.size === 0) {
+            const span = document.createElement('span');
+            span.className = 'text-secondary small';
+            span.textContent = 'No roles assigned yet.';
+            roleChips.appendChild(span);
+            return;
+        }
 
-        wrap.append(title, desc, startTime, endTime, max, save, cancel);
-        cell.appendChild(wrap);
+        const allRoles = getAllRoles();
+        const frag = document.createDocumentFragment();
 
-        cancel.onclick = () => {
-            wrap.remove();
-            cell.appendChild(btn);
-        };
+        selectedRoleIds.forEach((id) => {
+            const role = allRoles.find((r) => r.id === id);
+            const label = role?.name ?? `Role #${id}`;
 
-        save.onclick = async () => {
-            try {
+            const badge = document.createElement('span');
+            badge.className =
+                'badge text-bg-secondary me-1 mb-1 d-inline-flex align-items-center gap-1';
+
+            const textSpan = document.createElement('span');
+            textSpan.textContent = label;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn btn-sm btn-outline-light px-1 py-0';
+            removeBtn.dataset.roleChipRemove = '1';
+            removeBtn.dataset.roleId = String(id);
+            removeBtn.title = 'Remove role from this slot';
+            removeBtn.innerHTML = '<i class="bi bi-x"></i>';
+
+            badge.append(textSpan, removeBtn);
+            frag.appendChild(badge);
+        });
+
+        roleChips.appendChild(frag);
+    };
+
+    const clearRoleInput = () => {
+        if (roleInput) {
+            roleInput.value = '';
+        }
+    };
+
+    const hideRoleSuggestions = () => {
+        if (!roleSuggestions) return;
+        roleSuggestions.innerHTML = '';
+        roleSuggestions.classList.add('d-none');
+    };
+
+    const updateRoleSuggestions = () => {
+        if (!roleInput || !roleSuggestions) return;
+
+        const termRaw = roleInput.value || '';
+        const term = termRaw.trim();
+        roleSuggestions.innerHTML = '';
+
+        // If no search term, don't show anything – but DO NOT hide on blur, only when empty.
+        if (!term) {
+            roleSuggestions.classList.add('d-none');
+            return;
+        }
+
+        const allRoles = getAllRoles();
+        const lower = term.toLowerCase();
+
+        const available = allRoles.filter(
+            (r) =>
+                !selectedRoleIds.has(r.id) &&
+                (r.name.toLowerCase().includes(lower) ||
+                    (r.description ?? '').toLowerCase().includes(lower)),
+        );
+
+        const frag = document.createDocumentFragment();
+
+        if (available.length > 0) {
+            available.slice(0, 10).forEach((role) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className =
+                    'list-group-item list-group-item-action d-flex align-items-center justify-content-between text-bg-dark';
+                btn.dataset.roleId = String(role.id);
+
+                const labelSpan = document.createElement('span');
+                labelSpan.textContent = `Add role "${role.name}" to this slot`;
+
+                const icon = document.createElement('i');
+                icon.className = 'bi bi-plus-circle';
+
+                btn.append(labelSpan, icon);
+                frag.appendChild(btn);
+            });
+        } else {
+            // No existing roles match – suggest creating a new one
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className =
+                'list-group-item list-group-item-action d-flex align-items-center justify-content-between text-bg-dark';
+            btn.dataset.createRole = '1';
+
+            const labelSpan = document.createElement('span');
+            labelSpan.textContent = `Create new role "${term}"`;
+
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-magic';
+
+            btn.append(labelSpan, icon);
+            frag.appendChild(btn);
+        }
+
+        roleSuggestions.appendChild(frag);
+        roleSuggestions.classList.remove('d-none');
+    };
+
+    const openCreate = (dateISO: string) => {
+        mode = 'create';
+        slotIdInput.value = '';
+        dateInput.value = dateISO;
+        titleInput.value = '';
+        if (descInput) descInput.value = '';
+        startInput.value = '';
+        endInput.value = '';
+        capacityInput.value = '1';
+        setSelectedRoles([]);
+
+        setError();
+
+        if (titleEl) titleEl.textContent = 'Create slot';
+        if (metaSpan) metaSpan.textContent = `Day: ${dateISO}`;
+
+        clearRoleInput();
+        hideRoleSuggestions();
+
+        modal.show();
+        titleInput.focus();
+    };
+
+    const openEdit = (slotEl: HTMLElement) => {
+        mode = 'edit';
+
+        const slotId = slotEl.dataset.slotid;
+        const date = slotEl.closest<HTMLElement>('.slot-container')?.dataset.date || '';
+        if (!slotId || !date) return;
+
+        slotIdInput.value = slotId;
+        dateInput.value = date;
+
+        const titleSpan = slotEl.querySelector<HTMLElement>('[data-edit="title"]');
+        const descSpan = slotEl.querySelector<HTMLElement>('[data-edit="description"]');
+        const maxSpan = slotEl.querySelector<HTMLElement>('[data-edit="maxAssignees"]');
+
+        titleInput.value = titleSpan?.textContent?.trim() || '';
+        if (descInput) descInput.value = descSpan?.textContent?.trim() || '';
+
+        const startRaw = slotEl.dataset.start || '';
+        const endRaw = slotEl.dataset.end || '';
+        startInput.value = toTimeInputValue(startRaw);
+        endInput.value = toTimeInputValue(endRaw);
+        capacityInput.value = maxSpan?.textContent?.trim() || '1';
+
+        // Load current roles from window.Surveyor.slotRoles
+        const currentRoles = getSlotRolesForSlot(slotId);
+        setSelectedRoles(currentRoles.map((r) => r.id));
+
+        setError();
+
+        if (titleEl) titleEl.textContent = 'Edit slot';
+        if (metaSpan) {
+            const parts: string[] = [];
+            if (startInput.value) parts.push(startInput.value);
+            if (endInput.value) parts.push(endInput.value);
+            const range = parts.length ? ` (${parts.join(' – ')})` : '';
+            metaSpan.textContent = `Day: ${date}${range}`;
+        }
+
+        clearRoleInput();
+        hideRoleSuggestions();
+
+        modal.show();
+        titleInput.focus();
+    };
+
+    const createRoleOnServer = async (name: string): Promise<RoleSummary> => {
+        const trimmed = name.trim();
+        if (!trimmed) {
+            throw new Error('Role name must not be empty.');
+        }
+
+        // if it already exists, just return existing
+        const existing = getAllRoles().find(
+            (r) => r.name.toLowerCase() === trimmed.toLowerCase(),
+        );
+        if (existing) return existing;
+
+        requireEntityPerm('EDIT_META', 'create roles for this plan');
+
+        const res = await post(`/api/activity/${planId}/roles`, {
+            name: trimmed,
+        });
+
+        const role: RoleSummary | undefined = res?.data?.role;
+        if (!role || typeof role.id !== 'number') {
+            throw new Error('Server did not return the created role.');
+        }
+
+        addRoleToGlobal(role);
+        return role;
+    };
+
+    form.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        setError();
+
+        const titleValue = titleInput.value.trim();
+        if (!titleValue) {
+            setError('Title is required.');
+            titleInput.focus();
+            return;
+        }
+
+        const startVal = toDbTime(startInput.value);
+        const endVal = toDbTime(endInput.value);
+        const roleIds = Array.from(selectedRoleIds);
+
+        try {
+            if (mode === 'create') {
                 requireEntityPerm('ITEM_ADD', 'add slots');
-                const startVal = startTime.value ? `${startTime.value}:00` : null;
-                const endVal = endTime.value ? `${endTime.value}:00` : null;
                 await post(`/api/activity/${planId}/slot/add`, {
-                    date: dateISO,
-                    title: title.value.trim(),
-                    description: desc.value.trim(),
+                    date: dateInput.value,
+                    title: titleValue,
+                    description: descInput?.value?.trim() || '',
                     startTime: startVal,
                     endTime: endVal,
-                    maxAssignees: max.value,
+                    maxAssignees: capacityInput.value,
+                    roles: roleIds,
                 });
-                showInlineAlert('success', 'Added');
-                reloadAfterDelay(100);
-            } catch (err) {
-                const message = err instanceof Error ? err.message : 'Unable to add the slot.';
-                showInlineAlert('error', message);
+                showInlineAlert('success', 'Slot created');
+            } else {
+                const slotId = slotIdInput.value;
+                requireItemPerm(slotId, 'ITEM_EDIT', 'edit slots', 'ITEM_EDIT');
+                await post(`/api/activity/${planId}/slot/${slotId}/attr`, {
+                    title: titleValue,
+                    description: descInput?.value?.trim() || '',
+                    startTime: startVal,
+                    endTime: endVal,
+                    maxAssignees: capacityInput.value,
+                    roles: roleIds,
+                });
+                showInlineAlert('success', 'Slot updated');
             }
-        };
+
+            modal.hide();
+            reloadAfterDelay(150);
+        } catch (err) {
+            const message =
+                err instanceof Error ? err.message : 'Failed to save slot.';
+            setError(message);
+        }
+    });
+
+    if (roleChips) {
+        roleChips.addEventListener('click', (ev) => {
+            const btn = (ev.target as HTMLElement | null)?.closest<HTMLButtonElement>(
+                '[data-role-chip-remove]',
+            );
+            if (!btn) return;
+            const id = Number(btn.dataset.roleId || '');
+            if (!id) return;
+            selectedRoleIds.delete(id);
+            renderRoleChips();
+            updateRoleSuggestions();
+        });
+    }
+
+    if (roleInput) {
+        roleInput.addEventListener('input', () => {
+            setError();
+            updateRoleSuggestions();
+        });
+
+        roleInput.addEventListener('keydown', async (ev: KeyboardEvent) => {
+            if (ev.key === 'Enter') {
+                ev.preventDefault();
+                if (!roleSuggestions || !roleSuggestions.firstElementChild) {
+                    return;
+                }
+                const btn = roleSuggestions
+                    .firstElementChild as HTMLButtonElement | null;
+                if (!btn) return;
+
+                if (btn.dataset.roleId) {
+                    const id = Number(btn.dataset.roleId);
+                    if (id && !selectedRoleIds.has(id)) {
+                        selectedRoleIds.add(id);
+                        renderRoleChips();
+                    }
+                    clearRoleInput();
+                    hideRoleSuggestions(); // explicit choice
+                } else if (btn.dataset.createRole) {
+                    try {
+                        const role = await createRoleOnServer(roleInput.value);
+                        selectedRoleIds.add(role.id);
+                        renderRoleChips();
+                        clearRoleInput();
+                        hideRoleSuggestions();
+                    } catch (err) {
+                        const message =
+                            err instanceof Error
+                                ? err.message
+                                : 'Unable to create role.';
+                        setError(message);
+                    }
+                }
+            } else if (ev.key === 'Escape') {
+                // ESC clears search + suggestions, but does NOT close the modal
+                clearRoleInput();
+                hideRoleSuggestions();
+            }
+        });
+    }
+
+    if (roleSuggestions) {
+        roleSuggestions.addEventListener('click', async (ev) => {
+            const btn = (ev.target as HTMLElement | null)?.closest<HTMLButtonElement>(
+                'button',
+            );
+            if (!btn) return;
+
+            if (btn.dataset.roleId) {
+                const id = Number(btn.dataset.roleId);
+                if (id && !selectedRoleIds.has(id)) {
+                    selectedRoleIds.add(id);
+                    renderRoleChips();
+                }
+                clearRoleInput();
+                hideRoleSuggestions();
+            } else if (btn.dataset.createRole) {
+                try {
+                    const role = await createRoleOnServer(roleInput?.value || '');
+                    selectedRoleIds.add(role.id);
+                    renderRoleChips();
+                    clearRoleInput();
+                    hideRoleSuggestions();
+                } catch (err) {
+                    const message =
+                        err instanceof Error
+                            ? err.message
+                            : 'Unable to create role.';
+                    setError(message);
+                }
+            }
+        });
+    }
+
+    // IMPORTANT: we DO NOT hide suggestions when the input loses focus.
+    // No click-outside handler here on purpose – suggestions remain usable
+    // while the modal is open, until the user clears the input or selects something.
+
+    // Open in "create" mode from +Slot buttons
+    document.addEventListener('click', (ev) => {
+        const btn = (ev.target as HTMLElement | null)?.closest<HTMLElement>(
+            '[data-add-slot]',
+        );
+        if (!btn) return;
+
+        const date = btn.dataset.date;
+        if (!date) return;
+        openCreate(date);
+    });
+
+    // Open in "edit" mode from pencil buttons on slots
+    document.addEventListener('click', (ev) => {
+        const btn = (ev.target as HTMLElement | null)?.closest<HTMLElement>(
+            '[data-slot-edit]',
+        );
+        if (!btn) return;
+
+        const slot = btn.closest<HTMLElement>('.slot');
+        if (!slot) return;
+
+        openEdit(slot);
+    });
+}
+
+function initSlotRoleAdminModal(): void {
+    const planId = getActivityPlanId();
+    if (!planId) return;
+
+    const modalEl = document.getElementById('slotRoleAdminModal') as HTMLElement | null;
+    const bodyEl = document.getElementById('slotRoleAdminBody') as HTMLElement | null;
+    const titleEl = document.getElementById('slotRoleAdminTitle') as HTMLElement | null;
+    const slotIdInput = document.getElementById('slotRoleAdminSlotId') as HTMLInputElement | null;
+    const errorEl = document.getElementById('slotRoleAdminError') as HTMLElement | null;
+    const saveBtn = document.getElementById('slotRoleAdminSave') as HTMLButtonElement | null;
+
+    if (!modalEl || !bodyEl || !slotIdInput || !saveBtn) return;
+
+    const modal: BootstrapModal | null =
+        typeof bootstrap !== 'undefined'
+            ? new bootstrap.Modal(modalEl, {focus: true})
+            : null;
+
+    let currentSlotId: string | null = null;
+
+    interface SlotParticipant {
+        id: string;
+        name: string;
+    }
+
+    interface SlotRoleRow {
+        roleName: string;
+        roleLabel: string;
+        assignmentId: string | null;
+    }
+
+    const setError = (message?: string) => {
+        if (!errorEl) return;
+        if (!message) {
+            errorEl.textContent = '';
+            errorEl.classList.add('d-none');
+        } else {
+            errorEl.textContent = message;
+            errorEl.classList.remove('d-none');
+        }
+    };
+
+    const collectParticipants = (slotEl: HTMLElement): SlotParticipant[] => {
+        const result: SlotParticipant[] = [];
+        const lis = slotEl.querySelectorAll<HTMLLIElement>('ul.list-unstyled li');
+        lis.forEach((li) => {
+            const btn = li.querySelector<HTMLElement>('[data-assignid]');
+            const nameSpan = li.querySelector<HTMLElement>('span.flex-grow-1');
+            const id = btn?.dataset.assignid || '';
+            const name = nameSpan?.textContent?.trim() || '';
+            if (!id || !name) return;
+            result.push({id, name});
+        });
+        return result;
+    };
+
+    const collectRoles = (slotEl: HTMLElement): SlotRoleRow[] => {
+        const rows: SlotRoleRow[] = [];
+        const roleEls = slotEl.querySelectorAll<HTMLElement>('.role-assignment[data-role-name]');
+        roleEls.forEach((el) => {
+            const roleName = el.dataset.roleName;
+            if (!roleName) return;
+            const roleLabel = el.dataset.roleLabel || roleName;
+            const assignmentId = el.dataset.assignmentId || null;
+            rows.push({roleName, roleLabel, assignmentId});
+        });
+        return rows;
+    };
+
+    const renderTable = (participants: SlotParticipant[], roles: SlotRoleRow[]) => {
+        bodyEl.innerHTML = '';
+
+        if (!roles.length) {
+            const tr = document.createElement('tr');
+            tr.dataset.emptyState = '1';
+
+            const td = document.createElement('td');
+            td.colSpan = 2;
+            td.className = 'text-center text-secondary pt-3';
+            td.textContent = 'No roles for this slot.';
+
+            tr.appendChild(td);
+            bodyEl.appendChild(tr);
+            saveBtn.disabled = true;
+            return;
+        }
+
+        saveBtn.disabled = false;
+
+        roles.forEach((role) => {
+            const tr = document.createElement('tr');
+            tr.dataset.roleName = role.roleName;
+
+            const tdRole = document.createElement('td');
+            tdRole.className = 'align-middle';
+            tdRole.textContent = role.roleLabel;
+
+            const tdParticipant = document.createElement('td');
+            const select = document.createElement('select');
+            select.className = 'form-select form-select-sm text-bg-dark';
+            select.dataset.slotRoleAdminSelect = '1';
+            select.dataset.roleName = role.roleName;
+
+            const optNone = document.createElement('option');
+            optNone.value = '';
+            optNone.textContent = '-- None --';
+            select.appendChild(optNone);
+
+            participants.forEach((p) => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.name;
+                if (role.assignmentId && role.assignmentId === p.id) {
+                    opt.selected = true;
+                }
+                select.appendChild(opt);
+            });
+
+            tdParticipant.appendChild(select);
+            tr.append(tdRole, tdParticipant);
+            bodyEl.appendChild(tr);
+        });
+    };
+
+    document.addEventListener('click', (e: Event) => {
+        const target = e.target as Element | null;
+        if (!target) return;
+
+        const btn = target.closest<HTMLElement>('[data-slot-role-admin]');
+        if (!btn) return;
+
+        const slotId = btn.dataset.slotid;
+        if (!slotId) return;
+
+        const slotEl = document.querySelector<HTMLElement>(`.slot[data-slotid="${slotId}"]`);
+        if (!slotEl) return;
+
+        currentSlotId = slotId;
+        slotIdInput.value = slotId;
+        setError();
+
+        const title = describeSlot(slotId);
+        if (titleEl) {
+            titleEl.textContent = `Manage role assignments – ${title}`;
+        }
+
+        const participants = collectParticipants(slotEl);
+        const roles = collectRoles(slotEl);
+
+        renderTable(participants, roles);
+        modal?.show();
+    });
+
+    saveBtn.addEventListener('click', async () => {
+        if (!currentSlotId) return;
+        setError();
+
+        const selects = bodyEl.querySelectorAll<HTMLSelectElement>(
+            'select[data-slot-role-admin-select]',
+        );
+        const assignments: { role: string; assignmentId: string | null }[] = [];
+
+        selects.forEach((select) => {
+            const roleName = select.dataset.roleName;
+            if (!roleName) return;
+            const value = select.value || '';
+            assignments.push({
+                role: roleName,
+                assignmentId: value || null,
+            });
+        });
+
+        try {
+            requireEntityPerm('MANAGE_ASSIGNMENTS', 'manage role assignments');
+            await post(`/api/activity/${planId}/slot/${currentSlotId}/roles/admin`, {
+                assignments,
+            });
+            showInlineAlert('success', 'Role assignments updated');
+            modal?.hide();
+            reloadAfterDelay(150);
+        } catch (err) {
+            const message =
+                err instanceof Error ? err.message : 'Failed to update role assignments.';
+            setError(message);
+            showInlineAlert('error', message);
+        }
     });
 }
 
@@ -498,6 +1055,7 @@ function initRequirementPanel(): void {
     const reloadBtn = panel.querySelector<HTMLButtonElement>('[data-requirements-refresh]');
     const saveBtn = panel.querySelector<HTMLButtonElement>('[data-requirements-save]');
     const summaryBody = panel.querySelector<HTMLElement>('#requirementSummaryBody');
+    const summaryStats = panel.querySelector<HTMLElement>('#requirementSummaryStats');
     const assignmentMode = panel.querySelector<HTMLSelectElement>('#assignmentMode');
     const generalRequired = panel.querySelector<HTMLInputElement>('#requiredShifts');
     const roundingMode = panel.querySelector<HTMLSelectElement>('#roundingMode');
@@ -520,9 +1078,52 @@ function initRequirementPanel(): void {
         target.textContent = message;
     };
 
+    const updateRequirementSummaryStats = (summary: RequirementParticipantSummary[] = []) => {
+        if (!summaryStats) return;
+        summaryStats.innerHTML = '';
+
+        if (!summary.length) {
+            const span = document.createElement('span');
+            span.className = 'text-secondary';
+            span.textContent = 'No participants yet.';
+            summaryStats.append(span);
+            return;
+        }
+
+        let ok = 0;
+        let under = 0;
+        let over = 0;
+        summary.forEach((entry) => {
+            if (entry.remainingShifts > 0) {
+                under += 1;
+            } else if (entry.remainingShifts < 0) {
+                over += 1;
+            } else {
+                ok += 1;
+            }
+        });
+
+        const total = summary.length;
+
+        const pieces: { label: string; value: number; className: string }[] = [
+            {label: 'Total', value: total, className: 'badge bg-secondary-subtle text-secondary-emphasis me-1'},
+            {label: 'Satisfied', value: ok, className: 'badge bg-success-subtle text-success-emphasis me-1'},
+            {label: 'Under-assigned', value: under, className: 'badge bg-warning-subtle text-warning-emphasis me-1'},
+            {label: 'Over-assigned', value: over, className: 'badge bg-danger-subtle text-danger-emphasis me-1'},
+        ];
+
+        pieces.forEach(({label, value, className}) => {
+            const span = document.createElement('span');
+            span.className = className;
+            span.textContent = `${label}: ${value}`;
+            summaryStats.append(span);
+        });
+    };
+
     const renderRequirementSummary = (summary: RequirementParticipantSummary[] = []) => {
         if (!summaryBody) return;
         summaryBody.innerHTML = '';
+        updateRequirementSummaryStats(summary);
 
         if (!summary.length) {
             const row = document.createElement('tr');
@@ -821,7 +1422,7 @@ function initDnD(): void {
     initCardReorder({
         containerClass: 'slot-container',
         cardClass: 'slot',
-        apiUrl: `/activity/${planId}/slot/reorder`,
+        apiUrl: `/api/activity/${planId}/slot/reorder`,
         getOrderData: (container) => {
             return [...container.querySelectorAll<HTMLElement>('.slot')]
                 .map((el, i) => ({slotId: el.dataset.slotid, pos: i}));
@@ -838,6 +1439,7 @@ function initRecommendationPanel(): void {
     const autoBtn = panel?.querySelector<HTMLButtonElement>('[data-recommendations-auto]');
     const saveBtn = panel?.querySelector<HTMLButtonElement>('[data-recommendations-save]');
     const applyBtn = panel?.querySelector<HTMLButtonElement>('[data-recommendations-apply]');
+    const summaryStats = panel?.querySelector<HTMLElement>('#recommendationSummaryStats');
 
     if (!planId || !panel || !rows) return;
 
@@ -936,8 +1538,51 @@ function initRecommendationPanel(): void {
         warningCell.append(span);
     };
 
+    const updateRecommendationSummaryStats = (data: RecommendationRow[] = []) => {
+        if (!summaryStats) return;
+
+        summaryStats.innerHTML = '';
+
+        if (!data.length) {
+            const span = document.createElement('span');
+            span.className = 'text-secondary';
+            span.textContent = 'No recommendations loaded.';
+            summaryStats.append(span);
+            return;
+        }
+
+        const counts: Record<string, number> = {
+            PENDING: 0,
+            APPROVED: 0,
+            REJECTED: 0,
+            APPLIED: 0,
+        };
+
+        data.forEach((rec) => {
+            if (rec.status && counts[rec.status] !== undefined) {
+                counts[rec.status] += 1;
+            }
+        });
+
+        const pieces: { label: string; key: keyof typeof counts; className: string }[] = [
+            {label: 'Pending', key: 'PENDING', className: 'badge bg-secondary-subtle text-secondary-emphasis me-1'},
+            {label: 'Approved', key: 'APPROVED', className: 'badge bg-success-subtle text-success-emphasis me-1'},
+            {label: 'Rejected', key: 'REJECTED', className: 'badge bg-warning-subtle text-warning-emphasis me-1'},
+            {label: 'Applied', key: 'APPLIED', className: 'badge bg-info-subtle text-info-emphasis me-1'},
+        ];
+
+        pieces.forEach(({label, key, className}) => {
+            const value = counts[key];
+            const span = document.createElement('span');
+            span.className = className;
+            span.textContent = `${label}: ${value}`;
+            summaryStats.append(span);
+        });
+    };
+
     const renderRecommendations = (data: RecommendationRow[]) => {
         rows.innerHTML = '';
+        updateRecommendationSummaryStats(data);
         const warningMap = buildWarningMap();
 
         if (!data.length) {
@@ -1055,7 +1700,9 @@ function initRecommendationPanel(): void {
                 setAlert('Recommendations auto-generated after the binding deadline');
                 showInlineAlert('info', 'New recommendations were auto-generated because the binding deadline passed.');
             } else {
-                setAlert(warnings.length ? 'Warnings detected in proposed assignments' : 'Recommendations loaded');
+                setAlert(warnings.length
+                    ? 'Warnings detected in proposed assignments'
+                    : 'Recommendations loaded');
             }
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to load recommendations';
@@ -1124,6 +1771,7 @@ function initRecommendationPanel(): void {
     void loadRecommendations();
 }
 
+
 /**
  * Initialize date display formatting
  */
@@ -1148,13 +1796,122 @@ function initDates(): void {
 }
 
 /**
+ * Initialize filter buttons for the schedule (All / My / Open)
+ */
+function initSlotFilters(): void {
+    const filterButtons = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[data-slot-filter]')
+    );
+    if (!filterButtons.length) return;
+
+    type FilterMode = 'all' | 'mine' | 'open';
+
+    const applyFilter = (mode: FilterMode) => {
+        const slots = document.querySelectorAll<HTMLElement>('.slot');
+        slots.forEach((slot) => {
+            // always start visible
+            slot.classList.remove('d-none');
+
+            if (mode === 'mine') {
+                if (slot.dataset.my !== '1') {
+                    slot.classList.add('d-none');
+                }
+            } else if (mode === 'open') {
+                if (slot.dataset.open !== '1') {
+                    slot.classList.add('d-none');
+                }
+            }
+            // mode === 'all' → nothing to filter
+        });
+    };
+
+    filterButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const mode = btn.getAttribute('data-slot-filter') as FilterMode | null;
+            if (!mode) return;
+
+            // visual active state
+            filterButtons.forEach((b) => {
+                b.classList.toggle('active', b === btn);
+            });
+
+            applyFilter(mode);
+        });
+    });
+
+    // initial state
+    applyFilter('all');
+}
+
+function initParticipantsTab(): void {
+    const tab = document.getElementById('tab-participants');
+    if (!tab) return;
+
+    const searchInput = tab.querySelector<HTMLInputElement>('#participant-search');
+    const filterButtons = Array.from(
+        tab.querySelectorAll<HTMLButtonElement>('[data-participant-filter]')
+    );
+    const rows = Array.from(
+        tab.querySelectorAll<HTMLTableRowElement>('[data-participant-row]')
+    );
+
+    if (!rows.length) return;
+
+    type ParticipantFilter = 'all' | 'assigned' | 'unassigned';
+
+    let currentFilter: ParticipantFilter = 'all';
+    let currentSearch = '';
+
+    const applyFilters = () => {
+        const search = currentSearch.trim().toLowerCase();
+
+        rows.forEach((row) => {
+            const name = (row.dataset.participantName || '').toLowerCase();
+            const assigned = row.dataset.participantAssigned === '1';
+
+            let visible = true;
+
+            if (search && !name.includes(search)) {
+                visible = false;
+            }
+
+            if (currentFilter === 'assigned' && !assigned) {
+                visible = false;
+            } else if (currentFilter === 'unassigned' && assigned) {
+                visible = false;
+            }
+
+            row.classList.toggle('d-none', !visible);
+        });
+    };
+
+    searchInput?.addEventListener('input', () => {
+        currentSearch = searchInput.value || '';
+        applyFilters();
+    });
+
+    filterButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const mode = btn.getAttribute('data-participant-filter') as ParticipantFilter | null;
+            if (!mode) return;
+
+            currentFilter = mode;
+            filterButtons.forEach((b) => b.classList.toggle('active', b === btn));
+            applyFilters();
+        });
+    });
+
+    // Initial state
+    applyFilters();
+}
+
+/**
  * Initialize all activity plan functionality
  */
 export function init(): void {
     setCurrentNavLocation();
     loadPerms();
     initDates();
-    initSelectBox();
 
     const planId = getActivityPlanId();
     if (planId) {
@@ -1162,13 +1919,16 @@ export function init(): void {
         initAssign(warningModal);
         initInlineEdit();
         initDelete();
-        initAddSlot();
+        initSlotEditorModal();
         initDnD();
         initRequirementPanel();
         initRecommendationPanel();
+        initSlotFilters();
+        initParticipantsTab();
+        initSlotRoleAdminModal();
 
         initAssignmentRemoval({
-            baseUrl: `/activity/${planId}`,
+            baseUrl: `/api/activity/${planId}`,
         });
     }
 }

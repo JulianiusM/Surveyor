@@ -1,0 +1,153 @@
+h4.mb-3 Rules & auto-assign
+p.small.text-secondary.mb-4
+    | Configure requirements for this plan, review coverage per participant, and generate assignment suggestions.
+
+// Step 1 + 2: Requirements & coverage
+if permData.entity.has('MANAGE_REQUIREMENTS') && data.plan.eventId
+    .mb-3
+        span.badge.bg-light.text-dark.me-2 Step 1
+        span.fw-semibold Configure rules & defaults
+
+    .card.text-bg-dark.border.border-secondary-subtle.mb-4#requirementPanel
+        .card-header.d-flex.justify-content-between.align-items-center
+            span.d-flex.align-items-center.gap-2
+                i.bi.bi-gear-wide-connected
+                span Requirement settings
+            .d-flex.gap-2
+                button.btn.btn-sm.btn-outline-secondary(type="button" data-requirements-refresh)
+                    i.bi.bi-arrow-clockwise.me-1
+                    | Reload
+                button.btn.btn-sm.btn-success(type="button" data-requirements-save)
+                    i.bi.bi-save.me-1
+                    | Save settings
+        .card-body
+            p.text-secondary.small.mb-3
+                | Define required shifts, rounding, and optional overrides for participants.
+                |  Leave counts empty to skip enforcement; rules are optional.
+
+            form#requirementForm
+                .row.g-3
+                    .col-md-3
+                        label.form-label(for="assignmentMode") Assignment mode
+                        select#assignmentMode.form-select.form-select-sm.text-bg-dark
+                            option(value="FREE") Free
+                            option(value="REQUIRED") Required
+                    .col-md-3
+                        label.form-label(for="requiredShifts") General required shifts
+                        input#requiredShifts.form-control.form-control-sm.text-bg-dark(type="number" min="0" placeholder="e.g. 2")
+                    .col-md-3
+                        label.form-label(for="roundingMode") Rounding mode
+                        select#roundingMode.form-select.form-select-sm.text-bg-dark
+                            option(value="") None
+                            option(value="CEIL") Ceil
+                            option(value="ROUND") Round
+                            option(value="FLOOR") Floor
+                    .col-md-3
+                        label.form-label(for="bindingDeadline") Binding deadline
+                        input#bindingDeadline.form-control.form-control-sm.text-bg-dark(type="datetime-local" placeholder="optional")
+
+                .form-check.form-switch.my-3
+                    input#allowOverfill.form-check-input(type="checkbox" role="switch")
+                    label.form-check-label(for="allowOverfill") Allow assignments beyond slot capacity
+
+                .row.g-3
+                    .col-md-6
+                        .form-check.form-switch
+                            input#allowArrivalEvening.form-check-input(type="checkbox" role="switch")
+                            label.form-check-label(for="allowArrivalEvening") Allow arrival-day evening assignments
+                    .col-md-6
+                        .form-check.form-switch
+                            input#allowDepartureMorning.form-check-input(type="checkbox" role="switch")
+                            label.form-check-label(for="allowDepartureMorning") Allow departure-day morning assignments
+
+                hr
+                h6.d-flex.justify-content-between.align-items-center
+                    span Role requirements
+                    small.text-secondary Set per-role required shift counts
+                .row.g-2#roleRequirementList
+
+                hr
+                h6.d-flex.justify-content-between.align-items-center
+                    span Participant overrides
+                    button.btn.btn-sm.btn-outline-info(type="button" data-add-override)
+                        i.bi.bi-plus-lg.me-1
+                        | Add override
+                p.text-secondary.small.mb-2
+                    | Specify user-specific required shifts and optional roles to override the general rule.
+                .d-grid.gap-2#overrideList
+
+                hr
+                h6.d-flex.justify-content-between.align-items-center.mt-3
+                    span
+                        span.badge.bg-light.text-dark.me-2 Step 2
+                        | Check coverage
+                    small.text-secondary Remaining vs assigned per attendee
+
+                .d-flex.justify-content-between.align-items-center.mb-2
+                    small.text-secondary Overall coverage:
+                    small#requirementSummaryStats.text-secondary
+                        | No participants yet.
+
+                .table-responsive
+                    table.table.table-dark.table-bordered.mb-0
+                        thead
+                            tr
+                                th Participant
+                                th.text-center Required / Assigned
+                                th.text-center Remaining
+                                th.text-center Attendance
+                                th.text-center Source
+                        tbody#requirementSummaryBody
+                            tr(data-empty-state)
+                                td(colspan="5").text-center.text-secondary.pt-3 No participants yet.
+
+            .alert.alert-info.py-2.px-3.mt-3.d-none(role="alert" data-requirements-alert)
+                i.bi.bi-exclamation-circle.me-2
+                span
+
+// Step 3: Recommendations
+if permData.entity.has('MANAGE_ASSIGNMENTS') && data.plan.eventId
+    hr
+    .mb-3
+        span.badge.bg-light.text-dark.me-2 Step 3
+        span.fw-semibold Generate & apply suggestions
+
+    .card.text-bg-dark.border.border-secondary-subtle#recommendationPanel
+        .card-header.d-flex.justify-content-between.align-items-center
+            span.d-flex.align-items-center.gap-2
+                i.bi.bi-magic.me-1
+                span Assignment recommendations
+            .d-flex.gap-2
+                button.btn.btn-sm.btn-outline-secondary(type="button" data-recommendations-refresh)
+                    i.bi.bi-arrow-clockwise.me-1
+                    | Reload
+                button.btn.btn-sm.btn-outline-primary(type="button" data-recommendations-auto)
+                    i.bi.bi-stars.me-1
+                    | Auto-generate
+                button.btn.btn-sm.btn-success(type="button" data-recommendations-save)
+                    i.bi.bi-save.me-1
+                    | Save edits
+                button.btn.btn-sm.btn-warning(type="button" data-recommendations-apply)
+                    i.bi.bi-check2-circle.me-1
+                    | Apply approved
+        .card-body
+            .d-flex.justify-content-between.align-items-center.mb-2
+                p.text-secondary.small.mb-0
+                    | Review automatically generated or manually edited assignments.
+                    |  Apply only when you are satisfied with the suggested changes.
+                small#recommendationSummaryStats.text-secondary
+                    | No recommendations loaded.
+            .alert.alert-info.py-2.px-3.d-none(role="alert" data-recommendations-alert)
+                i.bi.bi-info-circle.me-2
+                span
+            .table-responsive
+                table.table.table-dark.table-bordered.mb-0
+                    thead
+                        tr
+                            th Slot
+                            th Participant
+                            th Status
+                            th Warnings
+                    tbody#recommendationRows
+                        tr(data-empty-state)
+                            td(colspan="4").text-center.text-secondary.pt-3 No recommendations yet.

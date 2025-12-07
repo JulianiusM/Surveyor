@@ -9,7 +9,7 @@ import {ActivitySlotRole} from "../entities/activity/ActivitySlotRole";
 import type {PlanParticipant, PlanParticipantRow, SlotAssignmentMap} from "../../../types/ActivityTypes";
 import {ensureOneByObjectsAuthed} from "../utils/relation-upsert";
 import * as entityAdminService from "./EntityAdminService";
-import {In} from "typeorm";
+import {EntityManager, In} from "typeorm";
 import {AssignmentCandidate} from "../../activity/availability";
 import {toParticipantKey} from "../../activity/requirements";
 
@@ -17,17 +17,27 @@ import {toParticipantKey} from "../../activity/requirements";
 // Role & Assignment helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function ensureRoleId(roleName = "default"): Promise<number> {
-    const repo = AppDataSource.getRepository(ActivityRole);
-    const role = await repo.findOne({where: {name: roleName}});
-    if (role) return role.id;
+export async function ensureRoleId(planId: string, roleNames: string[] | string, isDefault?: boolean, description?: string): Promise<ActivityRole[]> {
+    return await AppDataSource.transaction(async (manager) => {
+        const repo = manager.getRepository(ActivityRole);
+        if (!Array.isArray(roleNames)) {
+            roleNames = [roleNames];
+        }
+        const roles = await repo.findBy({name: In(roleNames), plan: {id: planId}});
 
-    const newRole = repo.create({
-        name: roleName,
-        isDefault: roleName === "default",
+        for (const name of roleNames) {
+            if (roles.find(val => val.name === name)) continue;
+
+            roles.push(repo.create({
+                name: name,
+                isDefault: isDefault === undefined ? name === "default" : isDefault,
+                description: description,
+                plan: {id: planId}
+            }));
+        }
+
+        return await repo.save(roles);
     });
-    const saved = await repo.save(newRole);
-    return saved.id;
 }
 
 export async function ensureAssignment(
@@ -58,19 +68,30 @@ export async function ensureAssignment(
     return entity.id;
 }
 
-export async function assignRole(assignmentId: number, roleName: string) {
-    const roleId = await ensureRoleId(roleName);
-    const repo = AppDataSource.getRepository(ActivityAssignmentRole);
+export async function assignRole(assignmentId: number, roleName: string[] | string, manager?: EntityManager) {
+    async function doAssign(manager: EntityManager): Promise<void> {
+        const repo = manager.getRepository(ActivityAssignmentRole);
+        const ass = await manager.getRepository(ActivityAssignment).findOneBy({id: assignmentId});
+        if (!ass) throw new Error("assignment not found");
 
-    const exists = await repo
-        .createQueryBuilder('aar')
-        .where('aar.assignment_id = :aid AND aar.role_id = :rid', {aid: assignmentId, rid: roleId})
-        .getExists();
+        const roles = await ensureRoleId(ass.planId, roleName);
 
-    if (!exists) {
-        const role = repo.create({assignment: {id: assignmentId}, role: {id: roleId}});
-        await repo.save(role);
+        const newRoles: ActivityAssignmentRole[] = [];
+        for (const role of roles) {
+            const exists = await repo
+                .createQueryBuilder('aar')
+                .where('aar.assignment_id = :aid AND aar.role_id = :rid', {aid: assignmentId, rid: role.id})
+                .getExists();
+
+            if (!exists) {
+                newRoles.push(repo.create({assignment: {id: assignmentId}, role: {id: role.id}}));
+            }
+        }
+        await repo.save(newRoles);
     }
+
+    if (manager) return await doAssign(manager);
+    return AppDataSource.transaction(doAssign);
 }
 
 export async function doUnassignRole(assignmentId: number, roleName: string) {
@@ -93,6 +114,38 @@ export async function doUnassignRole(assignmentId: number, roleName: string) {
 
 export async function getAllRoles(planId: string) {
     return AppDataSource.getRepository(ActivityRole).findBy({plan: {id: planId}});
+}
+
+export async function updateRoleAssignments(slotId: string, assign: {
+    assignmentId: number | null,
+    role: string
+}[]) {
+    await AppDataSource.transaction(async (manager) => {
+        const repo = manager.getRepository(ActivityAssignmentRole);
+        const assRepo = manager.getRepository(ActivityAssignment);
+
+        // 1. Get all assignments for this slot
+        const assignments = await assRepo.find({
+            where: {slot: {id: slotId}}, // relations ARE allowed in find()
+            select: ["id"],
+        });
+
+        const assignmentIds = assignments.map(a => a.id);
+        if (assignmentIds.length === 0) {
+            // nothing to delete
+            return;
+        }
+
+        // 2. Delete all roles for those assignments
+        await repo.delete({assignment: {id: In(assignmentIds)}});
+
+        for (const part of assign) {
+            if (!part.assignmentId) continue;
+            const ass = assRepo.findOneBy({id: part.assignmentId, slot: {id: slotId}});
+            if (!ass) throw new Error("Assignment not found");
+            await assignRole(part.assignmentId, part.role, manager);
+        }
+    });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -465,6 +518,7 @@ export async function getActivitySlotAssignees(planId: string): Promise<SlotAssi
         const slotId = assignment.slot.id;
 
         const name =
+            assignment.user?.name ??
             assignment.user?.username ??
             assignment.guest?.username ??
             "—";
@@ -498,7 +552,8 @@ export async function getActivityPlanParticipants(planId: string): Promise<PlanP
         .leftJoin("ar.role", "role")
         .where("aa.plan_id = :planId", {planId})
         .select([
-            `COALESCE(user.username, guest.username) AS name`,
+            `user.name AS name`,
+            `COALESCE(user.username, guest.username) AS username`,
             `COUNT(DISTINCT aa.id) AS count`,
             `GROUP_CONCAT(DISTINCT role.name ORDER BY role.name) AS roles`
         ])

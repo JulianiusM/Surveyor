@@ -1,0 +1,205 @@
+// Participant summary (only if the current user has assignments)
+if data.assignments && data.assignments.length
+    .alert.alert-info.d-flex.justify-content-between.align-items-center.mb-3#my-assignment-summary
+        span
+            i.bi.bi-person-check.me-2
+            | You are assigned to
+            span.fw-semibold.ms-1 #{data.assignments.length}
+            |  slot(s) in this plan.
+        small.text-secondary.ms-3.d-none.d-md-inline Use the filter buttons to focus on your own or open slots.
+
+// Filter toolbar
+.d-flex.flex-wrap.justify-content-between.align-items-center.mb-3#schedule-filter-bar
+    .btn-group.btn-group-sm(role="group" aria-label="Slot filters")
+        button.btn.btn-outline-light.active(
+            type="button"
+            data-slot-filter="all") All slots
+        button.btn.btn-outline-light(
+            type="button"
+            data-slot-filter="mine") My slots
+        button.btn.btn-outline-light(
+            type="button"
+            data-slot-filter="open") Open slots
+        small.text-secondary.ms-2.mt-2.mt-sm-0
+        | Filter the schedule to focus on your own assignments or unfilled slots.
+
+// Meta info / badges (moved from old "Erste Zeile: Metainfos / Badge")
+.d-flex.justify-content-between.align-items-center.mb-3
+    //- Participants badge
+    span.fs-6.fw-semibold
+        i.bi.bi-people-fill.me-1
+        | Participants:
+        span.badge.bg-light.text-dark.ms-1 #{data.counters.participants}
+
+    //- Slots and open / empty counters
+    span.fs-6.fw-semibold
+        i.bi.bi-card-checklist.me-1
+        | Slots:
+        span.badge.bg-light.text-dark.ms-1 #{data.slots.length}
+        span.badge.bg-secondary-subtle.text-secondary-emphasis.ms-1
+            i.bi.bi-box-arrow-up-right.me-1
+            | #{data.counters.open} open
+        span.badge.bg-danger-subtle.text-danger-emphasis.ms-1
+            i.bi.bi-slash-circle.me-1
+            | #{data.counters.empty} unassigned
+
+// Weekly schedule table (unchanged, just moved into the tab)
+each week in weeks
+    h4.mt-4.mb-2 Week of #{fmtISO(week)}
+    .table-responsive
+        if permData.entity.has('ITEM_EDIT')
+            small.text-info.fst-italic.fw-light Drag slots to reorder. Double-click a field or use the pencil icon to edit.
+        table.table.table-dark.table-bordered.activity-table
+            thead
+                tr
+                    - for (let i = 0; i < 7; i++) {
+                    -   const cur = new Date(week); cur.setDate(cur.getDate() + i);
+                    -   if (cur < start || cur > end) continue;
+                        th.text-center.small(data-date=fmtISO(cur))
+                            span.day #{dayNames[i]}
+                            br
+                            span.date #{fmtISO(cur)}
+                    - }
+            tbody
+                tr
+                    - for (let i = 0; i < 7; i++) {
+                    -   const cur = new Date(week); cur.setDate(cur.getDate() + i);
+                    -   if (cur < start || cur > end) continue;
+                    td
+                        // ▶ every slot now shares this parent
+                        .slot-container(data-date=fmtISO(cur))
+                            - const daySlots = (data.slots[fmtISO(cur)] || []);
+                            if daySlots.length > 0
+                                each slot, idx in daySlots
+                                    - const my = data.assignments.includes(slot.id)
+                                    - const startTime = slot.startTime ? slot.startTime.slice(0, 5) : null
+                                    - const endTime = slot.endTime ? slot.endTime.slice(0, 5) : null
+                                    - const slotRoles = (data.roles.slotRoles ? data.roles.slotRoles[slot.id] || [] : [])
+                                    - const roleIdsStr = slotRoles.length ? slotRoles.map(r => r.id).join(',') : ''
+                                    .slot.border.rounded.p-2.mb-2.d-grid.gap-1.draggable(
+                                        data-slotid=slot.id
+                                        data-day=slot.day
+                                        data-start=slot.startTime
+                                        data-end=slot.endTime
+                                        data-role-ids=roleIdsStr
+                                        data-my=my ? '1' : null
+                                        data-open=(slot.assignedCount < slot.maxAssignees ? '1' : null)
+                                        draggable=permData.entity.has('ITEM_EDIT') ? 'true' : null)
+
+                                        // ── Header: title + time + admin controls
+                                        .d-flex.justify-content-between.align-items-start.mb-0
+                                            if permData.itemAllow(slot.id, 'ITEM_EDIT', 'ITEM_EDIT')
+                                                i.bi.bi-grip-vertical.text-bg-dark.me-2(
+                                                    title="Drag to reorder")
+                                            .d-flex.flex-column.flex-grow-1.me-2
+                                                span.fw-bold.text-start(
+                                                    data-edit="title"
+                                                    data-id=slot.id)= slot.title
+
+                                                if startTime || endTime
+                                                    small.text-info.d-flex.align-items-center.gap-1(data-time-range)
+                                                        i.bi.bi-clock-history
+                                                        span
+                                                            | #{startTime || '??'}
+                                                            |  – #{endTime || '??'}
+
+                                            - const overbooked = slot.assignedCount > slot.maxAssignees
+                                            - const empty = slot.assignedCount === 0 && slot.maxAssignees > 0
+                                            .d-flex.align-items-center.gap-2
+                                                span.rounded-circle.flex-shrink-0(
+                                                    class=overbooked ? 'bg-danger' : empty ? 'bg-warning' : 'bg-success'
+                                                    style="width:0.7rem;height:0.7rem;display:inline-block;"
+                                                    title=overbooked ? 'Overbooked' : empty ? 'No assignments yet' : 'OK')
+                                                if permData.itemAllow(slot.id, 'ITEM_EDIT', 'ITEM_EDIT')
+                                                    button.btn.btn-sm.btn-outline-light(
+                                                        type="button"
+                                                        data-slot-edit
+                                                        aria-label="Edit slot")
+                                                        i.bi.bi-pencil
+                                                if permData.itemAllow(slot.id, 'ITEM_DELETE', 'ITEM_DELETE')
+                                                    button.btn.btn-sm.btn-outline-danger(
+                                                        data-delete-slot
+                                                        data-slotid=slot.id
+                                                        draggable="false")
+                                                        i.bi.bi-trash
+
+                                        hr.m-0
+
+                                        // ── Body: description + role add-ons
+                                        if slot.description
+                                            small.d-block.text-bg-dark(
+                                                data-edit="description"
+                                                data-id=slot.id)= slot.description
+
+                                        if slotRoles.length > 0
+                                            .mt-1
+                                                each slotRole in slotRoles
+                                                    +roleAssignmentAddon(
+                                                        slot.id,
+                                                        slotRole.name,
+                                                        slotRole.description || slotRole.name,
+                                                        data.assigneeLists[slot.id],
+                                                        user,
+                                                        guest)
+
+                                                // single admin button per slot – opens modal
+                                                if permData.entity.has('MANAGE_ASSIGNMENTS')
+                                                    button.btn.btn-sm.btn-outline-light.mt-1.w-100(
+                                                        type="button"
+                                                        data-slot-role-admin
+                                                        data-slotid=slot.id)
+                                                        i.bi.bi-people-fill.me-1
+                                                        | Manage role assignments
+
+                                        // ── Capacity + assignees list
+                                        .mt-2
+                                            .d-flex.justify-content-between.align-items-center.mb-1
+                                                span.badge.bg-secondary.w-100.text-center
+                                                    span(data-count)= slot.assignedCount
+                                                    |  /&nbsp;
+                                                    span(
+                                                        data-edit="maxAssignees"
+                                                        data-id=slot.id
+                                                        data-max)= slot.maxAssignees
+
+                                            if permData.entity.has("ACCESS_PARTICIPANTS")
+                                                ul.list-unstyled.mb-0
+                                                    each asg in data.assigneeLists[slot.id] || []
+                                                        li.d-flex.align-items-center.gap-1
+                                                            i.bi.bi-person-fill
+                                                            span.flex-grow-1= asg.name || asg.username
+                                                            if permData.itemAllow(slot.id, 'EDIT_ASSIGNMENTS', 'ITEM_EDIT')
+                                                                button.btn.btn-sm.btn-outline-danger.ms-1(
+                                                                    data-owner-remove
+                                                                    data-assignid=asg.id) ×
+
+                                        // ── Footer actions
+                                        .d-flex.gap-2.mt-2
+                                            if my
+                                                button.btn.btn-sm.btn-outline-danger.flex-grow-1(
+                                                    data-action="unassign") Leave
+                                            else if slot.assignedCount < slot.maxAssignees
+                                                button.btn.btn-sm.btn-outline-success.flex-grow-1(
+                                                    data-action="assign") Join
+                                            else
+                                                span.badge.bg-secondary.flex-grow-1.text-center Full
+                            else
+                                span.badge.w-100.text-center
+                                    i.bi.bi-info-circle.me-2
+                                    | No slots for this day!
+                    - }
+
+            // ★ add-slot buttons row
+            if permData.entity.has('ITEM_ADD')
+                tfoot
+                    tr
+                        // @formatter:off
+                        - for(let i=0;i<7;i++){
+                        - const cur=new Date(week);cur.setDate(cur.getDate() + i)
+                        - if(cur<start||cur>end) continue;
+                            td.text-center
+                                button.btn.btn-sm.btn-outline-info.w-100(
+                                    data-add-slot
+                                    data-date=fmtISO(cur)) + Slot
+                        - }
+                        // @formatter:on
