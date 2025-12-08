@@ -96,6 +96,50 @@ describe('generateAutoRecommendations', () => {
         expect(recommendations[0]).toMatchObject({slotId: 'next-day', userId: 1});
     });
 
+    // Issue 1: Test that duplicate recommendations are not created for already assigned slots
+    it('does not create duplicate recommendations for already assigned slots', () => {
+        const existing: Record<string, AssignmentCandidate[]> = {
+            'user:1': [{id: 'slot-1', day: '2024-01-01', startTime: '09:00', endTime: '10:00', pos: 1}],
+        };
+
+        const context = buildContext({
+            participants: [
+                {userId: 1, arrivalDate: '2024-01-01', departureDate: '2024-01-02'},
+            ],
+            existingAssignments: existing,
+        });
+
+        const recommendations = generateAutoRecommendations(context);
+        
+        // Should not recommend slot-1 since user 1 is already assigned to it
+        const slot1Recommendations = recommendations.filter(r => r.slotId === 'slot-1' && r.userId === 1);
+        expect(slot1Recommendations).toHaveLength(0);
+    });
+
+    // Issue 2: Test that fully satisfied participants don't get additional recommendations
+    it('does not create recommendations for fully satisfied participants', () => {
+        // User 1 is required 2 shifts and already has 2 assignments
+        const existing: Record<string, AssignmentCandidate[]> = {
+            'user:1': [
+                {id: 'slot-1', day: '2024-01-01', startTime: '09:00', endTime: '10:00', pos: 1},
+                {id: 'slot-2', day: '2024-01-01', startTime: '10:00', endTime: '11:00', pos: 2},
+            ],
+        };
+
+        const context = buildContext({
+            participants: [
+                {userId: 1, arrivalDate: '2024-01-01', departureDate: '2024-01-02'},
+            ],
+            existingAssignments: existing,
+        });
+
+        const recommendations = generateAutoRecommendations(context);
+        
+        // Should not recommend any additional slots since user 1 is fully satisfied (2/2)
+        const user1Recommendations = recommendations.filter(r => r.userId === 1);
+        expect(user1Recommendations).toHaveLength(0);
+    });
+
     // F3: Only affect participants with deficit
     it('only assigns to participants with deficit > 0', () => {
         const existing: Record<string, AssignmentCandidate[]> = {

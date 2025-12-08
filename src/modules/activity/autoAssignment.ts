@@ -379,6 +379,12 @@ function assignFairly(
                 );
                 if (alreadyRecommended) continue;
 
+                // ISSUE FIX #2: Check if participant is already assigned to this exact slot
+                const alreadyAssigned = existingAssignments.some(a =>
+                    a.id === slot.slot.id
+                );
+                if (alreadyAssigned) continue;
+
                 // F6, F7, F8: Check eligibility
                 if (!canAssign(slot.candidate, state.participant, existingAssignments, attendancePolicy)) {
                     continue;

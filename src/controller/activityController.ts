@@ -865,19 +865,26 @@ async function applyRecommendations(planId: string, body?: any) {
     }
 
     const appliedIds = applicable.map((rec) => rec.id).filter(Boolean) as string[];
+    
+    // ISSUE FIX #1: Load existing recommendations BEFORE marking as applied
+    // to preserve rejection memory (REJECTED status)
+    const existingForRejectionMemory = appliedIds.length > 0 
+        ? await recommendationService.getRecommendations(planId)
+        : [];
+    
+    // Mark recommendations as applied (changes status to APPLIED)
     await recommendationService.markRecommendationsApplied(planId, appliedIds);
 
     // Auto-regenerate recommendations after applying to remove stale items
     // and get fresh recommendations that know about the new assignments
     if (appliedIds.length > 0) {
         try {
-            // Load existing recommendations to preserve rejection memory
-            const existingRecommendations = await recommendationService.getRecommendations(planId);
-            
-            // Generate fresh recommendations with rejection memory
-            const freshRecommendations = await generatePlanRecommendations(planId, existingRecommendations);
+            // Generate fresh recommendations with rejection memory from BEFORE apply
+            // (existingForRejectionMemory contains the REJECTED ones we want to remember)
+            const freshRecommendations = await generatePlanRecommendations(planId, existingForRejectionMemory);
             
             // Replace all recommendations with fresh ones
+            // This will delete the APPLIED recommendations and replace with fresh PENDING/REJECTED ones
             await recommendationService.replaceRecommendations(planId, freshRecommendations);
         } catch (regenerateErr) {
             // Log but don't fail the apply operation
