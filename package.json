@@ -24,6 +24,8 @@
     "test:watch": "jest --watch",
     "test:debug": "cross-env TEST_DB_LOGGING=true jest --runInBand --detectOpenHandles",
     "test": "jest --runInBand",
+    "test:quick": "./scripts/test-quick.sh",
+    "test:all": "./scripts/test-all.sh",
     "e2e:prepare": "ts-node --transpile-only scripts/e2e.db.init.ts",
     "e2e:server": "cross-env NODE_ENV=e2e node dist/server.js",
     "e2e:init": "npm run build && npm run e2e:prepare && npm run e2e:server",
