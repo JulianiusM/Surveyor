@@ -750,6 +750,14 @@ export async function generatePlanRecommendations(
     if (!existingRecommendations) {
         existingRecommendations = await recommendationService.getRecommendations(planId).catch(() => [] as RecommendationDb[]);
     }
+    
+    // Convert RecommendationDb[] to RecommendationInput[] format for rejection memory
+    const existingRecommendationsInput: RecommendationInput[] | undefined = existingRecommendations?.map(rec => ({
+        slotId: rec.slot.id,
+        userId: rec.user?.id ?? undefined,
+        guestId: rec.guest?.id ?? undefined,
+        status: rec.status,
+    }));
 
     if (!plan) throw new Error(`Activity plan ${planId} not found`);
 
@@ -788,7 +796,7 @@ export async function generatePlanRecommendations(
         roleRequirements: requirementConfig.roleRequirements,
         overrides: requirementConfig.overrides,
         existingAssignments,
-        existingRecommendations,
+        existingRecommendations: existingRecommendationsInput,
     };
 
     return generateAutoRecommendations(context);
