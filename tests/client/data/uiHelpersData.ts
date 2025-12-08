@@ -86,3 +86,64 @@ export const createDietaryChipData = [
         expectedText: 'VEGAN',
     },
 ];
+
+/**
+ * Test cases for parseJsonScript function
+ */
+export const parseJsonScriptData = [
+    {
+        description: 'parses valid JSON from script tag',
+        scriptId: 'test-json',
+        scriptContent: '{"key": "value", "num": 42}',
+        expected: { key: 'value', num: 42 },
+    },
+    {
+        description: 'returns null for non-existent script',
+        scriptId: 'non-existent',
+        scriptContent: null,
+        expected: null,
+    },
+    {
+        description: 'returns null for empty script',
+        scriptId: 'empty-script',
+        scriptContent: '',
+        expected: null,
+    },
+    {
+        description: 'returns null for invalid JSON',
+        scriptId: 'invalid-json',
+        scriptContent: '{invalid json}',
+        expected: null,
+    },
+];
+
+/**
+ * Test cases for formatDuration function
+ */
+export const formatDurationData = [
+    {
+        description: 'formats days, hours, and minutes',
+        input: { ms: 2 * 24 * 60 * 60 * 1000 + 3 * 60 * 60 * 1000 + 45 * 60 * 1000 },
+        expected: '2d 3h 45m',
+    },
+    {
+        description: 'handles zero or negative values',
+        input: { ms: 0 },
+        expected: 'closed',
+    },
+    {
+        description: 'handles negative duration',
+        input: { ms: -1000 },
+        expected: 'closed',
+    },
+    {
+        description: 'formats less than one day',
+        input: { ms: 5 * 60 * 60 * 1000 + 30 * 60 * 1000 },
+        expected: '0d 5h 30m',
+    },
+    {
+        description: 'formats exactly one day',
+        input: { ms: 24 * 60 * 60 * 1000 },
+        expected: '1d 0h 0m',
+    },
+];
