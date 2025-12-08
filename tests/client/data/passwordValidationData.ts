@@ -123,7 +123,7 @@ export const passwordEdgeCaseData = [
 /**
  * Test cases for isPasswordRepeatValid function
  */
-export const passwordMatchData = [
+export const passwordRepeatMatchData = [
     {
         description: 'passwords match',
         input: { password: 'password123', passwordRepeat: 'password123' },
@@ -136,7 +136,7 @@ export const passwordMatchData = [
     },
 ];
 
-export const passwordMismatchData = [
+export const passwordRepeatMismatchData = [
     {
         description: 'passwords do not match',
         input: { password: 'password123', passwordRepeat: 'password124' },
@@ -179,7 +179,7 @@ export const passwordMismatchData = [
     },
 ];
 
-export const passwordMatchEdgeCaseData = [
+export const passwordRepeatEdgeCaseData = [
     {
         description: 'both passwords are undefined',
         input: { password: undefined, passwordRepeat: undefined },
@@ -198,24 +198,34 @@ export const passwordMatchEdgeCaseData = [
 export const passwordFeedbackData = [
     {
         description: 'all criteria met',
-        input: { hasEight: true, hasLetter: true, hasDigit: true },
-        expectedToContain: ['bi-check-circle-fill', 'text-success', 'At least 8 characters', 'At least one letter', 'At least one digit'],
-        expectedNotToContain: ['bi-x-circle'],
+        input: { hasMinLength: true, hasLetter: true, hasDigit: true },
+        expected: {
+            contains: ['bi-check-circle-fill', 'text-success', 'At least 8 characters', 'At least one letter', 'At least one digit'],
+            notContains: ['bi-x-circle'],
+        },
     },
     {
         description: 'no criteria met',
-        input: { hasEight: false, hasLetter: false, hasDigit: false },
-        expectedToContain: ['bi-x-circle', 'text-muted'],
-        expectedNotToContain: ['bi-check-circle-fill', 'text-success'],
+        input: { hasMinLength: false, hasLetter: false, hasDigit: false },
+        expected: {
+            contains: ['bi-x-circle', 'text-muted'],
+            notContains: ['bi-check-circle-fill', 'text-success'],
+        },
     },
     {
         description: 'mixed criteria - length and digit',
-        input: { hasEight: true, hasLetter: false, hasDigit: true },
-        expectedToContain: ['bi-check-circle-fill', 'bi-x-circle', 'text-success', 'text-muted'],
+        input: { hasMinLength: true, hasLetter: false, hasDigit: true },
+        expected: {
+            contains: ['bi-check-circle-fill', 'bi-x-circle', 'text-success', 'text-muted'],
+            notContains: [],
+        },
     },
     {
         description: 'correct HTML structure',
-        input: { hasEight: true, hasLetter: true, hasDigit: false },
-        expectedToContain: ['<ul class="list-unstyled mb-0 mt-1">', '</ul>', '<li'],
+        input: { hasMinLength: true, hasLetter: true, hasDigit: false },
+        expected: {
+            contains: ['<ul class="list-unstyled mb-0 mt-1">', '</ul>', '<li'],
+            notContains: [],
+        },
     },
 ];

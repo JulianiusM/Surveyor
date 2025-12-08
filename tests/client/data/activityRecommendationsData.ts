@@ -121,7 +121,7 @@ export const activityRecommendationsData = {
             startTime: '12:00:00',
             endTime: '16:00:00',
         },
-    },
+    ],
 
     apiResponses: {
         loadSuccess: {

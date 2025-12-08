@@ -31,7 +31,10 @@ describe('activity-slot-operations', () => {
     let mockConfirm: jest.SpyInstance;
 
     beforeEach(() => {
-        document.body.innerHTML = '';
+        // Clear document and remove all event listeners by replacing body
+        document.body = document.createElement('body');
+        
+        jest.clearAllMocks();
         mockStartInlineEdit = jest.spyOn(inlineEdit, 'startInlineEdit').mockImplementation();
         mockStartInlineEditArea = jest.spyOn(inlineEdit, 'startInlineEditArea').mockImplementation();
         mockPost = jest.spyOn(http, 'post').mockResolvedValue({});

@@ -68,7 +68,7 @@ export const activityRecommendationsScheduleData = {
         ],
     },
 
-    participants: [
+    participantOptions: [
         {
             key: 'user:1',
             label: 'John Doe',
@@ -93,9 +93,9 @@ export const activityRecommendationsScheduleData = {
             arrivalDate: null,
             departureDate: null,
         },
-    },
+    ],
 
-    slots: [
+    slotsList: [
         {
             id: 'slot1',
             title: 'Morning Shift',
@@ -117,7 +117,7 @@ export const activityRecommendationsScheduleData = {
             startTime: '16:00:00',
             endTime: '20:00:00',
         },
-    },
+    ],
 
     addModal: {
         slotId: 'slot1',
