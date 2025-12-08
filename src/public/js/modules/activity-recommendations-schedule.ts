@@ -336,11 +336,33 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
         const slotId = btn.dataset.slotId;
         if (!slotId || !addModal || !addModalInstance) return;
 
+        // Get slot date from DOM to filter participants
+        const slotElement = scheduleView.querySelector(`[data-slot-id="${slotId}"]`);
+        const slotDay = slotElement?.closest('[data-day]')?.getAttribute('data-day');
+        
         // Populate modal
         if (addSlotIdInput) addSlotIdInput.value = slotId;
         if (addParticipantSelect) {
             addParticipantSelect.innerHTML = '<option value="">Choose a participant...</option>';
+            
+            // Filter participants based on attendance window
             participantOptions.forEach((opt) => {
+                // Check if participant is available for this slot's day
+                let isAvailable = true;
+                if (slotDay && (opt.arrivalDate || opt.departureDate)) {
+                    const slotDate = new Date(slotDay);
+                    if (opt.arrivalDate) {
+                        const arrival = new Date(opt.arrivalDate);
+                        if (slotDate < arrival) isAvailable = false;
+                    }
+                    if (opt.departureDate) {
+                        const departure = new Date(opt.departureDate);
+                        if (slotDate > departure) isAvailable = false;
+                    }
+                }
+                
+                if (!isAvailable) return; // Skip participants outside attendance window
+                
                 const option = document.createElement('option');
                 option.value = participantValue(opt);
                 option.textContent = formatParticipantLabel(opt);
@@ -395,6 +417,45 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
                     if (span) span.textContent = 'This recommendation already exists.';
                 }
                 return;
+            }
+            
+            // Check for overlapping assignments/recommendations for this participant
+            // Get slot's day/time from DOM
+            const slotElement = scheduleView.querySelector(`[data-slot-id="${slotId}"]`);
+            const slotDay = slotElement?.closest('[data-day]')?.getAttribute('data-day');
+            const slotStartTime = slotElement?.querySelector('[data-start-time]')?.getAttribute('data-start-time');
+            const slotEndTime = slotElement?.querySelector('[data-end-time]')?.getAttribute('data-end-time');
+            
+            // Check if participant has overlapping recommendations
+            const hasOverlap = recommendations.some(r => {
+                // Must be same participant
+                if (!(r.user?.id === userId || r.guest?.id === guestId)) return false;
+                
+                // Must be same day
+                const rSlotEl = scheduleView.querySelector(`[data-slot-id="${r.slot.id}"]`);
+                const rDay = rSlotEl?.closest('[data-day]')?.getAttribute('data-day');
+                if (rDay !== slotDay) return false;
+                
+                // Check time overlap
+                const rStartTime = rSlotEl?.querySelector('[data-start-time]')?.getAttribute('data-start-time');
+                const rEndTime = rSlotEl?.querySelector('[data-end-time]')?.getAttribute('data-end-time');
+                
+                if (slotStartTime && slotEndTime && rStartTime && rEndTime) {
+                    // Times overlap if slot1.start < slot2.end AND slot1.end > slot2.start
+                    const overlap = slotStartTime < rEndTime && slotEndTime > rStartTime;
+                    return overlap;
+                }
+                
+                return false;
+            });
+            
+            if (hasOverlap && addWarningBox) {
+                addWarningBox.classList.remove('d-none');
+                addWarningBox.classList.remove('alert-info', 'alert-warning');
+                addWarningBox.classList.add('alert-warning');
+                const span = addWarningBox.querySelector('span');
+                if (span) span.textContent = '⚠️ Warning: This participant has an overlapping assignment or recommendation on the same day.';
+                // Allow them to proceed anyway - it's just a warning
             }
 
             // Create new recommendation
