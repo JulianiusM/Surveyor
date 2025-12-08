@@ -5,6 +5,7 @@ import {ActivityPlanRequirement} from "../database/entities/activity/ActivityPla
 import {ActivityPlanRequirementOverride} from "../database/entities/activity/ActivityPlanRequirementOverride";
 import {ActivitySlot} from "../database/entities/activity/ActivitySlot";
 import {ActivityPlan} from "../database/entities/activity/ActivityPlan";
+import {ActivityAssignmentRecommendation} from "../database/entities/activity/ActivityAssignmentRecommendation";
 import {RecommendationInput} from "../database/services/ActivityRecommendationService";
 import * as requirementService from "../database/services/ActivityRequirementService";
 import * as recommendationService from "../database/services/ActivityRecommendationService";
@@ -737,7 +738,7 @@ function toParticipantAttendanceFromAssignments(assignments: Record<string, Assi
 
 export async function generatePlanRecommendations(
     planId: string,
-    existingRecommendations?: RecommendationDb[]
+    existingRecommendations?: ActivityAssignmentRecommendation[]
 ): Promise<RecommendationInput[]> {
     const requirementConfig = await requirementService.getRequirementConfiguration(planId);
     const [plan, slots, existingAssignments] = await Promise.all([
@@ -748,7 +749,7 @@ export async function generatePlanRecommendations(
     
     // If existing recommendations not provided, load them for rejection memory
     if (!existingRecommendations) {
-        existingRecommendations = await recommendationService.getRecommendations(planId).catch(() => [] as RecommendationDb[]);
+        existingRecommendations = await recommendationService.getRecommendations(planId).catch(() => [] as ActivityAssignmentRecommendation[]);
     }
     
     // Convert RecommendationDb[] to RecommendationInput[] format for rejection memory

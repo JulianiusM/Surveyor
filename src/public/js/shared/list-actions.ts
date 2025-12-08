@@ -53,9 +53,9 @@ export function initAssignmentRemoval(config: AssignmentRemovalConfig): void {
         if (!btn) return;
 
         const assignId = (btn as HTMLElement).dataset.assignid;
-        const itemId = (btn as HTMLElement).closest('[data-itemid]')?.getAttribute('data-itemid');
         try {
-            guardItemAction(itemId, guard);
+            // Use assignId as the item context for permission check
+            guardItemAction(assignId, guard);
             await post(`${config.baseUrl}/assignment/${assignId}/delete`, {});
             showInlineAlert('success', 'Removed');
             reloadAfterDelay(reloadDelay);
