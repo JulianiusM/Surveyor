@@ -32,12 +32,58 @@ npm run test:client:watch
 
 ## Test Organization
 
+### Data-Driven and Keyword-Driven Testing
+
+Frontend tests follow the same patterns as backend tests:
+
+**Test Data** (`tests/client/data/`):
+- Test cases defined as data arrays
+- Separated from test logic for maintainability
+- Examples: `formattingData.ts`, `passwordValidationData.ts`, `eventRegistrationData.ts`
+
+**Test Keywords** (`tests/client/keywords/`):
+- Reusable test actions and assertions
+- Abstract implementation details
+- Examples: `formattingKeywords.ts`, `passwordValidationKeywords.ts`, `httpKeywords.ts`
+
+**Example Pattern:**
+```typescript
+// Test data (tests/client/data/formattingData.ts)
+export const padNumberData = [
+    {
+        description: 'pads single digit with zero by default',
+        input: { num: 5 },
+        expected: '05',
+    },
+    // ... more cases
+];
+
+// Test keywords (tests/client/keywords/formattingKeywords.ts)
+export function testPadNumber(input: { num: number }, expected: string): void {
+    const result = padNumber(input.num);
+    expect(result).toBe(expected);
+}
+
+// Test file (tests/client/unit/formatting.test.ts)
+import { padNumberData } from '../data/formattingData';
+import { testPadNumber } from '../keywords/formattingKeywords';
+
+describe('padNumber - Data Driven', () => {
+    test.each(padNumberData)(
+        '$description',
+        ({ input, expected }) => {
+            testPadNumber(input, expected);
+        }
+    );
+});
+```
+
 ### Unit Tests (`tests/client/unit/`)
 
 Test pure JavaScript/TypeScript logic without DOM or HTTP interactions.
 
 **Examples:**
-- `formatting.test.ts` - Date/time formatting utilities
+- `formatting.test.ts` - Date/time formatting utilities (40 data-driven tests)
 - `password-validation.test.ts` - Password strength validation logic
 - `permissions.test.ts` - Permission checking utilities
 - `http.test.ts` - HTTP client utilities (with mocked fetch)
@@ -47,6 +93,7 @@ Test pure JavaScript/TypeScript logic without DOM or HTTP interactions.
 - No HTTP requests (except in http.test.ts which mocks them)
 - Fast execution
 - Test edge cases and boundary conditions
+- Use data-driven approach with `test.each()`
 
 ### UI Tests (`tests/client/ui/`)
 
@@ -85,6 +132,31 @@ MSW intercepts HTTP requests at the network level and provides mocked responses.
 - **Server:** `tests/client/msw/server.ts` - MSW server instance
 - **Handlers:** `tests/client/msw/handlers.ts` - Default API endpoint handlers
 - **Setup:** `tests/client/setupTests.ts` - Global test setup with MSW initialization
+
+### Type-Safe MSW Handlers
+
+MSW handlers use actual backend types for request/response:
+
+```typescript
+// tests/client/msw/handlers.ts
+import type { CreateEventDTO } from '../../../src/types/EventTypes';
+
+interface ApiResponse<T = any> {
+    status: 'success' | 'error';
+    message?: string;
+    data?: T;
+}
+
+// Handlers match backend API routes and types
+http.post('/api/event/:id/register', async ({ request }) => {
+    const body = await request.json();
+    return HttpResponse.json({
+        status: 'success',
+        message: 'Successfully registered',
+        data: body
+    } as ApiResponse);
+});
+```
 
 ### Using MSW in Tests
 
@@ -312,32 +384,68 @@ node --inspect-brk node_modules/.bin/jest --config jest.client.config.ts --runIn
 
 ## Adding New Tests
 
-### 1. Create Test File
+### 1. Create Test Data File (if using data-driven approach)
+
+```typescript
+// tests/client/data/myModuleData.ts
+export const myFunctionData = [
+    {
+        description: 'handles basic case',
+        input: { value: 'input' },
+        expected: 'output',
+    },
+    // ... more test cases
+];
+```
+
+### 2. Create Test Keywords (if needed)
+
+```typescript
+// tests/client/keywords/myModuleKeywords.ts
+import { myFunction } from '../../../src/public/js/my-module';
+
+export function testMyFunction(input: { value: string }, expected: string): void {
+    const result = myFunction(input.value);
+    expect(result).toBe(expected);
+}
+```
+
+### 3. Create Test File
 
 ```typescript
 // tests/client/unit/my-module.test.ts
-import { myFunction } from '../../../src/public/js/my-module';
+import { myFunctionData } from '../data/myModuleData';
+import { testMyFunction } from '../keywords/myModuleKeywords';
 
-describe('myFunction', () => {
-    test('does something', () => {
-        expect(myFunction('input')).toBe('output');
-    });
+describe('myFunction - Data Driven', () => {
+    test.each(myFunctionData)(
+        '$description',
+        ({ input, expected }) => {
+            testMyFunction(input, expected);
+        }
+    );
 });
 ```
 
-### 2. Add MSW Handler (if needed)
+### 4. Add Type-Safe MSW Handler (if testing API calls)
 
 ```typescript
 // tests/client/msw/handlers.ts
+import type { MyRequestDTO, MyResponseDTO } from '../../../src/types/MyTypes';
+
 export const handlers = [
     // ... existing handlers
-    http.post('/api/my-endpoint', () => {
-        return HttpResponse.json({ status: 'success' });
+    http.post<never, MyRequestDTO>('/api/my-endpoint', async ({ request }) => {
+        const body = await request.json();
+        return HttpResponse.json({
+            status: 'success',
+            data: body
+        } as ApiResponse<MyResponseDTO>);
     }),
 ];
 ```
 
-### 3. Run Tests
+### 5. Run Tests
 
 ```bash
 npm run test:client
