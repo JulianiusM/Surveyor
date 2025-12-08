@@ -1,243 +1,150 @@
 // tests/client/unit/formatting.test.ts
 // Unit tests for core/formatting.ts utilities
+// Uses data-driven and keyword-driven testing approach
+import { formatISOInTimeZone } from '../../../src/public/js/core/formatting';
+
+// Import test data
 import {
-    padNumber,
-    formatDate,
-    formatDateTime,
-    formatISODate,
-    parseISODate,
-    formatDateLabel,
-    formatTimeLabel,
-    toDateTimeLocalValue,
-    toISOStringOrNull,
-    getValidDaysInWeek,
-    formatISOInTimeZone,
-} from '../../../src/public/js/core/formatting';
+    padNumberData,
+    formatDateData,
+    formatDateTimeData,
+    formatISODateData,
+    parseISODateData,
+    formatDateLabelData,
+    formatTimeLabelData,
+    toDateTimeLocalValueData,
+    toISOStringOrNullData,
+    getValidDaysInWeekData,
+} from '../data/formattingData';
+
+// Import test keywords
+import {
+    testPadNumber,
+    testFormatDate,
+    testFormatDateWithPattern,
+    testFormatDateTime,
+    testFormatISODate,
+    testParseISODate,
+    testFormatDateLabel,
+    testFormatTimeLabel,
+    testToDateTimeLocalValue,
+    testToISOStringOrNull,
+    testGetValidDaysInWeek,
+} from '../keywords/formattingKeywords';
 
 describe('formatting utilities', () => {
-    describe('padNumber', () => {
-        test('pads single digit with zero by default', () => {
-            expect(padNumber(5)).toBe('05');
-        });
-
-        test('does not pad double digit by default', () => {
-            expect(padNumber(15)).toBe('15');
-        });
-
-        test('pads to specified length', () => {
-            expect(padNumber(5, 3)).toBe('005');
-            expect(padNumber(5, 4)).toBe('0005');
-        });
-
-        test('handles zero', () => {
-            expect(padNumber(0)).toBe('00');
-        });
-
-        test('does not truncate longer numbers', () => {
-            expect(padNumber(123, 2)).toBe('123');
-        });
+    describe('padNumber - Data Driven', () => {
+        test.each(padNumberData)(
+            '$description',
+            ({ input, expected }) => {
+                testPadNumber(input, expected);
+            }
+        );
     });
 
-    describe('formatDate', () => {
-        test('formats valid date string', () => {
-            const result = formatDate('2025-01-15');
-            expect(result).toMatch(/1\/15\/2025|15\/1\/2025|2025-01-15/); // varies by locale
-        });
-
-        test('returns fallback for null', () => {
-            expect(formatDate(null)).toBe('—');
-        });
-
-        test('returns fallback for undefined', () => {
-            expect(formatDate(undefined)).toBe('—');
-        });
-
-        test('returns original string for invalid date', () => {
-            expect(formatDate('invalid-date')).toBe('invalid-date');
-        });
-
-        test('accepts formatting options', () => {
-            const result = formatDate('2025-01-15', { year: 'numeric', month: 'long', day: 'numeric' });
-            expect(result).toContain('2025');
-            expect(result).toContain('January');
-        });
+    describe('formatDate - Data Driven', () => {
+        test.each(formatDateData.filter(d => 'expected' in d))(
+            '$description',
+            ({ input, expected }) => {
+                testFormatDate(input, expected as string);
+            }
+        );
+        
+        test.each(formatDateData.filter(d => 'expectedPattern' in d))(
+            '$description',
+            ({ input, expectedPattern }) => {
+                testFormatDateWithPattern(input, expectedPattern as RegExp);
+            }
+        );
     });
 
-    describe('formatDateTime', () => {
-        test('formats valid datetime string', () => {
-            const result = formatDateTime('2025-01-15T14:30:00');
-            expect(result).toContain('2025');
-            expect(result).toContain('1'); // day
-            expect(result).toContain('15'); // day or month
-        });
-
-        test('returns fallback for null', () => {
-            expect(formatDateTime(null)).toBe('—');
-        });
-
-        test('returns fallback for undefined', () => {
-            expect(formatDateTime(undefined)).toBe('—');
-        });
-
-        test('returns fallback for invalid date', () => {
-            expect(formatDateTime('invalid-date')).toBe('—');
-        });
+    describe('formatDateTime - Data Driven', () => {
+        test.each(formatDateTimeData)(
+            '$description',
+            ({ input, expected }) => {
+                testFormatDateTime(input, expected);
+            }
+        );
     });
 
-    describe('formatISODate', () => {
-        test('formats date as YYYY-MM-DD', () => {
-            const date = new Date(Date.UTC(2025, 0, 15)); // Jan 15, 2025
-            expect(formatISODate(date)).toBe('2025-01-15');
-        });
-
-        test('pads single digit month and day', () => {
-            const date = new Date(Date.UTC(2025, 0, 5)); // Jan 5, 2025
-            expect(formatISODate(date)).toBe('2025-01-05');
-        });
-
-        test('handles December', () => {
-            const date = new Date(Date.UTC(2025, 11, 25)); // Dec 25, 2025
-            expect(formatISODate(date)).toBe('2025-12-25');
-        });
+    describe('formatISODate - Data Driven', () => {
+        test.each(formatISODateData)(
+            '$description',
+            ({ input, expected }) => {
+                testFormatISODate(input, expected);
+            }
+        );
     });
 
-    describe('parseISODate', () => {
-        test('parses YYYY-MM-DD to Date', () => {
-            const result = parseISODate('2025-01-15');
-            expect(result.getUTCFullYear()).toBe(2025);
-            expect(result.getUTCMonth()).toBe(0); // January = 0
-            expect(result.getUTCDate()).toBe(15);
-        });
-
-        test('handles single digit month and day', () => {
-            const result = parseISODate('2025-1-5');
-            expect(result.getUTCFullYear()).toBe(2025);
-            expect(result.getUTCMonth()).toBe(0);
-            expect(result.getUTCDate()).toBe(5);
-        });
+    describe('parseISODate - Data Driven', () => {
+        test.each(parseISODateData)(
+            '$description',
+            ({ input, expected }) => {
+                testParseISODate(input, expected);
+            }
+        );
     });
 
-    describe('formatDateLabel', () => {
-        test('formats valid date', () => {
-            const result = formatDateLabel('2025-01-15');
-            expect(result).toBeTruthy();
-            expect(result).not.toBe('');
-        });
-
-        test('returns empty string for null', () => {
-            expect(formatDateLabel(null)).toBe('');
-        });
-
-        test('returns empty string for undefined', () => {
-            expect(formatDateLabel(undefined)).toBe('');
-        });
-
-        test('returns empty string for invalid date', () => {
-            expect(formatDateLabel('invalid')).toBe('');
-        });
+    describe('formatDateLabel - Data Driven', () => {
+        test.each(formatDateLabelData)(
+            '$description',
+            ({ input, expected }) => {
+                testFormatDateLabel(input, expected);
+            }
+        );
     });
 
-    describe('formatTimeLabel', () => {
-        test('formats time as HH:MM', () => {
-            expect(formatTimeLabel('14:30:00')).toBe('14:30');
-        });
-
-        test('handles short time string', () => {
-            expect(formatTimeLabel('09:15')).toBe('09:15');
-        });
-
-        test('returns empty string for null', () => {
-            expect(formatTimeLabel(null)).toBe('');
-        });
-
-        test('returns empty string for undefined', () => {
-            expect(formatTimeLabel(undefined)).toBe('');
-        });
+    describe('formatTimeLabel - Data Driven', () => {
+        test.each(formatTimeLabelData)(
+            '$description',
+            ({ input, expected }) => {
+                testFormatTimeLabel(input, expected);
+            }
+        );
     });
 
-    describe('toDateTimeLocalValue', () => {
-        test('converts Date to datetime-local format', () => {
-            const date = new Date(2025, 0, 15, 14, 30); // Jan 15, 2025, 14:30
-            const result = toDateTimeLocalValue(date);
-            expect(result).toBe('2025-01-15T14:30');
-        });
-
-        test('converts ISO string to datetime-local format', () => {
-            const result = toDateTimeLocalValue('2025-01-15T14:30:00Z');
-            expect(result).toMatch(/2025-01-15T\d{2}:\d{2}/);
-        });
-
-        test('returns empty string for null', () => {
-            expect(toDateTimeLocalValue(null)).toBe('');
-        });
-
-        test('returns empty string for undefined', () => {
-            expect(toDateTimeLocalValue(undefined)).toBe('');
-        });
-
-        test('returns empty string for invalid date', () => {
-            expect(toDateTimeLocalValue('invalid')).toBe('');
-        });
-
-        test('pads single digit values', () => {
-            const date = new Date(2025, 0, 5, 9, 5); // Jan 5, 2025, 09:05
-            expect(toDateTimeLocalValue(date)).toBe('2025-01-05T09:05');
-        });
+    describe('toDateTimeLocalValue - Data Driven', () => {
+        test.each(toDateTimeLocalValueData)(
+            '$description',
+            ({ input, expected }) => {
+                testToDateTimeLocalValue(input, expected);
+            }
+        );
     });
 
-    describe('toISOStringOrNull', () => {
+    describe('toISOStringOrNull - Data Driven', () => {
+        test.each(toISOStringOrNullData)(
+            '$description',
+            ({ input, expected }) => {
+                testToISOStringOrNull(input, expected);
+            }
+        );
+        
         test('converts valid datetime-local to ISO string', () => {
-            const result = toISOStringOrNull('2025-01-15T14:30');
-            expect(result).toBeTruthy();
-            expect(result).toContain('2025-01-15');
-        });
-
-        test('returns null for empty string', () => {
-            expect(toISOStringOrNull('')).toBeNull();
-        });
-
-        test('returns null for invalid date', () => {
-            expect(toISOStringOrNull('invalid')).toBeNull();
+            testToISOStringOrNull({ value: '2025-01-15T14:30' }, '2025-01-15');
         });
     });
 
-    describe('getValidDaysInWeek', () => {
-        test('returns all 7 days when no restrictions', () => {
-            const monday = new Date(2025, 0, 6); // Jan 6, 2025 (Monday)
-            const start = new Date(2025, 0, 1);
-            const end = new Date(2025, 0, 31);
-            const result = getValidDaysInWeek(monday, start, end);
-            expect(result).toHaveLength(7);
-        });
-
+    describe('getValidDaysInWeek - Data Driven', () => {
+        test.each(getValidDaysInWeekData)(
+            '$description',
+            ({ input, expectedLength }) => {
+                testGetValidDaysInWeek(input, expectedLength);
+            }
+        );
+        
         test('filters days before start date', () => {
-            const monday = new Date(2025, 0, 6); // Jan 6, 2025 (Monday)
-            const start = new Date(2025, 0, 8); // Jan 8 (Wednesday)
+            const monday = new Date(2025, 0, 6);
+            const start = new Date(2025, 0, 8);
             const end = new Date(2025, 0, 31);
-            const result = getValidDaysInWeek(monday, start, end);
-            expect(result.length).toBeLessThan(7);
-            result.forEach(day => {
-                expect(day.getTime()).toBeGreaterThanOrEqual(start.getTime());
-            });
+            testGetValidDaysInWeek({ monday, start, end }, 5); // Wed-Sun = 5 days
         });
 
         test('filters days after end date', () => {
-            const monday = new Date(2025, 0, 6); // Jan 6, 2025 (Monday)
-            const start = new Date(2025, 0, 1);
-            const end = new Date(2025, 0, 9); // Jan 9 (Thursday)
-            const result = getValidDaysInWeek(monday, start, end);
-            expect(result.length).toBeLessThan(7);
-            result.forEach(day => {
-                expect(day.getTime()).toBeLessThanOrEqual(end.getTime());
-            });
-        });
-
-        test('returns empty array when week is outside range', () => {
             const monday = new Date(2025, 0, 6);
-            const start = new Date(2025, 1, 1); // February
-            const end = new Date(2025, 1, 28);
-            const result = getValidDaysInWeek(monday, start, end);
-            expect(result).toHaveLength(0);
+            const start = new Date(2025, 0, 1);
+            const end = new Date(2025, 0, 9);
+            testGetValidDaysInWeek({ monday, start, end }, 4); // Mon-Thu = 4 days
         });
     });
 

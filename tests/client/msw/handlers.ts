@@ -1,15 +1,26 @@
 // tests/client/msw/handlers.ts
 // MSW request handlers for mocking API endpoints in frontend tests
+// Uses actual backend types for type safety
 import { http, HttpResponse } from 'msw';
+import type { CreateEventDTO, DIETARY } from '../../../src/types/EventTypes';
 
 /**
- * Type-safe response helpers
+ * Standard API response structure matching backend renderer
  */
-const successResponse = (message: string, data?: any) => 
-    HttpResponse.json({ status: 'success', message, data });
+interface ApiResponse<T = any> {
+    status: 'success' | 'error';
+    message?: string;
+    data?: T;
+}
 
-const errorResponse = (message: string, status = 400) => 
-    HttpResponse.json({ status: 'error', message }, { status });
+/**
+ * Type-safe response helpers matching backend API format
+ */
+const successResponse = <T = any>(message: string, data?: T): Response => 
+    HttpResponse.json({ status: 'success', message, data } as ApiResponse<T>);
+
+const errorResponse = (message: string, status = 400): Response => 
+    HttpResponse.json({ status: 'error', message } as ApiResponse, { status });
 
 /**
  * Default MSW handlers for common API endpoints
