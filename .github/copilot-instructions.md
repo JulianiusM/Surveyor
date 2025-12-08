@@ -28,6 +28,7 @@ For general AI agent guidance, see [AGENTS.md](../AGENTS.md).
 4. **Security**: Never commit secrets, validate all input, hash passwords
 5. **Following Directions**: Always follow user directions. If you are not sure, make reasonable assumptions. Interpret requirements conservatively.
 6. **Generic approach**: If the user asks you to fix all tests, fix all tests including database and e2e tests. Fix all issues including those that are not influenced or caused by your changes.
+7. **Pre-commit requirement**: **ALWAYS run all tests (including database and E2E) before committing. All tests must pass. Fix all test failures, including unrelated ones.**
 
 ## Testing Approach
 
