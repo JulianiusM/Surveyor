@@ -144,6 +144,39 @@ jobs:
           if [ -f coverage/cobertura-coverage.xml ]; then cp coverage/cobertura-coverage.xml artifacts/coverage/cobertura-coverage.xml; fi
           if [ -f coverage/coverage-summary.json ]; then cp coverage/coverage-summary.json artifacts/coverage/coverage-summary.json; fi
 
+      # =========================
+      # Frontend tests (Jest + MSW)
+      # =========================
+      - name: Run frontend tests (Jest + MSW) with coverage
+        env:
+          NODE_ENV: test
+        run: |
+          mkdir -p artifacts/coverage-client
+          npm run test:client:coverage -- \
+            --ci \
+            --reporters=default \
+            --coverageDirectory=coverage/client \
+            --coverageReporters=lcov \
+            --coverageReporters=cobertura \
+            --coverageReporters=text-summary
+          # Move frontend coverage files into artifacts/
+          if [ -f coverage/client/lcov.info ]; then cp coverage/client/lcov.info artifacts/coverage-client/lcov.info; fi
+          if [ -f coverage/client/cobertura-coverage.xml ]; then cp coverage/client/cobertura-coverage.xml artifacts/coverage-client/cobertura-coverage.xml; fi
+          if [ -f coverage/client/coverage-summary.json ]; then cp coverage/client/coverage-summary.json artifacts/coverage-client/coverage-summary.json; fi
+
+      - name: Upload frontend coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: |
+            artifacts/coverage-client/lcov.info
+            artifacts/coverage-client/cobertura-coverage.xml
+            artifacts/coverage-client/coverage-summary.json
+          retention-days: 7
+          compression-level: 9
+          if-no-files-found: warn
+
       - name: Upload Jest reports & coverage (small)
         if: always()
         uses: actions/upload-artifact@v4

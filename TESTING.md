@@ -106,11 +106,17 @@ tests/
 │   ├── middleware/       # Middleware test keywords
 │   ├── database/         # Database test keywords
 │   └── e2e/             # E2E test keywords
-├── unit/                 # Unit tests
+├── client/               # Frontend tests (no backend required)
+│   ├── unit/            # Pure logic frontend tests
+│   ├── ui/              # DOM behavior tests
+│   ├── flows/           # Multi-step frontend flows
+│   ├── msw/             # MSW server and API handlers
+│   └── mocks/           # Frontend test mocks
+├── unit/                 # Backend unit tests
 ├── controller/           # Controller tests
 ├── middleware/           # Middleware tests
 ├── database/             # Database integration tests
-├── e2e/                 # End-to-end tests
+├── e2e/                 # End-to-end tests (Playwright)
 └── util/                # Test utilities and mocks
 ```
 
@@ -562,19 +568,124 @@ test.each(createEntityData)(
 );
 ```
 
+## Frontend Testing
+
+### Overview
+
+Frontend tests run **without a backend** and use MSW (Mock Service Worker) to mock HTTP requests. They provide fast, reliable testing of client-side code.
+
+### Test Types
+
+**Unit Tests** (`tests/client/unit/`):
+- Test pure JavaScript/TypeScript logic
+- No DOM or HTTP dependencies
+- Examples: formatting utils, validation logic, permission checks
+
+**UI Tests** (`tests/client/ui/`):
+- Test DOM behavior and user interactions
+- Use Testing Library for accessibility-oriented queries
+- Examples: form validation UI, interactive components
+
+**Flow Tests** (`tests/client/flows/`):
+- Test complete user workflows with mocked APIs
+- Multi-step interactions
+- Examples: registration flows, form submissions
+
+### Running Frontend Tests
+
+```bash
+# All frontend tests
+npm run test:client
+
+# Specific test suites
+npm run test:client:unit
+npm run test:client:ui
+npm run test:client:flows
+
+# With coverage
+npm run test:client:coverage
+```
+
+### MSW (Mock Service Worker)
+
+MSW intercepts HTTP requests and provides mocked responses:
+
+```typescript
+// Using default handlers
+import { post } from '../../../src/public/js/core/http';
+
+test('registers for event', async () => {
+    const result = await post('/api/event/123/register', { userId: 1 });
+    expect(result.status).toBe('success');
+});
+
+// Overriding handlers for specific tests
+import { server } from '../msw/server';
+import { http, HttpResponse } from 'msw';
+
+test('handles error', async () => {
+    server.use(
+        http.post('/api/event/123/register', () => {
+            return HttpResponse.json({
+                status: 'error',
+                message: 'Event is full',
+            }, { status: 409 });
+        })
+    );
+    
+    await expect(
+        post('/api/event/123/register', { userId: 1 })
+    ).rejects.toThrow('Event is full');
+});
+```
+
+### Testing Library
+
+Use accessibility-oriented queries:
+
+```typescript
+import { screen } from '@testing-library/dom';
+import userEvent from '@testing-library/user-event';
+
+test('validates password', async () => {
+    document.body.innerHTML = `
+        <label for="password">Password</label>
+        <input id="password" type="password" />
+    `;
+    
+    const passwordInput = screen.getByLabelText('Password');
+    await userEvent.type(passwordInput, 'short');
+    
+    expect(passwordInput).toHaveClass('is-invalid');
+});
+```
+
+### Frontend Testing Best Practices
+
+1. **Test behavior, not implementation** - Focus on what users see and do
+2. **Keep tests independent** - Each test should set up its own state
+3. **Use descriptive names** - Describe what and why
+4. **Test edge cases** - Empty inputs, validation errors, etc.
+5. **Mock only external dependencies** - Don't mock internal functions
+
+For detailed frontend testing documentation, see [tests/client/README.md](tests/client/README.md).
+
 ## Contributing
 
 When contributing tests:
 
-1. Follow the data-driven and keyword-driven patterns
-2. Add test data to appropriate data files
-3. Create or reuse keywords for common operations
-4. Write clear, descriptive test case descriptions
-5. Ensure tests are isolated and repeatable
-6. Update this documentation if adding new patterns
+1. Follow the data-driven and keyword-driven patterns (backend)
+2. Use MSW and Testing Library for frontend tests
+3. Add test data to appropriate data files
+4. Create or reuse keywords for common operations
+5. Write clear, descriptive test case descriptions
+6. Ensure tests are isolated and repeatable
+7. Update this documentation if adding new patterns
 
 ## Resources
 
 - [Jest Documentation](https://jestjs.io/docs/getting-started)
 - [Playwright Documentation](https://playwright.dev/)
-- [Testing Best Practices](https://kentcdodds.com/blog/common-mistakes-with-react-testing-library)
+- [MSW Documentation](https://mswjs.io/docs/)
+- [Testing Library](https://testing-library.com/docs/)
+- [Frontend Testing Guide](tests/client/README.md)
