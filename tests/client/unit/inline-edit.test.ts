@@ -23,9 +23,21 @@ const mockPost = post as jest.MockedFunction<typeof post>;
 const mockShowInlineAlert = showInlineAlert as jest.MockedFunction<typeof showInlineAlert>;
 const mockReloadAfterDelay = reloadAfterDelay as jest.MockedFunction<typeof reloadAfterDelay>;
 
+// Test helpers
+const waitForAsync = () => new Promise(resolve => setTimeout(resolve, 0));
+
+const createKeyboardEvent = (key: string, options: { ctrlKey?: boolean } = {}) => {
+    const event = new KeyboardEvent('keydown', { key, ...options });
+    Object.defineProperty(event, 'preventDefault', { value: jest.fn() });
+    return event;
+};
+
 describe('inline-edit', () => {
     beforeEach(() => {
         document.body.innerHTML = '';
+    });
+
+    afterEach(() => {
         jest.clearAllMocks();
     });
 
@@ -184,8 +196,7 @@ describe('inline-edit', () => {
             (textarea as HTMLTextAreaElement).value = 'New text';
             textarea?.dispatchEvent(new Event('blur'));
 
-            // Wait for async save
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await waitForAsync();
 
             expect(mockPost).toHaveBeenCalledWith('/api/test/description', { description: 'New text' });
             expect(mockShowInlineAlert).toHaveBeenCalledWith('success', 'Description updated');
@@ -205,7 +216,7 @@ describe('inline-edit', () => {
             (textarea as HTMLTextAreaElement).value = 'New text';
             textarea?.dispatchEvent(new Event('blur'));
 
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await waitForAsync();
 
             expect(mockShowInlineAlert).toHaveBeenCalledWith('error', 'Save failed');
             expect(elem.innerHTML).toContain('Old text');
@@ -224,11 +235,10 @@ describe('inline-edit', () => {
             const textarea = elem.querySelector('textarea') as HTMLTextAreaElement;
             textarea.value = 'New';
 
-            const event = new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true });
-            Object.defineProperty(event, 'preventDefault', { value: jest.fn() });
+            const event = createKeyboardEvent('Enter', { ctrlKey: true });
             textarea.dispatchEvent(event);
 
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await waitForAsync();
 
             expect(mockPost).toHaveBeenCalledWith('/api/test/description', { description: 'New' });
         });
@@ -269,7 +279,7 @@ describe('inline-edit', () => {
             input.value = 'New Title';
             input.dispatchEvent(new Event('blur'));
 
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await waitForAsync();
 
             expect(mockPost).toHaveBeenCalledWith('/api/test/456/attr', { field: 'title', value: 'New Title' });
             expect(mockShowInlineAlert).toHaveBeenCalledWith('success', 'Updated');
@@ -291,7 +301,7 @@ describe('inline-edit', () => {
             input.value = '10';
             input.dispatchEvent(new Event('blur'));
 
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await waitForAsync();
 
             expect(mockPost).toHaveBeenCalledWith('/api/test/789/attr', { field: 'maxAssignees', value: '10' });
             expect(mockReloadAfterDelay).toHaveBeenCalledWith(100);
@@ -313,7 +323,7 @@ describe('inline-edit', () => {
             input.value = 'Modified';
             input.dispatchEvent(new Event('blur'));
 
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await waitForAsync();
 
             expect(mockShowInlineAlert).toHaveBeenCalledWith('error', 'Failed to save');
             expect(elem.textContent).toBe('Original');
@@ -334,11 +344,10 @@ describe('inline-edit', () => {
             const input = elem.querySelector('input') as HTMLInputElement;
             input.value = 'After';
 
-            const event = new KeyboardEvent('keydown', { key: 'Enter' });
-            Object.defineProperty(event, 'preventDefault', { value: jest.fn() });
+            const event = createKeyboardEvent('Enter');
             input.dispatchEvent(event);
 
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await waitForAsync();
 
             expect(mockPost).toHaveBeenCalledWith('/api/test/111/attr', { field: 'title', value: 'After' });
         });
