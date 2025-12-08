@@ -465,15 +465,11 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             );
 
             if (isDuplicate) {
-                if (addWarningBox) {
-                    addWarningBox.classList.remove('d-none');
-                    const span = addWarningBox.querySelector('span');
-                    if (span) span.textContent = 'This recommendation already exists.';
-                }
+                alert('This recommendation already exists.');
                 return;
             }
             
-            // Check for overlapping assignments/recommendations for this participant
+            // Add recommendation directly (overlap warning already shown on selection change)
             // Get slot's day/time from DOM
             const slotElement = scheduleView.querySelector(`[data-slot-id="${slotId}"]`);
             const slotDay = slotElement?.closest('[data-day]')?.getAttribute('data-day');

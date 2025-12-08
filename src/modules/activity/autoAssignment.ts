@@ -44,6 +44,7 @@ export interface AutoAssignmentContext {
     roleRequirements: ActivityPlanRequirement[];
     overrides: ActivityPlanRequirementOverride[];
     existingAssignments: Record<string, AssignmentCandidate[]>;
+    existingRecommendations?: RecommendationInput[];
 }
 
 interface ParticipantState {
@@ -235,8 +236,7 @@ function canAssign(
  * - Rejection memory: Preserves rejected state and discourages re-recommendation
  */
 export function generateAutoRecommendations(
-    ctx: AutoAssignmentContext,
-    existingRecommendations?: RecommendationInput[]
+    ctx: AutoAssignmentContext
 ): RecommendationInput[] {
     const allowOverfill = Boolean(ctx.plan.allowOverfillAfterFull);
     const availabilityWeight = settingsStore.value.activityAvailabilityWeight;
@@ -244,10 +244,10 @@ export function generateAutoRecommendations(
     const arrivalDeparturePenalty = settingsStore.value.activityArrivalDeparturePenalty;
     const {states, assignmentMap} = buildParticipantStates(ctx);
     
-    // Build rejection memory from existing recommendations
+    // Build rejection memory from existing recommendations in context
     const rejectedSet = new Set<string>();
-    if (existingRecommendations) {
-        existingRecommendations
+    if (ctx.existingRecommendations) {
+        ctx.existingRecommendations
             .filter(r => r.status === 'REJECTED')
             .forEach(r => {
                 const key = `${r.slotId}:${r.userId || ''}:${r.guestId || ''}`;
@@ -284,12 +284,14 @@ export function generateAutoRecommendations(
     // Post-processing: Mark previously-rejected recommendations
     // When algorithm has no choice but to re-recommend a rejected assignment,
     // mark it as REJECTED to signal: "This was rejected before, but it's the best fit available"
-    recommendations.forEach(rec => {
-        const key = `${rec.slotId}:${rec.userId || ''}:${rec.guestId || ''}`;
-        if (rejectedSet.has(key)) {
-            rec.status = 'REJECTED';
-        }
-    });
+    if (ctx.existingRecommendations) {
+        recommendations.forEach(rec => {
+            const key = `${rec.slotId}:${rec.userId || ''}:${rec.guestId || ''}`;
+            if (rejectedSet.has(key)) {
+                rec.status = 'REJECTED';
+            }
+        });
+    }
 
     return recommendations;
 }
@@ -770,7 +772,7 @@ export async function generatePlanRecommendations(
         requirementConfig.overrides,
     );
 
-    const ctx: AutoAssignmentContext = {
+    const context: AutoAssignmentContext = {
         plan: {
             assignmentMode: plan.assignmentMode,
             generalRequiredShifts: plan.generalRequiredShifts,
@@ -786,7 +788,8 @@ export async function generatePlanRecommendations(
         roleRequirements: requirementConfig.roleRequirements,
         overrides: requirementConfig.overrides,
         existingAssignments,
+        existingRecommendations,
     };
 
-    return generateAutoRecommendations(ctx, existingRecommendations);
+    return generateAutoRecommendations(context);
 }
