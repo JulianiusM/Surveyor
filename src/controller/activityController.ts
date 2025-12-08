@@ -391,7 +391,9 @@ async function updateSlotAttr(slotId: string, body: any, permData?: PermBundle) 
 
 
 async function deleteAssignment(assignId: number) {
-    await activityService.deleteActivitySlotAssignment(assignId);
+    const assignment = await activityService.getActivitySlotAssignmentById(assignId);
+    if (!assignment) throw new APIError('Assignment not found', {assignId}, 404);
+    await activityService.deleteActivitySlotAssignment(assignId, assignment);
     return 'Assignment removed';
 }
 
@@ -726,8 +728,16 @@ async function updateRecommendations(planId: string, body: any) {
 }
 
 async function autoGenerateRecommendations(planId: string) {
-    const recommendations = await generatePlanRecommendations(planId);
+    // IMPORTANT: Load existing recommendations BEFORE generating
+    // This preserves rejection memory for the algorithm
+    const existingRecommendations = await recommendationService.getRecommendations(planId);
+    
+    // Generate with rejection memory
+    const recommendations = await generatePlanRecommendations(planId, existingRecommendations);
+    
+    // Now replace with new recommendations that respect rejection memory
     await recommendationService.replaceRecommendations(planId, recommendations);
+    
     const warnings = await collectRecommendationWarnings(planId, recommendations);
     return {message: 'Recommendations generated', warnings};
 }
@@ -861,11 +871,13 @@ async function applyRecommendations(planId: string, body?: any) {
 
     // Auto-regenerate recommendations after applying to remove stale items
     // and get fresh recommendations that know about the new assignments
-    if (applied > 0) {
+    if (appliedIds.length > 0) {
         try {
-            // Generate fresh recommendations using the wrapper function
-            // This will automatically load existing recommendations for rejection memory
-            const freshRecommendations = await generatePlanRecommendations(planId);
+            // Load existing recommendations to preserve rejection memory
+            const existingRecommendations = await recommendationService.getRecommendations(planId);
+            
+            // Generate fresh recommendations with rejection memory
+            const freshRecommendations = await generatePlanRecommendations(planId, existingRecommendations);
             
             // Replace all recommendations with fresh ones
             await recommendationService.replaceRecommendations(planId, freshRecommendations);

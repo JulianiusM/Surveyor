@@ -733,14 +733,21 @@ function toParticipantAttendanceFromAssignments(assignments: Record<string, Assi
     });
 }
 
-export async function generatePlanRecommendations(planId: string): Promise<RecommendationInput[]> {
+export async function generatePlanRecommendations(
+    planId: string,
+    existingRecommendations?: RecommendationDb[]
+): Promise<RecommendationInput[]> {
     const requirementConfig = await requirementService.getRequirementConfiguration(planId);
-    const [plan, slots, existingAssignments, existingRecommendations] = await Promise.all([
+    const [plan, slots, existingAssignments] = await Promise.all([
         activityService.getActivityPlanById(planId),
         activityService.getActivitySlotsFlat(planId) as Promise<AutoAssignmentSlot[]>,
         activityService.getParticipantAssignmentsWithSlots(planId),
-        recommendationService.getRecommendations(planId).catch(() => [] as RecommendationInput[]), // Load for rejection memory
     ]);
+    
+    // If existing recommendations not provided, load them for rejection memory
+    if (!existingRecommendations) {
+        existingRecommendations = await recommendationService.getRecommendations(planId).catch(() => [] as RecommendationDb[]);
+    }
 
     if (!plan) throw new Error(`Activity plan ${planId} not found`);
 
@@ -763,7 +770,7 @@ export async function generatePlanRecommendations(planId: string): Promise<Recom
         requirementConfig.overrides,
     );
 
-    const context: AutoAssignmentContext = {
+    const ctx: AutoAssignmentContext = {
         plan: {
             assignmentMode: plan.assignmentMode,
             generalRequiredShifts: plan.generalRequiredShifts,
@@ -781,5 +788,5 @@ export async function generatePlanRecommendations(planId: string): Promise<Recom
         existingAssignments,
     };
 
-    return generateAutoRecommendations(context, existingRecommendations);
+    return generateAutoRecommendations(ctx, existingRecommendations);
 }

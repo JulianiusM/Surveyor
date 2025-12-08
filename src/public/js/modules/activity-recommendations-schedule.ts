@@ -368,6 +368,60 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
                 option.textContent = formatParticipantLabel(opt);
                 addParticipantSelect.append(option);
             });
+            
+            // Add change handler to show warning when participant selected
+            addParticipantSelect.addEventListener('change', () => {
+                // Clear warning first
+                if (addWarningBox) {
+                    addWarningBox.classList.add('d-none');
+                }
+                
+                const participantValue = addParticipantSelect.value;
+                if (!participantValue || !slotId) return;
+                
+                // Check for overlap
+                const [type, idStr] = participantValue.split(':');
+                const id = parseInt(idStr, 10);
+                const userId = type === 'user' ? id : null;
+                const guestId = type === 'guest' ? id : null;
+                
+                const participant = participantOptions.find((p) =>
+                    (userId && p.userId === userId) || (guestId && p.guestId === guestId)
+                );
+                
+                if (participant) {
+                    // Find slot from existing data
+                    const slot = slots.find((s: any) => s.id === slotId);
+                    if (slot) {
+                        // Check for overlapping assignments on same day
+                        const slotDate = new Date(slot.day);
+                        const hasOverlap = existingAssignments.some((assignment: any) => {
+                            const matchesParticipant = 
+                                (userId && assignment.user?.id === userId) ||
+                                (guestId && assignment.guest?.id === guestId);
+                            
+                            if (!matchesParticipant) return false;
+                            
+                            const assignmentDate = new Date(assignment.slot.day);
+                            if (assignmentDate.toDateString() !== slotDate.toDateString()) return false;
+                            
+                            // Check time overlap
+                            const slotStart = new Date(`${slot.day}T${slot.startTime}`);
+                            const slotEnd = new Date(`${slot.day}T${slot.endTime}`);
+                            const assignmentStart = new Date(`${assignment.slot.day}T${assignment.slot.startTime}`);
+                            const assignmentEnd = new Date(`${assignment.slot.day}T${assignment.slot.endTime}`);
+                            
+                            return slotStart < assignmentEnd && slotEnd > assignmentStart;
+                        });
+                        
+                        if (hasOverlap && addWarningBox) {
+                            addWarningBox.classList.remove('d-none');
+                            const span = addWarningBox.querySelector('span');
+                            if (span) span.textContent = '⚠️ Warning: This participant has an overlapping assignment or recommendation on the same day';
+                        }
+                    }
+                }
+            }, {once: true}); // Only attach once per modal open
         }
         if (addWarningBox) addWarningBox.classList.add('d-none');
 
