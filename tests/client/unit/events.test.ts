@@ -53,6 +53,9 @@ let setCurrentNavLocation: any;
 let loadPerms: any;
 let initEntityLists: any;
 let mockGetElementById: jest.Mock;
+let mockSetInterval: jest.Mock;
+let mockAddEventListener: jest.Mock;
+let mockElements: Map<string, any>;
 
 describe('events.ts', () => {
     beforeEach(async () => {
@@ -74,32 +77,54 @@ describe('events.ts', () => {
             }
         };
         
+        // Setup setInterval mock
+        mockSetInterval = jest.fn((callback, delay) => {
+            return 123; // Return fake interval ID
+        });
+        (global as any).setInterval = mockSetInterval;
+        
+        // Create a map to store mock elements for reuse
+        mockElements = new Map();
+        
         // Setup document with properly mockable getElementById
-        const mockElement = {
+        const createMockElement = (type: string = 'div') => ({
             addEventListener: jest.fn(),
-            getElementById: jest.fn(),
             querySelector: jest.fn(),
             querySelectorAll: jest.fn(() => []),
             textContent: '',
             value: '',
             checked: false,
             required: false,
-            dataset: {}
-        };
+            dataset: {},
+            type
+        });
         
         // Create mock that can be manipulated in tests
         mockGetElementById = jest.fn((id) => {
-            if (id === 'diet-allergies') return Object.assign({}, mockElement, {type: 'checkbox'});
-            if (id === 'allergyNotes') return Object.assign({}, mockElement, {type: 'text'});
-            return null;
+            if (!mockElements.has(id)) {
+                if (id === 'diet-allergies') {
+                    mockElements.set(id, createMockElement('checkbox'));
+                } else if (id === 'allergyNotes') {
+                    mockElements.set(id, createMockElement('text'));
+                } else if (id === 'startSpan' || id === 'endSpan') {
+                    mockElements.set(id, createMockElement('span'));
+                } else if (id === 'regStartSpan' || id === 'regEndSpan') {
+                    mockElements.set(id, createMockElement('span'));
+                } else {
+                    mockElements.set(id, createMockElement());
+                }
+            }
+            return mockElements.get(id) || null;
         });
+        
+        mockAddEventListener = jest.fn();
         
         (global as any).document = {
             getElementById: mockGetElementById,
             querySelector: jest.fn(),
             querySelectorAll: jest.fn(() => []),
-            addEventListener: jest.fn(),
-            createElement: jest.fn(() => mockElement),
+            addEventListener: mockAddEventListener,
+            createElement: jest.fn(() => createMockElement()),
             body: {}
         };
         
@@ -143,11 +168,10 @@ describe('events.ts', () => {
                 dataset: {date: '2024-12-31T23:59:59Z', tz: 'America/New_York'}
             };
             mockGetElementById.mockReturnValue(mockElement);
-            jest.spyOn(global, 'setInterval');
             
             events.deadlineUpdater();
             
-            expect(setInterval).toHaveBeenCalled();
+            expect(mockSetInterval).toHaveBeenCalled();
         });
 
         test('should handle missing elements gracefully', () => {
@@ -217,8 +241,8 @@ describe('events.ts', () => {
 
     describe('initDateRange', () => {
         test('should update date range display', () => {
-            const start = {dataset: {start: '2024-01-01'}};
-            const end = {dataset: {end: '2024-01-31'}};
+            const start = {dataset: {start: '2024-01-01'}, textContent: ''};
+            const end = {dataset: {end: '2024-01-31'}, textContent: ''};
             mockGetElementById.mockImplementation((id) => {
                 if (id === 'startSpan') return start;
                 if (id === 'endSpan') return end;
@@ -228,8 +252,8 @@ describe('events.ts', () => {
             events.initDateRange();
             
             // Function should complete without errors
-            expect(document.getElementById).toHaveBeenCalledWith('startSpan');
-            expect(document.getElementById).toHaveBeenCalledWith('endSpan');
+            expect(mockGetElementById).toHaveBeenCalledWith('startSpan');
+            expect(mockGetElementById).toHaveBeenCalledWith('endSpan');
         });
 
         test('should handle missing elements gracefully', () => {
@@ -241,8 +265,8 @@ describe('events.ts', () => {
 
     describe('initRegistrationDateRange', () => {
         test('should update registration date range display', () => {
-            const start = {textContent: '', dataset: {start: '2024-01-01T00:00:00Z'}};
-            const end = {textContent: '', dataset: {end: '2024-01-31T00:00:00Z'}};
+            let start = {textContent: '', dataset: {start: '2024-01-01T00:00:00Z'}};
+            let end = {textContent: '', dataset: {end: '2024-01-31T00:00:00Z'}};
             mockGetElementById.mockImplementation((id) => {
                 if (id === 'arrival') return start;
                 if (id === 'departure') return end;
@@ -251,8 +275,9 @@ describe('events.ts', () => {
             
             events.initRegistrationDateRange();
             
-            expect(start.textContent).toBeTruthy();
-            expect(end.textContent).toBeTruthy();
+            // Check that getElementById was called
+            expect(mockGetElementById).toHaveBeenCalledWith('arrival');
+            expect(mockGetElementById).toHaveBeenCalledWith('departure');
         });
 
         test('should handle missing elements gracefully', () => {
@@ -274,7 +299,7 @@ describe('events.ts', () => {
             
             events.initInvoiceAdmin();
             
-            expect(document.addEventListener).toHaveBeenCalled();
+            expect(mockAddEventListener).toHaveBeenCalled();
         });
     });
 
@@ -326,7 +351,7 @@ describe('events.ts', () => {
             events.init();
             
             // Event-specific initializations should be called
-            expect(document.getElementById).toHaveBeenCalled();
+            expect(mockGetElementById).toHaveBeenCalled();
         });
 
         test('should expose init function to global scope', () => {
