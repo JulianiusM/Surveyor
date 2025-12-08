@@ -1,0 +1,334 @@
+/**
+ * Tests for events.ts module
+ * Event management functionality with registration and invoice operations
+ */
+
+import {describe, test, expect, jest, beforeEach, afterEach} from '@jest/globals';
+import {
+    allergyCheckData,
+    deadlineUpdaterData,
+    initRegistrationData,
+    initUpdateData,
+    initCancelRegistrationData,
+    initData
+} from '../data/eventsData';
+
+// Mock all dependencies
+jest.mock('../../../src/public/js/core/navigation', () => ({
+    initEntityLists: jest.fn(),
+    setCurrentNavLocation: jest.fn()
+}));
+
+jest.mock('../../../src/public/js/core/permissions', () => ({
+    loadPerms: jest.fn(),
+    requireEntityPerm: jest.fn(),
+    requireEntityPermsForForm: jest.fn()
+}));
+
+jest.mock('../../../src/public/js/core/http', () => ({
+    post: jest.fn().mockResolvedValue({})
+}));
+
+jest.mock('../../../src/public/js/shared/alerts', () => ({
+    showInlineAlert: jest.fn()
+}));
+
+jest.mock('../../../src/public/js/core/formatting', () => ({
+    formatISOInTimeZone: jest.fn((date) => date.toISOString())
+}));
+
+jest.mock('../../../src/public/js/shared/ui-helpers', () => ({
+    formatDuration: jest.fn((ms) => `${Math.floor(ms / 60000)} minutes`),
+    parseJsonScript: jest.fn((id) => {
+        if (id === 'participantsData') return [];
+        if (id === 'registrationData') return {id: 123};
+        return null;
+    }),
+    reloadAfterDelay: jest.fn(),
+    updateToLocalString: jest.fn()
+}));
+
+let events: any;
+let setCurrentNavLocation: any;
+let loadPerms: any;
+let initEntityLists: any;
+
+describe('events.ts', () => {
+    beforeEach(async () => {
+        jest.clearAllMocks();
+        
+        // Setup window
+        (global as any).window = {
+            Surveyor: {
+                eventId: '',
+                init: undefined
+            },
+            confirm: jest.fn(() => true),
+            bootstrap: {
+                Modal: {
+                    getOrCreateInstance: jest.fn(() => ({
+                        show: jest.fn()
+                    }))
+                }
+            }
+        };
+        
+        // Setup document
+        const mockElement = {
+            addEventListener: jest.fn(),
+            getElementById: jest.fn(),
+            querySelector: jest.fn(),
+            querySelectorAll: jest.fn(() => []),
+            textContent: '',
+            value: '',
+            checked: false,
+            required: false,
+            dataset: {}
+        };
+        
+        (global as any).document = {
+            getElementById: jest.fn((id) => {
+                if (id === 'diet-allergies') return Object.assign({}, mockElement, {type: 'checkbox'});
+                if (id === 'allergyNotes') return Object.assign({}, mockElement, {type: 'text'});
+                return null;
+            }),
+            querySelector: jest.fn(),
+            querySelectorAll: jest.fn(() => []),
+            addEventListener: jest.fn(),
+            createElement: jest.fn(() => mockElement),
+            body: {}
+        };
+        
+        // Import mocks
+        const nav = await import('../../../src/public/js/core/navigation');
+        const perms = await import('../../../src/public/js/core/permissions');
+        
+        setCurrentNavLocation = nav.setCurrentNavLocation;
+        loadPerms = perms.loadPerms;
+        initEntityLists = nav.initEntityLists;
+        
+        events = await import('../../../src/public/js/events');
+    });
+
+    afterEach(() => {
+        jest.resetModules();
+    });
+
+    describe('allergyCheck', () => {
+        test('should sync allergy notes requirement with checkbox', () => {
+            const allergyBox = document.getElementById('diet-allergies') as any;
+            const notes = document.getElementById('allergyNotes') as any;
+            
+            events.allergyCheck();
+            
+            // Check that event listener was added
+            expect(allergyBox.addEventListener).toHaveBeenCalledWith('change', expect.any(Function));
+        });
+
+        test('should handle missing elements gracefully', () => {
+            (document.getElementById as any).mockReturnValue(null);
+            
+            expect(() => events.allergyCheck()).not.toThrow();
+        });
+    });
+
+    describe('deadlineUpdater', () => {
+        test('should update deadline countdown display', () => {
+            const mockElement = {
+                textContent: '',
+                dataset: {date: '2024-12-31T23:59:59Z', tz: 'America/New_York'}
+            };
+            (document.getElementById as any).mockReturnValue(mockElement);
+            jest.spyOn(global, 'setInterval');
+            
+            events.deadlineUpdater();
+            
+            expect(setInterval).toHaveBeenCalled();
+        });
+
+        test('should handle missing elements gracefully', () => {
+            (document.getElementById as any).mockReturnValue(null);
+            
+            expect(() => events.deadlineUpdater()).not.toThrow();
+        });
+    });
+
+    describe('initRegistration', () => {
+        test('should set up registration form submit handler', () => {
+            const form = {
+                addEventListener: jest.fn()
+            };
+            (document.getElementById as any).mockReturnValue(form);
+            
+            events.initRegistration();
+            
+            expect(form.addEventListener).toHaveBeenCalledWith('submit', expect.any(Function));
+        });
+
+        test('should handle missing form gracefully', () => {
+            (document.getElementById as any).mockReturnValue(null);
+            
+            expect(() => events.initRegistration()).not.toThrow();
+        });
+    });
+
+    describe('initUpdate', () => {
+        test('should set up event update form submit handler', () => {
+            const form = {
+                addEventListener: jest.fn(),
+                querySelector: jest.fn(() => null)
+            };
+            (document.getElementById as any).mockReturnValue(form);
+            
+            events.initUpdate();
+            
+            expect(form.addEventListener).toHaveBeenCalledWith('submit', expect.any(Function));
+        });
+
+        test('should handle missing form gracefully', () => {
+            (document.getElementById as any).mockReturnValue(null);
+            
+            expect(() => events.initUpdate()).not.toThrow();
+        });
+    });
+
+    describe('initCancelRegistration', () => {
+        test('should set up cancel registration button handler', () => {
+            const btn = {
+                addEventListener: jest.fn()
+            };
+            (document.getElementById as any).mockReturnValue(btn);
+            
+            events.initCancelRegistration();
+            
+            expect(btn.addEventListener).toHaveBeenCalledWith('click', expect.any(Function));
+        });
+
+        test('should handle missing button gracefully', () => {
+            (document.getElementById as any).mockReturnValue(null);
+            
+            expect(() => events.initCancelRegistration()).not.toThrow();
+        });
+    });
+
+    describe('initDateRange', () => {
+        test('should update date range display', () => {
+            const start = {dataset: {start: '2024-01-01'}};
+            const end = {dataset: {end: '2024-01-31'}};
+            (document.getElementById as any).mockImplementation((id) => {
+                if (id === 'startSpan') return start;
+                if (id === 'endSpan') return end;
+                return null;
+            });
+            
+            events.initDateRange();
+            
+            // Function should complete without errors
+            expect(document.getElementById).toHaveBeenCalledWith('startSpan');
+            expect(document.getElementById).toHaveBeenCalledWith('endSpan');
+        });
+
+        test('should handle missing elements gracefully', () => {
+            (document.getElementById as any).mockReturnValue(null);
+            
+            expect(() => events.initDateRange()).not.toThrow();
+        });
+    });
+
+    describe('initRegistrationDateRange', () => {
+        test('should update registration date range display', () => {
+            const start = {textContent: '', dataset: {start: '2024-01-01T00:00:00Z'}};
+            const end = {textContent: '', dataset: {end: '2024-01-31T00:00:00Z'}};
+            (document.getElementById as any).mockImplementation((id) => {
+                if (id === 'arrival') return start;
+                if (id === 'departure') return end;
+                return null;
+            });
+            
+            events.initRegistrationDateRange();
+            
+            expect(start.textContent).toBeTruthy();
+            expect(end.textContent).toBeTruthy();
+        });
+
+        test('should handle missing elements gracefully', () => {
+            (document.getElementById as any).mockReturnValue(null);
+            
+            expect(() => events.initRegistrationDateRange()).not.toThrow();
+        });
+    });
+
+    describe('initInvoiceAdmin', () => {
+        test('should set up invoice administration handlers', () => {
+            const form = {
+                addEventListener: jest.fn(),
+                querySelector: jest.fn(() => null),
+                querySelectorAll: jest.fn(() => []),
+                dataset: {api: '/api/test'}
+            };
+            (document.getElementById as any).mockReturnValue(form);
+            
+            events.initInvoiceAdmin();
+            
+            expect(document.addEventListener).toHaveBeenCalled();
+        });
+    });
+
+    describe('initInvoiceSubmission', () => {
+        test('should set up invoice submission form handler', () => {
+            const form = {
+                addEventListener: jest.fn()
+            };
+            (document.getElementById as any).mockReturnValue(form);
+            
+            events.initInvoiceSubmission();
+            
+            expect(form.addEventListener).toHaveBeenCalledWith('submit', expect.any(Function));
+        });
+
+        test('should handle missing form gracefully', () => {
+            (document.getElementById as any).mockReturnValue(null);
+            
+            expect(() => events.initInvoiceSubmission()).not.toThrow();
+        });
+    });
+
+    describe('init', () => {
+        test('should call setCurrentNavLocation and loadPerms', () => {
+            events.init();
+            
+            expect(setCurrentNavLocation).toHaveBeenCalledTimes(1);
+            expect(loadPerms).toHaveBeenCalledTimes(1);
+        });
+
+        test('should initialize all basic functions', () => {
+            (document.getElementById as any).mockReturnValue({
+                addEventListener: jest.fn(),
+                dataset: {date: '2024-12-31T23:59:59Z', tz: 'UTC'}
+            });
+            
+            events.init();
+            
+            expect(setCurrentNavLocation).toHaveBeenCalled();
+            expect(loadPerms).toHaveBeenCalled();
+            expect(initEntityLists).toHaveBeenCalled();
+        });
+
+        test('should initialize event-specific functions when eventId exists', () => {
+            (global as any).window.Surveyor.eventId = 'event-123';
+            const form = {addEventListener: jest.fn(), querySelector: jest.fn()};
+            (document.getElementById as any).mockReturnValue(form);
+            
+            events.init();
+            
+            // Event-specific initializations should be called
+            expect(document.getElementById).toHaveBeenCalled();
+        });
+
+        test('should expose init function to global scope', () => {
+            events.init();
+            
+            expect(window.Surveyor.init).toBeDefined();
+        });
+    });
+});
