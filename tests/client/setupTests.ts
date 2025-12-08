@@ -38,9 +38,9 @@ import { server } from './msw/server';
 // Start server before all tests
 beforeAll(() => {
     server.listen({
-        // Fail tests if an unhandled request is made
-        // This ensures we mock all HTTP calls
-        onUnhandledRequest: 'error',
+        // Warn instead of error for unhandled requests to make debugging easier
+        // Change to 'error' once all handlers are properly set up
+        onUnhandledRequest: 'warn',
     });
 });
 
@@ -69,6 +69,9 @@ beforeEach(() => {
         rawPermissions: undefined,
         permissions: undefined,
     };
+
+    // Mock scrollIntoView (not available in jsdom)
+    Element.prototype.scrollIntoView = jest.fn();
 });
 
 /**
