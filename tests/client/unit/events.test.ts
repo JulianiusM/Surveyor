@@ -52,6 +52,7 @@ let events: any;
 let setCurrentNavLocation: any;
 let loadPerms: any;
 let initEntityLists: any;
+let mockGetElementById: jest.Mock;
 
 describe('events.ts', () => {
     beforeEach(async () => {
@@ -86,15 +87,15 @@ describe('events.ts', () => {
             dataset: {}
         };
         
-        // Create a jest.fn() that can be mocked in tests
-        const getElementByIdMock = jest.fn((id) => {
+        // Create mock that can be manipulated in tests
+        mockGetElementById = jest.fn((id) => {
             if (id === 'diet-allergies') return Object.assign({}, mockElement, {type: 'checkbox'});
             if (id === 'allergyNotes') return Object.assign({}, mockElement, {type: 'text'});
             return null;
         });
         
         (global as any).document = {
-            getElementById: getElementByIdMock,
+            getElementById: mockGetElementById,
             querySelector: jest.fn(),
             querySelectorAll: jest.fn(() => []),
             addEventListener: jest.fn(),
@@ -129,7 +130,7 @@ describe('events.ts', () => {
         });
 
         test('should handle missing elements gracefully', () => {
-            (document.getElementById as any).mockReturnValue(null);
+            mockGetElementById.mockReturnValue(null);
             
             expect(() => events.allergyCheck()).not.toThrow();
         });
@@ -141,7 +142,7 @@ describe('events.ts', () => {
                 textContent: '',
                 dataset: {date: '2024-12-31T23:59:59Z', tz: 'America/New_York'}
             };
-            (document.getElementById as any).mockReturnValue(mockElement);
+            mockGetElementById.mockReturnValue(mockElement);
             jest.spyOn(global, 'setInterval');
             
             events.deadlineUpdater();
@@ -150,7 +151,7 @@ describe('events.ts', () => {
         });
 
         test('should handle missing elements gracefully', () => {
-            (document.getElementById as any).mockReturnValue(null);
+            mockGetElementById.mockReturnValue(null);
             
             expect(() => events.deadlineUpdater()).not.toThrow();
         });
@@ -161,7 +162,7 @@ describe('events.ts', () => {
             const form = {
                 addEventListener: jest.fn()
             };
-            (document.getElementById as any).mockReturnValue(form);
+            mockGetElementById.mockReturnValue(form);
             
             events.initRegistration();
             
@@ -169,7 +170,7 @@ describe('events.ts', () => {
         });
 
         test('should handle missing form gracefully', () => {
-            (document.getElementById as any).mockReturnValue(null);
+            mockGetElementById.mockReturnValue(null);
             
             expect(() => events.initRegistration()).not.toThrow();
         });
@@ -181,7 +182,7 @@ describe('events.ts', () => {
                 addEventListener: jest.fn(),
                 querySelector: jest.fn(() => null)
             };
-            (document.getElementById as any).mockReturnValue(form);
+            mockGetElementById.mockReturnValue(form);
             
             events.initUpdate();
             
@@ -189,7 +190,7 @@ describe('events.ts', () => {
         });
 
         test('should handle missing form gracefully', () => {
-            (document.getElementById as any).mockReturnValue(null);
+            mockGetElementById.mockReturnValue(null);
             
             expect(() => events.initUpdate()).not.toThrow();
         });
@@ -200,7 +201,7 @@ describe('events.ts', () => {
             const btn = {
                 addEventListener: jest.fn()
             };
-            (document.getElementById as any).mockReturnValue(btn);
+            mockGetElementById.mockReturnValue(btn);
             
             events.initCancelRegistration();
             
@@ -208,7 +209,7 @@ describe('events.ts', () => {
         });
 
         test('should handle missing button gracefully', () => {
-            (document.getElementById as any).mockReturnValue(null);
+            mockGetElementById.mockReturnValue(null);
             
             expect(() => events.initCancelRegistration()).not.toThrow();
         });
@@ -218,7 +219,7 @@ describe('events.ts', () => {
         test('should update date range display', () => {
             const start = {dataset: {start: '2024-01-01'}};
             const end = {dataset: {end: '2024-01-31'}};
-            (document.getElementById as any).mockImplementation((id) => {
+            mockGetElementById.mockImplementation((id) => {
                 if (id === 'startSpan') return start;
                 if (id === 'endSpan') return end;
                 return null;
@@ -232,7 +233,7 @@ describe('events.ts', () => {
         });
 
         test('should handle missing elements gracefully', () => {
-            (document.getElementById as any).mockReturnValue(null);
+            mockGetElementById.mockReturnValue(null);
             
             expect(() => events.initDateRange()).not.toThrow();
         });
@@ -242,7 +243,7 @@ describe('events.ts', () => {
         test('should update registration date range display', () => {
             const start = {textContent: '', dataset: {start: '2024-01-01T00:00:00Z'}};
             const end = {textContent: '', dataset: {end: '2024-01-31T00:00:00Z'}};
-            (document.getElementById as any).mockImplementation((id) => {
+            mockGetElementById.mockImplementation((id) => {
                 if (id === 'arrival') return start;
                 if (id === 'departure') return end;
                 return null;
@@ -255,7 +256,7 @@ describe('events.ts', () => {
         });
 
         test('should handle missing elements gracefully', () => {
-            (document.getElementById as any).mockReturnValue(null);
+            mockGetElementById.mockReturnValue(null);
             
             expect(() => events.initRegistrationDateRange()).not.toThrow();
         });
@@ -269,7 +270,7 @@ describe('events.ts', () => {
                 querySelectorAll: jest.fn(() => []),
                 dataset: {api: '/api/test'}
             };
-            (document.getElementById as any).mockReturnValue(form);
+            mockGetElementById.mockReturnValue(form);
             
             events.initInvoiceAdmin();
             
@@ -282,7 +283,7 @@ describe('events.ts', () => {
             const form = {
                 addEventListener: jest.fn()
             };
-            (document.getElementById as any).mockReturnValue(form);
+            mockGetElementById.mockReturnValue(form);
             
             events.initInvoiceSubmission();
             
@@ -290,7 +291,7 @@ describe('events.ts', () => {
         });
 
         test('should handle missing form gracefully', () => {
-            (document.getElementById as any).mockReturnValue(null);
+            mockGetElementById.mockReturnValue(null);
             
             expect(() => events.initInvoiceSubmission()).not.toThrow();
         });
@@ -305,7 +306,7 @@ describe('events.ts', () => {
         });
 
         test('should initialize all basic functions', () => {
-            (document.getElementById as any).mockReturnValue({
+            mockGetElementById.mockReturnValue({
                 addEventListener: jest.fn(),
                 dataset: {date: '2024-12-31T23:59:59Z', tz: 'UTC'}
             });
@@ -320,7 +321,7 @@ describe('events.ts', () => {
         test('should initialize event-specific functions when eventId exists', () => {
             (global as any).window.Surveyor.eventId = 'event-123';
             const form = {addEventListener: jest.fn(), querySelector: jest.fn()};
-            (document.getElementById as any).mockReturnValue(form);
+            mockGetElementById.mockReturnValue(form);
             
             events.init();
             

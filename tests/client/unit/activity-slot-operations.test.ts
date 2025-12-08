@@ -62,7 +62,9 @@ describe('activity-slot-operations', () => {
                 document.body.innerHTML = testCase.elementHtml;
                 initInlineEdit(testCase.planId);
 
-                const element = document.body.firstElementChild as HTMLElement;
+                // Find element with data-edit attribute
+                const editableElement = document.body.querySelector('[data-edit]') as HTMLElement;
+                const element = editableElement || (document.body.firstElementChild as HTMLElement);
                 const event = new MouseEvent('dblclick', {bubbles: true});
                 element.dispatchEvent(event);
 
