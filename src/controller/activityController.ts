@@ -391,8 +391,6 @@ async function updateSlotAttr(slotId: string, body: any, permData?: PermBundle) 
 
 
 async function deleteAssignment(assignId: number) {
-    const assignment = await activityService.getActivitySlotAssignmentById(assignId);
-    if (!assignment) throw new APIError('Assignment not found', {assignId}, 404);
     await activityService.deleteActivitySlotAssignment(assignId);
     return 'Assignment removed';
 }

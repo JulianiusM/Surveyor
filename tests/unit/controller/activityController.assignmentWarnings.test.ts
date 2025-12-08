@@ -6,6 +6,7 @@ jest.mock("../../../src/modules/database/services/ActivityService", () => ({
     getActivitySlotById: jest.fn(),
     getParticipantAssignmentsWithSlots: jest.fn(),
     getActivitySlotAssignees: jest.fn(),
+    getParticipantRolesForPlan: jest.fn().mockResolvedValue([]),
 }));
 
 jest.mock("../../../src/modules/database/services/ActivityRequirementService", () => ({
@@ -52,6 +53,7 @@ describe("getAssignmentWarnings", () => {
         activityService.getActivitySlotAssignees.mockResolvedValue({
             "slot-1": [{id: 1}],
         });
+        activityService.getParticipantRolesForPlan.mockResolvedValue([]);
         eventService.getEventParticipants.mockResolvedValue([
             {userId: 1, arrivalDate: "2025-01-01", departureDate: "2025-01-03"},
         ]);
@@ -84,6 +86,7 @@ describe("getAssignmentWarnings", () => {
         requirementService.getRequirementConfiguration.mockResolvedValue({overrides: []});
         activityService.getParticipantAssignmentsWithSlots.mockResolvedValue({});
         activityService.getActivitySlotAssignees.mockResolvedValue({});
+        activityService.getParticipantRolesForPlan.mockResolvedValue([]);
         eventService.getEventParticipants.mockResolvedValue([]);
 
         await expect(

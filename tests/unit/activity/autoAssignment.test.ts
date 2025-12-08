@@ -2,6 +2,18 @@ import {generateAutoRecommendations, AutoAssignmentContext} from "../../../src/m
 import {AssignmentCandidate} from "../../../src/modules/activity/availability";
 import {RecommendationInput} from "../../../src/modules/database/services/ActivityRecommendationService";
 
+// Mock settings to disable swap optimization for basic fairness tests
+jest.mock("../../../src/modules/settings", () => ({
+    __esModule: true,
+    default: {
+        value: {
+            activityAvailabilityWeight: 0.3,
+            activitySwapOptimizationIterations: 0, // Disable swap optimization
+            activityArrivalDeparturePenalty: 0.2,
+        },
+    },
+}));
+
 describe('generateAutoRecommendations', () => {
     const basePlan = {
         assignmentMode: 'REQUIRED' as const,
