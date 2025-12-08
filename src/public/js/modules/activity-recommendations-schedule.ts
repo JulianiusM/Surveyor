@@ -3,9 +3,7 @@
  * Handles the enhanced schedule-based recommendations view
  */
 
-import {get, post, del} from '../core/http';
-import {showInlineAlert} from '../shared/alerts';
-import {describeWarning} from './activity-assignments';
+import {get, post} from '../core/http';
 import {reloadAfterDelay} from '../shared/ui-helpers';
 import type {
     AssignmentWarning,
@@ -33,6 +31,8 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
     let recommendations: RecommendationRow[] = [];
     let warnings: RecommendationWarning[] = [];
     let participantOptions: RecommendationParticipantOption[] = [];
+    let slots: any[] = [];
+    let existingAssignments: any[] = [];
 
     // Add recommendation modal
     const addModal = document.getElementById('addRecommendationModal');
@@ -279,6 +279,10 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             recommendations = data.recommendations || [];
             warnings = data.warnings || [];
             participantOptions = data.participantOptions || [];
+            slots = data.slots || [];
+            
+            // Extract existing assignments from recommendations for overlap detection
+            existingAssignments = [];
 
             renderAllRecommendations();
             setAlert();
