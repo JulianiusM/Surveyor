@@ -279,7 +279,7 @@ export function generateAutoRecommendations(
     // Swap optimization can ADD recommendations by moving better-served participants to alternative
     // slots, thereby freeing up slots for underserved participants. This is intentional behavior.
     if (swapIterations > 0 && recommendations.length > 0) {
-        optimizeViaSwaps(recommendations, states, assignmentMap, ctx.slots, attendancePolicy, swapIterations);
+        optimizeViaSwaps(recommendations, states, assignmentMap, ctx.slots, attendancePolicy, swapIterations, ctx.plan.allowOverfillAfterFull);
     }
     
     // Post-processing: Mark previously-rejected recommendations
@@ -529,7 +529,8 @@ function optimizeViaSwaps(
     assignmentMap: Record<string, AssignmentCandidate[]>,
     slots: AutoAssignmentSlot[],
     attendancePolicy: AttendancePolicy,
-    maxIterations: number
+    maxIterations: number,
+    allowOverfillAfterFull: boolean
 ): void {
     if (maxIterations <= 0) return;
     
@@ -635,6 +636,20 @@ function optimizeViaSwaps(
                         
                         // Check if other participant can take the alternative slot
                         if (!canParticipantTakeSlot(otherKey, alternativeSlot, slot.id)) continue;
+                        
+                        // Check capacity constraint for alternative slot
+                        // Count existing assignments + recommendations for alternative slot
+                        const alternativeSlotRecs = recommendations.filter(r => r.slotId === alternativeSlot.id && r.slotId !== slot.id);
+                        const alternativeSlotExisting = Object.values(assignmentMap).reduce((count, assignments) => {
+                            return count + assignments.filter(a => a.id === alternativeSlot.id).length;
+                        }, 0);
+                        const alternativeSlotTotalAssigned = alternativeSlotRecs.length + alternativeSlotExisting;
+                        const alternativeSlotCapacity = alternativeSlot.maxAssignees ?? Number.POSITIVE_INFINITY;
+                        
+                        // Only swap if alternative slot has available capacity (or plan allows overfill)
+                        if (!allowOverfillAfterFull && alternativeSlotTotalAssigned >= alternativeSlotCapacity) {
+                            continue;
+                        }
                         
                         // Perform the swap: move other participant to alternative slot,
                         // free up original slot for underserved participant
