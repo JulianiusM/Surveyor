@@ -449,9 +449,15 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
                 return false;
             });
             
+            // Always clear warning first
+            if (addWarningBox) {
+                addWarningBox.classList.add('d-none');
+            }
+            
+            // Show warning if overlap detected
             if (hasOverlap && addWarningBox) {
                 addWarningBox.classList.remove('d-none');
-                addWarningBox.classList.remove('alert-info', 'alert-warning');
+                addWarningBox.classList.remove('alert-info');
                 addWarningBox.classList.add('alert-warning');
                 const span = addWarningBox.querySelector('span');
                 if (span) span.textContent = '⚠️ Warning: This participant has an overlapping assignment or recommendation on the same day.';

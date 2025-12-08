@@ -7,6 +7,7 @@ import {ActivitySlot} from "../database/entities/activity/ActivitySlot";
 import {ActivityPlan} from "../database/entities/activity/ActivityPlan";
 import {RecommendationInput} from "../database/services/ActivityRecommendationService";
 import * as requirementService from "../database/services/ActivityRequirementService";
+import * as recommendationService from "../database/services/ActivityRecommendationService";
 import * as activityService from "../database/services/ActivityService";
 import * as eventService from "../database/services/EventService";
 import settingsStore from "../settings";
@@ -231,13 +232,28 @@ function canAssign(
  * Enhanced with:
  * - Option 1: Weighted scoring (configurable via availabilityWeight)
  * - Option 2: Post-assignment swap optimization (configurable via swapOptimizationIterations)
+ * - Rejection memory: Preserves rejected state and discourages re-recommendation
  */
-export function generateAutoRecommendations(ctx: AutoAssignmentContext): RecommendationInput[] {
+export function generateAutoRecommendations(
+    ctx: AutoAssignmentContext,
+    existingRecommendations?: RecommendationInput[]
+): RecommendationInput[] {
     const allowOverfill = Boolean(ctx.plan.allowOverfillAfterFull);
     const availabilityWeight = settingsStore.value.activityAvailabilityWeight;
     const swapIterations = settingsStore.value.activitySwapOptimizationIterations;
     const arrivalDeparturePenalty = settingsStore.value.activityArrivalDeparturePenalty;
     const {states, assignmentMap} = buildParticipantStates(ctx);
+    
+    // Build rejection memory from existing recommendations
+    const rejectedSet = new Set<string>();
+    if (existingRecommendations) {
+        existingRecommendations
+            .filter(r => r.status === 'REJECTED')
+            .forEach(r => {
+                const key = `${r.slotId}:${r.userId || ''}:${r.guestId || ''}`;
+                rejectedSet.add(key);
+            });
+    }
 
     if (!states.size) return [];
 
@@ -250,12 +266,12 @@ export function generateAutoRecommendations(ctx: AutoAssignmentContext): Recomme
 
     // F5 Phase 1: Fill free capacity first
     const phase1Slots = buildSlotCapacities(ctx.slots, false);
-    assignFairly(phase1Slots, states, assignmentMap, attendancePolicy, recommendations, false, availabilityWeight, arrivalDeparturePenalty);
+    assignFairly(phase1Slots, states, assignmentMap, attendancePolicy, recommendations, false, availabilityWeight, arrivalDeparturePenalty, rejectedSet);
 
     // F5 Phase 2: If overfill allowed and participants still have deficit, allow overcapacity
     if (allowOverfill) {
         const phase2Slots = buildSlotCapacities(ctx.slots, true);
-        assignFairly(phase2Slots, states, assignmentMap, attendancePolicy, recommendations, true, availabilityWeight, arrivalDeparturePenalty);
+        assignFairly(phase2Slots, states, assignmentMap, attendancePolicy, recommendations, true, availabilityWeight, arrivalDeparturePenalty, rejectedSet);
     }
 
     // Option 2: Post-assignment swap optimization
@@ -264,6 +280,16 @@ export function generateAutoRecommendations(ctx: AutoAssignmentContext): Recomme
     if (swapIterations > 0 && recommendations.length > 0) {
         optimizeViaSwaps(recommendations, states, assignmentMap, ctx.slots, attendancePolicy, swapIterations);
     }
+    
+    // Post-processing: Mark previously-rejected recommendations
+    // When algorithm has no choice but to re-recommend a rejected assignment,
+    // mark it as REJECTED to signal: "This was rejected before, but it's the best fit available"
+    recommendations.forEach(rec => {
+        const key = `${rec.slotId}:${rec.userId || ''}:${rec.guestId || ''}`;
+        if (rejectedSet.has(key)) {
+            rec.status = 'REJECTED';
+        }
+    });
 
     return recommendations;
 }
@@ -274,6 +300,7 @@ export function generateAutoRecommendations(ctx: AutoAssignmentContext): Recomme
  * 
  * @param availabilityWeight - Weight for limited availability (0-1). 0.3 means 70% fairness, 30% availability
  * @param arrivalDeparturePenalty - Penalty for slots on arrival/departure days (0-1). 0.2 means 20% penalty
+ * @param rejectedSet - Set of previously rejected (participant, slot) combinations to discourage
  */
 function assignFairly(
     slots: SlotCapacity[],
@@ -283,7 +310,8 @@ function assignFairly(
     recommendations: RecommendationInput[],
     allowOvercapacity: boolean = false,
     availabilityWeight: number = 0.30,
-    arrivalDeparturePenalty: number = 0.2
+    arrivalDeparturePenalty: number = 0.2,
+    rejectedSet: Set<string> = new Set()
 ): void {
     // Track slot assignment counts for fair distribution (cached and updated incrementally)
     const slotAssignmentCounts = new Map<string, number>();
@@ -393,12 +421,17 @@ function assignFairly(
                     }
                 }
                 
+                // Check if this (participant, slot) combination was previously rejected
+                const rejectionKey = `${slot.slot.id}:${state.participant.userId || ''}:${state.participant.guestId || ''}`;
+                const rejectionPenalty = rejectedSet.has(rejectionKey) ? 1000 : 0;
+                
                 // Slot scoring:
                 // 1. Filling degree (primary): prefer less-filled slots
                 // 2. Competition (secondary): prefer less-contested slots when filling degree is similar
                 // 3. Deficit (tertiary): prefer slots where participants have higher need
                 // 4. Arrival/departure penalty: discourage slots on arrival/departure days
-                const slotScore = fillingDegree * 100 + (competition * 0.5) - (slotDeficit * 0.05) + arrivalDeparturePenaltyValue;
+                // 5. Rejection penalty: strongly discourage previously rejected combinations
+                const slotScore = fillingDegree * 100 + (competition * 0.5) - (slotDeficit * 0.05) + arrivalDeparturePenaltyValue + rejectionPenalty;
 
                 // Combined score (lower is better)
                 // Participant score is weighted heavily to prioritize participant fairness over slot balance
@@ -702,10 +735,11 @@ function toParticipantAttendanceFromAssignments(assignments: Record<string, Assi
 
 export async function generatePlanRecommendations(planId: string): Promise<RecommendationInput[]> {
     const requirementConfig = await requirementService.getRequirementConfiguration(planId);
-    const [plan, slots, existingAssignments] = await Promise.all([
+    const [plan, slots, existingAssignments, existingRecommendations] = await Promise.all([
         activityService.getActivityPlanById(planId),
         activityService.getActivitySlotsFlat(planId) as Promise<AutoAssignmentSlot[]>,
         activityService.getParticipantAssignmentsWithSlots(planId),
+        recommendationService.getRecommendations(planId).catch(() => [] as RecommendationInput[]), // Load for rejection memory
     ]);
 
     if (!plan) throw new Error(`Activity plan ${planId} not found`);
@@ -747,5 +781,5 @@ export async function generatePlanRecommendations(planId: string): Promise<Recom
         existingAssignments,
     };
 
-    return generateAutoRecommendations(context);
+    return generateAutoRecommendations(context, existingRecommendations);
 }

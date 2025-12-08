@@ -859,6 +859,22 @@ async function applyRecommendations(planId: string, body?: any) {
     const appliedIds = applicable.map((rec) => rec.id).filter(Boolean) as string[];
     await recommendationService.markRecommendationsApplied(planId, appliedIds);
 
+    // Auto-regenerate recommendations after applying to remove stale items
+    // and get fresh recommendations that know about the new assignments
+    if (applied > 0) {
+        try {
+            // Generate fresh recommendations using the wrapper function
+            // This will automatically load existing recommendations for rejection memory
+            const freshRecommendations = await generatePlanRecommendations(planId);
+            
+            // Replace all recommendations with fresh ones
+            await recommendationService.replaceRecommendations(planId, freshRecommendations);
+        } catch (regenerateErr) {
+            // Log but don't fail the apply operation
+            console.error('Failed to auto-regenerate recommendations after apply:', regenerateErr);
+        }
+    }
+
     return {
         message: `Applied ${appliedIds.length} recommendation${appliedIds.length === 1 ? '' : 's'}`,
         applied: appliedIds.length,
