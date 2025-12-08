@@ -10,12 +10,18 @@ import {
 } from '../data/verifyPasswordData';
 
 // Mock jQuery with chainable methods
-const createMockElement = () => ({
-    on: jest.fn(function() { return this; }),
-    trigger: jest.fn(function() { return this; }),
-    val: jest.fn(() => 'test-value'),
-    submit: jest.fn()
-});
+const createMockElement = () => {
+    const mockElement = {
+        on: jest.fn(function(this: any) { return this; }),
+        trigger: jest.fn(function(this: any) { return this; }),
+        val: jest.fn(() => 'test-value'),
+        submit: jest.fn()
+    };
+    // Fix the binding so 'this' refers to mockElement
+    mockElement.on = jest.fn(() => mockElement);
+    mockElement.trigger = jest.fn(() => mockElement);
+    return mockElement;
+};
 
 const mockJQuery = jest.fn((selector: string) => createMockElement());
 
@@ -252,12 +258,18 @@ describe('verify_password module', () => {
                     return mockRepeatElement;
                 })
             };
+            
+            const mockChainableElement = {
+                on: jest.fn().mockReturnThis()
+            };
 
             mockJQuery.mockImplementation((selector: string) => {
                 if (selector === '#password_repeat') return mockRepeatElement;
-                if (selector === '#password') return {};
-                if (selector === '#password_repeat-info') return {};
-                return { on: jest.fn().mockReturnThis() };
+                if (selector === '#password') return mockChainableElement;
+                if (selector === '#password-info') return mockChainableElement;
+                if (selector === '#password_repeat-info') return mockChainableElement;
+                if (selector === '#form') return mockChainableElement;
+                return mockChainableElement;
             });
 
             const verifyPasswordModule = await import('../../../src/public/js/verify_password');
@@ -278,14 +290,18 @@ describe('verify_password module', () => {
                     return mockFormElement;
                 })
             };
+            
+            const mockChainableElement = {
+                on: jest.fn().mockReturnThis()
+            };
 
             mockJQuery.mockImplementation((selector: string) => {
                 if (selector === '#form') return mockFormElement;
-                if (selector === '#password') return {};
-                if (selector === '#password_repeat') return {};
-                if (selector === '#password-info') return {};
-                if (selector === '#password_repeat-info') return {};
-                return { on: jest.fn().mockReturnThis() };
+                if (selector === '#password') return mockChainableElement;
+                if (selector === '#password_repeat') return mockChainableElement;
+                if (selector === '#password-info') return mockChainableElement;
+                if (selector === '#password_repeat-info') return mockChainableElement;
+                return mockChainableElement;
             });
 
             const verifyPasswordModule = await import('../../../src/public/js/verify_password');
