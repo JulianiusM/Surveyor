@@ -877,19 +877,15 @@ async function applyRecommendations(planId: string, body?: any) {
 
     // Auto-regenerate recommendations after applying to remove stale items
     // and get fresh recommendations that know about the new assignments
+    // IMPORTANT: Do this BEFORE returning so the frontend gets fresh data on reload
     if (appliedIds.length > 0) {
-        try {
-            // Generate fresh recommendations with rejection memory from BEFORE apply
-            // (existingForRejectionMemory contains the REJECTED ones we want to remember)
-            const freshRecommendations = await generatePlanRecommendations(planId, existingForRejectionMemory);
-            
-            // Replace all recommendations with fresh ones
-            // This will delete the APPLIED recommendations and replace with fresh PENDING/REJECTED ones
-            await recommendationService.replaceRecommendations(planId, freshRecommendations);
-        } catch (regenerateErr) {
-            // Log but don't fail the apply operation
-            console.error('Failed to auto-regenerate recommendations after apply:', regenerateErr);
-        }
+        // Generate fresh recommendations with rejection memory from BEFORE apply
+        // (existingForRejectionMemory contains the REJECTED ones we want to remember)
+        const freshRecommendations = await generatePlanRecommendations(planId, existingForRejectionMemory);
+        
+        // Replace all recommendations with fresh ones
+        // This will delete the APPLIED recommendations and replace with fresh PENDING/REJECTED ones
+        await recommendationService.replaceRecommendations(planId, freshRecommendations);
     }
 
     return {

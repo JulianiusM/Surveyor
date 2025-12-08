@@ -312,15 +312,17 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
 
         try {
             setAlert('Saving recommendations...', 'info');
+            // Wait for backend to complete (includes regeneration)
             await post(`/api/activity/${planId}/recommendations/apply`, {recommendations: payload});
-            setAlert('Recommendations saved successfully!', 'info');
+            setAlert('Recommendations saved successfully! Reloading...', 'info');
             // Store active tab before reload
             const activeTabEl = document.querySelector<HTMLElement>('.nav-link.active[data-bs-target]');
             if (activeTabEl) {
                 const targetId = activeTabEl.getAttribute('data-bs-target') || '';
                 sessionStorage.setItem('activity-active-tab', targetId);
             }
-            reloadAfterDelay(1000);
+            // Reload after API completes (backend regenerates recommendations)
+            reloadAfterDelay(500);
         } catch (err) {
             console.error('Failed to save recommendations:', err);
             setAlert('Failed to save recommendations.', 'danger');
