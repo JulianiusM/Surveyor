@@ -68,6 +68,36 @@ The E2E database should be configured with:
 
 The Surveyor test suite uses **data-driven** and **keyword-driven** testing approaches for maintainable, reusable, and comprehensive test coverage. See [TESTING.md](TESTING.md) for detailed testing guidelines.
 
+### Quick Start - One-Click Test Execution
+
+**Run all tests (recommended for CI/verification):**
+
+```bash
+npm run test:all
+```
+
+This single command will:
+1. Install dependencies (if needed)
+2. Start MariaDB test container
+3. Configure test databases
+4. Build the application
+5. Run all Jest tests (unit, controller, middleware, database)
+6. Prepare and run E2E tests with Playwright
+7. Clean up resources
+
+**Options:**
+- `npm run test:all -- --skip-deps` - Skip npm install
+- `npm run test:all -- --skip-build` - Skip building (use existing build)
+- `npm run test:all -- --skip-e2e` - Skip E2E tests
+
+**Run only Jest tests (fast):**
+
+```bash
+npm run test:quick
+# or
+npm test
+```
+
 ### Test Organization
 
 Tests are organized into:
@@ -79,31 +109,35 @@ Tests are organized into:
 
 Test data is separated into `tests/data/` and reusable test keywords are in `tests/keywords/`.
 
-### Unit and Integration Tests
+### Individual Test Commands
 
-Run all unit and integration tests:
-
-```bash
-npm test
-```
-
-Watch mode for development:
+**Jest tests:**
 
 ```bash
-npm run test:watch
+npm test                    # Run all Jest tests
+npm run test:watch          # Watch mode for development
+npm test -- --coverage      # Run with coverage report
+npm run test:debug          # Run with database logging
 ```
 
-Run with coverage:
+**E2E tests:**
 
 ```bash
-npm test -- --coverage
+npm run e2e                 # Run all E2E tests
+npm run e2e:headed          # Run with visible browser
+npm run e2e:ui              # Run with Playwright UI
 ```
 
-### E2E Tests
+**Manual E2E setup (if needed):**
 
-The E2E tests use Playwright and require the application to be built first.
+```bash
+npm run build               # Build application
+npm run e2e:prepare         # Initialize E2E database
+npx playwright install      # Install browsers (first time)
+npm run e2e                 # Run E2E tests
+```
 
-#### E2E Test Structure
+### E2E Test Structure
 
 The E2E tests are organized by feature area:
 
@@ -114,26 +148,6 @@ The E2E tests are organized by feature area:
 - `drivers.test.ts` - Drivers list management
 - `navigation.test.ts` - UI navigation and accessibility
 - `error-handling.test.ts` - Frontend error handling and validation
-
-#### Running E2E Tests
-
-Run E2E tests:
-
-```bash
-npm run e2e
-```
-
-Run E2E tests in headed mode (with browser visible):
-
-```bash
-npm run e2e:headed
-```
-
-Run E2E tests with UI:
-
-```bash
-npm run e2e:ui
-```
 
 For detailed E2E test coverage and configuration information, see `tests/e2e/README.md`.
 

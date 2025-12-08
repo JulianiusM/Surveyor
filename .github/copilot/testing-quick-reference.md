@@ -2,6 +2,29 @@
 
 For comprehensive testing guidelines, see [TESTING.md](../../TESTING.md).
 
+## Quick Start
+
+**Run all tests (one command):**
+
+```bash
+npm run test:all
+```
+
+This automatically sets up database, builds, and runs all tests (Jest + E2E).
+
+**Run only Jest tests (fast):**
+
+```bash
+npm test
+# or
+npm run test:quick
+```
+
+**Options for test:all:**
+- `--skip-deps` - Skip npm install
+- `--skip-build` - Skip building
+- `--skip-e2e` - Skip E2E tests
+
 ## Overview
 
 The project uses **data-driven** and **keyword-driven** testing approaches.

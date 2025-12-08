@@ -258,12 +258,29 @@ npm run server  # Runs server + client watch
 
 ### Testing
 
-```bash
-# Unit/integration tests (no database needed for unit tests)
-npm test
+**Quick start - run all tests:**
 
-# E2E tests (requires database and built application)
+```bash
+npm run test:all
+```
+
+This one command sets up everything and runs all tests (Jest + E2E). Perfect for CI or comprehensive testing.
+
+**Options:**
+- `npm run test:all -- --skip-deps` - Skip npm install
+- `npm run test:all -- --skip-build` - Skip building
+- `npm run test:all -- --skip-e2e` - Skip E2E tests
+
+**Individual test commands:**
+
+```bash
+# Jest tests only (fast)
+npm test
+npm run test:quick
+
+# E2E tests only (requires build + database)
 npm run build
+npm run e2e:prepare
 npm run e2e
 ```
 
@@ -276,6 +293,8 @@ Tests use two databases:
 Configuration:
 - `tests/.env.test` - Unit/integration test config
 - `.env.e2e` - E2E test config
+
+The `test:all` script automatically sets up and configures both databases.
 
 ## CI/CD
 
