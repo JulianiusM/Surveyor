@@ -9,15 +9,15 @@ import {
     formSubmitTestData 
 } from '../data/verifyPasswordData';
 
-// Mock jQuery
-const mockJQuery = jest.fn((selector: string) => {
-    const mockElement = {
-        on: jest.fn().mockReturnThis(),
-        trigger: jest.fn().mockReturnThis(),
-        val: jest.fn().mockReturnValue('test-value')
-    };
-    return mockElement;
+// Mock jQuery with chainable methods
+const createMockElement = () => ({
+    on: jest.fn(function() { return this; }),
+    trigger: jest.fn(function() { return this; }),
+    val: jest.fn(() => 'test-value'),
+    submit: jest.fn()
 });
+
+const mockJQuery = jest.fn((selector: string) => createMockElement());
 
 // Assign to global
 (global as any).$ = mockJQuery;
@@ -38,6 +38,11 @@ jest.mock('../../../src/public/js/core/password-validation', () => ({
     verifyPassword: jest.fn()
 }));
 
+// Setup window.Surveyor before module imports
+(global as any).window = {
+    Surveyor: {}
+};
+
 describe('verify_password module', () => {
     let mockSetCurrentNavLocation: jest.Mock;
     let mockLoadPerms: jest.Mock;
@@ -50,11 +55,10 @@ describe('verify_password module', () => {
         // Reset all mocks
         jest.clearAllMocks();
         mockJQuery.mockClear();
+        jest.resetModules();
 
-        // Setup window.Surveyor
-        if (!window.Surveyor) {
-            window.Surveyor = {} as any;
-        }
+        // Reset window.Surveyor
+        (global as any).window.Surveyor = {};
 
         // Get mock functions
         const navigation = require('../../../src/public/js/core/navigation');

@@ -48,9 +48,13 @@ let activityCreate: any;
 let setCurrentNavLocation: any;
 let loadPerms: any;
 
+let mockGetElementById: jest.Mock;
+let mockCreateElement: jest.Mock;
+
 describe('activity-create.ts', () => {
     beforeEach(async () => {
         jest.clearAllMocks();
+        jest.resetModules();
         
         // Setup window
         (global as any).window = {
@@ -97,23 +101,27 @@ describe('activity-create.ts', () => {
             draggable: false
         };
         
+        mockGetElementById = jest.fn((id) => {
+            if (id === 'slotArea') return Object.assign({}, mockElement);
+            if (id === 'startDate') return Object.assign({}, mockElement, {value: '2024-01-15'});
+            if (id === 'endDate') return Object.assign({}, mockElement, {value: '2024-01-21'});
+            if (id === 'planForm') return Object.assign({}, mockElement);
+            if (id === 'slotsJson') return Object.assign({}, mockElement);
+            return mockElement;
+        });
+        
+        mockCreateElement = jest.fn((tag) => {
+            const elem = Object.assign({}, mockElement);
+            if (tag === 'table') {
+                elem.createTHead = mockElement.createTHead;
+                elem.createTBody = mockElement.createTBody;
+            }
+            return elem;
+        });
+        
         (global as any).document = {
-            getElementById: jest.fn((id) => {
-                if (id === 'slotArea') return Object.assign({}, mockElement);
-                if (id === 'startDate') return Object.assign({}, mockElement, {value: '2024-01-15'});
-                if (id === 'endDate') return Object.assign({}, mockElement, {value: '2024-01-21'});
-                if (id === 'planForm') return Object.assign({}, mockElement);
-                if (id === 'slotsJson') return Object.assign({}, mockElement);
-                return mockElement;
-            }),
-            createElement: jest.fn((tag) => {
-                const elem = Object.assign({}, mockElement);
-                if (tag === 'table') {
-                    elem.createTHead = mockElement.createTHead;
-                    elem.createTBody = mockElement.createTBody;
-                }
-                return elem;
-            }),
+            getElementById: mockGetElementById,
+            createElement: mockCreateElement,
             querySelector: jest.fn(),
             querySelectorAll: jest.fn(() => []),
             addEventListener: jest.fn(),
@@ -225,7 +233,7 @@ describe('activity-create.ts', () => {
             const cell = activityCreate.buildDayCell(date);
             
             expect(cell).toBeDefined();
-            expect(document.createElement).toHaveBeenCalledWith('td');
+            expect(mockCreateElement).toHaveBeenCalledWith('td');
         });
     });
 
@@ -238,8 +246,8 @@ describe('activity-create.ts', () => {
             const wrapper = activityCreate.createWeekTable(monday, start, end);
             
             expect(wrapper).toBeDefined();
-            expect(document.createElement).toHaveBeenCalledWith('table');
-            expect(document.createElement).toHaveBeenCalledWith('div');
+            expect(mockCreateElement).toHaveBeenCalledWith('table');
+            expect(mockCreateElement).toHaveBeenCalledWith('div');
         });
     });
 
@@ -382,7 +390,7 @@ describe('activity-create.ts', () => {
             activityCreate.init();
             
             // Should set up form handlers
-            expect(document.getElementById).toHaveBeenCalled();
+            expect(mockGetElementById).toHaveBeenCalled();
         });
 
         test('should load prefilled slots when available', () => {
