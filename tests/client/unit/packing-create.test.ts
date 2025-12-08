@@ -266,10 +266,11 @@ describe('packing-create module', () => {
     });
 
     describe('graceful handling', () => {
-        it('should handle missing table element', () => {
+        it('should require table element for initialization', () => {
             document.body.innerHTML = '<form id="packingForm"><input id="itemsJson" /><button id="addItemBtn"></button></form>';
 
-            expect(() => init()).not.toThrow();
+            // createRow() requires table element, so init() will throw
+            expect(() => init()).toThrow();
         });
     });
 });

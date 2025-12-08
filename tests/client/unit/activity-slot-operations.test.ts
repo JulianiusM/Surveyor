@@ -9,7 +9,7 @@ import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
 import * as permissions from '../../../src/public/js/core/permissions';
 import * as dragDrop from '../../../src/public/js/shared/drag-drop';
-import {initInlineEditData, initDeleteData, initDnDData} from '../../data/activitySlotOperationsData';
+import {initInlineEditData, initDeleteData, initDnDData} from '../data/activitySlotOperationsData';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/shared/inline-edit');

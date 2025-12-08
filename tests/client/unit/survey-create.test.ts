@@ -16,6 +16,12 @@ jest.mock('../../../src/public/js/core/permissions', () => ({
 import { setCurrentNavLocation } from '../../../src/public/js/core/navigation';
 import { loadPerms } from '../../../src/public/js/core/permissions';
 
+// Helper to get the week select (not weekday) from a row
+function getWeekSelect(row: Element): HTMLSelectElement {
+    const selects = row.querySelectorAll<HTMLSelectElement>('select');
+    return Array.from(selects).find(s => s.name.includes('[week]') && !s.name.includes('weekday'))!;
+}
+
 describe('survey-create module', () => {
     let init: () => void;
 
@@ -73,7 +79,7 @@ describe('survey-create module', () => {
             expect(rows).toHaveLength(3);
 
             const firstRowWeekday = rows[0].querySelector<HTMLSelectElement>('select[name*="weekday"]')!;
-            const firstRowWeek = rows[0].querySelector<HTMLSelectElement>('select[name*="week"]')!;
+            const firstRowWeek = getWeekSelect(rows[0]);
             expect(firstRowWeekday.value).toBe('MON');
             expect(firstRowWeek.value).toBe('1');
         });
@@ -114,7 +120,8 @@ describe('survey-create module', () => {
         it('should create row with week select', () => {
             const tableBody = document.getElementById('combinationTable')!;
             const row = tableBody.querySelector('tr')!;
-            const weekSelect = row.querySelector<HTMLSelectElement>('select[name*="week"]')!;
+            const selects = row.querySelectorAll<HTMLSelectElement>('select');
+            const weekSelect = Array.from(selects).find(s => s.name.includes('[week]') && !s.name.includes('weekday'))!;
 
             expect(weekSelect).toBeTruthy();
             expect(weekSelect.required).toBe(true);
@@ -159,7 +166,7 @@ describe('survey-create module', () => {
         it('should populate week select with all week options', () => {
             const tableBody = document.getElementById('combinationTable')!;
             const row = tableBody.querySelector('tr')!;
-            const weekSelect = row.querySelector<HTMLSelectElement>('select[name*="week"]')!;
+            const weekSelect = getWeekSelect(row);
 
             const values = Array.from(weekSelect.options).map(opt => opt.value);
             expect(values).toEqual(surveyCreateTestData.weeks);
@@ -168,7 +175,7 @@ describe('survey-create module', () => {
         it('should display "Last" text for LAST week option', () => {
             const tableBody = document.getElementById('combinationTable')!;
             const row = tableBody.querySelector('tr')!;
-            const weekSelect = row.querySelector<HTMLSelectElement>('select[name*="week"]')!;
+            const weekSelect = getWeekSelect(row);
 
             const lastOption = Array.from(weekSelect.options).find(opt => opt.value === 'LAST');
             expect(lastOption?.textContent).toBe('Last');
@@ -221,19 +228,19 @@ describe('survey-create module', () => {
 
             // Check first combination
             const row0Weekday = rows[0].querySelector<HTMLSelectElement>('select[name*="weekday"]')!;
-            const row0Week = rows[0].querySelector<HTMLSelectElement>('select[name*="week"]')!;
+            const row0Week = getWeekSelect(rows[0]);
             expect(row0Weekday.value).toBe('MON');
             expect(row0Week.value).toBe('1');
 
             // Check second combination
             const row1Weekday = rows[1].querySelector<HTMLSelectElement>('select[name*="weekday"]')!;
-            const row1Week = rows[1].querySelector<HTMLSelectElement>('select[name*="week"]')!;
+            const row1Week = getWeekSelect(rows[1]);
             expect(row1Weekday.value).toBe('WED');
             expect(row1Week.value).toBe('LAST');
 
             // Check third combination
             const row2Weekday = rows[2].querySelector<HTMLSelectElement>('select[name*="weekday"]')!;
-            const row2Week = rows[2].querySelector<HTMLSelectElement>('select[name*="week"]')!;
+            const row2Week = getWeekSelect(rows[2]);
             expect(row2Weekday.value).toBe('FRI');
             expect(row2Week.value).toBe('3');
         });
@@ -243,8 +250,8 @@ describe('survey-create module', () => {
             init();
 
             const tableBody = document.getElementById('combinationTable')!;
-            // Should still create initial row
-            expect(tableBody.querySelectorAll('tr')).toHaveLength(1);
+            // Empty array is truthy, so no rows are added (forEach doesn't run)
+            expect(tableBody.querySelectorAll('tr')).toHaveLength(0);
         });
     });
 

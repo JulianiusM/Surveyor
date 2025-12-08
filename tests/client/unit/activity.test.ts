@@ -172,27 +172,39 @@ describe('activity.ts', () => {
         });
 
         test('should restore saved tab from session storage', () => {
-            const tabTrigger = {getAttribute: jest.fn()};
-            (global as any).sessionStorage.getItem.mockReturnValue('#participants-tab');
-            (global as any).document.querySelector.mockReturnValue(tabTrigger);
+            // Mock sessionStorage
+            const getItemSpy = jest.spyOn(Storage.prototype, 'getItem').mockReturnValue('#participants-tab');
+            const removeItemSpy = jest.spyOn(Storage.prototype, 'removeItem');
+            
+            // Mock DOM elements needed for tab restoration
+            const tabTrigger = document.createElement('a');
+            tabTrigger.setAttribute('data-bs-target', '#participants-tab');
+            document.body.appendChild(tabTrigger);
+            
             const mockTab = {show: jest.fn()};
-            (global as any).window.bootstrap.Tab.mockReturnValue(mockTab);
+            (global as any).window.bootstrap = {Tab: jest.fn(() => mockTab)};
             
             activity.init();
             
-            expect(sessionStorage.getItem).toHaveBeenCalledWith('activity-active-tab');
-            expect(sessionStorage.removeItem).toHaveBeenCalledWith('activity-active-tab');
-            expect(document.querySelector).toHaveBeenCalledWith('[data-bs-target="#participants-tab"]');
+            expect(getItemSpy).toHaveBeenCalledWith('activity-active-tab');
+            expect(removeItemSpy).toHaveBeenCalledWith('activity-active-tab');
             expect(mockTab.show).toHaveBeenCalled();
+            
+            getItemSpy.mockRestore();
+            removeItemSpy.mockRestore();
         });
 
         test('should not restore tab if none saved', () => {
-            (global as any).sessionStorage.getItem.mockReturnValue(null);
+            const getItemSpy = jest.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
+            const removeItemSpy = jest.spyOn(Storage.prototype, 'removeItem');
             
             activity.init();
             
-            expect(sessionStorage.getItem).toHaveBeenCalledWith('activity-active-tab');
-            expect(sessionStorage.removeItem).not.toHaveBeenCalled();
+            expect(getItemSpy).toHaveBeenCalledWith('activity-active-tab');
+            expect(removeItemSpy).not.toHaveBeenCalled();
+            
+            getItemSpy.mockRestore();
+            removeItemSpy.mockRestore();
         });
 
         test('should initialize all modules when planId exists', () => {

@@ -239,8 +239,10 @@ describe('activity-assignments module', () => {
             
             initAssign(planId, mockWarningModal);
             
-            // Click unassign button
-            const btn = document.querySelector(`[data-action="unassign"][data-role="${role}"]`) as HTMLElement;
+            // Click unassign button - handle both with and without role
+            const selector = role ? `[data-action="unassign"][data-role="${role}"]` : '[data-action="unassign"]';
+            const btn = document.querySelector(selector) as HTMLElement;
+            if (!btn) throw new Error(`Button not found with selector: ${selector}`);
             btn.click();
             
             // Wait for async operations
@@ -269,8 +271,10 @@ describe('activity-assignments module', () => {
             
             initAssign(planId, mockWarningModal);
             
-            // Click assign button
-            const btn = document.querySelector(`[data-action="assign"][data-role="${role}"]`) as HTMLElement;
+            // Click assign button - handle both with and without role
+            const selector = role ? `[data-action="assign"][data-role="${role}"]` : '[data-action="assign"]';
+            const btn = document.querySelector(selector) as HTMLElement;
+            if (!btn) throw new Error(`Button not found with selector: ${selector}`);
             btn.click();
             
             // Wait for async operations
