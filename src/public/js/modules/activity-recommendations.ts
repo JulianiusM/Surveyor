@@ -6,6 +6,7 @@
 import {get, post} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
 import {describeWarning} from './activity-assignments';
+import { reloadAfterDelay } from '../shared/ui-helpers';
 import type {
     AssignmentWarning,
     RecommendationParticipantOption,
@@ -161,10 +162,10 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
         });
 
         const pieces: { label: string; key: keyof typeof counts; className: string }[] = [
-            {label: 'Pending', key: 'PENDING', className: 'badge bg-secondary-subtle text-secondary-emphasis me-1'},
-            {label: 'Approved', key: 'APPROVED', className: 'badge bg-success-subtle text-success-emphasis me-1'},
-            {label: 'Rejected', key: 'REJECTED', className: 'badge bg-warning-subtle text-warning-emphasis me-1'},
-            {label: 'Applied', key: 'APPLIED', className: 'badge bg-info-subtle text-info-emphasis me-1'},
+            {label: 'Pending', key: 'PENDING', className: 'badge bg-secondary text-white me-1'},
+            {label: 'Approved', key: 'APPROVED', className: 'badge bg-success text-white me-1'},
+            {label: 'Rejected', key: 'REJECTED', className: 'badge bg-warning text-dark me-1'},
+            {label: 'Applied', key: 'APPLIED', className: 'badge bg-info text-white me-1'},
         ];
 
         pieces.forEach(({label, key, className}) => {
@@ -351,7 +352,16 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
             const res = await post(`/api/activity/${planId}/recommendations/apply`, {});
             warnings = (res?.warnings || []) as RecommendationWarning[];
             showInlineAlert('success', res?.message || 'Recommendations applied');
-            await loadRecommendations();
+            
+            // Store current tab before reload
+            const activeTab = document.querySelector('.nav-link.active');
+            const activeTabId = activeTab?.getAttribute('data-bs-target');
+            if (activeTabId) {
+                sessionStorage.setItem('activity-active-tab', activeTabId);
+            }
+            
+            // Reload the page to show updated assignments
+            reloadAfterDelay(1000);
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to apply recommendations';
             setAlert(message, 'danger');

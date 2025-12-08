@@ -199,15 +199,19 @@ function selectOverride(participant: ParticipantAttendance, overrides: ActivityP
 function resolveRoleRequirement(roleRequirements: ActivityPlanRequirement[], roleIds: number[] | undefined, ratio: number, roundingMode: RoundingMode): number {
     if (!roleIds || roleIds.length === 0) return 0;
 
-    let maxRequirement = 0;
+    let minRequirement = Number.POSITIVE_INFINITY;
+    let hasMatch = false;
+    
     for (const requirement of roleRequirements) {
         if (!roleIds.includes(Number(requirement.roleId))) continue;
 
         const proportional = requirement.requiredShifts * ratio;
         const rounded = applyRounding(proportional, roundingMode);
-        maxRequirement = Math.max(maxRequirement, rounded);
+        minRequirement = Math.min(minRequirement, rounded);
+        hasMatch = true;
     }
-    return maxRequirement;
+    
+    return hasMatch ? minRequirement : 0;
 }
 
 export function calculateParticipantRequirement(
@@ -234,22 +238,41 @@ export function calculateParticipantRequirement(
     }
 
     const ratio = attendance.days / planDays;
-    const roleRequirement = plan.assignmentMode === "REQUIRED"
-        ? resolveRoleRequirement(roleRequirements, participant.roleIds, ratio, roundingMode)
-        : 0;
-
-    let baseRequirement = 0;
-    if (plan.assignmentMode === "REQUIRED" && plan.generalRequiredShifts != null) {
-        baseRequirement = applyRounding(plan.generalRequiredShifts * ratio, roundingMode);
-    }
-
+    
+    // Check for override first
     const override = selectOverride(participant, overrides);
     const requirementFromOverride = override?.requiredShifts ?? null;
 
-    let requiredShifts = Math.max(baseRequirement, roleRequirement);
-    let source: ParticipantRequirementResult["source"] = requiredShifts > 0 ? (roleRequirement > baseRequirement ? "role" : "general") : "none";
+    let requiredShifts = 0;
+    let source: ParticipantRequirementResult["source"] = "none";
+    let roleRequirement = 0;
+    let baseRequirement = 0;
 
-    if (requirementFromOverride != null) {
+    if (plan.assignmentMode === "REQUIRED") {
+        // Calculate role requirement
+        roleRequirement = resolveRoleRequirement(roleRequirements, participant.roleIds, ratio, roundingMode);
+        
+        // Calculate general requirement
+        if (plan.generalRequiredShifts != null) {
+            baseRequirement = applyRounding(plan.generalRequiredShifts * ratio, roundingMode);
+        }
+
+        // Apply priority: override > role > general (override applied later)
+        if (requirementFromOverride != null) {
+            // Override takes absolute priority
+            requiredShifts = requirementFromOverride;
+            source = "override";
+        } else if (roleRequirement > 0) {
+            // Role requirement is used if present
+            requiredShifts = roleRequirement;
+            source = "role";
+        } else if (baseRequirement > 0) {
+            // General requirement is the fallback
+            requiredShifts = baseRequirement;
+            source = "general";
+        }
+    } else if (requirementFromOverride != null) {
+        // Even in non-REQUIRED mode, overrides are respected
         requiredShifts = requirementFromOverride;
         source = "override";
     }

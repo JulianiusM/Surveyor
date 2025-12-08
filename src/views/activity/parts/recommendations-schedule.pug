@@ -1,0 +1,124 @@
+//- Enhanced recommendations view: schedule-based instead of table
+//- Shows existing assignments + recommendations in a visual schedule format
+
+h5.mb-3
+    i.bi.bi-calendar-plus.me-2
+    | Review recommendations in schedule
+p.small.text-secondary.mb-3
+    | This view shows the schedule with current assignments (locked) and new recommendations.
+    |  Approve or remove recommendations, or manually add new ones using the
+    |  #[span.badge.bg-info + Add] buttons.
+
+// Legend
+.d-flex.gap-3.mb-3.flex-wrap
+    .d-flex.align-items-center.gap-2
+        .badge.bg-success Confirmed
+        span.small.text-secondary Existing assignments
+    .d-flex.align-items-center.gap-2
+        .badge.bg-warning Pending
+        span.small.text-secondary New recommendations
+    .d-flex.align-items-center.gap-2
+        .badge.bg-danger Rejected
+        span.small.text-secondary Declined recommendations
+
+// Weekly schedule similar to schedule.pug but with recommendations
+each week in weeks
+    h5.mt-4.mb-2 Week of #{fmtISO(week)}
+    .table-responsive
+        table.table.table-dark.table-bordered.activity-table#recommendations-schedule
+            thead
+                tr
+                    - for (let i = 0; i < 7; i++) {
+                    -   const cur = new Date(week); cur.setDate(cur.getDate() + i);
+                    -   if (cur < start || cur > end) continue;
+                        th.text-center.small(data-date=fmtISO(cur))
+                            span.day #{dayNames[i]}
+                            br
+                            span.date #{fmtISO(cur)}
+                    - }
+            tbody
+                tr
+                    - for (let i = 0; i < 7; i++) {
+                    -   const cur = new Date(week); cur.setDate(cur.getDate() + i);
+                    -   if (cur < start || cur > end) continue;
+                    td
+                        .slot-container(data-date=fmtISO(cur))
+                            - const daySlots = (data.slots[fmtISO(cur)] || []);
+                            if daySlots.length > 0
+                                each slot, idx in daySlots
+                                    - const startTime = slot.startTime ? slot.startTime.slice(0, 5) : null
+                                    - const endTime = slot.endTime ? slot.endTime.slice(0, 5) : null
+                                    - const slotRoles = (data.roles.slotRoles ? data.roles.slotRoles[slot.id] || [] : [])
+                                    .slot.border.rounded.p-2.mb-2.d-grid.gap-1(
+                                        data-slot-id=slot.id
+                                        data-day=slot.day)
+
+                                        // ── Header: title + time
+                                        .d-flex.justify-content-between.align-items-start.mb-1
+                                            .d-flex.flex-column.flex-grow-1
+                                                span.fw-bold= slot.title
+                                                if startTime || endTime
+                                                    small.text-info.d-flex.align-items-center.gap-1
+                                                        i.bi.bi-clock-history
+                                                        span
+                                                            | #{startTime || '??'} – #{endTime || '??'}
+
+                                            .d-flex.align-items-center.gap-2
+                                                small.text-secondary
+                                                    span.badge.bg-secondary
+                                                        span(data-slot-capacity=slot.id) #{slot.maxAssignees}
+                                                    |  max
+
+                                        hr.m-0
+
+                                        // ── Existing assignments (locked, cannot be removed)
+                                        if permData.entity.has("ACCESS_PARTICIPANTS")
+                                            div(data-slot-existing=slot.id)
+                                                each asg in data.assigneeLists[slot.id] || []
+                                                    .d-flex.align-items-center.gap-2.mb-1.p-1.border.border-success.rounded
+                                                        i.bi.bi-person-check-fill.text-success
+                                                        span.flex-grow-1.small= asg.name || asg.username
+                                                        span.badge.bg-success.text-white.small Confirmed
+
+                                        // ── Recommendations will be inserted here by JS
+                                        div(data-slot-recommendations=slot.id)
+                                            //- JS will populate recommendations here
+
+                                        // ── Add recommendation button
+                                        if permData.entity.has('MANAGE_ASSIGNMENTS')
+                                            button.btn.btn-sm.btn-outline-info.w-100.mt-2(
+                                                type="button"
+                                                data-add-recommendation
+                                                data-slot-id=slot.id)
+                                                i.bi.bi-plus-lg.me-1
+                                                | Add recommendation
+                            else
+                                span.badge.w-100.text-center
+                                    i.bi.bi-info-circle.me-2
+                                    | No slots for this day!
+                    - }
+
+// Add recommendation modal
+#addRecommendationModal.modal.fade(tabindex="-1" aria-labelledby="addRecommendationTitle" aria-hidden="true")
+    .modal-dialog
+        .modal-content.text-bg-dark
+            .modal-header
+                h5#addRecommendationTitle.modal-title
+                    i.bi.bi-plus-circle.me-2
+                    | Add recommendation
+                button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
+            .modal-body
+                input#addRecommendationSlotId(type="hidden")
+                .mb-3
+                    label.form-label(for="addRecommendationParticipant") Select participant
+                    select#addRecommendationParticipant.form-select.form-select-sm.text-bg-dark(required)
+                        option(value="") Choose a participant...
+                        //- Options populated by JS
+                .alert.alert-warning.py-2.px-3.d-none(role="alert" data-add-warning)
+                    i.bi.bi-exclamation-triangle.me-2
+                    span
+            .modal-footer
+                button.btn.btn-sm.btn-outline-secondary(type="button" data-bs-dismiss="modal") Cancel
+                button#addRecommendationConfirm.btn.btn-sm.btn-primary(type="button")
+                    i.bi.bi-check2.me-1
+                    | Add as approved

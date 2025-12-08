@@ -21,6 +21,7 @@ jest.mock('../../src/modules/database/services/ActivityService', () => ({
     updateActivityPlanFlags: jest.fn(),
     deleteActivitySlot: jest.fn(),
     addActivitySlotRoles: jest.fn(),
+    updateActivitySlotRoles: jest.fn(),
     assignActivitySlotToUser: jest.fn(),
     assignActivitySlotToGuest: jest.fn(),
     unassignActivitySlotUser: jest.fn(),

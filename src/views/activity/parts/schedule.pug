@@ -36,10 +36,10 @@ if data.assignments && data.assignments.length
         i.bi.bi-card-checklist.me-1
         | Slots:
         span.badge.bg-light.text-dark.ms-1 #{data.slots.length}
-        span.badge.bg-secondary-subtle.text-secondary-emphasis.ms-1
+        span.badge.bg-secondary.text-white.ms-1
             i.bi.bi-box-arrow-up-right.me-1
             | #{data.counters.open} open
-        span.badge.bg-danger-subtle.text-danger-emphasis.ms-1
+        span.badge.bg-danger.text-white.ms-1
             i.bi.bi-slash-circle.me-1
             | #{data.counters.empty} unassigned
 
@@ -78,6 +78,7 @@ each week in weeks
                                     - const roleIdsStr = slotRoles.length ? slotRoles.map(r => r.id).join(',') : ''
                                     .slot.border.rounded.p-2.mb-2.d-grid.gap-1.draggable(
                                         data-slotid=slot.id
+                                        data-itemid=slot.id
                                         data-day=slot.day
                                         data-start=slot.startTime
                                         data-end=slot.endTime

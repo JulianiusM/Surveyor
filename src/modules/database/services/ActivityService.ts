@@ -474,7 +474,7 @@ export async function getParticipantAssignmentsWithSlots(planId: string): Promis
         relations: {slot: true, user: true, guest: true},
         select: {
             id: true,
-            slot: {id: true, day: true, startTime: true, endTime: true, pos: true},
+            slot: {id: true, day: true, startTime: true, endTime: true, pos: true, isArrivalEvening: true, isDepartureMorning: true},
             user: {id: true},
             guest: {id: true},
         },
@@ -490,6 +490,8 @@ export async function getParticipantAssignmentsWithSlots(planId: string): Promis
             startTime: assignment.slot.startTime,
             endTime: assignment.slot.endTime,
             pos: assignment.slot.pos,
+            isArrivalEvening: assignment.slot.isArrivalEvening,
+            isDepartureMorning: assignment.slot.isDepartureMorning,
         });
     }
 
@@ -552,6 +554,12 @@ export async function getActivitySlotAssignees(planId: string): Promise<SlotAssi
 }
 
 export async function getActivityPlanParticipants(planId: string): Promise<PlanParticipant[]> {
+    const plan = await AppDataSource.getRepository(ActivityPlan).findOne({
+        where: {id: planId},
+        relations: ['event']
+    });
+    
+    // Get assigned participants
     const qb = AppDataSource
         .getRepository(ActivityAssignment)
         .createQueryBuilder("aa")
@@ -567,12 +575,73 @@ export async function getActivityPlanParticipants(planId: string): Promise<PlanP
         ])
         .groupBy("name");
 
-    const raw: PlanParticipantRow[] = await qb.getRawMany();
+    const assignedRaw: PlanParticipantRow[] = await qb.getRawMany();
+    const participantMap = new Map<string, PlanParticipant>();
+    
+    // Add assigned participants to map
+    for (const r of assignedRaw) {
+        participantMap.set(r.name, {
+            name: r.name,
+            count: Number(r.count),
+            roles: r.roles ? r.roles.split(",") : [],
+        });
+    }
+    
+    // If plan is associated with an event, also include all event participants
+    if (plan?.event?.id) {
+        const eventService = await import("./EventService");
+        const eventParticipants = await eventService.getEventParticipants(plan.event.id);
+        
+        for (const ep of eventParticipants) {
+            const name = ep.name || 'Unknown';
+            if (!participantMap.has(name)) {
+                // Add event participant who hasn't been assigned yet
+                participantMap.set(name, {
+                    name,
+                    count: 0,
+                    roles: [],
+                });
+            }
+        }
+    }
+    
+    return Array.from(participantMap.values());
+}
 
-    return raw.map((r) => ({
-        name: r.name,
-        count: Number(r.count),
-        roles: r.roles ? r.roles.split(",") : [],
+export async function getParticipantRolesForPlan(planId: string): Promise<{participantKey: string; roleIds: number[]}[]> {
+    const assignments = await AppDataSource
+        .getRepository(ActivityAssignment)
+        .find({
+            where: {plan: {id: planId}},
+            relations: ['user', 'guest', 'activityAssignmentRoles', 'activityAssignmentRoles.role'],
+        });
+
+    const roleMap = new Map<string, Set<number>>();
+
+    for (const assignment of assignments) {
+        let participantKey: string | null = null;
+        if (assignment.user?.id) {
+            participantKey = `user:${assignment.user.id}`;
+        } else if (assignment.guest?.id) {
+            participantKey = `guest:${assignment.guest.id}`;
+        }
+
+        if (!participantKey) continue;
+
+        if (!roleMap.has(participantKey)) {
+            roleMap.set(participantKey, new Set());
+        }
+
+        for (const assignmentRole of assignment.activityAssignmentRoles || []) {
+            if (assignmentRole.role?.id) {
+                roleMap.get(participantKey)!.add(Number(assignmentRole.role.id));
+            }
+        }
+    }
+
+    return Array.from(roleMap.entries()).map(([participantKey, roleIds]) => ({
+        participantKey,
+        roleIds: Array.from(roleIds),
     }));
 }
 

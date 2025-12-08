@@ -115,7 +115,7 @@ app.post(
     '/:id/recommendations/apply',
     requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
     asyncHandler(async (req: Request, res: Response) => {
-        const data = await controller.applyRecommendations(resFct(req).id);
+        const data = await controller.applyRecommendations(resFct(req).id, req.body);
         renderer.respondWithSuccessDataJson(res, data.message, data.skipped !== undefined ? {
             applied: data.applied,
             skipped: data.skipped,
