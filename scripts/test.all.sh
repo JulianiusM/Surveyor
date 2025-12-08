@@ -101,39 +101,22 @@ echo ""
 echo -e "${YELLOW}[5/9]${NC} Creating test environment files..."
 mkdir -p tests
 
-cat > tests/.env.test <<'EOF'
-TEST_DB_HOST=127.0.0.1
-TEST_DB_PORT=3306
-TEST_DB_USER=surveyor
-TEST_DB_PASSWORD=surveyor
-TEST_DB_NAME=surveyor_test
-TEST_DB_LOGGING=false
-EOF
+# Copy from example files
+if [ -f "tests/.env.test.example" ]; then
+    cp tests/.env.test.example tests/.env.test
+else
+    echo -e "${RED}✗${NC} tests/.env.test.example not found"
+    exit 1
+fi
 
-cat > .env.e2e <<'EOF'
-NODE_ENV=e2e
-APP_PORT=3001
-ROOT_URL=http://localhost:3001
+if [ -f ".env.e2e.example" ]; then
+    cp .env.e2e.example .env.e2e
+else
+    echo -e "${RED}✗${NC} .env.e2e.example not found"
+    exit 1
+fi
 
-# Make local login available for E2E
-LOCAL_LOGIN_ENABLED=1
-SESSION_SECRET=test_e2e_secret
-OIDC_ENABLED=0
-
-# E2E DB (guard requires name to contain 'e2e')
-E2E_DB_HOST=127.0.0.1
-E2E_DB_PORT=3306
-E2E_DB_USER=surveyor
-E2E_DB_PASSWORD=surveyor
-E2E_DB_NAME=surveyor_e2e
-
-# Seeded admin for tests
-E2E_ADMIN_USERNAME=tester
-E2E_ADMIN_EMAIL=e2e@example.com
-E2E_ADMIN_PASSWORD=passw0rd!
-EOF
-
-echo -e "${GREEN}✓${NC} Environment files created"
+echo -e "${GREEN}✓${NC} Environment files created from examples"
 echo ""
 
 # Step 6: Build application
