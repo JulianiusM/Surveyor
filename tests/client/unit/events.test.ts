@@ -73,7 +73,7 @@ describe('events.ts', () => {
             }
         };
         
-        // Setup document
+        // Setup document with properly mockable getElementById
         const mockElement = {
             addEventListener: jest.fn(),
             getElementById: jest.fn(),
@@ -86,12 +86,15 @@ describe('events.ts', () => {
             dataset: {}
         };
         
+        // Create a jest.fn() that can be mocked in tests
+        const getElementByIdMock = jest.fn((id) => {
+            if (id === 'diet-allergies') return Object.assign({}, mockElement, {type: 'checkbox'});
+            if (id === 'allergyNotes') return Object.assign({}, mockElement, {type: 'text'});
+            return null;
+        });
+        
         (global as any).document = {
-            getElementById: jest.fn((id) => {
-                if (id === 'diet-allergies') return Object.assign({}, mockElement, {type: 'checkbox'});
-                if (id === 'allergyNotes') return Object.assign({}, mockElement, {type: 'text'});
-                return null;
-            }),
+            getElementById: getElementByIdMock,
             querySelector: jest.fn(),
             querySelectorAll: jest.fn(() => []),
             addEventListener: jest.fn(),

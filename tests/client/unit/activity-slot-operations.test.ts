@@ -48,11 +48,17 @@ describe('activity-slot-operations', () => {
 
     afterEach(() => {
         jest.restoreAllMocks();
+        // Clean up DOM to prevent event listener persistence
+        document.body.innerHTML = '';
     });
 
     describe('initInlineEdit', () => {
         initInlineEditData.forEach((testCase) => {
             test(testCase.description, () => {
+                // Clear mocks before each test case
+                mockStartInlineEdit.mockClear();
+                mockStartInlineEditArea.mockClear();
+                
                 document.body.innerHTML = testCase.elementHtml;
                 initInlineEdit(testCase.planId);
 
