@@ -61,8 +61,8 @@ cp .env.e2e.example .env.e2e
 The E2E database should be configured with:
 
 - Database name: `surveyor_e2e` (must contain 'e2e' for safety)
-- User: `e2e_user`
-- Password: `e2e_password`
+- User: `surveyor`
+- Password: `surveyor`
 
 ## Running Tests
 
