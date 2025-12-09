@@ -1,10 +1,14 @@
 // tests/client/unit/http.test.ts
 // Unit tests for core/http.ts utilities
 import { http, get, post, del, patch } from '../../../src/public/js/core/http';
+import { setupTest } from '../helpers/testSetup';
 import { server } from '../msw/server';
 import { http as mswHttp, HttpResponse } from 'msw';
 
 describe('HTTP client utilities', () => {
+    // Use unified setup for common cleanup (DOM, mocks, queues)
+    setupTest();
+    
     describe('http', () => {
         test('makes successful GET request', async () => {
             server.use(
