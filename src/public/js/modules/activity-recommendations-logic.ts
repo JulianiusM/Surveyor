@@ -23,8 +23,8 @@ export class RecommendationsLogic {
     approveRecommendation(rec: RecommendationRow): boolean {
         return this.state.updateRecommendationStatus(
             rec.slot.id,
-            rec.user?.id || null,
-            rec.guest?.id || null,
+            rec.user?.id ?? null,
+            rec.guest?.id ?? null,
             'APPROVED'
         );
     }
@@ -35,8 +35,8 @@ export class RecommendationsLogic {
     rejectRecommendation(rec: RecommendationRow): boolean {
         return this.state.updateRecommendationStatus(
             rec.slot.id,
-            rec.user?.id || null,
-            rec.guest?.id || null,
+            rec.user?.id ?? null,
+            rec.guest?.id ?? null,
             'REJECTED'
         );
     }
@@ -47,8 +47,8 @@ export class RecommendationsLogic {
     revertToPending(rec: RecommendationRow): boolean {
         return this.state.updateRecommendationStatus(
             rec.slot.id,
-            rec.user?.id || null,
-            rec.guest?.id || null,
+            rec.user?.id ?? null,
+            rec.guest?.id ?? null,
             'PENDING'
         );
     }
