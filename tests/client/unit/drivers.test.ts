@@ -3,6 +3,7 @@
  */
 
 import { driversTestData } from '../data/driversData';
+import { setupTest } from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/navigation', () => ({
@@ -43,31 +44,30 @@ import { initAssignmentRemoval, initItemDeletion, initQuickAdd } from '../../../
 describe('drivers module', () => {
     let init: () => void;
 
-    beforeEach(() => {
-        // Setup DOM
-        document.body.innerHTML = `
-            <table data-assignable>
-                <tbody data-reorderable>
-                    <tr data-itemid="item1">
-                        <td data-edit="title">Driver 1</td>
-                    </tr>
-                </tbody>
-            </table>
-            <div data-edit="planDescription">Plan description</div>
-            <form id="quickAddForm"></form>
-        `;
+    setupTest({
+        beforeEach: () => {
+            // Setup DOM
+            document.body.innerHTML = `
+                <table data-assignable>
+                    <tbody data-reorderable>
+                        <tr data-itemid="item1">
+                            <td data-edit="title">Driver 1</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div data-edit="planDescription">Plan description</div>
+                <form id="quickAddForm"></form>
+            `;
 
-        // Setup global namespace
-        window.Surveyor = { entityId: driversTestData.driversListId } as any;
+            // Setup global namespace
+            window.Surveyor = { entityId: driversTestData.driversListId } as any;
 
-        // Clear mocks
-        jest.clearAllMocks();
-
-        // Import module fresh
-        jest.isolateModules(() => {
-            const module = require('../../../src/public/js/drivers');
-            init = module.init;
-        });
+            // Import module fresh
+            jest.isolateModules(() => {
+                const module = require('../../../src/public/js/drivers');
+                init = module.init;
+            });
+        }
     });
 
     describe('init', () => {
