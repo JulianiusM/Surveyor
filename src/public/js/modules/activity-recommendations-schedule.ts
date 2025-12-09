@@ -425,7 +425,7 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             });
             
             // Add change handler to show warning when participant selected
-            // Note: We don't track this listener because it uses {once: true} and removes itself
+            // Note: This listener uses {once: true} so it self-removes and doesn't need tracking
             addParticipantSelect.addEventListener('change', () => {
                 // Clear warning first
                 if (addWarningBox) {
