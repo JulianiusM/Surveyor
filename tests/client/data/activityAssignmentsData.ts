@@ -3,6 +3,7 @@
  */
 
 import type {AssignmentWarning} from '../../../src/public/js/modules/activity-types';
+import {deepCopy} from "../helpers/util";
 
 const baseModalHTML = `
     <div id="assignmentWarningModal">
@@ -13,7 +14,7 @@ const baseModalHTML = `
     </div>
 `;
 
-export const activityAssignmentsData = {
+export const _activityAssignmentsData = {
     describeWarning: [
         {
             description: 'describes outside_attendance warning',
@@ -219,3 +220,5 @@ export const activityAssignmentsData = {
         ]
     }
 };
+
+export const activityAssignmentsData = () => deepCopy(_activityAssignmentsData) as typeof _activityAssignmentsData;

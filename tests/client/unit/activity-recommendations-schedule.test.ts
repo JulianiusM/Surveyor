@@ -3,11 +3,15 @@
  * Testing schedule-based recommendations view
  */
 
-import {initRecommendationScheduleView} from '../../../src/public/js/modules/activity-recommendations-schedule';
-import {activityRecommendationsScheduleData as testData} from '../data/activityRecommendationsScheduleData';
 import * as http from '../../../src/public/js/core/http';
+import {
+    cleanupRecommendationScheduleView,
+    initRecommendationScheduleView
+} from '../../../src/public/js/modules/activity-recommendations-schedule';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
+import {activityRecommendationsScheduleData as testData} from '../data/activityRecommendationsScheduleData';
 import {setupTest} from '../helpers/testSetup';
+import {deepCopy} from "../helpers/util";
 
 // Mock Bootstrap
 const mockShow = jest.fn();
@@ -89,40 +93,42 @@ describe('activity-recommendations-schedule', () => {
             document.body.append(addModal);
         },
         afterEach: () => {
+            // Call cleanup function to reset module state and remove event listeners
+            cleanupRecommendationScheduleView();
             // Comprehensive cleanup: remove all dynamically created elements
             document.body.innerHTML = '';
         }
     });
 
     describe('initialization', () => {
-        test('should not initialize without planId', () => {
-            mockGet.mockResolvedValue(testData.apiResponses.loadSuccess);
-            initRecommendationScheduleView('', mockDescribeSlot);
+        test('should not initialize without planId', async () => {
+            mockGet.mockResolvedValue(testData().apiResponses.loadSuccess);
+            await initRecommendationScheduleView('', mockDescribeSlot);
             expect(mockGet).not.toHaveBeenCalled();
         });
 
-        test('should not initialize without schedule view element', () => {
+        test('should not initialize without schedule view element', async () => {
             document.getElementById('recommendationScheduleView')?.remove();
-            mockGet.mockResolvedValue(testData.apiResponses.loadSuccess);
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            mockGet.mockResolvedValue(testData().apiResponses.loadSuccess);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             expect(mockGet).not.toHaveBeenCalled();
         });
 
         test('should initialize and load recommendations', async () => {
-            mockGet.mockResolvedValue(testData.apiResponses.loadSuccess);
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
-            
+            mockGet.mockResolvedValue(testData().apiResponses.loadSuccess);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
+
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             expect(mockGet).toHaveBeenCalledWith(
-                `/api/activity/${testData.initialization.valid.planId}/recommendations`
+                `/api/activity/${testData().initialization.valid.planId}/recommendations`
             );
         });
 
-        test('should initialize Bootstrap modal', () => {
-            mockGet.mockResolvedValue(testData.apiResponses.loadSuccess);
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
-            
+        test('should initialize Bootstrap modal', async () => {
+            mockGet.mockResolvedValue(testData().apiResponses.loadSuccess);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
+
             expect((global as any).bootstrap.Modal).toHaveBeenCalled();
         });
     });
@@ -131,14 +137,14 @@ describe('activity-recommendations-schedule', () => {
         test('should handle empty recommendations', async () => {
             mockGet.mockResolvedValue({
                 data: {
-                    recommendations: testData.recommendations.empty,
+                    recommendations: testData().recommendations.empty,
                     warnings: [],
                     slots: [],
                     participantOptions: [],
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const summaryStats = document.getElementById('recommendationSummaryStats')!;
@@ -147,7 +153,7 @@ describe('activity-recommendations-schedule', () => {
 
         test('should render recommendations in schedule view', async () => {
             const scheduleView = document.getElementById('recommendationScheduleView')!;
-            
+
             // Create slot container
             const slotContainer = document.createElement('div');
             slotContainer.dataset.slotRecommendations = 'slot1';
@@ -155,14 +161,14 @@ describe('activity-recommendations-schedule', () => {
 
             mockGet.mockResolvedValue({
                 data: {
-                    recommendations: testData.recommendations.pending,
+                    recommendations: testData().recommendations.pending,
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             expect(slotContainer.children.length).toBeGreaterThan(0);
@@ -171,7 +177,7 @@ describe('activity-recommendations-schedule', () => {
         test('should handle load error', async () => {
             mockGet.mockRejectedValue(new Error('Network error'));
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const alertBox = document.querySelector('[data-recommendations-alert]')!;
@@ -184,14 +190,14 @@ describe('activity-recommendations-schedule', () => {
         test('should display empty state when no recommendations', async () => {
             mockGet.mockResolvedValue({
                 data: {
-                    recommendations: testData.recommendations.empty,
+                    recommendations: testData().recommendations.empty,
                     warnings: [],
                     slots: [],
                     participantOptions: [],
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const summaryStats = document.getElementById('recommendationSummaryStats')!;
@@ -201,14 +207,14 @@ describe('activity-recommendations-schedule', () => {
         test('should display summary with counts for each status', async () => {
             mockGet.mockResolvedValue({
                 data: {
-                    recommendations: testData.recommendations.mixed,
+                    recommendations: testData().recommendations.mixed,
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const summaryStats = document.getElementById('recommendationSummaryStats')!;
@@ -221,8 +227,8 @@ describe('activity-recommendations-schedule', () => {
     describe('recommendation rendering', () => {
         beforeEach(() => {
             const scheduleView = document.getElementById('recommendationScheduleView')!;
-            
-            testData.slots.forEach((slot) => {
+
+            testData().slots.forEach((slot) => {
                 const slotContainer = document.createElement('div');
                 slotContainer.dataset.slotRecommendations = slot.id;
                 scheduleView.append(slotContainer);
@@ -232,14 +238,14 @@ describe('activity-recommendations-schedule', () => {
         test('should render pending recommendations with correct styling', async () => {
             mockGet.mockResolvedValue({
                 data: {
-                    recommendations: testData.recommendations.pending,
+                    recommendations: testData().recommendations.pending,
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const container = document.querySelector('[data-slot-recommendations="slot1"]')!;
@@ -250,14 +256,14 @@ describe('activity-recommendations-schedule', () => {
         test('should render approved recommendations with correct styling', async () => {
             mockGet.mockResolvedValue({
                 data: {
-                    recommendations: testData.recommendations.approved,
+                    recommendations: testData().recommendations.approved,
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const container = document.querySelector('[data-slot-recommendations="slot2"]')!;
@@ -268,14 +274,14 @@ describe('activity-recommendations-schedule', () => {
         test('should render rejected recommendations with correct styling', async () => {
             mockGet.mockResolvedValue({
                 data: {
-                    recommendations: testData.recommendations.rejected,
+                    recommendations: testData().recommendations.rejected,
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const container = document.querySelector('[data-slot-recommendations="slot3"]')!;
@@ -286,14 +292,14 @@ describe('activity-recommendations-schedule', () => {
         test('should display participant name in recommendation', async () => {
             mockGet.mockResolvedValue({
                 data: {
-                    recommendations: testData.recommendations.pending,
+                    recommendations: deepCopy(testData().recommendations.pending),
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: deepCopy(testData().slots),
+                    participantOptions: deepCopy(testData().participants),
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const container = document.querySelector('[data-slot-recommendations="slot1"]')!;
@@ -302,39 +308,51 @@ describe('activity-recommendations-schedule', () => {
     });
 
     describe('recommendation actions', () => {
-        beforeEach(() => {
+        beforeEach(async () => {
+            // Clean up module state first
+            cleanupRecommendationScheduleView();
+
             const scheduleView = document.getElementById('recommendationScheduleView')!;
-            
+
             // Clear any dynamically created content from previous test
             scheduleView.innerHTML = '';
-            
+
             // Create containers for all test slots
             ['slot1', 'slot2', 'slot3'].forEach((slotId) => {
                 const slotContainer = document.createElement('div');
                 slotContainer.dataset.slotRecommendations = slotId;
                 scheduleView.append(slotContainer);
             });
+
+            // Wait a bit to ensure cleanup is complete
+            await new Promise((resolve) => setTimeout(resolve, 50));
         });
-        
-        afterEach(() => {
+
+        afterEach(async () => {
             // Clean up dynamically created elements after each test
             const scheduleView = document.getElementById('recommendationScheduleView');
             if (scheduleView) {
                 scheduleView.innerHTML = '';
             }
+
+            // Clean up module state
+            cleanupRecommendationScheduleView();
+
+            // Wait to ensure cleanup is complete
+            await new Promise((resolve) => setTimeout(resolve, 50));
         });
 
         test('should approve pending recommendation', async () => {
             mockGet.mockResolvedValue({
                 data: {
-                    recommendations: testData.recommendations.pending,
+                    recommendations: testData().recommendations.pending,
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot)
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const approveBtn = document.querySelector('.btn-success') as HTMLButtonElement;
@@ -352,21 +370,21 @@ describe('activity-recommendations-schedule', () => {
         test('should reject pending recommendation', async () => {
             mockGet.mockResolvedValue({
                 data: {
-                    recommendations: testData.recommendations.pending,
+                    recommendations: testData().recommendations.pending,
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
+            await new Promise((resolve) => setTimeout(resolve, 150));
 
             const rejectBtn = document.querySelector('.btn-danger') as HTMLButtonElement;
             expect(rejectBtn).toBeTruthy();
             rejectBtn?.click();
 
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            await new Promise((resolve) => setTimeout(resolve, 150));
 
             // Should re-render with rejected styling
             const container = document.querySelector('[data-slot-recommendations="slot1"]')!;
@@ -377,14 +395,14 @@ describe('activity-recommendations-schedule', () => {
         test('should revert approved recommendation to pending', async () => {
             mockGet.mockResolvedValue({
                 data: {
-                    recommendations: testData.recommendations.approved,
+                    recommendations: testData().recommendations.approved,
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const revertBtn = document.querySelector('.btn-outline-secondary') as HTMLButtonElement;
@@ -402,14 +420,14 @@ describe('activity-recommendations-schedule', () => {
         test('should approve rejected recommendation', async () => {
             mockGet.mockResolvedValue({
                 data: {
-                    recommendations: testData.recommendations.rejected,
+                    recommendations: testData().recommendations.rejected,
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const approveBtn = document.querySelector('.btn-outline-success') as HTMLButtonElement;
@@ -428,16 +446,16 @@ describe('activity-recommendations-schedule', () => {
     describe('add recommendation modal', () => {
         beforeEach(() => {
             const scheduleView = document.getElementById('recommendationScheduleView')!;
-            
+
             const addBtn = document.createElement('button');
             addBtn.dataset.addRecommendation = 'true';
-            addBtn.dataset.slotId = testData.addModal.slotId;
+            addBtn.dataset.slotId = testData().addModal.slotId;
 
             const dayDiv = document.createElement('div');
             dayDiv.dataset.day = '2024-12-15';
 
             const slotDiv = document.createElement('div');
-            slotDiv.dataset.slotId = testData.addModal.slotId;
+            slotDiv.dataset.slotId = testData().addModal.slotId;
 
             dayDiv.append(slotDiv);
             slotDiv.append(addBtn);
@@ -449,12 +467,12 @@ describe('activity-recommendations-schedule', () => {
                 data: {
                     recommendations: [],
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const addBtn = document.querySelector('[data-add-recommendation]') as HTMLButtonElement;
@@ -468,19 +486,19 @@ describe('activity-recommendations-schedule', () => {
                 data: {
                     recommendations: [],
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const addBtn = document.querySelector('[data-add-recommendation]') as HTMLButtonElement;
             addBtn?.click();
 
             const slotIdInput = document.getElementById('addRecommendationSlotId') as HTMLInputElement;
-            expect(slotIdInput.value).toBe(testData.addModal.slotId);
+            expect(slotIdInput.value).toBe(testData().addModal.slotId);
         });
 
         test('should populate participant options', async () => {
@@ -488,12 +506,12 @@ describe('activity-recommendations-schedule', () => {
                 data: {
                     recommendations: [],
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const addBtn = document.querySelector('[data-add-recommendation]') as HTMLButtonElement;
@@ -509,14 +527,14 @@ describe('activity-recommendations-schedule', () => {
 
             mockGet.mockResolvedValue({
                 data: {
-                    recommendations: testData.recommendations.pending,
+                    recommendations: testData().recommendations.pending,
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             // Create add button for this test
@@ -533,7 +551,7 @@ describe('activity-recommendations-schedule', () => {
             addSlotIdInput.value = 'slot1';
 
             const participantSelect = document.getElementById('addRecommendationParticipant') as HTMLSelectElement;
-            participantSelect.value = testData.addModal.participantValue;
+            participantSelect.value = testData().addModal.participantValue;
 
             const confirmBtn = document.getElementById('addRecommendationConfirm') as HTMLButtonElement;
             confirmBtn.click();
@@ -548,24 +566,24 @@ describe('activity-recommendations-schedule', () => {
                 data: {
                     recommendations: [],
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const scheduleView = document.getElementById('recommendationScheduleView')!;
             const slotContainer = document.createElement('div');
-            slotContainer.dataset.slotRecommendations = testData.addModal.slotId;
+            slotContainer.dataset.slotRecommendations = testData().addModal.slotId;
             scheduleView.append(slotContainer);
 
             const addBtn = document.querySelector('[data-add-recommendation]') as HTMLButtonElement;
             addBtn?.click();
 
             const participantSelect = document.getElementById('addRecommendationParticipant') as HTMLSelectElement;
-            participantSelect.value = testData.addModal.participantValue;
+            participantSelect.value = testData().addModal.participantValue;
 
             const confirmBtn = document.getElementById('addRecommendationConfirm') as HTMLButtonElement;
             confirmBtn?.click();
@@ -581,15 +599,15 @@ describe('activity-recommendations-schedule', () => {
         test('should apply recommendations successfully', async () => {
             mockGet.mockResolvedValue({
                 data: {
-                    recommendations: testData.recommendations.pending,
+                    recommendations: testData().recommendations.pending,
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
-            mockPost.mockResolvedValue(testData.apiResponses.applySuccess);
+            mockPost.mockResolvedValue(testData().apiResponses.applySuccess);
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const applyBtn = document.querySelector('[data-recommendations-apply]') as HTMLButtonElement;
@@ -598,7 +616,7 @@ describe('activity-recommendations-schedule', () => {
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             expect(mockPost).toHaveBeenCalledWith(
-                `/api/activity/${testData.initialization.valid.planId}/recommendations/apply`,
+                `/api/activity/${testData().initialization.valid.planId}/recommendations/apply`,
                 expect.objectContaining({
                     recommendations: expect.any(Array),
                 })
@@ -609,15 +627,15 @@ describe('activity-recommendations-schedule', () => {
         test('should handle apply error', async () => {
             mockGet.mockResolvedValue({
                 data: {
-                    recommendations: testData.recommendations.pending,
+                    recommendations: testData().recommendations.pending,
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
             mockPost.mockRejectedValue(new Error('Apply failed'));
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const applyBtn = document.querySelector('[data-recommendations-apply]') as HTMLButtonElement;
@@ -638,15 +656,15 @@ describe('activity-recommendations-schedule', () => {
 
             mockGet.mockResolvedValue({
                 data: {
-                    recommendations: testData.recommendations.pending,
+                    recommendations: testData().recommendations.pending,
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
-            mockPost.mockResolvedValue(testData.apiResponses.applySuccess);
+            mockPost.mockResolvedValue(testData().apiResponses.applySuccess);
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const applyBtn = document.querySelector('[data-recommendations-apply]') as HTMLButtonElement;
@@ -664,13 +682,13 @@ describe('activity-recommendations-schedule', () => {
                 data: {
                     recommendations: [],
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
-            mockPost.mockResolvedValue(testData.apiResponses.generateSuccess);
+            mockPost.mockResolvedValue(testData().apiResponses.generateSuccess);
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const autoBtn = document.querySelector('[data-recommendations-auto]') as HTMLButtonElement;
@@ -679,7 +697,7 @@ describe('activity-recommendations-schedule', () => {
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             expect(mockPost).toHaveBeenCalledWith(
-                `/api/activity/${testData.initialization.valid.planId}/recommendations/auto`,
+                `/api/activity/${testData().initialization.valid.planId}/recommendations/auto`,
                 {}
             );
         });
@@ -689,13 +707,13 @@ describe('activity-recommendations-schedule', () => {
                 data: {
                     recommendations: [],
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
             mockPost.mockRejectedValue(new Error('Generation failed'));
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const autoBtn = document.querySelector('[data-recommendations-auto]') as HTMLButtonElement;
@@ -719,16 +737,16 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData().initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             mockGet.mockClear();
             mockGet.mockResolvedValue({
                 data: {
-                    recommendations: testData.recommendations.pending,
+                    recommendations: testData().recommendations.pending,
                     warnings: [],
-                    slots: testData.slots,
-                    participantOptions: testData.participants,
+                    slots: testData().slots,
+                    participantOptions: testData().participants,
                 },
             });
 
@@ -738,7 +756,7 @@ describe('activity-recommendations-schedule', () => {
             await new Promise((resolve) => setTimeout(resolve, 0));
 
             expect(mockGet).toHaveBeenCalledWith(
-                `/api/activity/${testData.initialization.valid.planId}/recommendations`
+                `/api/activity/${testData().initialization.valid.planId}/recommendations`
             );
         });
     });

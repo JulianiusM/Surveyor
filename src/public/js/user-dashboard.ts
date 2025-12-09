@@ -3,8 +3,8 @@
  * Simple module for user dashboard functionality
  */
 
-import { initEntityLists, setCurrentNavLocation } from './core/navigation';
-import { loadPerms } from './core/permissions';
+import {initEntityLists, setCurrentNavLocation} from './core/navigation';
+import {loadPerms} from './core/permissions';
 
 /**
  * Initialize user dashboard
@@ -16,4 +16,5 @@ export function init(): void {
 }
 
 // Expose to global scope
+if (!window.Surveyor) window.Surveyor = {};
 window.Surveyor.init = init;

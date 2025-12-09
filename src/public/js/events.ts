@@ -604,7 +604,7 @@ export function initInvoiceSubmission(): void {
 export function init(): void {
     // Initialize data from page scripts first
     initializeData();
-    
+
     setCurrentNavLocation();
     loadPerms();
     allergyCheck();
@@ -625,4 +625,5 @@ export function init(): void {
 }
 
 // Expose to global scope
+if (!window.Surveyor) window.Surveyor = {};
 window.Surveyor.init = init;

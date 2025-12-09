@@ -43,7 +43,7 @@ beforeAll(() => {
         // Change to 'error' once all handlers are properly set up
         onUnhandledRequest: 'warn',
     });
-    
+
     // Initialize ALL valid endpoints with queue handlers
     // This allows tests to use mockApiSuccess/mockApiError without manual setup
     initializeAllEndpoints();
@@ -64,16 +64,16 @@ afterAll(() => {
  * This is injected by the backend in production but needs to be mocked in tests
  */
 beforeEach(() => {
-    // Initialize window.Surveyor if it doesn't exist
+    // Reset window.Surveyor to clean state
+    // Preserve init function if it was set by a module
     if (!window.Surveyor) {
         (window as any).Surveyor = {};
     }
-    
-    // Reset to clean state for each test
-    window.Surveyor = {
-        rawPermissions: undefined,
-        permissions: undefined,
-    };
+    const existingInit = window.Surveyor.init;
+    // Reset properties but preserve init
+    window.Surveyor.rawPermissions = undefined;
+    window.Surveyor.permissions = undefined;
+    window.Surveyor.init = existingInit; // Always set, even if undefined
 
     // Mock scrollIntoView (not available in jsdom)
     Element.prototype.scrollIntoView = jest.fn();
@@ -85,14 +85,8 @@ beforeEach(() => {
  */
 declare global {
     interface Window {
-        Surveyor: {
-            rawPermissions?: string;
-            permissions?: any;
-            [key: string]: any;
-        };
         $?: any;
         jQuery?: any;
-        bootstrap?: any;
     }
 }
 
