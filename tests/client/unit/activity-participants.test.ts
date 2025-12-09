@@ -4,15 +4,10 @@
 
 import {initParticipantsTab} from '../../../src/public/js/modules/activity-participants';
 import {participantsFilterData, participantsInitData} from '../data/activityParticipantsData';
+import { setupTest } from '../helpers/testSetup';
 
 describe('activity-participants module', () => {
-    beforeEach(() => {
-        document.body.innerHTML = '';
-    });
-
-    afterEach(() => {
-        document.body.innerHTML = '';
-    });
+    setupTest();
 
     describe('initParticipantsTab', () => {
         test.each(participantsInitData)('$description', (testCase) => {
