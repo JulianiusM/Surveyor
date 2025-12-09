@@ -56,6 +56,7 @@ describe('activity-create.ts', () => {
     setupTest({
         clearDOM: false,
         beforeEach: async () => {
+            // Reset modules to get fresh imports
             jest.resetModules();
         
         // Setup window

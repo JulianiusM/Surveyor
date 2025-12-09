@@ -9,9 +9,19 @@ import type {ActivitySlot} from "../../modules/database/entities/activity/Activi
 import {formatISODate as fmtISO, getValidDaysInWeek, parseISODate as toDate} from './core/formatting';
 
 /**
- * Slot storage map: dateISO -> array of slot objects
+ * Module state that persists across function calls
+ * Encapsulated to allow cleanup in tests
  */
-const slotsMap: Record<string, Partial<ActivitySlot>[]> = {};
+const moduleState = {
+    slotsMap: {} as Record<string, Partial<ActivitySlot>[]>
+};
+
+/**
+ * Clear module state - used for testing
+ */
+export function clearState(): void {
+    moduleState.slotsMap = {};
+}
 
 /**
  * Sort function for slots by position
@@ -28,14 +38,14 @@ function getPrefilledSlots() {
  * @param obj Slot object to update/add
  */
 export function updateSlotObj(dateISO: string, obj: Partial<ActivitySlot>): void {
-    let arr = slotsMap[dateISO] || [];
+    let arr = moduleState.slotsMap[dateISO] || [];
     let curr = arr.findIndex((v) => v.id === obj.id);
     if (curr !== -1) {
         arr[curr] = obj;
         return;
     }
     arr.push(obj);
-    slotsMap[dateISO] = arr.sort(sortSlotFn);
+    moduleState.slotsMap[dateISO] = arr.sort(sortSlotFn);
 }
 
 /**
@@ -45,7 +55,7 @@ export function updateSlotObj(dateISO: string, obj: Partial<ActivitySlot>): void
  * @returns Slot object or undefined
  */
 export function getSlotObj(dateISO: string, id: string): Partial<ActivitySlot> | undefined {
-    return (slotsMap[dateISO] || []).find((v) => v.id === id);
+    return (moduleState.slotsMap[dateISO] || []).find((v) => v.id === id);
 }
 
 /**
@@ -53,11 +63,11 @@ export function getSlotObj(dateISO: string, id: string): Partial<ActivitySlot> |
  * @param dateISO Date in ISO format
  */
 export function reIndexDay(dateISO: string): void {
-    (slotsMap[dateISO] || []).forEach((s, i) => {
+    (moduleState.slotsMap[dateISO] || []).forEach((s, i) => {
         s.pos = i;
         updateSlotObj(dateISO, s);
     });
-    slotsMap[dateISO].sort(sortSlotFn);
+    moduleState.slotsMap[dateISO].sort(sortSlotFn);
 }
 
 /**
@@ -164,7 +174,7 @@ export function buildSlotRow(
 
     delBtn.addEventListener('click', () => {
         wrap.remove();
-        slotsMap[dateISO] = slotsMap[dateISO].filter((s: any) => s.id !== id);
+        moduleState.slotsMap[dateISO] = moduleState.slotsMap[dateISO].filter((s: any) => s.id !== id);
         reIndexDay(dateISO);
         infoClb();
     });
@@ -197,7 +207,7 @@ export function buildDayCell(slotDate: Date): HTMLTableCellElement {
     }
 
     // Render existing slots
-    (slotsMap[dateISO] || []).forEach((obj, i) =>
+    (moduleState.slotsMap[dateISO] || []).forEach((obj, i) =>
         container.appendChild(buildSlotRow(dateISO, obj.pos || i, infoClb, obj))
     );
 
@@ -209,7 +219,7 @@ export function buildDayCell(slotDate: Date): HTMLTableCellElement {
     addBtn.className = 'btn btn-sm btn-outline-info w-100 add-slot';
     addBtn.textContent = '+ Slot';
     addBtn.addEventListener('click', () => {
-        const pos = (slotsMap[dateISO] || []).length;
+        const pos = (moduleState.slotsMap[dateISO] || []).length;
         container.appendChild(buildSlotRow(dateISO, pos, infoClb));
         infoClb();
     });
@@ -326,7 +336,7 @@ export function initSubmitHandler(): void {
         const startD = toDate(startInp.value);
         const endD = toDate(endInp.value);
 
-        for (const [date, arr] of Object.entries(slotsMap)) {
+        for (const [date, arr] of Object.entries(moduleState.slotsMap)) {
             const cur = toDate(date);
             if (cur < startD || cur > endD) continue;
             payload[date] = arr;
@@ -373,14 +383,14 @@ export function initSlotDnD(): void {
         if (!firstSlot) return;
 
         const dateISO = firstSlot.dataset.slotDate || '';
-        const dayArr = slotsMap[dateISO] || [];
+        const dayArr = moduleState.slotsMap[dateISO] || [];
 
         // New order based on data-slotId
         Array.from(cont!.querySelectorAll('.slot')).forEach((el, i) => {
             const obj = dayArr.find((s: any) => s.id === (el as HTMLElement).dataset.slotId);
             if (obj) obj.pos = i;
         });
-        slotsMap[dateISO] = dayArr;
+        moduleState.slotsMap[dateISO] = dayArr;
         reIndexDay(dateISO);
         dragSrc = null;
     });
@@ -398,7 +408,7 @@ export function init(): void {
 
     const slots = getPrefilledSlots();
     if (slots) {
-        Object.assign(slotsMap, slots);
+        Object.assign(moduleState.slotsMap, slots);
         maybeGenerate();
     }
 }
