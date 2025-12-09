@@ -2,7 +2,9 @@
  * Test data for drag-drop.ts
  */
 
-export const tableReorderData = [
+import {deepCopy} from "../helpers/util";
+
+const _tableReorderData = [
     {
         description: 'initializes table reordering with valid config',
         tbodySelector: '.test-tbody',
@@ -21,7 +23,9 @@ export const tableReorderData = [
     },
 ];
 
-export const cardReorderData = [
+export const tableReorderData = () => deepCopy(_tableReorderData) as typeof _tableReorderData;
+
+const _cardReorderData = [
     {
         description: 'initializes card reordering',
         containerClass: 'test-container',
@@ -33,3 +37,5 @@ export const cardReorderData = [
         ],
     },
 ];
+
+export const cardReorderData = () => deepCopy(_cardReorderData) as typeof _cardReorderData;

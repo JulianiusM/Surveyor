@@ -2,7 +2,9 @@
  * Test data for admin-matrix module
  */
 
-export const permissionData = [
+import {deepCopy} from "../helpers/util";
+
+const _permissionData = [
     {
         description: 'should collect checked permission keys',
         checkboxes: [
@@ -22,7 +24,9 @@ export const permissionData = [
     },
 ];
 
-export const maskApplicationData = [
+export const permissionData = () => deepCopy(_permissionData) as typeof _permissionData;
+
+const _maskApplicationData = [
     {
         description: 'should apply mask with multiple bits',
         mask: 7, // binary 111
@@ -58,7 +62,9 @@ export const maskApplicationData = [
     },
 ];
 
-export const updateOperationData = [
+export const maskApplicationData = () => deepCopy(_maskApplicationData) as typeof _maskApplicationData;
+
+const _updateOperationData = [
     {
         description: 'should update permissions successfully',
         userId: '123',
@@ -76,7 +82,9 @@ export const updateOperationData = [
     },
 ];
 
-export const searchUserData = [
+export const updateOperationData = () => deepCopy(_updateOperationData) as typeof _updateOperationData;
+
+const _searchUserData = [
     {
         description: 'should search and populate datalist',
         query: 'john',
@@ -103,3 +111,5 @@ export const searchUserData = [
         expectedOptions: 10,
     },
 ];
+
+export const searchUserData = () => deepCopy(_searchUserData) as typeof _searchUserData;

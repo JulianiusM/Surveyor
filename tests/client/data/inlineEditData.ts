@@ -2,7 +2,9 @@
  * Test data for inline-edit.ts
  */
 
-export const enableDnDData = [
+import {deepCopy} from "../helpers/util";
+
+const _enableDnDData = [
     {
         description: 'enables draggable when user has ITEM_EDIT permission',
         hasPermission: true,
