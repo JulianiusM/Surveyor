@@ -3,19 +3,18 @@
 // Uses data-driven testing approach
 import { showInlineAlert } from '../../../src/public/js/shared/alerts';
 import { showInlineAlertData } from '../data/alertsData';
+import { setupTest } from '../helpers/testSetup';
 
 describe('alerts utilities', () => {
-    beforeEach(() => {
-        document.body.innerHTML = '<div id="liveAlerts"></div>';
-        
-        // Mock scrollIntoView (not available in jsdom)
-        Element.prototype.scrollIntoView = jest.fn();
-        // Mock focus (not fully implemented in jsdom)
-        HTMLElement.prototype.focus = jest.fn();
-    });
-
-    afterEach(() => {
-        document.body.innerHTML = '';
+    setupTest({
+        beforeEach: () => {
+            document.body.innerHTML = '<div id="liveAlerts"></div>';
+            
+            // Mock scrollIntoView (not available in jsdom)
+            Element.prototype.scrollIntoView = jest.fn();
+            // Mock focus (not fully implemented in jsdom)
+            HTMLElement.prototype.focus = jest.fn();
+        }
     });
 
     describe('showInlineAlert - Data Driven', () => {
