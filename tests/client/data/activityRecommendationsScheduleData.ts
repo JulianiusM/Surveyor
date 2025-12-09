@@ -119,6 +119,10 @@ export const activityRecommendationsScheduleData = {
         },
     ],
 
+    // Aliases for convenience in tests
+    get slots() { return this.slotsList; },
+    get participants() { return this.participantOptions; },
+
     addModal: {
         slotId: 'slot1',
         participantValue: 'user:1',

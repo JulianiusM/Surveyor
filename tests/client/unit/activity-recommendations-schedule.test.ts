@@ -299,9 +299,12 @@ describe('activity-recommendations-schedule', () => {
         beforeEach(() => {
             const scheduleView = document.getElementById('recommendationScheduleView')!;
             
-            const slotContainer = document.createElement('div');
-            slotContainer.dataset.slotRecommendations = 'slot1';
-            scheduleView.append(slotContainer);
+            // Create containers for all test slots
+            ['slot1', 'slot2', 'slot3'].forEach((slotId) => {
+                const slotContainer = document.createElement('div');
+                slotContainer.dataset.slotRecommendations = slotId;
+                scheduleView.append(slotContainer);
+            });
         });
 
         test('should approve pending recommendation', async () => {
@@ -499,14 +502,24 @@ describe('activity-recommendations-schedule', () => {
             initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
-            const addBtn = document.querySelector('[data-add-recommendation]') as HTMLButtonElement;
-            addBtn?.click();
+            // Create add button for this test
+            const scheduleView = document.getElementById('recommendationScheduleView')!;
+            const addBtn = document.createElement('button');
+            addBtn.dataset.addRecommendation = 'true';
+            addBtn.dataset.slotId = 'slot1';
+            scheduleView.append(addBtn);
+
+            addBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 50));
+
+            const addSlotIdInput = document.getElementById('addRecommendationSlotId') as HTMLInputElement;
+            addSlotIdInput.value = 'slot1';
 
             const participantSelect = document.getElementById('addRecommendationParticipant') as HTMLSelectElement;
             participantSelect.value = testData.addModal.participantValue;
 
             const confirmBtn = document.getElementById('addRecommendationConfirm') as HTMLButtonElement;
-            confirmBtn?.click();
+            confirmBtn.click();
 
             await new Promise((resolve) => setTimeout(resolve, 100));
 

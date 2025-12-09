@@ -276,9 +276,9 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
 
             const warningCell = document.createElement('td');
             warningCell.dataset.warning = 'true';
-            renderWarningCell(row, warningMap);
 
             row.append(slotCell, participantCell, statusCell, warningCell);
+            renderWarningCell(row, warningMap);
             rows.append(row);
         });
     };

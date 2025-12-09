@@ -165,8 +165,8 @@ describe('activity-recommendations', () => {
 
             const alertBox = document.querySelector('[data-recommendations-alert]')!;
             expect(alertBox.classList.contains('d-none')).toBe(false);
-            expect(alertBox.textContent).toContain('Failed to load recommendations');
-            expect(alerts.showInlineAlert).toHaveBeenCalledWith('error', expect.any(String));
+            expect(alertBox.textContent).toContain('Network error');
+            expect(alerts.showInlineAlert).toHaveBeenCalledWith('error', 'Network error');
         });
     });
 
