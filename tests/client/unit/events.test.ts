@@ -269,13 +269,9 @@ describe('events.ts', () => {
             const start = {dataset: {start: '2024-01-01'}, textContent: ''};
             const end = {dataset: {end: '2024-01-31'}, textContent: ''};
             
-            // Reset mock and set new implementation
-            mockGetElementById.mockClear();
-            mockGetElementById.mockImplementation((id) => {
-                if (id === 'startSpan') return start;
-                if (id === 'endSpan') return end;
-                return null;
-            });
+            // Store elements in mockElements map so default mock can find them
+            mockElements.set('startSpan', start);
+            mockElements.set('endSpan', end);
             
             events.initDateRange();
             
@@ -296,13 +292,9 @@ describe('events.ts', () => {
             let start = {textContent: '', dataset: {start: '2024-01-01T00:00:00Z'}};
             let end = {textContent: '', dataset: {end: '2024-01-31T00:00:00Z'}};
             
-            // Reset mock and set new implementation
-            mockGetElementById.mockClear();
-            mockGetElementById.mockImplementation((id) => {
-                if (id === 'arrival') return start;
-                if (id === 'departure') return end;
-                return null;
-            });
+            // Store elements in mockElements map
+            mockElements.set('arrival', start);
+            mockElements.set('departure', end);
             
             events.initRegistrationDateRange();
             
@@ -327,14 +319,11 @@ describe('events.ts', () => {
                 dataset: {api: '/api/test'}
             };
             
-            // Reset mocks
-            mockGetElementById.mockClear();
-            mockAddEventListener.mockClear();
+            // Store element in mockElements map
+            mockElements.set('poolCreateForm', form);
             
-            mockGetElementById.mockImplementation((id: string) => {
-                if (id === 'poolCreateForm') return form;
-                return null;
-            });
+            // Clear just the addEventListener mock before test
+            mockAddEventListener.mockClear();
             
             events.initInvoiceAdmin();
             
@@ -349,11 +338,8 @@ describe('events.ts', () => {
                 addEventListener: jest.fn()
             };
             
-            mockGetElementById.mockClear();
-            mockGetElementById.mockImplementation((id: string) => {
-                if (id === 'invoiceSubmitForm') return form;
-                return null;
-            });
+            // Store element in mockElements map
+            mockElements.set('invoiceSubmitForm', form);
             
             events.initInvoiceSubmission();
             
@@ -399,24 +385,20 @@ describe('events.ts', () => {
                 dataset: {api: '/api/test'}
             };
             
-            // Reset mocks
-            mockGetElementById.mockClear();
-            mockGetElementById.mockImplementation((id: string) => {
-                // Return appropriate mocks for different IDs
-                if (id === 'registrationForm' || id === 'updateEventForm' || id === 'poolCreateForm' || id === 'invoiceSubmitForm') {
-                    return mockForm;
-                }
-                if (id === 'cancelRegistrationBtn') {
-                    return {addEventListener: jest.fn()};
-                }
-                return null;
-            });
+            const mockBtn = {addEventListener: jest.fn()};
+            
+            // Store elements in mockElements map
+            mockElements.set('registrationForm', mockForm);
+            mockElements.set('eventUpdateForm', mockForm);
+            mockElements.set('poolCreateForm', mockForm);
+            mockElements.set('invoiceSubmitForm', mockForm);
+            mockElements.set('cancelRegistrationBtn', mockBtn);
             
             events.init();
             
-            // Event-specific initializations should be called (registrationForm, updateEventForm, cancelRegistrationBtn)
+            // Event-specific initializations should be called (registrationForm, eventUpdateForm, cancelRegistrationBtn)
             expect(mockGetElementById).toHaveBeenCalledWith('registrationForm');
-            expect(mockGetElementById).toHaveBeenCalledWith('updateEventForm');
+            expect(mockGetElementById).toHaveBeenCalledWith('eventUpdateForm');
             expect(mockGetElementById).toHaveBeenCalledWith('cancelRegistrationBtn');
         });
 
