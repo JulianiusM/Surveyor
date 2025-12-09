@@ -2,7 +2,9 @@
  * Test data for entity-assign.ts
  */
 
-export const initAssignButtonsData = [
+import {deepCopy} from "../helpers/util";
+
+const _initAssignButtonsData = [
     {
         description: 'handles assign action successfully',
         action: 'assign',
@@ -62,7 +64,9 @@ export const initAssignButtonsData = [
     },
 ];
 
-export const configData = [
+export const initAssignButtonsData = () => deepCopy(_initAssignButtonsData) as typeof _initAssignButtonsData;
+
+const _configData = [
     {
         description: 'uses default reload delay',
         config: {
@@ -81,3 +85,5 @@ export const configData = [
         expectedReloadDelay: 500,
     },
 ];
+
+export const configData = () => deepCopy(_configData) as typeof _configData;

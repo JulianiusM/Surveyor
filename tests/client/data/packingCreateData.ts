@@ -2,7 +2,9 @@
  * Test data for packing-create.ts module
  */
 
-export const packingCreateTestData = {
+import {deepCopy} from "../helpers/util";
+
+const _packingCreateTestData = {
     formElements: {
         form: { id: 'packingForm' },
         itemTable: { id: 'itemTable' },
@@ -19,3 +21,5 @@ export const packingCreateTestData = {
         { title: 'Prefilled 2', description: '', maxAssignees: 2, requiredByAll: false },
     ],
 };
+
+export const packingCreateTestData = () => deepCopy(_packingCreateTestData) as typeof _packingCreateTestData;

@@ -3,7 +3,9 @@
  * Data-driven test cases for entity selection UI
  */
 
-export const entitySelectInitData = [
+import {deepCopy} from "../helpers/util";
+
+const _entitySelectInitData = [
     {
         description: 'should initialize with provided value',
         id: 'event-select',
@@ -39,7 +41,9 @@ export const entitySelectInitData = [
     },
 ];
 
-export const entitySelectFilterData = [
+export const entitySelectInitData = () => deepCopy(_entitySelectInitData) as typeof _entitySelectInitData;
+
+const _entitySelectFilterData = [
     {
         description: 'should filter by title',
         query: 'event 2',
@@ -80,7 +84,9 @@ export const entitySelectFilterData = [
     },
 ];
 
-export const entitySelectSelectionData = [
+export const entitySelectFilterData = () => deepCopy(_entitySelectFilterData) as typeof _entitySelectFilterData;
+
+const _entitySelectSelectionData = [
     {
         description: 'should select entity when clicked',
         entityId: '2',
@@ -92,3 +98,5 @@ export const entitySelectSelectionData = [
         expectedLabel: 'Event 1',
     },
 ];
+
+export const entitySelectSelectionData = () => deepCopy(_entitySelectSelectionData) as typeof _entitySelectSelectionData;

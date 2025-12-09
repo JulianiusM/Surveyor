@@ -3,7 +3,11 @@
  */
 
 import {initEventParticipants} from '../../../src/public/js/modules/event-participant';
-import {participantRowsData, filterTestData, totalsTestData} from '../data/eventParticipantData';
+import {participantRowsData as _participantRowsData, filterTestData as _filterTestData, totalsTestData as _totalsTestData} from '../data/eventParticipantData';
+
+const participantRowsData = _participantRowsData();
+const filterTestData = _filterTestData();
+const totalsTestData = _totalsTestData();
 import {setupTest} from '../helpers/testSetup';
 import {server} from '../msw/server';
 import {http, HttpResponse} from 'msw';

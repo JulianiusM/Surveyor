@@ -2,7 +2,9 @@
  * Tests for survey-create.ts module
  */
 
-import { surveyCreateTestData } from '../data/surveyCreateData';
+import { surveyCreateTestData as _surveyCreateTestData } from '../data/surveyCreateData';
+
+const surveyCreateTestData = _surveyCreateTestData();
 import { setupTest } from '../helpers/testSetup';
 
 // Mock dependencies

@@ -2,7 +2,9 @@
  * Tests for packing-create.ts module
  */
 
-import { packingCreateTestData } from '../data/packingCreateData';
+import { packingCreateTestData as _packingCreateTestData } from '../data/packingCreateData';
+
+const packingCreateTestData = _packingCreateTestData();
 import { setupTest } from '../helpers/testSetup';
 
 // Mock dependencies

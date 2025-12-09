@@ -2,7 +2,9 @@
  * Test data for packing.ts module
  */
 
-export const packingTestData = {
+import {deepCopy} from "../helpers/util";
+
+const _packingTestData = {
     packListId: 'packing-123',
     editableElements: [
         { dataEdit: 'title', value: 'Item Title' },
@@ -15,3 +17,5 @@ export const packingTestData = {
     },
     itemId: 'item-456',
 };
+
+export const packingTestData = () => deepCopy(_packingTestData) as typeof _packingTestData;

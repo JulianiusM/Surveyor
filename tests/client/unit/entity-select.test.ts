@@ -4,7 +4,11 @@
  */
 
 import { initEntitySelect } from '../../../src/public/js/modules/entity-select';
-import { entitySelectInitData, entitySelectFilterData, entitySelectSelectionData } from '../data/entitySelectData';
+import { entitySelectInitData as _entitySelectInitData, entitySelectFilterData as _entitySelectFilterData, entitySelectSelectionData as _entitySelectSelectionData } from '../data/entitySelectData';
+
+const entitySelectInitData = _entitySelectInitData();
+const entitySelectFilterData = _entitySelectFilterData();
+const entitySelectSelectionData = _entitySelectSelectionData();
 import { setupTest } from '../helpers/testSetup';
 
 // Mock Bootstrap Modal

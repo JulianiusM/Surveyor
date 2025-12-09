@@ -2,7 +2,9 @@
  * Test data for event-participant module
  */
 
-export const participantRowsData = [
+import {deepCopy} from "../helpers/util";
+
+const _participantRowsData = [
     {
         description: 'should render participant with all fields',
         participant: {
@@ -53,7 +55,9 @@ export const participantRowsData = [
     },
 ];
 
-export const filterTestData = [
+export const participantRowsData = () => deepCopy(_participantRowsData) as typeof _participantRowsData;
+
+const _filterTestData = [
     {
         description: 'should filter by name',
         query: 'john',
@@ -96,7 +100,9 @@ export const filterTestData = [
     },
 ];
 
-export const totalsTestData = [
+export const filterTestData = () => deepCopy(_filterTestData) as typeof _filterTestData;
+
+const _totalsTestData = [
     {
         description: 'should render dietary totals with proper styling',
         totals: {VEGETARIAN: 3, VEGAN: 2, ALLERGIES: 1},
@@ -116,3 +122,5 @@ export const totalsTestData = [
         expectedTexts: ['VEGETARIAN: 3', 'ALLERGIES: 2'],
     },
 ];
+
+export const totalsTestData = () => deepCopy(_totalsTestData) as typeof _totalsTestData;

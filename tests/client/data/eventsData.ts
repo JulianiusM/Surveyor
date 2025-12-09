@@ -2,13 +2,17 @@
  * Test data for events.ts module
  */
 
-export const allergyCheckData = {
+import {deepCopy} from "../helpers/util";
+
+const _allergyCheckData = {
     description: 'synchronizes allergy notes requirement with checkbox',
     hasElements: true,
     checked: true
 };
 
-export const deadlineUpdaterData = [
+export const allergyCheckData = () => deepCopy(_allergyCheckData) as typeof _allergyCheckData;
+
+const _deadlineUpdaterData = [
     {
         description: 'updates deadline display with valid data',
         date: '2024-12-31T23:59:59Z',
@@ -23,7 +27,9 @@ export const deadlineUpdaterData = [
     }
 ];
 
-export const initRegistrationData = {
+export const deadlineUpdaterData = () => deepCopy(_deadlineUpdaterData) as typeof _deadlineUpdaterData;
+
+const _initRegistrationData = {
     hasForm: true,
     formData: {
         name: 'John Doe',
@@ -32,7 +38,9 @@ export const initRegistrationData = {
     }
 };
 
-export const initUpdateData = {
+export const initRegistrationData = () => deepCopy(_initRegistrationData) as typeof _initRegistrationData;
+
+const _initUpdateData = {
     hasForm: true,
     formData: {
         title: 'Updated Event',
@@ -42,13 +50,17 @@ export const initUpdateData = {
     }
 };
 
-export const initCancelRegistrationData = {
+export const initUpdateData = () => deepCopy(_initUpdateData) as typeof _initUpdateData;
+
+const _initCancelRegistrationData = {
     hasButton: true,
     registrationId: 123,
     confirmed: true
 };
 
-export const initData = {
+export const initCancelRegistrationData = () => deepCopy(_initCancelRegistrationData) as typeof _initCancelRegistrationData;
+
+const _initData = {
     basicInit: {
         description: 'initializes with all basic functions',
         eventId: 'event-123'
@@ -58,3 +70,5 @@ export const initData = {
         eventId: ''
     }
 };
+
+export const initData = () => deepCopy(_initData) as typeof _initData;

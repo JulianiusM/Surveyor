@@ -2,7 +2,9 @@
  * Tests for drivers-create.ts module
  */
 
-import { driversCreateTestData } from '../data/driversCreateData';
+import { driversCreateTestData as _driversCreateTestData } from '../data/driversCreateData';
+
+const driversCreateTestData = _driversCreateTestData();
 import { setupTest } from '../helpers/testSetup';
 
 // Mock dependencies

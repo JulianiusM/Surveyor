@@ -2,7 +2,9 @@
  * Test data for survey-create.ts module
  */
 
-export const surveyCreateTestData = {
+import {deepCopy} from "../helpers/util";
+
+const _surveyCreateTestData = {
     formElements: {
         combinationTable: { id: 'combinationTable' },
         addCombinationBtn: { id: 'addCombinationBtn' },
@@ -15,3 +17,5 @@ export const surveyCreateTestData = {
         { weekday: 'FRI', nth_week: '3' },
     ],
 };
+
+export const surveyCreateTestData = () => deepCopy(_surveyCreateTestData) as typeof _surveyCreateTestData;
