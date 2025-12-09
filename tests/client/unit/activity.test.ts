@@ -4,20 +4,20 @@
  */
 
 import {describe, expect, jest, test} from '@jest/globals';
-import {setupTest} from '../helpers/testSetup';
 // Import after mocking (window already set up at top of file)
 import * as activity from '../../../src/public/js/activity';
 import {setCurrentNavLocation} from '../../../src/public/js/core/navigation';
 import {loadPerms} from '../../../src/public/js/core/permissions';
-import {initDates, initSlotFilters} from '../../../src/public/js/modules/activity-filters';
 import {buildWarningModal, initAssign} from '../../../src/public/js/modules/activity-assignments';
-import {initDelete, initDnD, initInlineEdit} from '../../../src/public/js/modules/activity-slot-operations';
-import {initSlotEditorModal} from '../../../src/public/js/modules/activity-slot-editor';
-import {initRequirementPanel} from '../../../src/public/js/modules/activity-requirements';
-import {initRecommendationScheduleView} from '../../../src/public/js/modules/activity-recommendations-schedule';
+import {initDates, initSlotFilters} from '../../../src/public/js/modules/activity-filters';
 import {initParticipantsTab} from '../../../src/public/js/modules/activity-participants';
+import {initRecommendationScheduleView} from '../../../src/public/js/modules/activity-recommendations-schedule';
+import {initRequirementPanel} from '../../../src/public/js/modules/activity-requirements';
 import {initSlotRoleAdminModal} from '../../../src/public/js/modules/activity-roles';
+import {initSlotEditorModal} from '../../../src/public/js/modules/activity-slot-editor';
+import {initDelete, initDnD, initInlineEdit} from '../../../src/public/js/modules/activity-slot-operations';
 import {initAssignmentRemoval} from '../../../src/public/js/shared/list-actions';
+import {setupTest} from '../helpers/testSetup';
 
 // Mock all module dependencies
 jest.mock('../../../src/public/js/core/navigation', () => ({
@@ -45,7 +45,7 @@ jest.mock('../../../src/public/js/modules/activity-roles', () => ({
 
 jest.mock('../../../src/public/js/modules/activity-assignments', () => ({
     buildWarningModal: jest.fn(() => ({modal: 'mock'})),
-    describeWarning: jest.fn((warning, describeFn) => {
+    describeWarning: jest.fn((warning: any, describeFn: any) => {
         return describeFn ? describeFn(warning.slotId) : `Warning for ${warning.slotId}`;
     }),
     initAssign: jest.fn()

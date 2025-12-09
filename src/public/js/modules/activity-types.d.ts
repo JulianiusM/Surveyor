@@ -6,6 +6,7 @@
 
 // Bootstrap modal types
 export interface BootstrapModal {
+    dispose: any;
     show: () => void;
     hide: () => void;
 }

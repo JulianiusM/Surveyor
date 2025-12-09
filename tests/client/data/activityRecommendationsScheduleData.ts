@@ -1,8 +1,9 @@
 /**
  * Test data for activity-recommendations-schedule.ts
  */
+import {deepCopy} from "../helpers/util";
 
-export const activityRecommendationsScheduleData = {
+const _activityRecommendationsScheduleData = {
     initialization: {
         valid: {
             planId: 'plan123',
@@ -120,8 +121,12 @@ export const activityRecommendationsScheduleData = {
     ],
 
     // Aliases for convenience in tests
-    get slots() { return this.slotsList; },
-    get participants() { return this.participantOptions; },
+    get slots() {
+        return this.slotsList;
+    },
+    get participants() {
+        return this.participantOptions;
+    },
 
     addModal: {
         slotId: 'slot1',
@@ -170,3 +175,5 @@ export const activityRecommendationsScheduleData = {
         },
     },
 };
+
+export const activityRecommendationsScheduleData = () => deepCopy(_activityRecommendationsScheduleData) as typeof _activityRecommendationsScheduleData;

@@ -1,8 +1,9 @@
 /**
  * Test data for activity-create.ts module
  */
+import {deepCopy} from "../helpers/util";
 
-export const updateSlotObjData = [
+export const _updateSlotObjData = [
     {
         description: 'adds new slot object to map',
         dateISO: '2024-01-15',
@@ -25,7 +26,9 @@ export const updateSlotObjData = [
     }
 ];
 
-export const getSlotObjData = [
+export const updateSlotObjData = () => deepCopy(_updateSlotObjData) as typeof _updateSlotObjData
+
+export const _getSlotObjData = [
     {
         description: 'retrieves existing slot',
         dateISO: '2024-01-15',
@@ -40,7 +43,9 @@ export const getSlotObjData = [
     }
 ];
 
-export const reIndexDayData = {
+export const getSlotObjData = () => deepCopy(_getSlotObjData) as typeof _getSlotObjData
+
+export const _reIndexDayData = {
     description: 're-indexes all slots for a day',
     dateISO: '2024-01-15',
     slots: [
@@ -50,7 +55,9 @@ export const reIndexDayData = {
     ]
 };
 
-export const buildSlotRowData = [
+export const reIndexDayData = () => deepCopy(_reIndexDayData) as typeof _getSlotObjData
+
+export const _buildSlotRowData = [
     {
         description: 'builds slot row with prefilled data',
         dateISO: '2024-01-15',
@@ -72,14 +79,18 @@ export const buildSlotRowData = [
     }
 ];
 
-export const buildDayCellData = [
+export const buildSlotRowData = () => deepCopy(_buildSlotRowData) as typeof _buildSlotRowData;
+
+export const _buildDayCellData = [
     {
         description: 'builds day cell for a date',
         date: new Date('2024-01-15')
     }
 ];
 
-export const createWeekTableData = [
+export const buildDayCellData = () => deepCopy(_buildDayCellData) as typeof _buildDayCellData
+
+export const _createWeekTableData = [
     {
         description: 'creates week table within date range',
         monday: new Date('2024-01-15'),
@@ -88,7 +99,9 @@ export const createWeekTableData = [
     }
 ];
 
-export const buildTablesData = [
+export const createWeekTableData = () => deepCopy(_createWeekTableData) as typeof _createWeekTableData
+
+export const _buildTablesData = [
     {
         description: 'builds all tables for date range',
         start: new Date('2024-01-15'),
@@ -101,7 +114,9 @@ export const buildTablesData = [
     }
 ];
 
-export const maybeGenerateData = [
+export const buildTablesData = () => deepCopy(_buildTablesData) as typeof _buildTablesData
+
+export const _maybeGenerateData = [
     {
         description: 'generates tables when start and end dates are valid',
         startDate: '2024-01-15',
@@ -128,19 +143,27 @@ export const maybeGenerateData = [
     }
 ];
 
-export const initListenersData = {
+export const maybeGenerateData = () => deepCopy(_maybeGenerateData) as typeof _maybeGenerateData
+
+export const _initListenersData = {
     description: 'initializes date input listeners'
 };
 
-export const initSubmitHandlerData = {
+export const initListenersData = () => deepCopy(_initListenersData) as typeof _initListenersData
+
+export const _initSubmitHandlerData = {
     description: 'initializes form submit handler with slot serialization'
 };
 
-export const initSlotDnDData = {
+export const initSubmitHandlerData = () => deepCopy(_initSubmitHandlerData) as typeof _initSubmitHandlerData
+
+export const _initSlotDnDData = {
     description: 'initializes drag-and-drop for slot reordering'
 };
 
-export const initData = {
+export const initSlotDnDData = () => deepCopy(_initSlotDnDData) as typeof _initSlotDnDData
+
+export const _initData = {
     basicInit: {
         description: 'initializes with all functions',
         hasPrefilledSlots: false
@@ -155,3 +178,5 @@ export const initData = {
         }
     }
 };
+
+export const initData = () => deepCopy(_initData) as typeof _initData;

@@ -10,10 +10,10 @@
 
 import {get, post} from '../core/http';
 import {reloadAfterDelay} from '../shared/ui-helpers';
-import type {RecommendationRow} from './activity-types';
-import {ActivityRecommendationsState} from './activity-recommendations-state';
 import {RecommendationsLogic} from './activity-recommendations-logic';
+import {ActivityRecommendationsState} from './activity-recommendations-state';
 import {RecommendationsUI} from './activity-recommendations-ui';
+import type {RecommendationRow} from './activity-types';
 
 // Module-level instances
 let state: ActivityRecommendationsState | null = null;
@@ -41,11 +41,11 @@ export function cleanupRecommendationScheduleView(): void {
  * @param planId - Activity plan ID
  * @param describeSlot - Function to describe a slot by ID
  */
-export async function initRecommendationScheduleView(planId: string, describeSlot: (slotId: string) => string): Promise<void> {
+export async function initRecommendationScheduleView(planId: string, describeSlot: (slotId: string) => string): Promise<ActivityRecommendationsState | null> {
     const panel = document.getElementById('recommendationPanel');
     const scheduleView = panel?.querySelector<HTMLElement>('#recommendationScheduleView');
 
-    if (!planId || !panel || !scheduleView) return;
+    if (!planId || !panel || !scheduleView) return null;
 
     // Initialize layers
     state = new ActivityRecommendationsState();
@@ -166,4 +166,6 @@ export async function initRecommendationScheduleView(planId: string, describeSlo
     ui!.setupButtons(loadRecommendations, generateRecommendations, applyRecommendations);
     ui!.setupAddModal(handleAddConfirm);
     await loadRecommendations();
+
+    return state;
 }
