@@ -17,7 +17,6 @@ import {
     initSubmitHandlerData,
     initData
 } from '../data/activityCreateData';
-import {setupTest} from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/navigation', () => ({
@@ -53,10 +52,9 @@ let mockGetElementById: jest.Mock;
 let mockCreateElement: jest.Mock;
 
 describe('activity-create.ts', () => {
-    setupTest({
-        clearDOM: false,
-        beforeEach: async () => {
-            jest.resetModules();
+    beforeEach(async () => {
+        jest.clearAllMocks();
+        jest.resetModules();
         
         // Setup window
         (global as any).window = {
@@ -138,10 +136,10 @@ describe('activity-create.ts', () => {
         loadPerms = perms.loadPerms;
         
         activityCreate = await import('../../../src/public/js/activity-create');
-        },
-        afterEach: () => {
-            jest.resetModules();
-        }
+    });
+    
+    afterEach(() => {
+        jest.resetModules();
     });
 
     describe('updateSlotObj', () => {
