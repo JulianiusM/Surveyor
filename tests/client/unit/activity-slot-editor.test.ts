@@ -35,7 +35,6 @@ describe('activity-slot-editor', () => {
     let mockPost: jest.SpyInstance;
 
     setupTest({
-        clearDOM: false,
         beforeEach: () => {
             mockShow.mockClear();
             mockHide.mockClear();

@@ -104,14 +104,6 @@ describe('activity.ts', () => {
                 clear: jest.fn()
             };
             (global as any).sessionStorage = sessionStorageMock;
-            
-            // Setup document
-            (global as any).document = {
-                querySelector: jest.fn(),
-                querySelectorAll: jest.fn(() => []),
-                createElement: jest.fn(),
-                body: {}
-            };
         }
     });
 
