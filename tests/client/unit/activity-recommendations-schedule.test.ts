@@ -3,7 +3,7 @@
  * Testing schedule-based recommendations view
  */
 
-import {initRecommendationScheduleView} from '../../../src/public/js/modules/activity-recommendations-schedule';
+import {initRecommendationScheduleView, cleanupRecommendationScheduleView} from '../../../src/public/js/modules/activity-recommendations-schedule';
 import {activityRecommendationsScheduleData as testData} from '../data/activityRecommendationsScheduleData';
 import * as http from '../../../src/public/js/core/http';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
@@ -89,6 +89,8 @@ describe('activity-recommendations-schedule', () => {
             document.body.append(addModal);
         },
         afterEach: () => {
+            // Call cleanup function to reset module state and remove event listeners
+            cleanupRecommendationScheduleView();
             // Comprehensive cleanup: remove all dynamically created elements
             document.body.innerHTML = '';
         }

@@ -17,6 +17,50 @@ import {formatDateLabel} from "../core/formatting";
 
 declare const bootstrap: BootstrapGlobal;
 
+// Module-level state that persists across function calls
+interface EventListenerTracking {
+    element: HTMLElement | Document;
+    event: string;
+    handler: EventListener;
+}
+
+const moduleState = {
+    recommendations: [] as RecommendationRow[],
+    warnings: [] as RecommendationWarning[],
+    participantOptions: [] as RecommendationParticipantOption[],
+    slots: [] as any[],
+    existingAssignments: [] as any[],
+    eventListeners: [] as EventListenerTracking[],
+    addModalInstance: null as BootstrapModal | null
+};
+
+/**
+ * Cleanup function to reset module state and remove event listeners
+ * Should be called when tearing down the view or between tests
+ */
+export function cleanupRecommendationScheduleView(): void {
+    // Remove all tracked event listeners
+    moduleState.eventListeners.forEach(({element, event, handler}) => {
+        element.removeEventListener(event, handler);
+    });
+    moduleState.eventListeners = [];
+    
+    // Dispose modal if exists
+    if (moduleState.addModalInstance) {
+        if (typeof moduleState.addModalInstance.dispose === 'function') {
+            moduleState.addModalInstance.dispose();
+        }
+        moduleState.addModalInstance = null;
+    }
+    
+    // Clear all state arrays
+    moduleState.recommendations = [];
+    moduleState.warnings = [];
+    moduleState.participantOptions = [];
+    moduleState.slots = [];
+    moduleState.existingAssignments = [];
+}
+
 export function initRecommendationScheduleView(planId: string, describeSlot: (slotId: string) => string): void {
     const panel = document.getElementById('recommendationPanel');
     const scheduleView = panel?.querySelector<HTMLElement>('#recommendationScheduleView');
@@ -28,23 +72,23 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
 
     if (!planId || !panel || !scheduleView) return;
 
-    let recommendations: RecommendationRow[] = [];
-    let warnings: RecommendationWarning[] = [];
-    let participantOptions: RecommendationParticipantOption[] = [];
-    let slots: any[] = [];
-    let existingAssignments: any[] = [];
-
     // Add recommendation modal
     const addModal = document.getElementById('addRecommendationModal');
     const addSlotIdInput = addModal?.querySelector<HTMLInputElement>('#addRecommendationSlotId');
     const addParticipantSelect = addModal?.querySelector<HTMLSelectElement>('#addRecommendationParticipant');
     const addConfirmBtn = addModal?.querySelector<HTMLButtonElement>('#addRecommendationConfirm');
     const addWarningBox = addModal?.querySelector<HTMLElement>('[data-add-warning]');
-    let addModalInstance: BootstrapModal | null = null;
 
-    if (addModal) {
-        addModalInstance = new bootstrap.Modal(addModal, {focus: true});
+    if (addModal && !moduleState.addModalInstance) {
+        moduleState.addModalInstance = new bootstrap.Modal(addModal, {focus: true});
     }
+    const addModalInstance = moduleState.addModalInstance;
+
+    // Helper to track event listeners for cleanup
+    const addTrackedListener = (element: HTMLElement | Document, event: string, handler: EventListener) => {
+        element.addEventListener(event, handler);
+        moduleState.eventListeners.push({element, event, handler});
+    };
 
     const setAlert = (message?: string, variant: 'info' | 'danger' = 'info') => {
         if (!alertBox) return;
@@ -74,7 +118,7 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
         if (!summaryStats) return;
         summaryStats.innerHTML = '';
 
-        if (!recommendations.length) {
+        if (!moduleState.recommendations.length) {
             const span = document.createElement('span');
             span.className = 'text-secondary';
             span.textContent = 'No recommendations loaded.';
@@ -88,7 +132,7 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             REJECTED: 0,
         };
 
-        recommendations.forEach((rec) => {
+        moduleState.recommendations.forEach((rec) => {
             if (rec.status && counts[rec.status] !== undefined) {
                 counts[rec.status] += 1;
             }
@@ -161,7 +205,8 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             approveBtn.type = 'button';
             approveBtn.title = 'Approve';
             approveBtn.innerHTML = '<i class="bi bi-check"></i>';
-            approveBtn.addEventListener('click', () => approveRecommendation(rec));
+            const approveHandler = () => approveRecommendation(rec);
+            addTrackedListener(approveBtn, 'click', approveHandler);
             recDiv.append(approveBtn);
 
             const rejectBtn = document.createElement('button');
@@ -169,7 +214,8 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             rejectBtn.type = 'button';
             rejectBtn.title = 'Reject';
             rejectBtn.innerHTML = '<i class="bi bi-x"></i>';
-            rejectBtn.addEventListener('click', () => rejectRecommendation(rec));
+            const rejectHandler = () => rejectRecommendation(rec);
+            addTrackedListener(rejectBtn, 'click', rejectHandler);
             recDiv.append(rejectBtn);
         } else if (rec.status === 'APPROVED') {
             // Can revert to pending (acts as "undo approve")
@@ -178,7 +224,8 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             revertBtn.type = 'button';
             revertBtn.title = 'Revert to Pending';
             revertBtn.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i>';
-            revertBtn.addEventListener('click', () => removeRecommendation(rec));
+            const revertHandler = () => removeRecommendation(rec);
+            addTrackedListener(revertBtn, 'click', revertHandler);
             recDiv.append(revertBtn);
         } else if (rec.status === 'REJECTED') {
             // Can approve (revert rejection)
@@ -187,7 +234,8 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             approveBtn.type = 'button';
             approveBtn.title = 'Approve';
             approveBtn.innerHTML = '<i class="bi bi-check"></i>';
-            approveBtn.addEventListener('click', () => approveRecommendation(rec));
+            const approveHandler = () => approveRecommendation(rec);
+            addTrackedListener(approveBtn, 'click', approveHandler);
             recDiv.append(approveBtn);
             
             // Can also revert to pending
@@ -196,7 +244,8 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             revertBtn.type = 'button';
             revertBtn.title = 'Revert to Pending';
             revertBtn.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i>';
-            revertBtn.addEventListener('click', () => removeRecommendation(rec));
+            const revertHandler = () => removeRecommendation(rec);
+            addTrackedListener(revertBtn, 'click', revertHandler);
             recDiv.append(revertBtn);
         }
 
@@ -212,7 +261,7 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
 
         // Group recommendations by slot
         const bySlot = new Map<string, RecommendationRow[]>();
-        recommendations.forEach((rec) => {
+        moduleState.recommendations.forEach((rec) => {
             const slotId = rec.slot.id;
             if (!bySlot.has(slotId)) {
                 bySlot.set(slotId, []);
@@ -232,38 +281,38 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
     };
 
     const approveRecommendation = async (rec: RecommendationRow) => {
-        const idx = recommendations.findIndex((r) =>
+        const idx = moduleState.recommendations.findIndex((r) =>
             r.slot.id === rec.slot.id &&
             r.user?.id === rec.user?.id &&
             r.guest?.id === rec.guest?.id
         );
         if (idx !== -1) {
-            recommendations[idx].status = 'APPROVED';
+            moduleState.recommendations[idx].status = 'APPROVED';
             renderAllRecommendations();
         }
     };
 
     const rejectRecommendation = async (rec: RecommendationRow) => {
-        const idx = recommendations.findIndex((r) =>
+        const idx = moduleState.recommendations.findIndex((r) =>
             r.slot.id === rec.slot.id &&
             r.user?.id === rec.user?.id &&
             r.guest?.id === rec.guest?.id
         );
         if (idx !== -1) {
-            recommendations[idx].status = 'REJECTED';
+            moduleState.recommendations[idx].status = 'REJECTED';
             renderAllRecommendations();
         }
     };
 
     const removeRecommendation = async (rec: RecommendationRow) => {
         // Revert to PENDING instead of deleting
-        const idx = recommendations.findIndex((r) =>
+        const idx = moduleState.recommendations.findIndex((r) =>
             r.slot.id === rec.slot.id &&
             r.user?.id === rec.user?.id &&
             r.guest?.id === rec.guest?.id
         );
         if (idx !== -1) {
-            recommendations[idx].status = 'PENDING';
+            moduleState.recommendations[idx].status = 'PENDING';
             renderAllRecommendations();
         }
     };
@@ -276,13 +325,13 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             // Extract data from {status, data, message} format
             const data = resp.data || resp;
 
-            recommendations = data.recommendations || [];
-            warnings = data.warnings || [];
-            participantOptions = data.participantOptions || [];
-            slots = data.slots || [];
+            moduleState.recommendations = data.recommendations || [];
+            moduleState.warnings = data.warnings || [];
+            moduleState.participantOptions = data.participantOptions || [];
+            moduleState.slots = data.slots || [];
             
             // Extract existing assignments from recommendations for overlap detection
-            existingAssignments = [];
+            moduleState.existingAssignments = [];
 
             renderAllRecommendations();
             setAlert();
@@ -307,7 +356,7 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
     const applyRecommendations = async () => {
         // Apply = Save all current statuses
         // Send all recommendations with their current status
-        const payload = recommendations.map(r => ({
+        const payload = moduleState.recommendations.map(r => ({
             slotId: r.slot.id,
             userId: r.user?.id || null,
             guestId: r.guest?.id || null,
@@ -334,7 +383,7 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
     };
 
     // Add recommendation handlers
-    scheduleView.addEventListener('click', (e) => {
+    const scheduleViewClickHandler = (e: Event) => {
         const target = e.target as HTMLElement;
         const btn = target.closest('[data-add-recommendation]') as HTMLButtonElement;
         if (!btn) return;
@@ -352,7 +401,7 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             addParticipantSelect.innerHTML = '<option value="">Choose a participant...</option>';
             
             // Filter participants based on attendance window
-            participantOptions.forEach((opt) => {
+            moduleState.participantOptions.forEach((opt) => {
                 // Check if participant is available for this slot's day
                 let isAvailable = true;
                 if (slotDay && (opt.arrivalDate || opt.departureDate)) {
@@ -376,6 +425,7 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             });
             
             // Add change handler to show warning when participant selected
+            // Note: We don't track this listener because it uses {once: true} and removes itself
             addParticipantSelect.addEventListener('change', () => {
                 // Clear warning first
                 if (addWarningBox) {
@@ -391,17 +441,17 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
                 const userId = type === 'user' ? id : null;
                 const guestId = type === 'guest' ? id : null;
                 
-                const participant = participantOptions.find((p) =>
+                const participant = moduleState.participantOptions.find((p) =>
                     (userId && p.userId === userId) || (guestId && p.guestId === guestId)
                 );
                 
                 if (participant) {
                     // Find slot from existing data
-                    const slot = slots.find((s: any) => s.id === slotId);
+                    const slot = moduleState.slots.find((s: any) => s.id === slotId);
                     if (slot) {
                         // Check for overlapping assignments on same day
                         const slotDate = new Date(slot.day);
-                        const hasOverlap = existingAssignments.some((assignment: any) => {
+                        const hasOverlap = moduleState.existingAssignments.some((assignment: any) => {
                             const matchesParticipant = 
                                 (userId && assignment.user?.id === userId) ||
                                 (guestId && assignment.guest?.id === guestId);
@@ -432,10 +482,11 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
         if (addWarningBox) addWarningBox.classList.add('d-none');
 
         addModalInstance.show();
-    });
+    };
+    addTrackedListener(scheduleView, 'click', scheduleViewClickHandler);
 
     if (addConfirmBtn) {
-        addConfirmBtn.addEventListener('click', async () => {
+        const addConfirmClickHandler = async () => {
             const slotId = addSlotIdInput?.value;
             const participantValue = addParticipantSelect?.value;
             if (!slotId || !participantValue) return;
@@ -445,14 +496,14 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             const userId = type === 'user' ? id : null;
             const guestId = type === 'guest' ? id : null;
 
-            const participant = participantOptions.find((p) =>
+            const participant = moduleState.participantOptions.find((p) =>
                 (userId && p.userId === userId) || (guestId && p.guestId === guestId)
             );
 
             if (!participant) return;
 
             // Find slot information from existing recommendations or from DOM
-            let slot = recommendations.find((r) => r.slot.id === slotId)?.slot;
+            let slot = moduleState.recommendations.find((r) => r.slot.id === slotId)?.slot;
             if (!slot) {
                 // Try to get slot title from DOM
                 const slotElement = scheduleView.querySelector(`[data-slot-id="${slotId}"]`);
@@ -464,7 +515,7 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             }
 
             // Check for duplicates before adding
-            const isDuplicate = recommendations.some(r =>
+            const isDuplicate = moduleState.recommendations.some(r =>
                 r.slot.id === slotId &&
                 r.user?.id === userId &&
                 r.guest?.id === guestId
@@ -483,7 +534,7 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             const slotEndTime = slotElement?.querySelector('[data-end-time]')?.getAttribute('data-end-time');
             
             // Check if participant has overlapping recommendations
-            const hasOverlap = recommendations.some(r => {
+            const hasOverlap = moduleState.recommendations.some(r => {
                 // Must be same participant
                 if (!(r.user?.id === userId || r.guest?.id === guestId)) return false;
                 
@@ -528,17 +579,18 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
                 status: 'APPROVED',
             };
 
-            recommendations.push(newRec);
+            moduleState.recommendations.push(newRec);
             renderAllRecommendations();
 
             if (addModalInstance) addModalInstance.hide();
-        });
+        };
+        addTrackedListener(addConfirmBtn, 'click', addConfirmClickHandler);
     }
 
     // Button handlers
-    refreshBtn?.addEventListener('click', loadRecommendations);
-    autoBtn?.addEventListener('click', generateRecommendations);
-    applyBtn?.addEventListener('click', applyRecommendations);
+    if (refreshBtn) addTrackedListener(refreshBtn, 'click', loadRecommendations);
+    if (autoBtn) addTrackedListener(autoBtn, 'click', generateRecommendations);
+    if (applyBtn) addTrackedListener(applyBtn, 'click', applyRecommendations);
 
     // Initial load
     loadRecommendations();
