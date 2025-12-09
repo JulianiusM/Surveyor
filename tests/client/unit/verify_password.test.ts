@@ -4,9 +4,7 @@
  */
 
 import { 
-    verifyPasswordInitTestData, 
-    passwordEventTestData, 
-    formSubmitTestData 
+    verifyPasswordInitTestData
 } from '../data/verifyPasswordData';
 
 // Mock jQuery with chainable methods

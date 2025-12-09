@@ -1,7 +1,5 @@
 // tests/client/ui/password-ui.test.ts
 // UI tests for password validation DOM behavior
-import { screen, waitFor } from '@testing-library/dom';
-import userEvent from '@testing-library/user-event';
 import {
     verifyPassword,
     matchPassword,
