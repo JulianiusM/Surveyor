@@ -101,13 +101,17 @@ describe('activity-create.ts', () => {
             draggable: false
         };
         
+        // Create persistent mock elements to avoid null references
+        const mockElementsMap: Record<string, any> = {
+            'slotArea': Object.assign({}, mockElement),
+            'startDate': Object.assign({}, mockElement, {value: '2024-01-15'}),
+            'endDate': Object.assign({}, mockElement, {value: '2024-01-21'}),
+            'planForm': Object.assign({}, mockElement),
+            'slotsJson': Object.assign({}, mockElement)
+        };
+        
         mockGetElementById = jest.fn((id) => {
-            if (id === 'slotArea') return Object.assign({}, mockElement);
-            if (id === 'startDate') return Object.assign({}, mockElement, {value: '2024-01-15'});
-            if (id === 'endDate') return Object.assign({}, mockElement, {value: '2024-01-21'});
-            if (id === 'planForm') return Object.assign({}, mockElement);
-            if (id === 'slotsJson') return Object.assign({}, mockElement);
-            return mockElement;
+            return mockElementsMap[id] || mockElement;
         });
         
         mockCreateElement = jest.fn((tag) => {
