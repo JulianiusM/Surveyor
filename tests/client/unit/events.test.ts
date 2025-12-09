@@ -4,7 +4,6 @@
  */
 
 import {describe, test, expect, jest, beforeEach, afterEach} from '@jest/globals';
-import { setupTest } from '../helpers/testSetup';
 
 // Mock all dependencies
 jest.mock('../../../src/public/js/core/navigation', () => ({
@@ -51,9 +50,10 @@ let mockAddEventListener: jest.Mock;
 let mockElements: Map<string, any>;
 
 describe('events.ts', () => {
-    setupTest();
     
     beforeEach(async () => {
+        // Clear all mocks
+        jest.clearAllMocks();
         
         // Setup window
         (global as any).window = {
@@ -135,6 +135,9 @@ describe('events.ts', () => {
 
     afterEach(() => {
         jest.resetModules();
+        // Clear document mock
+        delete (global as any).document;
+        delete (global as any).window;
     });
 
     describe('allergyCheck', () => {
