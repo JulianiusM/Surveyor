@@ -4,14 +4,6 @@
  */
 
 import {describe, test, expect, jest, beforeEach, afterEach} from '@jest/globals';
-import {
-    allergyCheckData,
-    deadlineUpdaterData,
-    initRegistrationData,
-    initUpdateData,
-    initCancelRegistrationData,
-    initData
-} from '../data/eventsData';
 
 // Mock all dependencies
 jest.mock('../../../src/public/js/core/navigation', () => ({
@@ -145,8 +137,12 @@ describe('events.ts', () => {
 
     describe('allergyCheck', () => {
         test('should sync allergy notes requirement with checkbox', () => {
+            // Pre-cache the elements so they exist when allergyCheck() runs
             const allergyBox = document.getElementById('diet-allergies') as any;
             const notes = document.getElementById('allergyNotes') as any;
+            
+            // Clear the mocks before running the function
+            allergyBox.addEventListener.mockClear();
             
             events.allergyCheck();
             
@@ -163,11 +159,26 @@ describe('events.ts', () => {
 
     describe('deadlineUpdater', () => {
         test('should update deadline countdown display', () => {
-            const mockElement = {
+            // Setup all required elements
+            const deadlineCnt = {
                 textContent: '',
-                dataset: {date: '2024-12-31T23:59:59Z', tz: 'America/New_York'}
+                dataset: {}
             };
-            mockGetElementById.mockReturnValue(mockElement);
+            const deadlineText = {
+                textContent: '',
+                dataset: {date: '2024-12-31T23:59:59Z'}
+            };
+            const deadlineTZ = {
+                textContent: '',
+                dataset: {tz: 'America/New_York'}
+            };
+            
+            mockGetElementById.mockImplementation((id: string) => {
+                if (id === 'deadlineCountdown') return deadlineCnt;
+                if (id === 'deadlineText') return deadlineText;
+                if (id === 'deadlineTZ') return deadlineTZ;
+                return null;
+            });
             
             events.deadlineUpdater();
             
@@ -186,7 +197,10 @@ describe('events.ts', () => {
             const form = {
                 addEventListener: jest.fn()
             };
-            mockGetElementById.mockReturnValue(form);
+            mockGetElementById.mockImplementation((id: string) => {
+                if (id === 'registrationForm') return form;
+                return null;
+            });
             
             events.initRegistration();
             
@@ -206,7 +220,10 @@ describe('events.ts', () => {
                 addEventListener: jest.fn(),
                 querySelector: jest.fn(() => null)
             };
-            mockGetElementById.mockReturnValue(form);
+            mockGetElementById.mockImplementation((id: string) => {
+                if (id === 'updateEventForm') return form;
+                return null;
+            });
             
             events.initUpdate();
             
@@ -225,7 +242,10 @@ describe('events.ts', () => {
             const btn = {
                 addEventListener: jest.fn()
             };
-            mockGetElementById.mockReturnValue(btn);
+            mockGetElementById.mockImplementation((id: string) => {
+                if (id === 'cancelRegistrationBtn') return btn;
+                return null;
+            });
             
             events.initCancelRegistration();
             
@@ -243,6 +263,9 @@ describe('events.ts', () => {
         test('should update date range display', () => {
             const start = {dataset: {start: '2024-01-01'}, textContent: ''};
             const end = {dataset: {end: '2024-01-31'}, textContent: ''};
+            
+            // Reset mock and set new implementation
+            mockGetElementById.mockClear();
             mockGetElementById.mockImplementation((id) => {
                 if (id === 'startSpan') return start;
                 if (id === 'endSpan') return end;
@@ -267,6 +290,9 @@ describe('events.ts', () => {
         test('should update registration date range display', () => {
             let start = {textContent: '', dataset: {start: '2024-01-01T00:00:00Z'}};
             let end = {textContent: '', dataset: {end: '2024-01-31T00:00:00Z'}};
+            
+            // Reset mock and set new implementation
+            mockGetElementById.mockClear();
             mockGetElementById.mockImplementation((id) => {
                 if (id === 'arrival') return start;
                 if (id === 'departure') return end;
@@ -295,11 +321,20 @@ describe('events.ts', () => {
                 querySelectorAll: jest.fn(() => []),
                 dataset: {api: '/api/test'}
             };
-            mockGetElementById.mockReturnValue(form);
+            
+            // Reset mocks
+            mockGetElementById.mockClear();
+            mockAddEventListener.mockClear();
+            
+            mockGetElementById.mockImplementation((id: string) => {
+                if (id === 'poolCreateForm') return form;
+                return null;
+            });
             
             events.initInvoiceAdmin();
             
-            expect(mockAddEventListener).toHaveBeenCalled();
+            // Check that document.addEventListener was called for click handlers
+            expect(mockAddEventListener).toHaveBeenCalledWith('click', expect.any(Function));
         });
     });
 
@@ -308,7 +343,12 @@ describe('events.ts', () => {
             const form = {
                 addEventListener: jest.fn()
             };
-            mockGetElementById.mockReturnValue(form);
+            
+            mockGetElementById.mockClear();
+            mockGetElementById.mockImplementation((id: string) => {
+                if (id === 'invoiceSubmitForm') return form;
+                return null;
+            });
             
             events.initInvoiceSubmission();
             
@@ -345,13 +385,34 @@ describe('events.ts', () => {
 
         test('should initialize event-specific functions when eventId exists', () => {
             (global as any).window.Surveyor.eventId = 'event-123';
-            const form = {addEventListener: jest.fn(), querySelector: jest.fn()};
-            mockGetElementById.mockReturnValue(form);
+            
+            // Create mock forms for event-specific initialization
+            const mockForm = {
+                addEventListener: jest.fn(), 
+                querySelector: jest.fn(() => null), 
+                querySelectorAll: jest.fn(() => []),
+                dataset: {api: '/api/test'}
+            };
+            
+            // Reset mocks
+            mockGetElementById.mockClear();
+            mockGetElementById.mockImplementation((id: string) => {
+                // Return appropriate mocks for different IDs
+                if (id === 'registrationForm' || id === 'updateEventForm' || id === 'poolCreateForm' || id === 'invoiceSubmitForm') {
+                    return mockForm;
+                }
+                if (id === 'cancelRegistrationBtn') {
+                    return {addEventListener: jest.fn()};
+                }
+                return null;
+            });
             
             events.init();
             
-            // Event-specific initializations should be called
-            expect(mockGetElementById).toHaveBeenCalled();
+            // Event-specific initializations should be called (registrationForm, updateEventForm, cancelRegistrationBtn)
+            expect(mockGetElementById).toHaveBeenCalledWith('registrationForm');
+            expect(mockGetElementById).toHaveBeenCalledWith('updateEventForm');
+            expect(mockGetElementById).toHaveBeenCalledWith('cancelRegistrationBtn');
         });
 
         test('should expose init function to global scope', () => {
