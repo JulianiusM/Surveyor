@@ -3,13 +3,14 @@
  */
 
 import type {RoleSummary} from '../../../src/public/js/modules/activity-types';
+import {deepCopy} from "../helpers/util";
 
 const sampleRoles: RoleSummary[] = [
     {id: 'role1', name: 'Driver', label: 'Driver', color: '#ff0000'},
     {id: 'role2', name: 'Navigator', label: 'Navigator', color: '#00ff00'}
 ];
 
-export const activityRolesData = {
+const _activityRolesData = {
     getAllRoles: [
         {
             description: 'returns empty array when window.Surveyor is undefined',
@@ -275,3 +276,5 @@ export const activityRolesData = {
         ]
     }
 };
+
+export const activityRolesData = () => deepCopy(_activityRolesData) as typeof _activityRolesData;

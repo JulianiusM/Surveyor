@@ -2,7 +2,9 @@
  * Test data for activity-participants module
  */
 
-export const participantsFilterData = [
+import {deepCopy} from "../helpers/util";
+
+const _participantsFilterData = [
     {
         description: 'filters participants by name search',
         search: 'john',
@@ -115,7 +117,9 @@ export const participantsFilterData = [
     }
 ];
 
-export const participantsInitData = [
+export const participantsFilterData = () => deepCopy(_participantsFilterData) as typeof _participantsFilterData;
+
+const _participantsInitData = [
     {
         description: 'initializes with no participants',
         hasTab: true,
@@ -138,3 +142,5 @@ export const participantsInitData = [
         expected: { initialized: true }
     }
 ];
+
+export const participantsInitData = () => deepCopy(_participantsInitData) as typeof _participantsInitData;

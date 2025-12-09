@@ -91,7 +91,9 @@ const mockConfigWithParticipants = {
     ]
 };
 
-export const activityRequirementsData = {
+import {deepCopy} from "../helpers/util";
+
+const _activityRequirementsData = {
     initSetup: {
         invalid: [
             {
@@ -264,3 +266,5 @@ export const activityRequirementsData = {
         }
     ]
 };
+
+export const activityRequirementsData = () => deepCopy(_activityRequirementsData) as typeof _activityRequirementsData;

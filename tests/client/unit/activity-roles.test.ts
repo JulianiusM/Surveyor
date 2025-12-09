@@ -32,7 +32,7 @@ describe('activity-roles module', () => {
     });
 
     describe('getAllRoles', () => {
-        test.each(activityRolesData.getAllRoles)('$description', ({initialRoles, expected}) => {
+        test.each(activityRolesData().getAllRoles)('$description', ({initialRoles, expected}) => {
             if (initialRoles !== undefined) {
                 (window as any).Surveyor = {allRoles: initialRoles};
             }
@@ -42,7 +42,7 @@ describe('activity-roles module', () => {
     });
 
     describe('getSlotRolesForSlot', () => {
-        test.each(activityRolesData.getSlotRolesForSlot)('$description', ({slotId, slotRoles, expected}) => {
+        test.each(activityRolesData().getSlotRolesForSlot)('$description', ({slotId, slotRoles, expected}) => {
             if (slotRoles !== undefined) {
                 (window as any).Surveyor = {slotRoles};
             }
@@ -52,7 +52,7 @@ describe('activity-roles module', () => {
     });
 
     describe('addRoleToGlobal', () => {
-        test.each(activityRolesData.addRoleToGlobal)('$description', ({initialRoles, roleToAdd, expectedRoles}) => {
+        test.each(activityRolesData().addRoleToGlobal)('$description', ({initialRoles, roleToAdd, expectedRoles}) => {
             if (initialRoles !== undefined) {
                 (window as any).Surveyor = {allRoles: initialRoles};
             }
@@ -78,7 +78,7 @@ describe('activity-roles module', () => {
             };
         });
 
-        test.each(activityRolesData.initSlotRoleAdminModal.invalidSetup)('$description', ({planId, html, describeSlot}) => {
+        test.each(activityRolesData().initSlotRoleAdminModal.invalidSetup)('$description', ({planId, html, describeSlot}) => {
             document.body.innerHTML = html;
             const mockDescribeSlot = jest.fn(describeSlot);
             
@@ -88,7 +88,7 @@ describe('activity-roles module', () => {
             expect((window as any).bootstrap?.Modal).not.toHaveBeenCalled();
         });
 
-        test.each(activityRolesData.initSlotRoleAdminModal.validSetup)('$description', ({planId, html, describeSlot}) => {
+        test.each(activityRolesData().initSlotRoleAdminModal.validSetup)('$description', ({planId, html, describeSlot}) => {
             document.body.innerHTML = html;
             const mockDescribeSlot = jest.fn(describeSlot);
             
@@ -98,7 +98,7 @@ describe('activity-roles module', () => {
             expect((window as any).bootstrap.Modal).toHaveBeenCalled();
         });
 
-        test.each(activityRolesData.initSlotRoleAdminModal.openModal)('$description', async ({planId, html, slotId, expectedTitle}) => {
+        test.each(activityRolesData().initSlotRoleAdminModal.openModal)('$description', async ({planId, html, slotId, expectedTitle}) => {
             document.body.innerHTML = html;
             const mockDescribeSlot = jest.fn((id: string) => `Slot ${id}`);
             
@@ -119,7 +119,7 @@ describe('activity-roles module', () => {
             expect(mockModal.show).toHaveBeenCalled();
         });
 
-        test.each(activityRolesData.initSlotRoleAdminModal.renderTable)('$description', ({planId, html, slotId, expectedRows}) => {
+        test.each(activityRolesData().initSlotRoleAdminModal.renderTable)('$description', ({planId, html, slotId, expectedRows}) => {
             document.body.innerHTML = html;
             const mockDescribeSlot = jest.fn((id: string) => `Slot ${id}`);
             
@@ -135,7 +135,7 @@ describe('activity-roles module', () => {
             expect(rows?.length).toBe(expectedRows);
         });
 
-        test.each(activityRolesData.initSlotRoleAdminModal.saveSuccess)('$description', async ({planId, html, slotId, expectedPayload}) => {
+        test.each(activityRolesData().initSlotRoleAdminModal.saveSuccess)('$description', async ({planId, html, slotId, expectedPayload}) => {
             document.body.innerHTML = html;
             const mockDescribeSlot = jest.fn((id: string) => `Slot ${id}`);
             mockPost.mockResolvedValue({});
@@ -164,7 +164,7 @@ describe('activity-roles module', () => {
             expect(mockReloadAfterDelay).toHaveBeenCalledWith(150);
         });
 
-        test.each(activityRolesData.initSlotRoleAdminModal.saveError)('$description', async ({planId, html, slotId, errorMessage}) => {
+        test.each(activityRolesData().initSlotRoleAdminModal.saveError)('$description', async ({planId, html, slotId, errorMessage}) => {
             document.body.innerHTML = html;
             const mockDescribeSlot = jest.fn((id: string) => `Slot ${id}`);
             

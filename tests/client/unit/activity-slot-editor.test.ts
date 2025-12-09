@@ -4,7 +4,9 @@
  */
 
 import {initSlotEditorModal} from '../../../src/public/js/modules/activity-slot-editor';
-import {activitySlotEditorData as testData} from '../data/activitySlotEditorData';
+import {activitySlotEditorData} from '../data/activitySlotEditorData';
+
+const testData = activitySlotEditorData();
 import * as http from '../../../src/public/js/core/http';
 import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';

@@ -2,7 +2,9 @@
  * Test data for activity.ts module
  */
 
-export const formatTimeLabelData = [
+import {deepCopy} from "../helpers/util";
+
+const _formatTimeLabelData = [
     {
         description: 'formats time with hours and minutes',
         input: '14:30:00',
@@ -25,7 +27,9 @@ export const formatTimeLabelData = [
     }
 ];
 
-export const describeSlotData = [
+export const formatTimeLabelData = () => deepCopy(_formatTimeLabelData) as typeof _formatTimeLabelData;
+
+const _describeSlotData = [
     {
         description: 'describes slot with all data',
         slotId: 'slot-1',
@@ -52,7 +56,9 @@ export const describeSlotData = [
     }
 ];
 
-export const formatSlotLabelData = [
+export const describeSlotData = () => deepCopy(_describeSlotData) as typeof _describeSlotData;
+
+const _formatSlotLabelData = [
     {
         description: 'formats slot label with all data',
         slot: {
@@ -95,7 +101,9 @@ export const formatSlotLabelData = [
     }
 ];
 
-export const toDateTimeLocalValueData = [
+export const formatSlotLabelData = () => deepCopy(_formatSlotLabelData) as typeof _formatSlotLabelData;
+
+const _toDateTimeLocalValueData = [
     {
         description: 'converts Date object to datetime-local format',
         input: new Date('2024-01-15T14:30:00Z'),
@@ -123,7 +131,9 @@ export const toDateTimeLocalValueData = [
     }
 ];
 
-export const toISOStringOrNullData = [
+export const toDateTimeLocalValueData = () => deepCopy(_toDateTimeLocalValueData) as typeof _toDateTimeLocalValueData;
+
+const _toISOStringOrNullData = [
     {
         description: 'converts valid datetime-local to ISO string',
         input: '2024-01-15T14:30',
@@ -141,7 +151,9 @@ export const toISOStringOrNullData = [
     }
 ];
 
-export const initData = {
+export const toISOStringOrNullData = () => deepCopy(_toISOStringOrNullData) as typeof _toISOStringOrNullData;
+
+const _initData = {
     basicInit: {
         description: 'initializes with all basic functions',
         planId: 'plan-123',
@@ -162,3 +174,5 @@ export const initData = {
         hasTabs: false
     }
 };
+
+export const initData = () => deepCopy(_initData) as typeof _initData;

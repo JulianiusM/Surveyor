@@ -33,7 +33,7 @@ describe('activity-filters', () => {
             expect(document.querySelectorAll('th[data-date]')).toHaveLength(0);
         });
 
-        test.each(initDatesTestData)('$description', ({date}) => {
+        test.each(initDatesTestData())('$description', ({date}) => {
             document.body.innerHTML = `
                 <th data-date="${date}">
                     <span class="day"></span>
@@ -131,7 +131,7 @@ describe('activity-filters', () => {
             expect(document.querySelectorAll('[data-slot-filter]')).toHaveLength(0);
         });
 
-        test.each(initSlotFiltersTestData)('$description', ({filterMode, slots}) => {
+        test.each(initSlotFiltersTestData())('$description', ({filterMode, slots}) => {
             // Create filter buttons
             document.body.innerHTML = `
                 <button data-slot-filter="all">All</button>
