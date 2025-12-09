@@ -17,6 +17,7 @@ import {
     initSubmitHandlerData,
     initData
 } from '../data/activityCreateData';
+import {setupTest} from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/navigation', () => ({
@@ -52,9 +53,10 @@ let mockGetElementById: jest.Mock;
 let mockCreateElement: jest.Mock;
 
 describe('activity-create.ts', () => {
-    beforeEach(async () => {
-        jest.clearAllMocks();
-        jest.resetModules();
+    setupTest({
+        clearDOM: false,
+        beforeEach: async () => {
+            jest.resetModules();
         
         // Setup window
         (global as any).window = {
@@ -101,17 +103,13 @@ describe('activity-create.ts', () => {
             draggable: false
         };
         
-        // Create persistent mock elements to avoid null references
-        const mockElementsMap: Record<string, any> = {
-            'slotArea': Object.assign({}, mockElement),
-            'startDate': Object.assign({}, mockElement, {value: '2024-01-15'}),
-            'endDate': Object.assign({}, mockElement, {value: '2024-01-21'}),
-            'planForm': Object.assign({}, mockElement),
-            'slotsJson': Object.assign({}, mockElement)
-        };
-        
         mockGetElementById = jest.fn((id) => {
-            return mockElementsMap[id] || mockElement;
+            if (id === 'slotArea') return Object.assign({}, mockElement);
+            if (id === 'startDate') return Object.assign({}, mockElement, {value: '2024-01-15'});
+            if (id === 'endDate') return Object.assign({}, mockElement, {value: '2024-01-21'});
+            if (id === 'planForm') return Object.assign({}, mockElement);
+            if (id === 'slotsJson') return Object.assign({}, mockElement);
+            return mockElement;
         });
         
         mockCreateElement = jest.fn((tag) => {
@@ -140,10 +138,10 @@ describe('activity-create.ts', () => {
         loadPerms = perms.loadPerms;
         
         activityCreate = await import('../../../src/public/js/activity-create');
-    });
-    
-    afterEach(() => {
-        jest.resetModules();
+        },
+        afterEach: () => {
+            jest.resetModules();
+        }
     });
 
     describe('updateSlotObj', () => {

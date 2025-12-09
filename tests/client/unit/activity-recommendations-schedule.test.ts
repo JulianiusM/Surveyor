@@ -37,6 +37,7 @@ describe('activity-recommendations-schedule', () => {
             mockPost = jest.spyOn(http, 'post');
             jest.spyOn(uiHelpers, 'reloadAfterDelay').mockImplementation();
 
+            // setupTest() already cleared DOM, just create our structure
             // Create panel structure
             const panel = document.createElement('div');
             panel.id = 'recommendationPanel';
@@ -86,6 +87,10 @@ describe('activity-recommendations-schedule', () => {
 
             addModal.append(addSlotIdInput, addParticipantSelect, addConfirmBtn, addWarningBox);
             document.body.append(addModal);
+        },
+        afterEach: () => {
+            // Comprehensive cleanup: remove all dynamically created elements
+            document.body.innerHTML = '';
         }
     });
 
@@ -300,12 +305,23 @@ describe('activity-recommendations-schedule', () => {
         beforeEach(() => {
             const scheduleView = document.getElementById('recommendationScheduleView')!;
             
+            // Clear any dynamically created content from previous test
+            scheduleView.innerHTML = '';
+            
             // Create containers for all test slots
             ['slot1', 'slot2', 'slot3'].forEach((slotId) => {
                 const slotContainer = document.createElement('div');
                 slotContainer.dataset.slotRecommendations = slotId;
                 scheduleView.append(slotContainer);
             });
+        });
+        
+        afterEach(() => {
+            // Clean up dynamically created elements after each test
+            const scheduleView = document.getElementById('recommendationScheduleView');
+            if (scheduleView) {
+                scheduleView.innerHTML = '';
+            }
         });
 
         test('should approve pending recommendation', async () => {

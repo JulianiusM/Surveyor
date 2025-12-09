@@ -84,18 +84,8 @@ import {initSlotRoleAdminModal} from '../../../src/public/js/modules/activity-ro
 import {initAssignmentRemoval} from '../../../src/public/js/shared/list-actions';
 
 describe('activity.ts', () => {
-    let savedInit: any;
-    
     setupTest({
         beforeEach: () => {
-            // Save and restore the init function that was set by module load
-            if (activity.init && !savedInit) {
-                savedInit = activity.init;
-            }
-            if (savedInit) {
-                window.Surveyor.init = savedInit;
-            }
-            
             // Reset window.Surveyor properties (but keep init function set by module)
             window.Surveyor.entityId = '';
             
