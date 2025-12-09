@@ -8,15 +8,10 @@ import {
     requireItemPerm,
     requireEntityPermsForForm,
 } from '../../../src/public/js/core/permissions';
+import { setupTest } from '../helpers/testSetup';
 
 describe('permissions utilities', () => {
-    beforeEach(() => {
-        // Reset window.Surveyor before each test
-        window.Surveyor = {
-            rawPermissions: undefined,
-            permissions: undefined,
-        };
-    });
+    setupTest();
 
     describe('jsonReviver', () => {
         test('restores Map from serialized data', () => {
