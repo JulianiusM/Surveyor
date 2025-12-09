@@ -3,10 +3,12 @@
  * Data-driven test cases for alert/notification system
  */
 
+import {deepCopy} from "../helpers/util";
+
 /**
  * Test cases for showInlineAlert function
  */
-export const showInlineAlertData = [
+const _showInlineAlertData = [
     {
         description: 'creates success alert',
         input: {
@@ -35,3 +37,5 @@ export const showInlineAlertData = [
         expectedMessage: 'Error occurred',
     },
 ];
+
+export const showInlineAlertData = () => deepCopy(_showInlineAlertData) as typeof _showInlineAlertData;

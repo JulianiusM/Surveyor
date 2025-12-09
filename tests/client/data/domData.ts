@@ -3,10 +3,12 @@
  * Data-driven test cases for DOM query and manipulation
  */
 
+import {deepCopy} from "../helpers/util";
+
 /**
  * Test cases for querySelector operations
  */
-export const querySelectorData = [
+const _querySelectorData = [
     {
         description: 'finds element by ID',
         html: '<div id="test-id">Content</div>',
@@ -33,10 +35,12 @@ export const querySelectorData = [
     },
 ];
 
+export const querySelectorData = () => deepCopy(_querySelectorData) as typeof _querySelectorData;
+
 /**
  * Test cases for querySelectorAll operations
  */
-export const querySelectorAllData = [
+const _querySelectorAllData = [
     {
         description: 'finds multiple elements',
         html: '<div class="item">1</div><div class="item">2</div><div class="item">3</div>',
@@ -57,10 +61,12 @@ export const querySelectorAllData = [
     },
 ];
 
+export const querySelectorAllData = () => deepCopy(_querySelectorAllData) as typeof _querySelectorAllData;
+
 /**
  * Test cases for closest operations
  */
-export const closestData = [
+const _closestData = [
     {
         description: 'finds closest parent',
         html: '<div class="parent"><div class="child"><span id="target">Text</span></div></div>',
@@ -83,3 +89,5 @@ export const closestData = [
         expectedClass: null,
     },
 ];
+
+export const closestData = () => deepCopy(_closestData) as typeof _closestData;

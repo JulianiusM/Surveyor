@@ -3,10 +3,12 @@
  * Data-driven test cases for event registration workflows with mocked API
  */
 
+import {deepCopy} from "../helpers/util";
+
 /**
  * Test cases for successful event registration
  */
-export const successfulRegistrationData = [
+const _successfulRegistrationData = [
     {
         description: 'registers user for event',
         input: {
@@ -48,10 +50,12 @@ export const successfulRegistrationData = [
     },
 ];
 
+export const successfulRegistrationData = () => deepCopy(_successfulRegistrationData) as typeof _successfulRegistrationData;
+
 /**
  * Test cases for registration cancellation
  */
-export const registrationCancellationData = [
+const _registrationCancellationData = [
     {
         description: 'allows registration cancellation',
         input: { eventId: '123' },
@@ -64,10 +68,12 @@ export const registrationCancellationData = [
     },
 ];
 
+export const registrationCancellationData = () => deepCopy(_registrationCancellationData) as typeof _registrationCancellationData;
+
 /**
  * Test cases for registration validation errors
  */
-export const registrationValidationErrorData = [
+const _registrationValidationErrorData = [
     {
         description: 'rejects registration without required fields',
         input: {
@@ -109,10 +115,12 @@ export const registrationValidationErrorData = [
     },
 ];
 
+export const registrationValidationErrorData = () => deepCopy(_registrationValidationErrorData) as typeof _registrationValidationErrorData;
+
 /**
  * Test cases for server errors
  */
-export const registrationServerErrorData = [
+const _registrationServerErrorData = [
     {
         description: 'handles server errors gracefully',
         input: {
@@ -154,10 +162,12 @@ export const registrationServerErrorData = [
     },
 ];
 
+export const registrationServerErrorData = () => deepCopy(_registrationServerErrorData) as typeof _registrationServerErrorData;
+
 /**
  * Test cases for multi-step registration flow
  */
-export const multiStepRegistrationData = [
+const _multiStepRegistrationData = [
     {
         description: 'completes full registration flow',
         steps: [
@@ -209,10 +219,12 @@ export const multiStepRegistrationData = [
     },
 ];
 
+export const multiStepRegistrationData = () => deepCopy(_multiStepRegistrationData) as typeof _multiStepRegistrationData;
+
 /**
  * Test cases for registration with preferences updates
  */
-export const registrationUpdateData = [
+const _registrationUpdateData = [
     {
         description: 'handles registration with preferences and updates',
         initialRegistration: {
@@ -254,10 +266,12 @@ export const registrationUpdateData = [
     },
 ];
 
+export const registrationUpdateData = () => deepCopy(_registrationUpdateData) as typeof _registrationUpdateData;
+
 /**
  * Test cases for authentication-related scenarios
  */
-export const registrationAuthData = [
+const _registrationAuthData = [
     {
         description: 'allows registration when authenticated',
         input: {
@@ -284,3 +298,5 @@ export const registrationAuthData = [
         expectedError: 'Authentication required',
     },
 ];
+
+export const registrationAuthData = () => deepCopy(_registrationAuthData) as typeof _registrationAuthData;

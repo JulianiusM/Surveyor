@@ -3,10 +3,12 @@
  * Data-driven test cases for clipboard operations
  */
 
+import {deepCopy} from "../helpers/util";
+
 /**
  * Test cases for copyToClipboard function
  */
-export const copyToClipboardData = [
+const _copyToClipboardData = [
     {
         description: 'copies simple text',
         input: { text: 'Hello, World!' },
@@ -33,3 +35,5 @@ export const copyToClipboardData = [
         expected: 'https://example.com/path?query=value',
     },
 ];
+
+export const copyToClipboardData = () => deepCopy(_copyToClipboardData) as typeof _copyToClipboardData;

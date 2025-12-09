@@ -9,7 +9,7 @@ describe('DOM utilities', () => {
     setupTest();
 
     describe('qs (querySelector) - Data Driven', () => {
-        test.each(querySelectorData)(
+        test.each(querySelectorData())(
             '$description',
             ({ html, selector, expectedContent }) => {
                 document.body.innerHTML = html;
@@ -42,7 +42,7 @@ describe('DOM utilities', () => {
     });
 
     describe('qsAll (querySelectorAll) - Data Driven', () => {
-        test.each(querySelectorAllData)(
+        test.each(querySelectorAllData())(
             '$description',
             ({ html, selector, expectedCount }) => {
                 document.body.innerHTML = html;
@@ -80,7 +80,7 @@ describe('DOM utilities', () => {
     });
 
     describe('closest - Data Driven', () => {
-        test.each(closestData)(
+        test.each(closestData())(
             '$description',
             ({ html, startSelector, closestSelector, expectedClass }) => {
                 document.body.innerHTML = html;

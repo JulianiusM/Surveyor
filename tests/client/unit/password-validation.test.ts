@@ -22,35 +22,35 @@ import {
 describe('password validation logic', () => {
     setupTest();
     describe('isPasswordValid', () => {
-        test.each(passwordValidData)('$description', ({input, expected}) => {
+        test.each(passwordValidData())('$description', ({input, expected}) => {
             expect(isPasswordValid(input.password)).toBe(expected);
         });
 
-        test.each(passwordInvalidData)('$description', ({input, expected}) => {
+        test.each(passwordInvalidData())('$description', ({input, expected}) => {
             expect(isPasswordValid(input.password)).toBe(expected);
         });
 
-        test.each(passwordEdgeCaseData)('$description', ({input, expected}) => {
+        test.each(passwordEdgeCaseData())('$description', ({input, expected}) => {
             expect(isPasswordValid(input.password)).toBe(expected);
         });
     });
 
     describe('isPasswordRepeatValid', () => {
-        test.each(passwordRepeatMatchData)('$description', ({input, expected}) => {
+        test.each(passwordRepeatMatchData())('$description', ({input, expected}) => {
             expect(isPasswordRepeatValid(input.password, input.passwordRepeat)).toBe(expected);
         });
 
-        test.each(passwordRepeatMismatchData)('$description', ({input, expected}) => {
+        test.each(passwordRepeatMismatchData())('$description', ({input, expected}) => {
             expect(isPasswordRepeatValid(input.password, input.passwordRepeat)).toBe(expected);
         });
 
-        test.each(passwordRepeatEdgeCaseData)('$description', ({input, expected}) => {
+        test.each(passwordRepeatEdgeCaseData())('$description', ({input, expected}) => {
             expect(isPasswordRepeatValid(input.password, input.passwordRepeat)).toBe(expected);
         });
     });
 
     describe('generatePasswordFeedback', () => {
-        test.each(passwordFeedbackData)('$description', ({input, expected}) => {
+        test.each(passwordFeedbackData())('$description', ({input, expected}) => {
             const feedback = generatePasswordFeedback(
                 input.hasMinLength,
                 input.hasLetter,

@@ -9,7 +9,7 @@ describe('form utilities', () => {
     setupTest();
 
     describe('getSelectValues - Data Driven', () => {
-        test.each(getSelectValuesData)(
+        test.each(getSelectValuesData())(
             '$description',
             ({ options, expected }) => {
                 const select = document.createElement('select');
@@ -56,7 +56,7 @@ describe('form utilities', () => {
     });
 
     describe('objectToArray - Data Driven', () => {
-        test.each(objectToArrayData)(
+        test.each(objectToArrayData())(
             '$description',
             ({ input, expectedKeys, expectedValues }) => {
                 const [keys, values] = objectToArray(input);
@@ -92,7 +92,7 @@ describe('form utilities', () => {
 
     describe.skip('serializeForm - Data Driven (skipped due to FormData limitations in test env)', () => {
         // Note: FormData in jsdom with undici polyfill has limitations with form elements
-        test.each(serializeFormData)(
+        test.each(serializeFormData())(
             '$description',
             ({ fields, expected }) => {
                 const form = document.createElement('form');

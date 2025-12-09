@@ -19,7 +19,7 @@ import { setupTest } from '../helpers/testSetup';
 describe('UI helpers utilities', () => {
     setupTest();
     describe('createBadge - Data Driven', () => {
-        test.each(createBadgeData)(
+        test.each(createBadgeData())(
             '$description',
             ({ input, expectedClass, expectedText }) => {
                 const result = createBadge(input.status);
@@ -51,7 +51,7 @@ describe('UI helpers utilities', () => {
     });
 
     describe('createChip - Data Driven', () => {
-        test.each(createChipData)(
+        test.each(createChipData())(
             '$description',
             ({ input, expectedClass, expectedText }) => {
                 const result = input.variant 
@@ -72,7 +72,7 @@ describe('UI helpers utilities', () => {
     });
 
     describe('createDietaryChip - Data Driven', () => {
-        test.each(createDietaryChipData)(
+        test.each(createDietaryChipData())(
             '$description',
             ({ input, expectedClass, expectedText }) => {
                 const result = createDietaryChip(input.choice);

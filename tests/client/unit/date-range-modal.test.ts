@@ -27,7 +27,7 @@ describe('date-range-modal', () => {
     });
 
     describe('readDateRangePayload - Data Driven', () => {
-        test.each(readDateRangePayloadData)(
+        test.each(readDateRangePayloadData())(
             '$description',
             ({ arrival, departure, registrationId, expected }) => {
                 // Setup DOM
@@ -72,7 +72,7 @@ describe('date-range-modal', () => {
     });
 
     describe('populateDateRangeModal - Data Driven', () => {
-        test.each(boundsData)('$description', ({ bounds, expectedMin, expectedMax }) => {
+        test.each(boundsData())('$description', ({ bounds, expectedMin, expectedMax }) => {
             // Setup DOM
             const modal = document.createElement('div');
             const form = document.createElement('form');

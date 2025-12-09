@@ -36,7 +36,7 @@ import {
 describe('formatting utilities', () => {
     setupTest();
     describe('padNumber - Data Driven', () => {
-        test.each(padNumberData)(
+        test.each(padNumberData())(
             '$description',
             ({ input, expected }) => {
                 testPadNumber(input, expected);
@@ -45,14 +45,14 @@ describe('formatting utilities', () => {
     });
 
     describe('formatDate - Data Driven', () => {
-        test.each(formatDateData.filter(d => 'expected' in d))(
+        test.each(formatDateData().filter(d => 'expected' in d))(
             '$description',
             ({ input, expected }) => {
                 testFormatDate(input, expected as string);
             }
         );
         
-        test.each(formatDateData.filter(d => 'expectedPattern' in d))(
+        test.each(formatDateData().filter(d => 'expectedPattern' in d))(
             '$description',
             ({ input, expectedPattern }) => {
                 testFormatDateWithPattern(input, expectedPattern as RegExp);
@@ -61,7 +61,7 @@ describe('formatting utilities', () => {
     });
 
     describe('formatDateTime - Data Driven', () => {
-        test.each(formatDateTimeData)(
+        test.each(formatDateTimeData())(
             '$description',
             ({ input, expected }) => {
                 testFormatDateTime(input, expected);
@@ -70,7 +70,7 @@ describe('formatting utilities', () => {
     });
 
     describe('formatISODate - Data Driven', () => {
-        test.each(formatISODateData)(
+        test.each(formatISODateData())(
             '$description',
             ({ input, expected }) => {
                 testFormatISODate(input, expected);
@@ -79,7 +79,7 @@ describe('formatting utilities', () => {
     });
 
     describe('parseISODate - Data Driven', () => {
-        test.each(parseISODateData)(
+        test.each(parseISODateData())(
             '$description',
             ({ input, expected }) => {
                 testParseISODate(input, expected);
@@ -88,7 +88,7 @@ describe('formatting utilities', () => {
     });
 
     describe('formatDateLabel - Data Driven', () => {
-        test.each(formatDateLabelData)(
+        test.each(formatDateLabelData())(
             '$description',
             ({ input, expected }) => {
                 testFormatDateLabel(input, expected);
@@ -97,7 +97,7 @@ describe('formatting utilities', () => {
     });
 
     describe('formatTimeLabel - Data Driven', () => {
-        test.each(formatTimeLabelData)(
+        test.each(formatTimeLabelData())(
             '$description',
             ({ input, expected }) => {
                 testFormatTimeLabel(input, expected);
@@ -106,7 +106,7 @@ describe('formatting utilities', () => {
     });
 
     describe('toDateTimeLocalValue - Data Driven', () => {
-        test.each(toDateTimeLocalValueData)(
+        test.each(toDateTimeLocalValueData())(
             '$description',
             ({ input, expected }) => {
                 testToDateTimeLocalValue(input, expected);
@@ -115,7 +115,7 @@ describe('formatting utilities', () => {
     });
 
     describe('toISOStringOrNull - Data Driven', () => {
-        test.each(toISOStringOrNullData)(
+        test.each(toISOStringOrNullData())(
             '$description',
             ({ input, expected }) => {
                 testToISOStringOrNull(input, expected);
@@ -128,7 +128,7 @@ describe('formatting utilities', () => {
     });
 
     describe('getValidDaysInWeek - Data Driven', () => {
-        test.each(getValidDaysInWeekData)(
+        test.each(getValidDaysInWeekData())(
             '$description',
             ({ input, expectedLength }) => {
                 testGetValidDaysInWeek(input, expectedLength);

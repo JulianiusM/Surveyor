@@ -3,10 +3,12 @@
  * Data-driven test cases for form manipulation
  */
 
+import {deepCopy} from "../helpers/util";
+
 /**
  * Test cases for getSelectValues function
  */
-export const getSelectValuesData = [
+const _getSelectValuesData = [
     {
         description: 'gets single selected value',
         options: [
@@ -41,10 +43,12 @@ export const getSelectValuesData = [
     },
 ];
 
+export const getSelectValuesData = () => deepCopy(_getSelectValuesData) as typeof _getSelectValuesData;
+
 /**
  * Test cases for objectToArray function
  */
-export const objectToArrayData = [
+const _objectToArrayData = [
     {
         description: 'converts simple object',
         input: { a: 1, b: 2, c: 3 },
@@ -71,10 +75,12 @@ export const objectToArrayData = [
     },
 ];
 
+export const objectToArrayData = () => deepCopy(_objectToArrayData) as typeof _objectToArrayData;
+
 /**
  * Test cases for serializeForm function
  */
-export const serializeFormData = [
+const _serializeFormData = [
     {
         description: 'serializes simple form',
         fields: [
@@ -103,3 +109,5 @@ export const serializeFormData = [
         },
     },
 ];
+
+export const serializeFormData = () => deepCopy(_serializeFormData) as typeof _serializeFormData;
