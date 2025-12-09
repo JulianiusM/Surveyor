@@ -28,6 +28,10 @@ export function renderPugView(viewPath: string, locals: Locals = {}, extractCont
         },
         data: {},
         user: null,
+        imprintUrl: '#',
+        privacyUrl: '#',
+        appVersion: '0.0.0-test',
+        year: new Date().getFullYear(),
         ...locals
     };
 
