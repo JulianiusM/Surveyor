@@ -307,7 +307,10 @@ describe('activity-recommendations-schedule', () => {
     });
 
     describe('recommendation actions', () => {
-        beforeEach(() => {
+        beforeEach(async () => {
+            // Clean up module state first
+            cleanupRecommendationScheduleView();
+            
             const scheduleView = document.getElementById('recommendationScheduleView')!;
 
             // Clear any dynamically created content from previous test
@@ -319,14 +322,23 @@ describe('activity-recommendations-schedule', () => {
                 slotContainer.dataset.slotRecommendations = slotId;
                 scheduleView.append(slotContainer);
             });
+            
+            // Wait a bit to ensure cleanup is complete
+            await new Promise((resolve) => setTimeout(resolve, 50));
         });
 
-        afterEach(() => {
+        afterEach(async () => {
             // Clean up dynamically created elements after each test
             const scheduleView = document.getElementById('recommendationScheduleView');
             if (scheduleView) {
                 scheduleView.innerHTML = '';
             }
+            
+            // Clean up module state
+            cleanupRecommendationScheduleView();
+            
+            // Wait to ensure cleanup is complete
+            await new Promise((resolve) => setTimeout(resolve, 50));
         });
 
         test('should approve pending recommendation', async () => {
@@ -355,6 +367,8 @@ describe('activity-recommendations-schedule', () => {
         });
 
         test('should reject pending recommendation', async () => {
+            // Reset mockGet to ensure clean state
+            mockGet.mockReset();
             mockGet.mockResolvedValue({
                 data: {
                     recommendations: testData.recommendations.pending,
@@ -365,13 +379,13 @@ describe('activity-recommendations-schedule', () => {
             });
 
             await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            await new Promise((resolve) => setTimeout(resolve, 150));
 
             const rejectBtn = document.querySelector('.btn-danger') as HTMLButtonElement;
             expect(rejectBtn).toBeTruthy();
             rejectBtn?.click();
 
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            await new Promise((resolve) => setTimeout(resolve, 150));
 
             // Should re-render with rejected styling
             const container = document.querySelector('[data-slot-recommendations="slot1"]')!;
