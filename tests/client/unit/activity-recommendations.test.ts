@@ -9,6 +9,7 @@ import * as http from '../../../src/public/js/core/http';
 import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
 import * as activityAssignments from '../../../src/public/js/modules/activity-assignments';
+import {setupTest} from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/http');
@@ -21,45 +22,44 @@ describe('activity-recommendations', () => {
     let mockPost: jest.SpyInstance;
     const mockDescribeSlot = jest.fn((slotId: string) => `Slot ${slotId}`);
 
-    beforeEach(() => {
-        document.body.innerHTML = '';
-        jest.clearAllMocks();
+    setupTest({
+        beforeEach: () => {
+            mockGet = jest.spyOn(http, 'get');
+            mockPost = jest.spyOn(http, 'post');
+            jest.spyOn(alerts, 'showInlineAlert').mockImplementation();
+            jest.spyOn(uiHelpers, 'reloadAfterDelay').mockImplementation();
+            jest.spyOn(activityAssignments, 'describeWarning').mockReturnValue('Warning description');
 
-        mockGet = jest.spyOn(http, 'get');
-        mockPost = jest.spyOn(http, 'post');
-        jest.spyOn(alerts, 'showInlineAlert').mockImplementation();
-        jest.spyOn(uiHelpers, 'reloadAfterDelay').mockImplementation();
-        jest.spyOn(activityAssignments, 'describeWarning').mockReturnValue('Warning description');
+            const panel = document.createElement('div');
+            panel.id = 'recommendationPanel';
 
-        const panel = document.createElement('div');
-        panel.id = 'recommendationPanel';
+            const rows = document.createElement('tbody');
+            rows.id = 'recommendationRows';
 
-        const rows = document.createElement('tbody');
-        rows.id = 'recommendationRows';
+            const alertBox = document.createElement('div');
+            alertBox.dataset.recommendationsAlert = 'true';
+            alertBox.classList.add('d-none');
+            const alertSpan = document.createElement('span');
+            alertBox.append(alertSpan);
 
-        const alertBox = document.createElement('div');
-        alertBox.dataset.recommendationsAlert = 'true';
-        alertBox.classList.add('d-none');
-        const alertSpan = document.createElement('span');
-        alertBox.append(alertSpan);
+            const refreshBtn = document.createElement('button');
+            refreshBtn.dataset.recommendationsRefresh = 'true';
 
-        const refreshBtn = document.createElement('button');
-        refreshBtn.dataset.recommendationsRefresh = 'true';
+            const autoBtn = document.createElement('button');
+            autoBtn.dataset.recommendationsAuto = 'true';
 
-        const autoBtn = document.createElement('button');
-        autoBtn.dataset.recommendationsAuto = 'true';
+            const saveBtn = document.createElement('button');
+            refreshBtn.dataset.recommendationsSave = 'true';
 
-        const saveBtn = document.createElement('button');
-        refreshBtn.dataset.recommendationsSave = 'true';
+            const applyBtn = document.createElement('button');
+            applyBtn.dataset.recommendationsApply = 'true';
 
-        const applyBtn = document.createElement('button');
-        applyBtn.dataset.recommendationsApply = 'true';
+            const summaryStats = document.createElement('div');
+            summaryStats.id = 'recommendationSummaryStats';
 
-        const summaryStats = document.createElement('div');
-        summaryStats.id = 'recommendationSummaryStats';
-
-        panel.append(rows, alertBox, refreshBtn, autoBtn, saveBtn, applyBtn, summaryStats);
-        document.body.append(panel);
+            panel.append(rows, alertBox, refreshBtn, autoBtn, saveBtn, applyBtn, summaryStats);
+            document.body.append(panel);
+        }
     });
 
     describe('initialization', () => {
