@@ -4,15 +4,17 @@
 
 import {initEventParticipants} from '../../../src/public/js/modules/event-participant';
 import {participantRowsData, filterTestData, totalsTestData} from '../data/eventParticipantData';
+import {setupTest} from '../helpers/testSetup';
 import {server} from '../msw/server';
 import {http, HttpResponse} from 'msw';
 
 describe('event-participant module', () => {
     let container: HTMLElement;
 
-    beforeEach(() => {
-        container = document.createElement('div');
-        container.innerHTML = `
+    setupTest({
+        beforeEach: () => {
+            container = document.createElement('div');
+            container.innerHTML = `
             <div class="event-participants" 
                  data-api-list="/api/event/123/participants"
                  data-api-update="/api/event/123/registration"
@@ -39,11 +41,13 @@ describe('event-participant module', () => {
             </div>
             <div id="liveAlerts"></div>
         `;
-        document.body.appendChild(container);
-    });
-
-    afterEach(() => {
-        document.body.removeChild(container);
+            document.body.appendChild(container);
+        },
+        afterEach: () => {
+            if (container && document.body.contains(container)) {
+                document.body.removeChild(container);
+            }
+        }
     });
 
     describe('renderRows', () => {

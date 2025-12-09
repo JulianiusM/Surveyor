@@ -10,6 +10,7 @@ import {
 } from '../../../src/public/js/shared/list-actions';
 import { configData } from '../data/listActionsData';
 import { requireEntityPerm, requireItemPerm } from '../../../src/public/js/core/permissions';
+import { setupTest } from '../helpers/testSetup';
 import { server } from '../msw/server';
 import { http, HttpResponse } from 'msw';
 
@@ -18,37 +19,23 @@ jest.mock('../../../src/public/js/core/permissions');
 const mockRequireEntityPerm = requireEntityPerm as jest.MockedFunction<typeof requireEntityPerm>;
 const mockRequireItemPerm = requireItemPerm as jest.MockedFunction<typeof requireItemPerm>;
 
-// Mock location.reload (done in beforeEach to avoid jsdom navigation errors)
-
 // Mock window.confirm
 global.confirm = jest.fn();
 
 describe('list-actions', () => {
     let mockReload: jest.Mock;
-    let originalLocation: Location;
 
-    beforeAll(() => {
-        // Save original location
-        originalLocation = window.location;
-    });
-
-    beforeEach(() => {
-        document.body.innerHTML = '';
-        jest.clearAllMocks();
-        
-        // Setup location mock
-        mockReload = jest.fn();
-        delete (window as any).location;
-        (window as any).location = { reload: mockReload };
-        
-        mockRequireEntityPerm.mockImplementation(() => {});
-        mockRequireItemPerm.mockImplementation(() => {});
-        (global.confirm as jest.Mock).mockReturnValue(true);
-    });
-
-    afterAll(() => {
-        // Restore original location
-        (window as any).location = originalLocation;
+    setupTest({
+        beforeEach: () => {
+            // Setup location mock
+            mockReload = jest.fn();
+            delete (window as any).location;
+            (window as any).location = { reload: mockReload };
+            
+            mockRequireEntityPerm.mockImplementation(() => {});
+            mockRequireItemPerm.mockImplementation(() => {});
+            (global.confirm as jest.Mock).mockReturnValue(true);
+        }
     });
 
     describe('initAssignmentRemoval - Configuration', () => {

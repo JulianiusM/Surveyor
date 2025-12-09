@@ -10,6 +10,7 @@ import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
 import * as permissions from '../../../src/public/js/core/permissions';
 import * as dragDrop from '../../../src/public/js/shared/drag-drop';
 import {initInlineEditData, initDeleteData, initDnDData} from '../data/activitySlotOperationsData';
+import {setupTest} from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/shared/inline-edit');
@@ -30,33 +31,32 @@ describe('activity-slot-operations', () => {
     let mockInitCardReorder: jest.SpyInstance;
     let mockConfirm: jest.SpyInstance;
 
-    beforeEach(() => {
-        jest.clearAllMocks();
-        
-        // Reset modules to get fresh event listeners
-        jest.resetModules();
-        
-        // Create fresh document to avoid event listener accumulation
-        const newDocument = {
-            ...document,
-            addEventListener: jest.fn(),
-            body: document.createElement('body')
-        };
-        (global as any).document = newDocument;
-        
-        mockStartInlineEdit = jest.spyOn(inlineEdit, 'startInlineEdit').mockImplementation();
-        mockStartInlineEditArea = jest.spyOn(inlineEdit, 'startInlineEditArea').mockImplementation();
-        mockPost = jest.spyOn(http, 'post').mockResolvedValue({});
-        mockShowInlineAlert = jest.spyOn(alerts, 'showInlineAlert').mockImplementation();
-        mockReloadAfterDelay = jest.spyOn(uiHelpers, 'reloadAfterDelay').mockImplementation();
-        mockRequireItemPerm = jest.spyOn(permissions, 'requireItemPerm').mockImplementation();
-        mockRequireEntityPerm = jest.spyOn(permissions, 'requireEntityPerm').mockImplementation();
-        mockInitCardReorder = jest.spyOn(dragDrop, 'initCardReorder').mockImplementation();
-        mockConfirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
-    });
-
-    afterEach(() => {
-        jest.restoreAllMocks();
+    setupTest({
+        beforeEach: () => {
+            // Reset modules to get fresh event listeners
+            jest.resetModules();
+            
+            // Create fresh document to avoid event listener accumulation
+            const newDocument = {
+                ...document,
+                addEventListener: jest.fn(),
+                body: document.createElement('body')
+            };
+            (global as any).document = newDocument;
+            
+            mockStartInlineEdit = jest.spyOn(inlineEdit, 'startInlineEdit').mockImplementation();
+            mockStartInlineEditArea = jest.spyOn(inlineEdit, 'startInlineEditArea').mockImplementation();
+            mockPost = jest.spyOn(http, 'post').mockResolvedValue({});
+            mockShowInlineAlert = jest.spyOn(alerts, 'showInlineAlert').mockImplementation();
+            mockReloadAfterDelay = jest.spyOn(uiHelpers, 'reloadAfterDelay').mockImplementation();
+            mockRequireItemPerm = jest.spyOn(permissions, 'requireItemPerm').mockImplementation();
+            mockRequireEntityPerm = jest.spyOn(permissions, 'requireEntityPerm').mockImplementation();
+            mockInitCardReorder = jest.spyOn(dragDrop, 'initCardReorder').mockImplementation();
+            mockConfirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
+        },
+        afterEach: () => {
+            jest.restoreAllMocks();
+        }
     });
 
     describe('initInlineEdit', () => {

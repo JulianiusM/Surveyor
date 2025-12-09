@@ -29,6 +29,7 @@ global.FormData = FormData as any;
 
 // Now import MSW server after all polyfills are in place
 import { server } from './msw/server';
+import { initializeAllEndpoints } from './helpers/testSetup';
 
 /**
  * Setup MSW server for mocking HTTP requests
@@ -42,6 +43,10 @@ beforeAll(() => {
         // Change to 'error' once all handlers are properly set up
         onUnhandledRequest: 'warn',
     });
+    
+    // Initialize ALL valid endpoints with queue handlers
+    // This allows tests to use mockApiSuccess/mockApiError without manual setup
+    initializeAllEndpoints();
 });
 
 // Reset handlers after each test to avoid test interdependencies

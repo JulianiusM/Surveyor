@@ -5,6 +5,7 @@
 
 import { initTimezoneSelect } from '../../../src/public/js/modules/timezone-select';
 import { timezoneSelectInitData, timezoneSelectSetZoneData, timezoneSelectFilterData } from '../data/timezoneSelectData';
+import { setupTest } from '../helpers/testSetup';
 
 // Mock Bootstrap Modal
 class MockModal {
@@ -38,30 +39,34 @@ if (typeof Intl.supportedValuesOf !== 'function') {
 
 describe('timezone-select', () => {
     let container: HTMLElement;
+    
     let originalDateTimeFormat: any;
 
-    beforeEach(() => {
-        container = document.createElement('div');
-        document.body.appendChild(container);
-        
-        // Mock Intl.DateTimeFormat consistently
-        originalDateTimeFormat = Intl.DateTimeFormat;
-        (Intl as any).DateTimeFormat = function(locales?: any, options?: any) {
-            return {
-                resolvedOptions: () => ({ timeZone: 'UTC' }),
-                formatToParts: (date?: Date) => {
-                    if (options?.timeZone) {
+    setupTest({
+        beforeEach: () => {
+            container = document.createElement('div');
+            document.body.appendChild(container);
+            
+            // Mock Intl.DateTimeFormat consistently
+            originalDateTimeFormat = Intl.DateTimeFormat;
+            (Intl as any).DateTimeFormat = function(locales?: any, options?: any) {
+                return {
+                    resolvedOptions: () => ({ timeZone: 'UTC' }),
+                    formatToParts: (date?: Date) => {
+                        if (options?.timeZone) {
+                            return [{ type: 'timeZoneName', value: 'UTC+00:00' }];
+                        }
                         return [{ type: 'timeZoneName', value: 'UTC+00:00' }];
                     }
-                    return [{ type: 'timeZoneName', value: 'UTC+00:00' }];
-                }
+                };
             };
-        };
-    });
-
-    afterEach(() => {
-        document.body.removeChild(container);
-        Intl.DateTimeFormat = originalDateTimeFormat;
+        },
+        afterEach: () => {
+            if (container && document.body.contains(container)) {
+                document.body.removeChild(container);
+            }
+            Intl.DateTimeFormat = originalDateTimeFormat;
+        }
     });
 
     function setupDOM(id: number) {

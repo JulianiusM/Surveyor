@@ -6,47 +6,49 @@ import {initAdminMatrix} from '../../../src/public/js/modules/admin-matrix';
 import {permissionData, maskApplicationData, updateOperationData, searchUserData} from '../data/adminMatrixData';
 import {server} from '../msw/server';
 import {http, HttpResponse} from 'msw';
+import { setupTest } from '../helpers/testSetup';
 
 describe('admin-matrix module', () => {
     let container: HTMLElement;
 
-    beforeEach(() => {
-        container = document.createElement('div');
-        container.innerHTML = `
-            <div class="admin-matrix"
-                 data-api-update="/api/admin/permissions"
-                 data-api-remove="/api/admin/users"
-                 data-api-add="/api/admin/users"
-                 data-api-search="/api/users/search">
-                <div class="admin-card">
-                    <input type="checkbox" class="perm-box" value="MANAGE_USERS" data-bit="1">
-                    <input type="checkbox" class="perm-box" value="MANAGE_EVENTS" data-bit="2">
-                    <input type="checkbox" class="perm-box" value="VIEW_REPORTS" data-bit="4">
-                    <button class="admin-perm-preset" data-mask="3">Preset</button>
-                    <button class="admin-perm-select-all">Select All</button>
-                    <button class="admin-perm-clear">Clear</button>
-                    <button class="btn-admin-update" data-user-id="123">Update</button>
-                    <button class="btn-admin-remove" data-user-id="123">Remove</button>
+    setupTest({
+        beforeEach: () => {
+            container = document.createElement('div');
+            container.innerHTML = `
+                <div class="admin-matrix"
+                     data-api-update="/api/admin/permissions"
+                     data-api-remove="/api/admin/users"
+                     data-api-add="/api/admin/users"
+                     data-api-search="/api/users/search">
+                    <div class="admin-card">
+                        <input type="checkbox" class="perm-box" value="MANAGE_USERS" data-bit="1">
+                        <input type="checkbox" class="perm-box" value="MANAGE_EVENTS" data-bit="2">
+                        <input type="checkbox" class="perm-box" value="VIEW_REPORTS" data-bit="4">
+                        <button class="admin-perm-preset" data-mask="3">Preset</button>
+                        <button class="admin-perm-select-all">Select All</button>
+                        <button class="admin-perm-clear">Clear</button>
+                        <button class="btn-admin-update" data-user-id="123">Update</button>
+                        <button class="btn-admin-remove" data-user-id="123">Remove</button>
+                    </div>
+                    <div class="modal admin-modal" id="test-add-modal">
+                        <input type="text" list="user-list">
+                        <datalist id="user-list"></datalist>
+                        <input type="hidden" id="test-userId">
+                        <select>
+                            <option value="">None</option>
+                            <option value="editor">Editor</option>
+                        </select>
+                        <button class="btn-admin-add-submit" data-modal="#test-add-modal">Add</button>
+                    </div>
                 </div>
-                <div class="modal admin-modal" id="test-add-modal">
-                    <input type="text" list="user-list">
-                    <datalist id="user-list"></datalist>
-                    <input type="hidden" id="test-userId">
-                    <select>
-                        <option value="">None</option>
-                        <option value="editor">Editor</option>
-                    </select>
-                    <button class="btn-admin-add-submit" data-modal="#test-add-modal">Add</button>
-                </div>
-            </div>
-            <div id="liveAlerts"></div>
-        `;
-        document.body.appendChild(container);
-        initAdminMatrix();
-    });
-
-    afterEach(() => {
-        document.body.removeChild(container);
+                <div id="liveAlerts"></div>
+            `;
+            document.body.appendChild(container);
+            initAdminMatrix();
+        },
+        afterEach: () => {
+            document.body.removeChild(container);
+        }
     });
 
     describe('permission collection', () => {

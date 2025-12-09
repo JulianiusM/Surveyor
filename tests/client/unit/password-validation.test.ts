@@ -7,6 +7,7 @@ import {
     isPasswordRepeatValid,
     generatePasswordFeedback,
 } from '../../../src/public/js/core/password-validation';
+import { setupTest } from '../helpers/testSetup';
 
 import {
     passwordValidData,
@@ -19,6 +20,7 @@ import {
 } from '../data/passwordValidationData';
 
 describe('password validation logic', () => {
+    setupTest();
     describe('isPasswordValid', () => {
         test.each(passwordValidData)('$description', ({input, expected}) => {
             expect(isPasswordValid(input.password)).toBe(expected);

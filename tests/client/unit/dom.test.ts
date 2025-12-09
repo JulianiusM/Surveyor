@@ -3,11 +3,10 @@
 // Uses data-driven testing approach
 import { qs, qsAll, closest } from '../../../src/public/js/core/dom';
 import { querySelectorData, querySelectorAllData, closestData } from '../data/domData';
+import { setupTest } from '../helpers/testSetup';
 
 describe('DOM utilities', () => {
-    beforeEach(() => {
-        document.body.innerHTML = '';
-    });
+    setupTest();
 
     describe('qs (querySelector) - Data Driven', () => {
         test.each(querySelectorData)(

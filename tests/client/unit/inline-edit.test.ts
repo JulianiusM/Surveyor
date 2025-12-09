@@ -9,6 +9,7 @@ import { getPerms, requireEntityPerm, requireItemPerm } from '../../../src/publi
 import { post } from '../../../src/public/js/core/http';
 import { showInlineAlert } from '../../../src/public/js/shared/alerts';
 import { reloadAfterDelay } from '../../../src/public/js/shared/ui-helpers';
+import { setupTest } from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/permissions');
@@ -33,13 +34,7 @@ const createKeyboardEvent = (key: string, options: { ctrlKey?: boolean } = {}) =
 };
 
 describe('inline-edit', () => {
-    beforeEach(() => {
-        document.body.innerHTML = '';
-    });
-
-    afterEach(() => {
-        jest.clearAllMocks();
-    });
+    setupTest();
 
     describe('enableDnD - Data Driven', () => {
         test.each(enableDnDData)('$description', ({ hasPermission, draggableCount, expectedDraggable }) => {

@@ -1,12 +1,18 @@
 // tests/client/unit/http.test.ts
 // Unit tests for core/http.ts utilities
 import { http, get, post, del, patch } from '../../../src/public/js/core/http';
+import { setupTest } from '../helpers/testSetup';
 import { server } from '../msw/server';
 import { http as mswHttp, HttpResponse } from 'msw';
 
 describe('HTTP client utilities', () => {
+    // Use unified setup for common cleanup (DOM, mocks, queues)
+    setupTest();
+    
     describe('http', () => {
         test('makes successful GET request', async () => {
+            // Note: /api/test is not in validEndpoints, so we still use server.use()
+            // For real endpoints, we could use mockApiSuccess()
             server.use(
                 mswHttp.get('/api/test', () => {
                     return HttpResponse.json({ status: 'success', data: 'test data' });
@@ -19,6 +25,8 @@ describe('HTTP client utilities', () => {
         });
 
         test('makes successful POST request with JSON body', async () => {
+            // Note: /api/test is not in validEndpoints, so we still use server.use()
+            // For real endpoints, we could use mockApiSuccess()
             server.use(
                 mswHttp.post('/api/test', async ({ request }) => {
                     const body = await request.json();

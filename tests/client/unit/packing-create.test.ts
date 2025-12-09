@@ -3,6 +3,7 @@
  */
 
 import { packingCreateTestData } from '../data/packingCreateData';
+import { setupTest } from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/navigation', () => ({
@@ -19,29 +20,28 @@ import { loadPerms } from '../../../src/public/js/core/permissions';
 describe('packing-create module', () => {
     let init: () => void;
 
-    beforeEach(() => {
-        // Setup DOM
-        document.body.innerHTML = `
-            <form id="packingForm">
-                <input type="hidden" id="itemsJson" />
-                <table>
-                    <tbody id="itemTable"></tbody>
-                </table>
-                <button id="addItemBtn">Add Item</button>
-            </form>
-        `;
+    setupTest({
+        beforeEach: () => {
+            // Setup DOM
+            document.body.innerHTML = `
+                <form id="packingForm">
+                    <input type="hidden" id="itemsJson" />
+                    <table>
+                        <tbody id="itemTable"></tbody>
+                    </table>
+                    <button id="addItemBtn">Add Item</button>
+                </form>
+            `;
 
-        // Setup global namespace
-        window.Surveyor = {} as any;
+            // Setup global namespace
+            window.Surveyor = {} as any;
 
-        // Clear mocks
-        jest.clearAllMocks();
-
-        // Import module fresh
-        jest.isolateModules(() => {
-            const module = require('../../../src/public/js/packing-create');
-            init = module.init;
-        });
+            // Import module fresh
+            jest.isolateModules(() => {
+                const module = require('../../../src/public/js/packing-create');
+                init = module.init;
+            });
+        }
     });
 
     describe('init', () => {

@@ -7,6 +7,7 @@ import { initTableReorder, initCardReorder } from '../../../src/public/js/shared
 import { tableReorderData, cardReorderData } from '../data/dragDropData';
 import { post } from '../../../src/public/js/core/http';
 import { showInlineAlert } from '../../../src/public/js/shared/alerts';
+import { setupTest } from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/http');
@@ -17,10 +18,7 @@ const mockPost = post as jest.MockedFunction<typeof post>;
 const mockShowInlineAlert = showInlineAlert as jest.MockedFunction<typeof showInlineAlert>;
 
 describe('drag-drop', () => {
-    beforeEach(() => {
-        document.body.innerHTML = '';
-        jest.clearAllMocks();
-    });
+    setupTest();
 
     describe('initTableReorder - Data Driven', () => {
         test.each(tableReorderData)('$description', ({ tbodySelector, apiUrl, rows }) => {

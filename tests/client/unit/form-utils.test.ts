@@ -3,15 +3,10 @@
 // Uses data-driven testing approach
 import { getSelectValues, objectToArray, serializeForm } from '../../../src/public/js/core/form-utils';
 import { getSelectValuesData, objectToArrayData, serializeFormData } from '../data/formUtilsData';
+import { setupTest } from '../helpers/testSetup';
 
 describe('form utilities', () => {
-    beforeEach(() => {
-        document.body.innerHTML = '';
-    });
-
-    afterEach(() => {
-        document.body.innerHTML = '';
-    });
+    setupTest();
 
     describe('getSelectValues - Data Driven', () => {
         test.each(getSelectValuesData)(

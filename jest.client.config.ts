@@ -11,6 +11,7 @@ const config: Config = {
     testMatch: ['<rootDir>/tests/client/**/*.(test|spec).ts'],
     
     // Setup files
+    setupFiles: ['<rootDir>/tests/client/setupGlobals.ts'],
     setupFilesAfterEnv: ['<rootDir>/tests/client/setupTests.ts'],
     
     // Module resolution

@@ -47,6 +47,8 @@ jest.mock('../../../src/public/js/core/password-validation', () => ({
     Surveyor: {}
 };
 
+import { setupTest } from '../helpers/testSetup';
+
 describe('verify_password module', () => {
     let mockSetCurrentNavLocation: jest.Mock;
     let mockLoadPerms: jest.Mock;
@@ -55,9 +57,10 @@ describe('verify_password module', () => {
     let mockRemoveTooltip: jest.Mock;
     let mockValidate: jest.Mock;
 
-    beforeEach(() => {
-        // Reset all mocks
-        jest.clearAllMocks();
+    setupTest({
+        beforeEach: () => {
+            // Reset all mocks - handled by setupTest
+            // jest.clearAllMocks();
         mockJQuery.mockClear();
         jest.resetModules();
 
@@ -75,12 +78,12 @@ describe('verify_password module', () => {
         mockMatchPassword = passwordValidation.matchPassword as jest.Mock;
         mockRemoveTooltip = passwordValidation.removeTooltip as jest.Mock;
         mockValidate = passwordValidation.validate as jest.Mock;
-    });
-
-    afterEach(() => {
-        // Clean up
-        if (window.Surveyor) {
-            delete (window.Surveyor as any).init;
+        },
+        afterEach: () => {
+            // Clean up
+            if (window.Surveyor) {
+                delete (window.Surveyor as any).init;
+            }
         }
     });
 

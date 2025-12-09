@@ -7,6 +7,7 @@ import {initRecommendationScheduleView} from '../../../src/public/js/modules/act
 import {activityRecommendationsScheduleData as testData} from '../data/activityRecommendationsScheduleData';
 import * as http from '../../../src/public/js/core/http';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
+import {setupTest} from '../helpers/testSetup';
 
 // Mock Bootstrap
 const mockShow = jest.fn();
@@ -27,65 +28,70 @@ describe('activity-recommendations-schedule', () => {
     let mockPost: jest.SpyInstance;
     const mockDescribeSlot = jest.fn((slotId: string) => `Slot ${slotId}`);
 
-    beforeEach(() => {
-        document.body.innerHTML = '';
-        mockShow.mockClear();
-        mockHide.mockClear();
-        jest.clearAllMocks();
+    setupTest({
+        beforeEach: () => {
+            mockShow.mockClear();
+            mockHide.mockClear();
 
-        mockGet = jest.spyOn(http, 'get');
-        mockPost = jest.spyOn(http, 'post');
-        jest.spyOn(uiHelpers, 'reloadAfterDelay').mockImplementation();
+            mockGet = jest.spyOn(http, 'get');
+            mockPost = jest.spyOn(http, 'post');
+            jest.spyOn(uiHelpers, 'reloadAfterDelay').mockImplementation();
 
-        // Create panel structure
-        const panel = document.createElement('div');
-        panel.id = 'recommendationPanel';
+            // setupTest() already cleared DOM, just create our structure
+            // Create panel structure
+            const panel = document.createElement('div');
+            panel.id = 'recommendationPanel';
 
-        const scheduleView = document.createElement('div');
-        scheduleView.id = 'recommendationScheduleView';
+            const scheduleView = document.createElement('div');
+            scheduleView.id = 'recommendationScheduleView';
 
-        const alertBox = document.createElement('div');
-        alertBox.dataset.recommendationsAlert = 'true';
-        alertBox.classList.add('d-none');
-        const alertSpan = document.createElement('span');
-        alertBox.append(alertSpan);
+            const alertBox = document.createElement('div');
+            alertBox.dataset.recommendationsAlert = 'true';
+            alertBox.classList.add('d-none');
+            const alertSpan = document.createElement('span');
+            alertBox.append(alertSpan);
 
-        const refreshBtn = document.createElement('button');
-        refreshBtn.dataset.recommendationsRefresh = 'true';
+            const refreshBtn = document.createElement('button');
+            refreshBtn.dataset.recommendationsRefresh = 'true';
 
-        const autoBtn = document.createElement('button');
-        autoBtn.dataset.recommendationsAuto = 'true';
+            const autoBtn = document.createElement('button');
+            autoBtn.dataset.recommendationsAuto = 'true';
 
-        const applyBtn = document.createElement('button');
-        applyBtn.dataset.recommendationsApply = 'true';
+            const applyBtn = document.createElement('button');
+            applyBtn.dataset.recommendationsApply = 'true';
 
-        const summaryStats = document.createElement('div');
-        summaryStats.id = 'recommendationSummaryStats';
+            const summaryStats = document.createElement('div');
+            summaryStats.id = 'recommendationSummaryStats';
 
-        panel.append(scheduleView, alertBox, refreshBtn, autoBtn, applyBtn, summaryStats);
-        document.body.append(panel);
+            panel.append(scheduleView, alertBox, refreshBtn, autoBtn, applyBtn, summaryStats);
+            document.body.append(panel);
 
-        // Create add recommendation modal
-        const addModal = document.createElement('div');
-        addModal.id = 'addRecommendationModal';
+            // Create add recommendation modal
+            const addModal = document.createElement('div');
+            addModal.id = 'addRecommendationModal';
 
-        const addSlotIdInput = document.createElement('input');
-        addSlotIdInput.id = 'addRecommendationSlotId';
+            const addSlotIdInput = document.createElement('input');
+            addSlotIdInput.id = 'addRecommendationSlotId';
 
-        const addParticipantSelect = document.createElement('select');
-        addParticipantSelect.id = 'addRecommendationParticipant';
+            const addParticipantSelect = document.createElement('select');
+            addParticipantSelect.id = 'addRecommendationParticipant';
 
-        const addConfirmBtn = document.createElement('button');
-        addConfirmBtn.id = 'addRecommendationConfirm';
+            const addConfirmBtn = document.createElement('button');
+            addConfirmBtn.id = 'addRecommendationConfirm';
 
-        const addWarningBox = document.createElement('div');
-        addWarningBox.dataset.addWarning = 'true';
-        addWarningBox.classList.add('d-none');
-        const warningSpan = document.createElement('span');
-        addWarningBox.append(warningSpan);
+            const addWarningBox = document.createElement('div');
+            addWarningBox.dataset.addWarning = 'true';
+            addWarningBox.classList.add('d-none');
+            const warningSpan = document.createElement('span');
+            addWarningBox.append(warningSpan);
 
-        addModal.append(addSlotIdInput, addParticipantSelect, addConfirmBtn, addWarningBox);
-        document.body.append(addModal);
+            addModal.append(addSlotIdInput, addParticipantSelect, addConfirmBtn, addWarningBox);
+            document.body.append(addModal);
+        },
+        afterEach: () => {
+            // Comprehensive cleanup: remove all dynamically created elements
+            document.body.innerHTML = '';
+        }
     });
 
     describe('initialization', () => {
@@ -299,9 +305,23 @@ describe('activity-recommendations-schedule', () => {
         beforeEach(() => {
             const scheduleView = document.getElementById('recommendationScheduleView')!;
             
-            const slotContainer = document.createElement('div');
-            slotContainer.dataset.slotRecommendations = 'slot1';
-            scheduleView.append(slotContainer);
+            // Clear any dynamically created content from previous test
+            scheduleView.innerHTML = '';
+            
+            // Create containers for all test slots
+            ['slot1', 'slot2', 'slot3'].forEach((slotId) => {
+                const slotContainer = document.createElement('div');
+                slotContainer.dataset.slotRecommendations = slotId;
+                scheduleView.append(slotContainer);
+            });
+        });
+        
+        afterEach(() => {
+            // Clean up dynamically created elements after each test
+            const scheduleView = document.getElementById('recommendationScheduleView');
+            if (scheduleView) {
+                scheduleView.innerHTML = '';
+            }
         });
 
         test('should approve pending recommendation', async () => {
@@ -499,14 +519,24 @@ describe('activity-recommendations-schedule', () => {
             initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
-            const addBtn = document.querySelector('[data-add-recommendation]') as HTMLButtonElement;
-            addBtn?.click();
+            // Create add button for this test
+            const scheduleView = document.getElementById('recommendationScheduleView')!;
+            const addBtn = document.createElement('button');
+            addBtn.dataset.addRecommendation = 'true';
+            addBtn.dataset.slotId = 'slot1';
+            scheduleView.append(addBtn);
+
+            addBtn.click();
+            await new Promise((resolve) => setTimeout(resolve, 50));
+
+            const addSlotIdInput = document.getElementById('addRecommendationSlotId') as HTMLInputElement;
+            addSlotIdInput.value = 'slot1';
 
             const participantSelect = document.getElementById('addRecommendationParticipant') as HTMLSelectElement;
             participantSelect.value = testData.addModal.participantValue;
 
             const confirmBtn = document.getElementById('addRecommendationConfirm') as HTMLButtonElement;
-            confirmBtn?.click();
+            confirmBtn.click();
 
             await new Promise((resolve) => setTimeout(resolve, 100));
 

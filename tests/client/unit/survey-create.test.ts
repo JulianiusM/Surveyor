@@ -3,6 +3,7 @@
  */
 
 import { surveyCreateTestData } from '../data/surveyCreateData';
+import { setupTest } from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/navigation', () => ({
@@ -25,26 +26,25 @@ function getWeekSelect(row: Element): HTMLSelectElement {
 describe('survey-create module', () => {
     let init: () => void;
 
-    beforeEach(() => {
-        // Setup DOM
-        document.body.innerHTML = `
-            <table>
-                <tbody id="combinationTable"></tbody>
-            </table>
-            <button id="addCombinationBtn">Add Combination</button>
-        `;
+    setupTest({
+        beforeEach: () => {
+            // Setup DOM
+            document.body.innerHTML = `
+                <table>
+                    <tbody id="combinationTable"></tbody>
+                </table>
+                <button id="addCombinationBtn">Add Combination</button>
+            `;
 
-        // Setup global namespace
-        window.Surveyor = {} as any;
+            // Setup global namespace
+            window.Surveyor = {} as any;
 
-        // Clear mocks
-        jest.clearAllMocks();
-
-        // Import module fresh
-        jest.isolateModules(() => {
-            const module = require('../../../src/public/js/survey-create');
-            init = module.init;
-        });
+            // Import module fresh
+            jest.isolateModules(() => {
+                const module = require('../../../src/public/js/survey-create');
+                init = module.init;
+            });
+        }
     });
 
     describe('init', () => {

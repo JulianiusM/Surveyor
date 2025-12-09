@@ -4,6 +4,7 @@
  */
 
 import { stubInitTestData } from '../data/stubData';
+import { setupTest } from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/navigation', () => ({
@@ -18,26 +19,24 @@ describe('stub module', () => {
     let mockSetCurrentNavLocation: jest.Mock;
     let mockLoadPerms: jest.Mock;
 
-    beforeEach(() => {
-        // Reset all mocks
-        jest.clearAllMocks();
+    setupTest({
+        beforeEach: () => {
+            // Setup window.Surveyor
+            if (!window.Surveyor) {
+                window.Surveyor = {} as any;
+            }
 
-        // Setup window.Surveyor
-        if (!window.Surveyor) {
-            window.Surveyor = {} as any;
-        }
-
-        // Get mock functions
-        const navigation = require('../../../src/public/js/core/navigation');
-        const permissions = require('../../../src/public/js/core/permissions');
-        mockSetCurrentNavLocation = navigation.setCurrentNavLocation as jest.Mock;
-        mockLoadPerms = permissions.loadPerms as jest.Mock;
-    });
-
-    afterEach(() => {
-        // Clean up
-        if (window.Surveyor) {
-            delete (window.Surveyor as any).init;
+            // Get mock functions
+            const navigation = require('../../../src/public/js/core/navigation');
+            const permissions = require('../../../src/public/js/core/permissions');
+            mockSetCurrentNavLocation = navigation.setCurrentNavLocation as jest.Mock;
+            mockLoadPerms = permissions.loadPerms as jest.Mock;
+        },
+        afterEach: () => {
+            // Clean up
+            if (window.Surveyor) {
+                delete (window.Surveyor as any).init;
+            }
         }
     });
 

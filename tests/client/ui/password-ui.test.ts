@@ -7,6 +7,7 @@ import {
     validate,
 } from '../../../src/public/js/core/password-validation';
 import $ from 'jquery';
+import { setupTest } from '../helpers/testSetup';
 
 // Mock jQuery for the tests
 (global as any).$ = $;
@@ -18,9 +19,10 @@ describe('password validation UI', () => {
     let infoDiv: HTMLDivElement;
     let repeatInfoDiv: HTMLDivElement;
 
-    beforeEach(() => {
-        // Set up DOM structure similar to actual registration/password forms
-        document.body.innerHTML = `
+    setupTest({
+        beforeEach: () => {
+            // Set up DOM structure similar to actual registration/password forms
+            document.body.innerHTML = `
             <form id="password-form">
                 <div class="form-group">
                     <label for="password">Password</label>
@@ -36,10 +38,11 @@ describe('password validation UI', () => {
             </form>
         `;
 
-        passwordInput = document.getElementById('password') as HTMLInputElement;
-        passwordRepeatInput = document.getElementById('password-repeat') as HTMLInputElement;
-        infoDiv = document.getElementById('password-info') as HTMLDivElement;
-        repeatInfoDiv = document.getElementById('password-repeat-info') as HTMLDivElement;
+            passwordInput = document.getElementById('password') as HTMLInputElement;
+            passwordRepeatInput = document.getElementById('password-repeat') as HTMLInputElement;
+            infoDiv = document.getElementById('password-info') as HTMLDivElement;
+            repeatInfoDiv = document.getElementById('password-repeat-info') as HTMLDivElement;
+        }
     });
 
     describe('verifyPassword', () => {

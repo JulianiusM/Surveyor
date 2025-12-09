@@ -5,16 +5,18 @@
 
 import { initAssignButtons } from '../../../src/public/js/shared/entity-assign';
 import { configData } from '../data/entityAssignData';
+import { setupTest } from '../helpers/testSetup';
 import { server } from '../msw/server';
 import { http, HttpResponse } from 'msw';
 
 describe('entity-assign', () => {
-    beforeEach(() => {
-        document.body.innerHTML = '';
-        jest.clearAllMocks();
-        // Reset location.reload mock
-        delete (window as any).location;
-        (window as any).location = { reload: jest.fn() };
+    // Use unified setup - automatically clears DOM, mocks, and response queue
+    setupTest({
+        beforeEach: () => {
+            // Custom setup for location.reload
+            delete (window as any).location;
+            (window as any).location = { reload: jest.fn() };
+        }
     });
 
     describe('initAssignButtons - Configuration', () => {

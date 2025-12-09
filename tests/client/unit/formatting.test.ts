@@ -2,6 +2,7 @@
 // Unit tests for core/formatting.ts utilities
 // Uses data-driven and keyword-driven testing approach
 import { formatISOInTimeZone } from '../../../src/public/js/core/formatting';
+import { setupTest } from '../helpers/testSetup';
 
 // Import test data
 import {
@@ -33,6 +34,7 @@ import {
 } from '../keywords/formattingKeywords';
 
 describe('formatting utilities', () => {
+    setupTest();
     describe('padNumber - Data Driven', () => {
         test.each(padNumberData)(
             '$description',

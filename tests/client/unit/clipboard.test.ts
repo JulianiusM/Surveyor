@@ -3,8 +3,11 @@
 // Uses data-driven testing approach
 import { copyToClipboard } from '../../../src/public/js/core/clipboard';
 import { copyToClipboardData } from '../data/clipboardData';
+import { setupTest } from '../helpers/testSetup';
 
 describe('clipboard utilities', () => {
+    setupTest();
+    
     describe('copyToClipboard - Data Driven', () => {
         beforeEach(() => {
             // Mock navigator.clipboard for tests

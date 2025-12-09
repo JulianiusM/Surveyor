@@ -9,21 +9,21 @@ import {
     submitDateRangeModal,
 } from '../../../src/public/js/shared/date-range-modal';
 import { readDateRangePayloadData, boundsData } from '../data/dateRangeModalData';
+import { setupTest, mocks } from '../helpers/testSetup';
 
 describe('date-range-modal', () => {
-    beforeEach(() => {
-        document.body.innerHTML = '';
-        jest.clearAllMocks();
-        
-        // Mock Bootstrap Modal
-        (window as any).bootstrap = {
-            Modal: {
-                getOrCreateInstance: jest.fn(() => ({
-                    show: jest.fn(),
-                    hide: jest.fn(),
-                })),
-            },
-        };
+    setupTest({
+        beforeEach: () => {
+            // Mock Bootstrap Modal with getOrCreateInstance
+            (window as any).bootstrap = {
+                Modal: {
+                    getOrCreateInstance: jest.fn(() => ({
+                        show: jest.fn(),
+                        hide: jest.fn(),
+                    })),
+                },
+            };
+        }
     });
 
     describe('readDateRangePayload - Data Driven', () => {
