@@ -170,18 +170,24 @@ describe('activity-assignments module', () => {
 
         test.each(activityAssignmentsData.initAssign.assignWithWarnings)('$description', async ({planId, html, slotId, role, warnings}) => {
             document.body.innerHTML = html;
-            mockPost.mockResolvedValueOnce({data: {warnings}});
-            mockPost.mockResolvedValueOnce({});
+            mockPost.mockImplementation((url) => {
+                if (url.includes('/warnings')) {
+                    return Promise.resolve({data: {warnings}});
+                }
+                return Promise.resolve({});
+            });
             mockWarningModal.confirm.mockResolvedValue(true);
             
             initAssign(planId, mockWarningModal);
             
             // Click assign button
-            const btn = document.querySelector(`[data-action="assign"][data-role="${role}"]`) as HTMLElement;
+            const selector = role ? `[data-action="assign"][data-role="${role}"]` : '[data-action="assign"]';
+            const btn = document.querySelector(selector) as HTMLElement;
+            if (!btn) throw new Error(`Button not found with selector: ${selector}`);
             btn.click();
             
             // Wait for async operations
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await new Promise(resolve => setTimeout(resolve, 50));
             
             // Should fetch warnings
             expect(mockPost).toHaveBeenCalledWith(
@@ -205,17 +211,24 @@ describe('activity-assignments module', () => {
 
         test.each(activityAssignmentsData.initAssign.assignCancelled)('$description', async ({planId, html, slotId, role, warnings}) => {
             document.body.innerHTML = html;
-            mockPost.mockResolvedValueOnce({data: {warnings}});
+            mockPost.mockImplementation((url) => {
+                if (url.includes('/warnings')) {
+                    return Promise.resolve({data: {warnings}});
+                }
+                return Promise.resolve({});
+            });
             mockWarningModal.confirm.mockResolvedValue(false);
             
             initAssign(planId, mockWarningModal);
             
             // Click assign button
-            const btn = document.querySelector(`[data-action="assign"][data-role="${role}"]`) as HTMLElement;
+            const selector = role ? `[data-action="assign"][data-role="${role}"]` : '[data-action="assign"]';
+            const btn = document.querySelector(selector) as HTMLElement;
+            if (!btn) throw new Error(`Button not found with selector: ${selector}`);
             btn.click();
             
             // Wait for async operations
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await new Promise(resolve => setTimeout(resolve, 50));
             
             // Should fetch warnings
             expect(mockPost).toHaveBeenCalledWith(

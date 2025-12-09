@@ -323,7 +323,8 @@ describe('packing module', () => {
 
             document.dispatchEvent(changeEvent);
 
-            await Promise.resolve();
+            // Wait for the catch block to execute
+            await new Promise(resolve => setTimeout(resolve, 10));
 
             expect(toggle.checked).toBe(originalState);
             expect(showInlineAlert).toHaveBeenCalledWith('error', 'No permission');

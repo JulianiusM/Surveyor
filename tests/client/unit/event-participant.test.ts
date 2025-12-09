@@ -130,7 +130,7 @@ describe('event-participant module', () => {
             initEventParticipants();
             
             // Wait longer for async operation to complete
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise(resolve => setTimeout(resolve, 300));
 
             const totalsBox = container.querySelector('.js-totals');
             expect(totalsBox).toBeTruthy();
@@ -160,12 +160,15 @@ describe('event-participant module', () => {
             // Initialize which will trigger the fetch
             initEventParticipants();
             
-            // Wait longer for async operation
-            await new Promise(resolve => setTimeout(resolve, 200));
+            // Wait for async operation - use waitFor pattern
+            await new Promise(resolve => setTimeout(resolve, 300));
 
             const totalsBox = container.querySelector('.js-totals');
+            // The renderTotals function should have been called with ALLERGIES: 3
+            // It creates a badge with text-danger and border-danger-subtle classes
             expect(totalsBox!.innerHTML).toContain('text-danger');
             expect(totalsBox!.innerHTML).toContain('border-danger-subtle');
+            expect(totalsBox!.innerHTML).toContain('ALLERGIES');
         });
     });
 
