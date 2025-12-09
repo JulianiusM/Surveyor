@@ -3,6 +3,8 @@
 // Uses actual backend types for type safety
 import { http, HttpResponse } from 'msw';
 import type { CreateEventDTO, DIETARY } from '../../../src/types/EventTypes';
+import { isValidEndpoint } from '../helpers/validEndpoints';
+import { responseQueue } from '../helpers/testSetup';
 
 /**
  * Standard API response structure matching backend renderer
@@ -23,6 +25,28 @@ const errorResponse = (message: string, status = 400): Response =>
     HttpResponse.json({ status: 'error', message } as ApiResponse, { status });
 
 /**
+ * Helper to check response queue first, then fall back to default
+ */
+const checkQueue = (method: string, path: string, defaultResponse: () => Response): Response => {
+    // Validate endpoint exists in backend
+    if (!isValidEndpoint(path)) {
+        console.warn(`[MSW] Unhandled endpoint: ${method} ${path} - not in validEndpoints.ts`);
+    }
+    
+    // Check if there's a queued response
+    const queued = responseQueue.dequeue(method, path);
+    if (queued) {
+        if (queued.status === 'error') {
+            return errorResponse(queued.message || 'Error', queued.statusCode);
+        }
+        return successResponse(queued.message || 'Success', queued.data);
+    }
+    
+    // Use default response
+    return defaultResponse();
+};
+
+/**
  * Default MSW handlers for common API endpoints
  * These can be overridden in individual tests using server.use()
  */
@@ -32,24 +56,29 @@ export const handlers = [
     // Login endpoint (if using local auth)
     http.post('/auth/login', async ({ request }) => {
         const body = await request.json() as { username?: string; password?: string };
+        const path = '/auth/login';
         
-        if (!body.username || !body.password) {
-            return errorResponse('Username and password are required', 400);
-        }
-        
-        // Mock successful login
-        if (body.username === 'testuser' && body.password === 'password123') {
-            return successResponse('Login successful', {
-                user: { id: 1, username: 'testuser', email: 'test@example.com' }
-            });
-        }
-        
-        return errorResponse('Invalid credentials', 401);
+        return checkQueue('POST', path, () => {
+            if (!body.username || !body.password) {
+                return errorResponse('Username and password are required', 400);
+            }
+            
+            // Mock successful login
+            if (body.username === 'testuser' && body.password === 'password123') {
+                return successResponse('Login successful', {
+                    user: { id: 1, username: 'testuser', email: 'test@example.com' }
+                });
+            }
+            
+            return errorResponse('Invalid credentials', 401);
+        });
     }),
     
     // Logout endpoint
     http.post('/auth/logout', () => {
-        return successResponse('Logged out successfully');
+        return checkQueue('POST', '/auth/logout', () => 
+            successResponse('Logged out successfully')
+        );
     }),
     
     // ==================== Event API ====================
@@ -57,20 +86,28 @@ export const handlers = [
     // Get event details
     http.get('/api/event/:id', ({ params }) => {
         const { id } = params;
-        return successResponse('Event retrieved', {
-            id,
-            title: `Test Event ${id}`,
-            description: 'Test event description',
-            startDate: '2025-01-01',
-            endDate: '2025-01-02',
-        });
+        const path = `/api/event/${id}`;
+        
+        return checkQueue('GET', path, () => 
+            successResponse('Event retrieved', {
+                id,
+                title: `Test Event ${id}`,
+                description: 'Test event description',
+                startDate: '2025-01-01',
+                endDate: '2025-01-02',
+            })
+        );
     }),
     
     // Register for event
     http.post('/api/event/:id/register', async ({ request, params }) => {
         const { id } = params;
+        const path = `/api/event/${id}/register`;
         const body = await request.json();
-        return successResponse(`Successfully registered for event ${id}`, body);
+        
+        return checkQueue('POST', path, () => 
+            successResponse(`Successfully registered for event ${id}`, body)
+        );
     }),
     
     // Cancel registration
