@@ -3,8 +3,11 @@
 // Uses data-driven testing approach
 import { setCurrentNavLocation, initEntityLists } from '../../../src/public/js/core/navigation';
 import { setCurrentNavLocationData, initEntityListsData } from '../data/navigationData';
+import { setupTest } from '../helpers/testSetup';
 
 describe('navigation utilities', () => {
+    setupTest();
+    
     describe.skip('setCurrentNavLocation - Data Driven (browser-specific behavior - tested in E2E)', () => {
         beforeEach(() => {
             // Create navigation structure
