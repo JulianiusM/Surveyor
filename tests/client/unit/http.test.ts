@@ -11,6 +11,8 @@ describe('HTTP client utilities', () => {
     
     describe('http', () => {
         test('makes successful GET request', async () => {
+            // Note: /api/test is not in validEndpoints, so we still use server.use()
+            // For real endpoints, we could use mockApiSuccess()
             server.use(
                 mswHttp.get('/api/test', () => {
                     return HttpResponse.json({ status: 'success', data: 'test data' });
@@ -23,6 +25,8 @@ describe('HTTP client utilities', () => {
         });
 
         test('makes successful POST request with JSON body', async () => {
+            // Note: /api/test is not in validEndpoints, so we still use server.use()
+            // For real endpoints, we could use mockApiSuccess()
             server.use(
                 mswHttp.post('/api/test', async ({ request }) => {
                     const body = await request.json();

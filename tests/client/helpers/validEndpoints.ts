@@ -186,3 +186,82 @@ export function validateEndpoint(method: string, path: string): void {
         );
     }
 }
+
+/**
+ * Get all unique endpoint patterns with their HTTP methods
+ * Returns array of {method, path} objects for all valid endpoints
+ */
+export function getAllEndpointsWithMethods(): Array<{method: string; path: string}> {
+    const allEndpoints = getAllValidEndpoints();
+    const result: Array<{method: string; path: string}> = [];
+    
+    // For each endpoint, determine which HTTP methods are typically used
+    for (const endpoint of allEndpoints) {
+        // Auth endpoints
+        if (endpoint.includes('/auth/')) {
+            if (endpoint.includes('login') || endpoint.includes('register') || endpoint.includes('logout')) {
+                result.push({ method: 'POST', path: endpoint });
+            }
+        }
+        // API endpoints - determine method from endpoint pattern
+        else if (endpoint.startsWith('/api/')) {
+            // GET endpoints (retrieval)
+            if (endpoint.match(/\/api\/[^/]+\/\:id$/) || 
+                endpoint.includes('/search') ||
+                endpoint.includes('/participants') ||
+                endpoint.includes('/requirements') ||
+                endpoint.includes('/recommendations') ||
+                endpoint.includes('/credits') ||
+                endpoint.includes('/entries') ||
+                endpoint.includes('/list')) {
+                result.push({ method: 'GET', path: endpoint });
+            }
+            
+            // POST endpoints (creation, actions)
+            if (endpoint.includes('/create') ||
+                endpoint.includes('/assign') ||
+                endpoint.includes('/unassign') ||
+                endpoint.includes('/apply') ||
+                endpoint.includes('/auto') ||
+                endpoint.includes('/register') ||
+                endpoint.includes('/reorder') ||
+                endpoint.includes('/warnings')) {
+                result.push({ method: 'POST', path: endpoint });
+            }
+            
+            // DELETE endpoints
+            if (endpoint.includes('/delete')) {
+                result.push({ method: 'DELETE', path: endpoint });
+            }
+            
+            // PUT/PATCH endpoints (updates)
+            if (endpoint.includes('/update') ||
+                endpoint.includes('/item') ||
+                endpoint.includes('/driver') ||
+                endpoint.includes('/slot') ||
+                endpoint.includes('/description') ||
+                endpoint.includes('/permissions') ||
+                endpoint.includes('/roles')) {
+                result.push({ method: 'POST', path: endpoint }); // Most updates use POST in this API
+                result.push({ method: 'PATCH', path: endpoint });
+            }
+            
+            // Generic endpoints (support multiple methods)
+            if (!endpoint.includes('/create') && 
+                !endpoint.includes('/delete') && 
+                !endpoint.includes('/update') &&
+                !endpoint.includes('/assign') &&
+                endpoint.match(/\/api\/[^/]+\/\:[^/]+$/)) {
+                // Generic entity endpoint - support GET and POST
+                if (!result.some(e => e.method === 'GET' && e.path === endpoint)) {
+                    result.push({ method: 'GET', path: endpoint });
+                }
+                if (!result.some(e => e.method === 'POST' && e.path === endpoint)) {
+                    result.push({ method: 'POST', path: endpoint });
+                }
+            }
+        }
+    }
+    
+    return result;
+}

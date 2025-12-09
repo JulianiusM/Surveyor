@@ -5,6 +5,7 @@
 
 import { server } from '../msw/server';
 import { http, HttpResponse } from 'msw';
+import { getAllEndpointsWithMethods } from './validEndpoints';
 
 /**
  * Response queue entry for endpoint-specific mocking
@@ -267,6 +268,28 @@ export function setupQueuedEndpoint(method: string, path: string): void {
             });
         })
     );
+}
+
+/**
+ * Initialize ALL valid endpoints with queue handlers
+ * This is called automatically during test setup
+ * After this, any test can use mockApiSuccess/mockApiError without manual endpoint setup
+ */
+let endpointsInitialized = false;
+
+export function initializeAllEndpoints(): void {
+    if (endpointsInitialized) {
+        return; // Only initialize once
+    }
+    
+    const allEndpoints = getAllEndpointsWithMethods();
+    
+    for (const { method, path } of allEndpoints) {
+        setupQueuedEndpoint(method, path);
+    }
+    
+    endpointsInitialized = true;
+    console.log(`[testSetup] Initialized ${allEndpoints.length} endpoint handlers for response queue`);
 }
 
 /**

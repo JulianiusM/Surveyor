@@ -32,9 +32,9 @@ describe('My Component', () => {
 - ✅ Resets `window.Surveyor`
 - ✅ Mocks `window.location`
 
-### 2. Response Queue System
+### 2. Response Queue System (Automatic Initialization)
 
-Tests can set API responses without directly calling MSW:
+**ALL valid endpoints are automatically initialized** - tests can immediately use `mockApiSuccess()` or `mockApiError()` without any setup!
 
 ```typescript
 import { mockApiSuccess, mockApiError, setupTest } from './helpers/testSetup';
@@ -43,7 +43,7 @@ describe('Event Registration', () => {
     setupTest();
     
     test('registers for event successfully', async () => {
-        // Queue a response - no MSW setup needed!
+        // Just queue the response - endpoint already initialized!
         mockApiSuccess('POST', '/api/event/123/register', { 
             registered: true 
         });
@@ -56,7 +56,7 @@ describe('Event Registration', () => {
     });
     
     test('handles registration error', async () => {
-        // Queue an error response
+        // Queue an error response - no setup required!
         mockApiError('POST', '/api/event/123/register', 'Event is full', 400);
         
         await registerForEvent('123');
@@ -66,7 +66,13 @@ describe('Event Registration', () => {
 });
 ```
 
+**How it works:**
+- 🎯 All 100+ valid endpoints are initialized automatically at test startup
+- 🎯 Queues are cleared before each test
+- 🎯 Tests just call `mockApiSuccess()` or `mockApiError()` - that's it!
+
 **Benefits:**
+- ✅ No manual endpoint setup required
 - ✅ No `server.use()` calls in tests
 - ✅ Responses are automatically consumed in order
 - ✅ Simpler test code
@@ -206,23 +212,37 @@ Configure test setup/teardown behavior.
 
 ### `mockApiSuccess(method, path, data?, message?)`
 
-Queue a successful API response.
+Queue a successful API response for ANY valid backend endpoint (no setup required).
 
 **Parameters:**
 - `method: string` - HTTP method (GET, POST, etc.)
-- `path: string` - API endpoint path
+- `path: string` - API endpoint path (must be in validEndpoints.ts)
 - `data?: any` - Response data
 - `message?: string` - Success message
 
+**Example:**
+```typescript
+mockApiSuccess('GET', '/api/event/123', { id: 123, title: 'My Event' });
+mockApiSuccess('POST', '/api/activity/456/assign', { success: true });
+```
+
+**Note:** For test-only endpoints (like `/api/test`), use `server.use()` directly instead.
+
 ### `mockApiError(method, path, message, statusCode?)`
 
-Queue an error API response.
+Queue an error API response for ANY valid backend endpoint (no setup required).
 
 **Parameters:**
 - `method: string` - HTTP method
-- `path: string` - API endpoint path  
+- `path: string` - API endpoint path (must be in validEndpoints.ts)
 - `message: string` - Error message
 - `statusCode?: number` - HTTP status code (default: 400)
+
+**Example:**
+```typescript
+mockApiError('POST', '/api/event/123/register', 'Event is full', 400);
+mockApiError('GET', '/api/users/search', 'Unauthorized', 401);
+```
 
 ### `dom.createForm(fields)`
 
