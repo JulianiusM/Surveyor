@@ -8,16 +8,13 @@ import { tableReorderData as _tableReorderData, cardReorderData as _cardReorderD
 
 const tableReorderData = _tableReorderData();
 const cardReorderData = _cardReorderData();
-import { post } from '../../../src/public/js/core/http';
 import { showInlineAlert } from '../../../src/public/js/shared/alerts';
 import { setupTest } from '../helpers/testSetup';
 
-// Mock dependencies
-jest.mock('../../../src/public/js/core/http');
+// Mock UI dependencies only (not HTTP layer - MSW handles that)
 jest.mock('../../../src/public/js/shared/alerts');
 jest.mock('../../../src/public/js/shared/ui-helpers');
 
-const mockPost = post as jest.MockedFunction<typeof post>;
 const mockShowInlineAlert = showInlineAlert as jest.MockedFunction<typeof showInlineAlert>;
 
 describe('drag-drop', () => {
