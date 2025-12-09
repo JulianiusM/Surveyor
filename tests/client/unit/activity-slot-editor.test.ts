@@ -10,6 +10,7 @@ import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
 import * as permissions from '../../../src/public/js/core/permissions';
 import * as activityRoles from '../../../src/public/js/modules/activity-roles';
+import {setupTest} from '../helpers/testSetup';
 
 // Mock Bootstrap
 const mockShow = jest.fn();
@@ -33,11 +34,11 @@ describe('activity-slot-editor', () => {
     let form: HTMLFormElement;
     let mockPost: jest.SpyInstance;
 
-    beforeEach(() => {
-        document.body.innerHTML = '';
-        mockShow.mockClear();
-        mockHide.mockClear();
-        jest.clearAllMocks();
+    setupTest({
+        clearDOM: false,
+        beforeEach: () => {
+            mockShow.mockClear();
+            mockHide.mockClear();
 
         // Setup basic modal structure
         modal = document.createElement('div');
@@ -103,6 +104,7 @@ describe('activity-slot-editor', () => {
         jest.spyOn(activityRoles, 'getAllRoles').mockReturnValue(testData.roleManagement.multipleRoles);
         jest.spyOn(activityRoles, 'getSlotRolesForSlot').mockReturnValue([]);
         jest.spyOn(activityRoles, 'addRoleToGlobal').mockImplementation();
+        }
     });
 
     describe('initialization', () => {
