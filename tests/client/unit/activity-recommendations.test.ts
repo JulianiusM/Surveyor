@@ -50,7 +50,7 @@ describe('activity-recommendations', () => {
         autoBtn.dataset.recommendationsAuto = 'true';
 
         const saveBtn = document.createElement('button');
-        refreshBtn.dataset.recommendationsSave = 'true';
+        saveBtn.dataset.recommendationsSave = 'true';
 
         const applyBtn = document.createElement('button');
         applyBtn.dataset.recommendationsApply = 'true';
