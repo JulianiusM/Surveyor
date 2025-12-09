@@ -154,13 +154,15 @@ export function setupTest(config: TestSetupConfig = {}): void {
         }
         
         // Reset window.Surveyor to clean state
+        // Preserve init function if it was set by a module
         if (!window.Surveyor) {
             (window as any).Surveyor = {};
         }
-        window.Surveyor = {
-            rawPermissions: undefined,
-            permissions: undefined,
-        };
+        const existingInit = window.Surveyor.init;
+        // Reset properties but preserve init
+        window.Surveyor.rawPermissions = undefined;
+        window.Surveyor.permissions = undefined;
+        window.Surveyor.init = existingInit; // Always set, even if undefined
         
         // Mock common window properties
         // Note: Only mock location if tests need it - some tests override this themselves

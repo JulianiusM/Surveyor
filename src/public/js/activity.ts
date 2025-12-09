@@ -137,4 +137,6 @@ export function init(): void {
 }
 
 // Expose to global scope
-window.Surveyor.init = init;
+if (window.Surveyor) {
+    window.Surveyor.init = init;
+}
