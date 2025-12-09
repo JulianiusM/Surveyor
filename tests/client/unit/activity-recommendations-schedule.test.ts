@@ -3,7 +3,10 @@
  * Testing schedule-based recommendations view
  */
 
-import {initRecommendationScheduleView, cleanupRecommendationScheduleView} from '../../../src/public/js/modules/activity-recommendations-schedule';
+import {
+    cleanupRecommendationScheduleView,
+    initRecommendationScheduleView
+} from '../../../src/public/js/modules/activity-recommendations-schedule';
 import {activityRecommendationsScheduleData as testData} from '../data/activityRecommendationsScheduleData';
 import * as http from '../../../src/public/js/core/http';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
@@ -97,23 +100,23 @@ describe('activity-recommendations-schedule', () => {
     });
 
     describe('initialization', () => {
-        test('should not initialize without planId', () => {
+        test('should not initialize without planId', async () => {
             mockGet.mockResolvedValue(testData.apiResponses.loadSuccess);
-            initRecommendationScheduleView('', mockDescribeSlot);
+            await initRecommendationScheduleView('', mockDescribeSlot);
             expect(mockGet).not.toHaveBeenCalled();
         });
 
-        test('should not initialize without schedule view element', () => {
+        test('should not initialize without schedule view element', async () => {
             document.getElementById('recommendationScheduleView')?.remove();
             mockGet.mockResolvedValue(testData.apiResponses.loadSuccess);
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             expect(mockGet).not.toHaveBeenCalled();
         });
 
         test('should initialize and load recommendations', async () => {
             mockGet.mockResolvedValue(testData.apiResponses.loadSuccess);
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
-            
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             expect(mockGet).toHaveBeenCalledWith(
@@ -121,10 +124,10 @@ describe('activity-recommendations-schedule', () => {
             );
         });
 
-        test('should initialize Bootstrap modal', () => {
+        test('should initialize Bootstrap modal', async () => {
             mockGet.mockResolvedValue(testData.apiResponses.loadSuccess);
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
-            
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+
             expect((global as any).bootstrap.Modal).toHaveBeenCalled();
         });
     });
@@ -140,7 +143,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const summaryStats = document.getElementById('recommendationSummaryStats')!;
@@ -149,7 +152,7 @@ describe('activity-recommendations-schedule', () => {
 
         test('should render recommendations in schedule view', async () => {
             const scheduleView = document.getElementById('recommendationScheduleView')!;
-            
+
             // Create slot container
             const slotContainer = document.createElement('div');
             slotContainer.dataset.slotRecommendations = 'slot1';
@@ -164,7 +167,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             expect(slotContainer.children.length).toBeGreaterThan(0);
@@ -173,7 +176,7 @@ describe('activity-recommendations-schedule', () => {
         test('should handle load error', async () => {
             mockGet.mockRejectedValue(new Error('Network error'));
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const alertBox = document.querySelector('[data-recommendations-alert]')!;
@@ -193,7 +196,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const summaryStats = document.getElementById('recommendationSummaryStats')!;
@@ -210,7 +213,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const summaryStats = document.getElementById('recommendationSummaryStats')!;
@@ -223,7 +226,7 @@ describe('activity-recommendations-schedule', () => {
     describe('recommendation rendering', () => {
         beforeEach(() => {
             const scheduleView = document.getElementById('recommendationScheduleView')!;
-            
+
             testData.slots.forEach((slot) => {
                 const slotContainer = document.createElement('div');
                 slotContainer.dataset.slotRecommendations = slot.id;
@@ -241,7 +244,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const container = document.querySelector('[data-slot-recommendations="slot1"]')!;
@@ -259,7 +262,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const container = document.querySelector('[data-slot-recommendations="slot2"]')!;
@@ -277,7 +280,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const container = document.querySelector('[data-slot-recommendations="slot3"]')!;
@@ -295,7 +298,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const container = document.querySelector('[data-slot-recommendations="slot1"]')!;
@@ -306,10 +309,10 @@ describe('activity-recommendations-schedule', () => {
     describe('recommendation actions', () => {
         beforeEach(() => {
             const scheduleView = document.getElementById('recommendationScheduleView')!;
-            
+
             // Clear any dynamically created content from previous test
             scheduleView.innerHTML = '';
-            
+
             // Create containers for all test slots
             ['slot1', 'slot2', 'slot3'].forEach((slotId) => {
                 const slotContainer = document.createElement('div');
@@ -317,7 +320,7 @@ describe('activity-recommendations-schedule', () => {
                 scheduleView.append(slotContainer);
             });
         });
-        
+
         afterEach(() => {
             // Clean up dynamically created elements after each test
             const scheduleView = document.getElementById('recommendationScheduleView');
@@ -336,7 +339,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const approveBtn = document.querySelector('.btn-success') as HTMLButtonElement;
@@ -361,7 +364,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const rejectBtn = document.querySelector('.btn-danger') as HTMLButtonElement;
@@ -386,7 +389,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const revertBtn = document.querySelector('.btn-outline-secondary') as HTMLButtonElement;
@@ -411,7 +414,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const approveBtn = document.querySelector('.btn-outline-success') as HTMLButtonElement;
@@ -430,7 +433,7 @@ describe('activity-recommendations-schedule', () => {
     describe('add recommendation modal', () => {
         beforeEach(() => {
             const scheduleView = document.getElementById('recommendationScheduleView')!;
-            
+
             const addBtn = document.createElement('button');
             addBtn.dataset.addRecommendation = 'true';
             addBtn.dataset.slotId = testData.addModal.slotId;
@@ -456,7 +459,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const addBtn = document.querySelector('[data-add-recommendation]') as HTMLButtonElement;
@@ -475,7 +478,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const addBtn = document.querySelector('[data-add-recommendation]') as HTMLButtonElement;
@@ -495,7 +498,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const addBtn = document.querySelector('[data-add-recommendation]') as HTMLButtonElement;
@@ -518,7 +521,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             // Create add button for this test
@@ -555,7 +558,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const scheduleView = document.getElementById('recommendationScheduleView')!;
@@ -591,7 +594,7 @@ describe('activity-recommendations-schedule', () => {
             });
             mockPost.mockResolvedValue(testData.apiResponses.applySuccess);
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const applyBtn = document.querySelector('[data-recommendations-apply]') as HTMLButtonElement;
@@ -619,7 +622,7 @@ describe('activity-recommendations-schedule', () => {
             });
             mockPost.mockRejectedValue(new Error('Apply failed'));
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const applyBtn = document.querySelector('[data-recommendations-apply]') as HTMLButtonElement;
@@ -648,7 +651,7 @@ describe('activity-recommendations-schedule', () => {
             });
             mockPost.mockResolvedValue(testData.apiResponses.applySuccess);
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const applyBtn = document.querySelector('[data-recommendations-apply]') as HTMLButtonElement;
@@ -672,7 +675,7 @@ describe('activity-recommendations-schedule', () => {
             });
             mockPost.mockResolvedValue(testData.apiResponses.generateSuccess);
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const autoBtn = document.querySelector('[data-recommendations-auto]') as HTMLButtonElement;
@@ -697,7 +700,7 @@ describe('activity-recommendations-schedule', () => {
             });
             mockPost.mockRejectedValue(new Error('Generation failed'));
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             const autoBtn = document.querySelector('[data-recommendations-auto]') as HTMLButtonElement;
@@ -721,7 +724,7 @@ describe('activity-recommendations-schedule', () => {
                 },
             });
 
-            initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
+            await initRecommendationScheduleView(testData.initialization.valid.planId, mockDescribeSlot);
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             mockGet.mockClear();

@@ -3,9 +3,9 @@
  * Single source of truth for common test patterns
  */
 
-import { server } from '../msw/server';
-import { http, HttpResponse } from 'msw';
-import { getAllEndpointsWithMethods } from './validEndpoints';
+import {server} from '../msw/server';
+import {http, HttpResponse} from 'msw';
+import {getAllEndpointsWithMethods} from './validEndpoints';
 
 /**
  * Response queue entry for endpoint-specific mocking
@@ -23,7 +23,7 @@ interface QueuedResponse {
  */
 class ResponseQueueManager {
     private queues: Map<string, QueuedResponse[]> = new Map();
-    
+
     /**
      * Add a response to the queue for a specific endpoint
      * @param method HTTP method (GET, POST, etc.)
@@ -37,7 +37,7 @@ class ResponseQueueManager {
         }
         this.queues.get(key)!.push(response);
     }
-    
+
     /**
      * Get the next response from the queue for an endpoint
      * Returns undefined if queue is empty
@@ -47,7 +47,7 @@ class ResponseQueueManager {
         const queue = this.queues.get(key);
         return queue?.shift();
     }
-    
+
     /**
      * Check if a queue exists and has responses
      */
@@ -56,14 +56,14 @@ class ResponseQueueManager {
         const queue = this.queues.get(key);
         return queue !== undefined && queue.length > 0;
     }
-    
+
     /**
      * Clear all queues
      */
     clear(): void {
         this.queues.clear();
     }
-    
+
     /**
      * Clear queue for specific endpoint
      */
@@ -85,24 +85,24 @@ export interface TestSetupConfig {
      * @default true
      */
     clearDOM?: boolean;
-    
+
     /**
      * Whether to clear all mocks before each test
      * @default true
      */
     clearMocks?: boolean;
-    
+
     /**
      * Whether to reset response queues before each test
      * @default true
      */
     clearResponseQueue?: boolean;
-    
+
     /**
      * Custom beforeEach logic
      */
     beforeEach?: () => void;
-    
+
     /**
      * Custom afterEach logic
      */
@@ -112,7 +112,7 @@ export interface TestSetupConfig {
 /**
  * Standard test setup with common patterns
  * Call this in your describe block to get consistent setup/teardown
- * 
+ *
  * @example
  * ```typescript
  * describe('My Component', () => {
@@ -121,7 +121,7 @@ export interface TestSetupConfig {
  *             // Custom setup
  *         }
  *     });
- *     
+ *
  *     test('does something', () => {
  *         // Test code
  *     });
@@ -136,46 +136,35 @@ export function setupTest(config: TestSetupConfig = {}): void {
         beforeEach: customBeforeEach,
         afterEach: customAfterEach,
     } = config;
-    
+
     beforeEach(() => {
         // Clear DOM
         if (clearDOM) {
             document.body.innerHTML = '';
         }
-        
+
         // Clear mocks
         if (clearMocks) {
             jest.clearAllMocks();
         }
-        
+
         // Clear response queues
         if (clearResponseQueue) {
             responseQueue.clear();
         }
-        
-        // Reset window.Surveyor to clean state
-        // Preserve init function if it was set by a module
-        if (!window.Surveyor) {
-            (window as any).Surveyor = {};
-        }
-        const existingInit = window.Surveyor.init;
-        // Reset properties but preserve init
-        window.Surveyor.rawPermissions = undefined;
-        window.Surveyor.permissions = undefined;
-        window.Surveyor.init = existingInit; // Always set, even if undefined
-        
+
         // Mock common window properties
         // Note: Only mock location if tests need it - some tests override this themselves
         // Tests that need location should mock it explicitly or use the pattern:
         // delete (window as any).location;
         // (window as any).location = { ... };
-        
+
         // Custom setup
         if (customBeforeEach) {
             customBeforeEach();
         }
     });
-    
+
     afterEach(() => {
         // Custom teardown
         if (customAfterEach) {
@@ -187,7 +176,7 @@ export function setupTest(config: TestSetupConfig = {}): void {
 /**
  * Mock a successful API response
  * Uses the response queue system
- * 
+ *
  * @example
  * ```typescript
  * mockApiSuccess('GET', '/api/event/123', { 
@@ -207,7 +196,7 @@ export function mockApiSuccess(method: string, path: string, data?: any, message
 /**
  * Mock a failed API response
  * Uses the response queue system
- * 
+ *
  * @example
  * ```typescript
  * mockApiError('POST', '/api/event/123/register', 'Event is full', 400);
@@ -225,7 +214,7 @@ export function mockApiError(method: string, path: string, message: string, stat
  * Set up MSW handler to use response queue for a specific endpoint
  * This should be called once per endpoint in your test suite
  * The handler will automatically use responses from the queue
- * 
+ *
  * @example
  * ```typescript
  * setupQueuedEndpoint('GET', '/api/event/:id');
@@ -233,35 +222,35 @@ export function mockApiError(method: string, path: string, message: string, stat
  */
 export function setupQueuedEndpoint(method: string, path: string): void {
     const httpMethod = method.toLowerCase() as 'get' | 'post' | 'put' | 'delete' | 'patch';
-    
+
     server.use(
-        http[httpMethod](path, ({ params, request }) => {
+        http[httpMethod](path, ({params, request}) => {
             // Build actual path with params replaced
             let actualPath = path;
             for (const [key, value] of Object.entries(params)) {
                 actualPath = actualPath.replace(`:${key}`, String(value));
             }
-            
+
             // Check if there's a queued response
             const queuedResponse = responseQueue.dequeue(method, actualPath);
-            
+
             if (queuedResponse) {
-                const { status, data, message, statusCode } = queuedResponse;
-                
+                const {status, data, message, statusCode} = queuedResponse;
+
                 if (status === 'error') {
                     return HttpResponse.json(
-                        { status: 'error', message },
-                        { status: statusCode || 400 }
+                        {status: 'error', message},
+                        {status: statusCode || 400}
                     );
                 }
-                
+
                 return HttpResponse.json({
                     status: 'success',
                     message,
                     data,
                 });
             }
-            
+
             // No queued response - return default success
             return HttpResponse.json({
                 status: 'success',
@@ -283,13 +272,13 @@ export function initializeAllEndpoints(): void {
     if (endpointsInitialized) {
         return; // Only initialize once
     }
-    
+
     const allEndpoints = getAllEndpointsWithMethods();
-    
-    for (const { method, path } of allEndpoints) {
+
+    for (const {method, path} of allEndpoints) {
         setupQueuedEndpoint(method, path);
     }
-    
+
     endpointsInitialized = true;
     console.log(`[testSetup] Initialized ${allEndpoints.length} endpoint handlers for response queue`);
 }
@@ -301,9 +290,9 @@ export const dom = {
     /**
      * Create a basic form element with common structure
      */
-    createForm(fields: Array<{name: string; value?: string; type?: string}>): HTMLFormElement {
+    createForm(fields: Array<{ name: string; value?: string; type?: string }>): HTMLFormElement {
         const form = document.createElement('form');
-        
+
         for (const field of fields) {
             const input = document.createElement('input');
             input.name = field.name;
@@ -311,17 +300,17 @@ export const dom = {
             if (field.value) input.value = field.value;
             form.appendChild(input);
         }
-        
+
         return form;
     },
-    
+
     /**
      * Create a table with data-assignable attribute for assignment tests
      */
-    createAssignableTable(rows: Array<{itemId: string; count?: number; max?: number}>): HTMLTableElement {
+    createAssignableTable(rows: Array<{ itemId: string; count?: number; max?: number }>): HTMLTableElement {
         const table = document.createElement('table');
         table.dataset.assignable = 'true';
-        
+
         const tbody = document.createElement('tbody');
         for (const row of rows) {
             const tr = document.createElement('tr');
@@ -338,10 +327,10 @@ export const dom = {
             tbody.appendChild(tr);
         }
         table.appendChild(tbody);
-        
+
         return table;
     },
-    
+
     /**
      * Create Bootstrap modal structure
      */
@@ -384,7 +373,7 @@ export const mocks = {
             dispose: jest.fn(),
         };
     },
-    
+
     /**
      * Set up Bootstrap global mock
      */

@@ -1,10 +1,10 @@
 /**
  * Activity Recommendations Schedule Module
  * Handles the enhanced schedule-based recommendations view
- * 
+ *
  * Architecture: Uses layered approach with separation of concerns
  * - State layer: ActivityRecommendationsState
- * - Logic layer: RecommendationsLogic  
+ * - Logic layer: RecommendationsLogic
  * - UI layer: RecommendationsUI
  */
 
@@ -41,10 +41,10 @@ export function cleanupRecommendationScheduleView(): void {
  * @param planId - Activity plan ID
  * @param describeSlot - Function to describe a slot by ID
  */
-export function initRecommendationScheduleView(planId: string, describeSlot: (slotId: string) => string): void {
+export async function initRecommendationScheduleView(planId: string, describeSlot: (slotId: string) => string): Promise<void> {
     const panel = document.getElementById('recommendationPanel');
     const scheduleView = panel?.querySelector<HTMLElement>('#recommendationScheduleView');
-    
+
     if (!planId || !panel || !scheduleView) return;
 
     // Initialize layers
@@ -81,7 +81,7 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
         try {
             const url = `/api/activity/${planId}/recommendations`;
             const resp = await get(url);
-            
+
             const data = resp.data || resp;
             state!.setRecommendations(data.recommendations || []);
             state!.setWarnings(data.warnings || []);
@@ -122,12 +122,12 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
             ui!.setAlert('Saving recommendations...', 'info');
             await post(`/api/activity/${planId}/recommendations/apply`, {recommendations: payload});
             ui!.setAlert('Recommendations saved successfully! Reloading...', 'info');
-            
+
             const activeTabEl = document.querySelector<HTMLElement>('.nav-link.active[data-bs-target]');
             if (activeTabEl) {
                 sessionStorage.setItem('activity-active-tab', activeTabEl.getAttribute('data-bs-target') || '');
             }
-            
+
             reloadAfterDelay(500);
         } catch (err) {
             console.error('Failed to save recommendations:', err);
@@ -165,5 +165,5 @@ export function initRecommendationScheduleView(planId: string, describeSlot: (sl
 
     ui!.setupButtons(loadRecommendations, generateRecommendations, applyRecommendations);
     ui!.setupAddModal(handleAddConfirm);
-    loadRecommendations();
+    await loadRecommendations();
 }

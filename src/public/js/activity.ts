@@ -101,7 +101,7 @@ export function init(): void {
     setCurrentNavLocation();
     loadPerms();
     initDates();
-    
+
     // Restore active tab from session storage after page reload
     const savedTabId = sessionStorage.getItem('activity-active-tab');
     if (savedTabId) {
@@ -125,7 +125,7 @@ export function init(): void {
         initSlotEditorModal(planId);
         initDnD(planId);
         initRequirementPanel(planId);
-        initRecommendationScheduleView(planId, describeSlot);
+        initRecommendationScheduleView(planId, describeSlot); // Don't need to wait, best effort.
         initSlotFilters();
         initParticipantsTab();
         initSlotRoleAdminModal(planId, describeSlot);
@@ -137,6 +137,7 @@ export function init(): void {
 }
 
 // Expose to global scope
-if (window.Surveyor) {
-    window.Surveyor.init = init;
-}
+if (!window.Surveyor) window.Surveyor = {};
+console.log(window.Surveyor);
+window.Surveyor.init = init;
+console.log(window.Surveyor);

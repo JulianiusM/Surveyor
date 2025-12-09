@@ -3,14 +3,9 @@
  * Handles password validation UI and form submission
  */
 
-import { setCurrentNavLocation } from './core/navigation';
-import { loadPerms } from './core/permissions';
-import {
-    matchPassword,
-    removeTooltip,
-    validate,
-    verifyPassword
-} from './core/password-validation';
+import {setCurrentNavLocation} from './core/navigation';
+import {loadPerms} from './core/permissions';
+import {matchPassword, removeTooltip, validate, verifyPassword} from './core/password-validation';
 
 /**
  * Register password verification events
@@ -46,4 +41,5 @@ export function init(): void {
 }
 
 // Expose to global scope
+if (!window.Surveyor) window.Surveyor = {};
 window.Surveyor.init = init;

@@ -9,11 +9,11 @@ const config: Config = {
     rootDir: '.',
     roots: ['<rootDir>/src/public/js', '<rootDir>/tests/client'],
     testMatch: ['<rootDir>/tests/client/**/*.(test|spec).ts'],
-    
+
     // Setup files
-    setupFiles: ['<rootDir>/tests/client/setupGlobals.ts'],
+    setupFiles: [],
     setupFilesAfterEnv: ['<rootDir>/tests/client/setupTests.ts'],
-    
+
     // Module resolution
     moduleFileExtensions: ['ts', 'js', 'json'],
     moduleNameMapper: {
@@ -22,12 +22,12 @@ const config: Config = {
         // Keep the UUID stub from main config
         '^uuid$': '<rootDir>/tests/util/stubs/uuid.ts',
     },
-    
+
     // Transform MSW and its dependencies
     transformIgnorePatterns: [
         'node_modules/(?!(msw|@mswjs|@bundled-es-modules|until-async|strict-event-emitter|@open-draft)/)',
     ],
-    
+
     // Transform configuration
     transform: {
         '^.+\\.tsx?$': ['ts-jest', {
@@ -57,10 +57,10 @@ const config: Config = {
             }
         }],
     },
-    
+
     // Coverage configuration
     collectCoverageFrom: [
-        'src/public/js/**/*.{ts,js}',
+        'src/public/js/**/*.ts',
         '!src/public/js/**/*.d.ts',
         '!src/public/js/**/*.gen.js',
         '!src/public/js/**/stub.ts',
@@ -78,10 +78,10 @@ const config: Config = {
     //         statements: 4,
     //     },
     // },
-    
+
     // Test timeout
     testTimeout: 10000,
-    
+
     // Globals for jsdom
     testEnvironmentOptions: {
         url: 'http://localhost',
