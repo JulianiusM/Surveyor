@@ -4,6 +4,7 @@
  */
 
 import {describe, test, expect, jest, beforeEach, afterEach} from '@jest/globals';
+import { setupTest } from '../helpers/testSetup';
 
 // Mock all dependencies
 jest.mock('../../../src/public/js/core/navigation', () => ({
@@ -50,8 +51,9 @@ let mockAddEventListener: jest.Mock;
 let mockElements: Map<string, any>;
 
 describe('events.ts', () => {
+    setupTest();
+    
     beforeEach(async () => {
-        jest.clearAllMocks();
         
         // Setup window
         (global as any).window = {
