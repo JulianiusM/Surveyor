@@ -3,7 +3,9 @@
  * Data-driven test cases for timezone selection UI
  */
 
-export const timezoneSelectInitData = [
+import {deepCopy} from "../helpers/util";
+
+const _timezoneSelectInitData = [
     {
         description: 'should initialize with provided timezone',
         id: 1,
@@ -23,7 +25,9 @@ export const timezoneSelectInitData = [
     },
 ];
 
-export const timezoneSelectSetZoneData = [
+export const timezoneSelectInitData = () => deepCopy(_timezoneSelectInitData) as typeof _timezoneSelectInitData;
+
+const _timezoneSelectSetZoneData = [
     {
         description: 'should set valid timezone',
         zone: 'America/New_York',
@@ -41,7 +45,9 @@ export const timezoneSelectSetZoneData = [
     },
 ];
 
-export const timezoneSelectFilterData = [
+export const timezoneSelectSetZoneData = () => deepCopy(_timezoneSelectSetZoneData) as typeof _timezoneSelectSetZoneData;
+
+const _timezoneSelectFilterData = [
     {
         description: 'should filter by query "london"',
         query: 'london',
@@ -63,3 +69,5 @@ export const timezoneSelectFilterData = [
         expectedNoMatches: true,
     },
 ];
+
+export const timezoneSelectFilterData = () => deepCopy(_timezoneSelectFilterData) as typeof _timezoneSelectFilterData;

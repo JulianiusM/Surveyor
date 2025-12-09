@@ -2,7 +2,9 @@
  * Test data for reg-links module
  */
 
-export const regLinksTestData = {
+import {deepCopy} from "../helpers/util";
+
+const _regLinksTestData = {
     initialization: [
         {
             description: 'renders empty state when no links exist',
@@ -248,3 +250,5 @@ export const regLinksTestData = {
         }
     ]
 };
+
+export const regLinksTestData = () => deepCopy(_regLinksTestData) as typeof _regLinksTestData;

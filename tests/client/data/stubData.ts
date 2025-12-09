@@ -3,6 +3,8 @@
  * Data-driven test approach following repository patterns
  */
 
+import {deepCopy} from "../helpers/util";
+
 export interface StubTestData {
     description: string;
     windowSurveyorExists: boolean;
@@ -12,7 +14,7 @@ export interface StubTestData {
     };
 }
 
-export const stubInitTestData: StubTestData[] = [
+const _stubInitTestData: StubTestData[] = [
     {
         description: 'should initialize with navigation and permissions',
         windowSurveyorExists: true,
@@ -22,3 +24,5 @@ export const stubInitTestData: StubTestData[] = [
         }
     }
 ];
+
+export const stubInitTestData = () => deepCopy(_stubInitTestData) as typeof _stubInitTestData;

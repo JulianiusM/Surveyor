@@ -2,7 +2,9 @@
  * Test data for list-actions.ts
  */
 
-export const assignmentRemovalData = [
+import {deepCopy} from "../helpers/util";
+
+const _assignmentRemovalData = [
     {
         description: 'removes assignment with default permissions',
         assignId: '123',
@@ -21,7 +23,9 @@ export const assignmentRemovalData = [
     },
 ];
 
-export const itemDeletionData = [
+export const assignmentRemovalData = () => deepCopy(_assignmentRemovalData) as typeof _assignmentRemovalData;
+
+const _itemDeletionData = [
     {
         description: 'deletes item with confirmation',
         itemId: '123',
@@ -54,7 +58,9 @@ export const itemDeletionData = [
     },
 ];
 
-export const quickAddData = [
+export const itemDeletionData = () => deepCopy(_itemDeletionData) as typeof _itemDeletionData;
+
+const _quickAddData = [
     {
         description: 'submits form with default permissions',
         formId: 'quick-add-form',
@@ -73,7 +79,9 @@ export const quickAddData = [
     },
 ];
 
-export const configData = [
+export const quickAddData = () => deepCopy(_quickAddData) as typeof _quickAddData;
+
+const _configData = [
     {
         description: 'uses default reload delay for assignment removal',
         config: {
@@ -111,3 +119,5 @@ export const configData = [
         expectedSelector: '.custom-delete-btn',
     },
 ];
+
+export const configData = () => deepCopy(_configData) as typeof _configData;

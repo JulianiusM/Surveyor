@@ -4,7 +4,9 @@
  */
 
 import {initRegLinks} from '../../../src/public/js/modules/reg-links';
-import {regLinksTestData} from '../data/regLinksData';
+import {regLinksTestData as _regLinksTestData} from '../data/regLinksData';
+
+const regLinksTestData = _regLinksTestData();
 import * as http from '../../../src/public/js/core/http';
 import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';

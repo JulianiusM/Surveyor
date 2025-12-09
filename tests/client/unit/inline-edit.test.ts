@@ -4,7 +4,12 @@
  */
 
 import { enableDnD, disableDnD, startInlineEditArea, startInlineEdit } from '../../../src/public/js/shared/inline-edit';
-import { enableDnDData, disableDnDData, startInlineEditAreaData, startInlineEditData } from '../data/inlineEditData';
+import { enableDnDData as _enableDnDData, disableDnDData as _disableDnDData, startInlineEditAreaData as _startInlineEditAreaData, startInlineEditData as _startInlineEditData } from '../data/inlineEditData';
+
+const enableDnDData = _enableDnDData();
+const disableDnDData = _disableDnDData();
+const startInlineEditAreaData = _startInlineEditAreaData();
+const startInlineEditData = _startInlineEditData();
 import { getPerms, requireEntityPerm, requireItemPerm } from '../../../src/public/js/core/permissions';
 import { post } from '../../../src/public/js/core/http';
 import { showInlineAlert } from '../../../src/public/js/shared/alerts';

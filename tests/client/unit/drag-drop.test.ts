@@ -4,7 +4,10 @@
  */
 
 import { initTableReorder, initCardReorder } from '../../../src/public/js/shared/drag-drop';
-import { tableReorderData, cardReorderData } from '../data/dragDropData';
+import { tableReorderData as _tableReorderData, cardReorderData as _cardReorderData } from '../data/dragDropData';
+
+const tableReorderData = _tableReorderData();
+const cardReorderData = _cardReorderData();
 import { post } from '../../../src/public/js/core/http';
 import { showInlineAlert } from '../../../src/public/js/shared/alerts';
 import { setupTest } from '../helpers/testSetup';

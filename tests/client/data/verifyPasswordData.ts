@@ -3,6 +3,8 @@
  * Data-driven test approach following repository patterns
  */
 
+import {deepCopy} from "../helpers/util";
+
 export interface VerifyPasswordTestData {
     description: string;
     expectedCalls: {
@@ -19,7 +21,7 @@ export interface PasswordEventTestData {
     shouldPreventDefault?: boolean;
 }
 
-export const verifyPasswordInitTestData: VerifyPasswordTestData[] = [
+const _verifyPasswordInitTestData: VerifyPasswordTestData[] = [
     {
         description: 'should initialize with navigation and permissions',
         expectedCalls: {
@@ -29,7 +31,9 @@ export const verifyPasswordInitTestData: VerifyPasswordTestData[] = [
     }
 ];
 
-export const passwordEventTestData: PasswordEventTestData[] = [
+export const verifyPasswordInitTestData = () => deepCopy(_verifyPasswordInitTestData) as typeof _verifyPasswordInitTestData;
+
+const _passwordEventTestData: PasswordEventTestData[] = [
     {
         description: 'should verify password on keyup',
         eventType: 'keyup',
@@ -56,8 +60,12 @@ export const passwordEventTestData: PasswordEventTestData[] = [
     }
 ];
 
-export const formSubmitTestData = {
+export const passwordEventTestData = () => deepCopy(_passwordEventTestData) as typeof _passwordEventTestData;
+
+const _formSubmitTestData = {
     description: 'should validate on form submit',
     expectedFunction: 'validate',
     shouldCallPreventDefault: false // validate function handles this internally
 };
+
+export const formSubmitTestData = () => deepCopy(_formSubmitTestData) as typeof _formSubmitTestData;

@@ -3,6 +3,8 @@
  * Data-driven test approach following repository patterns
  */
 
+import {deepCopy} from "../helpers/util";
+
 export interface UserDashboardTestData {
     description: string;
     expectedCalls: {
@@ -12,7 +14,7 @@ export interface UserDashboardTestData {
     };
 }
 
-export const userDashboardInitTestData: UserDashboardTestData[] = [
+const _userDashboardInitTestData: UserDashboardTestData[] = [
     {
         description: 'should initialize with navigation, permissions, and entity lists',
         expectedCalls: {
@@ -23,7 +25,11 @@ export const userDashboardInitTestData: UserDashboardTestData[] = [
     }
 ];
 
-export const userDashboardCallOrderData = {
+export const userDashboardInitTestData = () => deepCopy(_userDashboardInitTestData) as typeof _userDashboardInitTestData;
+
+const _userDashboardCallOrderData = {
     description: 'should call functions in correct order',
     expectedOrder: ['setCurrentNavLocation', 'loadPerms', 'initEntityLists']
 };
+
+export const userDashboardCallOrderData = () => deepCopy(_userDashboardCallOrderData) as typeof _userDashboardCallOrderData;

@@ -4,7 +4,9 @@
  */
 
 import {initPermMatrix} from '../../../src/public/js/modules/perm-matrix';
-import {permMatrixTestData} from '../data/permMatrixData';
+import {permMatrixTestData as _permMatrixTestData} from '../data/permMatrixData';
+
+const permMatrixTestData = _permMatrixTestData();
 import * as http from '../../../src/public/js/core/http';
 import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
