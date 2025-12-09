@@ -8,6 +8,7 @@ import * as http from '../../../src/public/js/core/http';
 import * as alerts from '../../../src/public/js/shared/alerts';
 import * as activityRoles from '../../../src/public/js/modules/activity-roles';
 import {activityRequirementsData} from '../data/activityRequirementsData';
+import {setupTest} from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/http');
@@ -20,13 +21,13 @@ const mockShowInlineAlert = alerts.showInlineAlert as jest.MockedFunction<typeof
 const mockGetAllRoles = activityRoles.getAllRoles as jest.MockedFunction<typeof activityRoles.getAllRoles>;
 
 describe('activity-requirements module', () => {
-    beforeEach(() => {
-        document.body.innerHTML = '';
-        jest.clearAllMocks();
-        mockGetAllRoles.mockReturnValue([
-            {id: 1, name: 'Driver', label: 'Driver', color: '#ff0000'},
-            {id: 2, name: 'Navigator', label: 'Navigator', color: '#00ff00'}
-        ]);
+    setupTest({
+        beforeEach: () => {
+            mockGetAllRoles.mockReturnValue([
+                {id: 1, name: 'Driver', label: 'Driver', color: '#ff0000'},
+                {id: 2, name: 'Navigator', label: 'Navigator', color: '#00ff00'}
+            ]);
+        }
     });
 
     describe('initRequirementPanel - setup', () => {

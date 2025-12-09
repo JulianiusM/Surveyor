@@ -9,6 +9,7 @@ import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
 import {activityAssignmentsData} from '../data/activityAssignmentsData';
 import type {AssignmentWarning} from '../../../src/public/js/modules/activity-types';
+import {setupTest} from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/http');
@@ -20,10 +21,10 @@ const mockShowInlineAlert = alerts.showInlineAlert as jest.MockedFunction<typeof
 const mockReloadAfterDelay = uiHelpers.reloadAfterDelay as jest.MockedFunction<typeof uiHelpers.reloadAfterDelay>;
 
 describe('activity-assignments module', () => {
-    beforeEach(() => {
-        document.body.innerHTML = '';
-        (window as any).bootstrap = undefined;
-        jest.clearAllMocks();
+    setupTest({
+        beforeEach: () => {
+            (window as any).bootstrap = undefined;
+        }
     });
 
     describe('describeWarning', () => {

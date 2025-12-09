@@ -10,6 +10,7 @@ import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
 import * as permissions from '../../../src/public/js/core/permissions';
 import {activityRolesData} from '../data/activityRolesData';
 import type {RoleSummary} from '../../../src/public/js/modules/activity-types';
+import {setupTest} from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/http');
@@ -23,11 +24,11 @@ const mockReloadAfterDelay = uiHelpers.reloadAfterDelay as jest.MockedFunction<t
 const mockRequireEntityPerm = permissions.requireEntityPerm as jest.MockedFunction<typeof permissions.requireEntityPerm>;
 
 describe('activity-roles module', () => {
-    beforeEach(() => {
-        document.body.innerHTML = '';
-        (window as any).Surveyor = undefined;
-        (window as any).bootstrap = undefined;
-        jest.clearAllMocks();
+    setupTest({
+        beforeEach: () => {
+            (window as any).Surveyor = undefined;
+            (window as any).bootstrap = undefined;
+        }
     });
 
     describe('getAllRoles', () => {

@@ -5,24 +5,25 @@
 
 import {initDates, initSlotFilters} from '../../../src/public/js/modules/activity-filters';
 import {initDatesTestData, initSlotFiltersTestData} from '../data/activityFiltersData';
+import {setupTest} from '../helpers/testSetup';
 
 describe('activity-filters', () => {
     describe('initDates', () => {
-        beforeEach(() => {
-            document.body.innerHTML = '';
-            
-            // Mock toLocaleDateString to work in jsdom environment
-            const originalToLocaleDateString = Date.prototype.toLocaleDateString;
-            Date.prototype.toLocaleDateString = function(locales?: string | string[], options?: Intl.DateTimeFormatOptions) {
-                if (options?.weekday) {
-                    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                    return days[this.getUTCDay()];
-                }
-                const month = this.getUTCMonth() + 1;
-                const day = this.getUTCDate();
-                const year = this.getUTCFullYear();
-                return `${month}/${day}/${year}`;
-            };
+        setupTest({
+            beforeEach: () => {
+                // Mock toLocaleDateString to work in jsdom environment
+                const originalToLocaleDateString = Date.prototype.toLocaleDateString;
+                Date.prototype.toLocaleDateString = function(locales?: string | string[], options?: Intl.DateTimeFormatOptions) {
+                    if (options?.weekday) {
+                        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                        return days[this.getUTCDay()];
+                    }
+                    const month = this.getUTCMonth() + 1;
+                    const day = this.getUTCDate();
+                    const year = this.getUTCFullYear();
+                    return `${month}/${day}/${year}`;
+                };
+            }
         });
 
         test('does nothing when no date headers exist', () => {
@@ -121,9 +122,7 @@ describe('activity-filters', () => {
     });
 
     describe('initSlotFilters', () => {
-        beforeEach(() => {
-            document.body.innerHTML = '';
-        });
+        setupTest();
 
         test('does nothing when no filter buttons exist', () => {
             document.body.innerHTML = '<div></div>';
