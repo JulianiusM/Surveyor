@@ -292,7 +292,7 @@ describe('activity-create.ts', () => {
         test('should auto-fill end date when missing', () => {
             const startInp = {value: '2024-01-15'};
             const endInp = {value: '', setCustomValidity: jest.fn()};
-            (document.getElementById as any).mockImplementation((id) => {
+            mockGetElementById.mockImplementation((id) => {
                 if (id === 'startDate') return startInp;
                 if (id === 'endDate') return endInp;
                 return null;
@@ -306,7 +306,7 @@ describe('activity-create.ts', () => {
         test('should validate end date is not before start date', () => {
             const startInp = {value: '2024-01-21'};
             const endInp = {value: '2024-01-15', setCustomValidity: jest.fn()};
-            (document.getElementById as any).mockImplementation((id) => {
+            mockGetElementById.mockImplementation((id) => {
                 if (id === 'startDate') return startInp;
                 if (id === 'endDate') return endInp;
                 return null;
@@ -320,7 +320,7 @@ describe('activity-create.ts', () => {
         test('should do nothing when start date is empty', () => {
             const startInp = {value: ''};
             const endInp = {value: '2024-01-21'};
-            (document.getElementById as any).mockImplementation((id) => {
+            mockGetElementById.mockImplementation((id) => {
                 if (id === 'startDate') return startInp;
                 if (id === 'endDate') return endInp;
                 return null;
@@ -334,7 +334,7 @@ describe('activity-create.ts', () => {
         test('should initialize date input listeners', () => {
             const startInp = {addEventListener: jest.fn()};
             const endInp = {addEventListener: jest.fn()};
-            (document.getElementById as any).mockImplementation((id) => {
+            mockGetElementById.mockImplementation((id) => {
                 if (id === 'startDate') return startInp;
                 if (id === 'endDate') return endInp;
                 return null;
@@ -353,7 +353,7 @@ describe('activity-create.ts', () => {
             const hidden = {value: ''};
             const startInp = {value: '2024-01-15'};
             const endInp = {value: '2024-01-21'};
-            (document.getElementById as any).mockImplementation((id) => {
+            mockGetElementById.mockImplementation((id) => {
                 if (id === 'planForm') return form;
                 if (id === 'slotsJson') return hidden;
                 if (id === 'startDate') return startInp;
@@ -387,7 +387,7 @@ describe('activity-create.ts', () => {
 
         test('should initialize listeners and submit handler', () => {
             const mockInput = {addEventListener: jest.fn()};
-            (document.getElementById as any).mockReturnValue(mockInput);
+            mockGetElementById.mockReturnValue(mockInput);
             
             activityCreate.init();
             
@@ -401,7 +401,7 @@ describe('activity-create.ts', () => {
             };
             (global as any).window.Surveyor.prefilledSlots = prefilledSlots;
             const mockInput = {value: '2024-01-15', setCustomValidity: jest.fn()};
-            (document.getElementById as any).mockReturnValue(mockInput);
+            mockGetElementById.mockReturnValue(mockInput);
             
             activityCreate.init();
             

@@ -197,9 +197,9 @@ describe('activity.ts', () => {
         });
 
         test('should expose init function to global scope', () => {
-            activity.init();
-            
+            // The init function is exposed at module load time, not when init() is called
             expect(window.Surveyor.init).toBeDefined();
+            expect(window.Surveyor.init).toBe(activity.init);
         });
     });
 });
