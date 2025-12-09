@@ -5,6 +5,7 @@
 
 import { initEntitySelect } from '../../../src/public/js/modules/entity-select';
 import { entitySelectInitData, entitySelectFilterData, entitySelectSelectionData } from '../data/entitySelectData';
+import { setupTest } from '../helpers/testSetup';
 
 // Mock Bootstrap Modal
 class MockModal {
@@ -33,14 +34,17 @@ class MockModal {
 describe('entity-select', () => {
     let container: HTMLElement;
 
-    beforeEach(() => {
-        container = document.createElement('div');
-        document.body.appendChild(container);
-        MockModal.instances.clear();
-    });
-
-    afterEach(() => {
-        document.body.removeChild(container);
+    setupTest({
+        beforeEach: () => {
+            container = document.createElement('div');
+            document.body.appendChild(container);
+            MockModal.instances.clear();
+        },
+        afterEach: () => {
+            if (container && document.body.contains(container)) {
+                document.body.removeChild(container);
+            }
+        }
     });
 
     function setupDOM(id: string, initialValue: string = '') {

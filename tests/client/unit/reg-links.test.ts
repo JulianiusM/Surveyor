@@ -8,6 +8,7 @@ import {regLinksTestData} from '../data/regLinksData';
 import * as http from '../../../src/public/js/core/http';
 import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
+import { setupTest } from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/http');
@@ -21,29 +22,23 @@ const mockUiHelpers = uiHelpers as jest.Mocked<typeof uiHelpers>;
 describe('reg-links module', () => {
     let container: HTMLElement;
 
-    beforeEach(() => {
-        // Clear mocks
-        jest.clearAllMocks();
-        
-        // Mock implementations
-        mockUiHelpers.showSpinner = jest.fn();
-        mockUiHelpers.hideSpinner = jest.fn();
-        mockUiHelpers.copyWithFeedback = jest.fn().mockResolvedValue(undefined);
-        mockUiHelpers.createBadge = jest.fn((status: string) => `<span class="badge">${status}</span>`);
-        mockAlerts.showInlineAlert = jest.fn();
-        
-        // Create container
-        container = document.createElement('div');
-        document.body.innerHTML = '';
-        document.body.appendChild(container);
-        
-        // Mock location
-        delete (window as any).location;
-        (window as any).location = {origin: 'http://localhost:3000'};
-    });
-
-    afterEach(() => {
-        document.body.innerHTML = '';
+    setupTest({
+        beforeEach: () => {
+            // Mock implementations
+            mockUiHelpers.showSpinner = jest.fn();
+            mockUiHelpers.hideSpinner = jest.fn();
+            mockUiHelpers.copyWithFeedback = jest.fn().mockResolvedValue(undefined);
+            mockUiHelpers.createBadge = jest.fn((status: string) => `<span class="badge">${status}</span>`);
+            mockAlerts.showInlineAlert = jest.fn();
+            
+            // Create container
+            container = document.createElement('div');
+            document.body.appendChild(container);
+            
+            // Mock location
+            delete (window as any).location;
+            (window as any).location = {origin: 'http://localhost:3000'};
+        }
     });
 
     describe('initialization and rendering', () => {

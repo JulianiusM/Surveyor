@@ -8,6 +8,7 @@ import {permMatrixTestData} from '../data/permMatrixData';
 import * as http from '../../../src/public/js/core/http';
 import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
+import { setupTest } from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/http');
@@ -21,21 +22,17 @@ const mockUiHelpers = uiHelpers as jest.Mocked<typeof uiHelpers>;
 describe('perm-matrix module', () => {
     let container: HTMLElement;
 
-    beforeEach(() => {
-        jest.clearAllMocks();
-        mockUiHelpers.showSpinner = jest.fn();
-        mockUiHelpers.hideSpinner = jest.fn();
-        mockUiHelpers.reloadAfterDelay = jest.fn();
-        mockAlerts.showInlineAlert = jest.fn();
-        mockHttp.post = jest.fn().mockResolvedValue({});
-        
-        container = document.createElement('div');
-        document.body.innerHTML = '';
-        document.body.appendChild(container);
-    });
-
-    afterEach(() => {
-        document.body.innerHTML = '';
+    setupTest({
+        beforeEach: () => {
+            mockUiHelpers.showSpinner = jest.fn();
+            mockUiHelpers.hideSpinner = jest.fn();
+            mockUiHelpers.reloadAfterDelay = jest.fn();
+            mockAlerts.showInlineAlert = jest.fn();
+            mockHttp.post = jest.fn().mockResolvedValue({});
+            
+            container = document.createElement('div');
+            document.body.appendChild(container);
+        }
     });
 
     describe('select all / clear functionality', () => {

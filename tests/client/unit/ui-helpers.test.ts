@@ -14,8 +14,10 @@ import {
     copyWithFeedback,
 } from '../../../src/public/js/shared/ui-helpers';
 import { createBadgeData, createChipData, createDietaryChipData } from '../data/uiHelpersData';
+import { setupTest } from '../helpers/testSetup';
 
 describe('UI helpers utilities', () => {
+    setupTest();
     describe('createBadge - Data Driven', () => {
         test.each(createBadgeData)(
             '$description',
