@@ -293,23 +293,49 @@ async function getScheduleExport(plan: ActivityPlan) {
 
     const start = new Date(`${plan.startDate}T00:00:00Z`);
     const end = new Date(`${plan.endDate}T00:00:00Z`);
-    const days: {date: string, slots: (ActivitySlot & { assignedCount: number, assignees: SlotAssignee[], roles: { id: number; name: string }[] })[]}[] = [];
+
+    const mapDayKey = (date: Date) => date.toISOString().slice(0, 10);
+    const startOfWeek = (date: Date) => {
+        const d = new Date(date);
+        const weekday = d.getUTCDay();
+        const diff = weekday === 0 ? -6 : 1 - weekday; // shift to Monday
+        d.setUTCDate(d.getUTCDate() + diff);
+        return d;
+    };
+
+    const dayMap = new Map<string, { date: string; slots: (ActivitySlot & { assignedCount: number; assignees: SlotAssignee[]; roles: { id: number; name: string }[] })[] }>();
 
     for (let cur = new Date(start); cur <= end; cur.setUTCDate(cur.getUTCDate() + 1)) {
-        const day = cur.toISOString().slice(0, 10);
-        const slots = (slotsByDate[day] || []).map((slot) => ({
+        const dayKey = mapDayKey(cur);
+        const slots = (slotsByDate[dayKey] || []).map((slot) => ({
             ...slot,
             assignees: assigneeLists[slot.id] || [],
             roles: slotRoles[slot.id] || [],
         }));
 
-        days.push({date: day, slots});
+        dayMap.set(dayKey, {date: dayKey, slots});
+    }
+
+    const weeks: { start: string; days: ({ date: string; slots: (ActivitySlot & { assignedCount: number; assignees: SlotAssignee[]; roles: { id: number; name: string }[] })[] } | null)[] }[] = [];
+
+    for (let weekStart = startOfWeek(start); weekStart <= end; weekStart.setUTCDate(weekStart.getUTCDate() + 7)) {
+        const days: ({ date: string; slots: (ActivitySlot & { assignedCount: number; assignees: SlotAssignee[]; roles: { id: number; name: string }[] })[] } | null)[] = [];
+        for (let i = 0; i < 7; i++) {
+            const current = new Date(weekStart);
+            current.setUTCDate(weekStart.getUTCDate() + i);
+            const inRange = current >= start && current <= end;
+            const dayKey = mapDayKey(current);
+            days.push(inRange ? dayMap.get(dayKey) || {date: dayKey, slots: []} : null);
+        }
+
+        weeks.push({start: mapDayKey(weekStart), days});
     }
 
     return {
         plan,
         event: plan.event,
-        days,
+        days: Array.from(dayMap.values()),
+        weeks,
         textFields,
         generatedAt: new Date().toISOString(),
     };

@@ -107,6 +107,88 @@ h1, h2, h3
     font-size: 12px
 
 
+.week-block
+    margin-bottom: 16px
+    page-break-inside: avoid
+
+
+.schedule-grid
+    display: grid
+    grid-template-columns: repeat(7, minmax(0, 1fr))
+    gap: 6px
+    margin-top: 8px
+
+
+.day-card
+    background: #fff
+    border: 1px solid var(--rule)
+    border-radius: 8px
+    min-height: 130px
+    padding: 8px
+    display: flex
+    flex-direction: column
+    gap: 6px
+
+
+.empty-day
+    background: #fcfcfc
+    color: var(--muted)
+
+
+.day-header
+    display: flex
+    align-items: baseline
+    justify-content: space-between
+    gap: 8px
+    padding-bottom: 4px
+    border-bottom: 1px solid var(--rule)
+    font-size: 12px
+
+
+.day-name
+    font-weight: 700
+
+
+.date
+    color: var(--muted)
+
+
+.slot-card
+    border: 1px solid #eee
+    border-radius: 6px
+    padding: 6px
+    background: #f8f9fa
+    display: flex
+    flex-direction: column
+    gap: 4px
+
+
+.slot-title
+    font-weight: 600
+
+
+.slot-time
+    font-size: 12px
+    color: var(--muted)
+
+
+.slot-capacity
+    font-size: 12px
+    font-weight: 700
+    text-align: right
+
+
+.assignee-list
+    list-style: none
+    padding: 0
+    margin: 4px 0 0
+
+
+.assignee-list li
+    font-size: 12px
+    line-height: 1.35
+
+
 table
     width: 100%
     border-collapse: collapse

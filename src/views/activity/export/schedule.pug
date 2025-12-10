@@ -43,54 +43,53 @@ html(lang="en")
                 .rule
                 -
                     const readableDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {weekday: 'long', year: 'numeric', month: 'short', day: 'numeric'});
-                each day, idx in data.days
-                    h2= readableDate(day.date)
-                    if day.slots.length
-                        table
-                            thead
-                                tr
-                                    th(style="width:32mm").nowrap Time
-                                    th Slot
-                                    th(style="width:24mm").right Capacity
-                                    th(style="width:42mm") Assignees
-                                    th(style="width:36mm") Notes
-                            tbody
-                                each slot in day.slots
-                                    tr
-                                        - const start = slot.startTime ? slot.startTime.slice(0,5) : null;
-                                        - const end = slot.endTime ? slot.endTime.slice(0,5) : null;
-                                        td.nowrap.small= start || end ? `${start || '??'} – ${end || '??'}` : '—'
-                                        td
-                                            div.fw-bold= slot.title
-                                            if slot.roles && slot.roles.length
-                                                .chips.mt-1
-                                                    each role in slot.roles
-                                                        span.chip= role.name
-                                        td.small.right
-                                            if slot.maxAssignees != null
-                                                span= `${slot.assignedCount}/${slot.maxAssignees}`
-                                            else
-                                                span= slot.assignedCount
-                                        td.small
-                                            if slot.assignees && slot.assignees.length
-                                                ul.list-unstyled.mb-0
-                                                    each asg in slot.assignees
-                                                        li
-                                                            span= asg.name
-                                                            if asg.roles && asg.roles.length
-                                                                span.muted= ` (${asg.roles.join(', ')})`
-                                            else
-                                                span.muted —
-                                        td.small
-                                            if slot.description
-                                                span= slot.description
-                                            else
-                                                span.muted —
-                    else
-                        p.small.muted No slots scheduled for this day.
-
-                    if idx < data.days.length - 1
-                        .rule
+                    const shortDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+                    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                each week in data.weeks
+                    .week-block
+                        h2 Week of #{readableDate(week.start)}
+                        .schedule-grid
+                            each day, idx in week.days
+                                if day
+                                    .day-card
+                                        .day-header
+                                            span.day-name= dayNames[idx]
+                                            span.date= shortDate(day.date)
+                                        if day.slots.length
+                                            each slot in day.slots
+                                                - const start = slot.startTime ? slot.startTime.slice(0,5) : null;
+                                                - const end = slot.endTime ? slot.endTime.slice(0,5) : null;
+                                                .slot-card
+                                                    .slot-title= slot.title
+                                                    if start || end
+                                                        .slot-time= `${start || '??'} – ${end || '??'}`
+                                                    if slot.roles && slot.roles.length
+                                                        .chips
+                                                            each role in slot.roles
+                                                                span.chip= role.name
+                                                    .slot-capacity
+                                                        if slot.maxAssignees != null
+                                                            span= `${slot.assignedCount}/${slot.maxAssignees}`
+                                                        else
+                                                            span= slot.assignedCount
+                                                    if slot.assignees && slot.assignees.length
+                                                        ul.assignee-list
+                                                            each asg in slot.assignees
+                                                                li
+                                                                    span= asg.name
+                                                                    if asg.roles && asg.roles.length
+                                                                        span.muted= ` (${asg.roles.join(', ')})`
+                                                    else
+                                                        p.muted.small No assignees yet.
+                                                    if slot.description
+                                                        p.small= slot.description
+                                        else
+                                            p.small.muted No slots scheduled for this day.
+                                else
+                                    .day-card.empty-day
+                                        .day-header
+                                            span.day-name= dayNames[idx]
+                                            span.date.muted —
 
                 .footer
                     div Generated: #{new Date(data.generatedAt).toLocaleString()}
