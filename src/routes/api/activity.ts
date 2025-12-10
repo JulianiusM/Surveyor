@@ -75,6 +75,15 @@ app.get(
     })
 );
 
+app.get(
+    '/:id/requirements/baseline',
+    requirePermissionApi(permFct, PERM.MANAGE_REQUIREMENTS),
+    asyncHandler(async (req: Request, res: Response) => {
+        const baseline = await controller.calculateBaselineRequirement(resFct(req).id);
+        renderer.respondWithSuccessDataJson(res, undefined, baseline);
+    })
+);
+
 app.post(
     '/:id/requirements',
     requirePermissionApi(permFct, PERM.MANAGE_REQUIREMENTS),

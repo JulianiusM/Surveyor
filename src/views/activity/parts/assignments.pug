@@ -36,8 +36,12 @@ if permData.entity.has('MANAGE_REQUIREMENTS') && data.plan.eventId
                             option(value="FREE") Free
                             option(value="REQUIRED") Required
                     .col-md-3
-                        label.form-label(for="requiredShifts") General required shifts
-                        input#requiredShifts.form-control.form-control-sm.text-bg-dark(type="number" min="0" placeholder="e.g. 2")
+                        label.form-label(for="requiredShifts") Baseline shift requirement
+                        .input-group.input-group-sm
+                            input#requiredShifts.form-control.form-control-sm.text-bg-dark(type="number" min="0" placeholder="e.g. 2")
+                            button.btn.btn-outline-info(type="button" data-requirements-baseline-calc)
+                                i.bi.bi-calculator.me-1
+                                | Calculate
                     .col-md-3
                         label.form-label(for="roundingMode") Rounding mode
                         select#roundingMode.form-select.form-select-sm.text-bg-dark

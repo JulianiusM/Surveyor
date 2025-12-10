@@ -10,6 +10,7 @@ const baseHTML = `
         <button data-add-override>Add Override</button>
         <button data-requirements-refresh>Reload</button>
         <button data-requirements-save>Save</button>
+        <button data-requirements-baseline-calc>Calculate</button>
         <table>
             <tbody id="requirementSummaryBody"></tbody>
         </table>
@@ -253,6 +254,27 @@ const _activityRequirementsData = {
                 html: baseHTML,
                 mockData: mockConfig,
                 errorMessage: 'Save failed'
+            }
+        ]
+    },
+
+    baseline: {
+        success: [
+            {
+                description: 'sets baseline requirement after calculation',
+                planId: 'plan1',
+                html: baseHTML,
+                mockData: mockConfig,
+                baselineValue: 4,
+            }
+        ],
+        error: [
+            {
+                description: 'shows error when baseline calculation fails',
+                planId: 'plan1',
+                html: baseHTML,
+                mockData: mockConfig,
+                errorMessage: 'Calculation failed',
             }
         ]
     },

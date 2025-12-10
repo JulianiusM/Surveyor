@@ -296,4 +296,26 @@ describe('generateAutoRecommendations', () => {
         // User 1 has larger deficit (3 > 1), so should be assigned first
         expect(recommendations[0]?.userId).toBe(1);
     });
+
+    it('uses attendance-scaled role requirements when computing assignments', () => {
+        const context = buildContext({
+            plan: {...basePlan, generalRequiredShifts: 0},
+            participants: [
+                {userId: 1, arrivalDate: '2024-01-02', departureDate: '2024-01-02', roleIds: [1]},
+            ],
+            roleRequirements: [
+                {roleId: 1, requiredShifts: 2} as any,
+            ],
+            slots: [
+                {id: 'slot-1', day: '2024-01-02', startTime: '09:00', endTime: '10:00', pos: 1, maxAssignees: 1} as any,
+                {id: 'slot-2', day: '2024-01-02', startTime: '10:00', endTime: '11:00', pos: 2, maxAssignees: 1} as any,
+            ],
+        });
+
+        const recommendations = generateAutoRecommendations(context);
+        const user1Assignments = recommendations.filter((rec) => rec.userId === 1);
+
+        expect(user1Assignments).toHaveLength(1);
+        expect(user1Assignments[0].slotId).toBe('slot-1');
+    });
 });

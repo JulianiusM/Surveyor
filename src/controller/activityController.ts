@@ -6,6 +6,7 @@ import {generatePlanRecommendations} from "../modules/activity/autoAssignment";
 import {collectAssignmentWarnings, toAssignmentCandidate} from "../modules/activity/availability";
 import {buildRecommendationWarnings} from "../modules/activity/recommendations";
 import {
+    calculateBaselineRequirementForPlan,
     ParticipantAttendance,
     summarizeParticipantRequirements,
     toParticipantKey
@@ -431,6 +432,36 @@ async function getRequirements(planId: string) {
     );
 
     return {...requirementConfig, participants};
+}
+
+async function calculateBaselineRequirement(planId: string) {
+    const [plan, requirementConfig, slots, assignments] = await Promise.all([
+        activityService.getActivityPlanById(planId),
+        requirementService.getRequirementConfiguration(planId),
+        activityService.getActivitySlotsFlat(planId),
+        activityService.getParticipantAssignmentsWithSlots(planId),
+    ]);
+
+    if (!plan) {
+        throw new APIError('Activity plan not found', {planId}, 404);
+    }
+
+    const eventParticipants = plan.event ? await eventService.getEventParticipants(plan.event.id) : [];
+    const attendance = await buildParticipantAttendanceMap(
+        plan,
+        requirementConfig.overrides,
+        assignments,
+        [],
+        eventParticipants,
+    );
+
+    return calculateBaselineRequirementForPlan({
+        plan,
+        slots,
+        participants: Object.values(attendance),
+        roleRequirements: requirementConfig.roleRequirements,
+        overrides: requirementConfig.overrides,
+    });
 }
 
 async function updateRequirements(planId: string, body: any) {
@@ -949,6 +980,7 @@ export default {
     updateSettings,
     getRequirements,
     updateRequirements,
+    calculateBaselineRequirement,
     getRecommendations,
     updateRecommendations,
     autoGenerateRecommendations,

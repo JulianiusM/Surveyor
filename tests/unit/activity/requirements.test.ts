@@ -2,7 +2,11 @@ import {
     applyRounding,
     calculateParticipantRequirement,
     calculateRequirementsForParticipants,
+    calculateBaselineRequirementForPlan,
+    calculateShiftRequirementsForParticipants,
     clampAttendanceWindow,
+    ShiftParticipant,
+    ShiftSlot,
 } from "../../../src/modules/activity/requirements";
 import {ActivityPlanRequirement} from "../../../src/modules/database/entities/activity/ActivityPlanRequirement";
 import {ActivityPlanRequirementOverride} from "../../../src/modules/database/entities/activity/ActivityPlanRequirementOverride";
@@ -195,5 +199,100 @@ describe("activity requirements utilities", () => {
         const result = calculateParticipantRequirement(basePlan, participant, roleRequirements, []);
         expect(result.requiredShifts).toBe(3); // Minimum of [4, 3] after rounding
         expect(result.source).toBe("role");
+    });
+
+    describe("shift requirement distribution", () => {
+        const slots: ShiftSlot[] = [
+            {slotId: "slot-1", capacity: 2},
+            {slotId: "slot-2", capacity: 1},
+            {slotId: "slot-3", capacity: 1},
+        ];
+
+        function participant(partial: Partial<ShiftParticipant> & {participantId: string}): ShiftParticipant {
+            return {
+                participantId: partial.participantId,
+                feasibleSlotIds: partial.feasibleSlotIds,
+                explicitFixedShifts: partial.explicitFixedShifts,
+                roleFixedRequirement: partial.roleFixedRequirement,
+            };
+        }
+
+        test("shares remaining demand across baseline participants by attendance", () => {
+            const participants: ShiftParticipant[] = [
+                participant({participantId: "explicit", feasibleSlotIds: ["slot-1", "slot-2", "slot-3"], explicitFixedShifts: 1}),
+                participant({participantId: "role", feasibleSlotIds: ["slot-1", "slot-2"], roleFixedRequirement: 2}),
+                participant({participantId: "baseline-full", feasibleSlotIds: ["slot-1", "slot-2", "slot-3"]}),
+                participant({participantId: "baseline-limited", feasibleSlotIds: ["slot-2"]}),
+            ];
+
+            const result = calculateShiftRequirementsForParticipants(slots, participants);
+
+            const requirements = Object.fromEntries(result.participants.map((p) => [p.participantId, p.requiredShifts]));
+
+            expect(result.totalRequiredShifts).toBe(4);
+            expect(result.totalFixedShifts).toBe(3);
+            expect(result.remainingShifts).toBe(1);
+            expect(result.baseline).toBe(1);
+            expect(result.feasible).toBe(true);
+
+            expect(requirements.explicit).toBe(1); // Explicit fixed override respected
+            expect(requirements.role).toBe(2); // Role requirement scaled by attendance
+            expect(requirements["baseline-full"]).toBe(1); // Should receive remaining baseline
+            expect(requirements["baseline-limited"]).toBe(0); // Reduced in balancing step to avoid overshoot
+            expect(result.sumRequiredShifts).toBe(4);
+        });
+
+        test("flags infeasible baseline coverage when no attendance is available", () => {
+            const participants: ShiftParticipant[] = [
+                participant({participantId: "explicit", feasibleSlotIds: ["slot-1", "slot-2", "slot-3"], explicitFixedShifts: 1}),
+                participant({participantId: "baseline-none", feasibleSlotIds: []}),
+            ];
+
+            const result = calculateShiftRequirementsForParticipants(slots, participants);
+
+            expect(result.totalRequiredShifts).toBe(4);
+            expect(result.remainingShifts).toBe(3);
+            expect(result.baseline).toBe(0);
+            expect(result.feasible).toBe(false);
+            expect(result.deficit).toBe(3);
+            expect(result.participants.find((p) => p.participantId === "baseline-none")?.requiredShifts).toBe(0);
+        });
+    });
+
+    test("calculates baseline requirement from plan data", () => {
+        const slots = [
+            {id: "slot-1", day: "2025-06-01", maxAssignees: 2},
+            {id: "slot-2", day: "2025-06-02", maxAssignees: 2},
+        ];
+
+        const participants = [
+            {userId: 1, arrivalDate: "2025-06-01", departureDate: "2025-06-02"},
+            {userId: 2, arrivalDate: "2025-06-01", departureDate: "2025-06-02", roleIds: [5]},
+            {userId: 3, arrivalDate: "2025-06-01", departureDate: "2025-06-02"},
+            {userId: 4, arrivalDate: "2025-06-02", departureDate: "2025-06-02"},
+        ];
+
+        const overrides = [makeOverride({userId: 1, requiredShifts: 1, roleId: null})];
+        const roleRequirements = [makeRequirement({roleId: 5, requiredShifts: 2})];
+
+        const result = calculateBaselineRequirementForPlan({
+            plan: {startDate: "2025-06-01", endDate: "2025-06-03", roundingMode: "CEIL"},
+            slots,
+            participants,
+            roleRequirements,
+            overrides,
+        });
+
+        const requirements = Object.fromEntries(result.participants.map((p) => [p.participantKey, p.requiredShifts]));
+
+        expect(result.totalRequiredShifts).toBe(4);
+        expect(result.totalFixedShifts).toBe(3);
+        expect(result.remainingShifts).toBe(1);
+        expect(result.baseline).toBe(1);
+        expect(result.feasible).toBe(true);
+        expect(requirements["user:1"]).toBe(1); // explicit override
+        expect(requirements["user:2"]).toBe(2); // role-based requirement
+        expect(requirements["user:3"]).toBe(1); // baseline fully attending
+        expect(requirements["user:4"]).toBe(0); // limited attendance reduced in balancing
     });
 });

@@ -285,4 +285,45 @@ describe('activity-requirements module', () => {
             expect(mockGet).toHaveBeenCalledWith(`/api/activity/${planId}/requirements`);
         });
     });
+
+    describe('baseline requirement calculation', () => {
+        test.each(activityRequirementsData().baseline.success)('$description', async ({planId, html, mockData, baselineValue}) => {
+            document.body.innerHTML = html;
+            mockGet
+                .mockResolvedValueOnce({data: mockData})
+                .mockResolvedValueOnce({data: {baseline: baselineValue}});
+
+            initRequirementPanel(planId);
+
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            const baselineButton = document.querySelector('[data-requirements-baseline-calc]') as HTMLButtonElement;
+            baselineButton?.click();
+
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            expect(mockGet).toHaveBeenCalledWith(`/api/activity/${planId}/requirements/baseline`);
+            const generalRequired = document.querySelector<HTMLInputElement>('#requiredShifts');
+            expect(generalRequired?.value).toBe(String(baselineValue));
+        });
+
+        test.each(activityRequirementsData().baseline.error)('$description', async ({planId, html, mockData, errorMessage}) => {
+            document.body.innerHTML = html;
+            mockGet
+                .mockResolvedValueOnce({data: mockData})
+                .mockRejectedValueOnce(new Error(errorMessage));
+
+            initRequirementPanel(planId);
+
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            const baselineButton = document.querySelector('[data-requirements-baseline-calc]') as HTMLButtonElement;
+            baselineButton?.click();
+
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            const alertBox = document.querySelector('[data-requirements-alert]');
+            expect(alertBox?.classList.contains('alert-danger')).toBe(true);
+        });
+    });
 });
