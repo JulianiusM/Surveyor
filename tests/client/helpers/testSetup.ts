@@ -236,7 +236,6 @@ export function setupQueuedEndpoint(method: string, path: string): void {
 
             if (queuedResponse) {
                 const {status, data, message, statusCode} = queuedResponse;
-                console.log(`[MSW Handler] ${method} ${actualPath} -> returning ${status} response`);
 
                 if (status === 'error') {
                     return HttpResponse.json(
@@ -253,7 +252,6 @@ export function setupQueuedEndpoint(method: string, path: string): void {
             }
 
             // No queued response - return default success
-            console.log(`[MSW Handler] ${method} ${actualPath} -> no queued response, returning default success`);
             return HttpResponse.json({
                 status: 'success',
                 message: 'Default response',
@@ -267,22 +265,18 @@ export function setupQueuedEndpoint(method: string, path: string): void {
  * Initialize ALL valid endpoints with queue handlers
  * This is called automatically during test setup
  * After this, any test can use mockApiSuccess/mockApiError without manual endpoint setup
+ * 
+ * Note: Can be called multiple times (e.g., after server.resetHandlers())
+ * MSW will deduplicate handlers automatically
  */
-let endpointsInitialized = false;
-
 export function initializeAllEndpoints(): void {
-    if (endpointsInitialized) {
-        return; // Only initialize once
-    }
-
     const allEndpoints = getAllEndpointsWithMethods();
 
     for (const {method, path} of allEndpoints) {
         setupQueuedEndpoint(method, path);
     }
 
-    endpointsInitialized = true;
-    console.log(`[testSetup] Initialized ${allEndpoints.length} endpoint handlers for response queue`);
+    // Silent initialization - handlers are ready for use
 }
 
 /**

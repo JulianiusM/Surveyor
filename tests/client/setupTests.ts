@@ -25,6 +25,9 @@ beforeAll(() => {
 // Reset handlers after each test to avoid test interdependencies
 afterEach(() => {
     server.resetHandlers();
+    // Reinitialize endpoint handlers after reset
+    // resetHandlers() removes all runtime handlers, including our queue handlers
+    initializeAllEndpoints();
 });
 
 // Clean up after all tests

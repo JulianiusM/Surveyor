@@ -135,9 +135,7 @@ describe('activity-slot-operations', () => {
                 initDelete(testCase.planId);
 
                 const button = document.querySelector('[data-delete-slot]') as HTMLElement;
-                console.log('[TEST] About to click button, slotId:', testCase.slotId, 'planId:', testCase.planId);
                 button.click();
-                console.log('[TEST] Button clicked, waiting for HTTP...');
 
                 // Wait for async operations (increased for MSW + ensure HTTP resolves)
                 await new Promise((resolve) => setTimeout(resolve, 150));
