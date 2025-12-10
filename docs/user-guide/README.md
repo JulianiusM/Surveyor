@@ -67,14 +67,14 @@ Guest links are provided by the organizer and tied to your name/email.
 
 ## Understanding Permissions
 
-Most features have flexible permission settings:
+Surveyor uses a fine-grained permission system with two levels:
 
-- **View** - Can see the content
-- **Edit** - Can modify details
-- **Manage Assignments** - Can assign/remove participants
-- **Owner** - Full control (you, when you create it)
+- **Group Permissions** - Apply to audiences (participant, guest, authenticated, public)
+- **Individual Permissions** - Apply to specific users (administrators)
 
-You can set default permissions for all users or grant specific permissions to individuals.
+Each level can have permissions like VIEW, EDIT, MANAGE_ASSIGNMENTS, ITEM_ADD, etc.
+
+**See the [Permissions Guide](PERMISSIONS.md) for complete details on the permission system.**
 
 ## Getting Help
 
@@ -99,11 +99,12 @@ Each feature has a detailed guide with:
 
 1. **[Getting Started](GETTING_STARTED.md)** - Account setup and basics
 2. **[Dashboard](DASHBOARD.md)** - Your personal homepage
-3. **[Surveys](SURVEYS.md)** - Find meeting dates
-4. **[Events](EVENTS.md)** - Event organization
-5. **[Packing Lists](PACKING_LISTS.md)** - Shared packing coordination
-6. **[Activity Plans](ACTIVITY_PLANS.md)** - Activity scheduling
-7. **[Drivers Lists](DRIVERS_LISTS.md)** - Transportation coordination
+3. **[Permissions](PERMISSIONS.md)** - Understanding the permission system
+4. **[Surveys](SURVEYS.md)** - Find meeting dates
+5. **[Events](EVENTS.md)** - Event organization
+6. **[Packing Lists](PACKING_LISTS.md)** - Shared packing coordination
+7. **[Activity Plans](ACTIVITY_PLANS.md)** - Activity scheduling
+8. **[Drivers Lists](DRIVERS_LISTS.md)** - Transportation coordination
 
 ---
 

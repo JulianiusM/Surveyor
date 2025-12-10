@@ -121,43 +121,46 @@ Each role can have:
 
 ### Guest Capabilities
 
-Guests can:
-- ✅ View activity schedule
-- ✅ Sign up for open roles
-- ✅ Leave assignments
+What guests can do depends on the permissions set for the "guest" audience:
+
+**Typically guests can:**
+- ✅ View activity schedule (if VIEW permission granted)
+- ✅ Sign up for open roles (if MANAGE_ASSIGNMENTS permission granted)
+- ✅ Leave their own assignments
 - ✅ See all participants and assignments
 
-Guests cannot:
-- ❌ Create or edit slots
-- ❌ Manage roles or requirements
-- ❌ Access settings
+**Typically guests cannot:**
+- ❌ Create or edit slots (unless ITEM_ADD/ITEM_EDIT granted)
+- ❌ Manage others' assignments (unless MANAGE_ASSIGNMENTS granted)
+- ❌ Change permissions (requires MANAGE_PERMISSIONS)
 
 ---
 
-## Management Features (Owners/Editors)
+## Management Features (Users with Permissions)
 
 ### Creating Slots
 
-If you have edit permissions:
-1. Click **"Add Slot"** or similar button
-2. Set time range
-3. Enter activity title
-4. Define roles needed
-5. Save slot
+If you have ITEM_ADD permission:
+1. Use the slot creation interface
+2. Set time range, date, and activity title
+3. Define roles needed with counts
+4. Save the slot
 
 ### Editing Slots
 
-- **Double-click** slot details to edit inline
-- Modify time, title, or role counts
-- Changes save automatically
+If you have ITEM_EDIT permission:
+- **Use the pencil (✏️) icon** on each slot to open the edit modal (preferred method)
+- **Or double-click** editable fields for inline editing
+- Modify time, title, description, or role requirements
+- Changes save automatically (inline) or on modal save
 
 ### Managing Assignments
 
-Owners can:
-- Assign people to roles
-- Remove assignments
+Users with MANAGE_ASSIGNMENTS permission can:
+- Assign people to specific roles
+- Remove assignments from slots
 - View assignment statistics
-- Use auto-assignment recommendations (if available)
+- Use auto-assignment recommendations (if available and permitted)
 
 ---
 

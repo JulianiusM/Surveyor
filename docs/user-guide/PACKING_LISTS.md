@@ -82,15 +82,17 @@ When assigned count reaches max:
 
 ---
 
-## Managing Items (Owners/Editors)
+## Managing Items (Based on Permissions)
 
 ### Editing Item Details
 
-If you have edit permissions:
-- **Double-click Title** to edit item name
-- **Double-click Description** to edit details
-- **Double-click Max number** to change quantity needed
+Depending on permissions granted:
+- **Double-click Title** to edit item name (requires EDIT_TITLE or ITEM_EDIT permission)
+- **Double-click Description** to edit details (requires EDIT_DESC or ITEM_EDIT permission)
+- **Double-click Max number** to change quantity needed (requires EDIT_CAPACITY or ITEM_EDIT permission)
 - Changes save automatically
+
+**Note:** By default, only the owner has these permissions. Others need to be granted specific permissions.
 
 ### Reordering Items
 
@@ -102,16 +104,28 @@ Drag items to reorder:
 
 ### Removing Participants
 
-Owners can remove any assignee:
+Users with MANAGE_ASSIGNMENTS permission can remove any assignee:
 - **Click × button** next to participant name
 - Person is unassigned immediately
 
+**Note:** Participants can always remove themselves, even without this permission.
+
 ### Deleting Items
 
-If permitted:
+If you have ITEM_DELETE permission:
 - **Click trash icon** on item row
 - Confirm deletion
 - Item and all assignments removed
+
+### The "Everyone" Option
+
+Items can be marked as required for everyone:
+- When creating or editing an item, mark it as "required by all"
+- These items show a blue **"Everyone"** badge instead of individual assignees
+- The item appears highlighted (blue background) in the table
+- Everyone is expected to bring this item
+
+This is useful for items everyone needs individually (e.g., "Personal water bottle", "Sleeping bag")
 
 ---
 

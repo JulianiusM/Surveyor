@@ -99,6 +99,7 @@ When creating a drivers list, select "Assign to event" to coordinate transportat
 - Better coordination
 - All related items accessible from event
 - Participant tracking across activities
+- **Important:** Only event participants can access linked entities (if using participant audience permission)
 
 ---
 
@@ -183,12 +184,36 @@ Event permissions control:
 
 ### Advanced Features
 
-Some organizations may have additional features:
-- Registration approval workflow
-- Invoice pools for cost sharing
-- Bypass links for pre-approved registration
+#### Registration Bypass Links
 
-Check with your organizer for specific capabilities.
+Event organizers can create bypass links that:
+- Allow pre-approved registration
+- Skip normal registration process
+- Can be single-use or multi-use
+- Useful for inviting specific people
+
+**For Organizers:**
+- Create bypass link in event management
+- Share link with invited participants
+- Track who uses each bypass link
+
+#### Invoice Pools (if enabled)
+
+For events with shared costs:
+- Create invoice pool for the event
+- Track shared expenses
+- Collect payments from participants
+- Split costs fairly
+- Generate invoices and receipts
+
+**Features:**
+- Multiple invoice items
+- Participant cost sharing
+- Payment tracking
+- Surcharges and adjustments
+- Pool credits and balances
+
+Check with your organization to see if invoice pool features are enabled.
 
 ---
 

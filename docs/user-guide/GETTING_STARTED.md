@@ -181,9 +181,6 @@ A: Username is for logging in (must be unique). Display name is what others see 
 **Q: Can I use the same email for multiple guest participations?**  
 A: Yes, but you'll receive a different personalized link for each activity.
 
-**Q: Can I convert my guest participation to a registered account?**  
-A: Yes, create an account and contact the organizer to link your guest data.
-
 **Q: I lost my guest link. Can I recover it?**  
 A: No, guest links cannot be recovered. You'll need to register as a new guest if needed.
 

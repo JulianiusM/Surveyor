@@ -28,10 +28,10 @@ Each section shows:
 
 ### Creating New Items
 
-Each section has a "+ Create" button:
-- Click to start creating that type of entity
-- Fills in the creation form
-- Returns to dashboard after creation
+Each section has a "+ Create" button at the end of the search field:
+- Click to open the creation form
+- Fill in all required information
+- After creating, you'll be taken to the new entity's page
 
 ## Empty State
 
