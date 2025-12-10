@@ -1,0 +1,106 @@
+doctype html
+html(lang="en")
+    head
+        meta(charset="utf-8")
+        meta(name="viewport" content="width=device-width, initial-scale=1")
+        title= `Schedule – ${data.plan.title}`
+        link(rel="stylesheet" href="/style/print.css")
+
+    body
+        .sheet
+            .wrap
+                .toolbar
+                    h1= data.plan.title
+                    button.btn.no-print(type="button" onclick="window.print()") Print
+
+                h2 Plan info
+                .meta
+                    div
+                        strong Dates:&nbsp;
+                        span= `${data.plan.startDate} → ${data.plan.endDate}`
+                    if data.event?.title
+                        div
+                            strong Event:&nbsp;
+                            span= data.event.title
+                    if data.event?.timezone
+                        div
+                            strong Timezone:&nbsp;
+                            span= data.event.timezone
+                if data.plan.description
+                    p.small= data.plan.description
+
+                if data.textFields && data.textFields.length
+                    .rule
+                    h2 Shared notes
+                    each field in data.textFields
+                        .mb-2
+                            strong= field.title
+                            if field.text
+                                p.small.mb-0= field.text
+                            else
+                                p.small.muted.mb-0 —
+
+                .rule
+                -
+                    const readableDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {weekday: 'long', year: 'numeric', month: 'short', day: 'numeric'});
+                each day, idx in data.days
+                    h2= readableDate(day.date)
+                    if day.slots.length
+                        table
+                            thead
+                                tr
+                                    th(style="width:32mm").nowrap Time
+                                    th Slot
+                                    th(style="width:24mm").right Capacity
+                                    th(style="width:42mm") Assignees
+                                    th(style="width:36mm") Notes
+                            tbody
+                                each slot in day.slots
+                                    tr
+                                        - const start = slot.startTime ? slot.startTime.slice(0,5) : null;
+                                        - const end = slot.endTime ? slot.endTime.slice(0,5) : null;
+                                        td.nowrap.small= start || end ? `${start || '??'} – ${end || '??'}` : '—'
+                                        td
+                                            div.fw-bold= slot.title
+                                            if slot.roles && slot.roles.length
+                                                .chips.mt-1
+                                                    each role in slot.roles
+                                                        span.chip= role.name
+                                        td.small.right
+                                            if slot.maxAssignees != null
+                                                span= `${slot.assignedCount}/${slot.maxAssignees}`
+                                            else
+                                                span= slot.assignedCount
+                                        td.small
+                                            if slot.assignees && slot.assignees.length
+                                                ul.list-unstyled.mb-0
+                                                    each asg in slot.assignees
+                                                        li
+                                                            span= asg.name
+                                                            if asg.roles && asg.roles.length
+                                                                span.muted= ` (${asg.roles.join(', ')})`
+                                            else
+                                                span.muted —
+                                        td.small
+                                            if slot.description
+                                                span= slot.description
+                                            else
+                                                span.muted —
+                    else
+                        p.small.muted No slots scheduled for this day.
+
+                    if idx < data.days.length - 1
+                        .rule
+
+                .footer
+                    div Generated: #{new Date(data.generatedAt).toLocaleString()}
+                    div Page <span class="pageNumber"></span>
+
+        script.
+            (function () {
+                try {
+                    const spans = document.querySelectorAll('.pageNumber');
+                    spans.forEach(s => s.textContent = '1');
+                } catch (e) {
+                }
+            })();

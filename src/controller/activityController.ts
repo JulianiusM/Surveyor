@@ -24,6 +24,7 @@ import {APIError, ValidationError} from '../modules/lib/errors';
 import {ENTITIES, fromISOtoLocal, generateUniqueId} from '../modules/lib/util';
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
 import type {PermBundle} from "../types/PermissionTypes";
+import type {SlotAssignee} from "../types/ActivityTypes";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'activity/activity-create';
@@ -279,6 +280,38 @@ async function fetchForView(plan: ActivityPlan, req: Request) {
         roles: {allRoles, slotRoles},
         counters: {participants: participantList.length, open, empty},
         textFields,
+    };
+}
+
+async function getScheduleExport(plan: ActivityPlan) {
+    const [slotsByDate, assigneeLists, slotRoles, textFields] = await Promise.all([
+        activityService.getActivitySlots(plan.id),
+        activityService.getActivitySlotAssignees(plan.id),
+        activityService.getActivitySlotRoles(plan.id),
+        activityService.getActivityPlanTextFields(plan.id),
+    ]);
+
+    const start = new Date(`${plan.startDate}T00:00:00Z`);
+    const end = new Date(`${plan.endDate}T00:00:00Z`);
+    const days: {date: string, slots: (ActivitySlot & { assignedCount: number, assignees: SlotAssignee[], roles: { id: number; name: string }[] })[]}[] = [];
+
+    for (let cur = new Date(start); cur <= end; cur.setUTCDate(cur.getUTCDate() + 1)) {
+        const day = cur.toISOString().slice(0, 10);
+        const slots = (slotsByDate[day] || []).map((slot) => ({
+            ...slot,
+            assignees: assigneeLists[slot.id] || [],
+            roles: slotRoles[slot.id] || [],
+        }));
+
+        days.push({date: day, slots});
+    }
+
+    return {
+        plan,
+        event: plan.event,
+        days,
+        textFields,
+        generatedAt: new Date().toISOString(),
     };
 }
 
@@ -1004,6 +1037,7 @@ export default {
     createEntity,
     afterCreateItems,
     fetchForView,
+    getScheduleExport,
     fetchForDuplicate,
     deleteEntity,
 
