@@ -9,8 +9,13 @@ This is the main instruction file for GitHub Copilot. Additional detailed guidel
 - [Building and Running](copilot/build-and-run.md) - Development, build, and CI information
 - [Common Tasks](copilot/common-tasks.md) - Frequent workflows and security notes
 
-For comprehensive testing documentation, see [TESTING.md](../TESTING.md).
-For general AI agent guidance, see [AGENTS.md](../AGENTS.md).
+For comprehensive documentation:
+- **[docs/README.md](../docs/README.md)** - Documentation index and navigation
+- **[docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)** - System architecture and design
+- **[docs/DEVELOPMENT.md](../docs/DEVELOPMENT.md)** - Development workflow
+- **[docs/TESTING_GUIDE.md](../docs/TESTING_GUIDE.md)** - Complete testing guide
+- **[docs/TEST_REVIEW.md](../docs/TEST_REVIEW.md)** - Test quality review (⭐⭐⭐⭐⭐)
+- **[AGENTS.md](../AGENTS.md)** - General AI agent guidance
 
 ## Quick Reference
 
