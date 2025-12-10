@@ -287,6 +287,10 @@ export async function updateActivityPlanTextField(id: string, text: string, titl
     await repo.update(id, updates);
 }
 
+export async function deleteActivityPlanTextField(id: string) {
+    await AppDataSource.getRepository(ActivityPlanTextField).delete(id);
+}
+
 export async function getManagedPlansForUser(userId: number) {
     const ids = await entityAdminService.getIdsForUser('activity', userId);
     const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'

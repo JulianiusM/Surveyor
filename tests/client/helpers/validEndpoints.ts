@@ -57,6 +57,11 @@ export const VALID_ENDPOINTS = {
         recommendations: '/api/activity/:planId/recommendations',
         recommendationsApply: '/api/activity/:planId/recommendations/apply',
         recommendationsAuto: '/api/activity/:planId/recommendations/auto',
+
+        // Text fields
+        textFieldCreate: '/api/activity/:planId/text-field',
+        textFieldUpdate: '/api/activity/:planId/text-field/:textFieldId',
+        textFieldDelete: '/api/activity/:planId/text-field/:textFieldId/delete',
     },
     
     // Packing API endpoints
