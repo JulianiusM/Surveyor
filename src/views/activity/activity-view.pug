@@ -60,6 +60,47 @@ block content
                     br
         hr.mb-1.mt-0
 
+    // ─── Shared text fields ─────────────────────────────────────
+    .d-flex.justify-content-between.align-items-center.mt-3
+        h5.mb-0
+            i.bi.bi-journal-text.me-2
+            | Shared text fields
+        if permData.entity.has('MANAGE_PERMISSIONS')
+            button#addTextFieldBtn.btn.btn-sm.btn-outline-primary(type="button")
+                i.bi.bi-plus-lg.me-1
+                | Add text field
+
+    if data.textFields && data.textFields.length
+        each field in data.textFields
+            .card.border-secondary-subtle.mb-3
+                .card-header.d-flex.justify-content-between.align-items-center
+                    strong.mb-0 #{field.title}
+                    if permData.entity.has('ACCESS_PARTICIPANTS')
+                        button.btn.btn-sm.btn-outline-secondary.text-field-edit(
+                            type="button"
+                            data-text-field-id=field.id
+                            data-title=field.title
+                            data-content=field.text || ''
+                        )
+                            i.bi.bi-pencil
+                .card-body.pt-2.pb-3
+                    p.text-field-content.mb-0.border.border-secondary.rounded.p-2(
+                        data-edit="textField"
+                        data-id=field.id
+                        data-placeholder="double-click to edit"
+                        style="cursor: pointer"
+                    )
+                        if field.text
+                            - const textLines = field.text.split('\n')
+                            each line, i in textLines
+                                | #{line}
+                                if i < textLines.length - 1
+                                    br
+                        else
+                            em.text-secondary double-click to add text
+    else
+        p.text-secondary.small.mt-2.mb-3 No shared text fields yet.
+
     // ─── Tabs & panes for schedule, participants, rules, settings ─────────────
     -
         const hasRulesTab =
@@ -178,6 +219,28 @@ block content
                     button#assignmentWarningConfirm.btn.btn-warning(type="button")
                         i.bi.bi-check2.me-1
                         | Continue anyway
+
+    // Text field editor modal (create / edit)
+    #textFieldModal.modal.fade(tabindex="-1" aria-labelledby="textFieldModalTitle" aria-hidden="true")
+        .modal-dialog
+            .modal-content.text-bg-dark
+                .modal-header
+                    h5#textFieldModalTitle.modal-title
+                    button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
+                form#textFieldForm
+                    .modal-body
+                        input#textFieldId(type="hidden")
+                        .mb-3
+                            label.form-label(for="textFieldTitle") Title
+                            input#textFieldTitle.form-control.form-control-sm.text-bg-dark(type="text" name="title" maxlength="255" required)
+                        .mb-0
+                            label.form-label(for="textFieldText") Text
+                            textarea#textFieldText.form-control.text-bg-dark(name="text" rows="6" maxlength="5000")
+                    .modal-footer
+                        button.btn.btn-sm.btn-outline-secondary(type="button" data-bs-dismiss="modal") Cancel
+                        button.btn.btn-sm.btn-primary(type="submit")
+                            i.bi.bi-save.me-1
+                            | Save
 
     // Slot editor modal (create / edit)
     #slotEditorModal.modal.fade(tabindex="-1" aria-labelledby="slotEditorTitle" aria-hidden="true")

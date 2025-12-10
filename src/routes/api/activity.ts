@@ -30,6 +30,7 @@ const assignName = "assignment"
 const resFct = (req: Request) => getResource(req, entityName);
 const resFctItems = (req: Request) => getAdditional(req, entityItemName);
 const resFctAssign = (req: Request) => getAdditional(req, assignName);
+const textFieldName = "activityTextField";
 const permFct = getPermFct(resFct, entityName);
 const permFctItems = getPermFctItems(resFct, resFctItems, entityName, entityItemName);
 const permFctAssign = getPermFctAssign(resFct, resFctAssign, entityName, entityItemName);
@@ -38,6 +39,7 @@ const itemPermFct: ItemGetter = getItemFromEntityPermFct(activityService.getActi
 apiParamHandler('id', app, activityService.getActivityPlanById, entityName);
 apiParamHandler('slotId', app, activityService.getActivitySlotById, entityItemName);
 apiParamHandler('assignId', app, activityService.getActivitySlotAssignmentById, assignName);
+apiParamHandler('textFieldId', app, activityService.getActivityPlanTextFieldById, textFieldName);
 app.use("/:id", attachPermBundle(permFct, itemPermFct));
 
 createEntityAdminApiRouter(app, entityName, permFct)
@@ -46,6 +48,24 @@ app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), asyn
     const msg = await controller.updateDescription(resFct(req).id, req.body);
     renderer.respondWithSuccessJson(res, msg);
 })
+
+app.post(
+    '/:id/text-field',
+    requirePermissionApi(permFct, PERM.MANAGE_PERMISSIONS),
+    asyncHandler(async (req: Request, res: Response) => {
+        const field = await controller.createTextField(resFct(req).id, req.body);
+        renderer.respondWithSuccessDataJson(res, 'Text field created', {id: field.id});
+    }),
+);
+
+app.post(
+    '/:id/text-field/:textFieldId',
+    requirePermissionApi(permFct, PERM.ACCESS_PARTICIPANTS),
+    asyncHandler(async (req: Request, res: Response) => {
+        const msg = await controller.updateTextField(resFct(req).id, req.params.textFieldId, req.body);
+        renderer.respondWithSuccessJson(res, msg);
+    }),
+);
 
 app.post('/:id/roles', requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS), async (req: Request, res: Response) => {
     const roles = await controller.addActivityRole(resFct(req), req.body);

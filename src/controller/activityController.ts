@@ -260,6 +260,7 @@ async function fetchForView(plan: ActivityPlan, req: Request) {
         activityService.getAllRoles(plan.id),
         activityService.getActivitySlotRoles(plan.id)
     ]);
+    const textFields = await activityService.getActivityPlanTextFields(plan.id);
 
     let empty = 0, open = 0;
 
@@ -276,7 +277,8 @@ async function fetchForView(plan: ActivityPlan, req: Request) {
         assigneeLists,
         participantList,
         roles: {allRoles, slotRoles},
-        counters: {participants: participantList.length, open, empty}
+        counters: {participants: participantList.length, open, empty},
+        textFields,
     };
 }
 
@@ -305,6 +307,26 @@ async function updateDescription(planId: string, body: any) {
         throw new APIError('Description to long', body, 400)
     await activityService.updateActivityPlanDescription(planId, description);
     return 'Description updated';
+}
+
+async function createTextField(planId: string, body: any) {
+    const {title = '', text = ''} = body;
+    if (!title.trim()) throw new APIError('Title required', body, 400);
+    if (title.length > 255) throw new APIError('Title too long', body, 400);
+    if (text.length > 5000) throw new APIError('Text too long', body, 400);
+    return await activityService.createActivityPlanTextField(planId, title.trim(), text);
+}
+
+async function updateTextField(planId: string, textFieldId: string, body: any) {
+    const field = await activityService.getActivityPlanTextFieldById(textFieldId);
+    if (!field || field.planId !== planId) {
+        throw new APIError('Text field not found', {planId, textFieldId}, 404);
+    }
+    const {title, text = ''} = body;
+    if (title !== undefined && title.length > 255) throw new APIError('Title too long', body, 400);
+    if (text.length > 5000) throw new APIError('Text too long', body, 400);
+    await activityService.updateActivityPlanTextField(textFieldId, text, title?.trim());
+    return 'Text field updated';
 }
 
 async function reorderSlots(id: string, order: { slotId: string, pos: number }[]) {
@@ -972,6 +994,8 @@ export default {
     deleteEntity,
 
     updateDescription,
+    createTextField,
+    updateTextField,
     reorderSlots,
     quickAddSlot,
     updateSlotDescription,

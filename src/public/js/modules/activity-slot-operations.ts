@@ -28,6 +28,26 @@ export function initInlineEdit(planId: string): void {
             });
         }
 
+        const textField = target.closest<HTMLElement>('[data-edit="textField"]');
+        if (textField && textField.dataset.id) {
+            return startInlineEditArea(
+                textField,
+                `/api/activity/${planId}/text-field/${textField.dataset.id}`,
+                {
+                    scope: 'entity',
+                    key: 'ACCESS_PARTICIPANTS',
+                    action: 'edit shared text fields',
+                },
+                {
+                    payloadKey: 'text',
+                    successMessage: 'Text updated',
+                    placeholder: textField.dataset.placeholder || 'double-click to edit',
+                    maxLength: 5000,
+                    onSave: () => reloadAfterDelay(100),
+                },
+            );
+        }
+
         // For slots: allow double-click only on actual editable elements
         const editable = target.closest<HTMLElement>('.slot [data-edit]');
         if (!editable) return;
