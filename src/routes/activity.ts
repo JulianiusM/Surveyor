@@ -1,12 +1,12 @@
 import {Request, Response} from 'express';
-import {createGuestFlowRouter} from '../middleware/guestFlowFactory';
 import controller from '../controller/activityController';
-import * as activityService from '../modules/database/services/ActivityService';
-import {ENTITIES, ENTITY_ITEMS, getResource} from "../modules/lib/util";
+import {createGuestFlowRouter} from '../middleware/guestFlowFactory';
 import {requirePermission} from "../middleware/permissionMiddleware";
+import * as activityService from '../modules/database/services/ActivityService';
 import {asyncHandler} from "../modules/lib/asyncHandler";
-import renderer from "../modules/renderer";
 import {PERM} from "../modules/lib/permissions";
+import {ENTITIES, ENTITY_ITEMS, getResource} from "../modules/lib/util";
+import renderer from "../modules/renderer";
 import type {EntityDescriptor} from "../types/PermissionTypes";
 import type {EntityType} from "../types/UtilTypes";
 
@@ -43,7 +43,7 @@ const app = createGuestFlowRouter({
     deleteEntity: controller.deleteEntity,
 });
 
-app.get("/:id/export/schedule", requirePermission(permFct, PERM.DATA_EXPORT | PERM.ACCESS_VIEW), asyncHandler(async (req: Request, res: Response) => {
+app.get("/:id/export/schedule", requirePermission(permFct, PERM.DATA_EXPORT), asyncHandler(async (req: Request, res: Response) => {
     const data = await controller.getScheduleExport(resFct(req));
     renderer.renderWithData(res, 'activity/export/schedule', data);
 }));

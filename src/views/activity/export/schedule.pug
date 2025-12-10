@@ -10,22 +10,23 @@ html(lang="en")
         .sheet
             .wrap
                 .toolbar
-                    h1= data.plan.title
+                    h2= data.plan.title
                     button.btn.no-print(type="button" onclick="window.print()") Print
 
-                h2 Plan info
+                h3 Plan info
                 .meta
                     div
                         strong Dates:&nbsp;
                         span= `${data.plan.startDate} → ${data.plan.endDate}`
-                    if data.event?.title
-                        div
-                            strong Event:&nbsp;
-                            span= data.event.title
-                    if data.event?.timezone
-                        div
-                            strong Timezone:&nbsp;
-                            span= data.event.timezone
+                    if data.event
+                        if data.event.title
+                            div
+                                strong Event:&nbsp;
+                                span= data.event.title
+                        if data.event.timezone
+                            div
+                                strong Timezone:&nbsp;
+                                span= data.event.timezone
                     div
                         strong Slots:&nbsp;
                         span= data.counters.slots
@@ -43,7 +44,7 @@ html(lang="en")
 
                 if data.textFields && data.textFields.length
                     .rule
-                    h2 Shared notes
+                    h3 Shared notes
                     each field in data.textFields
                         .mb-2
                             strong= field.title
@@ -54,12 +55,20 @@ html(lang="en")
 
                 .rule
                 -
-                    const readableDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {weekday: 'long', year: 'numeric', month: 'short', day: 'numeric'});
-                    const shortDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+                    const readableDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                    });
+                    const shortDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric'
+                    });
                     const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
                 each week, wIdx in data.weeks
                     .week-block(class=wIdx !== data.weeks.length - 1 ? 'pagebreak' : '')
-                        h2 Week of #{readableDate(week.start)}
+                        h3 Week of #{readableDate(week.start)}
                         .schedule-grid(style=`grid-template-columns: repeat(${week.days.length || 1}, minmax(0, 1fr))`)
                             each day in week.days
                                 .day-card
@@ -75,7 +84,7 @@ html(lang="en")
                                                 if start || end
                                                     .slot-time= `${start || '??'} – ${end || '??'}`
                                                 if slot.description
-                                                    p.slot-description= slot.description
+                                                    .slot-description= slot.description
                                                 .slot-divider
                                                 if slot.assignees && slot.assignees.length
                                                     ul.assignee-list
@@ -85,9 +94,9 @@ html(lang="en")
                                                                 if asg.roles && asg.roles.length
                                                                     span.muted= ` (${asg.roles.join(', ')})`
                                                 else
-                                                    p.muted.small No assignees yet.
+                                                    .muted.slot-time No assignees yet.
                                     else
-                                        p.small.muted No slots scheduled for this day.
+                                        p.slot-title.muted No slots scheduled for this day.
 
                 .footer
                     div Generated: #{new Date(data.generatedAt).toLocaleString()}

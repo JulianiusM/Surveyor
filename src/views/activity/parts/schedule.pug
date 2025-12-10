@@ -20,14 +20,14 @@ if data.assignments && data.assignments.length
         button.btn.btn-outline-light(
             type="button"
             data-slot-filter="open") Open slots
-    .d-flex.align-items-center.gap-2.mt-2.mt-sm-0
-        if permData.entity.has('DATA_EXPORT')
+    small.text-secondary.mb-0 Filter the schedule to focus on your own assignments or unfilled slots.
+    if permData.entity.has('DATA_EXPORT')
+        .d-flex.align-items-center.gap-2.mt-2.mt-sm-0
             a.btn.btn-outline-light.btn-sm(
                 href=`/activity/${data.plan.id}/export/schedule`
                 target="_blank")
                 i.bi.bi-printer.me-1
                 | Export schedule
-        small.text-secondary.mb-0 Filter the schedule to focus on your own assignments or unfilled slots.
 
 // Meta info / badges (moved from old "Erste Zeile: Metainfos / Badge")
 .d-flex.justify-content-between.align-items-center.mb-3
@@ -117,7 +117,7 @@ each week in weeks
                                                     class=overbooked ? 'bg-danger' : empty ? 'bg-warning' : 'bg-success'
                                                     style="width:0.7rem;height:0.7rem;display:inline-block;"
                                                     title=overbooked ? 'Overbooked' : empty ? 'No assignments yet' : 'OK')
-                                                if permData.itemAllow(slot.id, 'ITEM_EDIT', 'ITEM_EDIT')
+                                                if permData.itemAllow(slot.id, 'ITEM_EDIT', 'ITEM_EDIT') || permData.entity.has('ITEM_EDIT_DESC')
                                                     button.btn.btn-sm.btn-outline-light(
                                                         type="button"
                                                         data-slot-edit
@@ -175,7 +175,7 @@ each week in weeks
                                                         li.d-flex.align-items-center.gap-1
                                                             i.bi.bi-person-fill
                                                             span.flex-grow-1= asg.name || asg.username
-                                                            if permData.itemAllow(slot.id, 'EDIT_ASSIGNMENTS', 'ITEM_EDIT')
+                                                            if permData.itemAllow(slot.id, 'EDIT_ASSIGNMENTS', 'MANAGE_ASSIGNMENTS')
                                                                 button.btn.btn-sm.btn-outline-danger.ms-1(
                                                                     data-owner-remove
                                                                     data-assignid=asg.id) ×

@@ -1,6 +1,6 @@
 // src/modules/lib/permissions.ts
-import type {CombEntityType} from "../../types/UtilTypes";
 import type {PermData, PermMeta, PermPreset} from "../../types/PermissionTypes";
+import type {CombEntityType} from "../../types/UtilTypes";
 
 export const PERM = {
     EDIT_TITLE: 1 << 0,
@@ -10,6 +10,7 @@ export const PERM = {
 
     ITEM_ADD: 1 << 4,
     ITEM_EDIT: 1 << 5,
+    ITEM_EDIT_DESC: 1 << 18,
     ITEM_DELETE: 1 << 6,
 
     MANAGE_ASSIGNMENTS: 1 << 7,
