@@ -40,6 +40,43 @@ export interface ParticipantRequirementResult {
     };
 }
 
+export interface ShiftSlot {
+    slotId: string | number;
+    capacity: number;
+}
+
+export interface ShiftParticipant extends ParticipantAttendance {
+    participantId: string | number;
+    feasibleSlotIds?: Array<string | number>;
+    explicitFixedShifts?: number | null;
+    roleFixedRequirement?: number | null;
+}
+
+export type ShiftParticipantGroup = "explicit" | "role-fixed" | "baseline";
+
+export interface ShiftRequirementParticipantResult {
+    participantId: string | number;
+    participantKey: string;
+    requiredShifts: number;
+    group: ShiftParticipantGroup;
+    attendanceFactor: number;
+    feasibleSlotCount: number;
+    fixedContribution: number;
+    baselineContribution: number;
+}
+
+export interface ShiftRequirementComputationResult {
+    participants: ShiftRequirementParticipantResult[];
+    totalRequiredShifts: number;
+    totalFixedShifts: number;
+    remainingShifts: number;
+    baseline: number;
+    sumRequiredShifts: number;
+    feasible: boolean;
+    overshoot: number;
+    deficit: number;
+}
+
 export interface ParticipantRequirementSummary {
     participantKey: string;
     name?: string | null;
@@ -168,7 +205,35 @@ export function normalizeRoleRequirementInput(input: RoleRequirementInput): Role
     return normalized;
 }
 
-function selectOverride(participant: ParticipantAttendance, overrides: ActivityPlanRequirementOverride[]): ActivityPlanRequirementOverride | undefined {
+function normalizeFeasibleSlots(slotIds: Array<string | number> | undefined): Array<string | number> {
+    if (!slotIds) return [];
+
+    const seen = new Set<string>();
+    const normalized: Array<string | number> = [];
+
+    for (const slotId of slotIds) {
+        const key = String(slotId);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        normalized.push(slotId);
+    }
+
+    return normalized;
+}
+
+function toShiftParticipantKey(participant: ShiftParticipant): string {
+    const knownKey = toParticipantKey(participant);
+    if (knownKey !== "participant:unknown") return knownKey;
+    return `participant:${participant.participantId}`;
+}
+
+function ensureNonNegativeInteger(value: number | null | undefined, fallback = 0): number {
+    if (value == null) return fallback;
+    if (!Number.isFinite(value) || Number.isNaN(value)) return fallback;
+    return Math.max(0, Math.trunc(value));
+}
+
+export function selectOverride(participant: ParticipantAttendance, overrides: ActivityPlanRequirementOverride[]): ActivityPlanRequirementOverride | undefined {
     const keyUser = participant.userId ?? null;
     const keyGuest = participant.guestId ?? null;
     const roleIds = participant.roleIds ?? [];
@@ -194,6 +259,21 @@ function selectOverride(participant: ParticipantAttendance, overrides: ActivityP
     }
 
     return best;
+}
+
+function resolveRoleFixedRequirement(roleRequirements: ActivityPlanRequirement[], roleIds: number[] | undefined): number | null {
+    if (!roleIds || roleIds.length === 0) return null;
+
+    let minRequirement = Number.POSITIVE_INFINITY;
+    let hasMatch = false;
+
+    for (const requirement of roleRequirements) {
+        if (!roleIds.includes(Number(requirement.roleId))) continue;
+        minRequirement = Math.min(minRequirement, ensureNonNegativeInteger(requirement.requiredShifts));
+        hasMatch = true;
+    }
+
+    return hasMatch ? minRequirement : null;
 }
 
 function resolveRoleRequirement(roleRequirements: ActivityPlanRequirement[], roleIds: number[] | undefined, ratio: number, roundingMode: RoundingMode): number {
@@ -332,5 +412,212 @@ export function summarizeParticipantRequirements(
                 ? {arrivalDate: participant.arrivalDate, departureDate: participant.departureDate}
                 : undefined,
         };
+    });
+}
+
+export function calculateShiftRequirementsForParticipants(
+    slots: ShiftSlot[],
+    participants: ShiftParticipant[],
+    options?: {resolveFeasibleSlots?: (participant: ShiftParticipant) => Array<string | number>; roundingMode?: RoundingMode}
+): ShiftRequirementComputationResult {
+    const roundingMode = options?.roundingMode ?? "CEIL";
+    const resolveSlots = options?.resolveFeasibleSlots;
+
+    const slotDemand = slots.reduce((total, slot) => total + Math.max(0, slot.capacity ?? 0), 0);
+
+    const participantStates = participants.map((participant) => {
+        const resolvedSlots = resolveSlots ? resolveSlots(participant) : participant.feasibleSlotIds;
+        const feasibleSlotIds = normalizeFeasibleSlots(resolvedSlots ?? participant.feasibleSlotIds);
+        const participantKey = toShiftParticipantKey(participant);
+
+        const group: ShiftParticipantGroup = participant.explicitFixedShifts != null
+            ? "explicit"
+            : participant.roleFixedRequirement != null
+                ? "role-fixed"
+                : "baseline";
+
+        return {
+            participant,
+            participantKey,
+            feasibleSlotIds,
+            feasibleSlotCount: feasibleSlotIds.length,
+            group,
+        };
+    });
+
+    const maxFeasibleSlots = participantStates.reduce((max, p) => Math.max(max, p.feasibleSlotCount), 0);
+
+    const withAttendance = participantStates.map((state) => {
+        const attendanceFactor = maxFeasibleSlots > 0 ? state.feasibleSlotCount / maxFeasibleSlots : 0;
+        return {...state, attendanceFactor};
+    });
+
+    const fixedContributions = withAttendance.map((state) => {
+        if (state.group === "explicit") {
+            return ensureNonNegativeInteger(state.participant.explicitFixedShifts);
+        }
+
+        if (state.group === "role-fixed") {
+            const roleRequirement = ensureNonNegativeInteger(state.participant.roleFixedRequirement);
+            const scaled = state.attendanceFactor * roleRequirement;
+            return applyRounding(scaled, roundingMode);
+        }
+
+        return 0;
+    });
+
+    const totalFixedShifts = fixedContributions.reduce((total, value) => total + value, 0);
+    const rawRemainingShifts = slotDemand - totalFixedShifts;
+    const remainingShifts = Math.max(rawRemainingShifts, 0);
+
+    const baselinePool = withAttendance
+        .filter((state) => state.group === "baseline")
+        .reduce((total, state) => total + state.attendanceFactor, 0);
+
+    const infeasibleBaseline = remainingShifts > 0 && baselinePool === 0;
+    const baseline = remainingShifts === 0 || baselinePool === 0 ? 0 : applyRounding(remainingShifts / baselinePool, roundingMode);
+
+    const participantResults: ShiftRequirementParticipantResult[] = withAttendance.map((state, index) => {
+        const fixedContribution = fixedContributions[index];
+        const baselineContribution = state.group === "baseline"
+            ? applyRounding(state.attendanceFactor * baseline, roundingMode)
+            : 0;
+        const requiredShifts = state.group === "baseline" ? baselineContribution : fixedContribution;
+
+        return {
+            participantId: state.participant.participantId,
+            participantKey: state.participantKey,
+            requiredShifts,
+            group: state.group,
+            attendanceFactor: state.attendanceFactor,
+            feasibleSlotCount: state.feasibleSlotCount,
+            fixedContribution,
+            baselineContribution,
+        };
+    });
+
+    const baselineParticipants = participantResults.filter((result) => result.group === "baseline");
+
+    let sumRequiredShifts = participantResults.reduce((total, result) => total + result.requiredShifts, 0);
+    let overshoot = Math.max(sumRequiredShifts - slotDemand, 0);
+    let deficit = Math.max(slotDemand - sumRequiredShifts, 0);
+
+    if (overshoot > 0 && baselineParticipants.length > 0) {
+        const orderedBySlack = [...baselineParticipants].sort((a, b) => {
+            const slackA = a.requiredShifts - a.attendanceFactor * baseline;
+            const slackB = b.requiredShifts - b.attendanceFactor * baseline;
+            if (slackA !== slackB) return slackB - slackA;
+            if (a.requiredShifts !== b.requiredShifts) return b.requiredShifts - a.requiredShifts;
+            return String(b.participantKey).localeCompare(String(a.participantKey));
+        });
+
+        while (overshoot > 0) {
+            let adjusted = false;
+            for (const participant of orderedBySlack) {
+                const fractionalTarget = participant.attendanceFactor * baseline;
+                const lowerBound = Math.floor(fractionalTarget);
+                if (participant.requiredShifts > lowerBound && participant.requiredShifts > 0) {
+                    participant.requiredShifts -= 1;
+                    participant.baselineContribution = participant.requiredShifts;
+                    overshoot -= 1;
+                    adjusted = true;
+                    if (overshoot === 0) break;
+                }
+            }
+            if (!adjusted) break;
+        }
+    }
+
+    if (!infeasibleBaseline && deficit > 0 && baselineParticipants.length > 0) {
+        const orderedByAttendance = [...baselineParticipants].sort((a, b) => {
+            if (a.attendanceFactor !== b.attendanceFactor) return b.attendanceFactor - a.attendanceFactor;
+            return String(a.participantKey).localeCompare(String(b.participantKey));
+        });
+
+        while (deficit > 0) {
+            for (const participant of orderedByAttendance) {
+                participant.requiredShifts += 1;
+                participant.baselineContribution = participant.requiredShifts;
+                deficit -= 1;
+                if (deficit === 0) break;
+            }
+        }
+    }
+
+    sumRequiredShifts = participantResults.reduce((total, result) => total + result.requiredShifts, 0);
+    overshoot = Math.max(sumRequiredShifts - slotDemand, 0);
+    deficit = Math.max(slotDemand - sumRequiredShifts, 0);
+
+    const feasible = !infeasibleBaseline && deficit === 0;
+
+    return {
+        participants: participantResults,
+        totalRequiredShifts: slotDemand,
+        totalFixedShifts,
+        remainingShifts,
+        baseline,
+        sumRequiredShifts,
+        feasible,
+        overshoot,
+        deficit,
+    };
+}
+
+interface BaselineSlotInput {
+    id: string | number;
+    day: string;
+    maxAssignees?: number | null;
+}
+
+export function calculateBaselineRequirementForPlan(options: {
+    plan: Pick<ActivityPlan, "startDate" | "endDate" | "roundingMode">;
+    slots: BaselineSlotInput[];
+    participants: ParticipantAttendance[];
+    roleRequirements: ActivityPlanRequirement[];
+    overrides: ActivityPlanRequirementOverride[];
+}): ShiftRequirementComputationResult {
+    const slotInputs: ShiftSlot[] = options.slots.map((slot) => ({
+        slotId: slot.id,
+        capacity: ensureNonNegativeInteger(slot.maxAssignees ?? 0, 0),
+    }));
+
+    const resolveFeasibleSlots = (participant: ShiftParticipant) => {
+        const attendance = clampAttendanceWindow(
+            options.plan.startDate,
+            options.plan.endDate,
+            participant.arrivalDate ?? undefined,
+            participant.departureDate ?? undefined,
+        );
+
+        if (!attendance) return [] as Array<string | number>;
+
+        return options.slots
+            .filter((slot) => slot.day >= attendance.start && slot.day <= attendance.end)
+            .map((slot) => slot.id);
+    };
+
+    const participants: ShiftParticipant[] = options.participants.map((participant, index) => {
+        const participantKey = toParticipantKey(participant);
+        const explicitOverride = selectOverride(participant, options.overrides);
+        const roleFixedRequirement = explicitOverride
+            ? null
+            : resolveRoleFixedRequirement(options.roleRequirements, participant.roleIds);
+
+        const participantId = participantKey === "participant:unknown"
+            ? `participant:${index}`
+            : participantKey;
+
+        return {
+            ...participant,
+            participantId,
+            feasibleSlotIds: [],
+            explicitFixedShifts: explicitOverride?.requiredShifts ?? null,
+            roleFixedRequirement,
+        };
+    });
+
+    return calculateShiftRequirementsForParticipants(slotInputs, participants, {
+        roundingMode: options.plan.roundingMode ?? "CEIL",
+        resolveFeasibleSlots,
     });
 }

@@ -15,6 +15,7 @@ Welcome to the Surveyor documentation. This directory contains comprehensive doc
 - **[CODING_STANDARDS.md](CODING_STANDARDS.md)** - TypeScript, code style, and best practices
 - **[DATABASE.md](DATABASE.md)** - Database entities, migrations, and patterns
 - **[FRONTEND.md](FRONTEND.md)** - Frontend architecture and modular structure
+- **[ACTIVITY_REQUIREMENTS_ALGORITHM.md](ACTIVITY_REQUIREMENTS_ALGORITHM.md)** - Shift requirement computation and coverage model
 
 #### Testing
 - **[TESTING_GUIDE.md](TESTING_GUIDE.md)** - Complete testing guide (data-driven & keyword-driven)

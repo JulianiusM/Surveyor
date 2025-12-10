@@ -32,6 +32,7 @@ export function initRequirementPanel(planId: string): void {
     const allowOverfill = panel.querySelector<HTMLInputElement>('#allowOverfill');
     const allowArrivalEvening = panel.querySelector<HTMLInputElement>('#allowArrivalEvening');
     const allowDepartureMorning = panel.querySelector<HTMLInputElement>('#allowDepartureMorning');
+    const baselineCalcBtn = panel.querySelector<HTMLButtonElement>('[data-requirements-baseline-calc]');
 
     const setAlert = (message?: string, variant: 'info' | 'danger' = 'info') => {
         if (!alertBox) return;
@@ -294,6 +295,24 @@ export function initRequirementPanel(planId: string): void {
         }
     };
 
+    const calculateBaselineRequirement = async () => {
+        setAlert('Calculating baseline requirement…');
+        try {
+            const res = await get(`/api/activity/${planId}/requirements/baseline`);
+            const baseline = Number(res.data?.baseline ?? NaN);
+
+            if (!Number.isFinite(baseline)) {
+                throw new Error('Unable to calculate baseline requirement');
+            }
+
+            if (generalRequired) generalRequired.value = String(baseline);
+            setAlert(`Baseline requirement set to ${baseline}`);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to calculate baseline requirement';
+            setAlert(message, 'danger');
+        }
+    };
+
     const collectRoleRequirements = (): { roleId: number; requiredShifts: number }[] => {
         if (!roleList) return [];
         return Array.from(roleList.querySelectorAll<HTMLInputElement>('input[data-role-id]'))
@@ -370,6 +389,7 @@ export function initRequirementPanel(planId: string): void {
     });
     reloadBtn?.addEventListener('click', () => void loadRequirements());
     saveBtn?.addEventListener('click', () => void saveRequirements());
+    baselineCalcBtn?.addEventListener('click', () => void calculateBaselineRequirement());
 
     void loadRequirements();
 }
