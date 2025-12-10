@@ -30,7 +30,7 @@ mixin permissionManagement(admins, permMeta, defaults, presets=[], opts={}, audi
                 apiUpdate: `/api/${entityType}/${entityId}/admins`,
                 apiRemove: `/api/${entityType}/${entityId}/admins`,
                 apiSearch: '/api/users/search',
-                apiUrl: `/${entityType}/${entityId}/settings`
+                apiUrl: `/api/${entityType}/${entityId}/settings`
             }, opts)
         }
 

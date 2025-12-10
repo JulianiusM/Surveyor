@@ -214,16 +214,16 @@ describe('API helpers', () => {
     describe('updateTextField', () => {
         test.each(testData.updateTextFieldData)(
             '$description',
-            async ({planId, textFieldId, existing, body, expectedTitle, expectedText, shouldThrow}) => {
+            async ({planId, textFieldId, existing, body, expectedTitle, expectedText, shouldThrow, permData}) => {
                 setupMock(activityService.getActivityPlanTextFieldById, existing);
 
                 if (shouldThrow) {
-                    await expect(updateTextField(planId, textFieldId, body)).rejects.toBeInstanceOf(APIError);
+                    await expect(updateTextField(planId, textFieldId, body, permData)).rejects.toBeInstanceOf(APIError);
                     return;
                 }
 
                 setupMock(activityService.updateActivityPlanTextField, undefined);
-                const result = await updateTextField(planId, textFieldId, body);
+                const result = await updateTextField(planId, textFieldId, body, permData);
 
                 verifyResult(result, 'Text field updated');
                 verifyMockCall(

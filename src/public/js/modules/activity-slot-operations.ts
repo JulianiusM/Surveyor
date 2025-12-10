@@ -91,8 +91,6 @@ export function initDnD(planId: string): void {
     try {
         requireEntityPerm('ITEM_EDIT', 'reorder slots');
     } catch (err) {
-        const message = err instanceof Error ? err.message : 'Reordering is not allowed.';
-        showInlineAlert('error', message);
         return;
     }
 

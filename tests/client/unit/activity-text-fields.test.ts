@@ -7,6 +7,7 @@ import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
 import * as permissions from '../../../src/public/js/core/permissions';
 import * as http from '../../../src/public/js/core/http';
+import * as inlineEdit from '../../../src/public/js/shared/inline-edit';
 import {
     deleteTextFieldData as _deleteTextFieldData,
     modalOpenData as _modalOpenData,
@@ -21,11 +22,14 @@ const saveTextFieldData = _saveTextFieldData();
 jest.mock('../../../src/public/js/shared/alerts');
 jest.mock('../../../src/public/js/shared/ui-helpers');
 jest.mock('../../../src/public/js/core/permissions');
+jest.mock('../../../src/public/js/shared/inline-edit');
 
 describe('activity-text-fields', () => {
     let mockShowInlineAlert: jest.SpyInstance;
     let mockReloadAfterDelay: jest.SpyInstance;
     let mockRequireEntityPerm: jest.SpyInstance;
+    let mockGetPerms: jest.SpyInstance;
+    let mockStartInlineEditArea: jest.SpyInstance;
     let mockConfirm: jest.SpyInstance;
     let modalInstance: {show: jest.Mock; hide: jest.Mock};
 
@@ -34,6 +38,10 @@ describe('activity-text-fields', () => {
             mockShowInlineAlert = jest.spyOn(alerts, 'showInlineAlert').mockImplementation();
             mockReloadAfterDelay = jest.spyOn(uiHelpers, 'reloadAfterDelay').mockImplementation();
             mockRequireEntityPerm = jest.spyOn(permissions, 'requireEntityPerm').mockImplementation();
+            mockGetPerms = jest.spyOn(permissions, 'getPerms').mockReturnValue({
+                entity: {has: (key: string) => key === 'MANAGE_REQUIREMENTS' || key === 'ACCESS_VIEW'},
+            } as any);
+            mockStartInlineEditArea = jest.spyOn(inlineEdit, 'startInlineEditArea').mockImplementation();
             mockConfirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
             modalInstance = {show: jest.fn(), hide: jest.fn()};
             (window as any).bootstrap = {
@@ -52,6 +60,8 @@ describe('activity-text-fields', () => {
             includeAdd?: boolean;
             editDataset?: {textFieldId?: string; title?: string; content?: string};
             initialValues?: {title?: string; text?: string; id?: string};
+            content?: string;
+            placeholder?: string;
         } = {}
     ) {
         const addBtn = options.includeAdd
@@ -61,6 +71,8 @@ describe('activity-text-fields', () => {
             ? `<button class="text-field-edit" type="button" data-text-field-id="${options.editDataset.textFieldId ?? ''}"
                     data-title="${options.editDataset.title ?? ''}" data-content="${options.editDataset.content ?? ''}">Edit</button>`
             : '';
+        const content = options.content ?? '';
+        const placeholder = options.placeholder ?? 'double-click to edit';
         document.body.innerHTML = `
             <div id="textFieldModal"></div>
             <h5 id="textFieldModalTitle"></h5>
@@ -71,6 +83,9 @@ describe('activity-text-fields', () => {
             ${addBtn}
             ${editBtn}
             <button class="text-field-delete" data-text-field-id="${textFieldId}">Delete</button>
+            <p class="text-field-content" data-edit="textField" data-id="${textFieldId}" data-placeholder="${placeholder}">
+                ${content}
+            </p>
         `;
     }
 
@@ -101,6 +116,49 @@ describe('activity-text-fields', () => {
                 expect(textInput.value).toBe(testCase.expected.text);
                 expect(idInput.value).toBe(testCase.expected.id);
             });
+        });
+    });
+
+    describe('edit button behavior', () => {
+        test('opens modal when user can manage requirements', () => {
+            renderBase('tf-2', {
+                editDataset: {textFieldId: 'tf-2', title: 'Existing title', content: 'Existing text'},
+            });
+
+            initTextFields('plan-1');
+
+            const btn = document.querySelector<HTMLElement>('.text-field-edit');
+            btn?.click();
+
+            expect(modalInstance.show).toHaveBeenCalled();
+            expect(mockStartInlineEditArea).not.toHaveBeenCalled();
+        });
+
+        test('starts inline edit when user lacks MANAGE_REQUIREMENTS', () => {
+            mockGetPerms.mockReturnValue({entity: {has: (key: string) => key === 'ACCESS_VIEW'}} as any);
+            renderBase('tf-3', {
+                editDataset: {textFieldId: 'tf-3', title: 'Existing title', content: 'Existing text'},
+                content: 'Existing text',
+                placeholder: 'double-click to edit',
+            });
+
+            initTextFields('plan-2');
+
+            const btn = document.querySelector<HTMLElement>('.text-field-edit');
+            btn?.click();
+
+            expect(mockStartInlineEditArea).toHaveBeenCalledWith(
+                expect.any(HTMLElement),
+                '/api/activity/plan-2/text-field/tf-3',
+                {scope: 'entity', key: 'ACCESS_VIEW', action: 'edit shared text fields'},
+                expect.objectContaining({
+                    payloadKey: 'text',
+                    successMessage: 'Text updated',
+                    placeholder: 'double-click to edit',
+                    maxLength: 5000,
+                }),
+            );
+            expect(modalInstance.show).not.toHaveBeenCalled();
         });
     });
 
@@ -182,7 +240,7 @@ describe('activity-text-fields', () => {
                     return;
                 }
 
-                expect(mockRequireEntityPerm).toHaveBeenCalledWith('MANAGE_PERMISSIONS', 'delete shared text fields');
+                expect(mockRequireEntityPerm).toHaveBeenCalledWith('MANAGE_REQUIREMENTS', 'delete shared text fields');
 
                 if (testCase.apiSuccess) {
                     expect(mockShowInlineAlert).toHaveBeenCalledWith('success', 'Text field deleted');

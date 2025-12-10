@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "scripts": {
+    "pretest": "npm run generate",
     "run": "node dist/server.js",
     "server:dev": "nodemon --watch src --ext ts,js --exec \"ts-node --project tsconfig.server.json src/server.ts\"",
     "server:client": "cross-env NODE_ENV=development node esbuild.client.js --watch",
@@ -26,7 +27,9 @@
     "test:debug": "cross-env TEST_DB_LOGGING=true jest --runInBand --detectOpenHandles",
     "test:quick": "./scripts/test.quick.sh",
     "test:all": "./scripts/test.all.sh",
+    "pretest:client": "npm run generate",
     "test:client": "jest --config jest.client.config.ts",
+    "pretest:client:unit": "npm run generate",
     "test:client:unit": "jest --config jest.client.config.ts tests/client/unit",
     "test:client:ui": "jest --config jest.client.config.ts tests/client/ui",
     "test:client:flows": "jest --config jest.client.config.ts tests/client/flows",
