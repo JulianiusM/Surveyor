@@ -31,7 +31,7 @@ describe('activity-requirements module', () => {
     });
 
     describe('initRequirementPanel - setup', () => {
-        test.each(activityRequirementsData.initSetup.invalid)('$description', ({planId, html}) => {
+        test.each(activityRequirementsData().initSetup.invalid)('$description', ({planId, html}) => {
             document.body.innerHTML = html;
             mockGet.mockClear(); // Clear any previous calls
             
@@ -48,7 +48,7 @@ describe('activity-requirements module', () => {
             }
         });
 
-        test.each(activityRequirementsData.initSetup.valid)('$description', async ({planId, html, mockData}) => {
+        test.each(activityRequirementsData().initSetup.valid)('$description', async ({planId, html, mockData}) => {
             document.body.innerHTML = html;
             mockGet.mockResolvedValue({data: mockData});
             
@@ -63,7 +63,7 @@ describe('activity-requirements module', () => {
     });
 
     describe('requirements loading', () => {
-        test.each(activityRequirementsData.loading.success)('$description', async ({planId, html, mockData, expectedAlertText}) => {
+        test.each(activityRequirementsData().loading.success)('$description', async ({planId, html, mockData, expectedAlertText}) => {
             document.body.innerHTML = html;
             mockGet.mockResolvedValue({data: mockData});
             
@@ -78,7 +78,7 @@ describe('activity-requirements module', () => {
             }
         });
 
-        test.each(activityRequirementsData.loading.error)('$description', async ({planId, html, errorMessage}) => {
+        test.each(activityRequirementsData().loading.error)('$description', async ({planId, html, errorMessage}) => {
             document.body.innerHTML = html;
             mockGet.mockRejectedValue(new Error(errorMessage));
             
@@ -95,7 +95,7 @@ describe('activity-requirements module', () => {
     });
 
     describe('role requirements rendering', () => {
-        test.each(activityRequirementsData.roleRequirements.render)('$description', async ({planId, html, mockData, expectedInputs}) => {
+        test.each(activityRequirementsData().roleRequirements.render)('$description', async ({planId, html, mockData, expectedInputs}) => {
             document.body.innerHTML = html;
             mockGet.mockResolvedValue({data: mockData});
             
@@ -112,7 +112,7 @@ describe('activity-requirements module', () => {
     });
 
     describe('overrides rendering', () => {
-        test.each(activityRequirementsData.overrides.render)('$description', async ({planId, html, mockData, hasEmptyState, expectedRows}) => {
+        test.each(activityRequirementsData().overrides.render)('$description', async ({planId, html, mockData, hasEmptyState, expectedRows}) => {
             document.body.innerHTML = html;
             mockGet.mockResolvedValue({data: mockData});
             
@@ -132,7 +132,7 @@ describe('activity-requirements module', () => {
             }
         });
 
-        test.each(activityRequirementsData.overrides.addOverride)('$description', async ({planId, html, mockData}) => {
+        test.each(activityRequirementsData().overrides.addOverride)('$description', async ({planId, html, mockData}) => {
             document.body.innerHTML = html;
             mockGet.mockResolvedValue({data: mockData});
             
@@ -153,7 +153,7 @@ describe('activity-requirements module', () => {
             expect(finalRows).toBeGreaterThan(initialRows);
         });
 
-        test.each(activityRequirementsData.overrides.removeOverride)('$description', async ({planId, html, mockData}) => {
+        test.each(activityRequirementsData().overrides.removeOverride)('$description', async ({planId, html, mockData}) => {
             document.body.innerHTML = html;
             mockGet.mockResolvedValue({data: mockData});
             
@@ -177,7 +177,7 @@ describe('activity-requirements module', () => {
     });
 
     describe('summary statistics', () => {
-        test.each(activityRequirementsData.summary.stats)('$description', async ({planId, html, mockData, expectedBadges}) => {
+        test.each(activityRequirementsData().summary.stats)('$description', async ({planId, html, mockData, expectedBadges}) => {
             document.body.innerHTML = html;
             mockGet.mockResolvedValue({data: mockData});
             
@@ -192,7 +192,7 @@ describe('activity-requirements module', () => {
             expect(badges?.length).toBe(expectedBadges);
         });
 
-        test.each(activityRequirementsData.summary.table)('$description', async ({planId, html, mockData, expectedRows}) => {
+        test.each(activityRequirementsData().summary.table)('$description', async ({planId, html, mockData, expectedRows}) => {
             document.body.innerHTML = html;
             mockGet.mockResolvedValue({data: mockData});
             
@@ -209,7 +209,7 @@ describe('activity-requirements module', () => {
     });
 
     describe('save requirements', () => {
-        test.each(activityRequirementsData.save.success)('$description', async ({planId, html, mockData, expectedPayload}) => {
+        test.each(activityRequirementsData().save.success)('$description', async ({planId, html, mockData, expectedPayload}) => {
             document.body.innerHTML = html;
             mockGet.mockResolvedValue({data: mockData});
             mockPost.mockResolvedValue({});
@@ -236,7 +236,7 @@ describe('activity-requirements module', () => {
             expect(mockShowInlineAlert).toHaveBeenCalledWith('success', expect.any(String));
         });
 
-        test.each(activityRequirementsData.save.error)('$description', async ({planId, html, mockData, errorMessage}) => {
+        test.each(activityRequirementsData().save.error)('$description', async ({planId, html, mockData, errorMessage}) => {
             document.body.innerHTML = html;
             mockGet.mockResolvedValue({data: mockData});
             mockPost.mockRejectedValue(new Error(errorMessage));
@@ -262,7 +262,7 @@ describe('activity-requirements module', () => {
     });
 
     describe('reload requirements', () => {
-        test.each(activityRequirementsData.reload)('$description', async ({planId, html, mockData}) => {
+        test.each(activityRequirementsData().reload)('$description', async ({planId, html, mockData}) => {
             document.body.innerHTML = html;
             mockGet.mockResolvedValue({data: mockData});
             

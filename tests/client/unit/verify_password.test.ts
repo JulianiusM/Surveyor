@@ -4,8 +4,10 @@
  */
 
 import { 
-    verifyPasswordInitTestData
+    verifyPasswordInitTestData as _verifyPasswordInitTestData
 } from '../data/verifyPasswordData';
+
+const verifyPasswordInitTestData = _verifyPasswordInitTestData();
 
 // Mock jQuery with chainable methods
 const createMockElement = () => {

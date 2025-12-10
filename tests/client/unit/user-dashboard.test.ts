@@ -3,7 +3,10 @@
  * Follows data-driven and keyword-driven test patterns
  */
 
-import { userDashboardInitTestData, userDashboardCallOrderData } from '../data/userDashboardData';
+import { userDashboardInitTestData as _userDashboardInitTestData, userDashboardCallOrderData as _userDashboardCallOrderData } from '../data/userDashboardData';
+
+const userDashboardInitTestData = _userDashboardInitTestData();
+const userDashboardCallOrderData = _userDashboardCallOrderData();
 import { setupTest } from '../helpers/testSetup';
 
 // Mock dependencies

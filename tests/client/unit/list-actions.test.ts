@@ -8,7 +8,9 @@ import {
     initItemDeletion,
     initQuickAdd,
 } from '../../../src/public/js/shared/list-actions';
-import { configData } from '../data/listActionsData';
+import { configData as _configData } from '../data/listActionsData';
+
+const configData = _configData();
 import { requireEntityPerm, requireItemPerm } from '../../../src/public/js/core/permissions';
 import { setupTest } from '../helpers/testSetup';
 import { server } from '../msw/server';

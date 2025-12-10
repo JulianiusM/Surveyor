@@ -1,9 +1,13 @@
 /**
  * Tests for survey-create.ts module
+ * Using real PUG template for DOM structure
  */
 
-import { surveyCreateTestData } from '../data/surveyCreateData';
+import { surveyCreateTestData as _surveyCreateTestData } from '../data/surveyCreateData';
+
+const surveyCreateTestData = _surveyCreateTestData();
 import { setupTest } from '../helpers/testSetup';
+import { renderPugView } from '../helpers/renderPugView';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/navigation', () => ({
@@ -28,13 +32,11 @@ describe('survey-create module', () => {
 
     setupTest({
         beforeEach: () => {
-            // Setup DOM
-            document.body.innerHTML = `
-                <table>
-                    <tbody id="combinationTable"></tbody>
-                </table>
-                <button id="addCombinationBtn">Add Combination</button>
-            `;
+            // Render real PUG template
+            const html = renderPugView('surveyor/survey-create.pug', {
+                data: {} // Empty data for create mode
+            }, true); // Extract content only
+            document.body.innerHTML = html;
 
             // Setup global namespace
             window.Surveyor = {} as any;

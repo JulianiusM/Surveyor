@@ -2,7 +2,9 @@
  * Test data for date-range-modal.ts
  */
 
-export const readDateRangePayloadData = [
+import {deepCopy} from "../helpers/util";
+
+const _readDateRangePayloadData = [
     {
         description: 'reads valid date range payload',
         arrival: '2024-01-01',
@@ -48,7 +50,9 @@ export const readDateRangePayloadData = [
     },
 ];
 
-export const boundsData = [
+export const readDateRangePayloadData = () => deepCopy(_readDateRangePayloadData) as typeof _readDateRangePayloadData;
+
+const _boundsData = [
     {
         description: 'applies both min and max bounds',
         bounds: {
@@ -81,3 +85,5 @@ export const boundsData = [
         expectedMax: undefined,
     },
 ];
+
+export const boundsData = () => deepCopy(_boundsData) as typeof _boundsData;

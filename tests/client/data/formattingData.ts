@@ -3,10 +3,12 @@
  * Data-driven test cases for date/time formatting functions
  */
 
+import {deepCopy} from "../helpers/util";
+
 /**
  * Test cases for padNumber function
  */
-export const padNumberData = [
+const _padNumberData = [
     {
         description: 'pads single digit with zero by default',
         input: {num: 5},
@@ -39,10 +41,12 @@ export const padNumberData = [
     },
 ];
 
+export const padNumberData = () => deepCopy(_padNumberData) as typeof _padNumberData;
+
 /**
  * Test cases for formatDate function
  */
-export const formatDateData = [
+const _formatDateData = [
     {
         description: 'formats valid date string',
         input: {date: '2025-01-15'},
@@ -65,10 +69,12 @@ export const formatDateData = [
     },
 ];
 
+export const formatDateData = () => deepCopy(_formatDateData) as typeof _formatDateData;
+
 /**
  * Test cases for formatDateTime function
  */
-export const formatDateTimeData = [
+const _formatDateTimeData = [
     {
         description: 'returns fallback for null',
         input: {date: null},
@@ -86,10 +92,12 @@ export const formatDateTimeData = [
     },
 ];
 
+export const formatDateTimeData = () => deepCopy(_formatDateTimeData) as typeof _formatDateTimeData;
+
 /**
  * Test cases for formatISODate function
  */
-export const formatISODateData = [
+const _formatISODateData = [
     {
         description: 'formats date as YYYY-MM-DD',
         input: {date: new Date(Date.UTC(2025, 0, 15))},
@@ -107,10 +115,12 @@ export const formatISODateData = [
     },
 ];
 
+export const formatISODateData = () => deepCopy(_formatISODateData) as typeof _formatISODateData;
+
 /**
  * Test cases for parseISODate function
  */
-export const parseISODateData = [
+const _parseISODateData = [
     {
         description: 'parses YYYY-MM-DD to Date',
         input: {dateString: '2025-01-15'},
@@ -123,10 +133,12 @@ export const parseISODateData = [
     },
 ];
 
+export const parseISODateData = () => deepCopy(_parseISODateData) as typeof _parseISODateData;
+
 /**
  * Test cases for formatDateLabel function
  */
-export const formatDateLabelData = [
+const _formatDateLabelData = [
     {
         description: 'returns empty string for null',
         input: {date: null},
@@ -144,10 +156,12 @@ export const formatDateLabelData = [
     },
 ];
 
+export const formatDateLabelData = () => deepCopy(_formatDateLabelData) as typeof _formatDateLabelData;
+
 /**
  * Test cases for formatTimeLabel function
  */
-export const formatTimeLabelData = [
+const _formatTimeLabelData = [
     {
         description: 'formats time as HH:MM',
         input: {time: '14:30:00'},
@@ -170,10 +184,12 @@ export const formatTimeLabelData = [
     },
 ];
 
+export const formatTimeLabelData = () => deepCopy(_formatTimeLabelData) as typeof _formatTimeLabelData;
+
 /**
  * Test cases for toDateTimeLocalValue function
  */
-export const toDateTimeLocalValueData = [
+const _toDateTimeLocalValueData = [
     {
         description: 'converts Date to datetime-local format',
         input: {date: new Date(2025, 0, 15, 14, 30)},
@@ -201,10 +217,12 @@ export const toDateTimeLocalValueData = [
     },
 ];
 
+export const toDateTimeLocalValueData = () => deepCopy(_toDateTimeLocalValueData) as typeof _toDateTimeLocalValueData;
+
 /**
  * Test cases for toISOStringOrNull function
  */
-export const toISOStringOrNullData = [
+const _toISOStringOrNullData = [
     {
         description: 'returns null for empty string',
         input: {value: ''},
@@ -217,10 +235,12 @@ export const toISOStringOrNullData = [
     },
 ];
 
+export const toISOStringOrNullData = () => deepCopy(_toISOStringOrNullData) as typeof _toISOStringOrNullData;
+
 /**
  * Test cases for getValidDaysInWeek function
  */
-export const getValidDaysInWeekData = [
+const _getValidDaysInWeekData = [
     {
         description: 'returns all 7 days when no restrictions',
         input: {
@@ -240,3 +260,5 @@ export const getValidDaysInWeekData = [
         expectedLength: 0,
     },
 ];
+
+export const getValidDaysInWeekData = () => deepCopy(_getValidDaysInWeekData) as typeof _getValidDaysInWeekData;

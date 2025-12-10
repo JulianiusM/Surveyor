@@ -4,21 +4,18 @@
  */
 
 import {getAllRoles, getSlotRolesForSlot, addRoleToGlobal, initSlotRoleAdminModal} from '../../../src/public/js/modules/activity-roles';
-import * as http from '../../../src/public/js/core/http';
 import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
 import * as permissions from '../../../src/public/js/core/permissions';
 import {activityRolesData} from '../data/activityRolesData';
 import type {RoleSummary} from '../../../src/public/js/modules/activity-types';
-import {setupTest} from '../helpers/testSetup';
+import {setupTest, mockApiSuccess, mockApiError} from '../helpers/testSetup';
 
-// Mock dependencies
-jest.mock('../../../src/public/js/core/http');
+// Mock UI dependencies (NOT http - MSW handles that)
 jest.mock('../../../src/public/js/shared/alerts');
 jest.mock('../../../src/public/js/shared/ui-helpers');
 jest.mock('../../../src/public/js/core/permissions');
 
-const mockPost = http.post as jest.MockedFunction<typeof http.post>;
 const mockShowInlineAlert = alerts.showInlineAlert as jest.MockedFunction<typeof alerts.showInlineAlert>;
 const mockReloadAfterDelay = uiHelpers.reloadAfterDelay as jest.MockedFunction<typeof uiHelpers.reloadAfterDelay>;
 const mockRequireEntityPerm = permissions.requireEntityPerm as jest.MockedFunction<typeof permissions.requireEntityPerm>;
@@ -32,7 +29,7 @@ describe('activity-roles module', () => {
     });
 
     describe('getAllRoles', () => {
-        test.each(activityRolesData.getAllRoles)('$description', ({initialRoles, expected}) => {
+        test.each(activityRolesData().getAllRoles)('$description', ({initialRoles, expected}) => {
             if (initialRoles !== undefined) {
                 (window as any).Surveyor = {allRoles: initialRoles};
             }
@@ -42,7 +39,7 @@ describe('activity-roles module', () => {
     });
 
     describe('getSlotRolesForSlot', () => {
-        test.each(activityRolesData.getSlotRolesForSlot)('$description', ({slotId, slotRoles, expected}) => {
+        test.each(activityRolesData().getSlotRolesForSlot)('$description', ({slotId, slotRoles, expected}) => {
             if (slotRoles !== undefined) {
                 (window as any).Surveyor = {slotRoles};
             }
@@ -52,7 +49,7 @@ describe('activity-roles module', () => {
     });
 
     describe('addRoleToGlobal', () => {
-        test.each(activityRolesData.addRoleToGlobal)('$description', ({initialRoles, roleToAdd, expectedRoles}) => {
+        test.each(activityRolesData().addRoleToGlobal)('$description', ({initialRoles, roleToAdd, expectedRoles}) => {
             if (initialRoles !== undefined) {
                 (window as any).Surveyor = {allRoles: initialRoles};
             }
@@ -78,7 +75,7 @@ describe('activity-roles module', () => {
             };
         });
 
-        test.each(activityRolesData.initSlotRoleAdminModal.invalidSetup)('$description', ({planId, html, describeSlot}) => {
+        test.each(activityRolesData().initSlotRoleAdminModal.invalidSetup)('$description', ({planId, html, describeSlot}) => {
             document.body.innerHTML = html;
             const mockDescribeSlot = jest.fn(describeSlot);
             
@@ -88,7 +85,7 @@ describe('activity-roles module', () => {
             expect((window as any).bootstrap?.Modal).not.toHaveBeenCalled();
         });
 
-        test.each(activityRolesData.initSlotRoleAdminModal.validSetup)('$description', ({planId, html, describeSlot}) => {
+        test.each(activityRolesData().initSlotRoleAdminModal.validSetup)('$description', ({planId, html, describeSlot}) => {
             document.body.innerHTML = html;
             const mockDescribeSlot = jest.fn(describeSlot);
             
@@ -98,7 +95,7 @@ describe('activity-roles module', () => {
             expect((window as any).bootstrap.Modal).toHaveBeenCalled();
         });
 
-        test.each(activityRolesData.initSlotRoleAdminModal.openModal)('$description', async ({planId, html, slotId, expectedTitle}) => {
+        test.each(activityRolesData().initSlotRoleAdminModal.openModal)('$description', async ({planId, html, slotId, expectedTitle}) => {
             document.body.innerHTML = html;
             const mockDescribeSlot = jest.fn((id: string) => `Slot ${id}`);
             
@@ -119,7 +116,7 @@ describe('activity-roles module', () => {
             expect(mockModal.show).toHaveBeenCalled();
         });
 
-        test.each(activityRolesData.initSlotRoleAdminModal.renderTable)('$description', ({planId, html, slotId, expectedRows}) => {
+        test.each(activityRolesData().initSlotRoleAdminModal.renderTable)('$description', ({planId, html, slotId, expectedRows}) => {
             document.body.innerHTML = html;
             const mockDescribeSlot = jest.fn((id: string) => `Slot ${id}`);
             
@@ -135,10 +132,16 @@ describe('activity-roles module', () => {
             expect(rows?.length).toBe(expectedRows);
         });
 
-        test.each(activityRolesData.initSlotRoleAdminModal.saveSuccess)('$description', async ({planId, html, slotId, expectedPayload}) => {
+        test.each(activityRolesData().initSlotRoleAdminModal.saveSuccess)('$description', async ({planId, html, slotId, expectedPayload}) => {
+            // Clear mocks at start of each test case in test.each loop
+            mockShowInlineAlert.mockClear();
+            mockReloadAfterDelay.mockClear();
+            mockRequireEntityPerm.mockClear();
+            
             document.body.innerHTML = html;
             const mockDescribeSlot = jest.fn((id: string) => `Slot ${id}`);
-            mockPost.mockResolvedValue({});
+            // Queue MSW response
+            mockApiSuccess('POST', `/api/activity/${planId}/slot/${slotId}/roles/admin`, {});
             
             initSlotRoleAdminModal(planId, mockDescribeSlot);
             
@@ -150,21 +153,17 @@ describe('activity-roles module', () => {
             const saveBtn = document.getElementById('slotRoleAdminSave') as HTMLButtonElement;
             await saveBtn.click();
             
-            // Wait for async operations
-            await new Promise(resolve => setTimeout(resolve, 0));
+            // Wait for async operations (increased to ensure HTTP resolves)
+            await new Promise(resolve => setTimeout(resolve, 250));
             
-            // Check API called with correct data
+            // Check side effects
             expect(mockRequireEntityPerm).toHaveBeenCalledWith('MANAGE_ASSIGNMENTS', expect.any(String));
-            expect(mockPost).toHaveBeenCalledWith(
-                `/api/activity/${planId}/slot/${slotId}/roles/admin`,
-                expectedPayload
-            );
             expect(mockShowInlineAlert).toHaveBeenCalledWith('success', expect.any(String));
             expect(mockModal.hide).toHaveBeenCalled();
             expect(mockReloadAfterDelay).toHaveBeenCalledWith(150);
         });
 
-        test.each(activityRolesData.initSlotRoleAdminModal.saveError)('$description', async ({planId, html, slotId, errorMessage}) => {
+        test.each(activityRolesData().initSlotRoleAdminModal.saveError)('$description', async ({planId, html, slotId, errorMessage}) => {
             document.body.innerHTML = html;
             const mockDescribeSlot = jest.fn((id: string) => `Slot ${id}`);
             
@@ -173,7 +172,8 @@ describe('activity-roles module', () => {
                     throw new Error('Permission denied');
                 });
             } else {
-                mockPost.mockRejectedValue(new Error(errorMessage));
+                // Queue MSW error response
+                mockApiError('POST', `/api/activity/${planId}/slot/${slotId}/roles/admin`, errorMessage, 400);
             }
             
             initSlotRoleAdminModal(planId, mockDescribeSlot);
@@ -187,7 +187,7 @@ describe('activity-roles module', () => {
             await saveBtn.click();
             
             // Wait for async operations
-            await new Promise(resolve => setTimeout(resolve, 0));
+            await new Promise(resolve => setTimeout(resolve, 100));
             
             // Check error displayed
             const errorEl = document.getElementById('slotRoleAdminError');

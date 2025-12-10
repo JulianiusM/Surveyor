@@ -3,10 +3,12 @@
  * Data-driven test cases for navigation state and highlighting
  */
 
+import {deepCopy} from "../helpers/util";
+
 /**
  * Test cases for setCurrentNavLocation function
  */
-export const setCurrentNavLocationData = [
+const _setCurrentNavLocationData = [
     {
         description: 'sets survey nav link active',
         pathname: '/survey/list',
@@ -49,10 +51,12 @@ export const setCurrentNavLocationData = [
     },
 ];
 
+export const setCurrentNavLocationData = () => deepCopy(_setCurrentNavLocationData) as typeof _setCurrentNavLocationData;
+
 /**
  * Test cases for initEntityLists function
  */
-export const initEntityListsData = [
+const _initEntityListsData = [
     {
         description: 'filters list items by search query',
         items: [
@@ -93,3 +97,5 @@ export const initEntityListsData = [
         expectedVisible: 1,
     },
 ];
+
+export const initEntityListsData = () => deepCopy(_initEntityListsData) as typeof _initEntityListsData;

@@ -19,15 +19,42 @@ export function renderPugView(viewPath: string, locals: Locals = {}, extractCont
     const viewsDir = path.resolve(__dirname, "../../../src/views");
     const fullPath = path.join(viewsDir, viewPath);
 
-    // Default locals that are commonly used in views
+    // Default locals that are commonly used in views (matching app.ts middleware structure)
     const defaultLocals = {
+        // User session data
+        user: null,
+        guest: null,
+        
+        // App version
+        version: '0.0.0-test',
+        
+        // Settings object (matching app.ts structure)
+        settings: {
+            localLoginEnabled: true,
+            oidcEnabled: false,
+            oidcName: 'OIDC',
+            rootUrl: 'http://localhost:3000',
+            imprintUrl: '#',
+            privacyPolicyUrl: '#',
+        },
+        
+        // Permission data (matching attachPermMeta structure)
+        perms: {
+            permMeta: [],
+            defaultPerms: {},
+            presets: [],
+        },
+        
+        // Legacy support for older templates
         permData: {
             entity: {
                 has: () => false, // Default: no permissions
             }
         },
+        
+        // Entity data
         data: {},
-        user: null,
+        
         ...locals
     };
 

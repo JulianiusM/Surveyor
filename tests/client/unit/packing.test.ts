@@ -2,7 +2,9 @@
  * Tests for packing.ts module
  */
 
-import { packingTestData } from '../data/packingData';
+import { packingTestData as _packingTestData } from '../data/packingData';
+
+const packingTestData = _packingTestData();
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/navigation', () => ({

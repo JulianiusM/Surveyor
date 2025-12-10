@@ -4,7 +4,9 @@
  */
 
 import {initSlotEditorModal} from '../../../src/public/js/modules/activity-slot-editor';
-import {activitySlotEditorData as testData} from '../data/activitySlotEditorData';
+import {activitySlotEditorData} from '../data/activitySlotEditorData';
+
+const testData = activitySlotEditorData();
 import * as http from '../../../src/public/js/core/http';
 import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
@@ -23,6 +25,11 @@ const mockHide = jest.fn();
 };
 
 // Mock dependencies
+// NOTE: This file uses jest.mock instead of MSW due to complex Bootstrap modal
+// timing issues with async form submissions. Attempted migration to MSW resulted
+// in 7 test failures where form submit events weren't properly receiving queued
+// responses. Keeping jest.mock until modal event lifecycle can be better understood.
+// See: docs/TESTING_INFRASTRUCTURE.md for migration pattern and troubleshooting.
 jest.mock('../../../src/public/js/core/http');
 jest.mock('../../../src/public/js/shared/alerts');
 jest.mock('../../../src/public/js/shared/ui-helpers');

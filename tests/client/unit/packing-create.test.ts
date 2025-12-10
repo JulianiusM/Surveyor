@@ -1,9 +1,13 @@
 /**
  * Tests for packing-create.ts module
+ * Using real PUG template for DOM structure
  */
 
-import { packingCreateTestData } from '../data/packingCreateData';
+import { packingCreateTestData as _packingCreateTestData } from '../data/packingCreateData';
+
+const packingCreateTestData = _packingCreateTestData();
 import { setupTest } from '../helpers/testSetup';
+import { renderPugView } from '../helpers/renderPugView';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/navigation', () => ({
@@ -22,16 +26,11 @@ describe('packing-create module', () => {
 
     setupTest({
         beforeEach: () => {
-            // Setup DOM
-            document.body.innerHTML = `
-                <form id="packingForm">
-                    <input type="hidden" id="itemsJson" />
-                    <table>
-                        <tbody id="itemTable"></tbody>
-                    </table>
-                    <button id="addItemBtn">Add Item</button>
-                </form>
-            `;
+            // Render real PUG template
+            const html = renderPugView('packing/packing-create.pug', {
+                data: {} // Empty data for create mode
+            }, true); // Extract content only
+            document.body.innerHTML = html;
 
             // Setup global namespace
             window.Surveyor = {} as any;

@@ -10,7 +10,7 @@ describe('activity-participants module', () => {
     setupTest();
 
     describe('initParticipantsTab', () => {
-        test.each(participantsInitData)('$description', (testCase) => {
+        test.each(participantsInitData())('$description', (testCase) => {
             if (testCase.hasTab) {
                 const html = `
                     <div id="tab-participants">
@@ -43,7 +43,7 @@ describe('activity-participants module', () => {
             }
         });
 
-        test.each(participantsFilterData)('$description', (testCase) => {
+        test.each(participantsFilterData())('$description', (testCase) => {
             const html = `
                 <div id="tab-participants">
                     <input type="text" id="participant-search" value="${testCase.search}" />

@@ -2,7 +2,9 @@
  * Test data for activity-filters module
  */
 
-export const initDatesTestData = [
+import {deepCopy} from "../helpers/util";
+
+const _initDatesTestData = [
     {
         description: 'formats dates in table headers',
         date: '2024-03-15',
@@ -23,7 +25,9 @@ export const initDatesTestData = [
     },
 ];
 
-export const initSlotFiltersTestData = [
+export const initDatesTestData = () => deepCopy(_initDatesTestData) as typeof _initDatesTestData;
+
+const _initSlotFiltersTestData = [
     {
         description: 'shows all slots in all mode',
         filterMode: 'all',
@@ -55,3 +59,5 @@ export const initSlotFiltersTestData = [
         ],
     },
 ];
+
+export const initSlotFiltersTestData = () => deepCopy(_initSlotFiltersTestData) as typeof _initSlotFiltersTestData;

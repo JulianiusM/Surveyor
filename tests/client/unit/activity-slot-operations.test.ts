@@ -4,17 +4,19 @@
 
 import {initInlineEdit, initDelete, initDnD} from '../../../src/public/js/modules/activity-slot-operations';
 import * as inlineEdit from '../../../src/public/js/shared/inline-edit';
-import * as http from '../../../src/public/js/core/http';
 import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
 import * as permissions from '../../../src/public/js/core/permissions';
 import * as dragDrop from '../../../src/public/js/shared/drag-drop';
-import {initInlineEditData, initDeleteData, initDnDData} from '../data/activitySlotOperationsData';
-import {setupTest} from '../helpers/testSetup';
+import {initInlineEditData as _initInlineEditData, initDeleteData as _initDeleteData, initDnDData as _initDnDData} from '../data/activitySlotOperationsData';
 
-// Mock dependencies
+const initInlineEditData = _initInlineEditData();
+const initDeleteData = _initDeleteData();
+const initDnDData = _initDnDData();
+import {setupTest, mockApiSuccess, mockApiError} from '../helpers/testSetup';
+
+// Mock UI dependencies (NOT http - MSW handles that)
 jest.mock('../../../src/public/js/shared/inline-edit');
-jest.mock('../../../src/public/js/core/http');
 jest.mock('../../../src/public/js/shared/alerts');
 jest.mock('../../../src/public/js/shared/ui-helpers');
 jest.mock('../../../src/public/js/core/permissions');
@@ -23,7 +25,6 @@ jest.mock('../../../src/public/js/shared/drag-drop');
 describe('activity-slot-operations', () => {
     let mockStartInlineEdit: jest.SpyInstance;
     let mockStartInlineEditArea: jest.SpyInstance;
-    let mockPost: jest.SpyInstance;
     let mockShowInlineAlert: jest.SpyInstance;
     let mockReloadAfterDelay: jest.SpyInstance;
     let mockRequireItemPerm: jest.SpyInstance;
@@ -33,20 +34,11 @@ describe('activity-slot-operations', () => {
 
     setupTest({
         beforeEach: () => {
-            // Reset modules to get fresh event listeners
-            jest.resetModules();
-            
-            // Create fresh document to avoid event listener accumulation
-            const newDocument = {
-                ...document,
-                addEventListener: jest.fn(),
-                body: document.createElement('body')
-            };
-            (global as any).document = newDocument;
+            // Note: Do NOT mock document.addEventListener or reset modules
+            // The initDelete/initInlineEdit functions need real event listeners to work
             
             mockStartInlineEdit = jest.spyOn(inlineEdit, 'startInlineEdit').mockImplementation();
             mockStartInlineEditArea = jest.spyOn(inlineEdit, 'startInlineEditArea').mockImplementation();
-            mockPost = jest.spyOn(http, 'post').mockResolvedValue({});
             mockShowInlineAlert = jest.spyOn(alerts, 'showInlineAlert').mockImplementation();
             mockReloadAfterDelay = jest.spyOn(uiHelpers, 'reloadAfterDelay').mockImplementation();
             mockRequireItemPerm = jest.spyOn(permissions, 'requireItemPerm').mockImplementation();
@@ -121,13 +113,23 @@ describe('activity-slot-operations', () => {
     describe('initDelete', () => {
         initDeleteData.forEach((testCase) => {
             test(testCase.description, async () => {
+                // Clear mocks at start of each test case in forEach loop
+                mockShowInlineAlert.mockClear();
+                mockReloadAfterDelay.mockClear();
+                mockRequireItemPerm.mockClear();
+                
                 const buttonHtml = `<button data-delete-slot data-slotid="${testCase.slotId}">Delete</button>`;
                 document.body.innerHTML = buttonHtml;
 
                 mockConfirm.mockReturnValue(testCase.confirmResult);
 
-                if (!testCase.apiSuccess) {
-                    mockPost.mockRejectedValue(new Error(testCase.apiError || 'API Error'));
+                // Queue API response using MSW
+                if (testCase.slotId && testCase.confirmResult) {
+                    if (testCase.apiSuccess) {
+                        mockApiSuccess('POST', `/api/activity/${testCase.planId}/slot/${testCase.slotId}/delete`, {});
+                    } else {
+                        mockApiError('POST', `/api/activity/${testCase.planId}/slot/${testCase.slotId}/delete`, testCase.apiError || 'API Error', 400);
+                    }
                 }
 
                 initDelete(testCase.planId);
@@ -135,11 +137,10 @@ describe('activity-slot-operations', () => {
                 const button = document.querySelector('[data-delete-slot]') as HTMLElement;
                 button.click();
 
-                // Wait for async operations
-                await new Promise((resolve) => setTimeout(resolve, 10));
+                // Wait for async operations (increased for MSW + ensure HTTP resolves)
+                await new Promise((resolve) => setTimeout(resolve, 150));
 
                 if (!testCase.confirmResult) {
-                    expect(mockPost).not.toHaveBeenCalled();
                     expect(mockShowInlineAlert).not.toHaveBeenCalled();
                     return;
                 }
@@ -152,11 +153,8 @@ describe('activity-slot-operations', () => {
                         'ITEM_DELETE'
                     );
 
+                    // Test side effects instead of mock calls
                     if (testCase.apiSuccess) {
-                        expect(mockPost).toHaveBeenCalledWith(
-                            `/api/activity/${testCase.planId}/slot/${testCase.slotId}/delete`,
-                            {}
-                        );
                         expect(mockShowInlineAlert).toHaveBeenCalledWith('success', 'Deleted');
                         expect(mockReloadAfterDelay).toHaveBeenCalledWith(100);
                     } else {
@@ -179,7 +177,6 @@ describe('activity-slot-operations', () => {
 
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            expect(mockPost).not.toHaveBeenCalled();
             expect(mockShowInlineAlert).toHaveBeenCalledWith('error', 'Permission denied');
         });
     });

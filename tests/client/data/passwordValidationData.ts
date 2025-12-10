@@ -3,10 +3,12 @@
  * Data-driven test cases for password strength checking and validation
  */
 
+import {deepCopy} from "../helpers/util";
+
 /**
  * Test cases for isPasswordValid function
  */
-export const passwordValidData = [
+const _passwordValidData = [
     {
         description: 'valid password with letters and digits',
         input: { password: 'password123' },
@@ -24,7 +26,9 @@ export const passwordValidData = [
     },
 ];
 
-export const passwordInvalidData = [
+export const passwordValidData = () => deepCopy(_passwordValidData) as typeof _passwordValidData;
+
+const _passwordInvalidData = [
     {
         description: 'password shorter than 8 characters',
         input: { password: 'Pass1' },
@@ -77,7 +81,9 @@ export const passwordInvalidData = [
     },
 ];
 
-export const passwordEdgeCaseData = [
+export const passwordInvalidData = () => deepCopy(_passwordInvalidData) as typeof _passwordInvalidData;
+
+const _passwordEdgeCaseData = [
     {
         description: 'lowercase letters with digits',
         input: { password: 'lowercase123' },
@@ -120,10 +126,12 @@ export const passwordEdgeCaseData = [
     },
 ];
 
+export const passwordEdgeCaseData = () => deepCopy(_passwordEdgeCaseData) as typeof _passwordEdgeCaseData;
+
 /**
  * Test cases for isPasswordRepeatValid function
  */
-export const passwordRepeatMatchData = [
+const _passwordRepeatMatchData = [
     {
         description: 'passwords match',
         input: { password: 'password123', passwordRepeat: 'password123' },
@@ -136,7 +144,9 @@ export const passwordRepeatMatchData = [
     },
 ];
 
-export const passwordRepeatMismatchData = [
+export const passwordRepeatMatchData = () => deepCopy(_passwordRepeatMatchData) as typeof _passwordRepeatMatchData;
+
+const _passwordRepeatMismatchData = [
     {
         description: 'passwords do not match',
         input: { password: 'password123', passwordRepeat: 'password124' },
@@ -179,7 +189,9 @@ export const passwordRepeatMismatchData = [
     },
 ];
 
-export const passwordRepeatEdgeCaseData = [
+export const passwordRepeatMismatchData = () => deepCopy(_passwordRepeatMismatchData) as typeof _passwordRepeatMismatchData;
+
+const _passwordRepeatEdgeCaseData = [
     {
         description: 'both passwords are undefined',
         input: { password: undefined, passwordRepeat: undefined },
@@ -192,10 +204,12 @@ export const passwordRepeatEdgeCaseData = [
     },
 ];
 
+export const passwordRepeatEdgeCaseData = () => deepCopy(_passwordRepeatEdgeCaseData) as typeof _passwordRepeatEdgeCaseData;
+
 /**
  * Test cases for generatePasswordFeedback function
  */
-export const passwordFeedbackData = [
+const _passwordFeedbackData = [
     {
         description: 'all criteria met',
         input: { hasMinLength: true, hasLetter: true, hasDigit: true },
@@ -229,3 +243,5 @@ export const passwordFeedbackData = [
         },
     },
 ];
+
+export const passwordFeedbackData = () => deepCopy(_passwordFeedbackData) as typeof _passwordFeedbackData;

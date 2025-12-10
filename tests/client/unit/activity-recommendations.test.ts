@@ -4,7 +4,9 @@
  */
 
 import {initRecommendationPanel} from '../../../src/public/js/modules/activity-recommendations';
-import {activityRecommendationsData as testData} from '../data/activityRecommendationsData';
+import {activityRecommendationsData} from '../data/activityRecommendationsData';
+
+const testData = activityRecommendationsData();
 import * as http from '../../../src/public/js/core/http';
 import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';

@@ -2,7 +2,9 @@
  * Test data for perm-matrix module
  */
 
-export const permMatrixTestData = {
+import {deepCopy} from "../helpers/util";
+
+const _permMatrixTestData = {
     selectAll: [
         {
             description: 'selects all checkboxes for audience',
@@ -93,3 +95,5 @@ export const permMatrixTestData = {
         }
     ]
 };
+
+export const permMatrixTestData = () => deepCopy(_permMatrixTestData) as typeof _permMatrixTestData;

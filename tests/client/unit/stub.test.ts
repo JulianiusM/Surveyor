@@ -3,7 +3,9 @@
  * Follows data-driven and keyword-driven test patterns
  */
 
-import { stubInitTestData } from '../data/stubData';
+import { stubInitTestData as _stubInitTestData } from '../data/stubData';
+
+const stubInitTestData = _stubInitTestData();
 import { setupTest } from '../helpers/testSetup';
 
 // Mock dependencies

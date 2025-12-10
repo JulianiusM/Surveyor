@@ -27,7 +27,7 @@ describe('navigation utilities', () => {
             `;
         });
 
-        test.each(setCurrentNavLocationData)(
+        test.each(setCurrentNavLocationData())(
             '$description',
             ({ pathname, expectedSelector }) => {
                 // Mock window.location with pathname
@@ -88,7 +88,7 @@ describe('navigation utilities', () => {
             `;
         }
 
-        test.each(initEntityListsData)(
+        test.each(initEntityListsData())(
             '$description',
             ({ items, searchQuery, expectedVisible }) => {
                 document.body.innerHTML = createListHTML(items);

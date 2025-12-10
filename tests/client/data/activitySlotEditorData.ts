@@ -2,7 +2,9 @@
  * Test data for activity-slot-editor.ts
  */
 
-export const activitySlotEditorData = {
+import {deepCopy} from "../helpers/util";
+
+const _activitySlotEditorData = {
     initialization: {
         valid: {
             planId: 'plan123',
@@ -123,3 +125,5 @@ export const activitySlotEditorData = {
         },
     },
 };
+
+export const activitySlotEditorData = () => deepCopy(_activitySlotEditorData) as typeof _activitySlotEditorData;

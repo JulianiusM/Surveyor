@@ -3,10 +3,12 @@
  * Data-driven test cases for UI component builders
  */
 
+import {deepCopy} from "../helpers/util";
+
 /**
  * Test cases for createBadge function
  */
-export const createBadgeData = [
+const _createBadgeData = [
     {
         description: 'creates success badge',
         input: { status: 'active' },
@@ -39,10 +41,12 @@ export const createBadgeData = [
     },
 ];
 
+export const createBadgeData = () => deepCopy(_createBadgeData) as typeof _createBadgeData;
+
 /**
  * Test cases for createChip function
  */
-export const createChipData = [
+const _createChipData = [
     {
         description: 'creates default chip',
         input: { text: 'Tag' },
@@ -63,10 +67,12 @@ export const createChipData = [
     },
 ];
 
+export const createChipData = () => deepCopy(_createChipData) as typeof _createChipData;
+
 /**
  * Test cases for createDietaryChip function
  */
-export const createDietaryChipData = [
+const _createDietaryChipData = [
     {
         description: 'creates danger chip for allergies',
         input: { choice: 'ALLERGIES' },
@@ -87,10 +93,12 @@ export const createDietaryChipData = [
     },
 ];
 
+export const createDietaryChipData = () => deepCopy(_createDietaryChipData) as typeof _createDietaryChipData;
+
 /**
  * Test cases for parseJsonScript function
  */
-export const parseJsonScriptData = [
+const _parseJsonScriptData = [
     {
         description: 'parses valid JSON from script tag',
         scriptId: 'test-json',
@@ -117,10 +125,12 @@ export const parseJsonScriptData = [
     },
 ];
 
+export const parseJsonScriptData = () => deepCopy(_parseJsonScriptData) as typeof _parseJsonScriptData;
+
 /**
  * Test cases for formatDuration function
  */
-export const formatDurationData = [
+const _formatDurationData = [
     {
         description: 'formats days, hours, and minutes',
         input: { ms: 2 * 24 * 60 * 60 * 1000 + 3 * 60 * 60 * 1000 + 45 * 60 * 1000 },
@@ -147,3 +157,5 @@ export const formatDurationData = [
         expected: '1d 0h 0m',
     },
 ];
+
+export const formatDurationData = () => deepCopy(_formatDurationData) as typeof _formatDurationData;

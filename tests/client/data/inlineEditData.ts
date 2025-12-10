@@ -2,7 +2,9 @@
  * Test data for inline-edit.ts
  */
 
-export const enableDnDData = [
+import {deepCopy} from "../helpers/util";
+
+const _enableDnDData = [
     {
         description: 'enables draggable when user has ITEM_EDIT permission',
         hasPermission: true,
@@ -23,7 +25,9 @@ export const enableDnDData = [
     },
 ];
 
-export const disableDnDData = [
+export const enableDnDData = () => deepCopy(_enableDnDData) as typeof _enableDnDData;
+
+const _disableDnDData = [
     {
         description: 'disables all draggable elements',
         draggableCount: 5,
@@ -38,7 +42,9 @@ export const disableDnDData = [
     },
 ];
 
-export const startInlineEditAreaData = [
+export const disableDnDData = () => deepCopy(_disableDnDData) as typeof _disableDnDData;
+
+const _startInlineEditAreaData = [
     {
         description: 'creates textarea with old value',
         oldText: 'Existing description',
@@ -66,7 +72,9 @@ export const startInlineEditAreaData = [
     },
 ];
 
-export const startInlineEditData = [
+export const startInlineEditAreaData = () => deepCopy(_startInlineEditAreaData) as typeof _startInlineEditAreaData;
+
+const _startInlineEditData = [
     {
         description: 'creates input for text field',
         field: 'title',
@@ -97,3 +105,5 @@ export const startInlineEditData = [
         shouldSkip: true,
     },
 ];
+
+export const startInlineEditData = () => deepCopy(_startInlineEditData) as typeof _startInlineEditData;

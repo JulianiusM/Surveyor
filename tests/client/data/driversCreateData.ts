@@ -2,7 +2,9 @@
  * Test data for drivers-create.ts module
  */
 
-export const driversCreateTestData = {
+import {deepCopy} from "../helpers/util";
+
+const _driversCreateTestData = {
     formElements: {
         form: { id: 'packingForm' },
         itemTable: { id: 'itemTable' },
@@ -18,3 +20,5 @@ export const driversCreateTestData = {
         { title: 'Solo Driver', description: 'Solo desc', maxAssignees: 1 },
     ],
 };
+
+export const driversCreateTestData = () => deepCopy(_driversCreateTestData) as typeof _driversCreateTestData;

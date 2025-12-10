@@ -4,7 +4,11 @@
  */
 
 import { initTimezoneSelect } from '../../../src/public/js/modules/timezone-select';
-import { timezoneSelectInitData, timezoneSelectSetZoneData, timezoneSelectFilterData } from '../data/timezoneSelectData';
+import { timezoneSelectInitData as _timezoneSelectInitData, timezoneSelectSetZoneData as _timezoneSelectSetZoneData, timezoneSelectFilterData as _timezoneSelectFilterData } from '../data/timezoneSelectData';
+
+const timezoneSelectInitData = _timezoneSelectInitData();
+const timezoneSelectSetZoneData = _timezoneSelectSetZoneData();
+const timezoneSelectFilterData = _timezoneSelectFilterData();
 import { setupTest } from '../helpers/testSetup';
 
 // Mock Bootstrap Modal

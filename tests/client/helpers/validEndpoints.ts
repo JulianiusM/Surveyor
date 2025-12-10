@@ -229,9 +229,10 @@ export function getAllEndpointsWithMethods(): Array<{method: string; path: strin
                 result.push({ method: 'POST', path: endpoint });
             }
             
-            // DELETE endpoints
+            // DELETE endpoints - Note: Many delete endpoints use POST in this API
             if (endpoint.includes('/delete')) {
-                result.push({ method: 'DELETE', path: endpoint });
+                result.push({ method: 'POST', path: endpoint }); // Primary method
+                result.push({ method: 'DELETE', path: endpoint }); // Also support DELETE
             }
             
             // PUT/PATCH endpoints (updates)

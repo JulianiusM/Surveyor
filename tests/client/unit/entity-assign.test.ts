@@ -4,7 +4,9 @@
  */
 
 import { initAssignButtons } from '../../../src/public/js/shared/entity-assign';
-import { configData } from '../data/entityAssignData';
+import { configData as _configData } from '../data/entityAssignData';
+
+const configData = _configData();
 import { setupTest } from '../helpers/testSetup';
 import { server } from '../msw/server';
 import { http, HttpResponse } from 'msw';

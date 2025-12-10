@@ -3,7 +3,12 @@
  */
 
 import {initAdminMatrix} from '../../../src/public/js/modules/admin-matrix';
-import {permissionData, maskApplicationData, updateOperationData, searchUserData} from '../data/adminMatrixData';
+import {permissionData as _permissionData, maskApplicationData as _maskApplicationData, updateOperationData as _updateOperationData, searchUserData as _searchUserData} from '../data/adminMatrixData';
+
+const permissionData = _permissionData();
+const maskApplicationData = _maskApplicationData();
+const updateOperationData = _updateOperationData();
+const searchUserData = _searchUserData();
 import {server} from '../msw/server';
 import {http, HttpResponse} from 'msw';
 import { setupTest } from '../helpers/testSetup';

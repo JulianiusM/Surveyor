@@ -2,7 +2,9 @@
  * Test data for activity-recommendations.ts
  */
 
-export const activityRecommendationsData = {
+import {deepCopy} from "../helpers/util";
+
+const _activityRecommendationsData = {
     initialization: {
         valid: {
             planId: 'plan123',
@@ -182,3 +184,5 @@ export const activityRecommendationsData = {
         },
     },
 };
+
+export const activityRecommendationsData = () => deepCopy(_activityRecommendationsData) as typeof _activityRecommendationsData;

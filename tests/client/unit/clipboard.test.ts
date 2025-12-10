@@ -18,7 +18,7 @@ describe('clipboard utilities', () => {
             });
         });
 
-        test.each(copyToClipboardData)(
+        test.each(copyToClipboardData())(
             '$description',
             async ({ input, expected }) => {
                 await copyToClipboard(input.text);

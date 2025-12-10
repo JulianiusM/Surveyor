@@ -3,6 +3,16 @@ export function deepCopy(obj: any): any {
         return obj;
     }
 
+    // Handle Date objects
+    if (obj instanceof Date) {
+        return new Date(obj.getTime());
+    }
+
+    // Handle RegExp objects
+    if (obj instanceof RegExp) {
+        return new RegExp(obj.source, obj.flags);
+    }
+
     const copied: any = Array.isArray(obj) ? [] : {};
 
     for (let key in obj) {

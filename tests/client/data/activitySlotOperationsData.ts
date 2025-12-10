@@ -2,7 +2,9 @@
  * Test data for activity-slot-operations module
  */
 
-export const initInlineEditData = [
+import {deepCopy} from "../helpers/util";
+
+const _initInlineEditData = [
     {
         description: 'initializes inline edit for plan description on double-click',
         elementHtml: '<div data-edit="planDescription">Test description</div>',
@@ -29,7 +31,9 @@ export const initInlineEditData = [
     },
 ];
 
-export const initDeleteData = [
+export const initInlineEditData = () => deepCopy(_initInlineEditData) as typeof _initInlineEditData;
+
+const _initDeleteData = [
     {
         description: 'deletes slot with confirmation',
         slotId: 'slot123',
@@ -69,7 +73,9 @@ export const initDeleteData = [
     },
 ];
 
-export const initDnDData = [
+export const initDeleteData = () => deepCopy(_initDeleteData) as typeof _initDeleteData;
+
+const _initDnDData = [
     {
         description: 'initializes drag-and-drop when user has ITEM_EDIT permission',
         planId: 'plan789',
@@ -84,3 +90,5 @@ export const initDnDData = [
         expectedAlertType: 'error',
     },
 ];
+
+export const initDnDData = () => deepCopy(_initDnDData) as typeof _initDnDData;

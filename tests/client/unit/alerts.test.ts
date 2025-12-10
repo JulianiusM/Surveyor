@@ -18,7 +18,7 @@ describe('alerts utilities', () => {
     });
 
     describe('showInlineAlert - Data Driven', () => {
-        test.each(showInlineAlertData)(
+        test.each(showInlineAlertData())(
             '$description',
             ({ input, expectedClass, expectedMessage }) => {
                 showInlineAlert(input.status, input.message);
