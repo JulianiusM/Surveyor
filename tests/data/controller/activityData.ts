@@ -141,11 +141,91 @@ export const updateDescriptionData = [
     },
 ];
 
+export const createTextFieldData = [
+    {
+        description: 'creates text field with trimmed title',
+        planId: 'p1',
+        body: {title: '  Notes  ', text: 'hello'},
+        expectedTitle: 'Notes',
+        expectedText: 'hello',
+    },
+    {
+        description: 'throws when title is missing',
+        planId: 'p1',
+        body: {title: '   '},
+        shouldThrow: 'APIError',
+    },
+    {
+        description: 'throws when title is too long',
+        planId: 'p1',
+        body: {title: 'x'.repeat(256)},
+        shouldThrow: 'APIError',
+    },
+    {
+        description: 'throws when text is too long',
+        planId: 'p1',
+        body: {title: 'Valid', text: 'x'.repeat(5001)},
+        shouldThrow: 'APIError',
+    },
+];
+
 export const reorderSlotsData = {
     planId: 'p1',
     order: [{slotId: 's1', pos: 2}],
     expectedMessage: 'Order saved',
 };
+
+export const updateTextFieldData = [
+    {
+        description: 'updates text and title when field belongs to plan',
+        planId: 'p1',
+        textFieldId: 'tf1',
+        existing: {id: 'tf1', planId: 'p1'},
+        body: {title: 'New title', text: 'Updated text'},
+        expectedTitle: 'New title',
+        expectedText: 'Updated text',
+    },
+    {
+        description: 'updates text when no title provided',
+        planId: 'p1',
+        textFieldId: 'tf1',
+        existing: {id: 'tf1', planId: 'p1'},
+        body: {text: 'Only text'},
+        expectedText: 'Only text',
+    },
+    {
+        description: 'throws when title exceeds limit',
+        planId: 'p1',
+        textFieldId: 'tf1',
+        existing: {id: 'tf1', planId: 'p1'},
+        body: {title: 'x'.repeat(256)},
+        shouldThrow: 'APIError',
+    },
+    {
+        description: 'throws when text exceeds limit',
+        planId: 'p1',
+        textFieldId: 'tf1',
+        existing: {id: 'tf1', planId: 'p1'},
+        body: {text: 'x'.repeat(5001)},
+        shouldThrow: 'APIError',
+    },
+    {
+        description: 'throws when text field is missing',
+        planId: 'p1',
+        textFieldId: 'missing',
+        existing: null,
+        body: {text: 'x'},
+        shouldThrow: 'APIError',
+    },
+    {
+        description: 'throws when text field belongs to different plan',
+        planId: 'p1',
+        textFieldId: 'tf2',
+        existing: {id: 'tf2', planId: 'other'},
+        body: {text: 'x'},
+        shouldThrow: 'APIError',
+    },
+];
 
 export const quickAddSlotData = {
     plan: {id: 'p1', startDate: '2024-01-01', endDate: '2024-01-31'},
@@ -230,6 +310,30 @@ export const deleteAssignmentData = {
     assignmentId: 99,
     expectedMessage: 'Assignment removed',
 };
+
+export const deleteTextFieldData = [
+    {
+        description: 'deletes text field when it belongs to plan',
+        planId: 'p1',
+        textFieldId: 'tf1',
+        existing: {id: 'tf1', planId: 'p1'},
+        expectedMessage: 'Text field deleted',
+    },
+    {
+        description: 'throws when text field is missing',
+        planId: 'p1',
+        textFieldId: 'missing',
+        existing: null,
+        shouldThrow: 'APIError',
+    },
+    {
+        description: 'throws when text field belongs to another plan',
+        planId: 'p1',
+        textFieldId: 'tf2',
+        existing: {id: 'tf2', planId: 'other'},
+        shouldThrow: 'APIError',
+    },
+];
 
 export const updateSettingsData = {
     planId: 'p1',

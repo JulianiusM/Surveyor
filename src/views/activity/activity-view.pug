@@ -75,14 +75,21 @@ block content
             .card.border-secondary-subtle.mb-3
                 .card-header.d-flex.justify-content-between.align-items-center
                     strong.mb-0 #{field.title}
-                    if permData.entity.has('ACCESS_PARTICIPANTS')
-                        button.btn.btn-sm.btn-outline-secondary.text-field-edit(
-                            type="button"
-                            data-text-field-id=field.id
-                            data-title=field.title
-                            data-content=field.text || ''
-                        )
-                            i.bi.bi-pencil
+                    .d-flex.gap-2
+                        if permData.entity.has('MANAGE_PERMISSIONS')
+                            button.btn.btn-sm.btn-outline-danger.text-field-delete(
+                                type="button"
+                                data-text-field-id=field.id
+                            )
+                                i.bi.bi-trash
+                        if permData.entity.has('ACCESS_PARTICIPANTS')
+                            button.btn.btn-sm.btn-outline-secondary.text-field-edit(
+                                type="button"
+                                data-text-field-id=field.id
+                                data-title=field.title
+                                data-content=field.text || ''
+                            )
+                                i.bi.bi-pencil
                 .card-body.pt-2.pb-3
                     p.text-field-content.mb-0.border.border-secondary.rounded.p-2(
                         data-edit="textField"

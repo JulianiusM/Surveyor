@@ -67,6 +67,15 @@ app.post(
     }),
 );
 
+app.post(
+    '/:id/text-field/:textFieldId/delete',
+    requirePermissionApi(permFct, PERM.MANAGE_PERMISSIONS),
+    asyncHandler(async (req: Request, res: Response) => {
+        const msg = await controller.deleteTextField(resFct(req).id, req.params.textFieldId);
+        renderer.respondWithSuccessJson(res, msg);
+    }),
+);
+
 app.post('/:id/roles', requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS), async (req: Request, res: Response) => {
     const roles = await controller.addActivityRole(resFct(req), req.body);
     renderer.respondWithSuccessDataJson(res, "Role(s) added", roles);

@@ -1,6 +1,7 @@
 import {post} from "../core/http";
 import {showInlineAlert} from "../shared/alerts";
 import {reloadAfterDelay} from "../shared/ui-helpers";
+import {requireEntityPerm} from "../core/permissions";
 import type {BootstrapGlobal, BootstrapModal} from "./activity-types";
 
 interface ModalParts {
@@ -65,6 +66,24 @@ export function initTextFields(planId: string): void {
                 title: btn.dataset.title,
                 text: btn.dataset.content,
             });
+        });
+    });
+
+    document.querySelectorAll<HTMLElement>('.text-field-delete').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const id = btn.dataset.textFieldId;
+            if (!id) return;
+            if (!confirm('Delete this text field?')) return;
+
+            try {
+                requireEntityPerm('MANAGE_PERMISSIONS', 'delete shared text fields');
+                await post(`/api/activity/${planId}/text-field/${id}/delete`, {});
+                showInlineAlert('success', 'Text field deleted');
+                reloadAfterDelay(150);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : 'Failed to delete text field';
+                showInlineAlert('error', msg);
+            }
         });
     });
 

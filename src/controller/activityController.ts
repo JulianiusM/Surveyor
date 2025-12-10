@@ -329,6 +329,15 @@ async function updateTextField(planId: string, textFieldId: string, body: any) {
     return 'Text field updated';
 }
 
+async function deleteTextField(planId: string, textFieldId: string) {
+    const field = await activityService.getActivityPlanTextFieldById(textFieldId);
+    if (!field || field.planId !== planId) {
+        throw new APIError('Text field not found', {planId, textFieldId}, 404);
+    }
+    await activityService.deleteActivityPlanTextField(textFieldId);
+    return 'Text field deleted';
+}
+
 async function reorderSlots(id: string, order: { slotId: string, pos: number }[]) {
     await activityService.reorderActivitySlots(id, order);
     return 'Order saved';
@@ -996,6 +1005,7 @@ export default {
     updateDescription,
     createTextField,
     updateTextField,
+    deleteTextField,
     reorderSlots,
     quickAddSlot,
     updateSlotDescription,
