@@ -121,6 +121,11 @@ export function initAssign(planId: string, warningModal: WarningModal): void {
 
         const act = btn.dataset.action;
         const role = btn.dataset.role;
+        const roleAssignment = btn.closest<HTMLElement>('.role-assignment');
+        const assignmentId = roleAssignment?.dataset.assignmentId;
+        const hasExistingAssignment = Boolean(assignmentId && assignmentId !== 'null');
+
+        const shouldCheckWarnings = act === 'assign' || (act === 'take-role' && !hasExistingAssignment);
 
         const performUpdate = async () => {
             await post(`/api/activity/${planId}/${act}`, {slotId, role});
@@ -129,7 +134,7 @@ export function initAssign(planId: string, warningModal: WarningModal): void {
         };
 
         try {
-            if (act === 'assign') {
+            if (shouldCheckWarnings) {
                 const warnings = await fetchWarnings(slotId);
                 const proceed = await warningModal.confirm(warnings, slotId);
                 if (!proceed) return;
