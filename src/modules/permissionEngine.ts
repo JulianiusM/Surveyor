@@ -100,11 +100,18 @@ async function computeMaskFor(
 function makePermView(mask: number, parentMask: number): PermView {
     const selfHas = (k: PermType) => hasPerm(mask, PERM[k]);
     const parentHas = (k: PermType) => hasPerm(parentMask, PERM[k]);
+
     return {
         mask,
         parentMask,
         has: selfHas,
-        allow: (k, parentKey) => selfHas(k) || parentHas(parentKey ?? k),
+        allow: (k, parentKey) => {
+            const parentKeys = parentKey !== undefined
+                ? (Array.isArray(parentKey) ? parentKey : [parentKey])
+                : [k];
+
+            return selfHas(k) || parentKeys.some(parentHas);
+        },
         all: (...keys) => keys.every(selfHas),
         any: (...keys) => keys.some(selfHas),
         bits: Object.fromEntries(Object.keys(PERM).map(k => [k, hasPerm(mask, (PERM as any)[k])]))
@@ -179,7 +186,7 @@ export async function buildPermBundle(
         items: itemMap,
         item: getItem,
         itemHas: (id: string, key: keyof typeof PERM) => getItem(id).has(key),
-        itemAllow: (id: string, key: keyof typeof PERM, parentKey?: keyof typeof PERM) => getItem(id).allow(key, parentKey),
+        itemAllow: (id: string, key: keyof typeof PERM, parentKey?: keyof typeof PERM | (keyof typeof PERM)[]) => getItem(id).allow(key, parentKey),
     };
 
     bundle.toJSON = () => JSON.stringify({entity: bundle.entity, items: bundle.items}, jsonReplacer);
@@ -192,7 +199,7 @@ export async function can(
     subject: Subject,
     session: SessionLike,
     requiredPerm: number,
-    requiredParentPerm?: number
+    requiredParentPerm?: number | number[]
 ): Promise<boolean> {
     const view = await evaluateSubject(subject, session, {
         participant: new Map(),
@@ -203,11 +210,12 @@ export async function can(
     // self
     if (hasPerm(view.mask, requiredPerm)) return true;
 
-    // item: optionally allow via parent
-    if (requiredParentPerm && hasPerm(view.parentMask, requiredParentPerm)) return true;
+    const parentPerms = requiredParentPerm !== undefined
+        ? (Array.isArray(requiredParentPerm) ? requiredParentPerm : [requiredParentPerm])
+        : [requiredPerm];
 
-    // default fallback: same perm on parent if subject is item and no parentRequiredPerm specified
-    if ('parentMask' in view && hasPerm(view.parentMask, requiredParentPerm ?? requiredPerm)) return true;
+    // item: optionally allow via parent
+    if ('parentMask' in view && parentPerms.some((perm) => hasPerm(view.parentMask, perm))) return true;
 
     return false;
 }

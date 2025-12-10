@@ -152,7 +152,7 @@ function requirePermInternal(
     getSubject: (req: Request) => Promise<Subject> | Subject,
     requiredPerm: number,
     err: ErrorAdapter,
-    requiredParentPerm?: number
+    requiredParentPerm?: number | number[]
 ) {
     return async (req: Request, _res: Response, next: NextFunction) => {
         const subject = await getSubject(req);
@@ -177,11 +177,11 @@ export function requirePermission(getEntity: EntityGetter, requiredPerm: number)
 }
 
 /** Item version (with parent). You may pass a different requiredParentPerm; if omitted, same perm is checked on parent. */
-export function requireItemPermissionApi(get: ItemWithParentGetter, requiredPerm: number, requiredParentPerm?: number) {
+export function requireItemPermissionApi(get: ItemWithParentGetter, requiredPerm: number, requiredParentPerm?: number | number[]) {
     return requirePermInternal((req) => ({kind: 'item', ...(get(req) as any)}), requiredPerm, apiErrors, requiredParentPerm);
 }
 
-export function requireItemPermission(get: ItemWithParentGetter, requiredPerm: number, requiredParentPerm?: number) {
+export function requireItemPermission(get: ItemWithParentGetter, requiredPerm: number, requiredParentPerm?: number | number[]) {
     return requirePermInternal((req) => ({kind: 'item', ...(get(req) as any)}), requiredPerm, expectedErrors, requiredParentPerm);
 }
 

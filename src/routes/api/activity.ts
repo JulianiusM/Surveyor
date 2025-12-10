@@ -188,7 +188,7 @@ app.post('/:id/slot/add', requirePermissionApi(permFct, PERM.ITEM_ADD), asyncHan
     renderer.respondWithSuccessJson(res, msg);
 }));
 
-app.post('/:id/slot/:slotId/description', requireItemPermissionApi(permFctItems, PERM.EDIT_DESC, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/slot/:slotId/description', requireItemPermissionApi(permFctItems, PERM.EDIT_DESC, [PERM.ITEM_EDIT, PERM.ITEM_EDIT_DESC]), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.updateSlotDescription(req.params.slotId, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));

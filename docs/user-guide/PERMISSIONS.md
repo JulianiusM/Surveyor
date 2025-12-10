@@ -76,6 +76,7 @@ The system uses these permission bits (can be combined):
 ### Item Permissions
 - **ITEM_ADD** - Can add new items (slots, packing items, drivers, etc.)
 - **ITEM_EDIT** - Can edit existing items
+- **ITEM_EDIT_DESC** - Can edit the description of every item in the entity
 - **ITEM_DELETE** - Can delete items
 
 ### Management Permissions
@@ -111,7 +112,7 @@ If you have MANAGE_PERMISSIONS permission:
 The system offers preset combinations:
 
 - **FULL_EDIT**: All edit permissions (EDIT_TITLE, EDIT_DESC, EDIT_CAPACITY, EDIT_META)
-- **FULL_ITEM**: All item permissions (ITEM_ADD, ITEM_EDIT, ITEM_DELETE)
+- **FULL_ITEM**: All item permissions (ITEM_ADD, ITEM_EDIT, ITEM_EDIT_DESC, ITEM_DELETE)
 - **FULL_MANAGE**: All management permissions  
 - **FULL_DATA**: All data permissions
 - **FULL_ACCESS**: All access permissions
@@ -149,7 +150,7 @@ For entities with items (slots, packing items, drivers), permissions work with i
 - If an item doesn't grant a permission, the parent entity's permission is checked
 - This is handled by `itemAllow(id, key, parentKey)` which checks item first, then parent
 
-Example: To edit a packing item, you need ITEM_EDIT on the item itself OR ITEM_EDIT on the parent packing list.
+Example: To edit a packing item, you need ITEM_EDIT on the item itself OR ITEM_EDIT on the parent packing list. If you only need to edit item descriptions, ITEM_EDIT_DESC on the parent also works.
 
 ## Practical Examples
 

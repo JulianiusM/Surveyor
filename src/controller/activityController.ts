@@ -480,7 +480,7 @@ async function updateSlotAttr(slotId: string, body: any, permData?: PermBundle) 
     if (!permData ||
         ((body.startTime !== undefined || body.endTime !== undefined) && !permData.itemAllow(slotId, "EDIT_META", "ITEM_EDIT"))
         || (body.title !== undefined && !permData.itemAllow(slotId, "EDIT_TITLE", "ITEM_EDIT"))
-        || (body.description !== undefined && !permData.itemAllow(slotId, "EDIT_DESC", "ITEM_EDIT"))
+        || (body.description !== undefined && !permData.itemAllow(slotId, "EDIT_DESC", ["ITEM_EDIT", "ITEM_EDIT_DESC"]))
         || (body.maxAssignees !== undefined && !permData.itemAllow(slotId, "EDIT_CAPACITY", "ITEM_EDIT"))
         || (body.roles !== undefined && !permData.itemAllow(slotId, "MANAGE_ASSIGNMENTS", "MANAGE_ASSIGNMENTS"))
     ) {

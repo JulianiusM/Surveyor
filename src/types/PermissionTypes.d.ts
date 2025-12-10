@@ -84,7 +84,11 @@ export type PermBundle = {
     items: Map<string, PermView>,
     item: (id: string) => PermView,
     itemHas: (id: string, key: keyof typeof PERM) => boolean,
-    itemAllow: (id: string, key: keyof typeof PERM, parentKey?: keyof typeof PERM) => boolean,
+    itemAllow: (
+        id: string,
+        key: keyof typeof PERM,
+        parentKey?: keyof typeof PERM | (keyof typeof PERM)[]
+    ) => boolean,
     toJSON?: () => string,
 }
 
@@ -99,7 +103,7 @@ export type PermView = {
     mask: number;
     parentMask: number;
     has: (k: keyof typeof PERM) => boolean;              // self only
-    allow: (k: keyof typeof PERM, parentKey?: keyof typeof PERM) => boolean; // self OR parent
+    allow: (k: keyof typeof PERM, parentKey?: keyof typeof PERM | (keyof typeof PERM)[]) => boolean; // self OR parent
     all: (...keys: (keyof typeof PERM)[]) => boolean;    // all on self
     any: (...keys: (keyof typeof PERM)[]) => boolean;    // any on self
     bits: Record<string, boolean>;                       // quick flags

@@ -68,7 +68,7 @@ app.post('/:id/items', requirePermissionApi(permFct, PERM.ITEM_ADD), asyncHandle
     renderer.respondWithSuccessJson(res, msg);
 }));
 
-app.post('/:id/item/:itemId/description', requireItemPermissionApi(permFctItems, PERM.EDIT_DESC, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/item/:itemId/description', requireItemPermissionApi(permFctItems, PERM.EDIT_DESC, [PERM.ITEM_EDIT, PERM.ITEM_EDIT_DESC]), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.updateItemDescription(req.params.itemId, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));

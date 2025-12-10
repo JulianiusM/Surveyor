@@ -34,7 +34,13 @@ function restorePermView(data: Partial<PermView>, parentData?: Partial<PermView>
         mask: data.mask!,
         parentMask: data.parentMask!,
         has: selfHas,
-        allow: (k, parentKey) => selfHas(k) || parentHas(k),
+        allow: (k, parentKey) => {
+            const parentKeys = parentKey !== undefined
+                ? (Array.isArray(parentKey) ? parentKey : [parentKey])
+                : [k];
+
+            return selfHas(k) || parentKeys.some(parentHas);
+        },
         all: (...keys) => keys.every(selfHas),
         any: (...keys) => keys.some(selfHas),
         bits: data.bits!
@@ -62,7 +68,7 @@ function restorePermBundle(data: Partial<PermBundle>): PermBundle {
         items: itemMap,
         item: getItem,
         itemHas: (id: string, key: PermType) => getItem(id).has(key),
-        itemAllow: (id: string, key: PermType, parentKey?: PermType) => getItem(id).allow(key, parentKey),
+        itemAllow: (id: string, key: PermType, parentKey?: PermType | PermType[]) => getItem(id).allow(key, parentKey),
     };
 
     return bundle;
@@ -149,13 +155,19 @@ export function requireEntityPermsForForm(formData: FormData, rules: EntityFormR
  * @param action Human readable action for error messages
  * @param parentKey Optional parent permission to fall back to
  */
-export function requireItemPerm(itemId: string, key: PermType, action: string, parentKey?: PermType): void {
+export function requireItemPerm(
+    itemId: string,
+    key: PermType,
+    action: string,
+    parentKey?: PermType | PermType[],
+): void {
     const perms = ensurePermData();
     if (!itemId) {
         throw new Error('Missing item context for permission check.');
     }
     if (!perms.itemAllow(itemId, key, parentKey)) {
-        const permName = formatPerm(parentKey ?? key);
+        const parentDisplay = Array.isArray(parentKey) ? parentKey[0] : parentKey;
+        const permName = formatPerm(parentDisplay ?? key);
         throw new Error(`You need ${permName} permission to ${action}.`);
     }
 }

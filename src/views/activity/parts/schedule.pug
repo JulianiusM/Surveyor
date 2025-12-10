@@ -95,6 +95,7 @@ each week in weeks
 
                                         // ── Header: title + time + admin controls
                                         .d-flex.justify-content-between.align-items-start.mb-0
+                                            - const canEditSlot = permData.itemAllow(slot.id, 'EDIT_META', 'ITEM_EDIT') || permData.itemAllow(slot.id, 'EDIT_DESC', ['ITEM_EDIT', 'ITEM_EDIT_DESC'])
                                             if permData.itemAllow(slot.id, 'ITEM_EDIT', 'ITEM_EDIT')
                                                 i.bi.bi-grip-vertical.text-bg-dark.me-2(
                                                     title="Drag to reorder")
@@ -117,7 +118,7 @@ each week in weeks
                                                     class=overbooked ? 'bg-danger' : empty ? 'bg-warning' : 'bg-success'
                                                     style="width:0.7rem;height:0.7rem;display:inline-block;"
                                                     title=overbooked ? 'Overbooked' : empty ? 'No assignments yet' : 'OK')
-                                                if permData.itemAllow(slot.id, 'ITEM_EDIT', 'ITEM_EDIT') || permData.entity.has('ITEM_EDIT_DESC')
+                                                if canEditSlot
                                                     button.btn.btn-sm.btn-outline-light(
                                                         type="button"
                                                         data-slot-edit
