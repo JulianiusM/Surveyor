@@ -22,10 +22,6 @@ html(lang="en")
                         div
                             strong Event:&nbsp;
                             span= data.event.title
-                    if data.event?.timezone
-                        div
-                            strong Timezone:&nbsp;
-                            span= data.event.timezone
                 if data.plan.description
                     p.small= data.plan.description
 
@@ -45,8 +41,8 @@ html(lang="en")
                     const readableDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {weekday: 'long', year: 'numeric', month: 'short', day: 'numeric'});
                     const shortDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
                     const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                each week in data.weeks
-                    .week-block
+                each week, wIdx in data.weeks
+                    .week-block(class=wIdx !== data.weeks.length - 1 ? 'pagebreak' : '')
                         h2 Week of #{readableDate(week.start)}
                         .schedule-grid
                             each day, idx in week.days
@@ -59,19 +55,14 @@ html(lang="en")
                                             each slot in day.slots
                                                 - const start = slot.startTime ? slot.startTime.slice(0,5) : null;
                                                 - const end = slot.endTime ? slot.endTime.slice(0,5) : null;
-                                                .slot-card
-                                                    .slot-title= slot.title
-                                                    if start || end
-                                                        .slot-time= `${start || '??'} – ${end || '??'}`
-                                                    if slot.roles && slot.roles.length
-                                                        .chips
-                                                            each role in slot.roles
-                                                                span.chip= role.name
-                                                    .slot-capacity
-                                                        if slot.maxAssignees != null
-                                                            span= `${slot.assignedCount}/${slot.maxAssignees}`
-                                                        else
-                                                            span= slot.assignedCount
+                                                    .slot-card
+                                                        .slot-title= slot.title
+                                                        if start || end
+                                                            .slot-time= `${start || '??'} – ${end || '??'}`
+                                                        if slot.roles && slot.roles.length
+                                                            .chips
+                                                                each role in slot.roles
+                                                                    span.chip= role.name
                                                     if slot.assignees && slot.assignees.length
                                                         ul.assignee-list
                                                             each asg in slot.assignees
