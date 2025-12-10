@@ -36,11 +36,11 @@ Each section has a "+ Create" button at the end of the search field:
 ## Empty State
 
 If you haven't created any items yet:
-- Each section shows an empty message
-- Large "+ Create" button in the center
+- Each section shows an empty message when expanded
+- A "+ Create" button at the end of the search field
 - Helpful icon illustration
 
-This is normal for new users - start creating!
+This is normal for new users - start creating by using the create button!
 
 ## Using Your Dashboard
 

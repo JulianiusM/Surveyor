@@ -104,11 +104,13 @@ Drag items to reorder:
 
 ### Removing Participants
 
-Users with MANAGE_ASSIGNMENTS permission can remove any assignee:
-- **Click × button** next to participant name
-- Person is unassigned immediately
+**As the owner:**
+- You can remove any assignee by clicking the **× button** next to their name
 
-**Note:** Participants can always remove themselves, even without this permission.
+**As a participant:**
+- You can always remove yourself using the "Remove" button, regardless of permissions
+
+**Note:** The ability to remove others depends on having MANAGE_ASSIGNMENTS permission.
 
 ### Deleting Items
 
@@ -140,17 +142,19 @@ This is useful for items everyone needs individually (e.g., "Personal water bott
 
 ### Guest Capabilities
 
-Guests can:
-- ✅ View packing list
-- ✅ Take items (sign up)
-- ✅ Remove themselves
-- ✅ See who else is bringing what
+Guest capabilities depend entirely on the permissions set for the "guest" audience.
 
-Guests cannot:
-- ❌ Add new items
-- ❌ Edit item details
-- ❌ Change permissions
-- ❌ Delete the list
+**Commonly granted to guests:**
+- ✅ ACCESS_VIEW - View the packing list
+- ✅ MANAGE_ASSIGNMENTS - Take/remove items
+
+**Not commonly granted (but possible):**
+- ITEM_ADD - Add new items
+- ITEM_EDIT - Edit item details
+- ITEM_DELETE - Delete items
+- MANAGE_PERMISSIONS - Change permissions
+
+The organizer controls what guests can do by setting the guest audience permissions.
 
 ---
 

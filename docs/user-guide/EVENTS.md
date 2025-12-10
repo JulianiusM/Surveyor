@@ -72,8 +72,7 @@ Event owners can:
 
 If max participants is set:
 - Registration closes when full
-- Waitlist may be available
-- Owner can adjust capacity
+- Owner can adjust capacity as needed
 
 ---
 
@@ -99,7 +98,7 @@ When creating a drivers list, select "Assign to event" to coordinate transportat
 - Better coordination
 - All related items accessible from event
 - Participant tracking across activities
-- **Important:** Only event participants can access linked entities (if using participant audience permission)
+- **Important:** Only event participants can access linked entities when using the participant audience in permissions
 
 ---
 
@@ -186,34 +185,35 @@ Event permissions control:
 
 #### Registration Bypass Links
 
-Event organizers can create bypass links that:
-- Allow pre-approved registration
-- Skip normal registration process
+Event organizers can create bypass links that allow registration after the deadline has passed:
+- Bypass the registration deadline (not the registration process itself)
 - Can be single-use or multi-use
-- Useful for inviting specific people
+- Can have expiration dates
+- Useful for late registrations
 
 **For Organizers:**
 - Create bypass link in event management
-- Share link with invited participants
-- Track who uses each bypass link
+- Share link with participants who need to register late
+- Track usage and remaining uses
 
-#### Invoice Pools (if enabled)
+#### Invoice Pools
 
-For events with shared costs:
-- Create invoice pool for the event
-- Track shared expenses
-- Collect payments from participants
-- Split costs fairly
-- Generate invoices and receipts
+For events with shared costs, invoice pools provide cost management:
+- Track expenses shared among participants
+- Define invoice items with amounts
+- Automatically split costs among participants
+- Record payments and track balances
+- Handle surcharges and adjustments
+- Manage pool credits
 
 **Features:**
-- Multiple invoice items
-- Participant cost sharing
-- Payment tracking
-- Surcharges and adjustments
-- Pool credits and balances
+- Create invoices with multiple line items
+- Assign costs to participants
+- Track who has paid
+- Generate payment records
+- View pool balance and participant balances
 
-Check with your organization to see if invoice pool features are enabled.
+**Note:** This is an advanced feature. Check your event settings to see if invoice pools are enabled.
 
 ---
 
