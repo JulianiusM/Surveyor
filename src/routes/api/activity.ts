@@ -1,7 +1,14 @@
 import express, {Request, Response} from 'express';
+
+import controller from '../../controller/activityController';
+import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
+import {attachAssignRoleRoutes, attachAssignRoutes} from '../../middleware/assignFlowFactory';
+
+import {apiParamHandler} from "../../middleware/paramHandler";
+import {attachPermBundle, requireItemPermissionApi, requirePermissionApi} from '../../middleware/permissionMiddleware';
 import * as activityService from '../../modules/database/services/ActivityService';
 import {asyncHandler} from '../../modules/lib/asyncHandler';
-import renderer from '../../modules/renderer';
+import {PERM} from "../../modules/lib/permissions";
 import {
     ENTITIES,
     ENTITY_ITEMS,
@@ -12,16 +19,9 @@ import {
     getPermFctItems,
     getResource
 } from "../../modules/lib/util";
-
-import {apiParamHandler} from "../../middleware/paramHandler";
-import {attachPermBundle, requireItemPermissionApi, requirePermissionApi} from '../../middleware/permissionMiddleware';
-import {attachAssignRoleRoutes, attachAssignRoutes} from '../../middleware/assignFlowFactory';
-
-import controller from '../../controller/activityController';
-import {PERM} from "../../modules/lib/permissions";
-import type {EntityItemType, EntityType} from "../../types/UtilTypes";
-import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
+import renderer from '../../modules/renderer';
 import type {ItemGetter, PermBundle} from "../../types/PermissionTypes";
+import type {EntityItemType, EntityType} from "../../types/UtilTypes";
 
 const app = express.Router();
 const entityName: EntityType = ENTITIES.ACTIVITY;
@@ -51,7 +51,7 @@ app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), asyn
 
 app.post(
     '/:id/text-field',
-    requirePermissionApi(permFct, PERM.MANAGE_PERMISSIONS),
+    requirePermissionApi(permFct, PERM.MANAGE_REQUIREMENTS),
     asyncHandler(async (req: Request, res: Response) => {
         const field = await controller.createTextField(resFct(req).id, req.body);
         renderer.respondWithSuccessDataJson(res, 'Text field created', {id: field.id});
@@ -60,7 +60,7 @@ app.post(
 
 app.post(
     '/:id/text-field/:textFieldId',
-    requirePermissionApi(permFct, PERM.ACCESS_PARTICIPANTS),
+    requirePermissionApi(permFct, PERM.ACCESS_VIEW),
     asyncHandler(async (req: Request, res: Response) => {
         const msg = await controller.updateTextField(resFct(req).id, req.params.textFieldId, req.body);
         renderer.respondWithSuccessJson(res, msg);
@@ -69,7 +69,7 @@ app.post(
 
 app.post(
     '/:id/text-field/:textFieldId/delete',
-    requirePermissionApi(permFct, PERM.MANAGE_PERMISSIONS),
+    requirePermissionApi(permFct, PERM.MANAGE_REQUIREMENTS),
     asyncHandler(async (req: Request, res: Response) => {
         const msg = await controller.deleteTextField(resFct(req).id, req.params.textFieldId);
         renderer.respondWithSuccessJson(res, msg);

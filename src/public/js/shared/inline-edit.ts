@@ -3,11 +3,11 @@
  * Provides reusable inline editing for various entity attributes
  */
 
-import { post } from '../core/http';
-import { showInlineAlert } from './alerts';
-import { reloadAfterDelay } from './ui-helpers';
-import { getPerms, requireEntityPerm, requireItemPerm } from '../core/permissions';
-import type { PermType } from '../../../types/PermissionTypes';
+import type {PermType} from '../../../types/PermissionTypes';
+import {post} from '../core/http';
+import {getPerms, requireEntityPerm, requireItemPerm} from '../core/permissions';
+import {showInlineAlert} from './alerts';
+import {reloadAfterDelay} from './ui-helpers';
 
 interface InlineEditPermission {
     scope: 'entity' | 'item';
@@ -114,7 +114,7 @@ export function startInlineEditArea(
     async function save(): Promise<void> {
         const val = ta.value.trim();
         try {
-            await post(url, { [config.payloadKey]: val });
+            await post(url, {[config.payloadKey]: val});
             restore(val);
             showInlineAlert('success', config.successMessage);
             if (config.onSave) config.onSave();
@@ -163,8 +163,8 @@ export function startInlineEdit(elem: HTMLElement, baseUrl: string): void {
     }
 
     const fieldGuard: Record<string, InlineEditPermission> = {
-        description: { scope: 'item', key: 'EDIT_DESC', action: 'edit descriptions', itemId: id, parentKey: 'ITEM_EDIT' },
-        default: { scope: 'item', key: 'EDIT_META', action: 'edit item details', itemId: id, parentKey: 'ITEM_EDIT' }
+        description: {scope: 'item', key: 'EDIT_DESC', action: 'edit descriptions', itemId: id, parentKey: 'ITEM_EDIT'},
+        default: {scope: 'item', key: 'EDIT_META', action: 'edit item details', itemId: id, parentKey: 'ITEM_EDIT'}
     };
 
     try {
@@ -198,8 +198,8 @@ export function startInlineEdit(elem: HTMLElement, baseUrl: string): void {
 
         try {
             await post(url,
-                field === 'description' ? { description: val }
-                    : { field, value: val });
+                field === 'description' ? {description: val}
+                    : {field, value: val});
             rollback(val);
             showInlineAlert('success', 'Updated');
             if (field === 'maxAssignees') {

@@ -62,27 +62,27 @@ block content
 
     // ─── Shared text fields ─────────────────────────────────────
     .d-flex.justify-content-between.align-items-center.mt-3
-        h5.mb-0
+        h5.mb-3
             i.bi.bi-journal-text.me-2
             | Shared text fields
-        if permData.entity.has('MANAGE_PERMISSIONS')
+        if permData.entity.has('MANAGE_REQUIREMENTS')
             button#addTextFieldBtn.btn.btn-sm.btn-outline-primary(type="button")
                 i.bi.bi-plus-lg.me-1
                 | Add text field
 
     if data.textFields && data.textFields.length
         each field in data.textFields
-            .card.border-secondary-subtle.mb-3
+            .card.text-bg-dark.border.border-secondary-subtle.mb-3
                 .card-header.d-flex.justify-content-between.align-items-center
                     strong.mb-0 #{field.title}
                     .d-flex.gap-2
-                        if permData.entity.has('MANAGE_PERMISSIONS')
+                        if permData.entity.has('MANAGE_REQUIREMENTS')
                             button.btn.btn-sm.btn-outline-danger.text-field-delete(
                                 type="button"
                                 data-text-field-id=field.id
                             )
                                 i.bi.bi-trash
-                        if permData.entity.has('ACCESS_PARTICIPANTS')
+                        if permData.entity.has('ACCESS_VIEW')
                             button.btn.btn-sm.btn-outline-secondary.text-field-edit(
                                 type="button"
                                 data-text-field-id=field.id
@@ -91,10 +91,11 @@ block content
                             )
                                 i.bi.bi-pencil
                 .card-body.pt-2.pb-3
+                    small.text-info.fst-italic.fw-light Double click to edit
                     p.text-field-content.mb-0.border.border-secondary.rounded.p-2(
                         data-edit="textField"
                         data-id=field.id
-                        data-placeholder="double-click to edit"
+                        data-placeholder="double-click to add text"
                         style="cursor: pointer"
                     )
                         if field.text

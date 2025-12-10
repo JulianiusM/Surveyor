@@ -4,11 +4,11 @@
  */
 
 import {post} from '../core/http';
+import {requireEntityPerm, requireItemPerm} from '../core/permissions';
 import {showInlineAlert} from '../shared/alerts';
+import {initCardReorder} from "../shared/drag-drop";
 import {startInlineEdit, startInlineEditArea} from '../shared/inline-edit';
 import {reloadAfterDelay} from '../shared/ui-helpers';
-import {requireEntityPerm, requireItemPerm} from '../core/permissions';
-import {initCardReorder} from "../shared/drag-drop";
 
 /**
  * Initialize inline editing for slots and plan description
@@ -35,7 +35,7 @@ export function initInlineEdit(planId: string): void {
                 `/api/activity/${planId}/text-field/${textField.dataset.id}`,
                 {
                     scope: 'entity',
-                    key: 'ACCESS_PARTICIPANTS',
+                    key: 'ACCESS_VIEW',
                     action: 'edit shared text fields',
                 },
                 {

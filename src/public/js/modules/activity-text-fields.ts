@@ -1,7 +1,7 @@
 import {post} from "../core/http";
+import {requireEntityPerm} from "../core/permissions";
 import {showInlineAlert} from "../shared/alerts";
 import {reloadAfterDelay} from "../shared/ui-helpers";
-import {requireEntityPerm} from "../core/permissions";
 import type {BootstrapGlobal, BootstrapModal} from "./activity-types";
 
 interface ModalParts {
@@ -27,7 +27,11 @@ function getModal(): ModalParts | null {
     return {modal: new bootstrap.Modal(modalEl), form, title, text, idInput};
 }
 
-function openModal(parts: ModalParts, mode: 'create' | 'edit', data?: {id?: string; title?: string; text?: string}): void {
+function openModal(parts: ModalParts, mode: 'create' | 'edit', data?: {
+    id?: string;
+    title?: string;
+    text?: string
+}): void {
     const heading = document.getElementById('textFieldModalTitle');
     if (heading) heading.textContent = mode === 'create' ? 'Add text field' : 'Edit text field';
     parts.title.value = data?.title ?? '';
@@ -76,7 +80,7 @@ export function initTextFields(planId: string): void {
             if (!confirm('Delete this text field?')) return;
 
             try {
-                requireEntityPerm('MANAGE_PERMISSIONS', 'delete shared text fields');
+                requireEntityPerm('MANAGE_REQUIREMENTS', 'delete shared text fields');
                 await post(`/api/activity/${planId}/text-field/${id}/delete`, {});
                 showInlineAlert('success', 'Text field deleted');
                 reloadAfterDelay(150);
