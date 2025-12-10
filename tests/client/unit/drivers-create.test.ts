@@ -6,6 +6,7 @@ import { driversCreateTestData as _driversCreateTestData } from '../data/drivers
 
 const driversCreateTestData = _driversCreateTestData();
 import { setupTest } from '../helpers/testSetup';
+import { renderPugView } from '../helpers/renderPugView';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/navigation', () => ({
@@ -24,15 +25,11 @@ describe('drivers-create module', () => {
 
     setupTest({
         beforeEach: () => {
-            // Setup DOM
-            document.body.innerHTML = `
-                <form id="packingForm">
-                    <input type="hidden" id="itemsJson" />
-                    <table>
-                        <tbody id="itemTable"></tbody>
-                    </table>
-                </form>
-            `;
+            // Render real PUG template
+            const html = renderPugView('drivers/drivers-create.pug', {
+                data: {}
+            }, true);
+            document.body.innerHTML = html;
 
             // Setup global namespace
             window.Surveyor = {} as any;
