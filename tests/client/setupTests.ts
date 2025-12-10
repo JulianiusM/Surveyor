@@ -1,33 +1,6 @@
 // tests/client/setupTests.ts
 // Global test setup for frontend tests
 import '@testing-library/jest-dom';
-
-// Import polyfills first before anything else
-import { TextEncoder, TextDecoder } from 'util';
-import { ReadableStream, TransformStream, WritableStream } from 'stream/web';
-import { MessageChannel, BroadcastChannel } from 'worker_threads';
-
-// Set up global polyfills BEFORE importing undici
-global.TextEncoder = TextEncoder as any;
-global.TextDecoder = TextDecoder as any;
-(global as any).ReadableStream = ReadableStream;
-(global as any).WritableStream = WritableStream;
-(global as any).TransformStream = TransformStream;
-(global as any).MessageChannel = MessageChannel;
-(global as any).MessagePort = MessageChannel.prototype as any;
-(global as any).BroadcastChannel = BroadcastChannel;
-
-// Now import fetch polyfills from undici
-import { fetch, Request, Response, Headers, FormData } from 'undici';
-
-// Set fetch globals
-global.fetch = fetch as any;
-global.Request = Request as any;
-global.Response = Response as any;
-global.Headers = Headers as any;
-global.FormData = FormData as any;
-
-// Now import MSW server after all polyfills are in place
 import { server } from './msw/server';
 import { initializeAllEndpoints } from './helpers/testSetup';
 

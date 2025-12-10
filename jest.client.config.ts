@@ -4,8 +4,19 @@ import type {Config} from 'jest';
 
 const config: Config = {
     displayName: 'client',
+
+    // Use ts-jest for TS support
     preset: 'ts-jest',
-    testEnvironment: 'jsdom',
+
+    /**
+     * IMPORTANT: Use "jest-fixed-jsdom" instead of "jest-environment-jsdom".
+     *
+     * This keeps a DOM via jsdom but restores Node.js globals
+     * (fetch, Request, Response, TextEncoder, TextDecoder, streams, etc.)
+     * so MSW and any Node-ish code work correctly.
+     */
+    testEnvironment: 'jest-fixed-jsdom',
+
     rootDir: '.',
     roots: ['<rootDir>/src/public/js', '<rootDir>/tests/client'],
     testMatch: ['<rootDir>/tests/client/**/*.(test|spec).ts'],
@@ -23,39 +34,48 @@ const config: Config = {
         '^uuid$': '<rootDir>/tests/util/stubs/uuid.ts',
     },
 
-    // Transform MSW and its dependencies
+    /**
+     * Transform MSW and its dependencies (ESM) so Jest can run them.
+     * You already had this in place; keep it.
+     */
     transformIgnorePatterns: [
         'node_modules/(?!(msw|@mswjs|@bundled-es-modules|until-async|strict-event-emitter|@open-draft)/)',
     ],
 
     // Transform configuration
     transform: {
-        '^.+\\.tsx?$': ['ts-jest', {
-            tsconfig: {
-                target: 'ES2020',
-                module: 'ESNext',
-                moduleResolution: 'node',
-                esModuleInterop: true,
-                allowSyntheticDefaultImports: true,
-                strict: true,
-                skipLibCheck: true,
-                resolveJsonModule: true,
-                isolatedModules: true,
-                lib: ['ES2020', 'DOM', 'DOM.Iterable'],
-                types: ['jest', 'node', 'jsdom', '@testing-library/jest-dom'],
-            }
-        }],
-        '^.+\\.jsx?$': ['ts-jest', {
-            tsconfig: {
-                target: 'ES2020',
-                module: 'ESNext',
-                moduleResolution: 'node',
-                esModuleInterop: true,
-                allowSyntheticDefaultImports: true,
-                allowJs: true,
-                skipLibCheck: true,
-            }
-        }],
+        '^.+\\.tsx?$': [
+            'ts-jest',
+            {
+                tsconfig: {
+                    target: 'ES2020',
+                    module: 'ESNext',
+                    moduleResolution: 'node',
+                    esModuleInterop: true,
+                    allowSyntheticDefaultImports: true,
+                    strict: true,
+                    skipLibCheck: true,
+                    resolveJsonModule: true,
+                    isolatedModules: true,
+                    lib: ['ES2020', 'DOM', 'DOM.Iterable'],
+                    types: ['jest', 'node', 'jsdom', '@testing-library/jest-dom'],
+                },
+            },
+        ],
+        '^.+\\.jsx?$': [
+            'ts-jest',
+            {
+                tsconfig: {
+                    target: 'ES2020',
+                    module: 'ESNext',
+                    moduleResolution: 'node',
+                    esModuleInterop: true,
+                    allowSyntheticDefaultImports: true,
+                    allowJs: true,
+                    skipLibCheck: true,
+                },
+            },
+        ],
     },
 
     // Coverage configuration
@@ -67,25 +87,21 @@ const config: Config = {
     ],
     coverageDirectory: 'coverage/client',
     coverageReporters: ['text', 'lcov', 'html'],
-    // Note: Coverage thresholds are intentionally low because many frontend modules
-    // are not yet tested. As more modules get tests, thresholds should be increased.
-    // TODO: Increase global thresholds as more modules are tested
-    // coverageThreshold: {
-    //     global: {
-    //         branches: 4,
-    //         functions: 4,
-    //         lines: 4,
-    //         statements: 4,
-    //     },
-    // },
+    // coverageThreshold can be enabled once you have more tests
 
     // Test timeout
     testTimeout: 10000,
 
-    // Globals for jsdom
+    /**
+     * jsdom URL & MSW export conditions:
+     *
+     * - url: base URL for relative requests like "/api/...".
+     * - customExportConditions: ['msw'] makes imports like "msw/node"
+     *   resolve correctly even when running under a jsdom-like env.
+     */
     testEnvironmentOptions: {
         url: 'http://localhost',
-        // Add custom properties to window if needed
+        customExportConditions: ['msw'],
     },
 };
 
