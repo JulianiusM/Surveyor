@@ -581,14 +581,22 @@ function optimizeViaSwaps(
     const canParticipantTakeSlot = (participantKey: string, slot: AutoAssignmentSlot, excludeSlotId?: string): boolean => {
         const state = states.get(participantKey);
         if (!state) return false;
-        
+
         const assignments = assignmentMap[participantKey] ?? [];
-        const filteredAssignments = excludeSlotId 
+        const filteredAssignments = excludeSlotId
             ? assignments.filter(a => a.id !== excludeSlotId)
             : assignments;
-        
-        // Add currently recommended slots (except the one being swapped out)
+
+        // Prevent suggesting the same slot twice (duplicate recommendation or existing assignment)
         const currentRecs = recByParticipant.get(participantKey) ?? [];
+        if (filteredAssignments.some(a => a.id === slot.id)) {
+            return false;
+        }
+        if (currentRecs.some(rec => rec.slotId === slot.id && rec.slotId !== excludeSlotId)) {
+            return false;
+        }
+
+        // Add currently recommended slots (except the one being swapped out)
         for (const rec of currentRecs) {
             if (rec.slotId === excludeSlotId) continue;
             const recSlot = slotMap.get(rec.slotId);
