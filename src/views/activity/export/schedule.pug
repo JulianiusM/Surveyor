@@ -1,0 +1,112 @@
+doctype html
+html(lang="en")
+    head
+        meta(charset="utf-8")
+        meta(name="viewport" content="width=device-width, initial-scale=1")
+        title= `Schedule – ${data.plan.title}`
+        link(rel="stylesheet" href="/style/print.css")
+
+    body
+        .sheet
+            .wrap
+                .toolbar
+                    h2= data.plan.title
+                    button.btn.no-print(type="button" onclick="window.print()") Print
+
+                h3 Plan info
+                .meta
+                    div
+                        strong Dates:&nbsp;
+                        span= `${data.plan.startDate} → ${data.plan.endDate}`
+                    if data.event
+                        if data.event.title
+                            div
+                                strong Event:&nbsp;
+                                span= data.event.title
+                        if data.event.timezone
+                            div
+                                strong Timezone:&nbsp;
+                                span= data.event.timezone
+                    div
+                        strong Slots:&nbsp;
+                        span= data.counters.slots
+                    div
+                        strong Open slots:&nbsp;
+                        span= data.counters.open
+                    div
+                        strong Empty slots:&nbsp;
+                        span= data.counters.empty
+                    div
+                        strong Participants:&nbsp;
+                        span= data.counters.participants
+                if data.plan.description
+                    p.small= data.plan.description
+
+                if data.textFields && data.textFields.length
+                    .rule
+                    h3 Shared notes
+                    each field in data.textFields
+                        .mb-2
+                            strong= field.title
+                            if field.text
+                                p.small.mb-0= field.text
+                            else
+                                p.small.muted.mb-0 —
+
+                .rule
+                -
+                    const readableDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                    });
+                    const shortDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric'
+                    });
+                    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                each week, wIdx in data.weeks
+                    .week-block(class=wIdx !== data.weeks.length - 1 ? 'pagebreak' : '')
+                        h3 Week of #{readableDate(week.start)}
+                        .schedule-grid(style=`grid-template-columns: repeat(${week.days.length || 1}, minmax(0, 1fr))`)
+                            each day in week.days
+                                .day-card
+                                    .day-header
+                                        span.day-name= dayNames[day.dayIndex]
+                                        span.date= shortDate(day.date)
+                                    if day.slots.length
+                                        each slot in day.slots
+                                            - const start = slot.startTime ? slot.startTime.slice(0,5) : null;
+                                            - const end = slot.endTime ? slot.endTime.slice(0,5) : null;
+                                            .slot-card
+                                                .slot-title= slot.title
+                                                if start || end
+                                                    .slot-time= `${start || '??'} – ${end || '??'}`
+                                                if slot.description
+                                                    .slot-description= slot.description
+                                                .slot-divider
+                                                if slot.assignees && slot.assignees.length
+                                                    ul.assignee-list
+                                                        each asg in slot.assignees
+                                                            li
+                                                                span= asg.name
+                                                                if asg.roles && asg.roles.length
+                                                                    span.muted= ` (${asg.roles.join(', ')})`
+                                                else
+                                                    .muted.slot-time No assignees yet.
+                                    else
+                                        p.slot-title.muted No slots scheduled for this day.
+
+                .footer
+                    div Generated: #{new Date(data.generatedAt).toLocaleString()}
+                    div Page <span class="pageNumber"></span>
+
+        script.
+            (function () {
+                try {
+                    const spans = document.querySelectorAll('.pageNumber');
+                    spans.forEach(s => s.textContent = '1');
+                } catch (e) {
+                }
+            })();
