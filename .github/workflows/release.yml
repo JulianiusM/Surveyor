@@ -12,7 +12,7 @@ permissions:
 jobs:
   ci:
     name: Run full CI for the tagged commit
-    uses: JulianiusM/Surveyor/.github/workflows/ci.yml@ts-migrate
+    uses: JulianiusM/Surveyor/.github/workflows/ci.yml@ts-migration
     secrets: inherit
 
   build-and-release:
