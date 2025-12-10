@@ -38,11 +38,6 @@ export function initTableReorder(config: TableReorderConfig): void {
         if (!target) return;
         if (target.closest('button') || target.closest('input')) return;
 
-        if (target.closest('[data-edit]')) {
-            (e as DragEvent).preventDefault();
-            return;
-        }
-
         dragSrc = target.closest('tr') as HTMLTableRowElement | null;
         if (!dragSrc) return;
 
@@ -127,11 +122,6 @@ export function initCardReorder(config: CardReorderConfig): void {
         const target = e.target as HTMLElement | null;
         if (!target) return;
         if (target.closest('button') || target.closest('input')) return;
-
-        if (target.closest('[data-edit]')) {
-            (e as DragEvent).preventDefault();
-            return;
-        }
 
         const card = target.closest(`.${config.cardClass}`) as HTMLElement | null;
         if (!card) return;
