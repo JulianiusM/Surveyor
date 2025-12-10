@@ -88,7 +88,7 @@ When assigned count reaches max:
 
 Depending on permissions granted:
 - **Double-click Title** to edit item name (requires EDIT_TITLE or ITEM_EDIT permission)
-- **Double-click Description** to edit details (requires EDIT_DESC or ITEM_EDIT permission)
+- **Double-click Description** to edit details (requires EDIT_DESC on the item, ITEM_EDIT on the list, or ITEM_EDIT_DESC on the list)
 - **Double-click Max number** to change quantity needed (requires EDIT_CAPACITY or ITEM_EDIT permission)
 - Changes save automatically
 

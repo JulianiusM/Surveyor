@@ -249,6 +249,28 @@ describe('permissions utilities', () => {
                 requireItemPerm('item1', 'EDIT', 'edit item', 'MANAGE');
             }).toThrow('You need Manage permission to edit item.');
         });
+
+        test('allows description edits when parent has ITEM_EDIT_DESC', () => {
+            const rawPerms = {
+                entity: {
+                    mask: 0,
+                    parentMask: 0,
+                    bits: {ITEM_EDIT_DESC: true},
+                },
+                items: {
+                    dataType: 'Map',
+                    value: [['item1', {mask: 0, parentMask: 0, bits: {}}]],
+                },
+            } as any;
+
+            window.Surveyor.rawPermissions = JSON.stringify(rawPerms);
+            loadPerms();
+
+            expect(() => requireItemPerm('item1', 'EDIT_DESC', 'edit item descriptions', ['ITEM_EDIT', 'ITEM_EDIT_DESC'])).not.toThrow();
+
+            window.Surveyor.rawPermissions = undefined;
+            window.Surveyor.permissions = undefined;
+        });
     });
 
     describe('requireEntityPermsForForm', () => {

@@ -6,7 +6,7 @@
 import {post} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
 import {reloadAfterDelay} from '../shared/ui-helpers';
-import {requireEntityPerm, requireItemPerm} from '../core/permissions';
+import {getPerms, requireEntityPerm, requireItemPerm} from '../core/permissions';
 import {addRoleToGlobal, getAllRoles, getSlotRolesForSlot} from './activity-roles';
 import type {BootstrapGlobal, RoleSummary, SlotEditorMode} from './activity-types';
 
@@ -63,6 +63,14 @@ export function initSlotEditorModal(planId: string): void {
         }
     };
 
+    const getEditCapabilities = (slotId: string) => {
+        const perms = getPerms();
+        const allowMeta = perms?.itemAllow(slotId, 'EDIT_META', 'ITEM_EDIT') ?? false;
+        const allowDesc = perms?.itemAllow(slotId, 'EDIT_DESC', ['ITEM_EDIT', 'ITEM_EDIT_DESC']) ?? false;
+
+        return {allowMeta, allowDesc};
+    };
+
     const toTimeInputValue = (dbTime?: string | null): string => {
         if (!dbTime) return '';
         const parts = dbTime.split(':');
@@ -80,10 +88,42 @@ export function initSlotEditorModal(planId: string): void {
         return `${value}:00`;
     };
 
+    const titleGroup = titleInput?.closest<HTMLElement>('.mb-3') ?? undefined;
+    const timeRow = startInput?.closest<HTMLElement>('.row') ?? undefined;
+    const capacityGroup = capacityInput?.closest<HTMLElement>('.mb-3') ?? undefined;
+    const descGroup = descInput?.closest<HTMLElement>('.mb-3') ?? undefined;
+    const roleGroup = roleChips?.closest<HTMLElement>('.mb-3') ?? undefined;
+
     const setSelectedRoles = (ids: number[]) => {
         selectedRoleIds = new Set(ids);
         renderRoleChips();
         updateRoleSuggestions();
+    };
+
+    const applyEditMode = (allowMeta: boolean, allowDesc: boolean) => {
+        const descOnly = allowDesc && !allowMeta;
+
+        const toggleHidden = (el: HTMLElement | undefined, hidden: boolean) => {
+            if (!el) return;
+            el.classList.toggle('d-none', hidden);
+        };
+
+        if (titleInput) {
+            titleInput.required = allowMeta;
+            titleInput.readOnly = !allowMeta;
+        }
+        [startInput, endInput, capacityInput, roleInput].forEach((el) => {
+            if (el) el.disabled = !allowMeta;
+        });
+        if (descInput) {
+            descInput.readOnly = !(allowDesc || allowMeta);
+        }
+
+        toggleHidden(titleGroup, descOnly);
+        toggleHidden(timeRow, descOnly);
+        toggleHidden(capacityGroup, descOnly);
+        toggleHidden(roleGroup, descOnly);
+        toggleHidden(descGroup, !(allowDesc || allowMeta));
     };
 
     const renderRoleChips = () => {
@@ -222,6 +262,8 @@ export function initSlotEditorModal(planId: string): void {
         clearRoleInput();
         hideRoleSuggestions();
 
+        applyEditMode(true, true);
+
         modal.show();
         titleInput.focus();
     };
@@ -235,6 +277,12 @@ export function initSlotEditorModal(planId: string): void {
 
         slotIdInput.value = slotId;
         dateInput.value = date;
+
+        const {allowMeta, allowDesc} = getEditCapabilities(slotId);
+        if (!allowMeta && !allowDesc) {
+            showInlineAlert('error', 'You are not allowed to edit this slot.');
+            return;
+        }
 
         const titleSpan = slotEl.querySelector<HTMLElement>('[data-edit="title"]');
         const descSpan = slotEl.querySelector<HTMLElement>('[data-edit="description"]');
@@ -267,8 +315,10 @@ export function initSlotEditorModal(planId: string): void {
         clearRoleInput();
         hideRoleSuggestions();
 
+        applyEditMode(allowMeta, allowDesc);
+
         modal.show();
-        titleInput.focus();
+        (allowMeta ? titleInput : descInput)?.focus();
     };
 
     const createRoleOnServer = async (name: string): Promise<RoleSummary> => {
@@ -328,15 +378,26 @@ export function initSlotEditorModal(planId: string): void {
                 showInlineAlert('success', 'Slot created');
             } else {
                 const slotId = slotIdInput.value;
-                requireItemPerm(slotId, 'ITEM_EDIT', 'edit slots', 'ITEM_EDIT');
-                await post(`/api/activity/${planId}/slot/${slotId}/attr`, {
-                    title: titleValue,
-                    description: descInput?.value?.trim() || '',
-                    startTime: startVal,
-                    endTime: endVal,
-                    maxAssignees: capacityInput.value,
-                    roles: roleIds,
-                });
+                const {allowMeta, allowDesc} = getEditCapabilities(slotId);
+
+                if (allowMeta) {
+                    requireItemPerm(slotId, 'EDIT_META', 'edit slots', 'ITEM_EDIT');
+                    await post(`/api/activity/${planId}/slot/${slotId}/attr`, {
+                        title: titleValue,
+                        description: descInput?.value?.trim() || '',
+                        startTime: startVal,
+                        endTime: endVal,
+                        maxAssignees: capacityInput.value,
+                        roles: roleIds,
+                    });
+                } else if (allowDesc) {
+                    requireItemPerm(slotId, 'EDIT_DESC', 'edit slot descriptions', ['ITEM_EDIT', 'ITEM_EDIT_DESC']);
+                    await post(`/api/activity/${planId}/slot/${slotId}/description`, {
+                        description: descInput?.value?.trim() || '',
+                    });
+                } else {
+                    throw new Error('Permission denied');
+                }
                 showInlineAlert('success', 'Slot updated');
             }
 

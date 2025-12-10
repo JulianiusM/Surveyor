@@ -112,7 +112,7 @@ block content
                             td= item.title
 
                         // Description
-                        if permData.itemAllow(item.id, 'EDIT_DESC', 'ITEM_EDIT')
+                        if permData.itemAllow(item.id, 'EDIT_DESC', ['ITEM_EDIT', 'ITEM_EDIT_DESC'])
                             td(data-edit="description" data-id=item.id)= item.description
                         else
                             td= item.description

@@ -14,7 +14,7 @@ interface InlineEditPermission {
     key: PermType;
     action: string;
     itemId?: string;
-    parentKey?: PermType;
+    parentKey?: PermType | PermType[];
 }
 
 interface InlineEditAreaOptions {
@@ -163,7 +163,7 @@ export function startInlineEdit(elem: HTMLElement, baseUrl: string): void {
     }
 
     const fieldGuard: Record<string, InlineEditPermission> = {
-        description: {scope: 'item', key: 'EDIT_DESC', action: 'edit descriptions', itemId: id, parentKey: 'ITEM_EDIT'},
+        description: {scope: 'item', key: 'EDIT_DESC', action: 'edit descriptions', itemId: id, parentKey: ['ITEM_EDIT', 'ITEM_EDIT_DESC']},
         default: {scope: 'item', key: 'EDIT_META', action: 'edit item details', itemId: id, parentKey: 'ITEM_EDIT'}
     };
 

@@ -46,71 +46,73 @@ describe('activity-slot-editor', () => {
             mockShow.mockClear();
             mockHide.mockClear();
 
-        // Setup basic modal structure
-        modal = document.createElement('div');
-        modal.id = 'slotEditorModal';
+            // Setup basic modal structure
+            modal = document.createElement('div');
+            modal.id = 'slotEditorModal';
 
-        form = document.createElement('form');
-        form.id = 'slotEditorForm';
+            form = document.createElement('form');
+            form.id = 'slotEditorForm';
 
-        const titleEl = document.createElement('h5');
-        titleEl.id = 'slotEditorTitle';
+            const titleEl = document.createElement('h5');
+            titleEl.id = 'slotEditorTitle';
 
-        const slotIdInput = document.createElement('input');
-        slotIdInput.id = 'slotEditorSlotId';
+            const slotIdInput = document.createElement('input');
+            slotIdInput.id = 'slotEditorSlotId';
 
-        const dateInput = document.createElement('input');
-        dateInput.id = 'slotEditorDate';
+            const dateInput = document.createElement('input');
+            dateInput.id = 'slotEditorDate';
 
-        const titleInput = document.createElement('input');
-        titleInput.id = 'slotEditorTitleInput';
+            const titleInput = document.createElement('input');
+            titleInput.id = 'slotEditorTitleInput';
 
-        const descInput = document.createElement('textarea');
-        descInput.id = 'slotEditorDescription';
+            const descInput = document.createElement('textarea');
+            descInput.id = 'slotEditorDescription';
 
-        const startInput = document.createElement('input');
-        startInput.id = 'slotEditorStartTime';
+            const startInput = document.createElement('input');
+            startInput.id = 'slotEditorStartTime';
 
-        const endInput = document.createElement('input');
-        endInput.id = 'slotEditorEndTime';
+            const endInput = document.createElement('input');
+            endInput.id = 'slotEditorEndTime';
 
-        const capacityInput = document.createElement('input');
-        capacityInput.id = 'slotEditorCapacity';
+            const capacityInput = document.createElement('input');
+            capacityInput.id = 'slotEditorCapacity';
 
-        const metaSpan = document.createElement('span');
-        metaSpan.id = 'slotEditorMeta';
+            const metaSpan = document.createElement('span');
+            metaSpan.id = 'slotEditorMeta';
 
-        const errorSpan = document.createElement('span');
-        errorSpan.id = 'slotEditorError';
-        errorSpan.classList.add('d-none');
+            const errorSpan = document.createElement('span');
+            errorSpan.id = 'slotEditorError';
+            errorSpan.classList.add('d-none');
 
-        const roleChips = document.createElement('div');
-        roleChips.id = 'slotEditorRoleChips';
+            const roleChips = document.createElement('div');
+            roleChips.id = 'slotEditorRoleChips';
 
-        const roleInput = document.createElement('input');
-        roleInput.id = 'slotEditorRoleInput';
+            const roleInput = document.createElement('input');
+            roleInput.id = 'slotEditorRoleInput';
 
-        const roleSuggestions = document.createElement('div');
-        roleSuggestions.id = 'slotEditorRoleSuggestions';
-        roleSuggestions.classList.add('d-none');
+            const roleSuggestions = document.createElement('div');
+            roleSuggestions.id = 'slotEditorRoleSuggestions';
+            roleSuggestions.classList.add('d-none');
 
-        form.append(slotIdInput, dateInput, titleInput, descInput, startInput, endInput, capacityInput);
-        modal.append(titleEl, form, metaSpan, errorSpan, roleChips, roleInput, roleSuggestions);
-        document.body.append(modal);
+            form.append(slotIdInput, dateInput, titleInput, descInput, startInput, endInput, capacityInput);
+            modal.append(titleEl, form, metaSpan, errorSpan, roleChips, roleInput, roleSuggestions);
+            document.body.append(modal);
 
-        mockPost = jest.spyOn(http, 'post').mockResolvedValue({
-            status: 'success',
-            data: {slotId: 'newSlot'},
-        });
+            mockPost = jest.spyOn(http, 'post').mockResolvedValue({
+                status: 'success',
+                data: {slotId: 'newSlot'},
+            });
 
-        jest.spyOn(alerts, 'showInlineAlert').mockImplementation();
-        jest.spyOn(uiHelpers, 'reloadAfterDelay').mockImplementation();
-        jest.spyOn(permissions, 'requireEntityPerm').mockImplementation();
-        jest.spyOn(permissions, 'requireItemPerm').mockImplementation();
-        jest.spyOn(activityRoles, 'getAllRoles').mockReturnValue(testData.roleManagement.multipleRoles);
-        jest.spyOn(activityRoles, 'getSlotRolesForSlot').mockReturnValue([]);
-        jest.spyOn(activityRoles, 'addRoleToGlobal').mockImplementation();
-        }
+            jest.spyOn(alerts, 'showInlineAlert').mockImplementation();
+            jest.spyOn(uiHelpers, 'reloadAfterDelay').mockImplementation();
+            jest.spyOn(permissions, 'requireEntityPerm').mockImplementation();
+            jest.spyOn(permissions, 'requireItemPerm').mockImplementation();
+            const permsMock = {itemAllow: jest.fn().mockReturnValue(true)};
+            jest.spyOn(permissions, 'getPerms').mockReturnValue(permsMock as any);
+            jest.spyOn(activityRoles, 'getAllRoles').mockReturnValue(testData.roleManagement.multipleRoles);
+            jest.spyOn(activityRoles, 'getSlotRolesForSlot').mockReturnValue([]);
+            jest.spyOn(activityRoles, 'addRoleToGlobal').mockImplementation();
+        },
     });
 
     describe('initialization', () => {
@@ -477,9 +479,45 @@ describe('activity-slot-editor', () => {
 
             expect(permissions.requireItemPerm).toHaveBeenCalledWith(
                 testData.slotEditing.existing.slotId,
-                'ITEM_EDIT',
+                'EDIT_META',
                 'edit slots',
                 'ITEM_EDIT'
+            );
+        });
+
+        test('allows description-only edits when user lacks full edit rights', async () => {
+            const descOnlyPerms = {
+                itemAllow: (_id: string, key: string) => key === 'EDIT_DESC',
+            } as any;
+            (permissions.getPerms as jest.Mock).mockReturnValue(descOnlyPerms);
+
+            const editBtn = document.createElement('button');
+            editBtn.dataset.slotEdit = '1';
+            slotEl.append(editBtn);
+
+            editBtn.click();
+
+            const titleInput = document.getElementById('slotEditorTitleInput') as HTMLInputElement;
+            const startInput = document.getElementById('slotEditorStartTime') as HTMLInputElement;
+            const descInput = document.getElementById('slotEditorDescription') as HTMLTextAreaElement;
+
+            expect(titleInput.required).toBe(false);
+            expect(startInput.disabled).toBe(true);
+
+            descInput.value = 'Updated description';
+
+            form.dispatchEvent(new Event('submit'));
+            await new Promise((resolve) => setTimeout(resolve, 100));
+
+            expect(permissions.requireItemPerm).toHaveBeenCalledWith(
+                testData.slotEditing.existing.slotId,
+                'EDIT_DESC',
+                'edit slot descriptions',
+                ['ITEM_EDIT', 'ITEM_EDIT_DESC']
+            );
+            expect(mockPost).toHaveBeenCalledWith(
+                `/api/activity/plan123/slot/${testData.slotEditing.existing.slotId}/description`,
+                {description: 'Updated description'}
             );
         });
     });
