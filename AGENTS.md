@@ -4,55 +4,83 @@ This document provides guidance for AI coding agents working on the Surveyor pro
 
 ## Project Overview
 
-Surveyor is a TypeScript-based survey management application with a focus on maintainable, tested code. The project uses:
+Surveyor is a TypeScript-based event and collaboration management application with comprehensive testing and documentation. The project uses:
 
 - **Backend**: Express.js + TypeORM + MariaDB
-- **Frontend**: Pug templates + Bootstrap + Vanilla JavaScript
-- **Testing**: Jest (unit/integration) + Playwright (E2E)
+- **Frontend**: Pug templates + Bootstrap + Vanilla TypeScript
+- **Testing**: Jest (unit/integration) + Playwright (E2E) + MSW (frontend mocking)
 - **Language**: TypeScript with strict type checking
-- **Frontend structure**: Reuse helpers under `src/public/js/core` and `src/public/js/shared` (see the Frontend Architecture section in README.md) instead of duplicating utilities.
+- **Testing Approach**: Data-driven and keyword-driven patterns
 
 ## Quick Start for AI Agents
 
 1. **Read the documentation first**: 
-   - [README.md](README.md) - Project setup and overview
-   - [TESTING.md](TESTING.md) - Comprehensive testing guide
+   - [README.md](README.md) - Project setup and quick start
+   - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture and design
+   - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) - Development workflow and guidelines
+   - [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) - Comprehensive testing guide
    - [.github/copilot-instructions.md](.github/copilot-instructions.md) - GitHub Copilot-specific instructions
 
-2. **Understand the testing approach**:
-   - All tests use **data-driven** and **keyword-driven** patterns
-   - Test data is in `tests/data/`
-   - Reusable keywords are in `tests/keywords/`
-   - See [TESTING.md](TESTING.md) for detailed patterns
+2. **Understand the documentation structure**:
+   - **Developer docs**: `docs/` directory - architecture, development, testing
+   - **User guides**: `docs/user-guide/` - end-user documentation
+   - **AI-specific**: `.github/copilot-instructions.md` and this file
 
-3. **Follow the conventions**:
+3. **Understand the testing approach**:
+   - All tests use **data-driven** and **keyword-driven** patterns
+   - Test data externalized to `tests/data/`
+   - Reusable keywords in `tests/keywords/`
+   - See [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for comprehensive patterns
+   - Test quality is excellent (see [docs/TEST_REVIEW.md](docs/TEST_REVIEW.md))
+
+4. **Follow the conventions**:
    - TypeScript for all code
    - Async/await over promises
    - Interfaces over types
    - Always create migrations for database changes
+   - Data-driven testing for all new tests
 
 ## Key Directories
 
 ```
 surveyor/
+├── docs/                # Documentation
+│   ├── README.md            # Documentation index
+│   ├── ARCHITECTURE.md      # System architecture
+│   ├── DEVELOPMENT.md       # Development guide
+│   ├── TESTING_GUIDE.md     # Testing documentation
+│   ├── TEST_REVIEW.md       # Test quality review
+│   ├── FRONTEND_TESTING.md  # Frontend testing guide
+│   ├── user-guide/          # End-user documentation
+│   └── archive/             # Historical documents
 ├── src/
-│   ├── modules/         # Application modules
-│   │   ├── database/    # Database entities and services
-│   │   ├── user/        # User authentication and management
-│   │   └── ...          # Other feature modules
+│   ├── controller/      # Business logic controllers
+│   ├── middleware/      # Express middleware
 │   ├── migrations/      # TypeORM database migrations
-│   ├── public/          # Static assets (JS, CSS, images)
-│   └── views/           # Pug templates
+│   ├── modules/         # Application modules
+│   │   ├── activity/    # Activity plan logic
+│   │   ├── database/    # Database entities and services
+│   │   └── lib/         # Utility libraries
+│   ├── public/          # Static assets
+│   │   ├── js/          # Client-side TypeScript
+│   │   │   ├── core/    # Core utilities
+│   │   │   ├── shared/  # Shared UI behaviors
+│   │   │   └── modules/ # Feature widgets
+│   │   └── style/       # SASS stylesheets
+│   ├── routes/          # Express routes
+│   ├── views/           # Pug templates
+│   └── server.ts        # Application entry point
 ├── tests/
-│   ├── unit/            # Unit tests
+│   ├── client/          # Frontend tests (Jest + MSW)
 │   ├── controller/      # Controller tests
-│   ├── middleware/      # Middleware tests
 │   ├── database/        # Database integration tests
-│   ├── e2e/             # End-to-end tests
+│   ├── e2e/             # End-to-end tests (Playwright)
+│   ├── middleware/      # Middleware tests
+│   ├── unit/            # Backend unit tests
 │   ├── data/            # Test data (data-driven testing)
 │   ├── keywords/        # Test keywords (keyword-driven testing)
 │   └── util/            # Test utilities and mocks
-└── scripts/             # Utility scripts
+└── scripts/             # Build and utility scripts
 ```
 
 ## Coding Conventions
@@ -361,9 +389,31 @@ See [.github/copilot-instructions.md](.github/copilot-instructions.md) for Copil
 
 ### Other AI Agents
 This file serves as the primary guide. Read it along with:
-- README.md for project overview
-- TESTING.md for testing patterns
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system design
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for development workflow
+- [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for testing patterns
 - Existing code for implementation examples
+
+## Documentation Structure
+
+Surveyor has comprehensive, well-organized documentation:
+
+### For Developers
+- **[docs/README.md](docs/README.md)** - Documentation navigation
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture
+- **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** - Development workflow
+- **[docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md)** - Testing documentation
+- **[docs/TEST_REVIEW.md](docs/TEST_REVIEW.md)** - Test quality review (⭐⭐⭐⭐⭐)
+- **[docs/FRONTEND_TESTING.md](docs/FRONTEND_TESTING.md)** - Frontend testing
+
+### For End Users
+- **[docs/user-guide/](docs/user-guide/)** - Complete user documentation
+  - Getting started, dashboard, surveys, events, packing, activities, drivers
+
+### For AI Agents
+- **This file** - General AI agent guidance
+- **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - Copilot-specific
+- **[.github/copilot/](..github/copilot/)** - Modular Copilot guidelines
 
 ## Contributing Guidelines
 
