@@ -4,22 +4,22 @@
  */
 
 import {setCurrentNavLocation} from './core/navigation';
-import {initAssignmentRemoval} from './shared/list-actions';
 import {loadPerms} from './core/permissions';
+import {buildWarningModal, describeWarning as descWarn, initAssign} from './modules/activity-assignments';
+import {initDates, initSlotFilters} from './modules/activity-filters';
 import {initParticipantsTab} from './modules/activity-participants';
+import {initRecommendationScheduleView} from './modules/activity-recommendations-schedule';
+import {initRequirementPanel} from './modules/activity-requirements';
 import {
     addRoleToGlobal as addRole,
     getAllRoles as getRoles,
     getSlotRolesForSlot as getSlotRoles,
     initSlotRoleAdminModal
 } from './modules/activity-roles';
-import {buildWarningModal, describeWarning as descWarn, initAssign} from './modules/activity-assignments';
-import {initDates, initSlotFilters} from './modules/activity-filters';
-import {initDelete, initDnD, initInlineEdit} from './modules/activity-slot-operations';
 import {initSlotEditorModal} from './modules/activity-slot-editor';
-import {initRequirementPanel} from './modules/activity-requirements';
-import {initRecommendationScheduleView} from './modules/activity-recommendations-schedule';
+import {initDelete, initDnD, initInlineEdit} from './modules/activity-slot-operations';
 import type {AssignmentWarning, RecommendationRow} from "./modules/activity-types";
+import {initAssignmentRemoval} from './shared/list-actions';
 
 
 // Assignment warning types moved to modules/activity-assignments.ts
@@ -138,6 +138,4 @@ export function init(): void {
 
 // Expose to global scope
 if (!window.Surveyor) window.Surveyor = {};
-console.log(window.Surveyor);
 window.Surveyor.init = init;
-console.log(window.Surveyor);

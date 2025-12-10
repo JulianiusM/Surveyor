@@ -1,28 +1,28 @@
 // controllers/activityController.js
+import {Request} from "express";
 // Business logic for the Activity routes
 import Joi from 'joi';
-
-import {ENTITIES, fromISOtoLocal, generateUniqueId} from '../modules/lib/util';
-import {APIError, ValidationError} from '../modules/lib/errors';
-import * as activityService from "../modules/database/services/ActivityService";
-import * as requirementService from "../modules/database/services/ActivityRequirementService";
-import * as recommendationService from "../modules/database/services/ActivityRecommendationService";
-import {RecommendationInput} from "../modules/database/services/ActivityRecommendationService";
-import * as eventService from "../modules/database/services/EventService";
-import {ActivitySlot} from "../modules/database/entities/activity/ActivitySlot";
-import {ActivityPlan} from "../modules/database/entities/activity/ActivityPlan";
-import {RecommendationStatus} from "../modules/database/entities/activity/ActivityAssignmentRecommendation";
-import {Request} from "express";
-import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
-import type {PermBundle} from "../types/PermissionTypes";
-import {buildRecommendationWarnings} from "../modules/activity/recommendations";
 import {generatePlanRecommendations} from "../modules/activity/autoAssignment";
+import {collectAssignmentWarnings, toAssignmentCandidate} from "../modules/activity/availability";
+import {buildRecommendationWarnings} from "../modules/activity/recommendations";
 import {
     ParticipantAttendance,
     summarizeParticipantRequirements,
     toParticipantKey
 } from "../modules/activity/requirements";
-import {collectAssignmentWarnings, toAssignmentCandidate} from "../modules/activity/availability";
+import {RecommendationStatus} from "../modules/database/entities/activity/ActivityAssignmentRecommendation";
+import {ActivityPlan} from "../modules/database/entities/activity/ActivityPlan";
+import {ActivitySlot} from "../modules/database/entities/activity/ActivitySlot";
+import * as recommendationService from "../modules/database/services/ActivityRecommendationService";
+import {RecommendationInput} from "../modules/database/services/ActivityRecommendationService";
+import * as requirementService from "../modules/database/services/ActivityRequirementService";
+import * as activityService from "../modules/database/services/ActivityService";
+import * as eventService from "../modules/database/services/EventService";
+import {APIError, ValidationError} from '../modules/lib/errors';
+
+import {ENTITIES, fromISOtoLocal, generateUniqueId} from '../modules/lib/util';
+import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
+import type {PermBundle} from "../types/PermissionTypes";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'activity/activity-create';
@@ -729,13 +729,13 @@ async function autoGenerateRecommendations(planId: string) {
     // IMPORTANT: Load existing recommendations BEFORE generating
     // This preserves rejection memory for the algorithm
     const existingRecommendations = await recommendationService.getRecommendations(planId);
-    
+
     // Generate with rejection memory
     const recommendations = await generatePlanRecommendations(planId, existingRecommendations);
-    
+
     // Now replace with new recommendations that respect rejection memory
     await recommendationService.replaceRecommendations(planId, recommendations);
-    
+
     const warnings = await collectRecommendationWarnings(planId, recommendations);
     return {message: 'Recommendations generated', warnings};
 }
@@ -756,19 +756,19 @@ async function applyRecommendations(planId: string, body?: any) {
     // If body contains recommendations array with statuses, use that (new format)
     // Otherwise fall back to filtering database recommendations for APPROVED (legacy)
     let approved: any[];
-    let statusUpdates: {pending: any[], rejected: any[], approved: any[]} = {pending: [], rejected: [], approved: []};
-    
+    let statusUpdates: { pending: any[], rejected: any[], approved: any[] } = {pending: [], rejected: [], approved: []};
+
     if (body?.recommendations && Array.isArray(body.recommendations)) {
         // New format: {recommendations: [{slotId, userId, guestId, status}]}
         const withStatus = body.recommendations;
-        
+
         // Group by status
         withStatus.forEach((r: any) => {
             if (r.status === 'APPROVED') statusUpdates.approved.push(r);
             else if (r.status === 'REJECTED') statusUpdates.rejected.push(r);
             else if (r.status === 'PENDING') statusUpdates.pending.push(r);
         });
-        
+
         // Update recommendation statuses in database
         // Create new input array from current recommendations, updating statuses from body
         const updatedRecommendations: RecommendationInput[] = withStatus.map((r: any) => ({
@@ -777,10 +777,10 @@ async function applyRecommendations(planId: string, body?: any) {
             guestId: r.guestId || null,
             status: r.status as RecommendationStatus,
         }));
-        
+
         // Replace all recommendations with updated statuses
         await recommendationService.replaceRecommendations(planId, updatedRecommendations);
-        
+
         // Get approved ones for processing
         approved = statusUpdates.approved.map((r: any) => {
             // Find full recommendation data from database
@@ -795,7 +795,7 @@ async function applyRecommendations(planId: string, body?: any) {
         // Legacy format: filter database recommendations
         approved = recommendations.filter((rec) => rec.status === "APPROVED");
     }
-    
+
     // Proceed even if no approved recommendations - we still want to regenerate
     const normalized = approved.map((rec) => ({
         id: rec.id ?? undefined,
@@ -861,32 +861,21 @@ async function applyRecommendations(planId: string, body?: any) {
         }
     }
 
-    const appliedIds = applicable.map((rec) => rec.id).filter(Boolean) as string[];
-    
     // Mark recommendations as applied (changes status to APPLIED)
-    if (appliedIds.length > 0) {
-        await recommendationService.markRecommendationsApplied(planId, appliedIds);
+    if (applicable.length > 0) {
+        // Load existing recommendations to preserve rejection memory
+        const existingForRejectionMemory = await recommendationService.getRecommendations(planId);
+
+        // Generate fresh recommendations with rejection memory
+        const freshRecommendations = await generatePlanRecommendations(planId, existingForRejectionMemory);
+
+        // Replace all recommendations with fresh ones
+        await recommendationService.replaceRecommendations(planId, freshRecommendations);
     }
 
-    // Auto-regenerate recommendations after saving changes (approved/rejected/pending)
-    // This ensures we always have fresh recommendations that reflect:
-    // 1. New assignments created from approved recommendations
-    // 2. Rejection memory from rejected recommendations
-    // 3. Current state of all assignments
-    // IMPORTANT: Do this BEFORE returning so the frontend gets fresh data on reload
-    
-    // Load existing recommendations to preserve rejection memory
-    const existingForRejectionMemory = await recommendationService.getRecommendations(planId);
-    
-    // Generate fresh recommendations with rejection memory
-    const freshRecommendations = await generatePlanRecommendations(planId, existingForRejectionMemory);
-    
-    // Replace all recommendations with fresh ones
-    await recommendationService.replaceRecommendations(planId, freshRecommendations);
-
     return {
-        message: `Applied ${appliedIds.length} recommendation${appliedIds.length === 1 ? '' : 's'}`,
-        applied: appliedIds.length,
+        message: `Applied ${applicable.length} recommendation${applicable.length === 1 ? '' : 's'}`,
+        applied: applicable.length,
         skipped: blockedIds.size,
         warnings,
     };
@@ -899,7 +888,7 @@ async function deleteSlot(slotId: string) {
 
 async function addSlotRole(slotId: string, body: any) {
     const {roles} = body;
-    if (!roles || !Array.isArray(roles) || roles.length < 1) {
+    if (!roles || !Array.isArray(roles) || roles.length < 1 || roles.includes("default")) {
         throw new APIError('Invalid roles', body, 400);
     }
 
@@ -909,7 +898,7 @@ async function addSlotRole(slotId: string, body: any) {
 
 async function addActivityRole(plan: ActivityPlan, body: any) {
     const {name, description, isDefault} = body;
-    if (!name) throw new APIError('Missing name', body, 400);
+    if (!name || name === "default") throw new APIError('Missing name', body, 400);
     return activityService.ensureRoleId(plan.id, name, isDefault === 'on', description);
 }
 

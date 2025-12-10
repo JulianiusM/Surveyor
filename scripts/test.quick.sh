@@ -8,6 +8,7 @@ echo "🚀 Running quick tests (Jest unit tests only)..."
 echo ""
 
 npm test
+npm test:client
 
 echo ""
 echo "✅ Quick tests completed!"

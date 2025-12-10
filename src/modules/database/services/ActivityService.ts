@@ -1,17 +1,17 @@
-import {AppDataSource} from "../dataSource";
-import {ActivityPlan} from "../entities/activity/ActivityPlan";
-import {ActivitySlot} from "../entities/activity/ActivitySlot";
-import {ActivityAssignment} from "../entities/activity/ActivityAssignment";
-import {ActivityAssignmentRole} from "../entities/activity/ActivityAssignmentRole";
-import {ActivityRole} from "../entities/activity/ActivityRole";
-import {generateUniqueId} from "../../lib/util";
-import {ActivitySlotRole} from "../entities/activity/ActivitySlotRole";
+import {EntityManager, In, Not} from "typeorm";
 import type {PlanParticipant, PlanParticipantRow, SlotAssignmentMap} from "../../../types/ActivityTypes";
-import {ensureOneByObjectsAuthed} from "../utils/relation-upsert";
-import * as entityAdminService from "./EntityAdminService";
-import {EntityManager, In} from "typeorm";
 import {AssignmentCandidate} from "../../activity/availability";
 import {toParticipantKey} from "../../activity/requirements";
+import {generateUniqueId} from "../../lib/util";
+import {AppDataSource} from "../dataSource";
+import {ActivityAssignment} from "../entities/activity/ActivityAssignment";
+import {ActivityAssignmentRole} from "../entities/activity/ActivityAssignmentRole";
+import {ActivityPlan} from "../entities/activity/ActivityPlan";
+import {ActivityRole} from "../entities/activity/ActivityRole";
+import {ActivitySlot} from "../entities/activity/ActivitySlot";
+import {ActivitySlotRole} from "../entities/activity/ActivitySlotRole";
+import {ensureOneByObjectsAuthed} from "../utils/relation-upsert";
+import * as entityAdminService from "./EntityAdminService";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Role & Assignment helpers
@@ -122,7 +122,7 @@ export async function doUnassignRole(assignmentId: number, roleName: string) {
 }
 
 export async function getAllRoles(planId: string) {
-    return AppDataSource.getRepository(ActivityRole).findBy({plan: {id: planId}});
+    return AppDataSource.getRepository(ActivityRole).findBy({plan: {id: planId}, name: Not("default")});
 }
 
 export async function updateRoleAssignments(slotId: string, assign: {
@@ -474,7 +474,15 @@ export async function getParticipantAssignmentsWithSlots(planId: string): Promis
         relations: {slot: true, user: true, guest: true},
         select: {
             id: true,
-            slot: {id: true, day: true, startTime: true, endTime: true, pos: true, isArrivalEvening: true, isDepartureMorning: true},
+            slot: {
+                id: true,
+                day: true,
+                startTime: true,
+                endTime: true,
+                pos: true,
+                isArrivalEvening: true,
+                isDepartureMorning: true
+            },
             user: {id: true},
             guest: {id: true},
         },
@@ -558,7 +566,7 @@ export async function getActivityPlanParticipants(planId: string): Promise<PlanP
         where: {id: planId},
         relations: ['event']
     });
-    
+
     // Get assigned participants
     const qb = AppDataSource
         .getRepository(ActivityAssignment)
@@ -577,7 +585,7 @@ export async function getActivityPlanParticipants(planId: string): Promise<PlanP
 
     const assignedRaw: PlanParticipantRow[] = await qb.getRawMany();
     const participantMap = new Map<string, PlanParticipant>();
-    
+
     // Add assigned participants to map
     for (const r of assignedRaw) {
         participantMap.set(r.name, {
@@ -586,12 +594,12 @@ export async function getActivityPlanParticipants(planId: string): Promise<PlanP
             roles: r.roles ? r.roles.split(",") : [],
         });
     }
-    
+
     // If plan is associated with an event, also include all event participants
     if (plan?.event?.id) {
         const eventService = await import("./EventService");
         const eventParticipants = await eventService.getEventParticipants(plan.event.id);
-        
+
         for (const ep of eventParticipants) {
             const name = ep.name || 'Unknown';
             if (!participantMap.has(name)) {
@@ -604,11 +612,14 @@ export async function getActivityPlanParticipants(planId: string): Promise<PlanP
             }
         }
     }
-    
+
     return Array.from(participantMap.values());
 }
 
-export async function getParticipantRolesForPlan(planId: string): Promise<{participantKey: string; roleIds: number[]}[]> {
+export async function getParticipantRolesForPlan(planId: string): Promise<{
+    participantKey: string;
+    roleIds: number[]
+}[]> {
     const assignments = await AppDataSource
         .getRepository(ActivityAssignment)
         .find({

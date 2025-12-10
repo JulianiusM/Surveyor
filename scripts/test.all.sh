@@ -146,6 +146,22 @@ else
 fi
 echo ""
 
+# Step 7: Run Jest tests
+echo -e "${YELLOW}[7/9]${NC} Running Jest client tests..."
+echo ""
+npm test:client
+JEST_EXIT=$?
+echo ""
+if [ $JEST_EXIT -eq 0 ]; then
+    echo -e "${GREEN}✓${NC} Jest client tests passed"
+else
+    echo -e "${RED}✗${NC} Jest client tests failed"
+    echo -e "${YELLOW}Stopping MariaDB container...${NC}"
+    docker compose -f docker-compose.mariadb.test.yml down
+    exit $JEST_EXIT
+fi
+echo ""
+
 # Step 8: Prepare E2E database
 if [ "$SKIP_E2E" = false ]; then
     echo -e "${YELLOW}[8/9]${NC} Preparing E2E database..."

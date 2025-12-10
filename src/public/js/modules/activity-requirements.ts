@@ -3,11 +3,11 @@
  * Handles the requirements configuration panel
  */
 
+import {formatDateLabel, toDateTimeLocalValue, toISOStringOrNull} from "../core/formatting";
 import {get, post} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
-import type {RequirementConfiguration, RequirementParticipantSummary} from './activity-types';
-import {formatDateLabel, toDateTimeLocalValue, toISOStringOrNull} from "../core/formatting";
 import {getAllRoles} from "./activity-roles";
+import type {RequirementConfiguration, RequirementParticipantSummary} from './activity-types';
 
 /**
  * Initialize the requirements panel
@@ -23,8 +23,8 @@ export function initRequirementPanel(planId: string): void {
     const addOverrideBtn = panel.querySelector<HTMLButtonElement>('[data-add-override]');
     const reloadBtn = panel.querySelector<HTMLButtonElement>('[data-requirements-refresh]');
     const saveBtn = panel.querySelector<HTMLButtonElement>('[data-requirements-save]');
-    const summaryBody = panel.querySelector<HTMLElement>('#requirementSummaryBody');
-    const summaryStats = panel.querySelector<HTMLElement>('#requirementSummaryStats');
+    const summaryBody = document.querySelector<HTMLElement>('#requirementSummaryBody');
+    const summaryStats = document.querySelector<HTMLElement>('#requirementSummaryStats');
     const assignmentMode = panel.querySelector<HTMLSelectElement>('#assignmentMode');
     const generalRequired = panel.querySelector<HTMLInputElement>('#requiredShifts');
     const roundingMode = panel.querySelector<HTMLSelectElement>('#roundingMode');
