@@ -1,22 +1,43 @@
 /**
  * Activity plan creation functionality
  * Handles dynamic slot management with drag-and-drop reordering
+ * 
+ * Architecture: Uses layered approach with separation of concerns
+ * - State layer: ActivityCreateState
+ * - Logic layer: ActivityCreateLogic
  */
 
 import {setCurrentNavLocation} from './core/navigation';
 import {loadPerms} from './core/permissions';
 import type {ActivitySlot} from "../../modules/database/entities/activity/ActivitySlot";
 import {formatISODate as fmtISO, getValidDaysInWeek, parseISODate as toDate} from './core/formatting';
+import {ActivityCreateState} from './modules/activity-create-state';
+import {ActivityCreateLogic} from './modules/activity-create-logic';
+
+// Module-level instances
+let state: ActivityCreateState | null = null;
+let logic: ActivityCreateLogic | null = null;
 
 /**
- * Slot storage map: dateISO -> array of slot objects
+ * Initialize state and logic layers
  */
-const slotsMap: Record<string, Partial<ActivitySlot>[]> = {};
+function ensureInitialized(): void {
+    if (!state) {
+        state = new ActivityCreateState();
+        logic = new ActivityCreateLogic(state);
+    }
+}
 
 /**
- * Sort function for slots by position
+ * Clear module state - used for testing
  */
-const sortSlotFn = (a: Partial<ActivitySlot>, b: Partial<ActivitySlot>) => (a.pos || 0) - (b.pos || 0);
+export function clearState(): void {
+    if (state) {
+        state.reset();
+    }
+    state = null;
+    logic = null;
+}
 
 function getPrefilledSlots() {
     return window.Surveyor.prefilledSlots
@@ -28,14 +49,8 @@ function getPrefilledSlots() {
  * @param obj Slot object to update/add
  */
 export function updateSlotObj(dateISO: string, obj: Partial<ActivitySlot>): void {
-    let arr = slotsMap[dateISO] || [];
-    let curr = arr.findIndex((v) => v.id === obj.id);
-    if (curr !== -1) {
-        arr[curr] = obj;
-        return;
-    }
-    arr.push(obj);
-    slotsMap[dateISO] = arr.sort(sortSlotFn);
+    ensureInitialized();
+    logic!.upsertSlot(dateISO, obj);
 }
 
 /**
@@ -45,7 +60,8 @@ export function updateSlotObj(dateISO: string, obj: Partial<ActivitySlot>): void
  * @returns Slot object or undefined
  */
 export function getSlotObj(dateISO: string, id: string): Partial<ActivitySlot> | undefined {
-    return (slotsMap[dateISO] || []).find((v) => v.id === id);
+    ensureInitialized();
+    return state!.getSlot(dateISO, id);
 }
 
 /**
@@ -53,11 +69,8 @@ export function getSlotObj(dateISO: string, id: string): Partial<ActivitySlot> |
  * @param dateISO Date in ISO format
  */
 export function reIndexDay(dateISO: string): void {
-    (slotsMap[dateISO] || []).forEach((s, i) => {
-        s.pos = i;
-        updateSlotObj(dateISO, s);
-    });
-    slotsMap[dateISO].sort(sortSlotFn);
+    ensureInitialized();
+    logic!.reIndexDate(dateISO);
 }
 
 /**
@@ -74,18 +87,10 @@ export function buildSlotRow(
     infoClb: () => void,
     pref: Partial<ActivitySlot> = {}
 ): HTMLDivElement {
-    const id = pref.id || crypto.randomUUID();
-
-    const rowObj: Partial<ActivitySlot> = {
-        id,
-        pos: pos || pref.pos || 0,
-        day: dateISO,
-        title: pref.title || '',
-        description: pref.description || '',
-        startTime: pref.startTime || null,
-        endTime: pref.endTime || null,
-        maxAssignees: pref.maxAssignees || 1
-    };
+    ensureInitialized();
+    
+    const rowObj = logic!.createSlot(dateISO, pos, pref);
+    const id = rowObj.id!;
     updateSlotObj(dateISO, rowObj);
 
     /* DOM - flexible card */
@@ -164,8 +169,7 @@ export function buildSlotRow(
 
     delBtn.addEventListener('click', () => {
         wrap.remove();
-        slotsMap[dateISO] = slotsMap[dateISO].filter((s: any) => s.id !== id);
-        reIndexDay(dateISO);
+        logic!.deleteSlot(dateISO, rowObj.id!);
         infoClb();
     });
 
@@ -197,7 +201,8 @@ export function buildDayCell(slotDate: Date): HTMLTableCellElement {
     }
 
     // Render existing slots
-    (slotsMap[dateISO] || []).forEach((obj, i) =>
+    ensureInitialized();
+    state!.getSlotsByDate(dateISO).forEach((obj, i) =>
         container.appendChild(buildSlotRow(dateISO, obj.pos || i, infoClb, obj))
     );
 
@@ -209,7 +214,7 @@ export function buildDayCell(slotDate: Date): HTMLTableCellElement {
     addBtn.className = 'btn btn-sm btn-outline-info w-100 add-slot';
     addBtn.textContent = '+ Slot';
     addBtn.addEventListener('click', () => {
-        const pos = (slotsMap[dateISO] || []).length;
+        const pos = logic!.getSlotCount(dateISO);
         container.appendChild(buildSlotRow(dateISO, pos, infoClb));
         infoClb();
     });
@@ -322,15 +327,11 @@ export function initSubmitHandler(): void {
 
     form.addEventListener('submit', (e: Event) => {
         e.preventDefault();
-        const payload: Record<string, Partial<ActivitySlot>[]> = {};
+        ensureInitialized();
+        
         const startD = toDate(startInp.value);
         const endD = toDate(endInp.value);
-
-        for (const [date, arr] of Object.entries(slotsMap)) {
-            const cur = toDate(date);
-            if (cur < startD || cur > endD) continue;
-            payload[date] = arr;
-        }
+        const payload = logic!.preparePayload(startD, endD);
 
         hidden.value = JSON.stringify(payload);
         form.submit();
@@ -373,14 +374,18 @@ export function initSlotDnD(): void {
         if (!firstSlot) return;
 
         const dateISO = firstSlot.dataset.slotDate || '';
-        const dayArr = slotsMap[dateISO] || [];
+        ensureInitialized();
+        const dayArr = state!.getSlotsByDate(dateISO);
 
         // New order based on data-slotId
         Array.from(cont!.querySelectorAll('.slot')).forEach((el, i) => {
-            const obj = dayArr.find((s: any) => s.id === (el as HTMLElement).dataset.slotId);
-            if (obj) obj.pos = i;
+            const slotId = (el as HTMLElement).dataset.slotId;
+            const obj = dayArr.find((s: any) => s.id === slotId);
+            if (obj) {
+                obj.pos = i;
+                updateSlotObj(dateISO, obj);
+            }
         });
-        slotsMap[dateISO] = dayArr;
         reIndexDay(dateISO);
         dragSrc = null;
     });
@@ -390,6 +395,7 @@ export function initSlotDnD(): void {
  * Initialize activity plan creation page
  */
 export function init(): void {
+    ensureInitialized();
     setCurrentNavLocation();
     loadPerms();
     initListeners();
@@ -398,10 +404,11 @@ export function init(): void {
 
     const slots = getPrefilledSlots();
     if (slots) {
-        Object.assign(slotsMap, slots);
+        logic!.initializeFromPrefilled(slots);
         maybeGenerate();
     }
 }
 
 // Expose to global scope
+if (!window.Surveyor) window.Surveyor = {};
 window.Surveyor.init = init;

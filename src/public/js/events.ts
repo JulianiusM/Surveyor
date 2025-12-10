@@ -15,11 +15,23 @@ import {formatDuration, parseJsonScript, reloadAfterDelay, updateToLocalString} 
  */
 const RELOAD_DELAY_MS = 120;
 
-const participantsData = parseJsonScript<any[]>("participantsData") || [];
-const registrationData = parseJsonScript<{ id: number }>("registrationData");
+// Module-level variables - initialized in init()
+let participantsData: any[] = [];
+let registrationData: { id: number } | null = null;
+let dataInitialized = false;
 
 function getEventId(): string {
     return window.Surveyor.eventId ?? '';
+}
+
+/**
+ * Initialize data from page scripts
+ */
+function initializeData(): void {
+    if (dataInitialized) return;
+    participantsData = parseJsonScript<any[]>("participantsData") || [];
+    registrationData = parseJsonScript<{ id: number }>("registrationData");
+    dataInitialized = true;
 }
 
 /**
@@ -590,6 +602,9 @@ export function initInvoiceSubmission(): void {
  * Initialize event management page
  */
 export function init(): void {
+    // Initialize data from page scripts first
+    initializeData();
+
     setCurrentNavLocation();
     loadPerms();
     allergyCheck();
@@ -610,4 +625,5 @@ export function init(): void {
 }
 
 // Expose to global scope
+if (!window.Surveyor) window.Surveyor = {};
 window.Surveyor.init = init;
