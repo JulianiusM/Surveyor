@@ -8,6 +8,7 @@ import {ActivityAssignment} from "../entities/activity/ActivityAssignment";
 import {ActivityAssignmentRole} from "../entities/activity/ActivityAssignmentRole";
 import {ActivityPlan} from "../entities/activity/ActivityPlan";
 import {ActivityRole} from "../entities/activity/ActivityRole";
+import {ActivityPlanTextField} from "../entities/activity/ActivityPlanTextField";
 import {ActivitySlot} from "../entities/activity/ActivitySlot";
 import {ActivitySlotRole} from "../entities/activity/ActivitySlotRole";
 import {ensureOneByObjectsAuthed} from "../utils/relation-upsert";
@@ -251,6 +252,43 @@ export async function updateActivityPlanDescription(
     description: string
 ) {
     await AppDataSource.getRepository(ActivityPlan).update(planId, {description});
+}
+
+export async function getActivityPlanTextFields(planId: string) {
+    return await AppDataSource.getRepository(ActivityPlanTextField).find({
+        where: {plan: {id: planId}},
+        order: {createdAt: "ASC"},
+    });
+}
+
+export async function getActivityPlanTextFieldById(id: string) {
+    return await AppDataSource.getRepository(ActivityPlanTextField).findOne({
+        where: {id},
+        relations: ["plan"],
+    });
+}
+
+export async function createActivityPlanTextField(planId: string, title: string, text: string) {
+    const repo = AppDataSource.getRepository(ActivityPlanTextField);
+    const field = repo.create({
+        id: generateUniqueId(),
+        plan: {id: planId},
+        title,
+        text,
+    });
+    await repo.save(field);
+    return field;
+}
+
+export async function updateActivityPlanTextField(id: string, text: string, title?: string) {
+    const repo = AppDataSource.getRepository(ActivityPlanTextField);
+    const updates: Partial<ActivityPlanTextField> = {text};
+    if (title !== undefined) updates.title = title;
+    await repo.update(id, updates);
+}
+
+export async function deleteActivityPlanTextField(id: string) {
+    await AppDataSource.getRepository(ActivityPlanTextField).delete(id);
 }
 
 export async function getManagedPlansForUser(userId: number) {

@@ -12,7 +12,12 @@ jest.mock('../../src/modules/database/services/ActivityService', () => ({
     getActivityPlanParticipants: jest.fn(),
     getAllRoles: jest.fn(),
     getActivitySlotRoles: jest.fn(),
+    getActivityPlanTextFields: jest.fn(),
     updateActivityPlanDescription: jest.fn(),
+    getActivityPlanTextFieldById: jest.fn(),
+    createActivityPlanTextField: jest.fn(),
+    updateActivityPlanTextField: jest.fn(),
+    deleteActivityPlanTextField: jest.fn(),
     reorderActivitySlots: jest.fn(),
     getLastActivitySlotNumber: jest.fn(),
     addActivitySlot: jest.fn(),
@@ -64,6 +69,9 @@ const {
     deleteEntity,
 
     updateDescription,
+    createTextField,
+    updateTextField,
+    deleteTextField,
     reorderSlots,
     quickAddSlot,
     updateSlotDescription,
@@ -176,6 +184,74 @@ describe('API helpers', () => {
                     verifyResult(result, expectedMessage);
                     verifyMockCall(activityService.updateActivityPlanDescription, planId, body.description);
                 }
+            }
+        );
+    });
+
+    describe('createTextField', () => {
+        test.each(testData.createTextFieldData)(
+            '$description',
+            async ({planId, body, expectedTitle, expectedText, shouldThrow}) => {
+                const mockField = {id: 'tf-123'};
+                setupMock(activityService.createActivityPlanTextField, mockField);
+
+                if (shouldThrow) {
+                    await expect(createTextField(planId, body)).rejects.toBeInstanceOf(APIError);
+                } else {
+                    const result = await createTextField(planId, body);
+                    verifyResult(result, mockField);
+                    verifyMockCall(
+                        activityService.createActivityPlanTextField,
+                        planId,
+                        expectedTitle,
+                        expectedText ?? ''
+                    );
+                }
+            }
+        );
+    });
+
+    describe('updateTextField', () => {
+        test.each(testData.updateTextFieldData)(
+            '$description',
+            async ({planId, textFieldId, existing, body, expectedTitle, expectedText, shouldThrow}) => {
+                setupMock(activityService.getActivityPlanTextFieldById, existing);
+
+                if (shouldThrow) {
+                    await expect(updateTextField(planId, textFieldId, body)).rejects.toBeInstanceOf(APIError);
+                    return;
+                }
+
+                setupMock(activityService.updateActivityPlanTextField, undefined);
+                const result = await updateTextField(planId, textFieldId, body);
+
+                verifyResult(result, 'Text field updated');
+                verifyMockCall(
+                    activityService.updateActivityPlanTextField,
+                    textFieldId,
+                    expectedText ?? '',
+                    expectedTitle
+                );
+            }
+        );
+    });
+
+    describe('deleteTextField', () => {
+        test.each(testData.deleteTextFieldData)(
+            '$description',
+            async ({planId, textFieldId, existing, expectedMessage, shouldThrow}) => {
+                setupMock(activityService.getActivityPlanTextFieldById, existing);
+
+                if (shouldThrow) {
+                    await expect(deleteTextField(planId, textFieldId)).rejects.toBeInstanceOf(APIError);
+                    return;
+                }
+
+                setupMock(activityService.deleteActivityPlanTextField, undefined);
+                const result = await deleteTextField(planId, textFieldId);
+
+                verifyResult(result, expectedMessage);
+                verifyMockCall(activityService.deleteActivityPlanTextField, textFieldId);
             }
         );
     });

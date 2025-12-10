@@ -7,6 +7,7 @@ import {ActivityPlanRequirementOverride} from "./ActivityPlanRequirementOverride
 import {ActivityAssignmentRecommendation} from "./ActivityAssignmentRecommendation";
 import {Event} from "../event/Event";
 import {ActivityRole} from "./ActivityRole";
+import {ActivityPlanTextField} from "./ActivityPlanTextField";
 
 @Entity("activity_plans", {schema: "surveyor"})
 export class ActivityPlan {
@@ -109,4 +110,7 @@ export class ActivityPlan {
         (recommendation) => recommendation.plan
     )
     activityAssignmentRecommendations: ActivityAssignmentRecommendation[];
+
+    @OneToMany(() => ActivityPlanTextField, (textField) => textField.plan)
+    textFields?: ActivityPlanTextField[];
 }

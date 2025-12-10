@@ -18,6 +18,7 @@ import {
 } from './modules/activity-roles';
 import {initSlotEditorModal} from './modules/activity-slot-editor';
 import {initDelete, initDnD, initInlineEdit} from './modules/activity-slot-operations';
+import {initTextFields} from './modules/activity-text-fields';
 import type {AssignmentWarning, RecommendationRow} from "./modules/activity-types";
 import {initAssignmentRemoval} from './shared/list-actions';
 
@@ -129,6 +130,7 @@ export function init(): void {
         initSlotFilters();
         initParticipantsTab();
         initSlotRoleAdminModal(planId, describeSlot);
+        initTextFields(planId);
 
         initAssignmentRemoval({
             baseUrl: `/api/activity/${planId}`,

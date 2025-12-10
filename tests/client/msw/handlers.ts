@@ -171,6 +171,32 @@ export const handlers = [
         const body = await request.json();
         return successResponse('Recommendations applied', { planId, ...body });
     }),
+
+    // Create activity text field
+    http.post('/api/activity/:planId/text-field', async ({params, request}) => {
+        const {planId} = params;
+        const path = `/api/activity/${planId}/text-field`;
+        const body = await request.json();
+
+        return checkQueue('POST', path, () => successResponse('Text field saved', {id: 'tf-generated', ...body}));
+    }),
+
+    // Update activity text field
+    http.post('/api/activity/:planId/text-field/:textFieldId', async ({params, request}) => {
+        const {planId, textFieldId} = params;
+        const path = `/api/activity/${planId}/text-field/${textFieldId}`;
+        const body = await request.json();
+
+        return checkQueue('POST', path, () => successResponse('Text field updated', {id: textFieldId, ...body}));
+    }),
+
+    // Delete activity text field
+    http.post('/api/activity/:planId/text-field/:textFieldId/delete', ({ params }) => {
+        const {planId, textFieldId} = params;
+        const path = `/api/activity/${planId}/text-field/${textFieldId}/delete`;
+
+        return checkQueue('POST', path, () => successResponse('Text field deleted'));
+    }),
     
     // ==================== User API ====================
     

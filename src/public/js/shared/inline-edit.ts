@@ -17,6 +17,14 @@ interface InlineEditPermission {
     parentKey?: PermType;
 }
 
+interface InlineEditAreaOptions {
+    payloadKey?: string;
+    successMessage?: string;
+    placeholder?: string;
+    maxLength?: number;
+    onSave?: () => void;
+}
+
 /**
  * Enable drag-and-drop for elements
  */
@@ -45,13 +53,31 @@ export function disableDnD(): void {
  * @param url API endpoint for saving
  * @param permission Optional permission guard configuration
  */
-export function startInlineEditArea(elem: HTMLElement, url: string, permission?: InlineEditPermission): void {
+export function startInlineEditArea(
+    elem: HTMLElement,
+    url: string,
+    permission?: InlineEditPermission,
+    options?: InlineEditAreaOptions,
+): void {
     if (!elem || elem.querySelector('textarea')) return;
 
     const guard: InlineEditPermission = permission ?? {
         scope: 'entity',
         key: 'EDIT_DESC',
         action: 'edit descriptions'
+    };
+
+    const config: InlineEditAreaOptions & {
+        payloadKey: string;
+        successMessage: string;
+        placeholder: string;
+        maxLength: number;
+    } = {
+        payloadKey: options?.payloadKey ?? 'description',
+        successMessage: options?.successMessage ?? 'Description updated',
+        placeholder: options?.placeholder ?? 'double-click to add description',
+        maxLength: options?.maxLength ?? 1999,
+        onSave: options?.onSave,
     };
 
     try {
@@ -71,26 +97,27 @@ export function startInlineEditArea(elem: HTMLElement, url: string, permission?:
     const ta = document.createElement('textarea');
     ta.className = 'form-control text-bg-dark';
     ta.style.minHeight = '6rem';
-    ta.value = old === 'double-click to add description' ? '' : old;
-    ta.maxLength = 1999;
+    ta.value = old === config.placeholder ? '' : old;
+    ta.maxLength = config.maxLength;
 
     elem.innerHTML = '';
     elem.appendChild(ta);
     ta.focus();
 
     function restore(val: string): void {
-        if (val === 'double-click to add description') val = '';
+        if (val === config.placeholder) val = '';
         elem.innerHTML = val
             ? val.replace(/\n/g, '<br>')
-            : '<em class="text-secondary">double-click to add description</em>';
+            : `<em class="text-secondary">${config.placeholder}</em>`;
     }
 
     async function save(): Promise<void> {
         const val = ta.value.trim();
         try {
-            await post(url, { description: val });
+            await post(url, { [config.payloadKey]: val });
             restore(val);
-            showInlineAlert('success', 'Description updated');
+            showInlineAlert('success', config.successMessage);
+            if (config.onSave) config.onSave();
         } catch (err) {
             restore(old);
             const message = err instanceof Error ? err.message : 'Failed to update the description.';
