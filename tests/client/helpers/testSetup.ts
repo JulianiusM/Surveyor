@@ -236,6 +236,7 @@ export function setupQueuedEndpoint(method: string, path: string): void {
 
             if (queuedResponse) {
                 const {status, data, message, statusCode} = queuedResponse;
+                console.log(`[MSW Handler] ${method} ${actualPath} -> returning ${status} response`);
 
                 if (status === 'error') {
                     return HttpResponse.json(
@@ -252,6 +253,7 @@ export function setupQueuedEndpoint(method: string, path: string): void {
             }
 
             // No queued response - return default success
+            console.log(`[MSW Handler] ${method} ${actualPath} -> no queued response, returning default success`);
             return HttpResponse.json({
                 status: 'success',
                 message: 'Default response',

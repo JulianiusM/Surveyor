@@ -133,6 +133,11 @@ describe('activity-roles module', () => {
         });
 
         test.each(activityRolesData().initSlotRoleAdminModal.saveSuccess)('$description', async ({planId, html, slotId, expectedPayload}) => {
+            // Clear mocks at start of each test case in test.each loop
+            mockShowInlineAlert.mockClear();
+            mockReloadAfterDelay.mockClear();
+            mockRequireEntityPerm.mockClear();
+            
             document.body.innerHTML = html;
             const mockDescribeSlot = jest.fn((id: string) => `Slot ${id}`);
             // Queue MSW response
@@ -148,8 +153,8 @@ describe('activity-roles module', () => {
             const saveBtn = document.getElementById('slotRoleAdminSave') as HTMLButtonElement;
             await saveBtn.click();
             
-            // Wait for async operations
-            await new Promise(resolve => setTimeout(resolve, 200));
+            // Wait for async operations (increased to ensure HTTP resolves)
+            await new Promise(resolve => setTimeout(resolve, 250));
             
             // Check side effects
             expect(mockRequireEntityPerm).toHaveBeenCalledWith('MANAGE_ASSIGNMENTS', expect.any(String));

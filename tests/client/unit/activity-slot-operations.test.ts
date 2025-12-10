@@ -34,16 +34,8 @@ describe('activity-slot-operations', () => {
 
     setupTest({
         beforeEach: () => {
-            // Reset modules to get fresh event listeners
-            jest.resetModules();
-            
-            // Create fresh document to avoid event listener accumulation
-            const newDocument = {
-                ...document,
-                addEventListener: jest.fn(),
-                body: document.createElement('body')
-            };
-            (global as any).document = newDocument;
+            // Note: Do NOT mock document.addEventListener or reset modules
+            // The initDelete/initInlineEdit functions need real event listeners to work
             
             mockStartInlineEdit = jest.spyOn(inlineEdit, 'startInlineEdit').mockImplementation();
             mockStartInlineEditArea = jest.spyOn(inlineEdit, 'startInlineEditArea').mockImplementation();
@@ -121,6 +113,11 @@ describe('activity-slot-operations', () => {
     describe('initDelete', () => {
         initDeleteData.forEach((testCase) => {
             test(testCase.description, async () => {
+                // Clear mocks at start of each test case in forEach loop
+                mockShowInlineAlert.mockClear();
+                mockReloadAfterDelay.mockClear();
+                mockRequireItemPerm.mockClear();
+                
                 const buttonHtml = `<button data-delete-slot data-slotid="${testCase.slotId}">Delete</button>`;
                 document.body.innerHTML = buttonHtml;
 
@@ -138,10 +135,12 @@ describe('activity-slot-operations', () => {
                 initDelete(testCase.planId);
 
                 const button = document.querySelector('[data-delete-slot]') as HTMLElement;
+                console.log('[TEST] About to click button, slotId:', testCase.slotId, 'planId:', testCase.planId);
                 button.click();
+                console.log('[TEST] Button clicked, waiting for HTTP...');
 
-                // Wait for async operations (increased for MSW)
-                await new Promise((resolve) => setTimeout(resolve, 100));
+                // Wait for async operations (increased for MSW + ensure HTTP resolves)
+                await new Promise((resolve) => setTimeout(resolve, 150));
 
                 if (!testCase.confirmResult) {
                     expect(mockShowInlineAlert).not.toHaveBeenCalled();
