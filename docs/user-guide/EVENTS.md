@@ -1,76 +1,199 @@
 # Events Guide
 
-Manage events and participant registrations in Surveyor.
+Create and manage events with participant registration and coordination of related activities.
 
-## Quick Start
+## What are Events?
 
-1. **Create Event**: Title, date, description
-2. **Configure Registration**: Open/closed, approval settings
-3. **Share**: Provide registration link
-4. **Manage**: Track registrations, communicate with participants
+Events in Surveyor are containers that:
+- Store event details (title, dates, location)
+- Manage participant registration
+- Link to related packing lists, activity plans, and drivers lists
+- Track who's attending
+- Collect dietary information (optional)
 
-## Event Creation
+## Creating an Event
 
-### Basic Details
-- **Title**: Event name
-- **Date/Time**: When it occurs
-- **Location**: Where (physical/virtual)
-- **Description**: Event details
-- **Capacity**: Max participants (optional)
+### Basic Steps
 
-### Registration Settings
-- **Open Registration**: Anyone can register
-- **Approval Required**: Owner approves requests
-- **Closed**: No new registrations
-- **Guest Registration**: Allow non-users
-
-## Managing Registrations
-
-### Viewing Participants
-- See registered users
-- Check registration status
-- View participant details
-- Export participant list
-
-### Approval Process
-1. User submits registration
-2. You receive notification
-3. Review request
-4. Approve or deny
-5. User notified of decision
-
-### Communication
-- Send messages to participants
-- Announce updates
-- Share important information
-
-## Event Features
-
-### Invoice Pools (Optional)
-- Collect event costs
-- Track payments
-- Distribute expenses
-- Generate invoices
-
-### Participant Management
-- Add/remove participants
-- Update registration status
-- Track attendance
-- Manage waitlist
-
-## Best Practices
-
-✅ **Do:**
-- Set clear registration deadline
-- Communicate event details early
-- Update participants regularly
-- Track RSVPs
-
-❌ **Don't:**
-- Change details last minute
-- Overbook capacity
-- Forget to close registration
+1. **Dashboard** → Events (if visible) → "+ Create"
+2. **Fill in:**
+   - **Title** (required) - Event name
+   - **Description** (optional) - Event details
+   - **Start Date** (required) - YYYY-MM-DD format
+   - **End Date** (required) - YYYY-MM-DD format
+   - **Location** (optional) - Where it's happening
+   - **Timezone** (optional) - For time-specific coordination
+3. **Optional Settings:**
+   - **Binding Deadline** - Last date to register/commit
+   - **Require Dietary Info** - Collect food preferences/restrictions
+   - **Max Participants** - Capacity limit
+4. **Create Event**
 
 ---
 
-**Next**: [Packing Lists Guide](PACKING_LISTS.md)
+## Event Registration
+
+### How Participants Register
+
+Participants can register through:
+- **Event page** (if they have access)
+- **Registration link** (shared by organizer)
+- **Guest registration** (no account needed)
+
+### Registration Process
+
+1. Navigate to event page
+2. Click "Register" button (if available)
+3. Fill in required information
+4. Submit registration
+5. Confirmation shown
+
+### Guest Registration
+
+1. Receive event link
+2. Option to login/register or continue as guest
+3. Fill in name and email
+4. Save personalized link (to manage registration later)
+5. Submit registration
+
+---
+
+## Managing Registrations (Owners)
+
+### Viewing Participants
+
+Event owners can:
+- See all registered participants
+- View registration details
+- Check dietary information (if collected)
+- Export participant list
+
+### Managing Capacity
+
+If max participants is set:
+- Registration closes when full
+- Waitlist may be available
+- Owner can adjust capacity
+
+---
+
+## Linking Related Items
+
+Events can be linked to:
+
+### Packing Lists
+When creating a packing list, select "Assign to event" to link it to your event.
+
+### Activity Plans  
+When creating an activity plan, select "Assign to event" to link it. This enables:
+- Participant list for assignments
+- Auto-assignment recommendations
+- Requirement tracking
+
+### Drivers Lists
+When creating a drivers list, select "Assign to event" to coordinate transportation.
+
+### Benefits of Linking
+
+- Centralized participant list
+- Better coordination
+- All related items accessible from event
+- Participant tracking across activities
+
+---
+
+## Event Details Page
+
+The event page typically shows:
+
+- **Event Information** - Title, dates, location, description
+- **Registration Button** - For participants to sign up
+- **Participant List** - Who's registered (if visible)
+- **Related Items** - Links to packing lists, activity plans, drivers lists
+- **Management Options** - Edit, permissions, delete (for owners)
+
+---
+
+## Permissions
+
+Event permissions control:
+- **View** - See event details
+- **Edit** - Modify event information
+- **Manage Registrations** - Handle participant registrations
+- **Owner** - Full control
+
+---
+
+## Tips and Best Practices
+
+✅ **Planning:**
+- Create event first, then link related items
+- Set realistic capacity
+- Include complete location details
+- Set binding deadline if needed
+
+✅ **Registration:**
+- Share registration link early
+- Collect dietary info if planning meals
+- Send registration reminders
+- Confirm final participant list
+
+✅ **Coordination:**
+- Create packing list for what to bring
+- Create activity plan for schedule
+- Create drivers list for transportation
+- Link all to the event
+
+---
+
+## Common Use Cases
+
+### Conference
+"Annual Tech Conference"
+- Registration with capacity limit
+- Linked activity plan for sessions
+- Packing list for materials
+- Drivers list for transportation
+
+### Retreat
+"Team Building Retreat"
+- Registration with dietary info
+- Linked packing list for gear
+- Activity plan for schedule
+- Drivers list for carpools
+
+### Workshop
+"Training Workshop"
+- Simple registration
+- Linked activity plan for sessions
+- Materials packing list
+
+---
+
+## Notes
+
+### Current Features
+
+- ✅ Event creation with details
+- ✅ Participant registration
+- ✅ Link to packing/activity/drivers
+- ✅ Dietary information collection
+- ✅ Capacity management
+- ✅ Guest registration
+
+### Advanced Features
+
+Some organizations may have additional features:
+- Registration approval workflow
+- Invoice pools for cost sharing
+- Bypass links for pre-approved registration
+
+Check with your organizer for specific capabilities.
+
+---
+
+**Back to:** [User Guide Home](README.md)
+
+---
+
+**Last Updated:** December 10, 2025

@@ -1,72 +1,206 @@
 # Packing Lists Guide
 
-Collaborate on packing lists for trips and events.
+Coordinate what to bring for trips or events using shared packing lists.
 
-## Quick Start
+## What are Packing Lists?
 
-1. **Create List**: Name and description
-2. **Add Categories**: Organize items
-3. **Add Items**: What to bring
-4. **Assign**: Who brings what
-5. **Share**: Collaborate with others
+Packing lists help groups coordinate items for trips:
+- Create items with descriptions
+- Assign items to people
+- Set maximum number needed per item
+- Track who's bringing what
+- Support guest participation
 
 ## Creating a Packing List
 
-### Basic Setup
-- **List Name**: Trip or event name
-- **Description**: Details and dates
-- **Categories**: Organize items (Food, Gear, etc.)
+### Basic Steps
+
+1. **Dashboard** → Packing Lists → "+ Create"
+2. **Fill in:**
+   - **Title** (required) - e.g., "Camp Trip Packing"
+   - **Description** (optional) - Details or instructions
+   - **Assign to Event** (optional) - Link to an event
+3. **Set Permissions** - Who can view/edit
+4. **Create List**
 
 ### Adding Items
-- Click "+ Add Item"
-- Enter item name
-- Set quantity
-- Assign to category
-- Assign to person (optional)
 
-## Item Management
+After creation, add items to the list:
 
-### Item Properties
-- **Name**: What to bring
-- **Quantity**: How many
-- **Category**: Organization
-- **Assigned To**: Who's responsible
-- **Status**: Packed/unpacked
+1. **Scroll to "Add new item" section** at bottom
+2. **Fill in:**
+   - **Title** (required) - What to bring
+   - **Description** (optional) - Specifics, preferences
+   - **Quantity** - How many needed
+3. **Click "Add"**
 
-### Marking Items
-- Check boxes when packed
-- Track completion progress
-- See what's left
-
-## Collaboration
-
-### Sharing the List
-- Share link with group
-- Set edit permissions
-- Allow guest access
-- Everyone can contribute
-
-### Assignments
-- Assign items to people
-- See your assignments
-- Mark as complete
-- Communicate changes
-
-## Best Practices
-
-✅ **Do:**
-- Organize by category
-- Be specific with quantities
-- Assign items early
-- Update in real-time
-- Check off when packed
-
-❌ **Don't:**
-- Duplicate items
-- Over-assign to one person
-- Forget to share
-- Leave ambiguous items
+Items appear in the table immediately.
 
 ---
 
-**Next**: [Activity Plans Guide](ACTIVITY_PLANS.md)
+## Using a Packing List
+
+### Viewing the List
+
+The packing list page shows:
+- **Description** - List details (double-click to edit if permitted)
+- **Statistics** - Total participants, items, assigned/unassigned counts
+- **Table** - All items with assignment info
+
+### Item Table Columns
+
+- **Title** - Item name
+- **Description** - Additional details
+- **Assignees** - Who's bringing it (list of names)
+- **Assigned / Max** - e.g., "2 / 3" means 2 people assigned, 3 needed
+- **Action** - Take/Remove buttons
+
+### Taking Items
+
+To sign up to bring an item:
+
+1. Find the item in the table
+2. **Click "Take"** button
+3. Your name appears in Assignees column
+4. Counter updates (e.g., "3 / 4")
+
+### Removing Yourself
+
+To remove your assignment:
+
+1. Find your name in the Assignees list
+2. **Click "Remove"** (or × button next to your name)
+3. Your name is removed
+4. Counter updates
+
+### Full Items
+
+When assigned count reaches max:
+- **"Full"** badge appears
+- **"Take" button** disabled for others
+- If you're already assigned, you can still remove yourself
+
+---
+
+## Managing Items (Owners/Editors)
+
+### Editing Item Details
+
+If you have edit permissions:
+- **Double-click Title** to edit item name
+- **Double-click Description** to edit details
+- **Double-click Max number** to change quantity needed
+- Changes save automatically
+
+### Reordering Items
+
+Drag items to reorder:
+- **Click and hold** on an item row
+- **Drag** to new position
+- **Release** to drop
+- Order saves automatically
+
+### Removing Participants
+
+Owners can remove any assignee:
+- **Click × button** next to participant name
+- Person is unassigned immediately
+
+### Deleting Items
+
+If permitted:
+- **Click trash icon** on item row
+- Confirm deletion
+- Item and all assignments removed
+
+---
+
+## Guest Participation
+
+### Registering as Guest
+
+1. **Receive Link** from organizer
+2. **Register as Guest** (name + optional email)
+3. **Save Personalized Link** to access again
+4. **Take Items** just like registered users
+
+### Guest Capabilities
+
+Guests can:
+- ✅ View packing list
+- ✅ Take items (sign up)
+- ✅ Remove themselves
+- ✅ See who else is bringing what
+
+Guests cannot:
+- ❌ Add new items
+- ❌ Edit item details
+- ❌ Change permissions
+- ❌ Delete the list
+
+---
+
+## Permissions
+
+### Default Permissions
+
+Set for all users:
+- **View** - See the list
+- **Edit** - Modify items
+- **Manage Assignments** - Add/remove people
+
+### Individual Permissions
+
+Grant specific permissions to users or make list public/authenticated-only.
+
+---
+
+## Tips and Best Practices
+
+✅ **Organization:**
+- Group similar items in description
+- Use clear item titles
+- Set realistic max quantities
+- Update as plans change
+
+✅ **Communication:**
+- Add context in list description
+- Coordinate duplicates (multiple people bringing)
+- Confirm before the event
+- Update if items change
+
+✅ **Coordination:**
+- Check what's already assigned
+- Don't over-assign items
+- Bring a bit extra as backup
+- Share any last-minute changes
+
+---
+
+## Common Use Cases
+
+### Trip Supplies
+"Camping Trip - May 2025"
+- Tents, cooking gear, food items
+- Each person takes what they can bring
+- Coordinate to cover everything
+
+### Event Materials
+"Conference Setup Materials"
+- Signs, supplies, equipment
+- Volunteers sign up for items
+- Track what's covered
+
+### Group Meals
+"Potluck Dinner Items"
+- Dishes, ingredients, supplies
+- Avoid duplicates
+- Ensure variety
+
+---
+
+**Next:** [Activity Plans Guide](ACTIVITY_PLANS.md)
+
+---
+
+**Last Updated:** December 10, 2025

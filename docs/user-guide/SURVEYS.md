@@ -1,242 +1,267 @@
 # Surveys Guide
 
-Learn how to create, manage, and analyze surveys in Surveyor.
+Surveys help you find the best meeting date by having participants vote on weekday and week-of-month combinations.
 
 ## What are Surveys?
 
-Surveys in Surveyor help you:
-- Gather group opinions
-- Make collective decisions
-- Vote on options with preferences
-- Collect feedback anonymously or identified
-
-## Quick Start
-
-1. **Go to Dashboard** → Surveys section
-2. **Click "+ Create Survey"**
-3. **Fill in survey details:**
-   - Title
-   - Description
-   - Questions/options (combinations)
-4. **Set permissions** (who can respond)
-5. **Share** with participants
+Surveys in Surveyor let you:
+- Define date combinations (e.g., "2nd Monday", "Last Friday")
+- Collect Yes/Maybe/No responses from participants
+- See everyone's availability at a glance
+- Add new combinations anytime
+- Support both registered users and guests
 
 ## Creating a Survey
 
-### Basic Information
+### Basic Steps
 
-**Title**: Clear, descriptive survey name  
-Example: "Weekend Activity Preferences"
+1. **Go to Dashboard** → Surveys section
+2. **Click "+ Create Survey"**
+3. **Fill in Details:**
+   - **Title** (required) - Name your survey
+   - **Description** (optional) - Add context or instructions
 
-**Description** (optional): Additional context  
-Example: "Help us choose activities for our team retreat"
+4. **Add Combinations** (date options)
+   - Click "+ Add combination"
+   - Select **Weekday** (Monday - Sunday)
+   - Select **Week of month** (1st, 2nd, 3rd, 4th, or Last)
+   - Add as many combinations as needed
 
-### Survey Questions (Combinations)
+5. **Click "Create Survey"**
 
-Surveys use **combinations** - sets of options participants can rank:
+### Date Combinations Explained
 
-**Example:**
-- Option A: Hiking
-- Option B: Bowling
-- Option C: Movie Night
-- Option D: Game Tournament
+Combinations define which dates participants vote on:
 
-### Adding Combinations
+**Examples:**
+- "1st Monday" = First Monday of the month
+- "Last Friday" = Last Friday of the month (4th or 5th)
+- "3rd Wednesday" = Third Wednesday of the month
 
-1. Click "+ Add Combination"
-2. Enter option text
-3. Repeat for all options
-4. Reorder by dragging (if available)
-5. Remove with delete button
+The survey displays combinations as: "2. Monday of the month"
 
-### Permission Settings
+### Permissions
 
-Control who can respond:
+When creating, you can set who can access your survey through the permission system. This controls who can view and participate.
 
-- **Public**: Anyone with link
-- **Registered Users**: Logged-in users only
-- **Specific Users**: Selected individuals
-- **Guest Link**: Share link for anonymous responses
+---
 
-## Taking a Survey
+## Voting on a Survey
 
 ### As a Registered User
 
-1. Navigate to survey
-2. Review options
-3. Rank preferences (drag to reorder)
-4. Submit responses
-5. See results (if allowed)
+1. Navigate to the survey (from your dashboard or shared link)
+2. See your current responses (if any)
+3. For each combination, select:
+   - **Yes** (available, prefer this date)
+   - **Maybe** (available if needed)
+   - **No** (not available)
+4. Click "Submit"
+5. Your response saves immediately
 
 ### As a Guest
 
-1. Receive survey link
-2. Click to open
-3. Rank options
-4. Submit
-5. No account needed
+1. **Receive Survey Link** from organizer
+2. **Register as Guest:**
+   - Enter your name
+   - Enter email (optional)
+   - Click "Continue as guest"
+3. **Save Your Personalized Link** (you'll need this to change your vote later)
+4. **Vote** on each combination (Yes/Maybe/No)
+5. **Submit** your response
 
-### Ranking System
+### Changing Your Vote
 
-- Drag options to preferred order
-- Top = Most preferred
-- Bottom = Least preferred
-- All options must be ranked
+**Registered Users:** Navigate to the survey anytime and resubmit
 
-## Managing Surveys
+**Guests:** Use your personalized link to access the survey and update your vote
 
-### Viewing Responses
+---
 
-1. Open your survey
-2. Click "View Responses"
-3. See participant responses
-4. Export results (if available)
+## Viewing Results
 
-### Response Analysis
+### Your Response
 
-See:
-- Total responses
-- Preference rankings
-- Individual submissions
-- Aggregate results
+At the top of the voting page, see your current selections for each combination.
 
-### Editing a Survey
+### All Responses
 
-**Before Responses:**
-- Edit freely
-- Change questions
-- Modify options
+Below your form, see everyone's responses in a table:
+- **Rows:** Each participant
+- **Columns:** Each date combination
+- **Colors:**
+  - Green = Yes
+  - Yellow/Orange = Maybe
+  - Red = No
 
-**After Responses:**
-- Limited editing
-- Can't change options
-- Can update title/description
+This helps you quickly identify which dates work best for the group.
+
+---
+
+## Adding Combinations
+
+After creating a survey, you can add more date options:
+
+1. **Go to Survey Page**
+2. **Scroll to "Add new combination" section**
+3. **Select Weekday and Week-of-Month**
+4. **Click "Add"**
+
+The new combination appears immediately for everyone to vote on.
+
+**Note:** Existing responses default to "No" for new combinations.
+
+---
+
+## Managing Your Survey
+
+### Editing Description
+
+If you have edit permissions:
+1. Go to survey page
+2. Double-click the description
+3. Edit inline
+4. Changes save automatically
 
 ### Deleting a Survey
 
-1. Open survey
-2. Click "Delete"
-3. Confirm deletion
-4. All responses removed
+**Warning:** This permanently removes the survey and all responses.
 
-⚠️ **Warning**: Deletion is permanent!
+1. Go to your dashboard
+2. Find the survey
+3. Click delete button
+4. Confirm deletion
 
-## Sharing Surveys
+---
 
-### Share Link
+## Sharing Your Survey
 
-1. Open survey
-2. Click "Share"
-3. Copy link
-4. Share via email/message
+### Share with Registered Users
 
-### Guest Access
+Users with an account can access your survey based on permission settings:
+- Set default permissions (all authenticated users)
+- Or grant specific permissions to individuals
 
-Create guest link for anonymous responses:
-1. Click "Generate Guest Link"
-2. Copy unique URL
-3. Share with participants
-4. No login required
+### Share with Guests
 
-### Email Invitations
+1. **Get Survey Link:** Copy the survey URL
+2. **Share Link:** Send via email, chat, or other means
+3. **Recipients Click Link:**
+   - Option to login/register
+   - Or continue as guest
+4. **They Vote:** Guest receives personalized link after registering
 
-If available:
-1. Click "Invite"
-2. Enter email addresses
-3. Add message
-4. Send invitations
-
-## Survey Results
-
-### Viewing Results
-
-Access via:
-- Survey page
-- "View Results" button
-- Export functionality
-
-### Result Types
-
-**Ranked Preferences:**
-- See option rankings
-- View by participant
-- Aggregate scores
-
-**Visual Displays:**
-- Bar charts
-- Ranking tables
-- Comparison views
-
-### Exporting Results
-
-If available:
-- Export to CSV
-- Download PDF report
-- Print results
+---
 
 ## Tips and Best Practices
 
 ### Creating Effective Surveys
 
 ✅ **Do:**
-- Use clear, specific titles
-- Keep options concise
-- Limit options to 4-8 choices
-- Test before sharing
-- Set clear deadline
+- Use clear survey titles (include month/year)
+- Add context in description (purpose, follow-up plans)
+- Limit combinations to manageable number (5-10)
+- Choose relevant weekdays for your group
+- Add combinations strategically
 
 ❌ **Don't:**
-- Use ambiguous options
-- Include too many choices
-- Change after responses
-- Share without reviewing
+- Create too many combinations (overwhelming)
+- Forget to communicate survey purpose
+- Change combinations after many responses (confusing)
 
-### Increasing Response Rates
+### Getting Better Responses
 
 1. **Clear Communication**
-   - Explain purpose
-   - Set expectations
-   - Provide deadline
+   - Explain what you're scheduling
+   - Set response deadline
+   - Mention how decision will be made
 
-2. **Easy Access**
-   - Share direct link
-   - Enable guest access
-   - Mobile-friendly design
+2. **Right Combinations**
+   - Consider your audience's typical availability
+   - Mix different weekdays and weeks
+   - Include "Last" week option for month-end flexibility
 
 3. **Follow Up**
-   - Send reminders
-   - Thank participants
-   - Share results
+   - Remind participants to vote
+   - Share results once complete
+   - Announce final date choice
 
-### Privacy Considerations
+---
 
-- **Anonymous Surveys**: Use guest links
-- **Identified Surveys**: Require login
-- **Partial Privacy**: Hide individual responses
-- **Results Sharing**: Control who sees results
+## Understanding the Display
 
-## Advanced Features
+### Survey Vote Page Shows:
 
-### Multiple Survey Types
+1. **Survey Title and Description** at top
+2. **Your Response Section:**
+   - Your name
+   - Radio buttons (Yes/Maybe/No) for each combination
+   - Submit button
 
-- **Preference Ranking**: Rank all options
-- **Yes/No Questions**: Simple binary choices
-- **Multiple Choice**: Select one option
+3. **All Responses Section:**
+   - Table with all participants
+   - Everyone's votes
+   - Color-coded for quick scanning
 
-### Survey Settings
+4. **Add Combination Section:**
+   - Add more date options
+   - Available at bottom of page
 
-Configure:
-- Response deadlines
-- Multiple responses (allow/prevent)
-- Result visibility
-- Edit permissions
+---
 
-### Integration
+## Common Use Cases
 
-If available:
-- Link to events
-- Connect with activity plans
-- Export to other tools
+### Finding Regular Meeting Time
+
+**Example:** Monthly team meeting
+
+1. Create survey "Monthly Team Meeting - January"
+2. Add combinations:
+   - 1st Tuesday
+   - 2nd Wednesday  
+   - 3rd Thursday
+3. Team votes on preferences
+4. Pick date with most "Yes" votes
+
+### Event Date Selection
+
+**Example:** Annual conference
+
+1. Create survey "2025 Conference Date"
+2. Add several weekends across months
+3. Share with all stakeholders
+4. Select date that works for most people
+
+### Recurring Activity Coordination
+
+**Example:** Weekly study group
+
+1. Create survey "Study Group Weekly Time"
+2. Add different day/week combinations
+3. Find time that works consistently
+4. Schedule recurring meeting
+
+---
+
+## Limitations and Notes
+
+### Current Features
+
+- ✅ Weekday and week-of-month combinations only
+- ✅ Yes/Maybe/No voting
+- ✅ Add combinations after creation
+- ✅ Guest participation supported
+- ✅ See all responses
+
+### Not Currently Supported
+
+- ❌ Specific calendar dates
+- ❌ Time selection (only weekday/week)
+- ❌ Response removal after submission
+- ❌ Anonymous voting
+- ❌ Combination removal after responses exist
+
+---
 
 ## Troubleshooting
 
@@ -244,65 +269,31 @@ If available:
 
 **Check:**
 - You're logged in
-- You have permissions
-- Form is complete
-- Browser is supported
+- Title is filled in
+- At least one combination added
 
-### Participants Can't Access
+### Participants Can't Vote
 
 **Verify:**
-- Link is correct
-- Permissions allow access
-- Survey is active
-- No deadline passed
+- They have the correct link
+- Survey still exists
+- Permissions allow their access
+- They've registered as guest (if not logged in)
 
-### Results Not Showing
+### Lost Guest Link
 
-**Ensure:**
-- Responses exist
-- You have view permission
-- Page is refreshed
-- No technical issues
-
-## Common Use Cases
-
-### Team Decision Making
-
-**Example:** Choose team lunch location
-- List restaurant options
-- Team ranks preferences
-- Select top choice
-- All opinions considered
-
-### Event Planning
-
-**Example:** Select conference sessions
-- List session options
-- Attendees rank interest
-- Schedule based on popularity
-- Optimize attendance
-
-### Preference Collection
-
-**Example:** Gather music preferences
-- List music genres/artists
-- Participants rank favorites
-- Create playlist based on rankings
-- Everyone's taste included
-
-## Next Steps
-
-- Create your first survey
-- Explore other features:
-  - [Events](EVENTS.md)
-  - [Packing Lists](PACKING_LISTS.md)
-  - [Activity Plans](ACTIVITY_PLANS.md)
-  - [Drivers Lists](DRIVERS_LISTS.md)
+**Solution:**
+- Guest links cannot be recovered
+- Register as new guest if needed
+- Or create an account for permanent access
 
 ---
 
-**Previous**: [Dashboard](DASHBOARD.md)  
-**Next**: [Events Guide](EVENTS.md)
+## Next Steps
+
+- **Create an Event** → [Events Guide](EVENTS.md)
+- **Manage Your Dashboard** → [Dashboard Guide](DASHBOARD.md)
+- **Learn About Other Features** → [User Guide Home](README.md)
 
 ---
 

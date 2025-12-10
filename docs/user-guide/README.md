@@ -1,154 +1,107 @@
 # Surveyor User Guide
 
-Welcome to Surveyor! This guide will help you get the most out of the application.
+Welcome to Surveyor! This guide explains how to use the application's features.
 
 ## What is Surveyor?
 
-Surveyor is a comprehensive event and collaboration management platform that helps you:
+Surveyor helps you organize and coordinate group activities:
 
-- 📊 **Create Surveys** - Gather opinions and make group decisions
-- 🎉 **Manage Events** - Organize events and coordinate registrations
-- 📦 **Coordinate Packing** - Collaborate on packing lists for trips
-- 📅 **Plan Activities** - Schedule activities and assign participants
-- 🚗 **Organize Drivers** - Coordinate transportation and carpools
+- **📊 Surveys** - Find meeting dates using weekday/week-of-month combinations
+- **🎉 Events** - Create events with participant registration
+- **📦 Packing Lists** - Coordinate what to bring for trips
+- **📅 Activity Plans** - Schedule activities with time slots and role assignments
+- **🚗 Drivers Lists** - Organize drivers and passengers for transportation
 
-## Getting Started
+## Quick Start
 
-1. **[Registration & Login](GETTING_STARTED.md)** - Create your account and sign in
-2. **[Your Dashboard](DASHBOARD.md)** - Navigate your personal dashboard
-3. **Choose a Feature** - Select what you want to do:
-   - [Create a Survey](SURVEYS.md)
-   - [Manage an Event](EVENTS.md)
-   - [Make a Packing List](PACKING_LISTS.md)
-   - [Plan Activities](ACTIVITY_PLANS.md)
-   - [Organize Drivers](DRIVERS_LISTS.md)
+### For Registered Users
 
-## Quick Links by Task
+1. **[Register an Account](GETTING_STARTED.md#creating-an-account)** - Create your account
+2. **[Your Dashboard](DASHBOARD.md)** - View and manage your entities
+3. **Create Items** - Use the guides below for specific features
 
-### I want to...
+### For Guest Users
 
-- **Get feedback from a group** → [Create a Survey](SURVEYS.md)
-- **Organize an event** → [Manage an Event](EVENTS.md)
-- **Plan what to bring on a trip** → [Coordinate a Packing List](PACKING_LISTS.md)
-- **Schedule group activities** → [Create an Activity Plan](ACTIVITY_PLANS.md)
-- **Arrange transportation** → [Set up a Drivers List](DRIVERS_LISTS.md)
-- **Share with others** → See Permissions section in each guide
-- **Invite participants** → See Registration Links in [Getting Started](GETTING_STARTED.md)
+Many features support guest access - participate without registering:
 
-## Feature Overview
+- **Survey Voting** - Vote via a personalized link
+- **Activity Plans** - Sign up for activities
+- **Packing Lists** - Mark items you'll bring
+- **Drivers Lists** - Sign up as driver or passenger
 
-### Surveys
+Guest links are provided by the organizer and tied to your name/email.
 
-Create surveys to gather opinions and make decisions. Features include:
-- Multiple choice questions with ranked preferences
-- Anonymous or identified responses
-- Guest participation via links
-- Visual results and analytics
+## Feature Guides
 
-**Best for:** Group decisions, feedback collection, preference gathering
+### Core Features
 
-### Events
+- **[Surveys](SURVEYS.md)** - Create surveys to find the best meeting dates
+  - Weekday and week-of-month combinations
+  - Yes/Maybe/No voting system
+  - Guest participation supported
 
-Manage events with participant registration. Features include:
-- Event creation and details management
-- Registration system with approval options
-- Participant list management
-- Optional invoice pools for cost sharing
+- **[Events](EVENTS.md)** - Organize events with registration
+  - Event details and dates
+  - Participant registration
+  - Dietary information collection
+  - Link to related packing/activity/drivers
 
-**Best for:** Conferences, meetups, parties, workshops
+- **[Packing Lists](PACKING_LISTS.md)** - Coordinate shared packing
+  - Add items with quantities
+  - Assign items to people
+  - Track completion
+  - Guest participation supported
 
-### Packing Lists
+- **[Activity Plans](ACTIVITY_PLANS.md)** - Schedule activities
+  - Time-based slots
+  - Role definitions (e.g., Facilitator, Helper)
+  - Participant requirements
+  - Auto-assignment recommendations
+  - Guest participation supported
 
-Collaborate on shared packing for trips or events. Features include:
-- Category-based organization
-- Item assignment tracking
-- Quantity management
-- Guest collaboration support
-
-**Best for:** Group trips, camping, event supplies
-
-### Activity Plans
-
-Schedule and coordinate group activities. Features include:
-- Time-slot based scheduling
-- Role-based assignments
-- Participant requirements
-- Availability tracking
-- Auto-assignment suggestions
-
-**Best for:** Conference schedules, camp activities, workshop sessions
-
-### Drivers Lists
-
-Coordinate transportation and carpooling. Features include:
-- Driver and vehicle information
-- Seat capacity management
-- Passenger assignments
-- Contact information sharing
-
-**Best for:** Carpools, event transportation, group travel
+- **[Drivers Lists](DRIVERS_LISTS.md)** - Organize transportation
+  - Register as a driver
+  - Specify passenger capacity
+  - Passengers sign up for rides
+  - Guest participation supported
 
 ## Understanding Permissions
 
-Most features in Surveyor have flexible permission settings:
+Most features have flexible permission settings:
 
-- **Owner**: Full control over the entity (you, when you create something)
-- **View**: Can see the content
-- **Edit**: Can modify the content
-- **Manage Assignments**: Can assign participants (for collaborative features)
+- **View** - Can see the content
+- **Edit** - Can modify details
+- **Manage Assignments** - Can assign/remove participants
+- **Owner** - Full control (you, when you create it)
 
-You can share your surveys, packing lists, and activity plans with specific people or make them public.
+You can set default permissions for all users or grant specific permissions to individuals.
 
 ## Getting Help
 
-### In This Guide
+### This Guide
 
-Each feature has its own detailed guide with:
-- Step-by-step instructions
-- Screenshots and examples
-- Tips and best practices
-- Troubleshooting common issues
+Each feature has a detailed guide with:
+- How to create and use the feature
+- Permission settings
+- Guest access information
+- Tips and common tasks
 
-### Common Questions
+### In the Application
 
-**Q: Do I need to register to participate?**  
-A: No! Many features support guest participation via special links.
-
-**Q: Can I collaborate with others?**  
-A: Yes! Use the permissions system to share access with others.
-
-**Q: Is my data private?**  
-A: By default, your data is private. You control who can see what through permissions.
-
-**Q: Can I delete my account?**  
-A: Yes, contact your administrator or use account settings.
-
-## Navigation Tips
-
-- **Dashboard**: Your home base showing all your entities
-- **Top Menu**: Quick access to create new items
-- **Entity Pages**: View and manage individual items
-- **Settings**: Manage your account and preferences
-
-## Support
-
-If you need help:
-1. Check the relevant feature guide
-2. Look for help icons (ℹ️) in the application
-3. Contact your organization administrator
-4. Report issues via the feedback system
+- Double-click text to edit (where permitted)
+- Drag items to reorder (in lists)
+- Look for action buttons on each page
+- Permission indicators show what you can do
 
 ---
 
-## Guide Structure
-
-This user guide is organized by feature:
+## Guide Index
 
 1. **[Getting Started](GETTING_STARTED.md)** - Account setup and basics
-2. **[Dashboard](DASHBOARD.md)** - Your personal dashboard
-3. **[Surveys](SURVEYS.md)** - Creating and managing surveys
-4. **[Events](EVENTS.md)** - Event management
-5. **[Packing Lists](PACKING_LISTS.md)** - Collaborative packing
+2. **[Dashboard](DASHBOARD.md)** - Your personal homepage
+3. **[Surveys](SURVEYS.md)** - Find meeting dates
+4. **[Events](EVENTS.md)** - Event organization
+5. **[Packing Lists](PACKING_LISTS.md)** - Shared packing coordination
 6. **[Activity Plans](ACTIVITY_PLANS.md)** - Activity scheduling
 7. **[Drivers Lists](DRIVERS_LISTS.md)** - Transportation coordination
 
