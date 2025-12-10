@@ -39,6 +39,7 @@ Surveyor is a TypeScript-based event and collaboration management application wi
    - Interfaces over types
    - Always create migrations for database changes
    - Data-driven testing for all new tests
+   - NEVER commit anything included in .gitignore, especially not generated files (like __index__.ts, *.ge.js, ...)
 
 ## Key Directories
 
