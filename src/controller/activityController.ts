@@ -317,7 +317,7 @@ async function createTextField(planId: string, body: any) {
     return await activityService.createActivityPlanTextField(planId, title.trim(), text);
 }
 
-async function updateTextField(planId: string, textFieldId: string, body: any) {
+async function updateTextField(planId: string, textFieldId: string, body: any, permData?: PermBundle) {
     const field = await activityService.getActivityPlanTextFieldById(textFieldId);
     if (!field || field.planId !== planId) {
         throw new APIError('Text field not found', {planId, textFieldId}, 404);
@@ -325,6 +325,11 @@ async function updateTextField(planId: string, textFieldId: string, body: any) {
     const {title, text = ''} = body;
     if (title !== undefined && title.length > 255) throw new APIError('Title too long', body, 400);
     if (text.length > 5000) throw new APIError('Text too long', body, 400);
+
+    if (title !== undefined && !permData?.entity.has('MANAGE_REQUIREMENTS')) {
+        throw new APIError('Not allowed', body, 403);
+    }
+
     await activityService.updateActivityPlanTextField(textFieldId, text, title?.trim());
     return 'Text field updated';
 }

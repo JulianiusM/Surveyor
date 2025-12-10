@@ -184,6 +184,7 @@ export const updateTextFieldData = [
         body: {title: 'New title', text: 'Updated text'},
         expectedTitle: 'New title',
         expectedText: 'Updated text',
+        permData: {entity: {has: (key: string) => key === 'MANAGE_REQUIREMENTS'}},
     },
     {
         description: 'updates text when no title provided',
@@ -192,6 +193,15 @@ export const updateTextFieldData = [
         existing: {id: 'tf1', planId: 'p1'},
         body: {text: 'Only text'},
         expectedText: 'Only text',
+    },
+    {
+        description: 'rejects title update without MANAGE_REQUIREMENTS permission',
+        planId: 'p1',
+        textFieldId: 'tf1',
+        existing: {id: 'tf1', planId: 'p1'},
+        body: {title: 'Blocked'},
+        shouldThrow: 'APIError',
+        permData: {entity: {has: () => false}},
     },
     {
         description: 'throws when title exceeds limit',

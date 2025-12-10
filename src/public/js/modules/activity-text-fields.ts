@@ -1,6 +1,7 @@
 import {post} from "../core/http";
-import {requireEntityPerm} from "../core/permissions";
+import {getPerms, requireEntityPerm} from "../core/permissions";
 import {showInlineAlert} from "../shared/alerts";
+import {startInlineEditArea} from "../shared/inline-edit";
 import {reloadAfterDelay} from "../shared/ui-helpers";
 import type {BootstrapGlobal, BootstrapModal} from "./activity-types";
 
@@ -65,11 +66,36 @@ export function initTextFields(planId: string): void {
 
     document.querySelectorAll<HTMLElement>('.text-field-edit').forEach(btn => {
         btn.addEventListener('click', () => {
-            openModal(parts, 'edit', {
-                id: btn.dataset.textFieldId,
-                title: btn.dataset.title,
-                text: btn.dataset.content,
-            });
+            const permData = getPerms();
+            const canManageTitles = permData?.entity.has('MANAGE_REQUIREMENTS');
+
+            if (canManageTitles) {
+                openModal(parts, 'edit', {
+                    id: btn.dataset.textFieldId,
+                    title: btn.dataset.title,
+                    text: btn.dataset.content,
+                });
+                return;
+            }
+
+            const textField = document.querySelector<HTMLElement>(
+                `[data-edit="textField"][data-id="${btn.dataset.textFieldId}"]`
+            );
+
+            if (!textField) return;
+
+            startInlineEditArea(
+                textField,
+                `/api/activity/${planId}/text-field/${btn.dataset.textFieldId}`,
+                {scope: 'entity', key: 'ACCESS_VIEW', action: 'edit shared text fields'},
+                {
+                    payloadKey: 'text',
+                    successMessage: 'Text updated',
+                    placeholder: textField.dataset.placeholder || 'double-click to edit',
+                    maxLength: 5000,
+                    onSave: () => reloadAfterDelay(100),
+                },
+            );
         });
     });
 

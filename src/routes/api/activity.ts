@@ -62,7 +62,12 @@ app.post(
     '/:id/text-field/:textFieldId',
     requirePermissionApi(permFct, PERM.ACCESS_VIEW),
     asyncHandler(async (req: Request, res: Response) => {
-        const msg = await controller.updateTextField(resFct(req).id, req.params.textFieldId, req.body);
+        const msg = await controller.updateTextField(
+            resFct(req).id,
+            req.params.textFieldId,
+            req.body,
+            res.locals.permData as PermBundle | undefined,
+        );
         renderer.respondWithSuccessJson(res, msg);
     }),
 );
