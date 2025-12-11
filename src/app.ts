@@ -14,6 +14,7 @@ import packingRouter from './routes/packing';
 import activityRouter from './routes/activity';
 import driversRouter from './routes/drivers';
 import eventRouter from './routes/event';
+import helpRouter from './routes/help';
 import settings from './modules/settings';
 import {handleGenericError} from './middleware/genericErrorHandler';
 
@@ -85,6 +86,7 @@ app.use('/packing', packingRouter);
 app.use('/activity', activityRouter);
 app.use('/drivers', driversRouter);
 app.use('/event', eventRouter);
+app.use('/help', helpRouter);
 
 app.get('/healthz', (_req, res) => res.status(200).send('ok'));
 
