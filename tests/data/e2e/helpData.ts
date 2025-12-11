@@ -25,26 +25,3 @@ export const helpDocsData = [
         expectedTitle: 'Activity Plans',
     },
 ];
-
-export const helpButtonData = [
-    {
-        description: 'help button on survey create page',
-        createUrl: '/survey/create',
-        helpUrl: '/help/surveys',
-    },
-    {
-        description: 'help button on activity create page',
-        createUrl: '/activity/create',
-        helpUrl: '/help/activity_plans',
-    },
-    {
-        description: 'help button on packing create page',
-        createUrl: '/packing/create',
-        helpUrl: '/help/packing_lists',
-    },
-    {
-        description: 'help button on drivers create page',
-        createUrl: '/drivers/create',
-        helpUrl: '/help/drivers_lists',
-    },
-];

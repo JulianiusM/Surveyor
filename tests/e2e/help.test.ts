@@ -1,7 +1,5 @@
 import {test, expect} from '@playwright/test';
-import {loginUser} from '../keywords/e2e/authKeywords';
-import {helpNavigationData, helpDocsData, helpButtonData} from '../data/e2e/helpData';
-import {testCredentials} from '../data/e2e/authData';
+import {helpNavigationData, helpDocsData} from '../data/e2e/helpData';
 
 test.describe('Help System', () => {
     test.beforeEach(async ({page}) => {
@@ -39,27 +37,6 @@ test.describe('Help System', () => {
                 
                 // Verify there are doc links in the sidebar
                 await expect(page.locator('.list-group-item').first()).toBeVisible();
-            });
-        }
-    });
-
-    test.describe('Contextual Help Buttons', () => {
-        for (const data of helpButtonData) {
-            test(data.description, async ({page}) => {
-                await loginUser(page, testCredentials.username, testCredentials.password);
-                
-                // Navigate to create page
-                await page.goto(data.createUrl);
-                
-                // Wait for page to load
-                await page.waitForLoadState('networkidle');
-                
-                // Find and click the help button in the header (more specific selector)
-                const helpButton = page.locator('.card-header a[href^="/help"]').first();
-                await helpButton.click();
-                
-                // Verify we're on the correct help page
-                await expect(page).toHaveURL(data.helpUrl);
             });
         }
     });

@@ -1,7 +1,7 @@
-import {Request, Response} from 'express';
 import fs from 'fs';
 import {marked} from 'marked';
 import path from 'path';
+import {ExpectedError} from '../modules/lib/errors';
 
 // Configure marked for safe HTML output
 marked.setOptions({
@@ -91,10 +91,9 @@ function getDocsList(): Array<{ name: string; title: string; path: string }> {
 }
 
 /**
- * GET /help
- * Display help index
+ * Fetch help index data
  */
-export async function getHelpIndex(req: Request, res: Response): Promise<void> {
+export function fetchHelpIndex(): { title: string; content: string; docsList: any[]; currentDoc: string } {
     const docsList = getDocsList();
 
     // Default to README if available
@@ -110,20 +109,18 @@ export async function getHelpIndex(req: Request, res: Response): Promise<void> {
         }
     }
 
-    res.render('help', {
+    return {
         title,
         content,
         docsList,
         currentDoc: 'readme',
-    });
+    };
 }
 
 /**
- * GET /help/:docName
- * Display specific help document
+ * Fetch specific help document data
  */
-export async function getHelpDoc(req: Request, res: Response): Promise<void> {
-    const docName = req.params.docName;
+export function fetchHelpDoc(docName: string): { title: string; content: string; docsList: any[]; currentDoc: string } {
     const docsList = getDocsList();
 
     // Convert URL path back to filename (e.g., 'getting_started' -> 'GETTING_STARTED.md')
@@ -131,26 +128,18 @@ export async function getHelpDoc(req: Request, res: Response): Promise<void> {
     const filePath = resolveDocPath(fileName);
 
     if (!filePath) {
-        res.status(404).render('error', {
-            message: 'Documentation not found',
-            error: {status: 404, stack: ''},
-        });
-        return;
+        throw new ExpectedError('Documentation not found', 'error', 404);
     }
 
     const parsed = readMarkdownFile(filePath);
     if (!parsed) {
-        res.status(500).render('error', {
-            message: 'Error loading documentation',
-            error: {status: 500, stack: ''},
-        });
-        return;
+        throw new ExpectedError('Error loading documentation', 'error', 500);
     }
 
-    res.render('help', {
+    return {
         title: parsed.title,
         content: parsed.content,
         docsList,
         currentDoc: docName.toLowerCase(),
-    });
+    };
 }
