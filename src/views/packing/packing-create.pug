@@ -5,9 +5,13 @@ block meta
     title Create Packing List | PackMaster
 
 block title
-    h1.card-header.text-center
-        i.bi.bi-bag-plus.me-2
-        | Create packing list
+    .card-header.d-flex.justify-content-between.align-items-center.flex-wrap.gap-2
+        h1.mb-0
+            i.bi.bi-bag-plus.me-2
+            | Create packing list
+        a.btn.btn-outline-info.btn-sm(href="/help/packing-lists#creating-a-packing-list")
+            i.bi.bi-journal-plus.me-1
+            | Packing list guide
 
 block content
     -

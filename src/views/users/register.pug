@@ -8,9 +8,13 @@ block scripts
     script(type="module" src="/js/verify_password.gen.js")
 
 block title
-    h1.card-header.text-center
-        i.bi.bi-person-plus-fill.me-2
-        | Register
+    .card-header.d-flex.justify-content-between.align-items-center.flex-wrap.gap-2
+        h1.mb-0
+            i.bi.bi-person-plus-fill.me-2
+            | Register
+        a.btn.btn-outline-info.btn-sm(href="/help/getting-started#creating-an-account")
+            i.bi.bi-journal-check.me-1
+            | Registration help
 
 block content
     form#form.row.gy-3.justify-content-center(action="/users/register" method="post")

@@ -13,9 +13,13 @@ block meta
     meta(name="twitter:card" content="summary_large_image")
 
 block title
-    h1.card-header.text-center
-        i.bi.bi-bar-chart-fill.me-2
-        | Welcome to Surveyor
+    .card-header.d-flex.justify-content-between.align-items-center.flex-wrap.gap-2
+        h1.mb-0
+            i.bi.bi-bar-chart-fill.me-2
+            | Welcome to Surveyor
+        a.btn.btn-outline-info.btn-sm(href="/help/overview#quick-start")
+            i.bi.bi-life-preserver.me-1
+            | Read the quick start
 
 block content
     //── Call to Action ─────────────────────────────────────

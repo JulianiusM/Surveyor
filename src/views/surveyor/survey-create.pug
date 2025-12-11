@@ -5,9 +5,13 @@ block meta
     title Create Survey | Surveyor
 
 block title
-    h1.card-header.text-center
-        i.bi.bi-clipboard-plus-fill.me-2
-        | Create Survey
+    .card-header.d-flex.justify-content-between.align-items-center.flex-wrap.gap-2
+        h1.mb-0
+            i.bi.bi-clipboard-plus-fill.me-2
+            | Create Survey
+        a.btn.btn-outline-info.btn-sm(href="/help/surveys#creating-a-survey")
+            i.bi.bi-journal-arrow-up.me-1
+            | Survey guide
 
 block content
     -

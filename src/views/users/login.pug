@@ -5,9 +5,13 @@ block meta
     title Login | Surveyor
 
 block title
-    h1.card-header.text-center
-        i.bi.bi-box-arrow-in-right.me-2
-        | Login
+    .card-header.d-flex.justify-content-between.align-items-center.flex-wrap.gap-2
+        h1.mb-0
+            i.bi.bi-box-arrow-in-right.me-2
+            | Login
+        a.btn.btn-outline-info.btn-sm(href="/help/getting-started#logging-in")
+            i.bi.bi-question-circle.me-1
+            | Login help
 
 block content
     form.row.gy-3.justify-content-center(action="/users/login" method="post")

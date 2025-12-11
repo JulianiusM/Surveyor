@@ -4,9 +4,13 @@ block meta
     title Vote on #{data.survey.title} | Surveyor
 
 block title
-    h1(class="card-header text-center")
-        i.bi.bi-clipboard-check.me-2
-        | Vote on “#{data.survey.title}”
+    .card-header.d-flex.justify-content-between.align-items-center.flex-wrap.gap-2
+        h1.mb-0
+            i.bi.bi-clipboard-check.me-2
+            | Vote on “#{data.survey.title}”
+        a.btn.btn-outline-info.btn-sm(href="/help/surveys#voting-on-a-survey")
+            i.bi.bi-person-check-fill.me-1
+            | Voting help
 
 block content
     -

@@ -4,9 +4,13 @@ block meta
     title #{data.plan.title} | Activity planner
 
 block title
-    h1.card-header.text-center
-        i.bi.bi-calendar-check.me-2
-        | #{data.plan.title}
+    .card-header.d-flex.justify-content-between.align-items-center.flex-wrap.gap-2
+        h1.mb-0
+            i.bi.bi-calendar-check.me-2
+            | #{data.plan.title}
+        a.btn.btn-outline-info.btn-sm(href="/help/activity-plans#working-with-activity-slots")
+            i.bi.bi-people-fill.me-1
+            | Slot & role help
 
 block content
     //- helper in pug (this won’t be sent to the client)

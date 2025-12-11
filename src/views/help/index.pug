@@ -1,0 +1,30 @@
+extends ../layout
+
+block meta
+    title Help Center | Surveyor
+
+block title
+    .card-header.d-flex.justify-content-between.align-items-center.flex-wrap.gap-2
+        h1.mb-0
+            i.bi.bi-journal-text.me-2
+            | Help Center
+        a.btn.btn-outline-info.btn-sm(href="/help/overview")
+            i.bi.bi-compass.me-1
+            | Start with the overview
+
+block content
+    p.lead.mb-4.text-light
+        | Explore the user guides for each Surveyor feature. Everything is styled to match the dark theme you already use in the app.
+
+    .row.g-3
+        each topic in topics
+            .col-12.col-md-6.col-lg-4
+                .card.h-100.bg-dark.text-white.shadow-sm.border-secondary
+                    .card-body.d-flex.flex-column
+                        h5.card-title.mb-2
+                            i.bi.bi-bookmark-star.me-2.text-info
+                            | #{topic.title}
+                        p.card-text.text-secondary.flex-grow-1 #{topic.description}
+                        a.btn.btn-outline-info.btn-sm.mt-2(href=`/help/${topic.slug}`)
+                            i.bi.bi-box-arrow-up-right.me-1
+                            | Open guide

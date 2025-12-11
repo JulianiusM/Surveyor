@@ -1,0 +1,60 @@
+extends ../layout
+
+block meta
+    title #{topic.title} | Surveyor Help
+
+block title
+    .card-header.d-flex.justify-content-between.align-items-center.flex-wrap.gap-2
+        h1.mb-0
+            i.bi.bi-journal-richtext.me-2
+            | #{topic.title}
+        a.btn.btn-outline-info.btn-sm(href="/help")
+            i.bi.bi-arrow-left.me-1
+            | Back to help center
+
+block content
+    .row
+        .col-lg-4.col-xl-3.mb-3
+            .card.bg-dark.text-white.shadow-sm.border-secondary.h-100
+                .card-header.d-flex.align-items-center.gap-2
+                    i.bi.bi-collection-play-fill.text-info
+                    strong Quick navigation
+                .list-group.list-group-flush
+                    each link in topics
+                        a.list-group-item.list-group-item-action.text-light.bg-dark.border-secondary(href=`/help/${link.slug}` class=link.slug === topic.slug ? 'active text-bg-info border-info' : '')
+                            i.bi.bi-link-45deg.me-2
+                            | #{link.title}
+        .col-lg-8.col-xl-9
+            .card.bg-dark.text-white.shadow-sm.border-secondary
+                .card-body.help-content
+                    != html
+
+block link
+    style.
+        .help-content h1, .help-content h2, .help-content h3, .help-content h4, .help-content h5, .help-content h6 {
+            color: #61dafb;
+            margin-top: 1.5rem;
+        }
+
+        .help-content p, .help-content li {
+            color: #e9ecef;
+        }
+
+        .help-content a {
+            color: #0dcaf0;
+        }
+
+        .help-content pre, .help-content code {
+            background-color: #1f2937;
+            color: #e9ecef;
+            border-radius: .25rem;
+            padding: .1rem .25rem;
+        }
+
+        .help-content table {
+            color: #e9ecef;
+        }
+
+        .help-content table thead {
+            color: #0dcaf0;
+        }
