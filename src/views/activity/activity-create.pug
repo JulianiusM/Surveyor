@@ -4,9 +4,12 @@ block meta
     title Create Activity Plan | Surveyor
 
 block title
-    h1.card-header.text-center
-        i.bi.bi-calendar-plus.me-2
-        | Create activity plan
+    .card-header.d-flex.justify-content-between.align-items-center
+        h1.card-title.mb-0
+            i.bi.bi-calendar-plus.me-2
+            | Create activity plan
+        a.btn.btn-sm.btn-outline-light(href="/help/activity_plans" title="Help with activity plans")
+            i.bi.bi-question-circle
 
 block content
     -

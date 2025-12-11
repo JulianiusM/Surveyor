@@ -5,13 +5,16 @@ block meta
     title My Dashboard | Surveyor
 
 block title
-    h1.card-header.text-center
-        if data.admin_flag
-            i.bi.bi-patch-check-fill.me-2
+    .card-header.d-flex.justify-content-between.align-items-center
+        h1.card-title.mb-0
+            if data.admin_flag
+                i.bi.bi-patch-check-fill.me-2
                 | Your managed entities
-        else
-            i.bi.bi-house-door-fill.me-2
-            | Welcome, #{user.name || user.username}!
+            else
+                i.bi.bi-house-door-fill.me-2
+                | Welcome, #{user.name || user.username}!
+        a.btn.btn-sm.btn-outline-light(href="/help/dashboard" title="Help with dashboard")
+            i.bi.bi-question-circle
 
 block content
     .accordion.accordion-dark#entityLists
