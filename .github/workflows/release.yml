@@ -50,26 +50,34 @@ jobs:
 
           echo "Requested release version: ${RELEASE_VERSION}"
 
-          # Basic semver check: 1.2.3 or 1.2.3-alpha.1 etc.
-          if ! node -e "process.exit(!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/.test(process.env.RELEASE_VERSION || ''))"; then
-            echo "ERROR: Version '${RELEASE_VERSION}' is not a valid semver (e.g. 1.2.3 or 1.2.3-alpha.1)"
-            exit 1
-          fi
+          # Validate version with Node (must be semver-like: 1.2.3 or 1.2.3-alpha.1)
+          node << 'EOF'
+          const v = process.env.RELEASE_VERSION || '';
 
-          # Disallow 'dev' in release version
-          if echo "${RELEASE_VERSION}" | grep -qi "dev"; then
-            echo "ERROR: 'dev' is not allowed in release versions."
-            exit 1
-          fi
+          const semverLike = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/;
 
-          # If prerelease, allow only alpha/beta/rc* for now
-          if echo "${RELEASE_VERSION}" | grep -q "-"; then
-            PRERELEASE_PART="$(echo "${RELEASE_VERSION}" | cut -d'-' -f2)"
-            if ! echo "${PRERELEASE_PART}" | grep -E -q "^(alpha|beta|rc)(\.|$)"; then
-              echo "ERROR: Pre-release identifier must start with alpha, beta, or rc (got: ${PRERELEASE_PART})"
-              exit 1
-            fi
-          fi
+          if (!semverLike.test(v)) {
+            console.error(`ERROR: Version '${v}' is not a valid semver (e.g. 1.2.3 or 1.2.3-alpha.1).`);
+            process.exit(1);
+          }
+
+          if (/dev/i.test(v)) {
+            console.error("ERROR: 'dev' is not allowed in release versions.");
+            process.exit(1);
+          }
+
+          const prereleaseIndex = v.indexOf('-');
+          if (prereleaseIndex !== -1) {
+            const pre = v.slice(prereleaseIndex + 1); // e.g. "alpha.1"
+            if (!/^(alpha|beta|rc)(\.|$)/.test(pre)) {
+              console.error(`ERROR: Pre-release identifier must start with alpha, beta, or rc (got: '${pre}')`);
+              process.exit(1);
+            }
+          }
+
+          console.log(`Version '${v}' is syntactically valid.`);
+          process.exit(0);
+          EOF
 
           # Ensure tag v<version> does not already exist remotely
           git fetch --tags --quiet
@@ -78,7 +86,7 @@ jobs:
             exit 1
           fi
 
-          echo "Version '${RELEASE_VERSION}' is valid and tag 'v${RELEASE_VERSION}' is free."
+          echo "Tag 'v${RELEASE_VERSION}' is free."
 
       - name: Update package.json to requested version (no tag yet)
         env:
