@@ -137,8 +137,25 @@ jobs:
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
           set -e
-          mkdir -p artifacts
-          tar -czf "artifacts/surveyor-v${RELEASE_VERSION}.tar.gz" dist package.json
+
+          mkdir -p artifacts/tmp
+
+          # Copy built files (flatten dist/) into a temp staging dir
+          cp -R dist/* artifacts/tmp/
+
+          # Optionally include package.json at the root of the archive
+          cp package.json artifacts/tmp/
+
+          # Create the tarball with everything from the staging dir at the root
+          (
+            cd artifacts/tmp
+            tar -czf "../surveyor-v${RELEASE_VERSION}.tar.gz" .
+          )
+
+          # Clean up staging directory
+          rm -rf artifacts/tmp
+
+          echo "Created artifacts/surveyor-v${RELEASE_VERSION}.tar.gz with dist contents at archive root:"
           ls -R artifacts
 
       - name: Create GitHub Release
