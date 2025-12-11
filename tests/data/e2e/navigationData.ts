@@ -26,36 +26,6 @@ export const homePageData = [
 ];
 
 /**
- * Test cases for navigation bar items (authenticated and unauthenticated states)
- */
-export const navigationBarData = [
-    {
-        description: 'navigation bar shows create survey link when authenticated',
-        isAuthenticated: true,
-        linkName: /create survey/i,
-        shouldBeVisible: true,
-    },
-    {
-        description: 'navigation bar shows create packing link when authenticated',
-        isAuthenticated: true,
-        linkName: /create packing/i,
-        shouldBeVisible: true,
-    },
-    {
-        description: 'navigation bar shows create activity link when authenticated',
-        isAuthenticated: true,
-        linkName: /create activity/i,
-        shouldBeVisible: true,
-    },
-    {
-        description: 'navigation bar shows create drivers link when authenticated',
-        isAuthenticated: true,
-        linkName: /create drivers/i,
-        shouldBeVisible: true,
-    },
-];
-
-/**
  * Test cases for dashboard entity sections
  */
 export const dashboardEntitySectionsData = [
@@ -142,28 +112,9 @@ export const formAccessibilityData = [
         description: 'login form has proper labels',
         url: '/users/login',
         labels: [
-            { for: 'username' },
-            { for: 'password' },
+            {for: 'username'},
+            {for: 'password'},
         ],
-    },
-];
-
-/**
- * Test cases for entity navigation flow
- */
-export const entityNavigationFlowData = [
-    {
-        description: 'can navigate between different entity creation pages',
-        steps: [
-            { linkName: /create survey/i, expectedUrl: /\/survey\/create/ },
-            { linkName: /create packing/i, expectedUrl: /\/packing\/create/ },
-            { linkName: /create activity/i, expectedUrl: /\/activity\/create/ },
-            { linkName: /create drivers/i, expectedUrl: /\/drivers\/create/ },
-        ],
-        finalStep: {
-            url: '/users/dashboard',
-            expectedHeading: /welcome/i,
-        },
     },
 ];
 

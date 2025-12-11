@@ -11,6 +11,7 @@ const base: Config = {
         '^.+\\.tsx?$': ['ts-jest', {tsconfig: '<rootDir>/tsconfig.test.json'}],
     },
     moduleNameMapper: {
+        '^marked$': '<rootDir>/tests/util/stubs/marked.ts',
         '^openid-client$': '<rootDir>/tests/util/stubs/openid-client.ts',
         '^oauth4webapi$': '<rootDir>/tests/util/stubs/oauth4webapi.ts',
         '^uuid$': '<rootDir>/tests/util/stubs/uuid.ts',
