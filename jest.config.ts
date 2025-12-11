@@ -10,9 +10,6 @@ const base: Config = {
     transform: {
         '^.+\\.tsx?$': ['ts-jest', {tsconfig: '<rootDir>/tsconfig.test.json'}],
     },
-    transformIgnorePatterns: [
-        'node_modules/(?!(marked)/)',
-    ],
     moduleNameMapper: {
         '^marked$': '<rootDir>/tests/util/stubs/marked.ts',
         '^openid-client$': '<rootDir>/tests/util/stubs/openid-client.ts',
