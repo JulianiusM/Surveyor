@@ -20,8 +20,8 @@ test.describe('Help System', () => {
                 // Verify we're on the help page
                 await expect(page).toHaveURL(data.expectedUrl);
                 
-                // Verify the help index is displayed
-                await expect(page.getByRole('heading', {name: data.expectedHeading, level: 1})).toBeVisible();
+                // Verify the help index is displayed (check in card header)
+                await expect(page.locator('.card-title').filter({hasText: data.expectedHeading})).toBeVisible();
             });
         }
     });
@@ -31,8 +31,8 @@ test.describe('Help System', () => {
             test(data.description, async ({page}) => {
                 await page.goto(`/help/${data.docName}`);
                 
-                // Verify the document title is displayed
-                await expect(page.getByRole('heading', {name: data.expectedTitle, level: 1})).toBeVisible();
+                // Verify the document title is displayed in card header
+                await expect(page.locator('.card-title').filter({hasText: data.expectedTitle})).toBeVisible();
                 
                 // Verify sidebar navigation is present
                 await expect(page.getByText('Documentation')).toBeVisible();
@@ -51,8 +51,12 @@ test.describe('Help System', () => {
                 // Navigate to create page
                 await page.goto(data.createUrl);
                 
-                // Find and click the help button
-                await page.getByRole('link', {name: /help/i}).first().click();
+                // Wait for page to load
+                await page.waitForLoadState('networkidle');
+                
+                // Find and click the help button in the header (more specific selector)
+                const helpButton = page.locator('.card-header a[href^="/help"]').first();
+                await helpButton.click();
                 
                 // Verify we're on the correct help page
                 await expect(page).toHaveURL(data.helpUrl);
@@ -64,18 +68,18 @@ test.describe('Help System', () => {
         await page.goto('/help');
         
         // Click on "Getting Started" in the sidebar
-        await page.getByRole('link', {name: /Getting Started/i}).click();
+        await page.locator('.list-group-item').filter({hasText: 'Getting Started'}).first().click();
         
         // Verify we navigated to the getting started page
         await expect(page).toHaveURL(/\/help\/getting_started/i);
-        await expect(page.getByRole('heading', {name: /Getting Started/i, level: 1})).toBeVisible();
+        await expect(page.locator('.card-title').filter({hasText: /Getting Started/i})).toBeVisible();
         
-        // Click on "Surveys" in the sidebar
-        await page.getByRole('link', {name: /Surveys/i}).first().click();
+        // Click on "Surveys" in the sidebar - match the exact link text
+        await page.locator('.list-group-item:has-text("Surveys")').click();
         
         // Verify we navigated to the surveys page
         await expect(page).toHaveURL(/\/help\/surveys/i);
-        await expect(page.getByRole('heading', {name: /Surveys/i, level: 1})).toBeVisible();
+        await expect(page.locator('.card-title').filter({hasText: /Surveys/i})).toBeVisible();
     });
 
     test('should render markdown content correctly', async ({page}) => {
