@@ -1,29 +1,34 @@
-name: Release
+name: Manual Release
 
 on:
-  push:
-    tags:
-      - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 1.2.3, 1.2.3-alpha.1, 1.2.3-rc.2)"
+        required: true
+        type: string
 
 permissions:
-  contents: write
+  contents: write    # needed to push commits, tags and create releases
 
 jobs:
+  # 1) Full CI verification on the selected branch and commit
   ci:
-    name: Run full CI for the tagged commit
-    uses: JulianiusM/Surveyor/.github/workflows/ci.yml@ts-migration
+    name: Run full CI on selected branch
+    uses: ./.github/workflows/ci.yml   # reusable CI workflow
     secrets: inherit
 
-  build-and-release:
-    name: Build & package release
+  # 2) If CI passes, bump version, tag, build, and create release
+  release:
+    name: Bump version, tag, build & create release
     needs: ci
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository at tag
+      - name: Checkout selected branch
         uses: actions/checkout@v4
         with:
+          # For workflow_dispatch, github.ref is refs/heads/<chosen-branch>
           ref: ${{ github.ref }}
           fetch-depth: 0
 
@@ -37,99 +42,65 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Normalize release version (remove -dev suffix)
+      - name: Validate requested version and check tag availability
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
-          node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); const orig=pkg.version; const base=orig.split('-')[0]; if(orig!==base && !base.startsWith("rc"){ console.log('Stripping prerelease suffix from version: ' + orig + ' -> ' + base); pkg.version=base; fs.writeFileSync('package.json', JSON.stringify(pkg,null,2) + '\n'); } else { console.log('No prerelease suffix to strip (version is ' + orig + ')'); }"
+          set -e
 
-      - name: Verify tag matches package.json version
-        run: |
-          PKG_VERSION=$(node -p "require('./package.json').version")
-          TAG_VERSION=${GITHUB_REF_NAME#v}
-          echo "package.json version (normalized): $PKG_VERSION"
-          echo "Tag version:                      $TAG_VERSION"
-          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
-            echo "ERROR: package.json version ($PKG_VERSION) does not match tag ($TAG_VERSION)"
+          echo "Requested release version: ${RELEASE_VERSION}"
+
+          # Basic semver check: 1.2.3 or 1.2.3-alpha.1 etc.
+          if ! node -e "process.exit(!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/.test(process.env.RELEASE_VERSION || ''))"; then
+            echo "ERROR: Version '${RELEASE_VERSION}' is not a valid semver (e.g. 1.2.3 or 1.2.3-alpha.1)"
             exit 1
           fi
 
-      - name: Build application (release)
-        run: npm run build
+          # Disallow 'dev' in release version
+          if echo "${RELEASE_VERSION}" | grep -qi "dev"; then
+            echo "ERROR: 'dev' is not allowed in release versions."
+            exit 1
+          fi
 
-      - name: Create build archive
-        run: |
-          tar -czf surveyor-dist.tar.gz dist package.json
-          ls -R
+          # If prerelease, allow only alpha/beta/rc* for now
+          if echo "${RELEASE_VERSION}" | grep -q "-"; then
+            PRERELEASE_PART="$(echo "${RELEASE_VERSION}" | cut -d'-' -f2)"
+            if ! echo "${PRERELEASE_PART}" | grep -E -q "^(alpha|beta|rc)(\.|$)"; then
+              echo "ERROR: Pre-release identifier must start with alpha, beta, or rc (got: ${PRERELEASE_PART})"
+              exit 1
+            fi
+          fi
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: surveyor-dist
-          path: surveyor-dist.tar.gz
+          # Ensure tag v<version> does not already exist remotely
+          git fetch --tags --quiet
+          if git tag -l "v${RELEASE_VERSION}" | grep -q .; then
+            echo "ERROR: Tag v${RELEASE_VERSION} already exists."
+            exit 1
+          fi
 
-  github-release:
-    name: Create GitHub Release
-    needs: build-and-release
-    runs-on: ubuntu-latest
+          echo "Version '${RELEASE_VERSION}' is valid and tag 'v${RELEASE_VERSION}' is free."
 
-    steps:
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: surveyor-dist
-          path: .
-
-      - name: List downloaded files
-        run: ls -R
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: surveyor-dist.tar.gz
+      - name: Update package.json to requested version (no tag yet)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  bump-dev-version:
-    name: Bump package.json version for next development cycle
-    needs: github-release
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout default branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Bump version in package.json to next -dev
-        id: bump
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
-          CURRENT=$(node -p "require('./package.json').version")
-          echo "Current version on default branch: $CURRENT"
+          set -e
+          echo "Updating package.json to version ${RELEASE_VERSION}..."
+          npm version "${RELEASE_VERSION}" --no-git-tag-version
 
-          BASE=${CURRENT%%-*}
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE"
-          NEXT_PATCH=$((PATCH + 1))
-          NEXT="${MAJOR}.${MINOR}.${NEXT_PATCH}-dev"
+          echo "New package.json version:"
+          node -p "require('./package.json').version"
 
-          echo "Next dev version: $NEXT"
-          npm version "$NEXT" --no-git-tag-version
-          echo "next_version=$NEXT" >> "$GITHUB_OUTPUT"
-
-      - name: Commit and push new dev version
+      - name: Commit version bump and create tag
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
+          set -e
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Stage version changes
           if [ -f package-lock.json ]; then
             git add package.json package-lock.json
           else
@@ -137,9 +108,39 @@ jobs:
           fi
 
           if git diff --cached --quiet; then
-            echo "No changes to commit; skipping push."
-            exit 0
+            echo "No changes detected after version bump; aborting."
+            exit 1
           fi
 
-          git commit -m "chore: bump version to ${{ steps.bump.outputs.next_version }} for next development cycle"
-          git push origin HEAD:${{ github.event.repository.default_branch }}
+          git commit -m "chore: release v${RELEASE_VERSION}"
+
+          # Create annotated tag
+          git tag -a "v${RELEASE_VERSION}" -m "Release v${RELEASE_VERSION}"
+
+          echo "Pushing commit and tag to origin..."
+          git push origin HEAD
+          git push origin "v${RELEASE_VERSION}"
+
+      - name: Build application for release
+        run: npm run build
+
+      - name: Create build archive
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -e
+          mkdir -p artifacts
+          tar -czf "artifacts/surveyor-v${RELEASE_VERSION}.tar.gz" dist package.json
+          ls -R artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ inputs.version }}
+          name: v${{ inputs.version }}
+          # Any version with '-' (alpha/beta/rc/...) is treated as prerelease
+          prerelease: ${{ contains(inputs.version, '-') }}
+          files: |
+            artifacts/surveyor-v${{ inputs.version }}.tar.gz
