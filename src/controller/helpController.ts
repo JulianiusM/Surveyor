@@ -3,12 +3,6 @@ import {marked} from 'marked';
 import path from 'path';
 import {ExpectedError} from '../modules/lib/errors';
 
-// Configure marked for safe HTML output
-marked.setOptions({
-    gfm: true, // GitHub Flavored Markdown
-    breaks: false,
-});
-
 /**
  * Rewrite links to other markdown docs into /help/<doc> routes.
  *
@@ -66,9 +60,12 @@ function rewriteDocHrefToHelpRoute(href: string): string {
     return `/help/${slug}${suffix}`;
 }
 
-// Register a global marked post-processor (only once per module load)
-marked.use({
+// Configure marked for safe HTML output
+marked.setOptions({
+    gfm: true, // GitHub Flavored Markdown
+    breaks: false,
     walkTokens(token: any) {
+        // Marked v17 link tokens have shape { type: 'link', href: string, ... }
         if (token?.type === 'link' && typeof token.href === 'string') {
             token.href = rewriteDocHrefToHelpRoute(token.href);
         }
