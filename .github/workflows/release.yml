@@ -9,13 +9,13 @@ on:
         type: string
 
 permissions:
-  contents: write    # needed to push commits, tags and create releases
+  contents: write
 
 jobs:
-  # 1) Full CI verification on the selected branch and commit
+  # 1) Full CI verification on the selected branch/commit
   ci:
     name: Run full CI on selected branch
-    uses: ./.github/workflows/ci.yml   # reusable CI workflow
+    uses: ./.github/workflows/ci.yml
     secrets: inherit
 
   # 2) If CI passes, bump version, tag, build, and create release
@@ -28,7 +28,6 @@ jobs:
       - name: Checkout selected branch
         uses: actions/checkout@v4
         with:
-          # For workflow_dispatch, github.ref is refs/heads/<chosen-branch>
           ref: ${{ github.ref }}
           fetch-depth: 0
 
@@ -50,7 +49,6 @@ jobs:
 
           echo "Requested release version: ${RELEASE_VERSION}"
 
-          # Validate version with Node (must be semver-like: 1.2.3 or 1.2.3-alpha.1)
           node << 'EOF'
           const v = process.env.RELEASE_VERSION || '';
 
@@ -79,7 +77,6 @@ jobs:
           process.exit(0);
           EOF
 
-          # Ensure tag v<version> does not already exist remotely
           git fetch --tags --quiet
           if git tag -l "v${RELEASE_VERSION}" | grep -q .; then
             echo "ERROR: Tag v${RELEASE_VERSION} already exists."
@@ -93,10 +90,7 @@ jobs:
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
           set -e
-          echo "Updating package.json to version ${RELEASE_VERSION}..."
           npm version "${RELEASE_VERSION}" --no-git-tag-version
-
-          echo "New package.json version:"
           node -p "require('./package.json').version"
 
       - name: Commit version bump and create tag
@@ -108,7 +102,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Stage version changes
           if [ -f package-lock.json ]; then
             git add package.json package-lock.json
           else
@@ -121,41 +114,74 @@ jobs:
           fi
 
           git commit -m "chore: release v${RELEASE_VERSION}"
-
-          # Create annotated tag
           git tag -a "v${RELEASE_VERSION}" -m "Release v${RELEASE_VERSION}"
 
-          echo "Pushing commit and tag to origin..."
           git push origin HEAD
           git push origin "v${RELEASE_VERSION}"
 
       - name: Build application for release
         run: npm run build
 
-      - name: Create build archive
+      - name: Prepare production-safe release bundle
         env:
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
           set -e
 
-          mkdir -p artifacts/tmp
+          rm -rf release
+          mkdir -p release
 
-          # Copy built files (flatten dist/) into a temp staging dir
-          cp -R dist/* artifacts/tmp/
+          # Copy build output
+          cp -R dist release/dist
 
-          # Optionally include package.json at the root of the archive
-          cp package.json artifacts/tmp/
+          # Create a production-safe package.json for the release artifact:
+          # - remove devDependencies
+          # - remove install-time scripts that commonly pull dev tooling / break installs
+          node << 'EOF'
+          const fs = require('fs');
 
-          # Create the tarball with everything from the staging dir at the root
-          (
-            cd artifacts/tmp
-            tar -czf "../surveyor-v${RELEASE_VERSION}.tar.gz" .
-          )
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 
-          # Clean up staging directory
-          rm -rf artifacts/tmp
+          // Remove dev dependencies from the release artifact
+          delete pkg.devDependencies;
 
-          echo "Created artifacts/surveyor-v${RELEASE_VERSION}.tar.gz with dist contents at archive root:"
+          // Remove scripts that run during "npm install" and often depend on dev tooling
+          if (pkg.scripts && typeof pkg.scripts === 'object') {
+            const scriptsToRemove = [
+              'preinstall',
+              'install',
+              'postinstall',
+              'prepare',
+              'prepublish',
+              'prepublishOnly',
+              'postpublish'
+            ];
+            for (const k of scriptsToRemove) delete pkg.scripts[k];
+
+            if (Object.keys(pkg.scripts).length === 0) delete pkg.scripts;
+          }
+
+          // Write sanitized package.json into release bundle
+          fs.writeFileSync('release/package.json', JSON.stringify(pkg, null, 2) + '\n');
+
+          console.log('Wrote release/package.json (devDependencies removed; install scripts stripped).');
+          EOF
+
+          # Optional extra safety: make "npm install" omit dev deps by default in this bundle
+          cat > release/.npmrc <<'EOF'
+          omit=dev
+          EOF
+
+          echo "Release bundle contents:"
+          find release -maxdepth 2 -type f -print
+
+      - name: Create build archive
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -e
+          mkdir -p artifacts
+          tar -czf "artifacts/surveyor-v${RELEASE_VERSION}.tar.gz" -C release .
           ls -R artifacts
 
       - name: Create GitHub Release
@@ -165,7 +191,6 @@ jobs:
         with:
           tag_name: v${{ inputs.version }}
           name: v${{ inputs.version }}
-          # Any version with '-' (alpha/beta/rc/...) is treated as prerelease
           prerelease: ${{ contains(inputs.version, '-') }}
           files: |
             artifacts/surveyor-v${{ inputs.version }}.tar.gz
