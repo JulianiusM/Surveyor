@@ -25,6 +25,23 @@ const baseHTML = `
     </div>
 `;
 
+const mockOverrideTargets = [
+    {
+        key: 'user:10',
+        userId: 10,
+        label: 'John Doe',
+        arrivalDate: '2025-01-01',
+        departureDate: '2025-01-05'
+    },
+    {
+        key: 'guest:11',
+        guestId: 11,
+        label: 'Guest Greta',
+        arrivalDate: null,
+        departureDate: null
+    }
+];
+
 const mockConfig = {
     plan: {
         assignmentMode: 'FREE',
@@ -39,6 +56,7 @@ const mockConfig = {
         {roleId: 1, requiredShifts: 2},
         {roleId: 2, requiredShifts: 1}
     ],
+    overrideTargets: mockOverrideTargets,
     overrides: [],
     participants: []
 };
@@ -54,6 +72,12 @@ const mockConfigWithOverrides = {
             requiredShifts: 5
         }
     ]
+};
+
+const mockConfigWithoutTargets = {
+    ...mockConfig,
+    overrideTargets: [],
+    overrides: []
 };
 
 const mockConfigWithParticipants = {
@@ -168,6 +192,15 @@ const _activityRequirementsData = {
                 mockData: mockConfig,
                 hasEmptyState: true,
                 expectedRows: 0
+            },
+            {
+                description: 'disables override creation when no participants available',
+                planId: 'plan1',
+                html: baseHTML,
+                mockData: mockConfigWithoutTargets,
+                hasEmptyState: true,
+                expectedRows: 0,
+                expectDisabledAdd: true
             },
             {
                 description: 'renders override rows when overrides exist',

@@ -573,7 +573,17 @@ async function getRequirements(planId: string) {
         assignments,
     );
 
-    return {...requirementConfig, participants};
+    const overrideTargets = eventParticipants.map((participant) => ({
+        key: participant.userId ? `user:${participant.userId}` : `guest:${participant.guestId}`,
+        userId: participant.userId ?? null,
+        guestId: participant.guestId ?? null,
+        label: participant.name
+            || (participant.userId ? `User #${participant.userId}` : participant.guestId ? `Guest #${participant.guestId}` : 'Participant'),
+        arrivalDate: participant.arrivalDate ?? null,
+        departureDate: participant.departureDate ?? null,
+    }));
+
+    return {...requirementConfig, participants, overrideTargets};
 }
 
 async function calculateBaselineRequirement(planId: string) {
@@ -608,6 +618,29 @@ async function calculateBaselineRequirement(planId: string) {
 
 async function updateRequirements(planId: string, body: any) {
     const {roleRequirements, overrides, ...planSettings} = preprocessRequirementUpdate(body);
+    const plan = await activityService.getActivityPlanById(planId);
+
+    if (!plan) {
+        throw new APIError('Activity plan not found', {planId}, 404);
+    }
+    if (!plan.event?.id) {
+        throw new APIError('Event is required to configure participant overrides', {planId}, 400);
+    }
+
+    const eventParticipants = await eventService.getEventParticipants(plan.event.id);
+    const allowedUsers = new Set(eventParticipants.map((p) => p.userId).filter((id): id is number => id != null));
+    const allowedGuests = new Set(eventParticipants.map((p) => p.guestId).filter((id): id is number => id != null));
+
+    const invalidOverride = overrides.find((override) => {
+        if (override.userId) return !allowedUsers.has(override.userId);
+        if (override.guestId) return !allowedGuests.has(override.guestId);
+        return false;
+    });
+
+    if (invalidOverride) {
+        throw new APIError('Overrides must target participants registered for this event', invalidOverride, 400);
+    }
+
     // Convert bindingDeadline string to Date if present
     const normalizedSettings: Partial<Pick<ActivityPlan, "assignmentMode" | "generalRequiredShifts" | "roundingMode" | "bindingDeadline" | "allowOverfillAfterFull" | "allowArrivalDayEvening" | "allowDepartureDayMorning">> = {
         assignmentMode: planSettings.assignmentMode,
