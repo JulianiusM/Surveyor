@@ -33,6 +33,8 @@ export function initRequirementPanel(planId: string): void {
     const allowArrivalEvening = panel.querySelector<HTMLInputElement>('#allowArrivalEvening');
     const allowDepartureMorning = panel.querySelector<HTMLInputElement>('#allowDepartureMorning');
     const baselineCalcBtn = panel.querySelector<HTMLButtonElement>('[data-requirements-baseline-calc]');
+    let overrideTargets: RequirementConfiguration['overrideTargets'] = [];
+    type OverrideTarget = NonNullable<RequirementConfiguration['overrideTargets']>[number];
 
     const setAlert = (message?: string, variant: 'info' | 'danger' = 'info') => {
         if (!alertBox) return;
@@ -46,6 +48,63 @@ export function initRequirementPanel(planId: string): void {
         alertBox.classList.remove('d-none', 'alert-danger', 'alert-info');
         alertBox.classList.add(variant === 'danger' ? 'alert-danger' : 'alert-info');
         target.textContent = message;
+    };
+
+    const participantValue = (target?: OverrideTarget) => {
+        if (!target) return '';
+        if (target.userId) return `user:${target.userId}`;
+        if (target.guestId) return `guest:${target.guestId}`;
+        return target.key || '';
+    };
+
+    const findTargetForOverride = (override?: RequirementConfiguration['overrides'][number]) => {
+        if (!overrideTargets) return undefined;
+        return overrideTargets.find((target) => {
+            if (override?.userId && target.userId) return target.userId === override.userId;
+            if (override?.guestId && target.guestId) return target.guestId === override.guestId;
+            return false;
+        });
+    };
+
+    const describeAttendance = (target?: OverrideTarget) => {
+        if (!target) return '';
+        const arrival = target.arrivalDate ? formatDateLabel(target.arrivalDate) : '';
+        const departure = target.departureDate ? formatDateLabel(target.departureDate) : '';
+        if (arrival || departure) return `${arrival || 'start'} – ${departure || 'end'}`;
+        return 'Full event attendance';
+    };
+
+    const updateParticipantHint = (select?: HTMLSelectElement | null, hint?: HTMLElement | null) => {
+        if (!select || !hint) return;
+        const option = select.selectedOptions[0];
+        if (!select.value) {
+            hint.classList.remove('text-warning');
+            hint.classList.add('text-secondary');
+            hint.textContent = 'Select a registered participant to override requirements.';
+            return;
+        }
+
+        if (option?.dataset.invalid === 'true') {
+            hint.classList.remove('text-secondary');
+            hint.classList.add('text-warning');
+            hint.textContent = 'Not registered for this event. Choose a different participant.';
+            return;
+        }
+
+        const target = overrideTargets?.find((t) => participantValue(t) === select.value);
+        const attendance = describeAttendance(target);
+        hint.classList.remove('text-warning');
+        hint.classList.add('text-secondary');
+        const badge = target?.userId ? 'User' : 'Guest';
+        hint.textContent = attendance ? `${badge} • ${attendance}` : badge;
+    };
+
+    const setOverrideControlsState = () => {
+        if (!addOverrideBtn) return;
+        addOverrideBtn.disabled = !overrideTargets || !overrideTargets.length;
+        addOverrideBtn.title = addOverrideBtn.disabled
+            ? 'Register participants for this event to enable overrides'
+            : '';
     };
 
     const updateRequirementSummaryStats = (summary: RequirementParticipantSummary[] = []) => {
@@ -180,39 +239,71 @@ export function initRequirementPanel(planId: string): void {
     const buildOverrideRow = (override?: RequirementConfiguration['overrides'][number]) => {
         if (!overrideList) return;
         const row = document.createElement('div');
-        row.className = 'row g-2 align-items-center override-row';
+        row.className = 'row g-3 align-items-start override-row border border-secondary-subtle rounded p-3';
         if (override?.id) row.dataset.overrideId = String(override.id);
 
         const colTarget = document.createElement('div');
-        colTarget.className = 'col-md-3 d-grid gap-1';
+        colTarget.className = 'col-lg-5 col-md-6 d-grid gap-1';
         const targetLabel = document.createElement('label');
         targetLabel.className = 'form-label small mb-0';
-        targetLabel.textContent = 'Participant type';
-        const targetSelect = document.createElement('select');
-        targetSelect.className = 'form-select form-select-sm text-bg-dark';
-        targetSelect.dataset.overrideTarget = 'type';
-        targetSelect.innerHTML = '<option value="user">User</option><option value="guest">Guest</option>';
-        if (override?.guestId) targetSelect.value = 'guest';
+        targetLabel.textContent = 'Participant';
+        const participantSelect = document.createElement('select');
+        participantSelect.className = 'form-select form-select-sm text-bg-dark';
+        participantSelect.dataset.overrideTarget = 'participant';
 
-        const targetId = document.createElement('input');
-        targetId.type = 'number';
-        targetId.min = '1';
-        targetId.className = 'form-control form-control-sm text-bg-dark';
-        targetId.dataset.overrideTarget = 'id';
-        targetId.placeholder = 'User/Guest ID';
-        targetId.value = override?.userId?.toString() || override?.guestId?.toString() || '';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.disabled = true;
+        placeholder.selected = true;
+        placeholder.textContent = overrideTargets?.length
+            ? 'Choose a participant'
+            : 'No participants available';
+        participantSelect.append(placeholder);
 
-        if (override?.user?.username || override?.guest?.username) {
-            const hint = document.createElement('small');
-            hint.className = 'text-secondary';
-            hint.textContent = `Current: ${override.user?.username || override.guest?.username}`;
-            colTarget.append(targetLabel, targetSelect, targetId, hint);
-        } else {
-            colTarget.append(targetLabel, targetSelect, targetId);
+        const sortedTargets = [...(overrideTargets || [])].sort((a, b) => a.label.localeCompare(b.label));
+        sortedTargets.forEach((target) => {
+            const opt = document.createElement('option');
+            opt.value = participantValue(target);
+            const attendance = describeAttendance(target);
+            opt.textContent = attendance ? `${target.label} — ${attendance}` : target.label;
+            participantSelect.append(opt);
+        });
+
+        const overrideValue = override?.userId
+            ? `user:${override.userId}`
+            : override?.guestId
+                ? `guest:${override.guestId}`
+                : '';
+
+        const matchedTarget = findTargetForOverride(override);
+        if (matchedTarget) {
+            participantSelect.value = participantValue(matchedTarget);
+        } else if (overrideValue) {
+            const missingOpt = document.createElement('option');
+            missingOpt.value = overrideValue;
+            missingOpt.dataset.invalid = 'true';
+            missingOpt.textContent = override?.user?.username
+                || override?.guest?.username
+                || `Not registered (${overrideValue.replace(':', ' #')})`;
+            participantSelect.append(missingOpt);
+            participantSelect.value = overrideValue;
+        } else if (participantSelect.querySelector('option:not([disabled])')) {
+            participantSelect.value = participantSelect.querySelector('option:not([disabled])')?.value || '';
         }
 
+        if (!overrideTargets?.length) {
+            participantSelect.disabled = true;
+        }
+
+        const targetHint = document.createElement('div');
+        targetHint.className = 'form-text text-secondary small';
+        updateParticipantHint(participantSelect, targetHint);
+        participantSelect.addEventListener('change', () => updateParticipantHint(participantSelect, targetHint));
+
+        colTarget.append(targetLabel, participantSelect, targetHint);
+
         const colRole = document.createElement('div');
-        colRole.className = 'col-md-4 d-grid gap-1';
+        colRole.className = 'col-lg-4 col-md-6 d-grid gap-1';
         const roleLabel = document.createElement('label');
         roleLabel.className = 'form-label small mb-0';
         roleLabel.textContent = 'Role (optional)';
@@ -254,7 +345,19 @@ export function initRequirementPanel(planId: string): void {
     const renderOverrides = (config: RequirementConfiguration) => {
         if (!overrideList) return;
         overrideList.innerHTML = '';
-        if (!config.overrides.length) {
+
+        if (!overrideTargets?.length) {
+            const empty = document.createElement('div');
+            empty.className = 'text-secondary small';
+            empty.dataset.emptyState = 'true';
+            empty.textContent = 'No event participants are registered yet. Add participants to enable overrides.';
+            overrideList.append(empty);
+            if (!config.overrides.length) {
+                return;
+            }
+        }
+
+        if (overrideTargets?.length && !config.overrides.length) {
             const empty = document.createElement('div');
             empty.className = 'text-secondary small';
             empty.dataset.emptyState = 'true';
@@ -277,6 +380,9 @@ export function initRequirementPanel(planId: string): void {
         if (allowOverfill) allowOverfill.checked = Boolean(config.plan.allowOverfillAfterFull);
         if (allowArrivalEvening) allowArrivalEvening.checked = Boolean(config.plan.allowArrivalDayEvening ?? true);
         if (allowDepartureMorning) allowDepartureMorning.checked = Boolean(config.plan.allowDepartureDayMorning ?? true);
+
+        overrideTargets = config.overrideTargets || [];
+        setOverrideControlsState();
 
         buildRoleRequirementInputs(config);
         renderOverrides(config);
@@ -326,18 +432,29 @@ export function initRequirementPanel(planId: string): void {
             .filter((v): v is { roleId: number; requiredShifts: number } => Boolean(v));
     };
 
-    const collectOverrides = (): RequirementConfiguration['overrides'] => {
-        if (!overrideList) return [];
+    const collectOverrides = (): {overrides: RequirementConfiguration['overrides']; hasInvalid: boolean} => {
+        if (!overrideList) return {overrides: [], hasInvalid: false};
         const entries: RequirementConfiguration['overrides'] = [];
+        let hasInvalid = false;
         overrideList.querySelectorAll<HTMLElement>('.override-row').forEach((row) => {
-            const typeSelect = row.querySelector<HTMLSelectElement>('[data-override-target="type"]');
-            const idInput = row.querySelector<HTMLInputElement>('[data-override-target="id"]');
+            const participantSelect = row.querySelector<HTMLSelectElement>('[data-override-target="participant"]');
             const roleSelect = row.querySelector<HTMLSelectElement>('[data-override-target="role"]');
             const reqInput = row.querySelector<HTMLInputElement>('[data-override-target="required"]');
 
             const requiredShifts = Number(reqInput?.value ?? 0);
-            const idVal = idInput?.value.trim();
-            if (!typeSelect || !idVal) return;
+            const selection = participantSelect?.value ?? '';
+            const selectedOption = participantSelect?.selectedOptions[0];
+            if (!selection) return;
+            if (selectedOption?.dataset.invalid === 'true') {
+                hasInvalid = true;
+                participantSelect?.classList.add('is-invalid');
+                return;
+            }
+            participantSelect?.classList.remove('is-invalid');
+
+            const [targetType, rawId] = selection.split(':');
+            const participantId = Number(rawId);
+            if (!targetType || Number.isNaN(participantId)) return;
 
             const entry: any = {
                 roleId: roleSelect?.value ? Number(roleSelect.value) : null,
@@ -346,20 +463,27 @@ export function initRequirementPanel(planId: string): void {
 
             if (row.dataset.overrideId) entry.id = Number(row.dataset.overrideId);
 
-            if (typeSelect.value === 'guest') {
-                entry.guestId = Number(idVal);
+            if (targetType === 'guest') {
+                entry.guestId = participantId;
             } else {
-                entry.userId = Number(idVal);
+                entry.userId = participantId;
             }
 
             entries.push(entry);
         });
-        return entries;
+        return {overrides: entries, hasInvalid};
     };
 
     const saveRequirements = async () => {
         setAlert('Saving settings…');
         try {
+            const {overrides, hasInvalid} = collectOverrides();
+            if (hasInvalid) {
+                setAlert('Update overrides to target registered participants only.', 'danger');
+                showInlineAlert('error', 'Update overrides to target registered participants only.');
+                return;
+            }
+
             await post(`/api/activity/${planId}/requirements`, {
                 assignmentMode: assignmentMode?.value,
                 generalRequiredShifts: generalRequired?.value ? Number(generalRequired.value) : null,
@@ -369,7 +493,7 @@ export function initRequirementPanel(planId: string): void {
                 allowArrivalDayEvening: allowArrivalEvening?.checked ?? true,
                 allowDepartureDayMorning: allowDepartureMorning?.checked ?? true,
                 roleRequirements: collectRoleRequirements(),
-                overrides: collectOverrides(),
+                overrides,
             });
 
             showInlineAlert('success', 'Requirement settings saved');
@@ -382,6 +506,7 @@ export function initRequirementPanel(planId: string): void {
     };
 
     addOverrideBtn?.addEventListener('click', () => {
+        if (!overrideTargets?.length) return;
         if (overrideList && overrideList.querySelector('[data-empty-state]')) {
             overrideList.innerHTML = '';
         }
@@ -393,4 +518,3 @@ export function initRequirementPanel(planId: string): void {
 
     void loadRequirements();
 }
-

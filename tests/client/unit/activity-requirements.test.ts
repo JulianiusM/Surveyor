@@ -112,7 +112,7 @@ describe('activity-requirements module', () => {
     });
 
     describe('overrides rendering', () => {
-        test.each(activityRequirementsData().overrides.render)('$description', async ({planId, html, mockData, hasEmptyState, expectedRows}) => {
+        test.each(activityRequirementsData().overrides.render)('$description', async ({planId, html, mockData, hasEmptyState, expectedRows, expectDisabledAdd}) => {
             document.body.innerHTML = html;
             mockGet.mockResolvedValue({data: mockData});
             
@@ -122,6 +122,7 @@ describe('activity-requirements module', () => {
             await new Promise(resolve => setTimeout(resolve, 10));
             
             const overrideList = document.getElementById('overrideList');
+            const addBtn = document.querySelector('[data-add-override]') as HTMLButtonElement | null;
             
             if (hasEmptyState) {
                 const emptyState = overrideList?.querySelector('[data-empty-state]');
@@ -129,6 +130,10 @@ describe('activity-requirements module', () => {
             } else {
                 const rows = overrideList?.querySelectorAll('.override-row');
                 expect(rows?.length).toBe(expectedRows);
+            }
+
+            if (expectDisabledAdd !== undefined) {
+                expect(addBtn?.disabled).toBe(expectDisabledAdd);
             }
         });
 

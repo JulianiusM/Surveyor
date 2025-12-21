@@ -86,6 +86,15 @@ export interface RequirementParticipantSummary {
     };
 }
 
+export interface RequirementOverrideTarget {
+    key: string;
+    label: string;
+    userId?: number | null;
+    guestId?: number | null;
+    arrivalDate?: string | null;
+    departureDate?: string | null;
+}
+
 export interface RequirementConfiguration {
     plan: {
         assignmentMode?: 'FREE' | 'REQUIRED';
@@ -97,6 +106,7 @@ export interface RequirementConfiguration {
         allowDepartureDayMorning?: boolean;
     };
     roleRequirements: { roleId: number; requiredShifts: number }[];
+    overrideTargets?: RequirementOverrideTarget[];
     overrides: {
         id?: number;
         roleId?: number | null;
