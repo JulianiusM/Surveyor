@@ -239,11 +239,11 @@ export function initRequirementPanel(planId: string): void {
     const buildOverrideRow = (override?: RequirementConfiguration['overrides'][number]) => {
         if (!overrideList) return;
         const row = document.createElement('div');
-        row.className = 'row g-3 align-items-start override-row border border-secondary-subtle rounded p-3';
+        row.className = 'row align-items-start override-row border border-secondary-subtle rounded p-2';
         if (override?.id) row.dataset.overrideId = String(override.id);
 
         const colTarget = document.createElement('div');
-        colTarget.className = 'col-lg-5 col-md-6 d-grid gap-1';
+        colTarget.className = 'col-md-5 d-grid gap-1 m-auto';
         const targetLabel = document.createElement('label');
         targetLabel.className = 'form-label small mb-0';
         targetLabel.textContent = 'Participant';
@@ -282,13 +282,13 @@ export function initRequirementPanel(planId: string): void {
             const missingOpt = document.createElement('option');
             missingOpt.value = overrideValue;
             missingOpt.dataset.invalid = 'true';
-            missingOpt.textContent = override?.user?.username
+            missingOpt.textContent = override?.user?.name || override?.user?.username
                 || override?.guest?.username
                 || `Not registered (${overrideValue.replace(':', ' #')})`;
             participantSelect.append(missingOpt);
             participantSelect.value = overrideValue;
         } else if (participantSelect.querySelector('option:not([disabled])')) {
-            participantSelect.value = participantSelect.querySelector('option:not([disabled])')?.value || '';
+            participantSelect.value = participantSelect.querySelector<HTMLOptionElement>('option:not([disabled])')?.value || '';
         }
 
         if (!overrideTargets?.length) {
@@ -303,7 +303,7 @@ export function initRequirementPanel(planId: string): void {
         colTarget.append(targetLabel, participantSelect, targetHint);
 
         const colRole = document.createElement('div');
-        colRole.className = 'col-lg-4 col-md-6 d-grid gap-1';
+        colRole.className = 'col-md-3 d-grid gap-1 m-auto';
         const roleLabel = document.createElement('label');
         roleLabel.className = 'form-label small mb-0';
         roleLabel.textContent = 'Role (optional)';
@@ -317,7 +317,7 @@ export function initRequirementPanel(planId: string): void {
         colRole.append(roleLabel, roleSelect);
 
         const colReq = document.createElement('div');
-        colReq.className = 'col-md-3 d-grid gap-1';
+        colReq.className = 'col-md-3 d-grid gap-1 m-auto';
         const reqLabel = document.createElement('label');
         reqLabel.className = 'form-label small mb-0';
         reqLabel.textContent = 'Required shifts';
@@ -330,7 +330,7 @@ export function initRequirementPanel(planId: string): void {
         colReq.append(reqLabel, reqInput);
 
         const colRemove = document.createElement('div');
-        colRemove.className = 'col-md-2 d-flex align-items-end';
+        colRemove.className = 'col-md-1 d-flex align-items-end m-auto py-3';
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'btn btn-sm btn-outline-danger w-100';
@@ -432,7 +432,7 @@ export function initRequirementPanel(planId: string): void {
             .filter((v): v is { roleId: number; requiredShifts: number } => Boolean(v));
     };
 
-    const collectOverrides = (): {overrides: RequirementConfiguration['overrides']; hasInvalid: boolean} => {
+    const collectOverrides = (): { overrides: RequirementConfiguration['overrides']; hasInvalid: boolean } => {
         if (!overrideList) return {overrides: [], hasInvalid: false};
         const entries: RequirementConfiguration['overrides'] = [];
         let hasInvalid = false;
