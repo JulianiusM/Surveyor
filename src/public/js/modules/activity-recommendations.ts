@@ -3,10 +3,11 @@
  * Handles the assignment recommendations panel
  */
 
+import {formatDateLabel, formatTimeLabel} from "../core/formatting";
 import {get, post} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
+import {reloadAfterDelay} from '../shared/ui-helpers';
 import {describeWarning} from './activity-assignments';
-import { reloadAfterDelay } from '../shared/ui-helpers';
 import type {
     AssignmentWarning,
     RecommendationParticipantOption,
@@ -14,7 +15,6 @@ import type {
     RecommendationSlotOption,
     RecommendationWarning
 } from './activity-types';
-import {formatDateLabel, formatTimeLabel} from "../core/formatting";
 
 function formatSlotLabel(slot: RecommendationRow['slot']): string {
     const day = slot.day ? ` on ${slot.day}` : '';
@@ -231,7 +231,7 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
             if (selectedValue && !participantList.some((opt) => participantValue(opt) === selectedValue)) {
                 participantList.push({
                     key: selectedValue,
-                    label: rec.user?.username || rec.guest?.username || selectedValue,
+                    label: rec.user?.name || rec.user?.username || rec.guest?.username || selectedValue,
                     userId: rec.user?.id ?? null,
                     guestId: rec.guest?.id ?? null,
                 });
@@ -352,14 +352,14 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
             const res = await post(`/api/activity/${planId}/recommendations/apply`, {});
             warnings = (res?.warnings || []) as RecommendationWarning[];
             showInlineAlert('success', res?.message || 'Recommendations applied');
-            
+
             // Store current tab before reload
             const activeTab = document.querySelector('.nav-link.active');
             const activeTabId = activeTab?.getAttribute('data-bs-target');
             if (activeTabId) {
                 sessionStorage.setItem('activity-active-tab', activeTabId);
             }
-            
+
             // Reload the page to show updated assignments
             reloadAfterDelay(1000);
         } catch (err) {

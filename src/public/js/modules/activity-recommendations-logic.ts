@@ -3,19 +3,17 @@
  * Pure logic layer - no DOM manipulation
  */
 
-import type {
-    RecommendationParticipantOption,
-    RecommendationRow
-} from './activity-types';
-import {ActivityRecommendationsState} from './activity-recommendations-state';
 import {formatDateLabel} from "../core/formatting";
+import {ActivityRecommendationsState} from './activity-recommendations-state';
+import type {RecommendationParticipantOption, RecommendationRow} from './activity-types';
 
 /**
  * Business logic class for recommendations
  * Handles all recommendation operations without DOM concerns
  */
 export class RecommendationsLogic {
-    constructor(private state: ActivityRecommendationsState) {}
+    constructor(private state: ActivityRecommendationsState) {
+    }
 
     /**
      * Approve a recommendation
@@ -73,7 +71,7 @@ export class RecommendationsLogic {
     /**
      * Parse participant value from form
      */
-    parseParticipantValue(value: string): {type: string; id: number} {
+    parseParticipantValue(value: string): { type: string; id: number } {
         const [type, idStr] = value.split(':');
         return {type, id: parseInt(idStr, 10)};
     }
@@ -97,24 +95,24 @@ export class RecommendationsLogic {
         }
 
         const slotDate = new Date(slotDay);
-        
+
         if (option.arrivalDate) {
             const arrival = new Date(option.arrivalDate);
             if (slotDate < arrival) return false;
         }
-        
+
         if (option.departureDate) {
             const departure = new Date(option.departureDate);
             if (slotDate > departure) return false;
         }
-        
+
         return true;
     }
 
     /**
      * Filter participants for a specific slot date
      */
-    getAvailableParticipants(slotDay: string | null): RecommendationParticipantOption[] {
+    getAvailableParticipants(slotDay?: string | null): RecommendationParticipantOption[] {
         if (!slotDay) {
             return this.state.getParticipantOptions();
         }
@@ -147,21 +145,21 @@ export class RecommendationsLogic {
         const existingAssignments = this.state.getExistingAssignments();
 
         return existingAssignments.some((assignment: any) => {
-            const matchesParticipant = 
+            const matchesParticipant =
                 (userId && assignment.user?.id === userId) ||
                 (guestId && assignment.guest?.id === guestId);
-            
+
             if (!matchesParticipant) return false;
-            
+
             const assignmentDate = new Date(assignment.slot.day);
             if (assignmentDate.toDateString() !== slotDate.toDateString()) return false;
-            
+
             // Check time overlap
             const slotStart = new Date(`${slot.day}T${slot.startTime}`);
             const slotEnd = new Date(`${slot.day}T${slot.endTime}`);
             const assignmentStart = new Date(`${assignment.slot.day}T${assignment.slot.startTime}`);
             const assignmentEnd = new Date(`${assignment.slot.day}T${assignment.slot.endTime}`);
-            
+
             return slotStart < assignmentEnd && slotEnd > assignmentStart;
         });
     }
@@ -182,7 +180,7 @@ export class RecommendationsLogic {
         return recommendations.some(r => {
             // Must be same participant
             if (!(r.user?.id === userId || r.guest?.id === guestId)) return false;
-            
+
             // Must be same day (comparing with DOM would require UI layer)
             // This is a simplified check - full implementation would need slot day info
             return false; // Placeholder - actual implementation needs more context
@@ -215,7 +213,7 @@ export class RecommendationsLogic {
     groupRecommendationsBySlot(): Map<string, RecommendationRow[]> {
         const recommendations = this.state.getRecommendations();
         const bySlot = new Map<string, RecommendationRow[]>();
-        
+
         recommendations.forEach((rec) => {
             const slotId = rec.slot.id;
             if (!bySlot.has(slotId)) {

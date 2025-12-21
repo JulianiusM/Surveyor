@@ -58,7 +58,7 @@ export interface RecommendationRow {
         startTime?: string | null;
         endTime?: string | null;
     };
-    user?: { id: number; username: string } | null;
+    user?: { id: number; username: string; name?: string } | null;
     guest?: { id: number; username: string } | null;
     status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'APPLIED';
 }
@@ -102,7 +102,7 @@ export interface RequirementConfiguration {
         roleId?: number | null;
         role?: RoleSummary | null;
         userId?: number | null;
-        user?: { username: string } | null;
+        user?: { username: string, name?: string } | null;
         guestId?: number | null;
         guest?: { username: string } | null;
         requiredShifts: number;
@@ -113,14 +113,6 @@ export interface RequirementConfiguration {
 // Slot roles mapping type
 export interface SlotRolesMap {
     [slotId: string]: RoleSummary[];
-}
-
-export interface RecommendationRow {
-    id?: string;
-    slot: { id: string; title: string; day?: string; startTime?: string | null; endTime?: string | null };
-    user?: { id: number; username: string } | null;
-    guest?: { id: number; username: string } | null;
-    status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'APPLIED';
 }
 
 export interface RecommendationSlotOption {

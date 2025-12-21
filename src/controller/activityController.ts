@@ -23,8 +23,8 @@ import {APIError, ValidationError} from '../modules/lib/errors';
 
 import {ENTITIES, fromISOtoLocal, generateUniqueId} from '../modules/lib/util';
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
-import type {PermBundle} from "../types/PermissionTypes";
 import type {SlotAssignee} from "../types/ActivityTypes";
+import type {PermBundle} from "../types/PermissionTypes";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'activity/activity-create';
@@ -304,7 +304,15 @@ async function getScheduleExport(plan: ActivityPlan) {
         return d;
     };
 
-    const dayMap = new Map<string, { date: string; dayIndex: number; slots: (ActivitySlot & { assignedCount: number; assignees: SlotAssignee[]; roles: { id: number; name: string }[] })[] }>();
+    const dayMap = new Map<string, {
+        date: string;
+        dayIndex: number;
+        slots: (ActivitySlot & {
+            assignedCount: number;
+            assignees: SlotAssignee[];
+            roles: { id: number; name: string }[]
+        })[]
+    }>();
 
     for (let cur = new Date(start); cur <= end; cur.setUTCDate(cur.getUTCDate() + 1)) {
         const dayKey = mapDayKey(cur);
@@ -318,10 +326,29 @@ async function getScheduleExport(plan: ActivityPlan) {
         dayMap.set(dayKey, {date: dayKey, dayIndex: weekday, slots});
     }
 
-    const weeks: { start: string; days: { date: string; dayIndex: number; slots: (ActivitySlot & { assignedCount: number; assignees: SlotAssignee[]; roles: { id: number; name: string }[] })[] }[] }[] = [];
+    const weeks: {
+        start: string;
+        days: {
+            date: string;
+            dayIndex: number;
+            slots: (ActivitySlot & {
+                assignedCount: number;
+                assignees: SlotAssignee[];
+                roles: { id: number; name: string }[]
+            })[]
+        }[]
+    }[] = [];
 
     for (let weekStart = startOfWeek(start); weekStart <= end; weekStart.setUTCDate(weekStart.getUTCDate() + 7)) {
-        const days: { date: string; dayIndex: number; slots: (ActivitySlot & { assignedCount: number; assignees: SlotAssignee[]; roles: { id: number; name: string }[] })[] }[] = [];
+        const days: {
+            date: string;
+            dayIndex: number;
+            slots: (ActivitySlot & {
+                assignedCount: number;
+                assignees: SlotAssignee[];
+                roles: { id: number; name: string }[]
+            })[]
+        }[] = [];
         for (let i = 0; i < 7; i++) {
             const current = new Date(weekStart);
             current.setUTCDate(weekStart.getUTCDate() + i);
@@ -690,7 +717,7 @@ async function buildParticipantAttendanceMap(
             userId: override.userId ?? undefined,
             guestId: override.guestId ?? undefined,
             roleIds: override.roleId ? [override.roleId] : undefined,
-            name: override.user?.username ?? override.guest?.username ?? undefined,
+            name: override.user?.name ?? override.user?.username ?? override.guest?.username ?? undefined,
         });
     }
 

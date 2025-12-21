@@ -10,15 +10,76 @@ marked.setOptions({
 });
 
 /**
- * Get the base directory for documentation files
- * In development, docs are in the project root
- * In production, docs are copied to dist/docs
+ * Rewrite links to other markdown docs into /help/<doc> routes.
+ *
+ * Examples:
+ *  - DASHBOARD.md            -> /help/dashboard
+ *  - ./PACKING_LISTS.md#foo  -> /help/packing_lists#foo
+ *  - /EVENTS.md              -> /help/events
+ *
+ * Leaves untouched:
+ *  - http(s)://..., mailto:, tel:, data:
+ *  - #anchors
+ *  - already-correct /help/... links
  */
-function getDocsBasePath(): string {
-    if (process.env.NODE_ENV === 'production') {
-        return path.join(__dirname, '..', 'docs', 'user-guide');
+function rewriteDocHrefToHelpRoute(href: string): string {
+    if (!href) return href;
+
+    // Same-page anchors
+    if (href.startsWith('#')) return href;
+
+    // Already routed through help
+    if (href === '/help' || href.startsWith('/help/')) return href;
+
+    // External links and other schemes
+    const lower = href.toLowerCase();
+    if (
+        lower.startsWith('http://') ||
+        lower.startsWith('https://') ||
+        lower.startsWith('mailto:') ||
+        lower.startsWith('tel:') ||
+        lower.startsWith('data:')
+    ) {
+        return href;
     }
 
+    // Split off query/fragment and preserve it
+    const qIdx = href.indexOf('?');
+    const hIdx = href.indexOf('#');
+    const cutIdx =
+        qIdx === -1 ? hIdx : hIdx === -1 ? qIdx : Math.min(qIdx, hIdx);
+
+    const base = cutIdx === -1 ? href : href.slice(0, cutIdx);
+    const suffix = cutIdx === -1 ? '' : href.slice(cutIdx);
+
+    // Only rewrite *.md (case-insensitive)
+    if (!base.toLowerCase().endsWith('.md')) return href;
+
+    // Turn any path into a slug based on the filename
+    // e.g. "../DASHBOARD.md" -> "dashboard"
+    //      "PACKING_LISTS.md" -> "packing_lists"
+    const normalized = base.replace(/\\/g, '/');
+    const ext = path.posix.extname(normalized);
+    const fileName = path.posix.basename(normalized, ext);
+    const slug = fileName.toLowerCase();
+
+    return `/help/${slug}${suffix}`;
+}
+
+// Register a global marked post-processor (only once per module load)
+marked.use({
+    walkTokens(token: any) {
+        if (token?.type === 'link' && typeof token.href === 'string') {
+            token.href = rewriteDocHrefToHelpRoute(token.href);
+        }
+    },
+});
+
+/**
+ * Get the base directory for documentation files
+ * In development & prod, docs are in the project root
+ */
+function getDocsBasePath(): string {
     return path.join(__dirname, '..', '..', 'docs', 'user-guide');
 }
 

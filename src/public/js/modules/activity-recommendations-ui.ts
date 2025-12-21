@@ -3,13 +3,9 @@
  * Handles all DOM manipulation and rendering
  */
 
-import type {
-    RecommendationRow,
-    BootstrapModal,
-    BootstrapGlobal
-} from './activity-types';
-import {ActivityRecommendationsState} from './activity-recommendations-state';
 import {RecommendationsLogic} from './activity-recommendations-logic';
+import {ActivityRecommendationsState} from './activity-recommendations-state';
+import type {BootstrapGlobal, RecommendationRow} from './activity-types';
 
 declare const bootstrap: BootstrapGlobal;
 
@@ -35,7 +31,7 @@ export class RecommendationsUI {
         this.scheduleView = container.querySelector<HTMLElement>('#recommendationScheduleView');
         this.alertBox = container.querySelector<HTMLElement>('[data-recommendations-alert]');
         this.summaryStats = container.querySelector<HTMLElement>('#recommendationSummaryStats');
-        
+
         // Modal elements
         this.addModal = document.getElementById('addRecommendationModal');
         this.addSlotIdInput = this.addModal?.querySelector<HTMLInputElement>('#addRecommendationSlotId') || null;
@@ -55,7 +51,7 @@ export class RecommendationsUI {
     setAlert(message?: string, variant: 'info' | 'danger' = 'info'): void {
         if (!this.alertBox) return;
         const target = this.alertBox.querySelector('span') || this.alertBox;
-        
+
         if (!message) {
             this.alertBox.classList.add('d-none');
             target.textContent = '';
@@ -127,15 +123,15 @@ export class RecommendationsUI {
 
         // Icon
         const icon = document.createElement('i');
-        icon.className = rec.status === 'APPROVED' ? 'bi bi-check-circle-fill text-success' : 
-                         rec.status === 'REJECTED' ? 'bi bi-x-circle-fill text-danger' :
-                         'bi bi-clock-fill text-warning';
+        icon.className = rec.status === 'APPROVED' ? 'bi bi-check-circle-fill text-success' :
+            rec.status === 'REJECTED' ? 'bi bi-x-circle-fill text-danger' :
+                'bi bi-clock-fill text-warning';
         recDiv.append(icon);
 
         // Participant name
         const nameSpan = document.createElement('span');
         nameSpan.className = 'flex-grow-1 small';
-        nameSpan.textContent = rec.user?.username || rec.guest?.username || 'Unknown';
+        nameSpan.textContent = rec.user?.name || rec.user?.username || rec.guest?.username || 'Unknown';
         recDiv.append(nameSpan);
 
         // Status badge
@@ -179,11 +175,11 @@ export class RecommendationsUI {
         btn.type = 'button';
         btn.title = title;
         btn.innerHTML = innerHTML;
-        
+
         const handler = () => onClick();
         btn.addEventListener('click', handler);
         this.state.trackListener(btn, 'click', handler);
-        
+
         return btn;
     }
 
@@ -196,7 +192,7 @@ export class RecommendationsUI {
         onRevert: (rec: RecommendationRow) => void
     ): void {
         if (!this.scheduleView) return;
-        
+
         // Clear all recommendation containers
         const containers = this.scheduleView.querySelectorAll<HTMLElement>('[data-slot-recommendations]');
         containers.forEach((container) => {
@@ -243,14 +239,14 @@ export class RecommendationsUI {
             if (!modalInstance) return;
 
             // Get slot date from DOM to filter participants
-            const slotElement = this.scheduleView.querySelector(`[data-slot-id="${slotId}"]`);
+            const slotElement = this.scheduleView!.querySelector(`[data-slot-id="${slotId}"]`);
             const slotDay = slotElement?.closest('[data-day]')?.getAttribute('data-day');
-            
+
             // Populate modal
             if (this.addSlotIdInput) this.addSlotIdInput.value = slotId;
             if (this.addParticipantSelect) {
                 this.addParticipantSelect.innerHTML = '<option value="">Choose a participant...</option>';
-                
+
                 // Filter participants based on attendance window
                 const availableParticipants = this.logic.getAvailableParticipants(slotDay);
                 availableParticipants.forEach((opt) => {
@@ -259,7 +255,7 @@ export class RecommendationsUI {
                     option.textContent = this.logic.formatParticipantLabel(opt);
                     this.addParticipantSelect!.append(option);
                 });
-                
+
                 // Add change handler to show warning when participant selected
                 // Note: This listener uses {once: true} so it self-removes and doesn't need tracking
                 this.addParticipantSelect.addEventListener('change', () => {
@@ -270,7 +266,7 @@ export class RecommendationsUI {
 
             modalInstance.show();
         };
-        
+
         this.scheduleView.addEventListener('click', scheduleViewClickHandler);
         this.state.trackListener(this.scheduleView, 'click', scheduleViewClickHandler);
 
@@ -295,17 +291,17 @@ export class RecommendationsUI {
 
         // Clear warning first
         this.addWarningBox.classList.add('d-none');
-        
+
         const participantValue = this.addParticipantSelect.value;
         if (!participantValue || !slotId) return;
-        
+
         // Check for overlap using logic layer
         const {type, id} = this.logic.parseParticipantValue(participantValue);
         const userId = type === 'user' ? id : null;
         const guestId = type === 'guest' ? id : null;
-        
+
         const hasOverlap = this.logic.hasOverlappingAssignment(userId, guestId, slotId);
-        
+
         if (hasOverlap) {
             this.addWarningBox.classList.remove('d-none');
             const span = this.addWarningBox.querySelector('span');
