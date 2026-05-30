@@ -37,7 +37,7 @@ const permFctAssign = getPermFctAssign(resFct, resFctAssign, entityName, entityI
 const itemPermFct: ItemGetter = getItemFromEntityPermFct(packingService.getPackingItems, resFct, entityItemName);
 
 apiParamHandler('id', app, packingService.getPackingListById, entityName);
-apiParamHandler('itemId', app, packingService.getPackingItemById, entityName);
+apiParamHandler('itemId', app, packingService.getPackingItemById, entityItemName);
 apiParamHandler('assignId', app, packingService.getPackingAssignmentById, assignName);
 app.use("/:id", attachPermBundle(permFct, itemPermFct));
 
@@ -96,7 +96,7 @@ app.post('/:id/settings', requirePermissionApi(permFct, PERM.MANAGE_PERMISSIONS)
     renderer.respondWithSuccessJson(res, msg);
 }));
 
-app.post('/:id/item/:itemId/delete', requirePermissionApi(permFct, PERM.ITEM_DELETE), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/item/:itemId/delete', requireItemPermissionApi(permFctItems, PERM.ITEM_DELETE, PERM.ITEM_DELETE), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.deleteItem(req.params.itemId);
     renderer.respondWithSuccessJson(res, msg);
 }));

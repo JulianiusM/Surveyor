@@ -84,7 +84,7 @@ describe('drivers module', () => {
 
             expect(initAssignButtons).toHaveBeenCalledWith({
                 tableSelector: 'table[data-assignable]',
-                baseUrl: `/drivers/${driversTestData.driversListId}`,
+                baseUrl: `/api/drivers/${driversTestData.driversListId}`,
             });
             expect(initQuickAdd).toHaveBeenCalled();
             expect(initAssignmentRemoval).toHaveBeenCalled();
@@ -98,7 +98,7 @@ describe('drivers module', () => {
             expect(requireEntityPerm).toHaveBeenCalledWith('ITEM_EDIT', 'reorder drivers');
             expect(initTableReorder).toHaveBeenCalledWith({
                 tbodySelector: 'tbody[data-reorderable]',
-                apiUrl: `/drivers/${driversTestData.driversListId}/reorder`,
+                apiUrl: `/api/drivers/${driversTestData.driversListId}/reorder`,
                 getItemId: expect.any(Function),
             });
         });
