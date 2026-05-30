@@ -121,7 +121,7 @@ describe('packing module', () => {
 
             expect(initAssignButtons).toHaveBeenCalledWith({
                 tableSelector: 'table[data-assignable]',
-                baseUrl: `/packing/${packingTestData.packListId}`,
+                baseUrl: `/api/packing/${packingTestData.packListId}`,
             });
             expect(initQuickAdd).toHaveBeenCalled();
             expect(initAssignmentRemoval).toHaveBeenCalled();
@@ -135,7 +135,7 @@ describe('packing module', () => {
             expect(requireEntityPerm).toHaveBeenCalledWith('ITEM_EDIT', 'reorder packing items');
             expect(initTableReorder).toHaveBeenCalledWith({
                 tbodySelector: 'tbody[data-reorderable]',
-                apiUrl: `/packing/${packingTestData.packListId}/reorder`,
+                apiUrl: `/api/packing/${packingTestData.packListId}/reorder`,
                 getItemId: expect.any(Function),
             });
         });
