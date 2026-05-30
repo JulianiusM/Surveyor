@@ -46,7 +46,12 @@ block content
                 .col-md-6
                     if ev.description
                         label.form-label Description
-                        p= ev.description
+                        p
+                            - const lines = ev.description.split('\n')
+                            each line, i in lines
+                                | #{line}
+                                if i < lines.length - 1
+                                    br
 
             .row
                 .col-12.d-flex.justify-content-end.gap-2
@@ -77,12 +82,12 @@ block content
                             label.form-label(for="startEdit")
                                 i.bi.bi-calendar-event.me-1
                                 | Start date
-                            input#startEdit.form-control.text-bg-dark(type="date" name="start" value=startDate)
+                            input#startEdit.form-control.text-bg-dark(type="date" name="startDate" value=startDate)
                         .col-md-4
                             label.form-label(for="endEdit")
                                 i.bi.bi-calendar2-event.me-1
                                 | End date
-                            input#endEdit.form-control.text-bg-dark(type="date" name="end" value=endDate)
+                            input#endEdit.form-control.text-bg-dark(type="date" name="endDate" value=endDate)
                     if permData.entity.has("EDIT_CAPACITY")
                         .col-md-4
                             label.form-label(for="maxParticipants")

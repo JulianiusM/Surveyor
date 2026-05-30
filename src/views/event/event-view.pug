@@ -51,7 +51,12 @@ block content
                 .col-md-6
                     if ev.description
                         label.form-label Description
-                        p= ev.description
+                        p
+                            - const lines = ev.description.split('\n')
+                            each line, i in lines
+                                | #{line}
+                                if i < lines.length - 1
+                                    br
 
             if permData.entity.has('ACCESS_ADMIN')
                 .row

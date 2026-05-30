@@ -319,6 +319,22 @@ export const updateEventSettingsData = {
             expectNotCalled: ['updateEventTitle', 'updateEventDescription'],
         },
         {
+            description: 'supports legacy start/end payload fields',
+            body: {start: '2025-01-03', end: '2025-01-13'},
+            expectedCalls: {
+                updateEventDates: ['e1', '2025-01-03', '2025-01-13'],
+            },
+            expectNotCalled: ['updateEventTitle', 'updateEventDescription'],
+        },
+        {
+            description: 'does not clear deadline when deadline field is not submitted',
+            body: {location: 'Cabin'},
+            expectedCalls: {
+                updateEventMeta: ['e1', {location: 'Cabin'}],
+            },
+            expectNotCalled: ['updateEventTitle', 'updateEventDescription'],
+        },
+        {
             description: 'on empty title string, falls back to existing title',
             body: {title: ''},
             expectedCalls: {
