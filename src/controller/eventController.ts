@@ -211,15 +211,27 @@ async function cancelRegistration(event: Event, session: Request['session']) {
 /* ----------------------- API: Organizer edit ----------------------- */
 
 async function updateEventSettings(event: Event, body: any, permData?: PermBundle) {
+    const normalizedBody = {...body};
+    if (normalizedBody.startDate === undefined && normalizedBody.start !== undefined) {
+        normalizedBody.startDate = normalizedBody.start;
+    }
+    if (normalizedBody.endDate === undefined && normalizedBody.end !== undefined) {
+        normalizedBody.endDate = normalizedBody.end;
+    }
+
     // Permission check
     if (!permData ||
-        ((body.location !== undefined || body.start !== undefined || body.end !== undefined || body.deadlineTz !== undefined) && !permData.entity.has("EDIT_META"))
-        || (body.title !== undefined && !permData.entity.has("EDIT_TITLE"))
-        || (body.description !== undefined && !permData.entity.has("EDIT_DESC"))
-        || (body.requireDietaryInfo !== undefined && !permData.entity.has("MANAGE_REQUIREMENTS"))
-        || (body.maxParticipants !== undefined && !permData.entity.has("EDIT_CAPACITY"))
+        ((normalizedBody.location !== undefined
+                || normalizedBody.startDate !== undefined
+                || normalizedBody.endDate !== undefined
+                || normalizedBody.bindingDeadline !== undefined
+                || normalizedBody.deadlineTz !== undefined) && !permData.entity.has("EDIT_META"))
+        || (normalizedBody.title !== undefined && !permData.entity.has("EDIT_TITLE"))
+        || (normalizedBody.description !== undefined && !permData.entity.has("EDIT_DESC"))
+        || (normalizedBody.requireDietaryInfo !== undefined && !permData.entity.has("MANAGE_REQUIREMENTS"))
+        || (normalizedBody.maxParticipants !== undefined && !permData.entity.has("EDIT_CAPACITY"))
     ) {
-        throw new APIError("Not allowed", body, 403);
+        throw new APIError("Not allowed", normalizedBody, 403);
     }
 
     const schema = Joi.object({
@@ -234,14 +246,14 @@ async function updateEventSettings(event: Event, body: any, permData?: PermBundl
         deadlineTz: Joi.string().allow(''),
     });
 
-    const {error, value} = schema.validate(body, {abortEarly: false, allowUnknown: true});
+    const {error, value} = schema.validate(normalizedBody, {abortEarly: false, allowUnknown: true});
     if (error) {
         const msg = error.details.map(d => d.message).join(', ');
-        throw new APIError(msg, body, 400);
+        throw new APIError(msg, normalizedBody, 400);
     }
 
     // Load current for cross-field checks
-    if (!event) throw new APIError('Event not found', body, 404);
+    if (!event) throw new APIError('Event not found', normalizedBody, 404);
 
     const start = value.startDate || event.startDate;
     const end = value.endDate || event.endDate;
@@ -259,7 +271,8 @@ async function updateEventSettings(event: Event, body: any, permData?: PermBundl
         timezone?: string | null;
     } = {};
     if (value.location !== undefined) update.location = value.location || null;
-    if (start !== undefined && end !== undefined) update.bindingDeadline = timedDeadline || null;
+    // Keep existing deadline unless the field was explicitly submitted.
+    if (value.bindingDeadline !== undefined) update.bindingDeadline = timedDeadline || null;
     if (value.requireDietaryInfo !== undefined) update.requireDietaryInfo = value.requireDietaryInfo === 'on';
     if (value.maxParticipants !== undefined) update.maxParticipants = value.maxParticipants || null;
     if (value.deadlineTz !== undefined) update.timezone = value.deadlineTz || null;

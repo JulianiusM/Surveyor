@@ -145,7 +145,7 @@ export function initUpdate(): void {
 
             requireEntityPermsForForm(formData, [
                 {
-                    fields: ['location', 'startDate', 'endDate', 'deadlineTz'],
+                    fields: ['location', 'startDate', 'endDate', 'bindingDeadline', 'deadlineTz'],
                     perm: 'EDIT_META',
                     action: 'update event metadata'
                 },
