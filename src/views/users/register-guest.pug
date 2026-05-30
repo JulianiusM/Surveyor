@@ -5,6 +5,9 @@ extends ../layout
 block meta
     title Join «#{data.title}»
 
+block scripts
+    script(type="module" src="/js/register-guest.gen.js")
+
 block title
     //- The page's card header (provided by your layout)
     h1.card-header.text-center.py-3.mb-0
@@ -38,6 +41,15 @@ block content
             i.bi.bi-person-plus
             | Create account
 
+    if data.guestRegistrationNags?.accountRecommendation
+        .alert.alert-info.text-center.border-info.mb-4(role="alert")
+            .d-flex
+                i.bi.bi-info-circle-fill.me-2
+                .flex-grow-1
+                    if data.guestRegistrationNags?.accountRecommendationTitle
+                        strong #{data.guestRegistrationNags.accountRecommendationTitle}:&nbsp;
+                    | #{data.guestRegistrationNags.accountRecommendation}
+
     //- Divider
     .position-relative.text-center.my-4
         hr
@@ -50,13 +62,14 @@ block content
             i.bi.bi-exclamation-triangle-fill.me-2
             .flex-grow-1
                 strong Heads up:&nbsp;
-                | Use the personal link you’ll receive to edit your submission later. Keep it safe.
+            | #{data.guestRegistrationNags?.linkWarning}
 
     //- Guest form
     form#guestForm.row.gx-3.gy-3.justify-content-center(
         method="post"
         action=`/${data.entityType}/${data.entityId}/guest`
         autocomplete="on"
+        data-confirm-message=data.guestRegistrationNags?.submitConfirmation
     )
         //- Display name
         .col-12.col-md-8
@@ -94,7 +107,7 @@ block content
                     inputmode="email"
                 )
             .form-text
-                | We’ll send your private edit link here. If you skip this, make sure to save the link after submitting.
+                | #{data.guestRegistrationNags?.emailRecommendation}
 
         //- Submit
         .col-12.col-md-8.mt-2

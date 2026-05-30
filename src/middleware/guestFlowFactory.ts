@@ -22,6 +22,7 @@ import type {GuestFlowConfig, GuestFlowDb} from "../types/UserTypes";
 import {PERM} from "../modules/lib/permissions";
 import type {EntityDescriptor, EntityGetter, GetResource, ItemGetter} from "../types/PermissionTypes";
 import {persistSession} from "../modules/lib/session";
+import {getGuestRegistrationNags} from "../modules/lib/guestRegistrationNags";
 
 // Builds the guest edit link for emails and redirects using Node.js URL API
 function buildGuestLink(entityType: string, entityId: string, token: string) {
@@ -156,7 +157,12 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         .get(asyncHandler(async (req: Request, res: Response) => {
             const {id, title} = resFct(req);
             if (req.session.user || req.session.guest) return res.redirect(buildRedirect(id))
-            renderer.renderWithData(res, guest, {entityType, entityId: id, title});
+            renderer.renderWithData(res, guest, {
+                entityType,
+                entityId: id,
+                title,
+                guestRegistrationNags: getGuestRegistrationNags(entityType),
+            });
         }))
         .post(asyncHandler(async (req: Request, res: Response) => {
             const entityId = resFct(req).id;
@@ -166,6 +172,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
                     entityType,
                     entityId,
                     title: resFct(req).title,
+                    guestRegistrationNags: getGuestRegistrationNags(entityType),
                     username,
                     email
                 });
@@ -263,4 +270,3 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
 
     return router;
 }
-

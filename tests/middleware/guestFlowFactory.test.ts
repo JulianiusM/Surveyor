@@ -170,8 +170,9 @@ describe('guestFlowRouter', () => {
 
     test.each(testData.guestRegistrationData)(
         '$description',
-        async ({method, path, body, expected}) => {
-            const app = makeApp(createGuestFlowRouter(makeConfig()));
+        async ({method, path, body, configOverrides, expected}) => {
+            const cfg = configOverrides ? makeConfig(configOverrides) : makeConfig();
+            const app = makeApp(createGuestFlowRouter(cfg));
             const res = await request(app)[method](path).send(body || {});
             
             expect(res.status).toBe(expected.status);
