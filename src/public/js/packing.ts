@@ -3,15 +3,15 @@
  * Handles assignment, inline editing, reordering, and owner operations for packing lists
  */
 
+import {post} from './core/http';
 import {setCurrentNavLocation} from './core/navigation';
 import {loadPerms, requireEntityPerm, requireItemPerm} from './core/permissions';
-import {post} from './core/http';
 import {showInlineAlert} from './shared/alerts';
-import {startInlineEdit, startInlineEditArea} from './shared/inline-edit';
-import {initAssignButtons} from './shared/entity-assign';
 import {initTableReorder} from './shared/drag-drop';
-import {reloadAfterDelay} from './shared/ui-helpers';
+import {initAssignButtons} from './shared/entity-assign';
+import {startInlineEdit, startInlineEditArea} from './shared/inline-edit';
 import {initAssignmentRemoval, initItemDeletion, initQuickAdd} from './shared/list-actions';
+import {reloadAfterDelay} from './shared/ui-helpers';
 
 /**
  * Get the packing list ID from the window object
@@ -147,7 +147,7 @@ export function init(): void {
         // Initialize assignment buttons
         initAssignButtons({
             tableSelector: 'table[data-assignable]',
-            baseUrl: `/packing/${listId}`,
+            baseUrl: `/api/packing/${listId}`,
         });
 
         // Initialize drag-and-drop reordering
@@ -155,7 +155,7 @@ export function init(): void {
             requireEntityPerm('ITEM_EDIT', 'reorder packing items');
             initTableReorder({
                 tbodySelector: 'tbody[data-reorderable]',
-                apiUrl: `/packing/${listId}/reorder`,
+                apiUrl: `/api/packing/${listId}/reorder`,
                 getItemId: (row) => row.dataset.itemid || '',
             });
         } catch (err) {
@@ -168,17 +168,17 @@ export function init(): void {
         // Initialize quick add form
         initQuickAdd({
             formId: 'quickAddForm',
-            baseUrl: `/packing/${listId}`,
+            baseUrl: `/api/packing/${listId}`,
         });
 
         initAssignmentRemoval({
-            baseUrl: `/packing/${listId}`,
+            baseUrl: `/api/packing/${listId}`,
         });
 
         initMarkEveryone();
 
         initItemDeletion({
-            baseUrl: `/packing/${listId}`,
+            baseUrl: `/api/packing/${listId}`,
             confirmMessage: 'Delete this item permanently?',
             successMessage: 'Item deleted',
         });

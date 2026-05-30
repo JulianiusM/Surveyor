@@ -5,9 +5,9 @@
 
 import {setCurrentNavLocation} from './core/navigation';
 import {loadPerms, requireEntityPerm} from './core/permissions';
-import {startInlineEdit, startInlineEditArea} from './shared/inline-edit';
-import {initAssignButtons} from './shared/entity-assign';
 import {initTableReorder} from './shared/drag-drop';
+import {initAssignButtons} from './shared/entity-assign';
+import {startInlineEdit, startInlineEditArea} from './shared/inline-edit';
 import {initAssignmentRemoval, initItemDeletion, initQuickAdd} from './shared/list-actions';
 
 /**
@@ -52,7 +52,7 @@ export function init(): void {
         // Initialize assignment buttons
         initAssignButtons({
             tableSelector: 'table[data-assignable]',
-            baseUrl: `/drivers/${listId}`,
+            baseUrl: `/api/drivers/${listId}`,
         });
 
         // Initialize drag-and-drop reordering
@@ -60,7 +60,7 @@ export function init(): void {
             requireEntityPerm('ITEM_EDIT', 'reorder drivers');
             initTableReorder({
                 tbodySelector: 'tbody[data-reorderable]',
-                apiUrl: `/drivers/${listId}/reorder`,
+                apiUrl: `/api/drivers/${listId}/reorder`,
                 getItemId: (row) => row.dataset.itemid || '',
             });
         } catch (err) {
@@ -73,15 +73,15 @@ export function init(): void {
         // Initialize quick add form
         initQuickAdd({
             formId: 'quickAddForm',
-            baseUrl: `/drivers/${listId}`,
+            baseUrl: `/api/drivers/${listId}`,
         });
 
         initAssignmentRemoval({
-            baseUrl: `/drivers/${listId}`,
+            baseUrl: `/api/drivers/${listId}`,
         });
 
         initItemDeletion({
-            baseUrl: `/drivers/${listId}`,
+            baseUrl: `/api/drivers/${listId}`,
             confirmMessage: 'Delete this driver permanently?',
             successMessage: 'Driver deleted',
         });
