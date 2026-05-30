@@ -5,6 +5,9 @@ extends ../layout
 block meta
     title Join «#{data.title}»
 
+block scripts
+    script(type="module" src="/js/register-guest.gen.js")
+
 block title
     //- The page's card header (provided by your layout)
     h1.card-header.text-center.py-3.mb-0
@@ -43,7 +46,8 @@ block content
             .d-flex
                 i.bi.bi-info-circle-fill.me-2
                 .flex-grow-1
-                    strong Best for events:&nbsp;
+                    if data.guestRegistrationNags?.accountRecommendationTitle
+                        strong #{data.guestRegistrationNags.accountRecommendationTitle}:&nbsp;
                     | #{data.guestRegistrationNags.accountRecommendation}
 
     //- Divider
@@ -65,6 +69,7 @@ block content
         method="post"
         action=`/${data.entityType}/${data.entityId}/guest`
         autocomplete="on"
+        data-confirm-message=data.guestRegistrationNags?.submitConfirmation
     )
         //- Display name
         .col-12.col-md-8
