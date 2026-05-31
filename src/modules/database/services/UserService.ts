@@ -98,10 +98,6 @@ export async function resetPassword(username: string, newPassword: string) {
 
 export async function createGuest(username: string, email: string | null = null) {
     const normalizedEmail = normalizeGuestEmail(email);
-    if (normalizedEmail) {
-        const existing = await getGuestByEmail(normalizedEmail);
-        if (existing) return existing.id;
-    }
     const repo = AppDataSource.getRepository(Guest);
     const guest = repo.create({username, email: normalizedEmail});
     const result = await repo.save(guest);
@@ -117,17 +113,9 @@ export async function createGuestLink(entityType: string, entityId: string, gues
 }
 
 export async function registerGuest(entityType: string, entityId: string, username: string, email: string) {
-    const normalizedEmail = normalizeGuestEmail(email);
-    if (normalizedEmail) {
-        const existing = await getGuestByEmail(normalizedEmail);
-        if (existing) {
-            return {guestId: existing.id, token: null, existingGuest: true};
-        }
-    }
-
-    const guestId = await createGuest(username, normalizedEmail);
+    const guestId = await createGuest(username, email);
     const token = await createGuestLink(entityType, entityId, guestId);
-    return {guestId, token, existingGuest: false};
+    return {guestId, token};
 }
 
 export async function getGuestByToken(token: string, entityType: string, entityId: string) {
@@ -162,7 +150,7 @@ export async function getGuestLinkToken(entityType: string, entityId: string, gu
     return link?.token || null;
 }
 
-export async function getGuestLinksByEmail(email: string) {
+export async function getGuestLinksForEntityByEmail(entityType: string, entityId: string, email: string) {
     const normalizedEmail = normalizeGuestEmail(email);
     if (!normalizedEmail) return [];
 
@@ -170,18 +158,11 @@ export async function getGuestLinksByEmail(email: string) {
         .createQueryBuilder('gl')
         .innerJoin('gl.guest', 'g')
         .where('LOWER(TRIM(g.email)) = :email', {email: normalizedEmail})
+        .andWhere('gl.entityType = :entityType', {entityType})
+        .andWhere('gl.entityId = :entityId', {entityId})
         .select(['gl.entityType', 'gl.entityId', 'gl.token'])
         .orderBy('gl.createdAt', 'DESC')
         .getMany();
-}
-
-async function getGuestByEmail(email: string) {
-    return await AppDataSource.getRepository(Guest)
-        .createQueryBuilder('g')
-        .where('LOWER(TRIM(g.email)) = :email', {email})
-        .orderBy('g.id', 'ASC')
-        .select(['g.id', 'g.username', 'g.email'])
-        .getOne();
 }
 
 function normalizeGuestEmail(email?: string | null) {

@@ -2,7 +2,6 @@ import express, {NextFunction, Request, Response} from 'express';
 
 import renderer from '../modules/renderer';
 import mailer from '../modules/email';
-import settings from '../modules/settings';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {ExpectedError, ValidationError} from '../modules/lib/errors';
 import {paramHandler, queryHandler} from "./paramHandler";
@@ -16,6 +15,7 @@ import {
     requirePermission
 } from "./permissionMiddleware";
 import {getItemFromEntityPermFct, getResource} from "../modules/lib/util";
+import {buildGuestLink} from "../modules/lib/guestLinks";
 import * as userService from "../modules/database/services/UserService";
 import * as eventService from "../modules/database/services/EventService";
 import type {GuestFlowConfig, GuestFlowDb} from "../types/UserTypes";
@@ -23,18 +23,6 @@ import {PERM} from "../modules/lib/permissions";
 import type {EntityDescriptor, EntityGetter, GetResource, ItemGetter} from "../types/PermissionTypes";
 import {persistSession} from "../modules/lib/session";
 import {getGuestRegistrationNags} from "../modules/lib/guestRegistrationNags";
-
-// Builds the guest edit link for emails and redirects using Node.js URL API
-function buildGuestLink(entityType: string, entityId: string, token: string) {
-    // Construct the path segments and ensure proper encoding
-    const pathSegments = [entityType, entityId, 'edit', token]
-        .map(segment => encodeURIComponent(String(segment)))
-        .join('/');
-    // Ensure rootUrl ends with a slash
-    let base = settings.value.rootUrl;
-    base = base.endsWith('/') ? base : base + '/';
-    return new URL(pathSegments, base).toString();
-}
 
 // Default DB functions if none provided in config
 function initConfig(): GuestFlowDb {
@@ -49,8 +37,7 @@ function initConfig(): GuestFlowDb {
         getGuestInternal: userService.getGuestInternal,
         getGuestByToken: userService.getGuestByToken,
         getGuestLinkToken: userService.getGuestLinkToken,
-        createGuestLink: userService.createGuestLink,
-        getGuestLinksByEmail: userService.getGuestLinksByEmail
+        createGuestLink: userService.createGuestLink
     };
 }
 
@@ -88,7 +75,6 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         getGuestByToken,
         getGuestLinkToken,
         createGuestLink,
-        getGuestLinksByEmail,
     }: GuestFlowDb = Object.assign(initConfig(), db);
 
     const guest = 'users/register-guest';
@@ -181,12 +167,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
                     email
                 });
             }
-            const {guestId, token, existingGuest} = await registerGuest(entityType, entityId, username, email);
-            if (existingGuest) {
-                req.flash('info', 'If this e-mail is linked to a guest account, you can recover links on the next page.');
-                const recoverUrl = `${buildRedirect(entityId)}/guest/recover?email=${encodeURIComponent(String(email || '').trim())}`;
-                return res.redirect(recoverUrl);
-            }
+            const {guestId, token} = await registerGuest(entityType, entityId, username, email);
             if (!token) {
                 throw new ExpectedError('Guest link token missing', 'error', 500);
             }
@@ -195,37 +176,6 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
             if (email) await mailer.sendLinkEmail(email, link);
             req.flash('success', `Login successful. Use ${link} to edit later.`);
             res.redirect(buildRedirect(entityId));
-        }));
-
-    router.route('/:id/guest/recover')
-        .get(asyncHandler(async (req: Request, res: Response) => {
-            const {id, title} = resFct(req);
-            renderer.renderWithData(res, 'users/recover-guest-links', {
-                entityType,
-                entityId: id,
-                title,
-                email: String(req.query.email || ''),
-            });
-        }))
-        .post(asyncHandler(async (req: Request, res: Response) => {
-            const {id, title} = resFct(req);
-            const email = String(req.body.email || '').trim();
-            if (!email) {
-                throw new ValidationError('users/recover-guest-links', 'E-mail is required', {
-                    entityType,
-                    entityId: id,
-                    title,
-                    email,
-                });
-            }
-
-            const links = await getGuestLinksByEmail(email);
-            if (links.length > 0) {
-                const fullLinks = links.map((link) => buildGuestLink(link.entityType, link.entityId, link.token));
-                await mailer.sendGuestRecoveryEmail(email, fullLinks);
-            }
-            req.flash('success', 'If a guest account with this e-mail exists, the recovery links have been sent.');
-            res.redirect(`${buildRedirect(id)}/guest`);
         }));
 
     // GET /:id/edit/:token

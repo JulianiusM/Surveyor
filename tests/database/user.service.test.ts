@@ -16,7 +16,7 @@ import {
     generatePasswordResetToken,
     getGuestByToken,
     getGuestInternal,
-    getGuestLinksByEmail,
+    getGuestLinksForEntityByEmail,
     getGuestLinkToken,
     getUserByOidc,
     getUserByUsername,
@@ -190,10 +190,9 @@ describe('Guests & guest links', () => {
     test.each(guestRegistrationData)(
         '$description',
         async ({entityType, entityId, username, email}) => {
-            const {guestId, token, existingGuest} = await registerGuest(entityType, entityId, username, email);
+            const {guestId, token} = await registerGuest(entityType, entityId, username, email);
             expect(typeof guestId).toBe('number');
             expect(typeof token).toBe('string');
-            expect(existingGuest).toBe(false);
             expect(token).not.toBeNull();
 
             const byToken = await getGuestByToken(token!, entityType, entityId);
@@ -201,22 +200,24 @@ describe('Guests & guest links', () => {
         }
     );
 
-    it('reuses guest identity for same email and requires recovery for access', async () => {
+    it('scopes guest recovery links by entity and email', async () => {
         const first = await registerGuest('activity', 'A-1', 'guestA', 'same@example.com');
-        expect(first.existingGuest).toBe(false);
-        expect(typeof first.token).toBe('string');
-
         const second = await registerGuest('survey', 'S-2', 'guestB', ' SAME@EXAMPLE.COM ');
-        expect(second.existingGuest).toBe(true);
-        expect(second.guestId).toBe(first.guestId);
-        expect(second.token).toBeNull();
 
-        const links = await getGuestLinksByEmail('same@example.com');
+        const links = await getGuestLinksForEntityByEmail('activity', 'A-1', 'same@example.com');
         expect(links).toHaveLength(1);
         expect(links[0]).toMatchObject({
             entityType: 'activity',
             entityId: 'A-1',
-            token: first.token!,
+            token: first.token,
+        });
+
+        const otherLinks = await getGuestLinksForEntityByEmail('survey', 'S-2', 'same@example.com');
+        expect(otherLinks).toHaveLength(1);
+        expect(otherLinks[0]).toMatchObject({
+            entityType: 'survey',
+            entityId: 'S-2',
+            token: second.token,
         });
     });
 });

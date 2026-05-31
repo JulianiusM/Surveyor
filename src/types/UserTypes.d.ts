@@ -34,7 +34,17 @@ export type GuestFlowDb = {
     getGuestByToken: typeof userService.getGuestByToken,
     getGuestLinkToken: typeof userService.getGuestLinkToken,
     createGuestLink: typeof userService.createGuestLink,
-    getGuestLinksByEmail: typeof userService.getGuestLinksByEmail,
+};
+
+export type GuestRecoveryConfig = {
+    entityType: EntityType,
+    db: Partial<GuestRecoveryDb>,
+    buildRedirect: (id: any) => string,
+};
+
+export type GuestRecoveryDb = {
+    getById: (id: any) => Promise<any | null>,
+    getGuestLinksForEntityByEmail: typeof userService.getGuestLinksForEntityByEmail,
 };
 
 export type UserInfo = {

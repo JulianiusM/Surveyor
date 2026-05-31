@@ -1,6 +1,7 @@
-import {Request, Response} from 'express';
+import express, {Request, Response} from 'express';
 import controller from '../controller/activityController';
 import {createGuestFlowRouter} from '../middleware/guestFlowFactory';
+import {createGuestRecoveryRouter} from '../middleware/guestRecoveryRouter';
 import {requirePermission} from "../middleware/permissionMiddleware";
 import * as activityService from '../modules/database/services/ActivityService';
 import {asyncHandler} from "../modules/lib/asyncHandler";
@@ -22,7 +23,17 @@ const permFct = (req: Request): EntityDescriptor => {
     };
 };
 
-const app = createGuestFlowRouter({
+const app = express.Router();
+
+app.use("/", createGuestRecoveryRouter({
+    entityType: ENTITIES.ACTIVITY,
+    buildRedirect: (id: any) => `/activity/${id}`,
+    db: {
+        getById: activityService.getActivityPlanById,
+    },
+}));
+
+app.use("/", createGuestFlowRouter({
     addToEvent: true,
     entityType: ENTITIES.ACTIVITY,
     entityItemType: ENTITY_ITEMS.ACTIVITY,
@@ -41,7 +52,7 @@ const app = createGuestFlowRouter({
     fetchForView: controller.fetchForView,
     fetchForDuplicate: controller.fetchForDuplicate,
     deleteEntity: controller.deleteEntity,
-});
+}));
 
 app.get("/:id/export/schedule", requirePermission(permFct, PERM.DATA_EXPORT), asyncHandler(async (req: Request, res: Response) => {
     const data = await controller.getScheduleExport(resFct(req));
