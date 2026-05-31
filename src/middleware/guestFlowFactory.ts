@@ -183,7 +183,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
             }
             const {guestId, token, existingGuest} = await registerGuest(entityType, entityId, username, email);
             if (existingGuest) {
-                req.flash('info', 'Guest access for this email must be recovered from a previously sent link.');
+                req.flash('info', 'If this e-mail is linked to a guest account, you can recover links on the next page.');
                 const recoverUrl = `${buildRedirect(entityId)}/guest/recover?email=${encodeURIComponent(String(email || '').trim())}`;
                 return res.redirect(recoverUrl);
             }
