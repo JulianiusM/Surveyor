@@ -49,7 +49,8 @@ function initConfig(): GuestFlowDb {
         getGuestInternal: userService.getGuestInternal,
         getGuestByToken: userService.getGuestByToken,
         getGuestLinkToken: userService.getGuestLinkToken,
-        createGuestLink: userService.createGuestLink
+        createGuestLink: userService.createGuestLink,
+        getGuestLinksByEmail: userService.getGuestLinksByEmail
     };
 }
 
@@ -87,6 +88,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         getGuestByToken,
         getGuestLinkToken,
         createGuestLink,
+        getGuestLinksByEmail,
     }: GuestFlowDb = Object.assign(initConfig(), db);
 
     const guest = 'users/register-guest';
@@ -162,27 +164,68 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
                 entityId: id,
                 title,
                 guestRegistrationNags: getGuestRegistrationNags(entityType),
+                recoveryPath: `${buildRedirect(id)}/guest/recover`,
             });
         }))
         .post(asyncHandler(async (req: Request, res: Response) => {
             const entityId = resFct(req).id;
-            const {username, email} = req.body;
+            const {username, email = ''} = req.body;
             if (!username) {
                 throw new ValidationError(guest, 'Username required', {
                     entityType,
                     entityId,
                     title: resFct(req).title,
                     guestRegistrationNags: getGuestRegistrationNags(entityType),
+                    recoveryPath: `${buildRedirect(entityId)}/guest/recover`,
                     username,
                     email
                 });
             }
-            const {guestId, token} = await registerGuest(entityType, entityId, username, email);
+            const {guestId, token, existingGuest} = await registerGuest(entityType, entityId, username, email);
+            if (existingGuest) {
+                req.flash('info', 'Guest access for this email must be recovered from a previously sent link.');
+                const recoverUrl = `${buildRedirect(entityId)}/guest/recover?email=${encodeURIComponent(String(email || '').trim())}`;
+                return res.redirect(recoverUrl);
+            }
+            if (!token) {
+                throw new ExpectedError('Guest link token missing', 'error', 500);
+            }
             req.session.guest = await getGuestInternal(guestId);
             const link = buildGuestLink(entityType, entityId, token);
             if (email) await mailer.sendLinkEmail(email, link);
             req.flash('success', `Login successful. Use ${link} to edit later.`);
             res.redirect(buildRedirect(entityId));
+        }));
+
+    router.route('/:id/guest/recover')
+        .get(asyncHandler(async (req: Request, res: Response) => {
+            const {id, title} = resFct(req);
+            renderer.renderWithData(res, 'users/recover-guest-links', {
+                entityType,
+                entityId: id,
+                title,
+                email: String(req.query.email || ''),
+            });
+        }))
+        .post(asyncHandler(async (req: Request, res: Response) => {
+            const {id, title} = resFct(req);
+            const email = String(req.body.email || '').trim();
+            if (!email) {
+                throw new ValidationError('users/recover-guest-links', 'E-mail is required', {
+                    entityType,
+                    entityId: id,
+                    title,
+                    email,
+                });
+            }
+
+            const links = await getGuestLinksByEmail(email);
+            if (links.length > 0) {
+                const fullLinks = links.map((link) => buildGuestLink(link.entityType, link.entityId, link.token));
+                await mailer.sendGuestRecoveryEmail(email, fullLinks);
+            }
+            req.flash('success', 'If a guest account with this e-mail exists, the recovery links have been sent.');
+            res.redirect(`${buildRedirect(id)}/guest`);
         }));
 
     // GET /:id/edit/:token

@@ -60,9 +60,17 @@ async function sendLinkEmail(userEmail: string, surveyLink: string) {
     await sendEmail(userEmail, subject, text);
 }
 
+async function sendGuestRecoveryEmail(userEmail: string, links: string[]) {
+    const subject = 'Your guest recovery links';
+    const list = links.map((link, i) => `${i + 1}. ${link}`).join('\n');
+    const text = `Hi! Thank you for using Surveyor!\n\nYou requested recovery links for guest access tied to this email address.\n\n${list}\n\nNote: Please do not share these links with anybody.\n\nYour Surveyor Team.`;
+    await sendEmail(userEmail, subject, text);
+}
+
 export default {
     sendEmail,
     sendActivationEmail,
     sendPasswordResetEmail,
-    sendLinkEmail
+    sendLinkEmail,
+    sendGuestRecoveryEmail
 };

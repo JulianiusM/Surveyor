@@ -34,6 +34,7 @@ export type GuestFlowDb = {
     getGuestByToken: typeof userService.getGuestByToken,
     getGuestLinkToken: typeof userService.getGuestLinkToken,
     createGuestLink: typeof userService.createGuestLink,
+    getGuestLinksByEmail: typeof userService.getGuestLinksByEmail,
 };
 
 export type UserInfo = {

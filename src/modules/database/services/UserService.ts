@@ -97,8 +97,13 @@ export async function resetPassword(username: string, newPassword: string) {
 // Guests
 
 export async function createGuest(username: string, email: string | null = null) {
+    const normalizedEmail = normalizeGuestEmail(email);
+    if (normalizedEmail) {
+        const existing = await getGuestByEmail(normalizedEmail);
+        if (existing) return existing.id;
+    }
     const repo = AppDataSource.getRepository(Guest);
-    const guest = repo.create({username, email});
+    const guest = repo.create({username, email: normalizedEmail});
     const result = await repo.save(guest);
     return result.id;
 }
@@ -112,9 +117,17 @@ export async function createGuestLink(entityType: string, entityId: string, gues
 }
 
 export async function registerGuest(entityType: string, entityId: string, username: string, email: string) {
-    const guestId = await createGuest(username, email);
+    const normalizedEmail = normalizeGuestEmail(email);
+    if (normalizedEmail) {
+        const existing = await getGuestByEmail(normalizedEmail);
+        if (existing) {
+            return {guestId: existing.id, token: null, existingGuest: true};
+        }
+    }
+
+    const guestId = await createGuest(username, normalizedEmail);
     const token = await createGuestLink(entityType, entityId, guestId);
-    return {guestId, token};
+    return {guestId, token, existingGuest: false};
 }
 
 export async function getGuestByToken(token: string, entityType: string, entityId: string) {
@@ -147,6 +160,33 @@ export async function getGuestLinkToken(entityType: string, entityId: string, gu
         .select(['gl.token'])
         .getOne();
     return link?.token || null;
+}
+
+export async function getGuestLinksByEmail(email: string) {
+    const normalizedEmail = normalizeGuestEmail(email);
+    if (!normalizedEmail) return [];
+
+    return await AppDataSource.getRepository(GuestLink)
+        .createQueryBuilder('gl')
+        .innerJoin('gl.guest', 'g')
+        .where('LOWER(TRIM(g.email)) = :email', {email: normalizedEmail})
+        .select(['gl.entityType', 'gl.entityId', 'gl.token'])
+        .orderBy('gl.createdAt', 'DESC')
+        .getMany();
+}
+
+async function getGuestByEmail(email: string) {
+    return await AppDataSource.getRepository(Guest)
+        .createQueryBuilder('g')
+        .where('LOWER(TRIM(g.email)) = :email', {email})
+        .orderBy('g.id', 'ASC')
+        .select(['g.id', 'g.username', 'g.email'])
+        .getOne();
+}
+
+function normalizeGuestEmail(email?: string | null) {
+    const normalized = (email || '').trim().toLowerCase();
+    return normalized || null;
 }
 
 /**

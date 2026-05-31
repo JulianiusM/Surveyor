@@ -14,9 +14,13 @@ jest.mock('../../src/modules/renderer', () => ({
 }));
 
 const sendLinkEmail = jest.fn();
+const sendGuestRecoveryEmail = jest.fn();
 jest.mock('../../src/modules/email', () => ({
     __esModule: true,
-    default: {sendLinkEmail: (...args: any[]) => sendLinkEmail(...args)},
+    default: {
+        sendLinkEmail: (...args: any[]) => sendLinkEmail(...args),
+        sendGuestRecoveryEmail: (...args: any[]) => sendGuestRecoveryEmail(...args)
+    },
 }));
 
 jest.mock('../../src/modules/settings', () => ({
@@ -115,6 +119,7 @@ function makeConfig(overrides: Partial<Parameters<typeof createGuestFlowRouter>[
             registerGuest: async (_t: string, _id: string, username: string, email?: string) => ({
                 guestId: 77,
                 token: 'tok-xyz',
+                existingGuest: false,
                 username,
                 email,
             }),
@@ -123,6 +128,7 @@ function makeConfig(overrides: Partial<Parameters<typeof createGuestFlowRouter>[
                 token === 'tok-xyz' ? ({id: 77, email: 'g@x', entityId}) : null,
             getGuestLinkToken: async () => 'existing-token',
             createGuestLink: async () => 'new-token',
+            getGuestLinksByEmail: async () => ([{entityType: 'activity', entityId: 'abc', token: 'existing-token'}]),
         },
         preprocessCreate: (body: any) => ({ok: true, title: body.title}),
         createEntity: async (_ownerId: number, _data: any) => 'new-123',
@@ -171,7 +177,10 @@ describe('guestFlowRouter', () => {
     test.each(testData.guestRegistrationData)(
         '$description',
         async ({method, path, body, configOverrides, expected}) => {
-            const cfg = configOverrides ? makeConfig(configOverrides) : makeConfig();
+            const baseCfg = makeConfig();
+            const cfg = configOverrides
+                ? makeConfig({...configOverrides, db: {...baseCfg.db, ...(configOverrides as any).db}})
+                : baseCfg;
             const app = makeApp(createGuestFlowRouter(cfg));
             const res = await request(app)[method](path).send(body || {});
             
@@ -189,6 +198,37 @@ describe('guestFlowRouter', () => {
                 expect(sendLinkEmail).toHaveBeenCalledTimes(1);
                 const link = (sendLinkEmail.mock.calls[0] as any[])[1];
                 expect(link).toBe(expected.emailLink);
+            }
+            if (expected.kind) {
+                expect(res.body.kind).toBe(expected.kind);
+                expect(res.body.template).toBe(expected.template);
+            }
+        }
+    );
+
+    test.each(testData.guestRecoveryData)(
+        '$description',
+        async ({method, path, body, configOverrides, expected}) => {
+            const baseCfg = makeConfig();
+            const cfg = configOverrides
+                ? makeConfig({db: {...baseCfg.db, ...configOverrides.db}})
+                : baseCfg;
+            const app = makeApp(createGuestFlowRouter(cfg));
+            const res = await request(app)[method](path).send(body || {});
+
+            expect(res.status).toBe(expected.status);
+            if (expected.tpl) {
+                expect(res.body.tpl).toBe(expected.tpl);
+                if (expected.data) {
+                    expect(res.body.data).toMatchObject(expected.data);
+                }
+            }
+            if (expected.location) {
+                expect(res.headers.location).toBe(expected.location);
+            }
+            if (expected.recoveryLinks) {
+                expect(sendGuestRecoveryEmail).toHaveBeenCalledTimes(1);
+                expect((sendGuestRecoveryEmail.mock.calls[0] as any[])[1]).toEqual(expected.recoveryLinks);
             }
             if (expected.kind) {
                 expect(res.body.kind).toBe(expected.kind);

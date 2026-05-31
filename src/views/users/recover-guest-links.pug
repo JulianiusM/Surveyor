@@ -1,0 +1,38 @@
+extends ../layout
+
+block meta
+    title Recover guest links | Surveyor
+
+block title
+    h1.card-header.text-center
+        i.bi.bi-link-45deg.me-2
+        | Recover guest links
+
+block content
+    p.lead.text-center.mb-4
+        | Enter the e-mail address you used as a guest. We will send all known guest edit links to that inbox.
+
+    form.row.gy-3.justify-content-center(action=`/${data.entityType}/${data.entityId}/guest/recover` method="post")
+        .col-md-8
+            label.form-label.mb-1(for="email")
+                i.bi.bi-envelope-at.me-1
+                | E-mail&nbsp;*
+            input#email.form-control(
+                type="email"
+                name="email"
+                value=data.email
+                maxlength="100"
+                placeholder="name@example.com"
+                required
+                autocomplete="email"
+            )
+
+        .col-12.d-grid.mt-2
+            button.btn.btn-success(type="submit")
+                i.bi.bi-send-check.me-1
+                | Send recovery links
+
+        .col-12.text-center.mt-3
+            a.text-decoration-none(href=`/${data.entityType}/${data.entityId}/guest`)
+                i.bi.bi-arrow-left-circle.me-1
+                | Back to guest registration
