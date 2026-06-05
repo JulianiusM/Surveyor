@@ -1,9 +1,9 @@
 import {Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId,} from "typeorm";
-import {User} from "../user/User";
-import {Guest} from "../user/Guest";
-import {SurveyCombination} from "./SurveyCombination";
-import {Survey} from "./Survey";
 import type {SurveyAnswer} from "../../../../types/SurveyTypes";
+import {Guest} from "../user/Guest";
+import {User} from "../user/User";
+import {Survey} from "./Survey";
+import {SurveyCombination} from "./SurveyCombination";
 
 @Entity("survey_responses", {schema: "surveyor"})
 export class SurveyResponse {
@@ -40,7 +40,7 @@ export class SurveyResponse {
     user?: User;
 
     @RelationId((c: SurveyResponse) => c.guest)
-    guestId?: number;
+    guestId?: string;
 
     @ManyToOne(() => Guest, (guests) => guests.surveyResponses, {
         onDelete: "CASCADE",

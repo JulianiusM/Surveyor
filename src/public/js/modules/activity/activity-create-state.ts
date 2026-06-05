@@ -3,7 +3,7 @@
  * Encapsulates slot management state
  */
 
-import type {ActivitySlot} from "../../../modules/database/entities/activity/ActivitySlot";
+import type {ActivitySlot} from "../../../../modules/database/entities/activity/ActivitySlot";
 
 /**
  * State management class for activity creation
@@ -32,13 +32,13 @@ export class ActivityCreateState {
     updateSlot(dateISO: string, slot: Partial<ActivitySlot>): void {
         let arr = this.slotsMap[dateISO] || [];
         let curr = arr.findIndex((v) => v.id === slot.id);
-        
+
         if (curr !== -1) {
             arr[curr] = slot;
         } else {
             arr.push(slot);
         }
-        
+
         this.slotsMap[dateISO] = arr;
     }
 

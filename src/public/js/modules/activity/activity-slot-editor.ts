@@ -3,10 +3,10 @@
  * Handles the slot editor modal for creating and editing slots
  */
 
-import {post} from '../core/http';
-import {showInlineAlert} from '../shared/alerts';
-import {reloadAfterDelay} from '../shared/ui-helpers';
-import {getPerms, requireEntityPerm, requireItemPerm} from '../core/permissions';
+import {post} from '../../core/http';
+import {getPerms, requireEntityPerm, requireItemPerm} from '../../core/permissions';
+import {showInlineAlert} from '../../shared/alerts';
+import {reloadAfterDelay} from '../../shared/ui-helpers';
 import {addRoleToGlobal, getAllRoles, getSlotRolesForSlot} from './activity-roles';
 import type {BootstrapGlobal, RoleSummary, SlotEditorMode} from './activity-types';
 

@@ -1,8 +1,8 @@
 import {Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId,} from "typeorm";
 import {Guest} from "../user/Guest";
+import {User} from "../user/User";
 import {PackingItem} from "./PackingItem";
 import {PackingList} from "./PackingList";
-import {User} from "../user/User";
 
 @Index("uk_packing_assignment_guest", ["item", "guest"], {unique: true})
 @Index("uk_packing_assignment_user", ["item", "user"], {unique: true})
@@ -34,7 +34,7 @@ export class PackingAssignment {
     user?: User;
 
     @RelationId((a: PackingAssignment) => a.guest)
-    guestId?: number;
+    guestId?: string;
 
     @ManyToOne(() => Guest, (guests) => guests.packingAssignments, {
         onDelete: "CASCADE",

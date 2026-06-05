@@ -1,9 +1,9 @@
 import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
-import {ActivityAssignmentRole} from "./ActivityAssignmentRole";
-import {ActivitySlot} from "./ActivitySlot";
-import {ActivityPlan} from "./ActivityPlan";
-import {User} from "../user/User";
 import {Guest} from "../user/Guest";
+import {User} from "../user/User";
+import {ActivityAssignmentRole} from "./ActivityAssignmentRole";
+import {ActivityPlan} from "./ActivityPlan";
+import {ActivitySlot} from "./ActivitySlot";
 
 @Index("uk_activity_assignment_guest", ["slot", "guest"], {unique: true})
 @Index("uk_unique_activity_assignment_user", ["slot", "user"], {
@@ -66,7 +66,7 @@ export class ActivityAssignment {
     user?: User;
 
     @RelationId((aa: ActivityAssignment) => aa.guest)
-    guestId?: number;
+    guestId?: string;
 
     @ManyToOne(() => Guest, (guests) => guests.activityAssignments, {
         onDelete: "CASCADE",

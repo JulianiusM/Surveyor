@@ -1,37 +1,37 @@
 /*
  * lib/assignRoutes.js
  */
-import {asyncHandler} from '../modules/lib/asyncHandler';
-import renderer from '../modules/renderer';
-import {performAPIAction} from '../modules/lib/util';
 import {Request, Response, Router} from "express";
-import type {PermBundle} from "../types/PermissionTypes";
-import {APIError} from "../modules/lib/errors";
 import * as activityService from "../modules/database/services/ActivityService";
+import {asyncHandler} from '../modules/lib/asyncHandler';
+import {APIError} from "../modules/lib/errors";
+import {performAPIAction} from '../modules/lib/util';
+import renderer from '../modules/renderer';
+import type {PermBundle} from "../types/PermissionTypes";
 
 export function attachAssignRoutes(router: Router, opts: {
     assignToUser: (body: any, userId: number) => Promise<void>,
-    assignToGuest: (body: any, guestId: number) => Promise<void>,
+    assignToGuest: (body: any, guestId: string) => Promise<void>,
     unassignFromUser: (body: any, userId: number) => Promise<void>,
-    unassignFromGuest: (body: any, guestId: number) => Promise<void>
+    unassignFromGuest: (body: any, guestId: string) => Promise<void>
 }) {
     attachGenericAssignRoutes(router, '/:id/assign', '/:id/unassign', opts);
 }
 
 export function attachAssignRoleRoutes(router: Router, opts: {
     assignToUser: (body: any, userId: number) => Promise<void>;
-    assignToGuest: (body: any, guestId: number) => Promise<void>;
+    assignToGuest: (body: any, guestId: string) => Promise<void>;
     unassignFromUser: (body: any, userId: number) => Promise<void>;
-    unassignFromGuest: (body: any, guestId: number) => Promise<void>;
+    unassignFromGuest: (body: any, guestId: string) => Promise<void>;
 }) {
     attachGenericAssignRoutes(router, '/:id/take-role', '/:id/leave-role', opts);
 }
 
 export function attachGenericAssignRoutes(router: Router, assignRoute: string, unassignRoute: string, opts: {
     assignToUser: (body: any, userId: number) => Promise<void>,
-    assignToGuest: (body: any, guestId: number) => Promise<void>,
+    assignToGuest: (body: any, guestId: string) => Promise<void>,
     unassignFromUser: (body: any, userId: number) => Promise<void>,
-    unassignFromGuest: (body: any, guestId: number) => Promise<void>
+    unassignFromGuest: (body: any, guestId: string) => Promise<void>
 }) {
     router.post(assignRoute, asyncHandler(async (req: Request, res: Response) => {
         await enforcePlanBindingDeadline(req, res.locals.permData as PermBundle | undefined);

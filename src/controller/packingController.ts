@@ -1,11 +1,11 @@
+import {Request} from "express";
 import Joi from 'joi';
+import {PackingItem} from "../modules/database/entities/packing/PackingItem";
+import {PackingList} from "../modules/database/entities/packing/PackingList";
 
 import * as packingService from '../modules/database/services/PackingService';
-import {ENTITIES, generateUniqueId} from "../modules/lib/util";
 import {APIError, ValidationError} from '../modules/lib/errors';
-import {PackingList} from "../modules/database/entities/packing/PackingList";
-import {Request} from "express";
-import {PackingItem} from "../modules/database/entities/packing/PackingItem";
+import {ENTITIES, generateUniqueId} from "../modules/lib/util";
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
 
 // Template constant for create errors
@@ -210,9 +210,9 @@ async function deleteItem(itemId: string) {
 function getAssignmentAccessMapping() {
     return {
         assignToUser: (body: any, userId: number) => packingService.assignPackingItemToUser(body.itemId, userId),
-        assignToGuest: (body: any, guestId: number) => packingService.assignPackingItemToGuest(body.itemId, guestId),
+        assignToGuest: (body: any, guestId: string) => packingService.assignPackingItemToGuest(body.itemId, guestId),
         unassignFromUser: (body: any, userId: number) => packingService.unassignPackingItemUser(body.itemId, userId),
-        unassignFromGuest: (body: any, guestId: number) => packingService.unassignPackingItemGuest(body.itemId, guestId),
+        unassignFromGuest: (body: any, guestId: string) => packingService.unassignPackingItemGuest(body.itemId, guestId),
     };
 }
 

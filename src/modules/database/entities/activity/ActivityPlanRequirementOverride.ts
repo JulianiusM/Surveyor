@@ -1,6 +1,6 @@
 import {Check, Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId,} from "typeorm";
-import {User} from "../user/User";
 import {Guest} from "../user/Guest";
+import {User} from "../user/User";
 import {ActivityPlan} from "./ActivityPlan";
 import {ActivityRole} from "./ActivityRole";
 
@@ -61,7 +61,7 @@ export class ActivityPlanRequirementOverride {
     user?: User | null;
 
     @RelationId((override: ActivityPlanRequirementOverride) => override.guest)
-    guestId?: number | null;
+    guestId?: string | null;
 
     @ManyToOne(() => Guest, (guest) => guest.activityPlanRequirementOverrides, {
         onDelete: "CASCADE",

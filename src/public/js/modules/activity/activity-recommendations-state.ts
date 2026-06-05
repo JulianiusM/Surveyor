@@ -4,10 +4,10 @@
  */
 
 import type {
+    BootstrapModal,
     RecommendationParticipantOption,
     RecommendationRow,
-    RecommendationWarning,
-    BootstrapModal
+    RecommendationWarning
 } from './activity-types';
 
 interface EventListenerTracking {
@@ -95,7 +95,7 @@ export class ActivityRecommendationsState {
             (r.user?.id ?? null) === userId &&
             (r.guest?.id ?? null) === guestId
         );
-        
+
         if (idx !== -1) {
             this.recommendations[idx].status = status as any;
             return true;
@@ -125,7 +125,7 @@ export class ActivityRecommendationsState {
             element.removeEventListener(event, handler);
         });
         this.eventListeners = [];
-        
+
         // Dispose modal if exists
         if (this.addModalInstance) {
             if (typeof this.addModalInstance.dispose === 'function') {
@@ -133,7 +133,7 @@ export class ActivityRecommendationsState {
             }
             this.addModalInstance = null;
         }
-        
+
         // Clear all arrays
         this.recommendations = [];
         this.warnings = [];

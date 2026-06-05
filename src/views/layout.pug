@@ -94,14 +94,20 @@ html(lang="en")
                                     i.bi.bi-collection.me-1
                                     | Overview
                                 ul.dropdown-menu(aria-labelledby="navOverview")
-                                    li
-                                        a.dropdown-item(href="/users/dashboard")
-                                            i.bi.bi-speedometer2.me-2
-                                            | Your overview
-                                    li
-                                        a.dropdown-item(href="/users/manage-dashboard")
-                                            i.bi.bi-people-fill.me-2
-                                            | Managed items
+                                    if guest
+                                        li
+                                            a.dropdown-item(href="/guest/dashboard")
+                                                i.bi.bi-speedometer2.me-1
+                                                | Your overview
+                                    else
+                                        li
+                                            a.dropdown-item(href="/users/dashboard")
+                                                i.bi.bi-speedometer2.me-2
+                                                | Your overview
+                                        li
+                                            a.dropdown-item(href="/users/manage-dashboard")
+                                                i.bi.bi-people-fill.me-2
+                                                | Managed items
                                     //-
                                         li
                                             hr.dropdown-divider
@@ -109,7 +115,7 @@ html(lang="en")
                                             a.dropdown-item(href="/event")
                                                 i.bi.bi-calendar3.me-2
                                                 | Events
-                            
+
                             // Help link
                             li.nav-item
                                 a.nav-link(href="/help")
@@ -118,20 +124,29 @@ html(lang="en")
 
                         // Right side: user account
                         ul.navbar-nav.ms-auto
-                            if user
+                            if user || guest
                                 li.nav-item.dropdown
                                     a.nav-link.dropdown-toggle(href="#" id="userMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false")
                                         i.bi.bi-person-circle.me-1
-                                        | #{user.username}
+                                        if user
+                                            | #{user.username}
+                                        else if guest
+                                            | #{guest.username} (Guest)
                                     ul.dropdown-menu.dropdown-menu-end(aria-labelledby="userMenu")
-                                        li
-                                            a.dropdown-item(href="/users/dashboard")
-                                                i.bi.bi-speedometer2.me-1
-                                                | Your overview
-                                        li
-                                            a.dropdown-item(href="/users/manage-dashboard")
-                                                i.bi.bi-people-fill.me-1
-                                                | Managed items
+                                        if user
+                                            li
+                                                a.dropdown-item(href="/users/dashboard")
+                                                    i.bi.bi-speedometer2.me-1
+                                                    | Your overview
+                                            li
+                                                a.dropdown-item(href="/users/manage-dashboard")
+                                                    i.bi.bi-people-fill.me-1
+                                                    | Managed items
+                                        if guest
+                                            li
+                                                a.dropdown-item(href="/guest/dashboard")
+                                                    i.bi.bi-speedometer2.me-1
+                                                    | Your overview
                                         //li
                                             a.dropdown-item(href="/users/settings")
                                                 i.bi.bi-gear-fill.me-1

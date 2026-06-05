@@ -1,24 +1,26 @@
 import {Column, Entity, OneToMany, PrimaryGeneratedColumn} from "typeorm";
 import {ActivityAssignment} from "../activity/ActivityAssignment";
+import {ActivityPlanRequirementOverride} from "../activity/ActivityPlanRequirementOverride";
 import {DriversAssignment} from "../drivers/DriversAssignment";
 import {DriversItem} from "../drivers/DriversItem";
-import {GuestLink} from "./GuestLink";
+import {EventRegBypassLink} from "../event/EventRegBypassLink";
+import {EventRegistration} from "../event/EventRegistration";
 import {PackingAssignment} from "../packing/PackingAssignment";
 import {SurveyResponse} from "../surveys/SurveyResponse";
-import {EventRegistration} from "../event/EventRegistration";
-import {EventRegBypassLink} from "../event/EventRegBypassLink";
-import {ActivityPlanRequirementOverride} from "../activity/ActivityPlanRequirementOverride";
 
 @Entity("guests", {schema: "surveyor"})
 export class Guest {
-    @PrimaryGeneratedColumn({type: "int", name: "id"})
-    id!: number;
+    @PrimaryGeneratedColumn("uuid", {name: "id"})
+    id!: string;
 
     @Column("varchar", {name: "username", length: 50})
     username!: string;
 
     @Column("varchar", {name: "email", nullable: true, length: 100})
     email?: string | null;
+
+    @Column("varchar", {name: "token", unique: true, length: 255})
+    token!: string;
 
     @Column("timestamp", {
         name: "created_at",
@@ -46,9 +48,6 @@ export class Guest {
 
     @OneToMany(() => DriversItem, (driversItems) => driversItems.guest)
     driversItems: DriversItem[];
-
-    @OneToMany(() => GuestLink, (guestLinks) => guestLinks.guest)
-    guestLinks: GuestLink[];
 
     @OneToMany(
         () => PackingAssignment,

@@ -5,21 +5,21 @@
 
 import {setCurrentNavLocation} from './core/navigation';
 import {loadPerms} from './core/permissions';
-import {buildWarningModal, describeWarning as descWarn, initAssign} from './modules/activity-assignments';
-import {initDates, initSlotFilters} from './modules/activity-filters';
-import {initParticipantsTab} from './modules/activity-participants';
-import {initRecommendationScheduleView} from './modules/activity-recommendations-schedule';
-import {initRequirementPanel} from './modules/activity-requirements';
+import {buildWarningModal, describeWarning as descWarn, initAssign} from './modules/activity/activity-assignments';
+import {initDates, initSlotFilters} from './modules/activity/activity-filters';
+import {initParticipantsTab} from './modules/activity/activity-participants';
+import {initRecommendationScheduleView} from './modules/activity/activity-recommendations-schedule';
+import {initRequirementPanel} from './modules/activity/activity-requirements';
 import {
     addRoleToGlobal as addRole,
     getAllRoles as getRoles,
     getSlotRolesForSlot as getSlotRoles,
     initSlotRoleAdminModal
-} from './modules/activity-roles';
-import {initSlotEditorModal} from './modules/activity-slot-editor';
-import {initDelete, initDnD, initInlineEdit} from './modules/activity-slot-operations';
-import {initTextFields} from './modules/activity-text-fields';
-import type {AssignmentWarning, RecommendationRow} from "./modules/activity-types";
+} from './modules/activity/activity-roles';
+import {initSlotEditorModal} from './modules/activity/activity-slot-editor';
+import {initDelete, initDnD, initInlineEdit} from './modules/activity/activity-slot-operations';
+import {initTextFields} from './modules/activity/activity-text-fields';
+import type {AssignmentWarning, RecommendationRow} from "./modules/activity/activity-types";
 import {initAssignmentRemoval} from './shared/list-actions';
 
 

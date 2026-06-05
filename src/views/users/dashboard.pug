@@ -11,94 +11,163 @@ block title
                 | Your managed entities
         else
             i.bi.bi-house-door-fill.me-2
-            | Welcome, #{user.name || user.username}!
+            if user
+                | Welcome, #{user.name || user.username}!
+            else if guest
+                | Welcome, #{guest.username}!
 
 block content
-    .accordion.accordion-dark#entityLists
-        if !data.admin_flag
+    if data.participant
+        h2.text-center
+            i.bi.bi-clipboard-check.me-2
+            | Your participation
+        hr
+        .accordion.accordion-dark#participationLists
             +entityList(
                 'sec-surveys',
-                'Your surveys',
+                'Your survey registrations',
                 'bi-clipboard-data',
-                data.surveys,
+                data.participant.surveys,
                 'survey',
-                '/survey/create',
-                'Create new survey',
+                '',
+                '',
                 'bi-plus-circle',
-                'You don’t have any surveys yet.',
+                'You don’t participate in any surveys yet.',
                 'bi-clipboard-check',
-                true
+                false
             )
 
-        +entityList(
-            'sec-pack',
-            'Your packing lists',
-            'bi-box-seam',
-            data.packlists,
-            'packing',
-            '/packing/create',
-            'Create new packing list',
-            'bi-plus-circle',
-            'You don’t have any packing lists yet.',
-            'bi-bag-check',
-            true
-        )
-
-        +entityList(
-            'sec-activity',
-            'Your activity plans',
-            'bi-calendar',
-            data.activityplans,
-            'activity',
-            '/activity/create',
-            'Create new activity plan',
-            'bi-calendar-plus',
-            'You don’t have any activity plans yet.',
-            'bi-calendar-check',
-            true
-        )
-
-        +entityList(
-            'sec-drivers',
-            'Your drivers lists',
-            'bi-car-front',
-            data.driverslists,
-            'drivers',
-            '/drivers/create',
-            'Create new drivers list',
-            'bi-plus-circle',
-            'You don’t have any drivers lists yet.',
-            'bi-car-front',
-            true
-        )
-
-        +entityList(
-            'sec-events',
-            'Your events',
-            'bi-people',
-            data.events,
-            'event',
-            '/event/create',
-            'Create new event',
-            'bi-plus-circle',
-            'You don’t have any events yet.',
-            'bi-people',
-            true
-        )
-
-        if !data.admin_flag
             +entityList(
-                'sec-event-regs',
+                'sec-pack',
+                'Your packing list registrations',
+                'bi-box-seam',
+                data.participant.packingLists,
+                'packing',
+                '',
+                '',
+                'bi-plus-circle',
+                'You don’t participate in any packing lists yet.',
+                'bi-bag-check',
+                false
+            )
+
+            +entityList(
+                'sec-activity',
+                'Your activity plan registrations',
+                'bi-calendar',
+                data.participant.activityPlans,
+                'activity',
+                '',
+                '',
+                'bi-calendar-plus',
+                'You don’t participate in any activity plans yet.',
+                'bi-calendar-check',
+                false
+            )
+
+            +entityList(
+                'sec-drivers',
+                'Your drivers list registrations',
+                'bi-car-front',
+                data.participant.driversLists,
+                'drivers',
+                '',
+                '',
+                'bi-plus-circle',
+                'You don’t participate in any drivers lists yet.',
+                'bi-car-front',
+                false
+            )
+
+            +entityList(
+                'sec-events',
                 'Your event registrations',
-                'bi-person-check',
-                data.registeredEvents,
+                'bi-people',
+                data.participant.events,
                 'event',
                 '',
                 '',
                 'bi-plus-circle',
-                'You are not registered for any event yet.',
-                'bi-person-check',
+                'You don’t participate in any events yet.',
+                'bi-people',
                 false
+            )
+
+    if data.owner
+        h2.text-center
+            i.bi.bi-shield-check.me-2
+            | Administrable entities
+        hr
+        .accordion.accordion-dark#entityLists
+            if !data.admin_flag
+                +entityList(
+                    'own-sec-surveys',
+                    'Your surveys',
+                    'bi-clipboard-data',
+                    data.owner.surveys,
+                    'survey',
+                    '/survey/create',
+                    'Create new survey',
+                    'bi-plus-circle',
+                    'You don’t have any surveys yet.',
+                    'bi-clipboard-check',
+                    true
+                )
+
+            +entityList(
+                'own-sec-pack',
+                'Your packing lists',
+                'bi-box-seam',
+                data.owner.packingLists,
+                'packing',
+                '/packing/create',
+                'Create new packing list',
+                'bi-plus-circle',
+                'You don’t have any packing lists yet.',
+                'bi-bag-check',
+                true
+            )
+
+            +entityList(
+                'own-sec-activity',
+                'Your activity plans',
+                'bi-calendar',
+                data.owner.activityPlans,
+                'activity',
+                '/activity/create',
+                'Create new activity plan',
+                'bi-calendar-plus',
+                'You don’t have any activity plans yet.',
+                'bi-calendar-check',
+                true
+            )
+
+            +entityList(
+                'own-sec-drivers',
+                'Your drivers lists',
+                'bi-car-front',
+                data.owner.driversLists,
+                'drivers',
+                '/drivers/create',
+                'Create new drivers list',
+                'bi-plus-circle',
+                'You don’t have any drivers lists yet.',
+                'bi-car-front',
+                true
+            )
+
+            +entityList(
+                'own-sec-events',
+                'Your events',
+                'bi-people',
+                data.owner.events,
+                'event',
+                '/event/create',
+                'Create new event',
+                'bi-plus-circle',
+                'You don’t have any events yet.',
+                'bi-people',
+                true
             )
 
 block scripts

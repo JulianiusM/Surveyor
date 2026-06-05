@@ -1,8 +1,8 @@
-import {post} from "../core/http";
-import {getPerms, requireEntityPerm} from "../core/permissions";
-import {showInlineAlert} from "../shared/alerts";
-import {startInlineEditArea} from "../shared/inline-edit";
-import {reloadAfterDelay} from "../shared/ui-helpers";
+import {post} from "../../core/http";
+import {getPerms, requireEntityPerm} from "../../core/permissions";
+import {showInlineAlert} from "../../shared/alerts";
+import {startInlineEditArea} from "../../shared/inline-edit";
+import {reloadAfterDelay} from "../../shared/ui-helpers";
 import type {BootstrapGlobal, BootstrapModal} from "./activity-types";
 
 interface ModalParts {

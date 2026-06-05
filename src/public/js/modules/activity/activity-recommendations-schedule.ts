@@ -8,8 +8,8 @@
  * - UI layer: RecommendationsUI
  */
 
-import {get, post} from '../core/http';
-import {reloadAfterDelay} from '../shared/ui-helpers';
+import {get, post} from '../../core/http';
+import {reloadAfterDelay} from '../../shared/ui-helpers';
 import {RecommendationsLogic} from './activity-recommendations-logic';
 import {ActivityRecommendationsState} from './activity-recommendations-state';
 import {RecommendationsUI} from './activity-recommendations-ui';

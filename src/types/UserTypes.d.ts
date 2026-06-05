@@ -1,4 +1,9 @@
-import * as userService from "../modules/database/services/UserService";
+import type {ActivityPlan} from "../modules/database/entities/activity/ActivityPlan";
+import type {DriversList} from "../modules/database/entities/drivers/DriversList";
+import type {Event} from "../modules/database/entities/event/Event";
+import type {PackingList} from "../modules/database/entities/packing/PackingList";
+import type {Survey} from "../modules/database/entities/surveys/Survey";
+import type * as userService from "../modules/database/services/UserService";
 import type {EntityItemType, EntityType} from "./UtilTypes";
 
 export type OidcClaims = {
@@ -29,11 +34,10 @@ export type GuestFlowConfig = {
 export type GuestFlowDb = {
     getById: (id: any) => Promise<any | null>,
     getItems: (id: any) => Promise<any[]>,
-    registerGuest: typeof userService.registerGuest,
+    registerGuest: typeof userService.createGuest,
     getGuestInternal: typeof userService.getGuestInternal,
     getGuestByToken: typeof userService.getGuestByToken,
     getGuestLinkToken: typeof userService.getGuestLinkToken,
-    createGuestLink: typeof userService.createGuestLink,
 };
 
 export type UserInfo = {
@@ -42,3 +46,19 @@ export type UserInfo = {
     email: string;
     name: string;
 }
+
+export type DashboardEntities = {
+    surveys: Survey[];
+    packingLists: PackingList[];
+    activityPlans: ActivityPlan[];
+    driversLists: DriversList[];
+    events: Event[];
+}
+
+export type DashboardDTO = {
+    owner?: Partial<DashboardEntities>;
+    participant?: Partial<DashboardEntities>;
+    admin_flag?: boolean;
+}
+
+export type GuestLinkData = Guest & { link: string }

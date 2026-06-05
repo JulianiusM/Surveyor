@@ -1,18 +1,18 @@
 /**
  * Activity plan creation functionality
  * Handles dynamic slot management with drag-and-drop reordering
- * 
+ *
  * Architecture: Uses layered approach with separation of concerns
  * - State layer: ActivityCreateState
  * - Logic layer: ActivityCreateLogic
  */
 
-import {setCurrentNavLocation} from './core/navigation';
-import {loadPerms} from './core/permissions';
 import type {ActivitySlot} from "../../modules/database/entities/activity/ActivitySlot";
 import {formatISODate as fmtISO, getValidDaysInWeek, parseISODate as toDate} from './core/formatting';
-import {ActivityCreateState} from './modules/activity-create-state';
-import {ActivityCreateLogic} from './modules/activity-create-logic';
+import {setCurrentNavLocation} from './core/navigation';
+import {loadPerms} from './core/permissions';
+import {ActivityCreateLogic} from './modules/activity/activity-create-logic';
+import {ActivityCreateState} from './modules/activity/activity-create-state';
 
 // Module-level instances
 let state: ActivityCreateState | null = null;
@@ -88,7 +88,7 @@ export function buildSlotRow(
     pref: Partial<ActivitySlot> = {}
 ): HTMLDivElement {
     ensureInitialized();
-    
+
     const rowObj = logic!.createSlot(dateISO, pos, pref);
     const id = rowObj.id!;
     updateSlotObj(dateISO, rowObj);
@@ -328,7 +328,7 @@ export function initSubmitHandler(): void {
     form.addEventListener('submit', (e: Event) => {
         e.preventDefault();
         ensureInitialized();
-        
+
         const startD = toDate(startInp.value);
         const endD = toDate(endInp.value);
         const payload = logic!.preparePayload(startD, endD);

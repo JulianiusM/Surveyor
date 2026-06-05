@@ -3,9 +3,9 @@
  * Handles the requirements configuration panel
  */
 
-import {formatDateLabel, toDateTimeLocalValue, toISOStringOrNull} from "../core/formatting";
-import {get, post} from '../core/http';
-import {showInlineAlert} from '../shared/alerts';
+import {formatDateLabel, toDateTimeLocalValue, toISOStringOrNull} from "../../core/formatting";
+import {get, post} from '../../core/http';
+import {showInlineAlert} from '../../shared/alerts';
 import {getAllRoles} from "./activity-roles";
 import type {RequirementConfiguration, RequirementParticipantSummary} from './activity-types';
 

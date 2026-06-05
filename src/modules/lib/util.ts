@@ -1,8 +1,6 @@
-import {v4 as uuidv4} from 'uuid';
 import crypto from 'crypto';
 import {Request} from "express";
-
-import {APIError} from "./errors";
+import {v4 as uuidv4} from 'uuid';
 import type {
     EntityDescriptor,
     EntityGetter,
@@ -14,6 +12,9 @@ import type {
     ItemWithParentGetter
 } from "../../types/PermissionTypes";
 import type {EntityItemType, EntityType} from "../../types/UtilTypes";
+import settings from "../settings";
+
+import {APIError} from "./errors";
 
 // Generic currency helpers for invoice math
 export function toAmount(val: string | number | undefined | null): number {
@@ -169,7 +170,7 @@ export function maskEmail(email?: string | null) {
 
 export async function performAPIAction(req: Request, action: {
     actionUser: (body: any, userId: number) => Promise<void>,
-    actionGuest: (body: any, guestId: number) => Promise<void>,
+    actionGuest: (body: any, guestId: string) => Promise<void>,
 }) {
     const userId = req.session.user?.id;
     const guestId = req.session.guest?.id;
@@ -350,6 +351,18 @@ export function jsonReplacer(key: any, value: any) {
     } else {
         return value;
     }
+}
+
+// Builds the guest edit link for emails and redirects using Node.js URL API
+export function buildGuestLink(guestId: string, token: string) {
+    // Construct the path segments and ensure proper encoding
+    const pathSegments = ['guest', guestId, 'login', token]
+        .map(segment => encodeURIComponent(String(segment)))
+        .join('/');
+    // Ensure rootUrl ends with a slash
+    let base = settings.value.rootUrl;
+    base = base.endsWith('/') ? base : base + '/';
+    return new URL(pathSegments, base).toString();
 }
 
 export const ENTITIES: Record<string, EntityType> = {

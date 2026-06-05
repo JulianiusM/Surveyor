@@ -1,7 +1,7 @@
 // src/modules/database/entities/event/EventRegBypassLink.ts
 import {Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId} from 'typeorm';
-import {User} from "../user/User";
 import {Guest} from "../user/Guest";
+import {User} from "../user/User";
 import {Event} from "./Event";
 
 @Entity('event_reg_links')
@@ -48,7 +48,7 @@ export class EventRegBypassLink {
     user?: User;
 
     @RelationId((a: EventRegBypassLink) => a.guest)
-    guestId?: number;
+    guestId?: string;
 
     @ManyToOne(() => Guest, (guests) => guests.eventRegBypassLinksUsed, {
         onDelete: "CASCADE",

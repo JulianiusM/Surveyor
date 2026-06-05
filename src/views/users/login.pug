@@ -10,6 +10,9 @@ block title
         | Login
 
 block content
+    h2.text-center
+        | Already got a user account?
+    p.text-center Login here using your credentials or visit the external authentication provider if enabled.
     form.row.gy-3.justify-content-center(action="/users/login" method="post")
         if settings.localLoginEnabled
             //── Username ────────────────────────────────────────
@@ -47,3 +50,22 @@ block content
                 a.btn.btn-primary(href="/users/oidc/login")
                     i.bi.bi-person-vcard.me-1
                     | Login using #{settings.oidcName}
+
+    hr
+    h2.text-center
+        | Looking for your guest account?
+    p.text-center If you have added your email upon registration, you will be able to recover it here. We will send a link of all associated guest accounts to the provided email address.
+    form.row.gy-3.justify-content-center(action="/guest/recovery" method="post")
+        .col-md-6
+            label.form-label.mb-1(for="email")
+                i.bi.bi-envelope.me-1
+                | E-mail&nbsp;*
+            input#email.form-control.text-bg-dark(
+                type="email"
+                name="email"
+                required)
+        .col-md-6.mt-auto
+            .d-grid
+                button.btn.btn-outline-primary(type="submit")
+                    i.bi.bi-box-arrow-in-right.me-1
+                    | Request access

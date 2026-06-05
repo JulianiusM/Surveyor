@@ -3,12 +3,12 @@
  * Handles basic slot operations: inline editing and deletion
  */
 
-import {post} from '../core/http';
-import {requireEntityPerm, requireItemPerm} from '../core/permissions';
-import {showInlineAlert} from '../shared/alerts';
-import {initCardReorder} from "../shared/drag-drop";
-import {startInlineEdit, startInlineEditArea} from '../shared/inline-edit';
-import {reloadAfterDelay} from '../shared/ui-helpers';
+import {post} from '../../core/http';
+import {requireEntityPerm, requireItemPerm} from '../../core/permissions';
+import {showInlineAlert} from '../../shared/alerts';
+import {initCardReorder} from "../../shared/drag-drop";
+import {startInlineEdit, startInlineEditArea} from '../../shared/inline-edit';
+import {reloadAfterDelay} from '../../shared/ui-helpers';
 
 /**
  * Initialize inline editing for slots and plan description

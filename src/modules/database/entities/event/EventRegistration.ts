@@ -1,7 +1,7 @@
 import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId} from "typeorm";
-import {Event} from "./Event";
-import {User} from "../user/User";
 import {Guest} from "../user/Guest";
+import {User} from "../user/User";
+import {Event} from "./Event";
 import {EventRegistrationDietary} from "./EventRegistrationDietary";
 
 @Entity("event_registrations", {schema: "surveyor"})
@@ -31,7 +31,7 @@ export class EventRegistration {
     user?: User | null;
 
     @RelationId((a: EventRegistration) => a.guest)
-    guestId?: number;
+    guestId?: string;
 
     @ManyToOne(() => Guest, (g) => g.eventRegistrations, {onDelete: "CASCADE", onUpdate: "RESTRICT"})
     @JoinColumn([{name: "guest_id", referencedColumnName: "id"}])

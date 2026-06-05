@@ -8,6 +8,6 @@ export type EnrichedDriversItem = DriversItem & {
 export type DriversItemAssignee = {
     id: number,
     userId?: number,
-    guestId?: number,
+    guestId?: string,
     name: string,
 }

@@ -11,7 +11,7 @@ export type BasePicked = {
 
 export type GuestResponseItem = BasePicked & {
     kind: "guest";
-    guestId: number;
+    guestId: string;
 };
 
 export type UserResponseItem = BasePicked & {
@@ -20,5 +20,5 @@ export type UserResponseItem = BasePicked & {
     name: string; // only users have a 'name'
 };
 
-export type GroupKey = `u_${number}` | `g_${number}`;
+export type GroupKey = `u_${number}` | `g_${string}`;
 export type GroupedResponses = Record<GroupKey, Array<UserResponseItem | GuestResponseItem>>;

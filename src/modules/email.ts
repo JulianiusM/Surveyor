@@ -1,6 +1,8 @@
 import nodemailer, {Transporter} from 'nodemailer';
-import settings from './settings';
 import {MailOptions, Options, SentMessageInfo} from 'nodemailer/lib/smtp-pool';
+import type {GuestLinkData} from '../types/UserTypes';
+import {toLocalISOTime} from "./lib/util";
+import settings from './settings';
 
 let transporter: Transporter<SentMessageInfo, Options> | undefined = undefined;
 
@@ -60,9 +62,26 @@ async function sendLinkEmail(userEmail: string, surveyLink: string) {
     await sendEmail(userEmail, subject, text);
 }
 
+async function sendGuestRecoveryEmail(email: string, guestLinkData: GuestLinkData[]) {
+    let guestSection = '---------- ';
+    for (let guest of guestLinkData) {
+        guestSection += guest.username;
+        guestSection += ' ----------\n';
+        guestSection += `Created: ${toLocalISOTime(guest.createdAt)}\n`;
+        guestSection += `Link: ${guest.link}\n`
+        guestSection += '---------- ';
+    }
+
+    const subject = 'Your guest accounts';
+    const text = `Hi! Thank you for using Surveyor!\n\nYou have requested a recovery of the guest accounts linked to this email. Here are your accounts with the corresponding login link:\n\n${guestSection}\n\nNote: Please do not share this link with anybody.\n\nYour Surveyor Team.`
+
+    await sendEmail(email, subject, text);
+}
+
 export default {
     sendEmail,
     sendActivationEmail,
     sendPasswordResetEmail,
-    sendLinkEmail
+    sendLinkEmail,
+    sendGuestRecoveryEmail,
 };

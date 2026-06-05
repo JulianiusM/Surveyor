@@ -1,8 +1,8 @@
 import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
+import {Guest} from "../user/Guest";
+import {User} from "../user/User";
 import {DriversAssignment} from "./DriversAssignment";
 import {DriversList} from "./DriversList";
-import {User} from "../user/User";
-import {Guest} from "../user/Guest";
 
 @Entity("drivers_items", {schema: "surveyor"})
 export class DriversItem {
@@ -64,7 +64,7 @@ export class DriversItem {
     user?: User;
 
     @RelationId((a: DriversItem) => a.guest)
-    guestId?: number;
+    guestId?: string;
 
     @ManyToOne(() => Guest, (guests) => guests.driversItems, {
         onDelete: "CASCADE",

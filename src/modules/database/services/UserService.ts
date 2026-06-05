@@ -1,11 +1,10 @@
 import bcrypt from 'bcryptjs';
-import {AppDataSource} from '../dataSource';
-import {coerceLimit, generateUniqueToken, maskEmail, SQL_ALLOW_LIST} from '../../lib/util';
-import {User} from '../entities/user/User';
-import {Guest} from '../entities/user/Guest';
-import {GuestLink} from '../entities/user/GuestLink';
 import {MoreThan} from "typeorm";
 import type {OidcClaims, UserInfo} from "../../../types/UserTypes";
+import {coerceLimit, generateUniqueToken, maskEmail, SQL_ALLOW_LIST} from '../../lib/util';
+import {AppDataSource} from '../dataSource';
+import {Guest} from '../entities/user/Guest';
+import {User} from '../entities/user/User';
 
 export async function registerUser(username: string, name: string, password: string, email: string) {
     const repo = AppDataSource.getRepository(User);
@@ -98,55 +97,41 @@ export async function resetPassword(username: string, newPassword: string) {
 
 export async function createGuest(username: string, email: string | null = null) {
     const repo = AppDataSource.getRepository(Guest);
-    const guest = repo.create({username, email});
-    const result = await repo.save(guest);
-    return result.id;
-}
-
-export async function createGuestLink(entityType: string, entityId: string, guestId: number) {
-    const repo = AppDataSource.getRepository(GuestLink);
     const token = generateUniqueToken();
-    const link = repo.create({guest: {id: guestId}, entityType, entityId, token});
-    await repo.save(link);
-    return token;
+    const guest = repo.create({username, email, token});
+    return await repo.save(guest);
 }
 
-export async function registerGuest(entityType: string, entityId: string, username: string, email: string) {
-    const guestId = await createGuest(username, email);
-    const token = await createGuestLink(entityType, entityId, guestId);
-    return {guestId, token};
-}
-
-export async function getGuestByToken(token: string, entityType: string, entityId: string) {
-    // Avoid Repository.findOne with nested relation predicates to prevent MySQL/MariaDB DISTINCT alias issues
-    // when the related entity uses composite keys. Query explicitly instead.
-    return await AppDataSource.getRepository(Guest)
-        .createQueryBuilder('g')
-        .innerJoin('g.guestLinks', 'gl', 'gl.token = :token AND gl.entityType = :entityType AND gl.entityId = :entityId', {
-            token, entityType, entityId
-        })
-        .select(['g.id', 'g.username', 'g.email'])
-        .getOne();
-}
-
-export async function getGuestInternal(guestId: number) {
+export async function getGuestByToken(token: string, guestId: string) {
     const repo = AppDataSource.getRepository(Guest);
     return await repo.findOne({
-        where: {id: guestId},
+        where: {id: guestId, token: token},
         select: ['id', 'username', 'email']
     });
 }
 
-export async function getGuestLinkToken(entityType: string, entityId: string, guestId: number) {
-    // Avoid nested relation predicate which can trigger DISTINCT alias bugs on MySQL/MariaDB.
-    const link = await AppDataSource.getRepository(GuestLink)
+export async function getGuestInternal(guestId: string) {
+    const repo = AppDataSource.getRepository(Guest);
+    return await repo.findOne({
+        where: {id: guestId},
+        select: ['id', 'username', 'email', 'token']
+    });
+}
+
+export async function getGuestLinkToken(guestId: string) {
+    const guest = await getGuestInternal(guestId);
+    return guest?.token || null;
+}
+
+export async function getGuestByEmail(email: string) {
+    const normalizedEmail = email?.trim().toLowerCase();
+    if (!normalizedEmail) return [];
+
+    return await AppDataSource.getRepository(Guest)
         .createQueryBuilder('gl')
-        .where('gl.entityType = :entityType AND gl.entityId = :entityId AND gl.guest_id = :guestId', {
-            entityType, entityId, guestId
-        })
-        .select(['gl.token'])
-        .getOne();
-    return link?.token || null;
+        .where('LOWER(TRIM(gl.email)) = :email', {email: normalizedEmail})
+        .orderBy('gl.createdAt', 'DESC')
+        .getMany();
 }
 
 /**

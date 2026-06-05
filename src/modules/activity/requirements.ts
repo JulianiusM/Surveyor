@@ -6,7 +6,7 @@ export type RoundingMode = NonNullable<ActivityPlan["roundingMode"]>;
 
 export interface ParticipantAttendance {
     userId?: number | null;
-    guestId?: number | null;
+    guestId?: string | null;
     arrivalDate?: string | null;
     departureDate?: string | null;
     roleIds?: number[];
@@ -17,7 +17,7 @@ export interface RequirementOverrideInput {
     id?: number;
     roleId?: number | null;
     userId?: number | null;
-    guestId?: number | null;
+    guestId?: string | null;
     requiredShifts: number;
 }
 
@@ -84,7 +84,7 @@ export interface ParticipantRequirementSummary {
     assignedShifts: number;
     remainingShifts: number;
     source: ParticipantRequirementResult["source"];
-    attendance?: {arrivalDate?: string | null; departureDate?: string | null};
+    attendance?: { arrivalDate?: string | null; departureDate?: string | null };
 }
 
 interface DaysWindow {
@@ -281,7 +281,7 @@ function resolveRoleRequirement(roleRequirements: ActivityPlanRequirement[], rol
 
     let minRequirement = Number.POSITIVE_INFINITY;
     let hasMatch = false;
-    
+
     for (const requirement of roleRequirements) {
         if (!roleIds.includes(Number(requirement.roleId))) continue;
 
@@ -290,7 +290,7 @@ function resolveRoleRequirement(roleRequirements: ActivityPlanRequirement[], rol
         minRequirement = Math.min(minRequirement, rounded);
         hasMatch = true;
     }
-    
+
     return hasMatch ? minRequirement : 0;
 }
 
@@ -318,7 +318,7 @@ export function calculateParticipantRequirement(
     }
 
     const ratio = attendance.days / planDays;
-    
+
     // Check for override first
     const override = selectOverride(participant, overrides);
     const requirementFromOverride = override?.requiredShifts ?? null;
@@ -331,7 +331,7 @@ export function calculateParticipantRequirement(
     if (plan.assignmentMode === "REQUIRED") {
         // Calculate role requirement
         roleRequirement = resolveRoleRequirement(roleRequirements, participant.roleIds, ratio, roundingMode);
-        
+
         // Calculate general requirement
         if (plan.generalRequiredShifts != null) {
             baseRequirement = applyRounding(plan.generalRequiredShifts * ratio, roundingMode);
@@ -418,7 +418,10 @@ export function summarizeParticipantRequirements(
 export function calculateShiftRequirementsForParticipants(
     slots: ShiftSlot[],
     participants: ShiftParticipant[],
-    options?: {resolveFeasibleSlots?: (participant: ShiftParticipant) => Array<string | number>; roundingMode?: RoundingMode}
+    options?: {
+        resolveFeasibleSlots?: (participant: ShiftParticipant) => Array<string | number>;
+        roundingMode?: RoundingMode
+    }
 ): ShiftRequirementComputationResult {
     const roundingMode = options?.roundingMode ?? "CEIL";
     const resolveSlots = options?.resolveFeasibleSlots;

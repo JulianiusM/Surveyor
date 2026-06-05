@@ -1,17 +1,17 @@
-import {AssignmentCandidate, AttendancePolicy, collectAssignmentWarnings, toAssignmentCandidate} from "./availability";
-import {compareActivitySlots} from "./timebox";
-import {calculateRequirementsForParticipants, ParticipantAttendance, toParticipantKey} from "./requirements";
+import {ActivityAssignmentRecommendation} from "../database/entities/activity/ActivityAssignmentRecommendation";
+import {ActivityPlan} from "../database/entities/activity/ActivityPlan";
 import {ActivityPlanRequirement} from "../database/entities/activity/ActivityPlanRequirement";
 import {ActivityPlanRequirementOverride} from "../database/entities/activity/ActivityPlanRequirementOverride";
 import {ActivitySlot} from "../database/entities/activity/ActivitySlot";
-import {ActivityPlan} from "../database/entities/activity/ActivityPlan";
-import {ActivityAssignmentRecommendation} from "../database/entities/activity/ActivityAssignmentRecommendation";
+import * as recommendationService from "../database/services/ActivityRecommendationService";
 import {RecommendationInput} from "../database/services/ActivityRecommendationService";
 import * as requirementService from "../database/services/ActivityRequirementService";
-import * as recommendationService from "../database/services/ActivityRecommendationService";
 import * as activityService from "../database/services/ActivityService";
 import * as eventService from "../database/services/EventService";
 import settingsStore from "../settings";
+import {AssignmentCandidate, AttendancePolicy, collectAssignmentWarnings, toAssignmentCandidate} from "./availability";
+import {calculateRequirementsForParticipants, ParticipantAttendance, toParticipantKey} from "./requirements";
+import {compareActivitySlots} from "./timebox";
 
 /**
  * Core automatic recommendation generator for activity plans. The engine balances required
@@ -32,7 +32,8 @@ interface AutoAssignmentPlan
         | "allowOverfillAfterFull"
         | "allowArrivalDayEvening"
         | "allowDepartureDayMorning"
-    > {}
+    > {
+}
 
 interface AutoAssignmentSlot extends ActivitySlot {
     assignedCount?: number;
@@ -67,7 +68,7 @@ function buildSlotCapacities(slots: AutoAssignmentSlot[], includeFullSlots: bool
         .sort(compareActivitySlots)
         .map((slot) => {
             const capacity = slot.maxAssignees ?? Number.POSITIVE_INFINITY;
-            const existing = Number((slot as AutoAssignmentSlot & {assignedCount?: number}).assignedCount ?? 0);
+            const existing = Number((slot as AutoAssignmentSlot & { assignedCount?: number }).assignedCount ?? 0);
             const remaining = capacity === Number.POSITIVE_INFINITY ? capacity : Math.max(capacity - existing, 0);
             return {
                 slot,
@@ -80,7 +81,7 @@ function buildSlotCapacities(slots: AutoAssignmentSlot[], includeFullSlots: bool
 
 function buildParticipantStates(
     ctx: AutoAssignmentContext,
-): {states: Map<string, ParticipantState>; assignmentMap: Record<string, AssignmentCandidate[]>} {
+): { states: Map<string, ParticipantState>; assignmentMap: Record<string, AssignmentCandidate[]> } {
     const requirements = calculateRequirementsForParticipants(
         ctx.plan,
         ctx.participants,
@@ -130,7 +131,7 @@ function countEligibleSlots(
         if (!allowOvercapacity && slot.remaining <= 0) {
             continue;
         }
-        
+
         if (canAssign(slot.candidate, participant, existingAssignments, attendancePolicy)) {
             count++;
         }
@@ -163,7 +164,7 @@ function scoreParticipantWithAvailability(
     // Priority 2: Largest absolute deficit
     const deficitA = Math.max(a.required - a.assigned, 0);
     const deficitB = Math.max(b.required - b.assigned, 0);
-    
+
     if (deficitA !== deficitB) {
         return deficitB - deficitA;
     }
@@ -181,7 +182,7 @@ function scoreParticipantWithAvailability(
 /**
  * Weighted scoring that blends fairness and availability
  * Option 1: Allows tuning the balance between fair distribution and limited availability
- * 
+ *
  * @param availabilityWeight - Weight for availability (0-1). 0.3 means 70% fairness, 30% availability
  */
 function scoreParticipantWeighted(
@@ -191,15 +192,15 @@ function scoreParticipantWeighted(
     availabilityWeight: number
 ): number {
     // Fairness score: ratio of assigned/required (lower is more underserved)
-    const fairnessScore = participant.required > 0 
-        ? participant.assigned / participant.required 
+    const fairnessScore = participant.required > 0
+        ? participant.assigned / participant.required
         : (participant.assigned > 0 ? 1 : 0);
-    
+
     // Availability score: normalized by total slots (lower eligible = higher priority = higher score)
-    const availabilityScore = totalSlots > 0 
+    const availabilityScore = totalSlots > 0
         ? 1 - (eligibleSlots / totalSlots)
         : 0;
-    
+
     // Combined score: lower is better (will be assigned first)
     // fairnessWeight + availabilityWeight = 1.0
     const fairnessWeight = 1 - availabilityWeight;
@@ -230,7 +231,7 @@ function canAssign(
  * - F8: No overlapping slots per participant
  * - F9: Fair distribution across participants with limited availability priority
  * - F10: Returns proposed assignments
- * 
+ *
  * Enhanced with:
  * - Option 1: Weighted scoring (configurable via availabilityWeight)
  * - Option 2: Post-assignment swap optimization (configurable via swapOptimizationIterations)
@@ -244,7 +245,7 @@ export function generateAutoRecommendations(
     const swapIterations = settingsStore.value.activitySwapOptimizationIterations;
     const arrivalDeparturePenalty = settingsStore.value.activityArrivalDeparturePenalty;
     const {states, assignmentMap} = buildParticipantStates(ctx);
-    
+
     // Build rejection memory from existing recommendations in context
     const rejectedSet = new Set<string>();
     if (ctx.existingRecommendations) {
@@ -281,7 +282,7 @@ export function generateAutoRecommendations(
     if (swapIterations > 0 && recommendations.length > 0) {
         optimizeViaSwaps(recommendations, states, assignmentMap, ctx.slots, attendancePolicy, swapIterations, ctx.plan.allowOverfillAfterFull);
     }
-    
+
     // Post-processing: Mark previously-rejected recommendations
     // When algorithm has no choice but to re-recommend a rejected assignment,
     // mark it as REJECTED to signal: "This was rejected before, but it's the best fit available"
@@ -300,7 +301,7 @@ export function generateAutoRecommendations(
 /**
  * Assign participants to slots fairly, one assignment at a time
  * This ensures fair distribution across both participants AND slots
- * 
+ *
  * @param availabilityWeight - Weight for limited availability (0-1). 0.3 means 70% fairness, 30% availability
  * @param arrivalDeparturePenalty - Penalty for slots on arrival/departure days (0-1). 0.2 means 20% penalty
  * @param rejectedSet - Set of previously rejected (participant, slot) combinations to discourage
@@ -327,7 +328,7 @@ function assignFairly(
     // Cache eligible slot counts (only recalculated when participant gets assigned)
     const participantEligibility = new Map<string, number>();
     const needsRecalc = new Set<string>();
-    
+
     // Initial calculation for all participants
     for (const state of states.values()) {
         const existingAssignments = assignmentMap[state.participantKey] ?? [];
@@ -339,7 +340,7 @@ function assignFairly(
     let iterationCount = 0;
     while (true) {
         iterationCount++;
-        
+
         // F3: Get participants with deficit > 0
         const participantsWithDeficit = [...states.values()].filter(state => {
             const deficit = Math.max(state.required - state.assigned, 0);
@@ -360,7 +361,7 @@ function assignFairly(
         needsRecalc.clear();
 
         // Find best (participant, slot) pair
-        let bestMatch: {participant: ParticipantState; slot: SlotCapacity} | null = null;
+        let bestMatch: { participant: ParticipantState; slot: SlotCapacity } | null = null;
         let bestScore = Number.POSITIVE_INFINITY;
 
         for (const state of participantsWithDeficit) {
@@ -400,40 +401,40 @@ function assignFairly(
                 // Lower score = better (prefer balanced distribution)
                 const slotCount = slotAssignmentCounts.get(slot.slot.id) ?? 0;
                 const capacity = slot.slot.maxAssignees ?? Number.POSITIVE_INFINITY;
-                
+
                 // Calculate filling degree (0 = empty, 1 = full, >1 = overfilled)
                 const fillingDegree = capacity !== Number.POSITIVE_INFINITY ? slotCount / capacity : slotCount / 100;
-                
+
                 // Calculate competition: how many other participants could use this slot
                 // Higher competition means slot is more contested
                 let competition = 0;
                 let slotDeficit = 0;
                 for (const p of participantsWithDeficit) {
                     const pAssignments = assignmentMap[p.participantKey] ?? [];
-                    if (p.participantKey !== state.participantKey && 
+                    if (p.participantKey !== state.participantKey &&
                         canAssign(slot.candidate, p.participant, pAssignments, attendancePolicy)) {
                         competition++;
                         slotDeficit += Math.max(p.required - p.assigned, 0);
                     }
                 }
-                
+
                 // Check if this slot is on the participant's arrival or departure day
                 let arrivalDeparturePenaltyValue = 0;
                 if (arrivalDeparturePenalty > 0) {
                     const slotDay = slot.slot.day;
                     const arrival = state.participant.arrivalDate;
                     const departure = state.participant.departureDate;
-                    
+
                     if ((arrival && slotDay === arrival) || (departure && slotDay === departure)) {
                         // Apply penalty to discourage assignments on arrival/departure days
                         arrivalDeparturePenaltyValue = arrivalDeparturePenalty * 100;
                     }
                 }
-                
+
                 // Check if this (participant, slot) combination was previously rejected
                 const rejectionKey = `${slot.slot.id}:${state.participant.userId || ''}:${state.participant.guestId || ''}`;
                 const rejectionPenalty = rejectedSet.has(rejectionKey) ? 1000 : 0;
-                
+
                 // Slot scoring:
                 // 1. Filling degree (primary): prefer less-filled slots
                 // 2. Competition (secondary): prefer less-contested slots when filling degree is similar
@@ -477,11 +478,11 @@ function assignFairly(
         }
         participant.assigned += 1;
         assignmentMap[participant.participantKey] = [...participantAssignments, slot.candidate];
-        
+
         // Update slot assignment count
         const currentCount = slotAssignmentCounts.get(slot.slot.id) ?? 0;
         slotAssignmentCounts.set(slot.slot.id, currentCount + 1);
-        
+
         // Mark this participant for eligibility recalculation in next iteration
         needsRecalc.add(participant.participantKey);
     }
@@ -498,10 +499,10 @@ function scoreParticipantForSlot(
 ): number {
     // Compare this participant with others based on fairness criteria
     let score = 0;
-    
+
     for (const other of allParticipants) {
         if (other.participantKey === participant.participantKey) continue;
-        
+
         const otherEligible = eligibilityMap.get(other.participantKey) ?? 0;
         const comparison = scoreParticipantWithAvailability(
             participant,
@@ -509,24 +510,24 @@ function scoreParticipantForSlot(
             eligibleSlots,
             otherEligible
         );
-        
+
         // If this participant has higher priority (comparison < 0), decrease score
         // If lower priority (comparison > 0), increase score
         score += comparison;
     }
-    
+
     return score;
 }
 
 /**
  * Option 2: Post-assignment swap optimization
- * 
+ *
  * Implements two scenarios for improving fairness:
  * 1. Help underserved participants: Try to move other participants to different slots
  *    to free up slots within the underserved participant's attendance window
  * 2. Balance slot filling: In overfill scenarios, redistribute participants from
  *    overfilled slots to underfilled slots
- * 
+ *
  * A swap is beneficial if it reduces the maximum deficit across all participants
  */
 function optimizeViaSwaps(
@@ -539,13 +540,13 @@ function optimizeViaSwaps(
     allowOverfillAfterFull: boolean
 ): void {
     if (maxIterations <= 0) return;
-    
+
     // Build lookup maps for efficient access
     const slotMap = new Map<string, AutoAssignmentSlot>();
     for (const slot of slots) {
         slotMap.set(slot.id, slot);
     }
-    
+
     const recByParticipant = new Map<string, RecommendationInput[]>();
     for (const rec of recommendations) {
         const key = rec.userId ? `user:${rec.userId}` : `guest:${rec.guestId}`;
@@ -553,7 +554,7 @@ function optimizeViaSwaps(
         existing.push(rec);
         recByParticipant.set(key, existing);
     }
-    
+
     // Helper: Calculate deficit for a specific participant
     const getDeficit = (key: string): number => {
         const state = states.get(key);
@@ -561,22 +562,22 @@ function optimizeViaSwaps(
         const assignedCount = (recByParticipant.get(key) ?? []).length + (state.existingCount ?? 0);
         return Math.max(state.required - assignedCount, 0);
     };
-    
+
     // Helper: Calculate overall fairness metric (lower is better)
     const calculateFairnessMetric = (): number => {
         let maxDeficit = 0;
         let totalSquaredDeficit = 0;
-        
+
         for (const key of states.keys()) {
             const deficit = getDeficit(key);
             maxDeficit = Math.max(maxDeficit, deficit);
             totalSquaredDeficit += deficit * deficit;
         }
-        
+
         // Combine max deficit (primary) and sum of squared deficits (secondary)
         return maxDeficit * 1000 + totalSquaredDeficit;
     };
-    
+
     // Helper: Check if participant can be assigned to a slot
     const canParticipantTakeSlot = (participantKey: string, slot: AutoAssignmentSlot, excludeSlotId?: string): boolean => {
         const state = states.get(participantKey);
@@ -604,53 +605,53 @@ function optimizeViaSwaps(
                 filteredAssignments.push(toAssignmentCandidate(recSlot));
             }
         }
-        
+
         const candidate = toAssignmentCandidate(slot);
         return canAssign(candidate, state.participant, filteredAssignments, attendancePolicy);
     };
-    
+
     let currentMetric = calculateFairnessMetric();
-    
+
     // Scenario 1: Help underserved participants by finding slots within their attendance window
     // Try to swap assignments so underserved participants can fill their deficits
     for (let iter = 0; iter < maxIterations; iter++) {
         let improvedThisIteration = false;
-        
+
         const participantKeys = Array.from(states.keys());
-        
+
         // Sort by deficit (most underserved first)
         participantKeys.sort((a, b) => getDeficit(b) - getDeficit(a));
-        
+
         for (const underservedKey of participantKeys) {
             const underservedDeficit = getDeficit(underservedKey);
             if (underservedDeficit === 0) break; // No more underserved participants
-            
+
             const underservedState = states.get(underservedKey);
             if (!underservedState) continue;
-            
+
             // Find slots that the underserved participant could use
             for (const slot of slots) {
                 if (!canParticipantTakeSlot(underservedKey, slot)) continue;
-                
+
                 // Check if this slot is currently assigned to someone else in recommendations
                 for (const [otherKey, otherRecs] of recByParticipant.entries()) {
                     if (otherKey === underservedKey) continue;
-                    
+
                     const recUsingThisSlot = otherRecs.find(r => r.slotId === slot.id);
                     if (!recUsingThisSlot) continue;
-                    
+
                     const otherDeficit = getDeficit(otherKey);
-                    
+
                     // Only swap if the other participant has a lower deficit (is better served)
                     if (otherDeficit >= underservedDeficit) continue;
-                    
+
                     // Try to find an alternative slot for the other participant
                     for (const alternativeSlot of slots) {
                         if (alternativeSlot.id === slot.id) continue;
-                        
+
                         // Check if other participant can take the alternative slot
                         if (!canParticipantTakeSlot(otherKey, alternativeSlot, slot.id)) continue;
-                        
+
                         // Check capacity constraint for alternative slot
                         // Count existing assignments + recommendations for alternative slot
                         const alternativeSlotRecs = recommendations.filter(r => r.slotId === alternativeSlot.id && r.slotId !== slot.id);
@@ -659,16 +660,16 @@ function optimizeViaSwaps(
                         }, 0);
                         const alternativeSlotTotalAssigned = alternativeSlotRecs.length + alternativeSlotExisting;
                         const alternativeSlotCapacity = alternativeSlot.maxAssignees ?? Number.POSITIVE_INFINITY;
-                        
+
                         // Only swap if alternative slot has available capacity (or plan allows overfill)
                         if (!allowOverfillAfterFull && alternativeSlotTotalAssigned >= alternativeSlotCapacity) {
                             continue;
                         }
-                        
+
                         // Perform the swap: move other participant to alternative slot,
                         // free up original slot for underserved participant
                         recUsingThisSlot.slotId = alternativeSlot.id;
-                        
+
                         // Add new recommendation for underserved participant
                         const newRec: RecommendationInput = {
                             slotId: slot.id,
@@ -677,22 +678,22 @@ function optimizeViaSwaps(
                             status: "PENDING",
                         };
                         recommendations.push(newRec);
-                        
+
                         const underservedRecs = recByParticipant.get(underservedKey) ?? [];
                         underservedRecs.push(newRec);
                         recByParticipant.set(underservedKey, underservedRecs);
-                        
+
                         // Update assignment map for underserved participant
                         const underservedAssignments = assignmentMap[underservedKey] ?? [];
                         assignmentMap[underservedKey] = [...underservedAssignments, toAssignmentCandidate(slot)];
-                        
+
                         // Update assignment map for other participant
                         const otherAssignments = (assignmentMap[otherKey] ?? []).filter(a => a.id !== slot.id);
                         assignmentMap[otherKey] = [...otherAssignments, toAssignmentCandidate(alternativeSlot)];
-                        
+
                         // Check if this improved fairness
                         const newMetric = calculateFairnessMetric();
-                        
+
                         if (newMetric < currentMetric) {
                             currentMetric = newMetric;
                             improvedThisIteration = true;
@@ -706,16 +707,16 @@ function optimizeViaSwaps(
                             assignmentMap[otherKey] = [...otherAssignments.filter(a => a.id !== alternativeSlot.id), toAssignmentCandidate(slot)];
                         }
                     }
-                    
+
                     if (improvedThisIteration) break;
                 }
-                
+
                 if (improvedThisIteration) break;
             }
-            
+
             if (improvedThisIteration) break;
         }
-        
+
         // If no improvement found in this iteration, stop early
         if (!improvedThisIteration) {
             break;
@@ -759,7 +760,7 @@ function toParticipantAttendanceFromAssignments(assignments: Record<string, Assi
             return {userId: Number(id)};
         }
         if (type === "guest") {
-            return {guestId: Number(id)};
+            return {guestId: String(id)};
         }
         return {};
     });
@@ -775,12 +776,12 @@ export async function generatePlanRecommendations(
         activityService.getActivitySlotsFlat(planId) as Promise<AutoAssignmentSlot[]>,
         activityService.getParticipantAssignmentsWithSlots(planId),
     ]);
-    
+
     // If existing recommendations not provided, load them for rejection memory
     if (!existingRecommendations) {
         existingRecommendations = await recommendationService.getRecommendations(planId).catch(() => [] as ActivityAssignmentRecommendation[]);
     }
-    
+
     // Convert RecommendationDb[] to RecommendationInput[] format for rejection memory
     const existingRecommendationsInput: RecommendationInput[] | undefined = existingRecommendations?.map(rec => ({
         slotId: rec.slot.id,

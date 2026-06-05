@@ -3,7 +3,7 @@
  * Pure logic layer - no DOM manipulation
  */
 
-import {formatDateLabel} from "../core/formatting";
+import {formatDateLabel} from "../../core/formatting";
 import {ActivityRecommendationsState} from './activity-recommendations-state';
 import type {RecommendationParticipantOption, RecommendationRow} from './activity-types';
 

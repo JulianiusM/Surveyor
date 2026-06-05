@@ -1,6 +1,9 @@
-import {AppDataSource} from "../dataSource";
-import {ActivityAssignmentRecommendation, RecommendationStatus} from "../entities/activity/ActivityAssignmentRecommendation";
 import {In} from "typeorm";
+import {AppDataSource} from "../dataSource";
+import {
+    ActivityAssignmentRecommendation,
+    RecommendationStatus
+} from "../entities/activity/ActivityAssignmentRecommendation";
 
 /**
  * Persistence helpers for staged assignment recommendations. This module normalizes incoming
@@ -12,7 +15,7 @@ export interface RecommendationInput {
     id?: string;
     slotId: string;
     userId?: number | null;
-    guestId?: number | null;
+    guestId?: string | null;
     status?: RecommendationStatus;
 }
 
@@ -36,7 +39,7 @@ export function normalizeRecommendationInput(input: RecommendationInput): Recomm
         id: input.id,
         slotId: input.slotId,
         userId: hasUser ? Number(input.userId) : null,
-        guestId: hasGuest ? Number(input.guestId) : null,
+        guestId: hasGuest ? String(input.guestId) : null,
         status: input.status ?? "PENDING",
     };
 }

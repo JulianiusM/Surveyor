@@ -1,7 +1,14 @@
 import express, {Request, Response} from 'express';
+
+import controller from "../../controller/packingController";
+import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
+import {attachAssignRoutes} from '../../middleware/assignFlowFactory';
+
+import {apiParamHandler} from "../../middleware/paramHandler";
+import {attachPermBundle, requireItemPermissionApi, requirePermissionApi} from '../../middleware/permissionMiddleware';
 import * as packingService from '../../modules/database/services/PackingService';
 import {asyncHandler} from '../../modules/lib/asyncHandler';
-import renderer from '../../modules/renderer';
+import {PERM} from "../../modules/lib/permissions";
 import {
     ENTITIES,
     ENTITY_ITEMS,
@@ -12,16 +19,9 @@ import {
     getPermFctItems,
     getResource
 } from "../../modules/lib/util";
-
-import {apiParamHandler} from "../../middleware/paramHandler";
-import {attachPermBundle, requireItemPermissionApi, requirePermissionApi} from '../../middleware/permissionMiddleware';
-import {attachAssignRoutes} from '../../middleware/assignFlowFactory';
-
-import controller from "../../controller/packingController";
-import {PERM} from "../../modules/lib/permissions";
-import type {EntityItemType, EntityType} from "../../types/UtilTypes";
-import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
+import renderer from '../../modules/renderer';
 import type {ItemGetter} from "../../types/PermissionTypes";
+import type {EntityItemType, EntityType} from "../../types/UtilTypes";
 
 const app = express.Router();
 
@@ -43,10 +43,10 @@ app.use("/:id", attachPermBundle(permFct, itemPermFct));
 
 createEntityAdminApiRouter(app, entityName, permFct)
 
-app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), async (req: Request, res: Response) => {
+app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.updateDescription(resFct(req).id, req.body);
     renderer.respondWithSuccessJson(res, msg);
-})
+}))
 
 /* Assign / Unassign identical to packing routes … */
 /* ───────────────── ASSIGN / UNASSIGN (JSON) ───────────────── */

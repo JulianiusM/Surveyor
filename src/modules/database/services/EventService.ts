@@ -1,18 +1,18 @@
 // TypeORM-based implementation of the event module
-import {AppDataSource} from '../dataSource';
-import {Event} from '../entities/event/Event';
-import {EventRegistration} from '../entities/event/EventRegistration';
-import {generateUniqueId, generateUniqueToken, now} from '../../lib/util';
-import {ActivityPlan} from "../entities/activity/ActivityPlan";
-import {PackingList} from "../entities/packing/PackingList";
-import {DriversList} from "../entities/drivers/DriversList";
-import {EventRegistrationDietary} from "../entities/event/EventRegistrationDietary";
-import type {DIETARY, ParticipantRow} from "../../../types/EventTypes";
 import {EntityManager, FindOptionsWhere, In, IsNull, MoreThanOrEqual} from 'typeorm';
+import type {DIETARY, ParticipantRow} from "../../../types/EventTypes";
+import {ExpectedError} from "../../lib/errors";
+import {generateUniqueId, generateUniqueToken, now} from '../../lib/util';
+import {AppDataSource} from '../dataSource';
+import {ActivityPlan} from "../entities/activity/ActivityPlan";
+import {DriversList} from "../entities/drivers/DriversList";
+import {Event} from '../entities/event/Event';
+import {EventRegBypassLink} from "../entities/event/EventRegBypassLink";
+import {EventRegistration} from '../entities/event/EventRegistration';
+import {EventRegistrationDietary} from "../entities/event/EventRegistrationDietary";
+import {PackingList} from "../entities/packing/PackingList";
 import {ensureOneByObjectsAuthed, findOneByObjectsAuthed} from "../utils/relation-upsert";
 import * as entityAdminService from "./EntityAdminService";
-import {EventRegBypassLink} from "../entities/event/EventRegBypassLink";
-import {ExpectedError} from "../../lib/errors";
 import {registerForDefaultPools} from "./EventInvoiceService";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -142,7 +142,7 @@ export async function registerUser(
 
 export async function registerGuest(
     eventId: string,
-    guestId: number,
+    guestId: string,
     arrivalDate: string,
     departureDate: string,
     dietaryChoices?: DIETARY[] | null,
@@ -156,7 +156,7 @@ export async function register(
     eventId: string,
     arrivalDate: string,
     departureDate: string,
-    actor: { userId?: number, guestId?: number },
+    actor: { userId?: number, guestId?: string },
     dietaryChoices?: DIETARY[] | null,
     dietaryAllergies?: string | null,
     bypass?: { ok: boolean, linkId?: string },
@@ -189,7 +189,7 @@ export async function register(
     });
 }
 
-export async function getRegistrationFor(actor: { userId?: number; guestId?: number }, eventId: string) {
+export async function getRegistrationFor(actor: { userId?: number; guestId?: string }, eventId: string) {
     const where: FindOptionsWhere<EventRegistration> = {event: {id: eventId}};
     if (actor.userId) where.user = {id: actor.userId};
     if (actor.guestId) where.guest = {id: actor.guestId};
@@ -223,7 +223,7 @@ export async function getEventParticipants(eventId: string): Promise<Participant
     }));
 }
 
-export async function deleteRegistrationFor(eventId: string, actor: { userId?: number; guestId?: number }) {
+export async function deleteRegistrationFor(eventId: string, actor: { userId?: number; guestId?: string }) {
     const repo = AppDataSource.getRepository(EventRegistration);
     if (actor.userId) {
         await repo.delete({event: {id: eventId}, user: {id: actor.userId}});
@@ -262,7 +262,7 @@ export async function replaceDietaryChoices(
  * - If both userId and guestId are provided, results are OR-combined.
  * - Sorted by event start date descending.
  */
-export async function getRegisteredEventsFor(actor: { userId?: number; guestId?: number }): Promise<Event[]> {
+export async function getRegisteredEventsFor(actor: { userId?: number; guestId?: string }): Promise<Event[]> {
     if (!actor.userId && !actor.guestId) return [];
 
     const repo = AppDataSource.getRepository(Event);
@@ -312,7 +312,7 @@ export async function isEventFull(eventId: string): Promise<boolean> {
     return registrations >= event.maxParticipants;
 }
 
-export async function isRegisteredForEvent(actor: { userId?: number; guestId?: number }, eventId: string) {
+export async function isRegisteredForEvent(actor: { userId?: number; guestId?: string }, eventId: string) {
     if (!actor.userId && !actor.guestId) return false;
 
     const repo = AppDataSource.getRepository(EventRegistration);
@@ -418,7 +418,7 @@ export async function validateDeadlineBypassToken(eventId: string, token: string
  */
 export async function consumeDeadlineBypassToken(
     linkId: string,
-    actor: { userId?: number; guestId?: number }
+    actor: { userId?: number; guestId?: string }
 ): Promise<boolean> {
     return await AppDataSource.transaction(async (manager) => {
         const repo = manager.getRepository(EventRegBypassLink);

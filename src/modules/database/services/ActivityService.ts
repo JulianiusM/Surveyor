@@ -7,8 +7,8 @@ import {AppDataSource} from "../dataSource";
 import {ActivityAssignment} from "../entities/activity/ActivityAssignment";
 import {ActivityAssignmentRole} from "../entities/activity/ActivityAssignmentRole";
 import {ActivityPlan} from "../entities/activity/ActivityPlan";
-import {ActivityRole} from "../entities/activity/ActivityRole";
 import {ActivityPlanTextField} from "../entities/activity/ActivityPlanTextField";
+import {ActivityRole} from "../entities/activity/ActivityRole";
 import {ActivitySlot} from "../entities/activity/ActivitySlot";
 import {ActivitySlotRole} from "../entities/activity/ActivitySlotRole";
 import {ensureOneByObjectsAuthed} from "../utils/relation-upsert";
@@ -44,7 +44,7 @@ export async function ensureRoleId(planId: string, roleNames: string[] | string,
 export async function ensureAssignment(
     slotId: string,
     userId?: number | null,
-    guestId?: number | null
+    guestId?: string | null
 ): Promise<number> {
     if (!slotId) throw new Error("slotId is required");
 
@@ -247,6 +247,24 @@ export async function getActivityPlansByUserId(userId: number) {
     });
 }
 
+export async function getActivityPlansByParticipantUserId(userId: number) {
+    return await AppDataSource.getRepository(ActivityPlan).createQueryBuilder('plan')
+        .whereExists(AppDataSource.getRepository(ActivityAssignment)
+            .createQueryBuilder("ass")
+            .where("ass.plan_id = plan.id")
+            .andWhere("ass.user_id = :userId", {userId: userId})
+        ).getMany();
+}
+
+export async function getActivityPlansByParticipantGuestId(guestId: string) {
+    return await AppDataSource.getRepository(ActivityPlan).createQueryBuilder('plan')
+        .whereExists(AppDataSource.getRepository(ActivityAssignment)
+            .createQueryBuilder("ass")
+            .where("ass.plan_id = plan.id")
+            .andWhere("ass.guest_id = :guestId", {guestId: guestId})
+        ).getMany();
+}
+
 export async function updateActivityPlanDescription(
     planId: string,
     description: string
@@ -441,7 +459,7 @@ export async function assignActivityAssignmentRoleToUser(
 
 export async function assignActivityAssignmentRoleToGuest(
     slotId: string,
-    guestId: number,
+    guestId: string,
     roleName = "default"
 ) {
     const assignmentId = await ensureAssignment(slotId, undefined, guestId);
@@ -464,7 +482,7 @@ export async function unassignActivityAssignmentRoleFromUser(
 
 export async function unassignActivityAssignmentRoleFromGuest(
     slotId: string,
-    guestId: number,
+    guestId: string,
     roleName = "default"
 ) {
     const assignment = await AppDataSource.getRepository(ActivityAssignment).findOne({
@@ -495,7 +513,7 @@ export async function getActivitySlotAssignmentsForUser(planId: string, userId: 
     return assignments.map(a => a.slot.id);
 }
 
-export async function getActivitySlotAssignmentsForGuest(planId: string, guestId: number) {
+export async function getActivitySlotAssignmentsForGuest(planId: string, guestId: string) {
     const assignments = await AppDataSource.getRepository(ActivityAssignment).find({
         select: ["slot"],
         where: {plan: {id: planId}, guest: {id: guestId}},

@@ -1,8 +1,8 @@
 import {Request} from "express";
-import {EntityItemType, EntityType, PartialRecord} from "./UtilTypes";
-import {User} from "../modules/database/entities/user/User";
 import {Guest} from "../modules/database/entities/user/Guest";
+import {User} from "../modules/database/entities/user/User";
 import {PERM} from "../modules/lib/permissions";
+import {EntityItemType, EntityType, PartialRecord} from "./UtilTypes";
 
 export type PermType = keyof typeof PERM;
 
@@ -16,7 +16,7 @@ export type ItemWithParentGetter = (req: Request) => Promise<ItemSubject> | Item
 type DescriptorBase = {
     entityId: string;
     ownerUserId?: number | null;
-    ownerGuestId?: number | null;
+    ownerGuestId?: string | null;
     eventId?: string | null;
 }
 
@@ -41,7 +41,7 @@ export type Subject = { kind: 'entity'; entity: EntityDescriptor } | {
 
 export type SessionLike = {
     user?: Partial<User> & { id: number } | null,
-    guest?: Partial<Guest> & { id: number } | null
+    guest?: Partial<Guest> & { id: string } | null
 };
 
 export type PermMeta = {

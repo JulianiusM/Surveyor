@@ -3,9 +3,9 @@
  * Handles assignment warnings and take/leave actions
  */
 
-import {post} from '../core/http';
-import {showInlineAlert} from '../shared/alerts';
-import {reloadAfterDelay} from '../shared/ui-helpers';
+import {post} from '../../core/http';
+import {showInlineAlert} from '../../shared/alerts';
+import {reloadAfterDelay} from '../../shared/ui-helpers';
 import type {AssignmentWarning, BootstrapGlobal, WarningModal,} from './activity-types';
 
 declare const bootstrap: BootstrapGlobal;

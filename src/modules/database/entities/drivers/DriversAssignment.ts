@@ -1,6 +1,6 @@
 import {Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId,} from "typeorm";
-import {User} from "../user/User";
 import {Guest} from "../user/Guest";
+import {User} from "../user/User";
 import {DriversItem} from "./DriversItem";
 import {DriversList} from "./DriversList";
 
@@ -34,7 +34,7 @@ export class DriversAssignment {
     user?: User;
 
     @RelationId((a: DriversAssignment) => a.guest)
-    guestId?: number;
+    guestId?: string;
 
     @ManyToOne(() => Guest, (guests) => guests.driversAssignments, {
         onDelete: "CASCADE",

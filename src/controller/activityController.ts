@@ -183,7 +183,7 @@ function preprocessRecommendationUpdate(body: any) {
                 Joi.object({
                     slotId: Joi.string().uuid().required(),
                     userId: Joi.number().integer().positive().allow(null),
-                    guestId: Joi.number().integer().positive().allow(null),
+                    guestId: Joi.string().uuid().allow(null),
                     status: Joi.string().valid("PENDING", "APPROVED", "APPLIED", "REJECTED").optional(),
                 }).custom((value, helpers) => {
                     if (!value.userId && !value.guestId) {
@@ -208,7 +208,7 @@ function preprocessRecommendationUpdate(body: any) {
         recommendations: {
             slotId: string;
             userId?: number | null;
-            guestId?: number | null;
+            guestId?: string | null;
             status?: RecommendationStatus
         }[]
     };
@@ -629,7 +629,7 @@ async function updateRequirements(planId: string, body: any) {
 
     const eventParticipants = await eventService.getEventParticipants(plan.event.id);
     const allowedUsers = new Set(eventParticipants.map((p) => p.userId).filter((id): id is number => id != null));
-    const allowedGuests = new Set(eventParticipants.map((p) => p.guestId).filter((id): id is number => id != null));
+    const allowedGuests = new Set(eventParticipants.map((p) => p.guestId).filter((id): id is string => id != null));
 
     const invalidOverride = overrides.find((override) => {
         if (override.userId) return !allowedUsers.has(override.userId);
@@ -664,7 +664,7 @@ async function updateRequirements(planId: string, body: any) {
 async function collectRecommendationWarnings(planId: string, recommendations: {
     slotId: string;
     userId?: number | null;
-    guestId?: number | null;
+    guestId?: string | null;
     status?: RecommendationStatus
 }[]) {
     const [plan, slots, existingAssignments] = await Promise.all([
@@ -712,7 +712,7 @@ async function buildParticipantAttendanceMap(
         endTime?: string | null;
         pos?: number | null
     }[]>,
-    recommendations: { slotId: string; userId?: number | null; guestId?: number | null }[],
+    recommendations: { slotId: string; userId?: number | null; guestId?: string | null }[],
     eventParticipants: Awaited<ReturnType<typeof eventService.getEventParticipants>> = [],
 ): Promise<Record<string, ParticipantAttendance>> {
     const attendance: Record<string, ParticipantAttendance> = {};
@@ -760,7 +760,7 @@ async function buildParticipantAttendanceMap(
             upsert({userId: Number(id)});
         }
         if (type === "guest") {
-            upsert({guestId: Number(id)});
+            upsert({guestId: String(id)});
         }
     });
 
@@ -782,7 +782,7 @@ async function buildParticipantAttendanceMap(
 function resolveWarningTarget(
     session: Request["session"],
     permData: PermBundle | undefined,
-    body: { userId?: number | null; guestId?: number | null } = {},
+    body: { userId?: number | null; guestId?: string | null } = {},
 ) {
     if (body.userId || body.guestId) {
         const isManager = permData?.entity?.has('MANAGE_ASSIGNMENTS');
@@ -814,7 +814,7 @@ async function getAssignmentWarnings(
     slotId: string,
     session: Request["session"],
     permData?: PermBundle,
-    body?: { userId?: number | null; guestId?: number | null },
+    body?: { userId?: number | null; guestId?: string | null },
 ) {
     const target = resolveWarningTarget(session, permData, body);
     const participantKey = toParticipantKey(target);
@@ -1122,18 +1122,18 @@ async function updateRoleAssignments(slotId: string, body: any) {
 function getAssignmentAccessMapping() {
     return {
         assignToUser: (body: any, userId: number) => activityService.assignActivitySlotToUser(body.slotId, userId),
-        assignToGuest: (body: any, guestId: number) => activityService.assignActivitySlotToGuest(body.slotId, guestId),
+        assignToGuest: (body: any, guestId: string) => activityService.assignActivitySlotToGuest(body.slotId, guestId),
         unassignFromUser: (body: any, userId: number) => activityService.unassignActivitySlotUser(body.slotId, userId),
-        unassignFromGuest: (body: any, guestId: number) => activityService.unassignActivitySlotGuest(body.slotId, guestId),
+        unassignFromGuest: (body: any, guestId: string) => activityService.unassignActivitySlotGuest(body.slotId, guestId),
     };
 }
 
 function getRoleAccessMapping() {
     return {
         assignToUser: (body: any, userId: number) => activityService.assignActivityAssignmentRoleToUser(body.slotId, userId, body.role),
-        assignToGuest: (body: any, guestId: number) => activityService.assignActivityAssignmentRoleToGuest(body.slotId, guestId, body.role),
+        assignToGuest: (body: any, guestId: string) => activityService.assignActivityAssignmentRoleToGuest(body.slotId, guestId, body.role),
         unassignFromUser: (body: any, userId: number) => activityService.unassignActivityAssignmentRoleFromUser(body.slotId, userId, body.role),
-        unassignFromGuest: (body: any, guestId: number) => activityService.unassignActivityAssignmentRoleFromGuest(body.slotId, guestId, body.role),
+        unassignFromGuest: (body: any, guestId: string) => activityService.unassignActivityAssignmentRoleFromGuest(body.slotId, guestId, body.role),
     };
 }
 

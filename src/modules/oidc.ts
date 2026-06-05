@@ -1,9 +1,9 @@
-import * as oidc from 'openid-client';
 import type {Request} from 'express';
+import * as oidc from 'openid-client';
 import {findOrCreateUserFromOidc} from "./database/services/UserService";
-import settings from "./settings";
 import {ExpectedError} from "./lib/errors";
 import {persistSession} from "./lib/session";
+import settings from "./settings";
 
 let config: oidc.Configuration;
 
@@ -124,6 +124,7 @@ export async function logout(session: Request['session']) {
 
     // Clear local session first
     session.user = undefined;
+    session.guest = undefined;
     session.tokens = undefined;
 
     await persistSession(session);

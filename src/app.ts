@@ -1,28 +1,29 @@
-import createError from 'http-errors';
-import express, {NextFunction, Request, Response} from 'express';
-import path from 'path';
+import {TypeormStore} from "connect-typeorm";
 import cookieParser from 'cookie-parser';
-import logger from 'morgan';
-import session from 'express-session';
+import express, {NextFunction, Request, Response} from 'express';
 import flash from 'express-flash';
-
-import indexRouter from './routes';
-import apiRouter from './routes/api';
-import usersRouter from './routes/users';
-import surveyRouter from './routes/survey';
-import packingRouter from './routes/packing';
-import activityRouter from './routes/activity';
-import driversRouter from './routes/drivers';
-import eventRouter from './routes/event';
-import helpRouter from './routes/help';
-import settings from './modules/settings';
-import {handleGenericError} from './middleware/genericErrorHandler';
+import session from 'express-session';
+import createError from 'http-errors';
+import logger from 'morgan';
+import path from 'path';
 
 // Version aus package.json lesen
 import {version} from '../package.json';
+import {handleGenericError} from './middleware/genericErrorHandler';
 import {AppDataSource} from "./modules/database/dataSource";
 import {Session} from "./modules/database/entities/session/Session";
-import {TypeormStore} from "connect-typeorm";
+import settings from './modules/settings';
+
+import indexRouter from './routes';
+import activityRouter from './routes/activity';
+import apiRouter from './routes/api';
+import driversRouter from './routes/drivers';
+import eventRouter from './routes/event';
+import guestsRouter from './routes/guests';
+import helpRouter from './routes/help';
+import packingRouter from './routes/packing';
+import surveyRouter from './routes/survey';
+import usersRouter from './routes/users';
 
 const app = express();
 
@@ -87,6 +88,7 @@ app.use('/activity', activityRouter);
 app.use('/drivers', driversRouter);
 app.use('/event', eventRouter);
 app.use('/help', helpRouter);
+app.use('/guest', guestsRouter);
 
 app.get('/healthz', (_req, res) => res.status(200).send('ok'));
 

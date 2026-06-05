@@ -1,17 +1,19 @@
+import {Request} from "express";
+import {Guest} from "../modules/database/entities/user/Guest";
 import {User} from '../modules/database/entities/user/User';
-import * as userService from "../modules/database/services/UserService";
 import * as activityService from "../modules/database/services/ActivityService";
 import * as driverService from "../modules/database/services/DriverService";
 import * as eventService from "../modules/database/services/EventService";
 import * as packingService from "../modules/database/services/PackingService";
 import * as surveyService from "../modules/database/services/SurveyService";
-import settings from "../modules/settings";
+import * as userService from "../modules/database/services/UserService";
 import mailer from "../modules/email";
 import {ExpectedError, ValidationError} from "../modules/lib/errors";
-import {Guest} from "../modules/database/entities/user/Guest";
-import {Request} from "express";
-import * as oidc from "../modules/oidc";
 import {persistSession} from "../modules/lib/session";
+import {buildGuestLink} from "../modules/lib/util";
+import * as oidc from "../modules/oidc";
+import settings from "../modules/settings";
+import {DashboardDTO, GuestLinkData} from "../types/UserTypes";
 
 const CREATE_TEMPLATE = 'users/register';
 const LOGIN_TEMPLATE = 'users/login';
@@ -81,12 +83,31 @@ export async function loginUser(body: any, session: Request["session"]) {
 
 export async function getUserDashboardEntities(user: User) {
     const surveys = await surveyService.getSurveysByUserId(user.id);
+    const partSurveys = await surveyService.getSurveysByParticipantUserId(user.id);
     const packlists = await packingService.getPackingListByUserId(user.id);
+    const partPackLists = await packingService.getPackingListByParticipantUserId(user.id);
     const activityplans = await activityService.getActivityPlansByUserId(user.id);
+    const partActivityPlans = await activityService.getActivityPlansByParticipantUserId(user.id);
     const driverslists = await driverService.getDriversListByUserId(user.id);
+    const partDriversLists = await driverService.getDriversListByParticipantUserId(user.id);
     const events = await eventService.getEventsByOwnerId(user.id);
     const registeredEvents = await eventService.getRegisteredEventsFor({userId: user.id});
-    return {surveys, packlists, activityplans, driverslists, events, registeredEvents};
+    return {
+        owner: {
+            surveys: surveys,
+            packingLists: packlists,
+            activityPlans: activityplans,
+            driversLists: driverslists,
+            events: events
+        },
+        participant: {
+            surveys: partSurveys,
+            packingLists: partPackLists,
+            activityPlans: partActivityPlans,
+            driversLists: partDriversLists,
+            events: registeredEvents
+        }
+    } as DashboardDTO;
 }
 
 export async function getUserAdminDashboardEntities(user: User) {
@@ -94,12 +115,32 @@ export async function getUserAdminDashboardEntities(user: User) {
     const activityplans = await activityService.getManagedPlansForUser(user.id);
     const driverslists = await driverService.getManagedListsForUser(user.id);
     const events = await eventService.getActiveManagedEventsForUser(user.id);
-    return {packlists, activityplans, driverslists, events, admin_flag: true};
+    return {
+        owner: {
+            packingLists: packlists,
+            activityPlans: activityplans,
+            driversLists: driverslists,
+            events: events
+        },
+        admin_flag: true,
+    } as DashboardDTO;
 }
 
 export async function getGuestDashboardEntities(guest: Guest) {
+    const partSurveys = await surveyService.getSurveysByParticipantGuestId(guest.id);
+    const partPackLists = await packingService.getPackingListByParticipantGuestId(guest.id);
+    const partActivityPlans = await activityService.getActivityPlansByParticipantGuestId(guest.id);
+    const partDriversLists = await driverService.getDriversListByParticipantGuestId(guest.id);
     const registeredEvents = await eventService.getRegisteredEventsFor({guestId: guest.id});
-    return {registeredEvents}
+    return {
+        participant: {
+            surveys: partSurveys,
+            packingLists: partPackLists,
+            activityPlans: partActivityPlans,
+            driversLists: partDriversLists,
+            events: registeredEvents
+        }
+    } as DashboardDTO;
 }
 
 export async function sendPasswordForgotMail(username: string) {
@@ -173,4 +214,33 @@ export async function loginUserWithOidcCallback(req: Request) {
 // POST /auth/logout → clears local session and (if available) does RP-initiated logout
 export async function logoutUserOidc(session: Request['session']) {
     return oidc.logout(session);
+}
+
+// Guests
+export async function loginGuest(guestId: string, token: string, session: Request["session"]) {
+    const guest = await userService.getGuestByToken(token, guestId);
+    if (!guest) {
+        throw new ExpectedError('Invalid or mismatched token', 'error', 401);
+    }
+    // switch to guest session
+    session.user = undefined;
+    session.guest = guest;
+    await persistSession(session);
+}
+
+export async function recoverGuestAccount(email: string) {
+    const guests = await userService.getGuestByEmail(email);
+    const guestLinkData: GuestLinkData = [];
+    for (let guest of guests) {
+        guestLinkData.push({...guest, link: buildGuestLink(guest.id, guest.token)});
+    }
+
+    if (guestLinkData.length > 0) {
+        await mailer.sendGuestRecoveryEmail(email, guestLinkData);
+    }
+}
+
+export async function hasGuestAccountForEmail(email: string) {
+    const guests = await userService.getGuestByEmail(email);
+    return guests.length > 0;
 }

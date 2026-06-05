@@ -1,11 +1,11 @@
 // TypeORM-based implementation of the packing list module
-import {AppDataSource} from '../dataSource';
-import {PackingList} from '../entities/packing/PackingList';
-import {PackingItem} from '../entities/packing/PackingItem';
-import {PackingAssignment} from '../entities/packing/PackingAssignment';
-import {generateUniqueId} from '../../lib/util';
-import * as entityAdminService from "./EntityAdminService";
 import {In} from "typeorm";
+import {generateUniqueId} from '../../lib/util';
+import {AppDataSource} from '../dataSource';
+import {PackingAssignment} from '../entities/packing/PackingAssignment';
+import {PackingItem} from '../entities/packing/PackingItem';
+import {PackingList} from '../entities/packing/PackingList';
+import * as entityAdminService from "./EntityAdminService";
 
 // Packing Lists
 export async function createPackingList(listId: string, ownerId: number, title: string, desc: string, eventId?: string,) {
@@ -85,6 +85,24 @@ export async function getManagedListsForUser(userId: number) {
             }
         ],
     });
+}
+
+export async function getPackingListByParticipantUserId(userId: number) {
+    return await AppDataSource.getRepository(PackingList).createQueryBuilder('list')
+        .whereExists(AppDataSource.getRepository(PackingAssignment)
+            .createQueryBuilder("ass")
+            .where("ass.list_id = list.id")
+            .andWhere("ass.user_id = :userId", {userId: userId})
+        ).getMany();
+}
+
+export async function getPackingListByParticipantGuestId(guestId: string) {
+    return await AppDataSource.getRepository(PackingList).createQueryBuilder('list')
+        .whereExists(AppDataSource.getRepository(PackingAssignment)
+            .createQueryBuilder("ass")
+            .where("ass.list_id = list.id")
+            .andWhere("ass.guest_id = :guestId", {guestId: guestId})
+        ).getMany();
 }
 
 // Packing Items
@@ -184,7 +202,7 @@ export async function unassignPackingItemUser(itemId: string, userId: number) {
     await AppDataSource.getRepository(PackingAssignment).delete({item: {id: itemId}, user: {id: userId}});
 }
 
-export async function assignPackingItemToGuest(itemId: string, guestId: number) {
+export async function assignPackingItemToGuest(itemId: string, guestId: string) {
     const itemRepo = AppDataSource.getRepository(PackingItem);
     const item = await itemRepo.findOneBy({id: itemId});
     if (!item) return;
@@ -195,7 +213,7 @@ export async function assignPackingItemToGuest(itemId: string, guestId: number) 
     }
 }
 
-export async function unassignPackingItemGuest(itemId: string, guestId: number) {
+export async function unassignPackingItemGuest(itemId: string, guestId: string) {
     await AppDataSource.getRepository(PackingAssignment).delete({item: {id: itemId}, guest: {id: guestId}});
 }
 
@@ -204,7 +222,7 @@ export async function getPackingAssignmentsForUser(listId: string, userId: numbe
     return rows.map(r => r.itemId);
 }
 
-export async function getPackingAssignmentsForGuest(listId: string, guestId: number) {
+export async function getPackingAssignmentsForGuest(listId: string, guestId: string) {
     const rows = await AppDataSource.getRepository(PackingAssignment).findBy({
         list: {id: listId},
         guest: {id: guestId}

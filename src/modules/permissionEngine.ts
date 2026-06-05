@@ -1,8 +1,4 @@
 // src/lib/permEngine.ts
-import {ALL_MASK, getInitialPerms, hasPerm, PERM, toMaskFromBodyValue} from './lib/permissions';
-import * as entityAdminService from './database/services/EntityAdminService';
-import {getUserPerms, updatePerms} from './database/services/EntityAdminService';
-import {isRegisteredForEvent} from './database/services/EventService';
 import type {
     Audience,
     EntityDescriptor,
@@ -16,6 +12,10 @@ import type {
     Subject
 } from "../types/PermissionTypes";
 import type {CombEntityType} from "../types/UtilTypes";
+import * as entityAdminService from './database/services/EntityAdminService';
+import {getUserPerms, updatePerms} from './database/services/EntityAdminService';
+import {isRegisteredForEvent} from './database/services/EventService';
+import {ALL_MASK, getInitialPerms, hasPerm, PERM, toMaskFromBodyValue} from './lib/permissions';
 import {jsonReplacer} from "./lib/util";
 
 function keyUser(t: CombEntityType, id: string, userId: number) {
@@ -29,7 +29,7 @@ function keyEnt(t: CombEntityType, id: string) {
 function isOwnerTyped(
     session: SessionLike,
     ownerUserId?: number | null,
-    ownerGuestId?: number | null
+    ownerGuestId?: string | null
 ): boolean {
     const uid = session.user?.id ?? null;
     const gid = session.guest?.id ?? null;
@@ -44,7 +44,7 @@ async function computeMaskFor(
     t: CombEntityType,
     id: string,
     ownerUserId: number | null | undefined,
-    ownerGuestId: number | null | undefined,
+    ownerGuestId: string | null | undefined,
     eventId: string | null | undefined,
     session: SessionLike,
     caches?: PermEngineCaches

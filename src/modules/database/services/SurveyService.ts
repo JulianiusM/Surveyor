@@ -1,9 +1,3 @@
-import {AppDataSource} from '../dataSource';
-import {generateUniqueId} from '../../lib/util';
-import {Survey} from '../entities/surveys/Survey';
-import {SurveyCombination} from '../entities/surveys/SurveyCombination';
-import {SurveyResponse} from '../entities/surveys/SurveyResponse';
-import {GuestLink} from '../entities/user/GuestLink';
 import type {
     GroupedResponses,
     GroupKey,
@@ -13,6 +7,11 @@ import type {
     WeekDay,
     WeekInMonth
 } from "../../../types/SurveyTypes";
+import {generateUniqueId} from '../../lib/util';
+import {AppDataSource} from '../dataSource';
+import {Survey} from '../entities/surveys/Survey';
+import {SurveyCombination} from '../entities/surveys/SurveyCombination';
+import {SurveyResponse} from '../entities/surveys/SurveyResponse';
 
 // Surveys
 
@@ -71,13 +70,31 @@ export async function getSurveysByUserId(userId: number) {
     });
 }
 
+export async function getSurveysByParticipantUserId(userId: number) {
+    return await AppDataSource.getRepository(Survey).createQueryBuilder('survey')
+        .whereExists(AppDataSource.getRepository(SurveyResponse)
+            .createQueryBuilder("resp")
+            .where("resp.survey_id = survey.id")
+            .andWhere("resp.user_id = :userId", {userId: userId})
+        ).getMany();
+}
+
+export async function getSurveysByParticipantGuestId(guestId: string) {
+    return await AppDataSource.getRepository(Survey).createQueryBuilder('survey')
+        .whereExists(AppDataSource.getRepository(SurveyResponse)
+            .createQueryBuilder("resp")
+            .where("resp.survey_id = survey.id")
+            .andWhere("resp.guest_id = :guestId", {guestId: guestId})
+        ).getMany();
+}
+
 export async function deleteSurvey(id: string) {
     await AppDataSource.getRepository(Survey).delete({id});
 }
 
 // Responses
 
-export async function saveResponseGuest(surveyId: string, guestId: number, combinationId: number, answer: SurveyAnswer) {
+export async function saveResponseGuest(surveyId: string, guestId: string, combinationId: number, answer: SurveyAnswer) {
     const response = AppDataSource.getRepository(SurveyResponse).create({
         survey: {id: surveyId},
         guest: {id: guestId},
@@ -97,7 +114,7 @@ export async function saveResponseUser(surveyId: string, userId: number, combina
     await AppDataSource.getRepository(SurveyResponse).save(response);
 }
 
-export async function deleteResponsesByGuestId(guestId: number, surveyId: string) {
+export async function deleteResponsesByGuestId(guestId: string, surveyId: string) {
     await AppDataSource.getRepository(SurveyResponse).delete({
         guest: {id: guestId},
         survey: {id: surveyId},
@@ -111,26 +128,10 @@ export async function deleteResponsesByUserId(userId: number, surveyId: string) 
     });
 }
 
-export async function getResponsesByGuestId(guestId: number) {
+export async function getResponsesByGuestId(guestId: string) {
     return await AppDataSource.getRepository(SurveyResponse).find({
         where: {guest: {id: guestId}},
         order: {combination: {id: 'ASC'}},
-    });
-}
-
-export async function getSurveyByGuestId(guestId: number) {
-    const link = await AppDataSource.getRepository(GuestLink).findOne({
-        where: {
-            guest: {id: guestId},
-            entityType: 'survey',
-        },
-        relations: ['guest'],
-    });
-
-    if (!link) return null;
-
-    return await AppDataSource.getRepository(Survey).findOne({
-        where: {id: link.entityId},
     });
 }
 

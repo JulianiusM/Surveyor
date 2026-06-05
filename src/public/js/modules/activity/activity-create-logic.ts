@@ -3,7 +3,7 @@
  * Pure logic layer - no DOM manipulation
  */
 
-import type {ActivitySlot} from "../../../modules/database/entities/activity/ActivitySlot";
+import type {ActivitySlot} from "../../../../modules/database/entities/activity/ActivitySlot";
 import {ActivityCreateState} from './activity-create-state';
 
 /**
@@ -11,7 +11,8 @@ import {ActivityCreateState} from './activity-create-state';
  * Handles slot operations without DOM concerns
  */
 export class ActivityCreateLogic {
-    constructor(private state: ActivityCreateState) {}
+    constructor(private state: ActivityCreateState) {
+    }
 
     /**
      * Sort function for slots by position
@@ -23,7 +24,7 @@ export class ActivityCreateLogic {
      */
     createSlot(dateISO: string, pos: number, prefilled?: Partial<ActivitySlot>): Partial<ActivitySlot> {
         const id = prefilled?.id || crypto.randomUUID();
-        
+
         return {
             id,
             pos: pos || prefilled?.pos || 0,
@@ -73,14 +74,14 @@ export class ActivityCreateLogic {
     preparePayload(startDate: Date, endDate: Date): Record<string, Partial<ActivitySlot>[]> {
         const payload: Record<string, Partial<ActivitySlot>[]> = {};
         const allSlots = this.state.getAllSlots();
-        
+
         for (const [date, slots] of Object.entries(allSlots)) {
             const curDate = new Date(date);
             if (curDate >= startDate && curDate <= endDate) {
                 payload[date] = slots;
             }
         }
-        
+
         return payload;
     }
 

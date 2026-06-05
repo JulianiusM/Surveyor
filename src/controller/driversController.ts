@@ -1,11 +1,11 @@
+import {Request} from "express";
 import Joi from 'joi';
-
-import * as driverService from '../modules/database/services/DriverService';
-import {ENTITIES, generateUniqueId} from "../modules/lib/util";
-import {APIError, ValidationError} from '../modules/lib/errors';
 import {DriversItem} from "../modules/database/entities/drivers/DriversItem";
 import {DriversList} from "../modules/database/entities/drivers/DriversList";
-import {Request} from "express";
+
+import * as driverService from '../modules/database/services/DriverService';
+import {APIError, ValidationError} from '../modules/lib/errors';
+import {ENTITIES, generateUniqueId} from "../modules/lib/util";
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
 
 // Template constant for create errors
@@ -188,9 +188,9 @@ async function deleteItem(itemId: string) {
 function getAssignmentAccessMapping() {
     return {
         assignToUser: (body: any, userId: number) => driverService.assignDriversItemToUser(body.itemId, userId),
-        assignToGuest: (body: any, guestId: number) => driverService.assignDriversItemToGuest(body.itemId, guestId),
+        assignToGuest: (body: any, guestId: string) => driverService.assignDriversItemToGuest(body.itemId, guestId),
         unassignFromUser: (body: any, userId: number) => driverService.unassignDriversItemUser(body.itemId, userId),
-        unassignFromGuest: (body: any, guestId: number) => driverService.unassignDriversItemGuest(body.itemId, guestId),
+        unassignFromGuest: (body: any, guestId: string) => driverService.unassignDriversItemGuest(body.itemId, guestId),
     };
 }
 

@@ -1,9 +1,13 @@
 /*
  * lib/permissionMiddleware.ts
  */
-import {APIError, ExpectedError} from "../modules/lib/errors";
 import {NextFunction, Request, Response} from "express";
+import * as entityAdminService from "../modules/database/services/EntityAdminService"
 import {isRegisteredForEvent} from "../modules/database/services/EventService";
+import {asyncHandler} from "../modules/lib/asyncHandler";
+import {APIError, ExpectedError} from "../modules/lib/errors";
+import {getPermMeta, getPresets} from "../modules/lib/permissions";
+import {buildPermBundle, can, getDefaultPerms} from "../modules/permissionEngine";
 import type {
     EntityGetter,
     GetAdditional,
@@ -12,11 +16,7 @@ import type {
     ItemWithParentGetter,
     Subject
 } from "../types/PermissionTypes";
-import {buildPermBundle, can, getDefaultPerms} from "../modules/permissionEngine";
-import {asyncHandler} from "../modules/lib/asyncHandler";
-import {getPermMeta, getPresets} from "../modules/lib/permissions";
 import type {CombEntityType} from "../types/UtilTypes";
-import * as entityAdminService from "../modules/database/services/EntityAdminService"
 
 /* -------------------- Error adapters -------------------- */
 type ErrorAdapter = {
@@ -144,6 +144,12 @@ export function isAuthenticated(req: Request, res: Response, next: NextFunction)
     if (req.session.user) return next();
     req.flash("info", "You must be logged in to access this site.");
     res.redirect("/users/login");
+}
+
+export function isGuest(req: Request, res: Response, next: NextFunction) {
+    if (req.session.guest) return next();
+    req.flash("info", "You must be logged in as guest to access this site.");
+    res.redirect("/guest/recovery");
 }
 
 /* ---------- Entity Administration ---------- */

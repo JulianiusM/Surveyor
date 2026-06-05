@@ -16,7 +16,7 @@ export type DIETARY = "MEAT" | "FISH" | "VEGETARIAN" | "VEGAN" | "HALAL" | "KOSH
 type ParticipantRow = {
     id: string | number;
     userId: number | null;
-    guestId: number | null;
+    guestId: string | null;
     name: string;
     email?: string | null;
     arrivalDate: string | null;

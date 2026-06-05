@@ -3,10 +3,10 @@
  * Handles role management and role admin modal functionality
  */
 
-import {post} from '../core/http';
-import {showInlineAlert} from '../shared/alerts';
-import {reloadAfterDelay} from '../shared/ui-helpers';
-import {requireEntityPerm} from '../core/permissions';
+import {post} from '../../core/http';
+import {requireEntityPerm} from '../../core/permissions';
+import {showInlineAlert} from '../../shared/alerts';
+import {reloadAfterDelay} from '../../shared/ui-helpers';
 import type {BootstrapGlobal, BootstrapModal, RoleSummary, SlotRolesMap,} from './activity-types';
 
 declare const bootstrap: BootstrapGlobal;

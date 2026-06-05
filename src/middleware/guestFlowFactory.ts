@@ -1,10 +1,16 @@
 import express, {NextFunction, Request, Response} from 'express';
-
-import renderer from '../modules/renderer';
+import * as eventService from "../modules/database/services/EventService";
+import * as userService from "../modules/database/services/UserService";
 import mailer from '../modules/email';
-import settings from '../modules/settings';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {ExpectedError, ValidationError} from '../modules/lib/errors';
+import {getGuestRegistrationNags} from "../modules/lib/guestRegistrationNags";
+import {PERM} from "../modules/lib/permissions";
+import {buildGuestLink, getItemFromEntityPermFct, getResource} from "../modules/lib/util";
+
+import renderer from '../modules/renderer';
+import type {EntityDescriptor, EntityGetter, GetResource, ItemGetter} from "../types/PermissionTypes";
+import type {GuestFlowConfig, GuestFlowDb} from "../types/UserTypes";
 import {paramHandler, queryHandler} from "./paramHandler";
 import {
     attachAdminData,
@@ -15,26 +21,6 @@ import {
     requireOwner,
     requirePermission
 } from "./permissionMiddleware";
-import {getItemFromEntityPermFct, getResource} from "../modules/lib/util";
-import * as userService from "../modules/database/services/UserService";
-import * as eventService from "../modules/database/services/EventService";
-import type {GuestFlowConfig, GuestFlowDb} from "../types/UserTypes";
-import {PERM} from "../modules/lib/permissions";
-import type {EntityDescriptor, EntityGetter, GetResource, ItemGetter} from "../types/PermissionTypes";
-import {persistSession} from "../modules/lib/session";
-import {getGuestRegistrationNags} from "../modules/lib/guestRegistrationNags";
-
-// Builds the guest edit link for emails and redirects using Node.js URL API
-function buildGuestLink(entityType: string, entityId: string, token: string) {
-    // Construct the path segments and ensure proper encoding
-    const pathSegments = [entityType, entityId, 'edit', token]
-        .map(segment => encodeURIComponent(String(segment)))
-        .join('/');
-    // Ensure rootUrl ends with a slash
-    let base = settings.value.rootUrl;
-    base = base.endsWith('/') ? base : base + '/';
-    return new URL(pathSegments, base).toString();
-}
 
 // Default DB functions if none provided in config
 function initConfig(): GuestFlowDb {
@@ -45,11 +31,10 @@ function initConfig(): GuestFlowDb {
         getItems: () => {
             throw new Error('getItems not implemented');
         },
-        registerGuest: userService.registerGuest,
+        registerGuest: userService.createGuest,
         getGuestInternal: userService.getGuestInternal,
         getGuestByToken: userService.getGuestByToken,
-        getGuestLinkToken: userService.getGuestLinkToken,
-        createGuestLink: userService.createGuestLink
+        getGuestLinkToken: userService.getGuestLinkToken
     };
 }
 
@@ -83,10 +68,6 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         getById,
         getItems,
         registerGuest,
-        getGuestInternal,
-        getGuestByToken,
-        getGuestLinkToken,
-        createGuestLink,
     }: GuestFlowDb = Object.assign(initConfig(), db);
 
     const guest = 'users/register-guest';
@@ -167,6 +148,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         .post(asyncHandler(async (req: Request, res: Response) => {
             const entityId = resFct(req).id;
             const {username, email} = req.body;
+            const normEmail = email?.trim().toLowerCase();
             if (!username) {
                 throw new ValidationError(guest, 'Username required', {
                     entityType,
@@ -177,29 +159,12 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
                     email
                 });
             }
-            const {guestId, token} = await registerGuest(entityType, entityId, username, email);
-            req.session.guest = await getGuestInternal(guestId);
-            const link = buildGuestLink(entityType, entityId, token);
-            if (email) await mailer.sendLinkEmail(email, link);
+            req.session.guest = await registerGuest(username, normEmail);
+            const link = buildGuestLink(req.session.guest.id, req.session.guest.token);
+            if (normEmail) await mailer.sendLinkEmail(normEmail, link);
             req.flash('success', `Login successful. Use ${link} to edit later.`);
             res.redirect(buildRedirect(entityId));
         }));
-
-    // GET /:id/edit/:token
-    router.get('/:id/edit/:token', asyncHandler(async (req: Request, res: Response) => {
-        const {id: entityId, token} = req.params;
-        const guest = await getGuestByToken(token, entityType, entityId);
-        if (!guest) {
-            throw new ExpectedError('Invalid or mismatched token', 'error', 401);
-        }
-        // switch to guest session
-        req.session.user = undefined;
-        req.session.guest = guest;
-        await persistSession(req.session);
-
-        req.flash('info', 'Switched to guest edit');
-        res.redirect(buildRedirect(entityId));
-    }));
 
     // GET /:id/duplicate
     router.get('/:id/duplicate', requirePermission(permFct, PERM.DATA_DUPLICATE), asyncHandler(async (req: Request, res: Response) => {
@@ -237,21 +202,9 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
             // No valid registration
             throw new ExpectedError('You must be registered for the event to access this resource');
         }
-        // Registered user
-        if (req.session.user) return next();
-        // Guest session
-        if (req.session.guest) {
-            let token = await getGuestLinkToken(entityType, entity.id, req.session.guest.id);
-            if (!token) {
-                token = await createGuestLink(entityType, entity.id, req.session.guest.id);
-                const link = buildGuestLink(entityType, entity.id, token);
-                req.flash('success', `Login successful. Use ${link} to edit later.`);
-                if (req.session.guest.email) {
-                    await mailer.sendLinkEmail(req.session.guest.email, link);
-                }
-            }
-            return next();
-        }
+        // Active session
+        if (req.session.user || req.session.guest) return next();
+
         // No session → redirect to guest registration
         req.flash('info', 'Register as a guest to participate');
         res.redirect(`${buildRedirect(entity.id)}/guest`);
