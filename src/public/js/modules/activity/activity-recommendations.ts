@@ -3,10 +3,10 @@
  * Handles the assignment recommendations panel
  */
 
-import {formatDateLabel, formatTimeLabel} from "../core/formatting";
-import {get, post} from '../core/http';
-import {showInlineAlert} from '../shared/alerts';
-import {reloadAfterDelay} from '../shared/ui-helpers';
+import {formatDateLabel, formatTimeLabel} from "../../core/formatting";
+import {get, post} from '../../core/http';
+import {showInlineAlert} from '../../shared/alerts';
+import {reloadAfterDelay} from '../../shared/ui-helpers';
 import {describeWarning} from './activity-assignments';
 import type {
     AssignmentWarning,
