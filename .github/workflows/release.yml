@@ -186,6 +186,7 @@ jobs:
           ls -R artifacts
 
       - name: Create GitHub Release
+        id: create_release
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -202,8 +203,15 @@ jobs:
         if: ${{ contains(inputs.version, '-') }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_ID: ${{ steps.create_release.outputs.id }}
         run: |
-          set -e
-          release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/v${RELEASE_VERSION}" --jq '.id')"
-          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}"             -f draft=false             -f prerelease=true
+          set -euo pipefail
+
+          if [ -z "${RELEASE_ID:-}" ]; then
+            echo "ERROR: release ID was not returned by the release creation step."
+            exit 1
+          fi
+
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            -f draft=false \
+            -f prerelease=true
