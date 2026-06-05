@@ -1,6 +1,6 @@
 {
   "name": "surveyor",
-  "version": "0.2.0-rc.5",
+  "version": "0.2.0-rc.6",
   "private": true,
   "scripts": {
     "pretest": "npm run generate",
