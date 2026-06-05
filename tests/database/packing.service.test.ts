@@ -52,6 +52,12 @@ import {
     packingAssignmentsData,
 } from '../data/database/packingServiceData';
 
+function toGuestId(id: string | number) {
+    const raw = String(id);
+    if (raw.includes('-')) return raw;
+    return `00000000-0000-4000-8000-${raw.padStart(12, '0')}`;
+}
+
 // Helper to clear tables between tests (order matters due to FKs)
 async function truncateAll() {
     await AppDataSource.query('SET FOREIGN_KEY_CHECKS=0');
@@ -239,7 +245,11 @@ describe('packingService (mysql)', () => {
         const user2 = AppDataSource.getRepository(User).create(testCase.testUser);
         await AppDataSource.getRepository(User).save(user2);
 
-        const guest1 = AppDataSource.getRepository(Guest).create(testCase.testGuest);
+        const guest1 = AppDataSource.getRepository(Guest).create({
+            ...testCase.testGuest,
+            id: toGuestId(testCase.testGuest.id),
+            token: `tok-${testCase.testGuest.id}`,
+        });
         await AppDataSource.getRepository(Guest).save(guest1);
 
         // Items
@@ -251,8 +261,9 @@ describe('packingService (mysql)', () => {
         const guestItemId = itemIdMap.get(testCase.assignments.guestItemId)!;
         await assignPackingItemToUser(userItemId, testCase.assignments.userId);
         await assignPackingItemToUser(userItemId, testCase.assignments.userId); // duplicate ignored
-        await assignPackingItemToGuest(guestItemId, testCase.assignments.guestId);
-        await assignPackingItemToGuest(guestItemId, testCase.assignments.guestId); // duplicate ignored
+        const guestId = toGuestId(testCase.assignments.guestId);
+        await assignPackingItemToGuest(guestItemId, guestId);
+        await assignPackingItemToGuest(guestItemId, guestId); // duplicate ignored
 
         // Counts
         const counts = await getPackingAssignmentCounts(listId);
@@ -262,7 +273,7 @@ describe('packingService (mysql)', () => {
         // Lists of item ids
         const userItems = await getPackingAssignmentsForUser(listId, testCase.assignments.userId);
         expect(userItems).toEqual([userItemId]);
-        const guestItems = await getPackingAssignmentsForGuest(listId, testCase.assignments.guestId);
+        const guestItems = await getPackingAssignmentsForGuest(listId, guestId);
         expect(guestItems).toEqual([guestItemId]);
 
         // Assignees map (names resolved)
@@ -285,7 +296,7 @@ describe('packingService (mysql)', () => {
         expect(finalCounts[itemId1] ?? 0).toBe(testCase.expectedFinalCounts[testCase.items[0].id]);
 
         // Guest unassign no-op (already deleted)
-        await unassignPackingItemGuest(guestItemId, testCase.assignments.guestId);
+        await unassignPackingItemGuest(guestItemId, guestId);
 
         // Items list reflects assignedCount=0
         const items = await getPackingItems(listId);

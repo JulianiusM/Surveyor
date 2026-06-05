@@ -2,7 +2,7 @@
  * Test data for activity-roles module tests
  */
 
-import type {RoleSummary} from '../../../src/public/js/modules/activity-types';
+import type {RoleSummary} from '../../../src/public/js/modules/activity/activity-types';
 import {deepCopy} from "../helpers/util";
 
 const sampleRoles: RoleSummary[] = [

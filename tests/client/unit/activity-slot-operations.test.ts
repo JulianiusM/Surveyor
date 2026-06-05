@@ -3,7 +3,7 @@
  */
 
 import * as permissions from '../../../src/public/js/core/permissions';
-import {initDelete, initDnD, initInlineEdit} from '../../../src/public/js/modules/activity-slot-operations';
+import {initDelete, initDnD, initInlineEdit} from '../../../src/public/js/modules/activity/activity-slot-operations';
 import * as alerts from '../../../src/public/js/shared/alerts';
 import * as dragDrop from '../../../src/public/js/shared/drag-drop';
 import * as inlineEdit from '../../../src/public/js/shared/inline-edit';

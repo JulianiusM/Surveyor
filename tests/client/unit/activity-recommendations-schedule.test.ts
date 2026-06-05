@@ -7,7 +7,7 @@ import * as http from '../../../src/public/js/core/http';
 import {
     cleanupRecommendationScheduleView,
     initRecommendationScheduleView
-} from '../../../src/public/js/modules/activity-recommendations-schedule';
+} from '../../../src/public/js/modules/activity/activity-recommendations-schedule';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
 import {activityRecommendationsScheduleData as testData} from '../data/activityRecommendationsScheduleData';
 import {setupTest} from '../helpers/testSetup';

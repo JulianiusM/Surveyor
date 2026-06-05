@@ -3,21 +3,21 @@
  * Testing recommendations panel functionality
  */
 
-import {initRecommendationPanel} from '../../../src/public/js/modules/activity-recommendations';
+import {initRecommendationPanel} from '../../../src/public/js/modules/activity/activity-recommendations';
 import {activityRecommendationsData} from '../data/activityRecommendationsData';
 
 const testData = activityRecommendationsData();
 import * as http from '../../../src/public/js/core/http';
 import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
-import * as activityAssignments from '../../../src/public/js/modules/activity-assignments';
+import * as activityAssignments from '../../../src/public/js/modules/activity/activity-assignments';
 import {setupTest} from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/http');
 jest.mock('../../../src/public/js/shared/alerts');
 jest.mock('../../../src/public/js/shared/ui-helpers');
-jest.mock('../../../src/public/js/modules/activity-assignments');
+jest.mock('../../../src/public/js/modules/activity/activity-assignments');
 
 describe('activity-recommendations', () => {
     let mockGet: jest.SpyInstance;

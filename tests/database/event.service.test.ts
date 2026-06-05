@@ -49,6 +49,12 @@ import {
     updateRegistrationDatesData,
 } from '../data/database/eventServiceData';
 
+function toGuestId(id: string | number) {
+    const raw = String(id);
+    if (raw.includes('-')) return raw;
+    return `00000000-0000-4000-8000-${raw.padStart(12, '0')}`;
+}
+
 // Helper to clear relevant tables between tests (order matters due to FKs)
 async function truncateAll() {
     await AppDataSource.query('SET FOREIGN_KEY_CHECKS=0');
@@ -148,7 +154,11 @@ describe('eventService (mysql)', () => {
         // Principals
         const user2 = AppDataSource.getRepository(User).create(testCase.principals.user);
         await AppDataSource.getRepository(User).save(user2);
-        const guest1 = AppDataSource.getRepository(Guest).create(testCase.principals.guest);
+        const guest1 = AppDataSource.getRepository(Guest).create({
+            ...testCase.principals.guest,
+            id: toGuestId(testCase.principals.guest.id),
+            token: `tok-${testCase.principals.guest.id}`,
+        });
         await AppDataSource.getRepository(Guest).save(guest1);
 
         const eid = await createEventTx(
@@ -200,7 +210,7 @@ describe('eventService (mysql)', () => {
         // Register guest
         const gid = await registerGuest(
             eid,
-            testCase.guestRegistration.guestId,
+            toGuestId(testCase.guestRegistration.guestId),
             testCase.guestRegistration.arrivalDate,
             testCase.guestRegistration.departureDate,
             testCase.guestRegistration.dietaryChoices,
@@ -218,11 +228,11 @@ describe('eventService (mysql)', () => {
         expect(names).toEqual(testCase.expected.participantNames);
         const pUser = participants.find(p => p.userId === testCase.userRegistration.userId)!;
         expect((pUser.dietaryChoices ?? []).length).toBe(testCase.expected.userDietaryCount);
-        const pGuest = participants.find(p => p.guestId === testCase.guestRegistration.guestId)!;
+        const pGuest = participants.find(p => p.guestId === toGuestId(testCase.guestRegistration.guestId))!;
         expect((pGuest.dietaryChoices ?? []).length).toBe(testCase.expected.guestDietaryCount);
 
         // Delete guest registration
-        await deleteRegistrationFor(eid, {guestId: testCase.guestRegistration.guestId});
+        await deleteRegistrationFor(eid, {guestId: toGuestId(testCase.guestRegistration.guestId)});
         const regsAfter = await getRegistrationsForEvent(eid);
         expect(regsAfter).toHaveLength(testCase.expected.afterDeleteCount);
 
@@ -236,7 +246,11 @@ describe('eventService (mysql)', () => {
         // Principals
         const user2 = AppDataSource.getRepository(User).create(testCase.principals.user);
         await AppDataSource.getRepository(User).save(user2);
-        const guest1 = AppDataSource.getRepository(Guest).create(testCase.principals.guest);
+        const guest1 = AppDataSource.getRepository(Guest).create({
+            ...testCase.principals.guest,
+            id: toGuestId(testCase.principals.guest.id),
+            token: `tok-${testCase.principals.guest.id}`,
+        });
         await AppDataSource.getRepository(Guest).save(guest1);
 
         // Events with differing start dates
@@ -267,12 +281,12 @@ describe('eventService (mysql)', () => {
 
         await registerUser(e1, testCase.registrations.user.event1.userId, testCase.registrations.user.event1.arrivalDate, testCase.registrations.user.event1.departureDate, null, null);
         await registerUser(e2, testCase.registrations.user.event2.userId, testCase.registrations.user.event2.arrivalDate, testCase.registrations.user.event2.departureDate, null, null);
-        await registerGuest(e2, testCase.registrations.guest.event2.guestId, testCase.registrations.guest.event2.arrivalDate, testCase.registrations.guest.event2.departureDate, null, null);
+        await registerGuest(e2, toGuestId(testCase.registrations.guest.event2.guestId), testCase.registrations.guest.event2.arrivalDate, testCase.registrations.guest.event2.departureDate, null, null);
 
         const userEvents = await getRegisteredEventsFor({userId: testCase.queries.user.userId});
         expect(userEvents.map(e => e.id)).toEqual(testCase.expected.userEventIds(e1, e2)); // DESC by startDate
 
-        const guestEvents = await getRegisteredEventsFor({guestId: testCase.queries.guest.guestId});
+        const guestEvents = await getRegisteredEventsFor({guestId: toGuestId(testCase.queries.guest.guestId)});
         expect(guestEvents.map(e => e.id)).toEqual(testCase.expected.guestEventIds(e2));
 
         const none = await getRegisteredEventsFor({});
@@ -337,7 +351,11 @@ describe('eventService (mysql)', () => {
         
         const user2 = AppDataSource.getRepository(User).create(testCase.principals.user);
         await AppDataSource.getRepository(User).save(user2);
-        const guest1 = AppDataSource.getRepository(Guest).create(testCase.principals.guest);
+        const guest1 = AppDataSource.getRepository(Guest).create({
+            ...testCase.principals.guest,
+            id: toGuestId(testCase.principals.guest.id),
+            token: `tok-${testCase.principals.guest.id}`,
+        });
         await AppDataSource.getRepository(Guest).save(guest1);
 
         const eid = await createEventTx(
@@ -355,13 +373,13 @@ describe('eventService (mysql)', () => {
 
         expect(await isRegisteredForEvent({}, eid)).toBe(testCase.expected.emptyQuery);
         expect(await isRegisteredForEvent({userId: testCase.principals.user.id}, eid)).toBe(testCase.expected.userBeforeRegistration);
-        expect(await isRegisteredForEvent({guestId: testCase.principals.guest.id}, eid)).toBe(testCase.expected.guestBeforeRegistration);
+        expect(await isRegisteredForEvent({guestId: toGuestId(testCase.principals.guest.id)}, eid)).toBe(testCase.expected.guestBeforeRegistration);
 
         await registerUser(eid, testCase.registrations.user.userId, testCase.registrations.user.arrivalDate, testCase.registrations.user.departureDate, null, null);
         expect(await isRegisteredForEvent({userId: testCase.principals.user.id}, eid)).toBe(testCase.expected.userAfterRegistration);
 
-        await registerGuest(eid, testCase.registrations.guest.guestId, testCase.registrations.guest.arrivalDate, testCase.registrations.guest.departureDate, null, null);
-        expect(await isRegisteredForEvent({guestId: testCase.principals.guest.id}, eid)).toBe(testCase.expected.guestAfterRegistration);
+        await registerGuest(eid, toGuestId(testCase.registrations.guest.guestId), testCase.registrations.guest.arrivalDate, testCase.registrations.guest.departureDate, null, null);
+        expect(await isRegisteredForEvent({guestId: toGuestId(testCase.principals.guest.id)}, eid)).toBe(testCase.expected.guestAfterRegistration);
     });
 
     test.each(updateRegistrationDatesData)('$description', async (testCase) => {

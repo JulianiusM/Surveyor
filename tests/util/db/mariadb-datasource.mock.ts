@@ -31,8 +31,5 @@ export const AppDataSource = new DataSource({
 export async function initDataSource() {
     if (!AppDataSource.isInitialized) {
         await AppDataSource.initialize();
-        // Synchronize is enabled in config above
-        // After sync, run migrations (now idempotent with IF NOT EXISTS clauses)
-        await AppDataSource.runMigrations();
     }
 }

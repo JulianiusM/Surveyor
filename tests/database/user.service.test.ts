@@ -10,7 +10,6 @@ jest.mock('../../src/modules/database/dataSource', () =>
 import {
     activateUser,
     createGuest,
-    createGuestLink,
     findOrCreateUserFromOidc,
     generateActivationToken,
     generatePasswordResetToken,
@@ -19,7 +18,6 @@ import {
     getGuestLinkToken,
     getUserByOidc,
     getUserByUsername,
-    registerGuest,
     registerUser,
     resetPassword,
     unlinkOidc,
@@ -32,14 +30,12 @@ import {AppDataSource, initDataSource} from '../../src/modules/database/dataSour
 // Entities used for setup/cleanup
 import {User} from '../../src/modules/database/entities/user/User';
 import {Guest} from '../../src/modules/database/entities/user/Guest';
-import {GuestLink} from '../../src/modules/database/entities/user/GuestLink';
 import {ActivityRole} from '../../src/modules/database/entities/activity/ActivityRole';
 
 // Test data
 import {
     activationTokenData,
     guestCreationData,
-    guestRegistrationData,
     oidcExactMatchData,
     oidcJitProvisioningData,
     oidcLinkByEmailData,
@@ -51,7 +47,6 @@ import {
 async function truncateAll() {
     await AppDataSource.query('SET FOREIGN_KEY_CHECKS=0');
 
-    await AppDataSource.createQueryBuilder().delete().from(GuestLink).execute();
     await AppDataSource.createQueryBuilder().delete().from(Guest).execute();
     await AppDataSource.createQueryBuilder().delete().from(ActivityRole).execute();
     await AppDataSource.createQueryBuilder().delete().from(User).execute();
@@ -158,43 +153,30 @@ describe('User registration, activation & password reset', () => {
 describe('Guests & guest links', () => {
     test.each(guestCreationData)(
         '$description',
-        async ({guestUsername, guestEmail, entityType, entityId}) => {
-            const guestId = await createGuest(guestUsername, guestEmail);
-            expect(typeof guestId).toBe('number');
-
-            const token = await createGuestLink(entityType, entityId, guestId);
-            expect(typeof token).toBe('string');
+        async ({guestUsername, guestEmail}) => {
+            const guest = await createGuest(guestUsername, guestEmail);
+            expect(typeof guest.id).toBe('string');
+            expect(guest.token).toEqual(expect.any(String));
 
             // get token again via helper
-            const token2 = await getGuestLinkToken(entityType, entityId, guestId);
-            expect(token2).toBe(token);
+            const token2 = await getGuestLinkToken(guest.id);
+            expect(token2).toBe(guest.token);
 
             // fetch by token
-            const guestByToken = await getGuestByToken(token, entityType, entityId);
+            const guestByToken = await getGuestByToken(guest.token, guest.id);
             expect(guestByToken).toMatchObject({
-                id: guestId,
+                id: guest.id,
                 username: guestUsername,
                 email: guestEmail,
             });
 
-            const internal = await getGuestInternal(guestId);
+            const internal = await getGuestInternal(guest.id);
             expect(internal).toEqual({
-                id: guestId,
+                id: guest.id,
                 username: guestUsername,
                 email: guestEmail,
+                token: guest.token,
             });
-        }
-    );
-
-    test.each(guestRegistrationData)(
-        '$description',
-        async ({entityType, entityId, username, email}) => {
-            const {guestId, token} = await registerGuest(entityType, entityId, username, email);
-            expect(typeof guestId).toBe('number');
-            expect(typeof token).toBe('string');
-
-            const byToken = await getGuestByToken(token, entityType, entityId);
-            expect(byToken).toMatchObject({id: guestId, username});
         }
     );
 });

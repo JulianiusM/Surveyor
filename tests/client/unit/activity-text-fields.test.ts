@@ -2,7 +2,7 @@
  * Tests for activity-text-fields module
  */
 
-import {initTextFields} from '../../../src/public/js/modules/activity-text-fields';
+import {initTextFields} from '../../../src/public/js/modules/activity/activity-text-fields';
 import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
 import * as permissions from '../../../src/public/js/core/permissions';

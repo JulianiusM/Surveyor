@@ -16,7 +16,7 @@ import {
     getCombinationsBySurveyId,
     getResponsesByGuestId,
     getResponsesSorted,
-    getSurveyByGuestId,
+    getSurveysByParticipantGuestId,
     getSurveyById,
     getSurveysByUserId,
     saveResponseGuest,
@@ -29,7 +29,6 @@ import { AppDataSource, initDataSource } from '../../src/modules/database/dataSo
 import { Survey } from '../../src/modules/database/entities/surveys/Survey';
 import { SurveyCombination } from '../../src/modules/database/entities/surveys/SurveyCombination';
 import { SurveyResponse } from '../../src/modules/database/entities/surveys/SurveyResponse';
-import { GuestLink } from '../../src/modules/database/entities/user/GuestLink';
 import { User } from '../../src/modules/database/entities/user/User';
 import { Guest } from '../../src/modules/database/entities/user/Guest';
 
@@ -38,11 +37,27 @@ import { createSurveyTestData, responseTestData } from '../data/database/surveyS
 import {
     createTestUser,
     createTestGuest,
-    createGuestLink,
     verifyCombinationsOrder,
     verifyGroupedResponses,
     verifyAnswers,
 } from '../keywords/database/databaseKeywords';
+
+function toGuestId(id: string | number) {
+    const raw = String(id);
+    if (raw.includes('-')) return raw;
+    return `00000000-0000-4000-8000-${raw.padStart(12, '0')}`;
+}
+
+function normalizeGuestGroupKey(key: string) {
+    if (!key.startsWith('g_')) return key;
+    const id = key.slice(2);
+    if (!/^\d+$/.test(id)) return key;
+    return `g_${toGuestId(id)}`;
+}
+
+function normalizeGuestKeyMap<T>(map: Record<string, T>) {
+    return Object.fromEntries(Object.entries(map).map(([k, v]) => [normalizeGuestGroupKey(k), v]));
+}
 
 // Helper to clear relevant tables between tests (order matters due to FKs)
 async function truncateAll() {
@@ -51,7 +66,6 @@ async function truncateAll() {
     await AppDataSource.createQueryBuilder().delete().from(SurveyResponse).execute();
     await AppDataSource.createQueryBuilder().delete().from(SurveyCombination).execute();
     await AppDataSource.createQueryBuilder().delete().from(Survey).execute();
-    await AppDataSource.createQueryBuilder().delete().from(GuestLink).execute();
     await AppDataSource.createQueryBuilder().delete().from(User).execute();
     await AppDataSource.createQueryBuilder().delete().from(Guest).execute();
 
@@ -179,14 +193,14 @@ describe('surveysService (mysql) with enum combinations', () => {
                 if (resp.principalType === 'user') {
                     await saveResponseUser(surveyId, resp.principalId, comboId, resp.answer as any);
                 } else {
-                    await saveResponseGuest(surveyId, resp.principalId, comboId, resp.answer as any);
+                    await saveResponseGuest(surveyId, toGuestId(resp.principalId), comboId, resp.answer as any);
                 }
             }
 
             // Verify guest responses are ordered by combination.id ASC
             const guestIds = guests.map(g => g.id);
             for (const guestId of guestIds) {
-                const guestRows = await getResponsesByGuestId(guestId);
+                const guestRows = await getResponsesByGuestId(toGuestId(guestId));
                 if (guestRows.length > 0) {
                     const combIds = guestRows.map(r => r.combinationId);
                     expect([...combIds].sort((a, b) => Number(a) - Number(b))).toEqual(combIds);
@@ -195,7 +209,7 @@ describe('surveysService (mysql) with enum combinations', () => {
 
             // Verify grouped responses
             const grouped = await getResponsesSorted(surveyId);
-            verifyGroupedResponses(grouped, expectedGroupedKeys);
+            verifyGroupedResponses(grouped, expectedGroupedKeys.map(normalizeGuestGroupKey));
 
             // Verify user answers
             for (const [principalKey, expectedAnswers] of Object.entries(expectedUserAnswers)) {
@@ -204,21 +218,14 @@ describe('surveysService (mysql) with enum combinations', () => {
             }
 
             // Verify guest answers
-            for (const [principalKey, expectedAnswers] of Object.entries(expectedGuestAnswers)) {
+            for (const [principalKey, expectedAnswers] of Object.entries(normalizeGuestKeyMap(expectedGuestAnswers))) {
                 verifyAnswers(grouped, principalKey, expectedAnswers);
             }
 
-            // Verify guest link if configured
+            // Verify survey participation lookup if configured
             if (guestLinkConfig) {
-                await createGuestLink({
-                    guestId: guestLinkConfig.guestId,
-                    entityType: 'survey',
-                    entityId: surveyId,
-                    token: guestLinkConfig.token,
-                });
-                const linkedSurvey = await getSurveyByGuestId(guestLinkConfig.guestId);
-                expect(linkedSurvey).toBeTruthy();
-                expect(linkedSurvey!.id).toBe(surveyId);
+                const linkedSurveys = await getSurveysByParticipantGuestId(toGuestId(guestLinkConfig.guestId));
+                expect(linkedSurveys.map(s => s.id)).toContain(surveyId);
             }
 
             // Test deletions if configured
@@ -228,14 +235,14 @@ describe('surveysService (mysql) with enum combinations', () => {
                     const afterUserDelete = await getResponsesSorted(surveyId);
 
                     if (deletions.expectedAfterUserDelete) {
-                        for (const [key, expectedLength] of Object.entries(deletions.expectedAfterUserDelete)) {
+                        for (const [key, expectedLength] of Object.entries(normalizeGuestKeyMap(deletions.expectedAfterUserDelete))) {
                             expect(afterUserDelete[key] ?? []).toHaveLength(expectedLength);
                         }
                     }
                 }
 
                 if (deletions.deleteGuestId !== undefined) {
-                    await deleteResponsesByGuestId(deletions.deleteGuestId, surveyId);
+                    await deleteResponsesByGuestId(toGuestId(deletions.deleteGuestId), surveyId);
                     const afterGuestDelete = await getResponsesSorted(surveyId);
 
                     if (deletions.expectedAfterGuestDelete) {

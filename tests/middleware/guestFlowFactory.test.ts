@@ -63,6 +63,7 @@ jest.mock('../../src/middleware/paramHandler', () => ({
 jest.mock('../../src/modules/lib/util', () => ({
     // make the controller pull the resource from our req.resources
     getResource: (req: any, type: string) => req.resources?.[type],
+    buildGuestLink: (guestId: string, token: string) => `http://app.local/guest/${guestId}/login/${token}`,
     // mock getItemFromEntityPermFct to return an empty function
     getItemFromEntityPermFct: jest.fn(() => async () => []),
 }));
@@ -112,17 +113,16 @@ function makeConfig(overrides: Partial<Parameters<typeof createGuestFlowRouter>[
         buildRedirect: (id: string) => `/activity/${id}`,
         db: {
             getById: async (id: string) => ({id, title: `Plan ${id}`}),
-            registerGuest: async (_t: string, _id: string, username: string, email?: string) => ({
-                guestId: 77,
+            registerGuest: async (username: string, email?: string) => ({
+                id: '77',
                 token: 'tok-xyz',
                 username,
                 email,
             }),
-            getGuestInternal: async (guestId: number) => ({id: guestId, email: 'g@x'}),
-            getGuestByToken: async (token: string, _t: string, entityId: string) =>
-                token === 'tok-xyz' ? ({id: 77, email: 'g@x', entityId}) : null,
-            getGuestLinkToken: async () => 'existing-token',
-            createGuestLink: async () => 'new-token',
+            getGuestInternal: async (guestId: string) => ({id: guestId, email: 'g@x', token: 'tok-xyz'}),
+            getGuestByToken: async (token: string, guestId: string) =>
+                token === 'tok-xyz' ? ({id: guestId, email: 'g@x'}) : null,
+            getGuestLinkToken: async () => 'tok-xyz',
         },
         preprocessCreate: (body: any) => ({ok: true, title: body.title}),
         createEntity: async (_ownerId: number, _data: any) => 'new-123',

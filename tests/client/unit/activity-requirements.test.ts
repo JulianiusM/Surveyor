@@ -3,17 +3,17 @@
  * Tests requirements panel initialization and management
  */
 
-import {initRequirementPanel} from '../../../src/public/js/modules/activity-requirements';
+import {initRequirementPanel} from '../../../src/public/js/modules/activity/activity-requirements';
 import * as http from '../../../src/public/js/core/http';
 import * as alerts from '../../../src/public/js/shared/alerts';
-import * as activityRoles from '../../../src/public/js/modules/activity-roles';
+import * as activityRoles from '../../../src/public/js/modules/activity/activity-roles';
 import {activityRequirementsData} from '../data/activityRequirementsData';
 import {setupTest} from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/http');
 jest.mock('../../../src/public/js/shared/alerts');
-jest.mock('../../../src/public/js/modules/activity-roles');
+jest.mock('../../../src/public/js/modules/activity/activity-roles');
 
 const mockGet = http.get as jest.MockedFunction<typeof http.get>;
 const mockPost = http.post as jest.MockedFunction<typeof http.post>;

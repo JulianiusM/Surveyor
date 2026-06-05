@@ -8,14 +8,14 @@ import {describe, expect, jest, test} from '@jest/globals';
 import * as activity from '../../../src/public/js/activity';
 import {setCurrentNavLocation} from '../../../src/public/js/core/navigation';
 import {loadPerms} from '../../../src/public/js/core/permissions';
-import {buildWarningModal, initAssign} from '../../../src/public/js/modules/activity-assignments';
-import {initDates, initSlotFilters} from '../../../src/public/js/modules/activity-filters';
-import {initParticipantsTab} from '../../../src/public/js/modules/activity-participants';
-import {initRecommendationScheduleView} from '../../../src/public/js/modules/activity-recommendations-schedule';
-import {initRequirementPanel} from '../../../src/public/js/modules/activity-requirements';
-import {initSlotRoleAdminModal} from '../../../src/public/js/modules/activity-roles';
-import {initSlotEditorModal} from '../../../src/public/js/modules/activity-slot-editor';
-import {initDelete, initDnD, initInlineEdit} from '../../../src/public/js/modules/activity-slot-operations';
+import {buildWarningModal, initAssign} from '../../../src/public/js/modules/activity/activity-assignments';
+import {initDates, initSlotFilters} from '../../../src/public/js/modules/activity/activity-filters';
+import {initParticipantsTab} from '../../../src/public/js/modules/activity/activity-participants';
+import {initRecommendationScheduleView} from '../../../src/public/js/modules/activity/activity-recommendations-schedule';
+import {initRequirementPanel} from '../../../src/public/js/modules/activity/activity-requirements';
+import {initSlotRoleAdminModal} from '../../../src/public/js/modules/activity/activity-roles';
+import {initSlotEditorModal} from '../../../src/public/js/modules/activity/activity-slot-editor';
+import {initDelete, initDnD, initInlineEdit} from '../../../src/public/js/modules/activity/activity-slot-operations';
 import {initAssignmentRemoval} from '../../../src/public/js/shared/list-actions';
 import {setupTest} from '../helpers/testSetup';
 
@@ -32,18 +32,18 @@ jest.mock('../../../src/public/js/core/permissions', () => ({
     loadPerms: jest.fn()
 }));
 
-jest.mock('../../../src/public/js/modules/activity-participants', () => ({
+jest.mock('../../../src/public/js/modules/activity/activity-participants', () => ({
     initParticipantsTab: jest.fn()
 }));
 
-jest.mock('../../../src/public/js/modules/activity-roles', () => ({
+jest.mock('../../../src/public/js/modules/activity/activity-roles', () => ({
     addRoleToGlobal: jest.fn(),
     getAllRoles: jest.fn(),
     getSlotRolesForSlot: jest.fn(),
     initSlotRoleAdminModal: jest.fn()
 }));
 
-jest.mock('../../../src/public/js/modules/activity-assignments', () => ({
+jest.mock('../../../src/public/js/modules/activity/activity-assignments', () => ({
     buildWarningModal: jest.fn(() => ({modal: 'mock'})),
     describeWarning: jest.fn((warning: any, describeFn: any) => {
         return describeFn ? describeFn(warning.slotId) : `Warning for ${warning.slotId}`;
@@ -51,26 +51,26 @@ jest.mock('../../../src/public/js/modules/activity-assignments', () => ({
     initAssign: jest.fn()
 }));
 
-jest.mock('../../../src/public/js/modules/activity-filters', () => ({
+jest.mock('../../../src/public/js/modules/activity/activity-filters', () => ({
     initDates: jest.fn(),
     initSlotFilters: jest.fn()
 }));
 
-jest.mock('../../../src/public/js/modules/activity-slot-operations', () => ({
+jest.mock('../../../src/public/js/modules/activity/activity-slot-operations', () => ({
     initDelete: jest.fn(),
     initDnD: jest.fn(),
     initInlineEdit: jest.fn()
 }));
 
-jest.mock('../../../src/public/js/modules/activity-slot-editor', () => ({
+jest.mock('../../../src/public/js/modules/activity/activity-slot-editor', () => ({
     initSlotEditorModal: jest.fn()
 }));
 
-jest.mock('../../../src/public/js/modules/activity-requirements', () => ({
+jest.mock('../../../src/public/js/modules/activity/activity-requirements', () => ({
     initRequirementPanel: jest.fn()
 }));
 
-jest.mock('../../../src/public/js/modules/activity-recommendations-schedule', () => ({
+jest.mock('../../../src/public/js/modules/activity/activity-recommendations-schedule', () => ({
     initRecommendationScheduleView: jest.fn()
 }));
 

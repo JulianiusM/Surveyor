@@ -3,7 +3,7 @@
  * Testing slot editor modal functionality
  */
 
-import {initSlotEditorModal} from '../../../src/public/js/modules/activity-slot-editor';
+import {initSlotEditorModal} from '../../../src/public/js/modules/activity/activity-slot-editor';
 import {activitySlotEditorData} from '../data/activitySlotEditorData';
 
 const testData = activitySlotEditorData();
@@ -11,7 +11,7 @@ import * as http from '../../../src/public/js/core/http';
 import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
 import * as permissions from '../../../src/public/js/core/permissions';
-import * as activityRoles from '../../../src/public/js/modules/activity-roles';
+import * as activityRoles from '../../../src/public/js/modules/activity/activity-roles';
 import {setupTest} from '../helpers/testSetup';
 
 // Mock Bootstrap
@@ -34,7 +34,7 @@ jest.mock('../../../src/public/js/core/http');
 jest.mock('../../../src/public/js/shared/alerts');
 jest.mock('../../../src/public/js/shared/ui-helpers');
 jest.mock('../../../src/public/js/core/permissions');
-jest.mock('../../../src/public/js/modules/activity-roles');
+jest.mock('../../../src/public/js/modules/activity/activity-roles');
 
 describe('activity-slot-editor', () => {
     let modal: HTMLElement;

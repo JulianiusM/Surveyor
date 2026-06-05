@@ -3,12 +3,12 @@
  * Tests role management and role admin modal functionality
  */
 
-import {getAllRoles, getSlotRolesForSlot, addRoleToGlobal, initSlotRoleAdminModal} from '../../../src/public/js/modules/activity-roles';
+import {getAllRoles, getSlotRolesForSlot, addRoleToGlobal, initSlotRoleAdminModal} from '../../../src/public/js/modules/activity/activity-roles';
 import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
 import * as permissions from '../../../src/public/js/core/permissions';
 import {activityRolesData} from '../data/activityRolesData';
-import type {RoleSummary} from '../../../src/public/js/modules/activity-types';
+import type {RoleSummary} from '../../../src/public/js/modules/activity/activity-types';
 import {setupTest, mockApiSuccess, mockApiError} from '../helpers/testSetup';
 
 // Mock UI dependencies (NOT http - MSW handles that)

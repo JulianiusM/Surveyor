@@ -72,7 +72,7 @@ export const guestRegistrationData = [
                 title: 'Plan abc',
                 guestRegistrationNags: {
                     linkWarning: 'Use the personal link you’ll receive to edit your submission later. Keep it safe.',
-                    emailRecommendation: 'We’ll send your private edit link here. If you skip this, make sure to save the link after submitting.',
+                    emailRecommendation: 'To be able to recover your guest link. We’ll send your private edit link here. If you skip this, make sure to save the link after submitting.',
                 },
             },
         },
@@ -95,8 +95,8 @@ export const guestRegistrationData = [
                     accountRecommendationTitle: 'Best for events',
                     accountRecommendation: 'A full user account is the safest way to keep access to your registration and all linked planning data.',
                     linkWarning: 'If you continue as a guest, you must save your personal link. Losing it means you can lose access to your event registration and linked packing lists or activity plans.',
-                    emailRecommendation: 'Please add an email address so we can send your personal link to your inbox and reduce the risk of losing it.',
-                    submitConfirmation: 'You are about to continue as a guest. You will need to save your personal link to access your event registration later. Continue?',
+                    emailRecommendation: 'Without an email, you will not be able to recover your guest link and your event registration. Please add an email address so we can send your personal link to your inbox and reduce the risk of losing it.',
+                    submitConfirmation: 'You are about to continue as a guest. You will need to save your personal link to access your event registration later. If you have not entered an email, you will not be able to recover it afterwards. Continue?',
                 },
             },
         },
@@ -109,7 +109,7 @@ export const guestRegistrationData = [
         expected: {
             status: 302,
             location: '/activity/abc',
-            emailLink: 'http://app.local/activity/abc/edit/tok-xyz',
+            emailLink: 'http://app.local/guest/77/login/tok-xyz',
         },
     },
     {
@@ -132,7 +132,7 @@ export const editTokenData = [
         path: '/abc/edit/tok-xyz',
         expected: {
             status: 302,
-            location: '/activity/abc',
+            location: '/activity/abc/guest',
         },
     },
     {
@@ -140,8 +140,8 @@ export const editTokenData = [
         method: 'get',
         path: '/abc/edit/bad-token',
         expected: {
-            status: 401,
-            kind: 'expected',
+            status: 302,
+            location: '/activity/abc/guest',
         },
     },
 ];
@@ -188,20 +188,13 @@ export const safeZoneData = [
         },
     },
     {
-        description: 'SAFE-ZONE: guest session ensures link token (create if missing), emails, then renders view',
+        description: 'SAFE-ZONE: guest session passes through and renders view',
         method: 'get',
         path: '/abc',
         session: {guest: {id: 77, email: 'g@x'}},
-        configOverrides: {
-            db: {
-                getGuestLinkToken: async () => null,
-                createGuestLink: async () => 'new-token',
-            },
-        },
         expected: {
             status: 200,
             tpl: 'activity/view',
-            emailLink: 'http://app.local/activity/abc/edit/new-token',
         },
     },
     {

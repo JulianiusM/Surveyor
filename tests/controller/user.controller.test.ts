@@ -17,10 +17,14 @@ jest.mock('../../src/modules/database/services/UserService', () => ({
 
 jest.mock('../../src/modules/database/services/ActivityService', () => ({
     getActivityPlansByUserId: jest.fn(),
+    getActivityPlansByParticipantUserId: jest.fn(),
+    getActivityPlansByParticipantGuestId: jest.fn(),
 }));
 
 jest.mock('../../src/modules/database/services/DriverService', () => ({
     getDriversListByUserId: jest.fn(),
+    getDriversListByParticipantUserId: jest.fn(),
+    getDriversListByParticipantGuestId: jest.fn(),
 }));
 
 jest.mock('../../src/modules/database/services/EventService', () => ({
@@ -30,10 +34,14 @@ jest.mock('../../src/modules/database/services/EventService', () => ({
 
 jest.mock('../../src/modules/database/services/PackingService', () => ({
     getPackingListByUserId: jest.fn(),
+    getPackingListByParticipantUserId: jest.fn(),
+    getPackingListByParticipantGuestId: jest.fn(),
 }));
 
 jest.mock('../../src/modules/database/services/SurveyService', () => ({
     getSurveysByUserId: jest.fn(),
+    getSurveysByParticipantUserId: jest.fn(),
+    getSurveysByParticipantGuestId: jest.fn(),
 }));
 
 jest.mock('../../src/modules/settings', () => ({
@@ -174,9 +182,13 @@ describe('dashboard entity loaders - Data Driven', () => {
         if (testCase.type === 'user') {
             // Mock all user dashboard services
             (surveyService.getSurveysByUserId as jest.Mock).mockResolvedValue(testCase.mockData.surveys);
+            (surveyService.getSurveysByParticipantUserId as jest.Mock).mockResolvedValue(testCase.mockData.partSurveys);
             (packingService.getPackingListByUserId as jest.Mock).mockResolvedValue(testCase.mockData.packlists);
+            (packingService.getPackingListByParticipantUserId as jest.Mock).mockResolvedValue(testCase.mockData.partPacklists);
             (activityService.getActivityPlansByUserId as jest.Mock).mockResolvedValue(testCase.mockData.activityplans);
+            (activityService.getActivityPlansByParticipantUserId as jest.Mock).mockResolvedValue(testCase.mockData.partActivityplans);
             (driverService.getDriversListByUserId as jest.Mock).mockResolvedValue(testCase.mockData.driverslists);
+            (driverService.getDriversListByParticipantUserId as jest.Mock).mockResolvedValue(testCase.mockData.partDriverslists);
             (eventService.getEventsByOwnerId as jest.Mock).mockResolvedValue(testCase.mockData.events);
             (eventService.getRegisteredEventsFor as jest.Mock).mockResolvedValue(testCase.mockData.registeredEvents);
 
@@ -184,6 +196,10 @@ describe('dashboard entity loaders - Data Driven', () => {
             expect(result).toEqual(testCase.expected);
         } else if (testCase.type === 'guest') {
             (eventService.getRegisteredEventsFor as jest.Mock).mockResolvedValue(testCase.mockData.registeredEvents);
+            (surveyService.getSurveysByParticipantGuestId as jest.Mock).mockResolvedValue(testCase.mockData.partSurveys);
+            (packingService.getPackingListByParticipantGuestId as jest.Mock).mockResolvedValue(testCase.mockData.partPacklists);
+            (activityService.getActivityPlansByParticipantGuestId as jest.Mock).mockResolvedValue(testCase.mockData.partActivityplans);
+            (driverService.getDriversListByParticipantGuestId as jest.Mock).mockResolvedValue(testCase.mockData.partDriverslists);
             
             const result = await getGuestDashboardEntities({id: testCase.userId} as any);
             expect(result).toEqual(testCase.expected);
