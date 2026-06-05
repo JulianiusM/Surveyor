@@ -18,6 +18,14 @@ interface GuestIdColumnDefinition {
     intDefinition: string;
 }
 
+interface DiscoveredForeignKeyDefinition extends ForeignKeyDefinition {
+    columns: string[];
+    referencedColumns: string[];
+    referencedTable: string;
+    onDelete: string;
+    onUpdate: string;
+}
+
 export class UpdateGuestModel1780682196710 implements MigrationInterface {
     name = 'UpdateGuestModel1780682196710'
 
@@ -154,6 +162,8 @@ export class UpdateGuestModel1780682196710 implements MigrationInterface {
             'CREATE UNIQUE INDEX `IDX_3d84b6c2d8e540af9da1cf265e` ON `guests` (`token`)'
         );
 
+        const indexForeignKeys = await this.dropForeignKeysUsingIndexes(queryRunner, this.guestIndexes);
+
         for (const foreignKey of this.guestForeignKeys) {
             await this.dropForeignKeyIfExists(queryRunner, foreignKey.table, foreignKey.name);
         }
@@ -173,12 +183,18 @@ export class UpdateGuestModel1780682196710 implements MigrationInterface {
             await this.createIndexIfMissing(queryRunner, index.table, index.name, index.definition);
         }
 
+        for (const foreignKey of indexForeignKeys) {
+            await this.addForeignKeyIfMissing(queryRunner, foreignKey);
+        }
+
         for (const foreignKey of this.guestForeignKeys) {
             await this.addForeignKeyIfMissing(queryRunner, foreignKey);
         }
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
+        const indexForeignKeys = await this.dropForeignKeysUsingIndexes(queryRunner, this.guestIndexes);
+
         for (const foreignKey of [...this.guestForeignKeys].reverse()) {
             await this.dropForeignKeyIfExists(queryRunner, foreignKey.table, foreignKey.name);
         }
@@ -196,6 +212,10 @@ export class UpdateGuestModel1780682196710 implements MigrationInterface {
 
         for (const index of this.guestIndexes) {
             await this.createIndexIfMissing(queryRunner, index.table, index.name, index.definition);
+        }
+
+        for (const foreignKey of indexForeignKeys) {
+            await this.addForeignKeyIfMissing(queryRunner, foreignKey);
         }
 
         for (const foreignKey of this.guestForeignKeys) {
@@ -295,6 +315,45 @@ export class UpdateGuestModel1780682196710 implements MigrationInterface {
         }
     }
 
+    private async dropForeignKeysUsingIndexes(
+        queryRunner: QueryRunner,
+        indexes: IndexDefinition[]
+    ): Promise<ForeignKeyDefinition[]> {
+        const foreignKeys = new Map<string, ForeignKeyDefinition>();
+
+        for (const index of indexes) {
+            for (const foreignKey of await this.getForeignKeysUsingIndex(queryRunner, index.table, index.name)) {
+                foreignKeys.set(`${foreignKey.table}.${foreignKey.name}`, foreignKey);
+            }
+        }
+
+        for (const foreignKey of foreignKeys.values()) {
+            await this.dropForeignKeyIfExists(queryRunner, foreignKey.table, foreignKey.name);
+        }
+
+        return [...foreignKeys.values()];
+    }
+
+    private async getForeignKeysUsingIndex(
+        queryRunner: QueryRunner,
+        tableName: string,
+        indexName: string
+    ): Promise<ForeignKeyDefinition[]> {
+        const indexColumns = await this.getIndexColumns(queryRunner, tableName, indexName);
+        if (indexColumns.length === 0) {
+            return [];
+        }
+
+        const tableForeignKeys = await this.getTableForeignKeys(queryRunner, tableName);
+        return tableForeignKeys
+            .filter((foreignKey) => this.isLeftPrefix(foreignKey.columns, indexColumns))
+            .map((foreignKey) => ({
+                name: foreignKey.name,
+                table: foreignKey.table,
+                definition: foreignKey.definition,
+            }));
+    }
+
     private async dropColumnIfExists(
         queryRunner: QueryRunner,
         tableName: string,
@@ -374,6 +433,80 @@ export class UpdateGuestModel1780682196710 implements MigrationInterface {
         ) as unknown[];
 
         return rows.length > 0;
+    }
+
+    private async getIndexColumns(queryRunner: QueryRunner, tableName: string, indexName: string): Promise<string[]> {
+        const rows = await queryRunner.query(
+            `SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? ORDER BY SEQ_IN_INDEX`,
+            [tableName, indexName]
+        ) as Array<{COLUMN_NAME: string}>;
+
+        return rows.map((row) => row.COLUMN_NAME);
+    }
+
+    private async getTableForeignKeys(
+        queryRunner: QueryRunner,
+        tableName: string
+    ): Promise<DiscoveredForeignKeyDefinition[]> {
+        const rows = await queryRunner.query(
+            `SELECT k.CONSTRAINT_NAME, k.COLUMN_NAME, k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME, rc.UPDATE_RULE, rc.DELETE_RULE
+             FROM information_schema.KEY_COLUMN_USAGE k
+             JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
+               ON rc.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA
+              AND rc.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+              AND rc.TABLE_NAME = k.TABLE_NAME
+             WHERE k.CONSTRAINT_SCHEMA = DATABASE()
+               AND k.TABLE_NAME = ?
+               AND k.REFERENCED_TABLE_NAME IS NOT NULL
+             ORDER BY k.CONSTRAINT_NAME, k.ORDINAL_POSITION`,
+            [tableName]
+        ) as Array<{
+            CONSTRAINT_NAME: string;
+            COLUMN_NAME: string;
+            REFERENCED_TABLE_NAME: string;
+            REFERENCED_COLUMN_NAME: string;
+            UPDATE_RULE: string;
+            DELETE_RULE: string;
+        }>;
+
+        const foreignKeys = new Map<string, DiscoveredForeignKeyDefinition>();
+
+        for (const row of rows) {
+            const existing = foreignKeys.get(row.CONSTRAINT_NAME);
+            if (existing) {
+                existing.columns.push(row.COLUMN_NAME);
+                existing.referencedColumns.push(row.REFERENCED_COLUMN_NAME);
+                continue;
+            }
+
+            foreignKeys.set(row.CONSTRAINT_NAME, {
+                name: row.CONSTRAINT_NAME,
+                table: tableName,
+                columns: [row.COLUMN_NAME],
+                referencedColumns: [row.REFERENCED_COLUMN_NAME],
+                referencedTable: row.REFERENCED_TABLE_NAME,
+                onDelete: row.DELETE_RULE,
+                onUpdate: row.UPDATE_RULE,
+                definition: '',
+            });
+        }
+
+        for (const foreignKey of foreignKeys.values()) {
+            foreignKey.definition = this.buildForeignKeyDefinition(foreignKey);
+        }
+
+        return [...foreignKeys.values()];
+    }
+
+    private buildForeignKeyDefinition(foreignKey: DiscoveredForeignKeyDefinition): string {
+        const columns = foreignKey.columns.map((column) => this.escapeIdentifier(column)).join(', ');
+        const referencedColumns = foreignKey.referencedColumns.map((column) => this.escapeIdentifier(column)).join(', ');
+
+        return `ALTER TABLE ${this.escapeIdentifier(foreignKey.table)} ADD CONSTRAINT ${this.escapeIdentifier(foreignKey.name)} FOREIGN KEY (${columns}) REFERENCES ${this.escapeIdentifier(foreignKey.referencedTable)} (${referencedColumns}) ON DELETE ${foreignKey.onDelete} ON UPDATE ${foreignKey.onUpdate}`;
+    }
+
+    private isLeftPrefix(columns: string[], indexColumns: string[]): boolean {
+        return columns.every((column, index) => column === indexColumns[index]);
     }
 
     private async primaryKeyExists(queryRunner: QueryRunner, tableName: string): Promise<boolean> {
