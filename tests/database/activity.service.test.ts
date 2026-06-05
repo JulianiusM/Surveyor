@@ -58,6 +58,12 @@ import {createTestUser} from '../keywords/database/databaseKeywords';
 
 export {}; // make module; avoid global collisions
 
+function toGuestId(id: string | number) {
+    const raw = String(id);
+    if (raw.includes('-')) return raw;
+    return `00000000-0000-4000-8000-${raw.padStart(12, '0')}`;
+}
+
 /**
  * Tests for ActivityService using the mysql (MariaDB/mysql2) DataSource mock.
  * Migrated to data-driven approach with externalized test data.
@@ -136,7 +142,7 @@ describe('Roles and assignments', () => {
             await addActivitySlot(planId, {id: slotId, ...slot});
 
             // Create assignment
-            const assignId = await ensureAssignment(slotId, userId, guestId);
+            const assignId = await ensureAssignment(slotId, userId, guestId !== undefined ? toGuestId(guestId) : undefined);
             const aBefore = await AppDataSource.getRepository(ActivityAssignment).findOneByOrFail({
                 id: assignId,
             });
@@ -476,12 +482,13 @@ describe('Assignment wrapper helpers + lookups', () => {
         let assignmentsU = await getActivitySlotAssignmentsForUser(planId, 1);
         expect(assignmentsU).toEqual([slotId]);
 
-        const guest = AppDataSource.getRepository(Guest).create({id: 77, username: ""});
+        const guestId = toGuestId(77);
+        const guest = AppDataSource.getRepository(Guest).create({id: guestId, username: "", token: 'tok-77'});
         await AppDataSource.getRepository(Guest).save(guest);
 
         // Guest assignment via wrapper
-        await assignActivityAssignmentRoleToGuest(slotId, 77, 'default');
-        let assignmentsG = await getActivitySlotAssignmentsForGuest(planId, 77);
+        await assignActivityAssignmentRoleToGuest(slotId, guestId, 'default');
+        let assignmentsG = await getActivitySlotAssignmentsForGuest(planId, guestId);
         expect(assignmentsG).toEqual([slotId]);
 
         // Unassign user 'helper' -> assignment gets removed (no remaining roles)
@@ -490,8 +497,8 @@ describe('Assignment wrapper helpers + lookups', () => {
         expect(assignmentsU).toEqual([]);
 
         // Unassign guest 'default' -> assignment removed (special-case default)
-        await unassignActivityAssignmentRoleFromGuest(slotId, 77, 'default');
-        assignmentsG = await getActivitySlotAssignmentsForGuest(planId, 77);
+        await unassignActivityAssignmentRoleFromGuest(slotId, guestId, 'default');
+        assignmentsG = await getActivitySlotAssignmentsForGuest(planId, guestId);
         expect(assignmentsG).toEqual([]);
     });
 });
@@ -516,11 +523,12 @@ describe('Edge cases & additional scenarios', () => {
         const u2 = await ensureAssignment(slotId, 1, undefined);
         expect(u2).toBe(u1); // reused
 
-        const guest = AppDataSource.getRepository(Guest).create({id: 1, username: ''});
+        const guestId = toGuestId(1);
+        const guest = AppDataSource.getRepository(Guest).create({id: guestId, username: '', token: 'tok-1'});
         await AppDataSource.getRepository(Guest).save(guest);
 
-        const g1 = await ensureAssignment(slotId, undefined, 1);
-        const g2 = await ensureAssignment(slotId, undefined, 1);
+        const g1 = await ensureAssignment(slotId, undefined, guestId);
+        const g2 = await ensureAssignment(slotId, undefined, guestId);
         expect(g2).toBe(g1); // reused
 
         const count = await AppDataSource.getRepository(ActivityAssignment).count();
@@ -644,7 +652,7 @@ describe('Edge cases & additional scenarios', () => {
             username: 'userA',
             email: 'a@a'
         }));
-        const guest = await AppDataSource.getRepository(Guest).save(AppDataSource.getRepository(Guest).create({username: 'guestB'}));
+        const guest = await AppDataSource.getRepository(Guest).save(AppDataSource.getRepository(Guest).create({username: 'guestB', token: 'tok-guestB'}));
 
         await ensureRoleId(planId, 'lead');
         await ensureRoleId(planId, 'helper');
@@ -674,7 +682,7 @@ describe('Edge cases & additional scenarios', () => {
             username: 'sam',
             email: 'sam@x'
         }));
-        const guest = await AppDataSource.getRepository(Guest).save(AppDataSource.getRepository(Guest).create({username: 'sam'}));
+        const guest = await AppDataSource.getRepository(Guest).save(AppDataSource.getRepository(Guest).create({username: 'sam', token: 'tok-sam'}));
 
         await ensureRoleId(planId, 'alpha');
         await ensureRoleId(planId, 'beta');
@@ -716,4 +724,3 @@ describe('Edge cases & additional scenarios', () => {
         expect(roleNames).toEqual(['Admin', 'Member']);
     });
 });
-

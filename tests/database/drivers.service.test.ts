@@ -51,6 +51,12 @@ import {
     driversAssignmentsData,
 } from '../data/database/driversServiceData';
 
+function toGuestId(id: string | number) {
+    const raw = String(id);
+    if (raw.includes('-')) return raw;
+    return `00000000-0000-4000-8000-${raw.padStart(12, '0')}`;
+}
+
 // Helper to clear relevant tables between tests (order matters due to FKs)
 async function truncateAll() {
     await AppDataSource.query('SET FOREIGN_KEY_CHECKS=0');
@@ -141,7 +147,11 @@ describe('driversService (mysql)', () => {
         const user2 = AppDataSource.getRepository(User).create(testCase.testUser);
         await AppDataSource.getRepository(User).save(user2);
 
-        const guest1 = AppDataSource.getRepository(Guest).create(testCase.testGuest);
+        const guest1 = AppDataSource.getRepository(Guest).create({
+            ...testCase.testGuest,
+            id: toGuestId(testCase.testGuest.id),
+            token: `tok-${testCase.testGuest.id}`,
+        });
         await AppDataSource.getRepository(Guest).save(guest1);
 
         // Generate UUIDs for items at runtime
@@ -154,7 +164,7 @@ describe('driversService (mysql)', () => {
         
         // Create two items
         await createDriversItemUser(listId, testCase.testUser.id, {...testCase.userItem, id: itemId1});
-        await createDriversItemGuest(listId, testCase.testGuest.id, {...testCase.guestItem, id: itemId2});
+        await createDriversItemGuest(listId, toGuestId(testCase.testGuest.id), {...testCase.guestItem, id: itemId2});
 
         // Enriched list read
         const itemsInitial = await getDriversItems(listId);
@@ -220,18 +230,23 @@ describe('driversService (mysql)', () => {
         const user2 = AppDataSource.getRepository(User).create(testCase.testUser);
         await AppDataSource.getRepository(User).save(user2);
 
-        const guest1 = AppDataSource.getRepository(Guest).create(testCase.testGuest);
+        const guest1 = AppDataSource.getRepository(Guest).create({
+            ...testCase.testGuest,
+            id: toGuestId(testCase.testGuest.id),
+            token: `tok-${testCase.testGuest.id}`,
+        });
         await AppDataSource.getRepository(Guest).save(guest1);
 
         // Items
         await createDriversItemUser(listId, testCase.testUser.id, {...testCase.userItem, id: itemId1});
-        await createDriversItemGuest(listId, testCase.testGuest.id, {...testCase.guestItem, id: itemId2});
+        const guestId = toGuestId(testCase.testGuest.id);
+        await createDriversItemGuest(listId, guestId, {...testCase.guestItem, id: itemId2});
 
         // Assign (idempotent/upsert)
         await assignDriversItemToUser(itemId1, testCase.testUser.id);
         await assignDriversItemToUser(itemId1, testCase.testUser.id); // duplicate
-        await assignDriversItemToGuest(itemId2, testCase.testGuest.id);
-        await assignDriversItemToGuest(itemId2, testCase.testGuest.id); // duplicate
+        await assignDriversItemToGuest(itemId2, guestId);
+        await assignDriversItemToGuest(itemId2, guestId); // duplicate
 
         // Counts by item
         const counts = await getDriversAssignmentCounts(listId);
@@ -247,7 +262,7 @@ describe('driversService (mysql)', () => {
         const userItems = await getDriversAssignmentsForUser(listId, testCase.testUser.id);
         expect(userItems).toEqual([itemId1]);
 
-        const guestItems = await getDriversAssignmentsForGuest(listId, testCase.testGuest.id);
+        const guestItems = await getDriversAssignmentsForGuest(listId, guestId);
         expect(guestItems).toEqual([itemId2]);
 
         // Map of assignees per item
@@ -272,7 +287,7 @@ describe('driversService (mysql)', () => {
         expect(finalCounts[itemId1] ?? 0).toBe(testCase.expectedFinalCounts[testCase.userItem.id]);
 
         // Also test guest unassign path again for completeness (no-op now)
-        await unassignDriversItemGuest(itemId2, testCase.testGuest.id);
+        await unassignDriversItemGuest(itemId2, guestId);
 
         const emptyMap = await getDriversItemAssignees(listId);
         expect(emptyMap[itemId1] ?? []).toHaveLength(0);

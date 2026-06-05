@@ -2,7 +2,7 @@
  * Tests for activity-participants module
  */
 
-import {initParticipantsTab} from '../../../src/public/js/modules/activity-participants';
+import {initParticipantsTab} from '../../../src/public/js/modules/activity/activity-participants';
 import {participantsFilterData, participantsInitData} from '../data/activityParticipantsData';
 import { setupTest } from '../helpers/testSetup';
 

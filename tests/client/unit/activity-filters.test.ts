@@ -3,7 +3,7 @@
  * Data-driven approach with test data from activityFiltersData.ts
  */
 
-import {initDates, initSlotFilters} from '../../../src/public/js/modules/activity-filters';
+import {initDates, initSlotFilters} from '../../../src/public/js/modules/activity/activity-filters';
 import {initDatesTestData, initSlotFiltersTestData} from '../data/activityFiltersData';
 import {setupTest} from '../helpers/testSetup';
 

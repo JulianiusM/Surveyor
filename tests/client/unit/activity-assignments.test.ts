@@ -4,8 +4,8 @@
  */
 
 import * as http from '../../../src/public/js/core/http';
-import {buildWarningModal, describeWarning, initAssign} from '../../../src/public/js/modules/activity-assignments';
-import type {AssignmentWarning} from '../../../src/public/js/modules/activity-types';
+import {buildWarningModal, describeWarning, initAssign} from '../../../src/public/js/modules/activity/activity-assignments';
+import type {AssignmentWarning} from '../../../src/public/js/modules/activity/activity-types';
 import * as alerts from '../../../src/public/js/shared/alerts';
 import * as uiHelpers from '../../../src/public/js/shared/ui-helpers';
 import {activityAssignmentsData} from '../data/activityAssignmentsData';

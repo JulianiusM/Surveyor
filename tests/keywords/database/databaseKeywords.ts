@@ -7,7 +7,12 @@ import type { Application } from 'express';
 import { AppDataSource } from '../../../src/modules/database/dataSource';
 import { User } from '../../../src/modules/database/entities/user/User';
 import { Guest } from '../../../src/modules/database/entities/user/Guest';
-import { GuestLink } from '../../../src/modules/database/entities/user/GuestLink';
+
+function toGuestId(id: string | number) {
+    const raw = String(id);
+    if (raw.includes('-')) return raw;
+    return `00000000-0000-4000-8000-${raw.padStart(12, '0')}`;
+}
 
 /**
  * Make HTTP request and verify status code
@@ -66,28 +71,17 @@ export async function createTestUser(userData: {
  * Create a guest in the database
  */
 export async function createTestGuest(guestData: {
-    id: number;
+    id?: number | string;
     username: string;
+    email?: string;
+    token?: string;
 }) {
-    const guest = AppDataSource.getRepository(Guest).create(guestData);
-    return await AppDataSource.getRepository(Guest).save(guest);
-}
-
-/**
- * Create a guest link in the database
- */
-export async function createGuestLink(config: {
-    guestId: number;
-    entityType: string;
-    entityId: number;
-    token: string;
-}) {
-    return await AppDataSource.getRepository(GuestLink).save({
-        guest: { id: config.guestId },
-        entityType: config.entityType,
-        entityId: config.entityId,
-        token: config.token,
+    const guest = AppDataSource.getRepository(Guest).create({
+        ...guestData,
+        id: guestData.id !== undefined ? toGuestId(guestData.id) : undefined,
+        token: guestData.token ?? `token-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     });
+    return await AppDataSource.getRepository(Guest).save(guest);
 }
 
 /**

@@ -2,7 +2,7 @@
  * Test data for activity-assignments module tests
  */
 
-import type {AssignmentWarning} from '../../../src/public/js/modules/activity-types';
+import type {AssignmentWarning} from '../../../src/public/js/modules/activity/activity-types';
 import {deepCopy} from "../helpers/util";
 
 const baseModalHTML = `
