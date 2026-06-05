@@ -116,7 +116,7 @@ jobs:
           git commit -m "chore: release v${RELEASE_VERSION}"
           git tag -a "v${RELEASE_VERSION}" -m "Release v${RELEASE_VERSION}"
 
-          git push origin HEAD
+          git push origin "HEAD:${GITHUB_REF_NAME}"
           git push origin "v${RELEASE_VERSION}"
 
       - name: Build application for release
@@ -193,5 +193,17 @@ jobs:
           tag_name: v${{ inputs.version }}
           name: v${{ inputs.version }}
           prerelease: ${{ contains(inputs.version, '-') }}
+          draft: ${{ contains(inputs.version, '-') }}
+          make_latest: ${{ contains(inputs.version, '-') && 'false' || 'true' }}
           files: |
             artifacts/surveyor-v${{ inputs.version }}.tar.gz
+
+      - name: Publish prerelease after assets upload
+        if: ${{ contains(inputs.version, '-') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -e
+          release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/v${RELEASE_VERSION}" --jq '.id')"
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}"             -f draft=false             -f prerelease=true
