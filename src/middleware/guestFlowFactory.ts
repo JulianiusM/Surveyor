@@ -206,7 +206,6 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         if (req.session.user || req.session.guest) return next();
 
         // No session → redirect to guest registration
-        req.flash('info', 'Register as a guest to participate');
         res.redirect(`${buildRedirect(entity.id)}/guest`);
     }
 
