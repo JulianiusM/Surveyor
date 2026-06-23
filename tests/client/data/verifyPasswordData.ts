@@ -15,7 +15,7 @@ export interface VerifyPasswordTestData {
 
 export interface PasswordEventTestData {
     description: string;
-    eventType: 'keyup' | 'focusin' | 'focusout' | 'submit';
+    eventType: 'input' | 'focusin' | 'focusout' | 'submit';
     fieldId: string;
     expectedFunction: string;
     shouldPreventDefault?: boolean;
@@ -35,8 +35,8 @@ export const verifyPasswordInitTestData = () => deepCopy(_verifyPasswordInitTest
 
 const _passwordEventTestData: PasswordEventTestData[] = [
     {
-        description: 'should verify password on keyup',
-        eventType: 'keyup',
+        description: 'should verify password on input',
+        eventType: 'input',
         fieldId: 'password',
         expectedFunction: 'verifyPassword'
     },
@@ -53,9 +53,15 @@ const _passwordEventTestData: PasswordEventTestData[] = [
         expectedFunction: 'removeTooltip'
     },
     {
-        description: 'should match passwords on repeat keyup',
-        eventType: 'keyup',
+        description: 'should match passwords on input',
+        eventType: 'input',
         fieldId: 'password_repeat',
+        expectedFunction: 'matchPassword'
+    },
+    {
+        description: 'should match passwords on input in main field',
+        eventType: 'input',
+        fieldId: 'password',
         expectedFunction: 'matchPassword'
     }
 ];

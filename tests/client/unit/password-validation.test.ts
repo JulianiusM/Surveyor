@@ -3,21 +3,21 @@
 // Follows data-driven test pattern
 
 import {
-    isPasswordValid,
-    isPasswordRepeatValid,
     generatePasswordFeedback,
+    isPasswordRepeatValid,
+    isPasswordValid,
 } from '../../../src/public/js/core/password-validation';
-import { setupTest } from '../helpers/testSetup';
 
 import {
-    passwordValidData,
-    passwordInvalidData,
     passwordEdgeCaseData,
+    passwordFeedbackData,
+    passwordInvalidData,
+    passwordRepeatEdgeCaseData,
     passwordRepeatMatchData,
     passwordRepeatMismatchData,
-    passwordRepeatEdgeCaseData,
-    passwordFeedbackData,
+    passwordValidData,
 } from '../data/passwordValidationData';
+import {setupTest} from '../helpers/testSetup';
 
 describe('password validation logic', () => {
     setupTest();
@@ -81,7 +81,7 @@ describe('password validation logic', () => {
 
         test('shows error icon for unmet criteria', () => {
             const feedback = generatePasswordFeedback(false, true, false);
-            expect(feedback).toMatch(/<li.*text-muted.*>.*bi-x-circle.*At least 8 characters/);
+            expect(feedback).toMatch(/<li.*text-danger.*>.*bi-x-circle.*At least 8 characters/);
         });
 
         test('includes all three criteria in output', () => {

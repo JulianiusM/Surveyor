@@ -3,17 +3,20 @@
  * Follows data-driven and keyword-driven test patterns
  */
 
-import { 
-    verifyPasswordInitTestData as _verifyPasswordInitTestData
-} from '../data/verifyPasswordData';
+import {verifyPasswordInitTestData as _verifyPasswordInitTestData} from '../data/verifyPasswordData';
+import {setupTest} from '../helpers/testSetup';
 
 const verifyPasswordInitTestData = _verifyPasswordInitTestData();
 
 // Mock jQuery with chainable methods
 const createMockElement = () => {
     const mockElement = {
-        on: jest.fn(function(this: any) { return this; }),
-        trigger: jest.fn(function(this: any) { return this; }),
+        on: jest.fn(function (this: any) {
+            return this;
+        }),
+        trigger: jest.fn(function (this: any) {
+            return this;
+        }),
         val: jest.fn(() => 'test-value'),
         submit: jest.fn()
     };
@@ -49,8 +52,6 @@ jest.mock('../../../src/public/js/core/password-validation', () => ({
     Surveyor: {}
 };
 
-import { setupTest } from '../helpers/testSetup';
-
 describe('verify_password module', () => {
     let mockSetCurrentNavLocation: jest.Mock;
     let mockLoadPerms: jest.Mock;
@@ -63,23 +64,23 @@ describe('verify_password module', () => {
         beforeEach: () => {
             // Reset all mocks - handled by setupTest
             // jest.clearAllMocks();
-        mockJQuery.mockClear();
-        jest.resetModules();
+            mockJQuery.mockClear();
+            jest.resetModules();
 
-        // Reset window.Surveyor
-        (global as any).window.Surveyor = {};
+            // Reset window.Surveyor
+            (global as any).window.Surveyor = {};
 
-        // Get mock functions
-        const navigation = require('../../../src/public/js/core/navigation');
-        const permissions = require('../../../src/public/js/core/permissions');
-        const passwordValidation = require('../../../src/public/js/core/password-validation');
-        
-        mockSetCurrentNavLocation = navigation.setCurrentNavLocation as jest.Mock;
-        mockLoadPerms = permissions.loadPerms as jest.Mock;
-        mockVerifyPassword = passwordValidation.verifyPassword as jest.Mock;
-        mockMatchPassword = passwordValidation.matchPassword as jest.Mock;
-        mockRemoveTooltip = passwordValidation.removeTooltip as jest.Mock;
-        mockValidate = passwordValidation.validate as jest.Mock;
+            // Get mock functions
+            const navigation = require('../../../src/public/js/core/navigation');
+            const permissions = require('../../../src/public/js/core/permissions');
+            const passwordValidation = require('../../../src/public/js/core/password-validation');
+
+            mockSetCurrentNavLocation = navigation.setCurrentNavLocation as jest.Mock;
+            mockLoadPerms = permissions.loadPerms as jest.Mock;
+            mockVerifyPassword = passwordValidation.verifyPassword as jest.Mock;
+            mockMatchPassword = passwordValidation.matchPassword as jest.Mock;
+            mockRemoveTooltip = passwordValidation.removeTooltip as jest.Mock;
+            mockValidate = passwordValidation.validate as jest.Mock;
         },
         afterEach: () => {
             // Clean up
@@ -126,38 +127,38 @@ describe('verify_password module', () => {
             expect(mockJQuery).toHaveBeenCalledWith('#form');
         });
 
-        test('should register keyup, focusin, and focusout events on password field', async () => {
+        test('should register input, focusin, and focusout events on password field', async () => {
             const mockPasswordElement = {
                 on: jest.fn().mockReturnThis()
             };
             mockJQuery.mockImplementation((selector: string) => {
                 if (selector === '#password') return mockPasswordElement;
-                return { on: jest.fn().mockReturnThis() };
+                return {on: jest.fn().mockReturnThis()};
             });
 
             const verifyPasswordModule = await import('../../../src/public/js/verify_password');
             verifyPasswordModule.init();
 
             // Verify events were registered
-            expect(mockPasswordElement.on).toHaveBeenCalledWith('keyup', expect.any(Function));
+            expect(mockPasswordElement.on).toHaveBeenCalledWith('input', expect.any(Function));
             expect(mockPasswordElement.on).toHaveBeenCalledWith('focusin', expect.any(Function));
             expect(mockPasswordElement.on).toHaveBeenCalledWith('focusout', expect.any(Function));
         });
 
-        test('should register keyup event on password_repeat field', async () => {
+        test('should register input event on password_repeat field', async () => {
             const mockRepeatElement = {
                 on: jest.fn().mockReturnThis()
             };
             mockJQuery.mockImplementation((selector: string) => {
                 if (selector === '#password_repeat') return mockRepeatElement;
-                return { on: jest.fn().mockReturnThis() };
+                return {on: jest.fn().mockReturnThis()};
             });
 
             const verifyPasswordModule = await import('../../../src/public/js/verify_password');
             verifyPasswordModule.init();
 
             // Verify keyup event was registered
-            expect(mockRepeatElement.on).toHaveBeenCalledWith('keyup', expect.any(Function));
+            expect(mockRepeatElement.on).toHaveBeenCalledWith('input', expect.any(Function));
         });
 
         test('should register submit event on form', async () => {
@@ -166,7 +167,7 @@ describe('verify_password module', () => {
             };
             mockJQuery.mockImplementation((selector: string) => {
                 if (selector === '#form') return mockFormElement;
-                return { on: jest.fn().mockReturnThis() };
+                return {on: jest.fn().mockReturnThis()};
             });
 
             const verifyPasswordModule = await import('../../../src/public/js/verify_password');
@@ -178,11 +179,11 @@ describe('verify_password module', () => {
     });
 
     describe('event handlers', () => {
-        test('should call verifyPassword on password keyup', async () => {
+        test('should call verifyPassword on password input', async () => {
             let keyupHandler: Function | null = null;
             const mockPasswordElement = {
                 on: jest.fn((event: string, handler: Function) => {
-                    if (event === 'keyup') keyupHandler = handler;
+                    if (event === 'input') keyupHandler = handler;
                     return mockPasswordElement;
                 })
             };
@@ -190,7 +191,7 @@ describe('verify_password module', () => {
             mockJQuery.mockImplementation((selector: string) => {
                 if (selector === '#password') return mockPasswordElement;
                 if (selector === '#password-info') return {};
-                return { on: jest.fn().mockReturnThis() };
+                return {on: jest.fn().mockReturnThis()};
             });
 
             const verifyPasswordModule = await import('../../../src/public/js/verify_password');
@@ -200,6 +201,7 @@ describe('verify_password module', () => {
             if (keyupHandler) {
                 keyupHandler();
                 expect(mockVerifyPassword).toHaveBeenCalled();
+                expect(mockMatchPassword).toHaveBeenCalled();
             }
         });
 
@@ -215,7 +217,7 @@ describe('verify_password module', () => {
             mockJQuery.mockImplementation((selector: string) => {
                 if (selector === '#password') return mockPasswordElement;
                 if (selector === '#password-info') return {};
-                return { on: jest.fn().mockReturnThis() };
+                return {on: jest.fn().mockReturnThis()};
             });
 
             const verifyPasswordModule = await import('../../../src/public/js/verify_password');
@@ -225,6 +227,7 @@ describe('verify_password module', () => {
             if (focusinHandler) {
                 focusinHandler();
                 expect(mockVerifyPassword).toHaveBeenCalled();
+                expect(mockMatchPassword).toHaveBeenCalled();
             }
         });
 
@@ -240,7 +243,7 @@ describe('verify_password module', () => {
             mockJQuery.mockImplementation((selector: string) => {
                 if (selector === '#password') return mockPasswordElement;
                 if (selector === '#password-info') return {};
-                return { on: jest.fn().mockReturnThis() };
+                return {on: jest.fn().mockReturnThis()};
             });
 
             const verifyPasswordModule = await import('../../../src/public/js/verify_password');
@@ -253,15 +256,15 @@ describe('verify_password module', () => {
             }
         });
 
-        test('should call matchPassword on password_repeat keyup', async () => {
+        test('should call matchPassword on password_repeat input', async () => {
             let keyupHandler: Function | null = null;
             const mockRepeatElement = {
                 on: jest.fn((event: string, handler: Function) => {
-                    if (event === 'keyup') keyupHandler = handler;
+                    if (event === 'input') keyupHandler = handler;
                     return mockRepeatElement;
                 })
             };
-            
+
             const mockChainableElement = {
                 on: jest.fn().mockReturnThis()
             };
@@ -293,7 +296,7 @@ describe('verify_password module', () => {
                     return mockFormElement;
                 })
             };
-            
+
             const mockChainableElement = {
                 on: jest.fn().mockReturnThis()
             };
@@ -312,7 +315,7 @@ describe('verify_password module', () => {
 
             // Call the submit handler
             if (submitHandler) {
-                const mockEvent = { preventDefault: jest.fn() };
+                const mockEvent = {preventDefault: jest.fn()};
                 submitHandler(mockEvent);
                 expect(mockValidate).toHaveBeenCalledWith(
                     mockEvent,
@@ -342,7 +345,7 @@ describe('verify_password module', () => {
             mockJQuery.mockImplementation((selector: string) => ({
                 on: jest.fn((event: string) => {
                     registeredEvents.push(`${selector}:${event}`);
-                    return { on: jest.fn().mockReturnThis() };
+                    return {on: jest.fn().mockReturnThis()};
                 })
             }));
 
