@@ -57,16 +57,16 @@ export function isPasswordRepeatValid(password?: string, passwordRepeat?: string
  */
 export function generatePasswordFeedback(hasEight: boolean, hasLetter: boolean, hasDigit: boolean): string {
     const criteria = [
-        { met: hasEight, text: 'At least 8 characters' },
-        { met: hasLetter, text: 'At least one letter' },
-        { met: hasDigit, text: 'At least one digit' }
+        {met: hasEight, text: 'At least 8 characters'},
+        {met: hasLetter, text: 'At least one letter'},
+        {met: hasDigit, text: 'At least one digit'}
     ];
 
     const items = criteria.map(c => {
-        const icon = c.met 
-            ? '<i class="bi bi-check-circle-fill text-success"></i>' 
+        const icon = c.met
+            ? '<i class="bi bi-check-circle-fill text-success"></i>'
             : '<i class="bi bi-x-circle text-danger"></i>';
-        const textClass = c.met ? 'text-success' : 'text-muted';
+        const textClass = c.met ? 'text-success' : 'text-danger';
         return `<li class="small ${textClass}">${icon} ${c.text}</li>`;
     }).join('');
 

@@ -21,6 +21,7 @@ block content
         h2.text-center
             i.bi.bi-clipboard-check.me-2
             | Your participation
+        p.text-center Here are all entities that you participate in. Open the respective section to see and access them.
         hr
         .accordion.accordion-dark#participationLists
             +entityList(
@@ -97,22 +98,22 @@ block content
         h2.text-center
             i.bi.bi-shield-check.me-2
             | Administrable entities
+        p.text-center These are the entities that you either own or are an admin to. Open the respective section to see and access them.
         hr
         .accordion.accordion-dark#entityLists
-            if !data.admin_flag
-                +entityList(
-                    'own-sec-surveys',
-                    'Your surveys',
-                    'bi-clipboard-data',
-                    data.owner.surveys,
-                    'survey',
-                    '/survey/create',
-                    'Create new survey',
-                    'bi-plus-circle',
-                    'You don’t have any surveys yet.',
-                    'bi-clipboard-check',
-                    true
-                )
+            +entityList(
+                'own-sec-surveys',
+                'Your surveys',
+                'bi-clipboard-data',
+                data.owner.surveys,
+                'survey',
+                '/survey/create',
+                'Create new survey',
+                'bi-plus-circle',
+                'You don’t have any surveys yet.',
+                'bi-clipboard-check',
+                true
+            )
 
             +entityList(
                 'own-sec-pack',

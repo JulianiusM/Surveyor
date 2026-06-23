@@ -1,11 +1,11 @@
 import express, {Request, Response} from 'express';
 
 import * as userController from "../controller/userController";
-import renderer from "../modules/renderer";
 import {isAuthenticated} from "../middleware/permissionMiddleware";
 import {asyncHandler} from '../modules/lib/asyncHandler';
-import settings from "../modules/settings";
 import {ExpectedError} from "../modules/lib/errors";
+import renderer from "../modules/renderer";
+import settings from "../modules/settings";
 
 const app = express.Router();
 
@@ -97,8 +97,8 @@ app.get('/dashboard', isAuthenticated, asyncHandler(async (req: Request, res: Re
     renderer.renderWithData(res, 'users/dashboard', await userController.getUserDashboardEntities(req.session.user!));
 }));
 
-app.get("/manage-dashboard", isAuthenticated, asyncHandler(async (req: Request, res: Response) => {
+/* app.get("/manage-dashboard", isAuthenticated, asyncHandler(async (req: Request, res: Response) => {
     renderer.renderWithData(res, "users/dashboard", await userController.getUserAdminDashboardEntities(req.session.user!));
-}))
+})) */
 
 export default app;

@@ -383,3 +383,10 @@ export const ENTITY_ITEMS: Record<string, EntityItemType> = {
 
 // simple allowlist to keep LIKE fast and avoid expensive patterns
 export const SQL_ALLOW_LIST = /^[a-z0-9._+\-@ ]{3,}$/i;
+
+export function merge<A>(a: A[], b: A[], predicate = (a: A, b: A) => a === b) {
+    const c = [...a]; // copy to avoid side effects
+    // add all items from B to copy C if they're not already present
+    b.forEach((bItem) => (c.some((cItem) => predicate(bItem, cItem)) ? null : c.push(bItem)))
+    return c;
+}

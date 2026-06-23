@@ -4,24 +4,26 @@
  */
 
 import {setCurrentNavLocation} from './core/navigation';
-import {loadPerms} from './core/permissions';
 import {matchPassword, removeTooltip, validate, verifyPassword} from './core/password-validation';
+import {loadPerms} from './core/permissions';
 
 /**
  * Register password verification events
  */
 function registerEvents(): void {
     // Events regarding the password field
-    $("#password").on("keyup", function () {
+    $("#password").on("input", function () {
         verifyPassword($("#password"), $("#password-info"));
+        matchPassword($("#password"), $("#password_repeat"), $("#password_repeat-info"));
     }).on('focusin', function () {
         verifyPassword($("#password"), $("#password-info"));
+        matchPassword($("#password"), $("#password_repeat"), $("#password_repeat-info"));
     }).on('focusout', function () {
         removeTooltip($("#password"), $("#password-info"));
     });
 
     // Events regarding password repeat field
-    $("#password_repeat").on("keyup", function () {
+    $("#password_repeat").on("input", function () {
         matchPassword($("#password"), $("#password_repeat"), $("#password_repeat-info"));
     });
 

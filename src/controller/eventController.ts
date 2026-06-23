@@ -1,19 +1,20 @@
 // controllers/eventController.ts
+import {Request} from "express";
 // Business logic for the Event routes
 import Joi from 'joi';
 
-import * as eventService from '../modules/database/services/EventService';
-import * as invoiceService from "../modules/database/services/EventInvoiceService";
-import {APIError, ValidationError} from '../modules/lib/errors';
-import {buildDateTotals, ENTITIES, getResource, isWithinWindow, rewriteISOToZone} from "../modules/lib/util";
-import {purgeExpiredProofs} from "./eventPoolController";
-
 import {Event} from "../modules/database/entities/event/Event";
-import type {DIETARY} from "../types/EventTypes";
-import {Request} from "express";
 import {ALLOWED_DIETARY} from "../modules/database/entities/event/EventRegistrationDietary";
-import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
+import * as invoiceService from "../modules/database/services/EventInvoiceService";
+
+import * as eventService from '../modules/database/services/EventService';
+import {APIError, ValidationError} from '../modules/lib/errors';
+import {PERM} from '../modules/lib/permissions';
+import {buildDateTotals, ENTITIES, getResource, isWithinWindow, rewriteISOToZone} from "../modules/lib/util";
+import {can, saveDefaultPermsFromBody} from "../modules/permissionEngine";
+import type {DIETARY} from "../types/EventTypes";
 import type {PermBundle} from "../types/PermissionTypes";
+import {purgeExpiredProofs} from "./eventPoolController";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'event/event-create';
@@ -98,7 +99,14 @@ async function fetchForView(event: Event, req: Request) {
 
     // Associated plans/lists (will be empty until event_id exists in schema)
     // Only show lists/plans once the actor is registered (or is owner)
-    const isOwner = session.user ? session.user.id == event.ownerId : false;
+    const isOwner = await can({
+        entity: {
+            entityId: event.id,
+            ownerUserId: event.ownerId,
+            entityType: "event"
+        },
+        kind: "entity"
+    }, req.session, PERM.MANAGE_ASSIGNMENTS);
     const shouldShowScoped = !!(isOwner || registration);
     const [activityPlans, packingLists, driverLists] = shouldShowScoped ? await Promise.all([
         eventService.getActivityPlansForEvent(event.id),
@@ -222,10 +230,10 @@ async function updateEventSettings(event: Event, body: any, permData?: PermBundl
     // Permission check
     if (!permData ||
         ((normalizedBody.location !== undefined
-                || normalizedBody.startDate !== undefined
-                || normalizedBody.endDate !== undefined
-                || normalizedBody.bindingDeadline !== undefined
-                || normalizedBody.deadlineTz !== undefined) && !permData.entity.has("EDIT_META"))
+            || normalizedBody.startDate !== undefined
+            || normalizedBody.endDate !== undefined
+            || normalizedBody.bindingDeadline !== undefined
+            || normalizedBody.deadlineTz !== undefined) && !permData.entity.has("EDIT_META"))
         || (normalizedBody.title !== undefined && !permData.entity.has("EDIT_TITLE"))
         || (normalizedBody.description !== undefined && !permData.entity.has("EDIT_DESC"))
         || (normalizedBody.requireDietaryInfo !== undefined && !permData.entity.has("MANAGE_REQUIREMENTS"))

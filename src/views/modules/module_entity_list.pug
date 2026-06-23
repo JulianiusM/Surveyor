@@ -51,10 +51,6 @@ mixin entityList(id, title, iconHeader, items, basePath, createHref, createLabel
                                 a.text-decoration-none.flex-grow-1(href=`/${basePath}/${item.id}`)
                                     i(class=`bi ${itemIcon} me-2`)
                                     | #{item.title}
-                                    if item.allowGuestAdd
-                                        span.badge.bg-info-subtle.text-info-emphasis.float-end.ms-2 Add&nbsp;enabled
-                                    if item.guestManage
-                                        span.badge.bg-warning-subtle.text-warning-emphasis.float-end Guests&nbsp;manage
                                 if showCreate && item.ownerId === user.id
                                     form.d-inline.btn-group.ms-2(method="post" action=`/${basePath}/${item.id}/delete` onsubmit="return confirm('Delete this item?');")
                                         a.btn.btn-sm.btn-outline-info(href=`/${basePath}/${item.id}/duplicate`)

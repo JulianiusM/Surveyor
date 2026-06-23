@@ -7,6 +7,7 @@ import {ExpectedError, ValidationError} from '../modules/lib/errors';
 import {getGuestRegistrationNags} from "../modules/lib/guestRegistrationNags";
 import {PERM} from "../modules/lib/permissions";
 import {buildGuestLink, getItemFromEntityPermFct, getResource} from "../modules/lib/util";
+import {can} from "../modules/permissionEngine";
 
 import renderer from '../modules/renderer';
 import type {EntityDescriptor, EntityGetter, GetResource, ItemGetter} from "../types/PermissionTypes";
@@ -197,6 +198,22 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
             }, event.id)) {
                 // We have a valid registration --> Don't need to check in more detail.
                 return next();
+            }
+
+            if (req.session.user) {
+                const canAccess = await can({
+                    entity: {
+                        entityId: entity.id,
+                        entityType: entityType,
+                        eventId: event.id,
+                        ownerUserId: entity.ownerId
+                    },
+                    kind: "entity"
+                }, req.session, PERM.ACCESS_VIEW);
+                if (canAccess) {
+                    // We specifically are allowed to access
+                    return next();
+                }
             }
 
             // No valid registration

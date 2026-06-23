@@ -1,9 +1,9 @@
 // src/modules/database/services/EntityAdminService.ts
+import type {Audience, PermData} from "../../../types/PermissionTypes";
+import type {CombEntityType} from "../../../types/UtilTypes";
 import {AppDataSource} from '../dataSource';
 import {EntityAdminAssignment as ACL} from '../entities/permissions/EntityAdminAssignment';
 import {EntityPermissions} from "../entities/permissions/EntityPermissions";
-import type {Audience, PermData} from "../../../types/PermissionTypes";
-import type {CombEntityType} from "../../../types/UtilTypes";
 
 export async function addAdmin(entityType: CombEntityType, entityId: string, userId: number, perms: number, createdBy?: number) {
     const repo = AppDataSource.getRepository(ACL);
@@ -31,6 +31,11 @@ export async function listAdmins(entityType: CombEntityType, entityId: string) {
 
 export async function updateAdminPerms(entityType: CombEntityType, entityId: string, userId: number, perms: number) {
     await AppDataSource.getRepository(ACL).update({entityType, entityId, user: {id: userId}}, {perms});
+}
+
+export async function isUserAdmin(entityType: CombEntityType, entityId: string, userId: number) {
+    const repo = AppDataSource.getRepository(ACL);
+    return await repo.exists({where: {entityType, entityId, user: {id: userId}}});
 }
 
 export async function getUserPerms(entityType: CombEntityType, entityId: string, userId: number): Promise<number> {

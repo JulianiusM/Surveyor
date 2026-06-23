@@ -10,7 +10,7 @@ import * as userService from "../modules/database/services/UserService";
 import mailer from "../modules/email";
 import {ExpectedError, ValidationError} from "../modules/lib/errors";
 import {persistSession} from "../modules/lib/session";
-import {buildGuestLink} from "../modules/lib/util";
+import {buildGuestLink, merge} from "../modules/lib/util";
 import * as oidc from "../modules/oidc";
 import settings from "../modules/settings";
 import {DashboardDTO, GuestLinkData} from "../types/UserTypes";
@@ -84,14 +84,24 @@ export async function loginUser(body: any, session: Request["session"]) {
 export async function getUserDashboardEntities(user: User) {
     const surveys = await surveyService.getSurveysByUserId(user.id);
     const partSurveys = await surveyService.getSurveysByParticipantUserId(user.id);
-    const packlists = await packingService.getPackingListByUserId(user.id);
+    const ownPacklists = await packingService.getPackingListByUserId(user.id);
+    const adminPacklists = await packingService.getManagedListsForUser(user.id);
     const partPackLists = await packingService.getPackingListByParticipantUserId(user.id);
-    const activityplans = await activityService.getActivityPlansByUserId(user.id);
+    const ownActivityplans = await activityService.getActivityPlansByUserId(user.id);
+    const adminActivityplans = await activityService.getManagedPlansForUser(user.id);
     const partActivityPlans = await activityService.getActivityPlansByParticipantUserId(user.id);
-    const driverslists = await driverService.getDriversListByUserId(user.id);
+    const ownDriverslists = await driverService.getDriversListByUserId(user.id);
+    const adminDriverslists = await driverService.getManagedListsForUser(user.id);
     const partDriversLists = await driverService.getDriversListByParticipantUserId(user.id);
-    const events = await eventService.getEventsByOwnerId(user.id);
+    const ownEvents = await eventService.getEventsByOwnerId(user.id);
+    const adminEvents = await eventService.getActiveManagedEventsForUser(user.id);
     const registeredEvents = await eventService.getRegisteredEventsFor({userId: user.id});
+
+    const packlists = merge(ownPacklists, adminPacklists, (a, b) => a.id === b.id);
+    const activityplans = merge(ownActivityplans, adminActivityplans, (a, b) => a.id === b.id);
+    const driverslists = merge(ownDriverslists, adminDriverslists, (a, b) => a.id === b.id);
+    const events = merge(ownEvents, adminEvents, (a, b) => a.id === b.id);
+
     return {
         owner: {
             surveys: surveys,
