@@ -17,23 +17,27 @@ jest.mock('../../src/modules/database/services/UserService', () => ({
 
 jest.mock('../../src/modules/database/services/ActivityService', () => ({
     getActivityPlansByUserId: jest.fn(),
+    getManagedPlansForUser: jest.fn(),
     getActivityPlansByParticipantUserId: jest.fn(),
     getActivityPlansByParticipantGuestId: jest.fn(),
 }));
 
 jest.mock('../../src/modules/database/services/DriverService', () => ({
     getDriversListByUserId: jest.fn(),
+    getManagedListsForUser: jest.fn(),
     getDriversListByParticipantUserId: jest.fn(),
     getDriversListByParticipantGuestId: jest.fn(),
 }));
 
 jest.mock('../../src/modules/database/services/EventService', () => ({
     getEventsByOwnerId: jest.fn(),
+    getActiveManagedEventsForUser: jest.fn(),
     getRegisteredEventsFor: jest.fn(),
 }));
 
 jest.mock('../../src/modules/database/services/PackingService', () => ({
     getPackingListByUserId: jest.fn(),
+    getManagedListsForUser: jest.fn(),
     getPackingListByParticipantUserId: jest.fn(),
     getPackingListByParticipantGuestId: jest.fn(),
 }));
@@ -78,22 +82,22 @@ import {
     resetPassword,
     sendPasswordForgotMail,
 } from '../../src/controller/userController';
-
-import * as userService from '../../src/modules/database/services/UserService';
 import * as activityService from '../../src/modules/database/services/ActivityService';
 import * as driverService from '../../src/modules/database/services/DriverService';
 import * as eventService from '../../src/modules/database/services/EventService';
 import * as packingService from '../../src/modules/database/services/PackingService';
 import * as surveyService from '../../src/modules/database/services/SurveyService';
-import * as oidc from '../../src/modules/oidc';
+
+import * as userService from '../../src/modules/database/services/UserService';
 import {ExpectedError, ValidationError} from '../../src/modules/lib/errors';
+import * as oidc from '../../src/modules/oidc';
 import {
-    registerUserData,
-    loginUserData,
-    dashboardEntityData,
-    passwordResetData,
     activateAccountData,
+    dashboardEntityData,
+    loginUserData,
     oidcWrapperData,
+    passwordResetData,
+    registerUserData,
 } from '../data/controller/userData';
 
 beforeEach(() => {
@@ -122,7 +126,7 @@ describe('registerUser - Data Driven', () => {
             );
         } else {
             await expect(registerUser(testCase.body as any)).resolves.toBeUndefined();
-            
+
             if (testCase.expectedRegisterCall) {
                 expect(userService.registerUser).toHaveBeenCalledWith(...testCase.expectedRegisterCall);
             }
@@ -139,7 +143,7 @@ describe('registerUser - Data Driven', () => {
 describe('loginUser - Data Driven', () => {
     test.each(loginUserData)('$description', async (testCase) => {
         const session: any = {};
-        
+
         // Setup mocks
         if (testCase.mockUser !== undefined) {
             (userService.getUserByUsername as jest.Mock).mockResolvedValue(testCase.mockUser);
@@ -156,13 +160,13 @@ describe('loginUser - Data Driven', () => {
             await expect(loginUser(testCase.body as any, session)).rejects.toBeInstanceOf(
                 testCase.errorType === 'ValidationError' ? ValidationError : ExpectedError
             );
-            
+
             if (testCase.expectsTokenGeneration) {
                 expect(userService.generateActivationToken).toHaveBeenCalled();
             } else if (testCase.expectsTokenGeneration === false) {
                 expect(userService.generateActivationToken).not.toHaveBeenCalled();
             }
-            
+
             if (testCase.expectsEmail) {
                 expect(sendActivationEmail).toHaveBeenCalled();
             } else if (testCase.expectsEmail === false) {
@@ -183,13 +187,17 @@ describe('dashboard entity loaders - Data Driven', () => {
             // Mock all user dashboard services
             (surveyService.getSurveysByUserId as jest.Mock).mockResolvedValue(testCase.mockData.surveys);
             (surveyService.getSurveysByParticipantUserId as jest.Mock).mockResolvedValue(testCase.mockData.partSurveys);
-            (packingService.getPackingListByUserId as jest.Mock).mockResolvedValue(testCase.mockData.packlists);
+            (packingService.getPackingListByUserId as jest.Mock).mockResolvedValue(testCase.mockData.ownPacklists);
+            (packingService.getManagedListsForUser as jest.Mock).mockResolvedValue(testCase.mockData.adminPacklists);
             (packingService.getPackingListByParticipantUserId as jest.Mock).mockResolvedValue(testCase.mockData.partPacklists);
-            (activityService.getActivityPlansByUserId as jest.Mock).mockResolvedValue(testCase.mockData.activityplans);
+            (activityService.getActivityPlansByUserId as jest.Mock).mockResolvedValue(testCase.mockData.ownActivityplans);
+            (activityService.getManagedPlansForUser as jest.Mock).mockResolvedValue(testCase.mockData.adminActivityplans);
             (activityService.getActivityPlansByParticipantUserId as jest.Mock).mockResolvedValue(testCase.mockData.partActivityplans);
-            (driverService.getDriversListByUserId as jest.Mock).mockResolvedValue(testCase.mockData.driverslists);
+            (driverService.getDriversListByUserId as jest.Mock).mockResolvedValue(testCase.mockData.ownDriverslists);
+            (driverService.getManagedListsForUser as jest.Mock).mockResolvedValue(testCase.mockData.adminDriverslists);
             (driverService.getDriversListByParticipantUserId as jest.Mock).mockResolvedValue(testCase.mockData.partDriverslists);
-            (eventService.getEventsByOwnerId as jest.Mock).mockResolvedValue(testCase.mockData.events);
+            (eventService.getEventsByOwnerId as jest.Mock).mockResolvedValue(testCase.mockData.ownEvents);
+            (eventService.getActiveManagedEventsForUser as jest.Mock).mockResolvedValue(testCase.mockData.adminEvents);
             (eventService.getRegisteredEventsFor as jest.Mock).mockResolvedValue(testCase.mockData.registeredEvents);
 
             const result = await getUserDashboardEntities({id: testCase.userId} as any);
@@ -200,7 +208,7 @@ describe('dashboard entity loaders - Data Driven', () => {
             (packingService.getPackingListByParticipantGuestId as jest.Mock).mockResolvedValue(testCase.mockData.partPacklists);
             (activityService.getActivityPlansByParticipantGuestId as jest.Mock).mockResolvedValue(testCase.mockData.partActivityplans);
             (driverService.getDriversListByParticipantGuestId as jest.Mock).mockResolvedValue(testCase.mockData.partDriverslists);
-            
+
             const result = await getGuestDashboardEntities({id: testCase.userId} as any);
             expect(result).toEqual(testCase.expected);
         }
@@ -223,7 +231,7 @@ describe('password reset flow - Data Driven', () => {
         // Execute based on action
         if (testCase.action === 'sendPasswordForgotMail') {
             await sendPasswordForgotMail(testCase.username!);
-            
+
             if (testCase.expectsToken) {
                 expect(userService.generatePasswordResetToken).toHaveBeenCalled();
             }

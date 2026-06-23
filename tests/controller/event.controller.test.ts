@@ -29,7 +29,7 @@ jest.mock('../../src/modules/database/services/EventInvoiceService', () => ({
     getParticipantPools: jest.fn(() => Promise.resolve([])),
 }));
 
-import { mockUtil, mockPermissionEngine } from '../mocks/commonMocks';
+const {mockUtil, mockPermissionEngine} = require('../mocks/commonMocks'); //must stay require or else import optimization acts up!
 
 jest.mock('../../src/modules/lib/util', () => mockUtil({
     isWithinWindow: jest.fn(() => true),
@@ -41,11 +41,11 @@ jest.mock('../../src/modules/permissionEngine', () => mockPermissionEngine());
 
 import controller from '../../src/controller/eventController';
 import * as eventService from '../../src/modules/database/services/EventService';
-import * as permissionEngine from '../../src/modules/permissionEngine';
 import {APIError, ValidationError} from '../../src/modules/lib/errors';
 import {isWithinWindow, rewriteISOToZone} from '../../src/modules/lib/util';
-import {setupMock, verifyMockCall, verifyResult} from '../keywords/common/controllerKeywords';
+import * as permissionEngine from '../../src/modules/permissionEngine';
 import * as testData from '../data/controller/eventData';
+import {setupMock, verifyMockCall, verifyResult} from '../keywords/common/controllerKeywords';
 
 const {
     preprocessCreate,
@@ -74,18 +74,18 @@ describe('preprocessCreate', () => {
                 expect(() => preprocessCreate(input)).toThrow(shouldThrow === 'ValidationError' ? ValidationError : Error);
             } else {
                 const out = preprocessCreate(input);
-                
+
                 if (expectRewrite) {
                     expect(rewriteISOToZone).toHaveBeenCalledWith(...expectRewrite);
                 }
-                
-                if (expected.bindingDeadline !== undefined) {
-                    expect(out.bindingDeadline).toBe(expected.bindingDeadline);
+
+                if (expected?.bindingDeadline !== undefined) {
+                    expect(out.bindingDeadline).toBe(expected?.bindingDeadline);
                 }
-                if (expected.timezone !== undefined) {
-                    expect(out.timezone).toBe(expected.timezone);
+                if (expected?.timezone !== undefined) {
+                    expect(out.timezone).toBe(expected?.timezone);
                 }
-                if (expected.title) {
+                if (expected?.title) {
                     expect(out).toMatchObject(expected);
                 }
             }
@@ -97,9 +97,9 @@ describe('createEntity / afterCreateItems / deleteEntity', () => {
     it('createEntity forwards fields to service', async () => {
         const {userId, data, expectedId} = testData.createEntityData;
         setupMock(eventService.createEventTx, expectedId);
-        
+
         const id = await createEntity(userId, data);
-        
+
         verifyResult(id, expectedId);
         verifyMockCall(eventService.createEventTx,
             userId, data.title, data.description, data.startDate, data.endDate,
@@ -110,9 +110,9 @@ describe('createEntity / afterCreateItems / deleteEntity', () => {
 
     it('deleteEntity delegates to service', async () => {
         const {event} = testData.deleteEntityData;
-        
+
         await deleteEntity(event as any, {} as any);
-        
+
         verifyMockCall(eventService.deleteEvent, event.id);
     });
 });
@@ -127,15 +127,17 @@ describe('fetchForView', () => {
 
     test.each(scenarios)(
         '$description',
-        async ({eventOverrides, session, mockRegistration, mockActivityPlans, mockPackingLists, mockDriverLists,
-                expectedRegistrationCall, expected, expectNoCall, registrations: customRegistrations}) => {
+        async ({
+                   eventOverrides, session, mockRegistration, mockActivityPlans, mockPackingLists, mockDriverLists,
+                   mockCanAccess, expectedRegistrationCall, expected, expectNoCall, registrations: customRegistrations
+               }) => {
             const event = {...baseEvent, ...eventOverrides};
-            
+
             if (customRegistrations) {
                 setupMock(eventService.getRegistrationsForEvent, customRegistrations);
                 setupMock(eventService.getEventParticipants, customRegistrations);
             }
-            
+
             if (mockRegistration !== undefined) {
                 setupMock(eventService.getRegistrationFor, mockRegistration);
             }
@@ -148,18 +150,21 @@ describe('fetchForView', () => {
             if (mockDriverLists) {
                 setupMock(eventService.getDriverListsForEvent, mockDriverLists);
             }
-            
+            if (mockCanAccess) {
+                setupMock(permissionEngine.can, mockCanAccess);
+            }
+
             const req = {session} as any;
             const res = await fetchForView(event, req);
-            
+
             if (expectedRegistrationCall) {
                 verifyMockCall(eventService.getRegistrationFor, ...expectedRegistrationCall);
             }
-            
+
             if (expectNoCall) {
                 expect(eventService[expectNoCall]).not.toHaveBeenCalled();
             }
-            
+
             Object.keys(expected).forEach(key => {
                 if (expected[key] === null) {
                     expect(res[key]).toBeNull();
@@ -183,7 +188,17 @@ describe('registerAttendance', () => {
 
     test.each(scenarios)(
         '$description',
-        async ({mockFull, mockRegistered, mockWithinWindow, body, session, expectedMessage, expectedCall, expectCallMade, shouldThrow}) => {
+        async ({
+                   mockFull,
+                   mockRegistered,
+                   mockWithinWindow,
+                   body,
+                   session,
+                   expectedMessage,
+                   expectedCall,
+                   expectCallMade,
+                   shouldThrow
+               }) => {
             if (mockFull !== undefined) {
                 setupMock(eventService.isEventFull, mockFull);
             }
@@ -193,9 +208,9 @@ describe('registerAttendance', () => {
             if (mockWithinWindow !== undefined) {
                 (isWithinWindow as jest.Mock).mockReturnValue(mockWithinWindow);
             }
-            
+
             const req = {session, resource: {}} as any;
-            
+
             if (shouldThrow) {
                 await expect(registerAttendance(event as any, body, req)).rejects.toBeInstanceOf(APIError);
             } else if (expectedCall) {
@@ -217,7 +232,7 @@ describe('cancelRegistration', () => {
         '$description',
         async ({eventId, session, expectedMessage, expectedArgs, shouldThrow}) => {
             const event = {id: eventId} as any;
-            
+
             if (shouldThrow) {
                 await expect(cancelRegistration(event, session as any)).rejects.toBeInstanceOf(APIError);
             } else {
@@ -241,26 +256,26 @@ describe('updateEventSettings', () => {
             const mockPermData = {
                 entity: new Set(['EDIT_META', 'EDIT_TITLE', 'EDIT_DESC', 'MANAGE_REQUIREMENTS', 'EDIT_CAPACITY'])
             };
-            
+
             if (shouldThrow) {
                 await expect(updateEventSettings(event as any, body, mockPermData as any)).rejects.toBeInstanceOf(APIError);
             } else {
                 const msg = await updateEventSettings(event as any, body, mockPermData as any);
-                
+
                 if (expectedMessage) {
                     verifyResult(msg, expectedMessage);
                 }
-                
+
                 if (expectRewrite) {
                     expect(rewriteISOToZone).toHaveBeenCalledWith(...expectRewrite);
                 }
-                
+
                 if (expectedCalls) {
                     Object.keys(expectedCalls).forEach(serviceName => {
                         verifyMockCall(eventService[serviceName], ...expectedCalls[serviceName]);
                     });
                 }
-                
+
                 if (expectNotCalled) {
                     expectNotCalled.forEach(serviceName => {
                         expect(eventService[serviceName]).not.toHaveBeenCalled();
@@ -273,20 +288,29 @@ describe('updateEventSettings', () => {
 
 describe('updateRegistrationDates', () => {
     const {updateRegistrationDates} = controller as any;
-    
+
     test.each(testData.updateRegistrationDatesData)(
         '$description',
-        async ({body, event, registrationId, expectedMessage, expectedCalls, expectNotCalled, shouldThrow, datesOutsideWindow}: any) => {
+        async ({
+                   body,
+                   event,
+                   registrationId,
+                   expectedMessage,
+                   expectedCalls,
+                   expectNotCalled,
+                   shouldThrow,
+                   datesOutsideWindow
+               }: any) => {
             const mockEvent = {id: 'e1', ...event} as any;
-            
+
             // Set up isWithinWindow mock based on test expectations
             (isWithinWindow as jest.Mock).mockReturnValue(!datesOutsideWindow);
-            
+
             if (shouldThrow) {
                 await expect(
                     updateRegistrationDates(mockEvent, registrationId, body)
                 ).rejects.toThrow(shouldThrow === 'APIError' ? APIError : Error);
-                
+
                 if (expectNotCalled) {
                     expectNotCalled.forEach(serviceName => {
                         expect(eventService[serviceName]).not.toHaveBeenCalled();
@@ -294,11 +318,11 @@ describe('updateRegistrationDates', () => {
                 }
             } else {
                 const msg = await updateRegistrationDates(mockEvent, registrationId, body);
-                
+
                 if (expectedMessage) {
                     verifyResult(msg, expectedMessage);
                 }
-                
+
                 if (expectedCalls) {
                     Object.keys(expectedCalls).forEach(serviceName => {
                         verifyMockCall(eventService[serviceName], ...expectedCalls[serviceName]);

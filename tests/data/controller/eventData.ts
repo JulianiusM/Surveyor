@@ -101,6 +101,7 @@ export const fetchForViewData = {
         {
             description: 'anonymous: no scoped lists, registration null, computes isFull',
             session: {},
+            mockCanAccess: false,
             expected: {
                 registration: null,
                 activityPlans: [],
@@ -116,6 +117,7 @@ export const fetchForViewData = {
             mockActivityPlans: ['ap'],
             mockPackingLists: ['pl'],
             mockDriverLists: ['dl'],
+            mockCanAccess: true,
             expected: {
                 activityPlans: ['ap'],
                 packingLists: ['pl'],
@@ -130,6 +132,7 @@ export const fetchForViewData = {
             mockActivityPlans: ['ap'],
             mockPackingLists: ['pl'],
             mockDriverLists: ['dl'],
+            mockCanAccess: false,
             expectedRegistrationCall: [{userId: 2}, 'e1'],
             expected: {
                 registration: {id: 'r1'},
@@ -141,6 +144,7 @@ export const fetchForViewData = {
             eventOverrides: {ownerId: 99},
             session: {guest: {id: 7}},
             mockRegistration: {id: 'rg'},
+            mockCanAccess: false,
             expectedRegistrationCall: [{guestId: 7}, 'e1'],
             expected: {
                 registration: {id: 'rg'},
@@ -150,6 +154,7 @@ export const fetchForViewData = {
             description: 'isFull false when maxParticipants undefined (treated as infinite)',
             eventOverrides: {maxParticipants: undefined},
             session: {},
+            mockCanAccess: false,
             registrations: [{}, {}, {}, {}],
             expected: {
                 isFull: false,

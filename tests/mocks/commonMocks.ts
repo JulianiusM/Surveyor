@@ -18,4 +18,5 @@ export const mockUtil = (overrides = {}) => ({
 
 export const mockPermissionEngine = () => ({
     saveDefaultPermsFromBody: jest.fn(),
+    can: jest.fn(),
 });
