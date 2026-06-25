@@ -194,70 +194,71 @@ block content
     if reg
         .row
             - let shownSegments = 0;
-            .accordion.accordion-dark#entityLists
-                if data.surveys && data.surveys.length > 0
-                    - shownSegments++;
-                    +entityList(
-                        'sec-surveys',
-                        'Event surveys',
-                        'bi-clipboard-data',
-                        data.surveys,
-                        'survey',
-                        `/survey/create?eventId=${ev.id}`,
-                        'Create new survey',
-                        'bi-plus-circle',
-                        'No surveys in this event yet.',
-                        'bi-clipboard-check',
-                        false
-                    )
+            if permData.entity.has("ACCESS_ITEMS")
+                .accordion.accordion-dark#entityLists
+                    if data.surveys && data.surveys.length > 0
+                        - shownSegments++;
+                        +entityList(
+                            'sec-surveys',
+                            'Event surveys',
+                            'bi-clipboard-data',
+                            data.surveys,
+                            'survey',
+                            `/survey/create?eventId=${ev.id}`,
+                            'Create new survey',
+                            'bi-plus-circle',
+                            'No surveys in this event yet.',
+                            'bi-clipboard-check',
+                            false
+                        )
 
-                if data.packingLists && data.packingLists.length > 0
-                    - shownSegments++;
-                    +entityList(
-                        'sec-pack',
-                        'Event packing lists',
-                        'bi-box-seam',
-                        data.packingLists,
-                        'packing',
-                        `/packing/create?eventId=${ev.id}`,
-                        'Create new packing list',
-                        'bi-plus-circle',
-                        'No packing lists in this event yet.',
-                        'bi-bag-check',
-                        false
-                    )
+                    if data.packingLists && data.packingLists.length > 0
+                        - shownSegments++;
+                        +entityList(
+                            'sec-pack',
+                            'Event packing lists',
+                            'bi-box-seam',
+                            data.packingLists,
+                            'packing',
+                            `/packing/create?eventId=${ev.id}`,
+                            'Create new packing list',
+                            'bi-plus-circle',
+                            'No packing lists in this event yet.',
+                            'bi-bag-check',
+                            false
+                        )
 
-                if data.activityPlans && data.activityPlans.length > 0
-                    - shownSegments++;
-                    +entityList(
-                        'sec-activity',
-                        'Event activity plans',
-                        'bi-calendar',
-                        data.activityPlans,
-                        'activity',
-                        `/activity/create?eventId=${ev.id}`,
-                        'Create new activity plan',
-                        'bi-calendar-plus',
-                        'No activity plans in this event yet.',
-                        'bi-calendar-check',
-                        false
-                    )
+                    if data.activityPlans && data.activityPlans.length > 0
+                        - shownSegments++;
+                        +entityList(
+                            'sec-activity',
+                            'Event activity plans',
+                            'bi-calendar',
+                            data.activityPlans,
+                            'activity',
+                            `/activity/create?eventId=${ev.id}`,
+                            'Create new activity plan',
+                            'bi-calendar-plus',
+                            'No activity plans in this event yet.',
+                            'bi-calendar-check',
+                            false
+                        )
 
-                if data.driverLists && data.driverLists.length > 0
-                    - shownSegments++;
-                    +entityList(
-                        'sec-drivers',
-                        'Event drivers lists',
-                        'bi-car-front',
-                        data.driverLists,
-                        'drivers',
-                        `/drivers/create?eventId=${ev.id}`,
-                        'Create new drivers list',
-                        'bi-plus-circle',
-                        'No drivers lists in this event yet.',
-                        'bi-car-front',
-                        false
-                    )
+                    if data.driverLists && data.driverLists.length > 0
+                        - shownSegments++;
+                        +entityList(
+                            'sec-drivers',
+                            'Event drivers lists',
+                            'bi-car-front',
+                            data.driverLists,
+                            'drivers',
+                            `/drivers/create?eventId=${ev.id}`,
+                            'Create new drivers list',
+                            'bi-plus-circle',
+                            'No drivers lists in this event yet.',
+                            'bi-car-front',
+                            false
+                        )
             if shownSegments === 0
                 .alert.alert-info
                     i.bi.bi-info-circle.me-2

@@ -42,12 +42,7 @@ function submitGuestFormSkippingLookup(bypassLookupState: { value: boolean }): v
     if (message && !window.confirm(message)) return;
 
     bypassLookupState.value = true;
-    const requestSubmit = form.requestSubmit?.bind(form);
-    if (requestSubmit) {
-        requestSubmit();
-    } else {
-        form.submit();
-    }
+    form.submit();
     queueMicrotask(() => {
         bypassLookupState.value = false;
     });
@@ -88,9 +83,6 @@ function registerGuestSubmitFlow(): void {
                 // If the lookup fails, continue with the normal flow.
             }
         }
-
-        const message = form.dataset.confirmMessage;
-        if (message && !window.confirm(message)) return;
 
         submitGuestFormSkippingLookup(bypassLookupState);
     });
