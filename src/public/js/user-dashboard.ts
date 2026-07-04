@@ -3,8 +3,10 @@
  * Simple module for user dashboard functionality
  */
 
-import {initEntityLists, setCurrentNavLocation} from './core/navigation';
+import {setCurrentNavLocation} from './core/navigation';
 import {loadPerms} from './core/permissions';
+import {initEntityOverview} from "./modules/entity-cards-overview";
+
 
 /**
  * Initialize user dashboard
@@ -12,7 +14,9 @@ import {loadPerms} from './core/permissions';
 export function init(): void {
     setCurrentNavLocation();
     loadPerms();
-    initEntityLists();
+    //initEntityLists();
+    initEntityOverview("#participationLists")
+    initEntityOverview("#entityLists")
 }
 
 // Expose to global scope

@@ -1,13 +1,14 @@
 import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId} from "typeorm";
+import type {EntityBase} from "../../../../types/UserTypes";
 import {ActivityPlan} from "../activity/ActivityPlan";
-import {PackingList} from "../packing/PackingList";
 import {DriversList} from "../drivers/DriversList";
-import {EventRegistration} from "./EventRegistration";
+import {PackingList} from "../packing/PackingList";
 import {User} from "../user/User";
 import {EventRegBypassLink} from "./EventRegBypassLink";
+import {EventRegistration} from "./EventRegistration";
 
 @Entity("events", {schema: "surveyor"})
-export class Event {
+export class Event implements EntityBase {
     @PrimaryGeneratedColumn("uuid", {name: "id"})
     id!: string;
 
@@ -37,6 +38,9 @@ export class Event {
 
     @Column("int", {name: "max_participants", nullable: true})
     maxParticipants?: number | null;
+
+    @Column("varchar", {name: "header_img", length: 255, nullable: true})
+    headerImg?: string | null;
 
     @Column("timestamp", {name: "created_at", default: () => "CURRENT_TIMESTAMP"})
     createdAt!: Date;

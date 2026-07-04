@@ -9,11 +9,20 @@ import * as invoiceService from "../modules/database/services/EventInvoiceServic
 
 import * as eventService from '../modules/database/services/EventService';
 import {APIError, ValidationError} from '../modules/lib/errors';
+import {performImageSwap} from "../modules/lib/fileCommons";
 import {PERM} from '../modules/lib/permissions';
-import {buildDateTotals, ENTITIES, getResource, isWithinWindow, rewriteISOToZone} from "../modules/lib/util";
+import {
+    buildDateTotals,
+    convertToSingleList,
+    ENTITIES,
+    getResource,
+    isWithinWindow,
+    rewriteISOToZone
+} from "../modules/lib/util";
 import {can, saveDefaultPermsFromBody} from "../modules/permissionEngine";
 import type {DIETARY} from "../types/EventTypes";
 import type {PermBundle} from "../types/PermissionTypes";
+import type {EntityBase} from "../types/UserTypes";
 import {purgeExpiredProofs} from "./eventPoolController";
 
 // Template constant for create errors
@@ -77,6 +86,7 @@ async function createEntity(ownerId: number, eventData: Partial<Event>) {
         eventData.requireDietaryInfo!,
         eventData.maxParticipants!,
         eventData.timezone!,
+        eventData.headerImg,
     );
 }
 
@@ -124,6 +134,8 @@ async function fetchForView(event: Event, req: Request) {
     const participants = await eventService.getEventParticipants(event.id);
     const isFull = (event.maxParticipants ?? Number.MAX_SAFE_INTEGER) <= participants.length;
 
+    const relatedEntities = convertToSingleList({activityPlans, packingLists, driversLists: driverLists});
+
     return {
         event,
         registration,
@@ -135,6 +147,7 @@ async function fetchForView(event: Event, req: Request) {
         participantPools,
         participantInvoices,
         isFull,
+        relatedEntities,
         regToken: getResource(req, 'regToken'),
     };
 }
@@ -364,6 +377,16 @@ async function getParticipantsExtended(event: Event) {
     }
 }
 
+async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
+    performImageSwap(entity, eventService.updateHeaderImage, file);
+    return 'Image updated';
+}
+
+async function deleteHeaderImg(entity: EntityBase) {
+    performImageSwap(entity, eventService.updateHeaderImage, undefined);
+    return 'Image deleted';
+}
+
 export default {
     preprocessCreate,
     createEntity,
@@ -385,4 +408,7 @@ export default {
     deleteRegistration,
     updateRegistrationDates,
     getParticipantsExtended,
+
+    updateHeaderImg,
+    deleteHeaderImg,
 };

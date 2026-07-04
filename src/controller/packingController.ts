@@ -5,8 +5,10 @@ import {PackingList} from "../modules/database/entities/packing/PackingList";
 
 import * as packingService from '../modules/database/services/PackingService';
 import {APIError, ValidationError} from '../modules/lib/errors';
+import {performImageSwap} from "../modules/lib/fileCommons";
 import {ENTITIES, generateUniqueId} from "../modules/lib/util";
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
+import type {EntityBase} from "../types/UserTypes";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'packing/packing-create';
@@ -64,7 +66,6 @@ async function createEntity(
         ownerId,
         listData.title!,
         listData.description!,
-
         listData.items.map((it, i) => ({
             id: generateUniqueId(),
             title: it.title!,
@@ -74,6 +75,7 @@ async function createEntity(
             position: i
         })),
         listData.eventId,
+        listData.headerImg,
     );
 }
 
@@ -207,6 +209,16 @@ async function deleteItem(itemId: string) {
     return 'Item deleted';
 }
 
+async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
+    performImageSwap(entity, packingService.updateHeaderImage, file);
+    return 'Image updated';
+}
+
+async function deleteHeaderImg(entity: EntityBase) {
+    performImageSwap(entity, packingService.updateHeaderImage, undefined);
+    return 'Image deleted';
+}
+
 function getAssignmentAccessMapping() {
     return {
         assignToUser: (body: any, userId: number) => packingService.assignPackingItemToUser(body.itemId, userId),
@@ -233,6 +245,9 @@ export default {
     updateSettings,
     deleteItem,
     updateRequired,
+
+    updateHeaderImg,
+    deleteHeaderImg,
 
     getAssignmentAccessMapping,
 }

@@ -12,7 +12,7 @@
     "typeorm:drop": "npm run typeorm -- schema:drop migrationDataSource.ts",
     "typeorm:sync": "npm run typeorm -- schema:sync migrationDataSource.ts",
     "typeorm:migrate": "npm run typeorm -- migration:run migrationDataSource.ts",
-    "typeorm:reset-db": "npm run typeorm:drop && npm run typeorm:sync && npm run typeorm:migrate",
+    "typeorm:reset-db": "npm run generate:db-index && npm run typeorm:drop && npm run typeorm:sync && npm run typeorm:migrate",
     "generate:db-index": "ts-node --project tsconfig.server.json scripts/genTypeormIdx.ts",
     "generate": "npm run generate:db-index",
     "copy:assets": "cpx \"src/public/{img,style}/**/*\" dist/public",

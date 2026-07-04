@@ -1,10 +1,11 @@
 import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
+import type {EntityBase} from "../../../../types/UserTypes";
+import {User} from "../user/User";
 import {SurveyCombination} from "./SurveyCombination";
 import {SurveyResponse} from "./SurveyResponse";
-import {User} from "../user/User";
 
 @Entity("surveys", {schema: "surveyor"})
-export class Survey {
+export class Survey implements EntityBase {
     @PrimaryGeneratedColumn("uuid", {name: "id"})
     id!: string;
 
@@ -13,6 +14,9 @@ export class Survey {
 
     @Column("text", {name: "description", nullable: true})
     description?: string | null;
+
+    @Column("varchar", {name: "header_img", length: 255, nullable: true})
+    headerImg?: string | null;
 
     @Column("timestamp", {
         name: "created_at",

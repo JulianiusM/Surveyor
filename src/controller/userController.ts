@@ -10,7 +10,7 @@ import * as userService from "../modules/database/services/UserService";
 import mailer from "../modules/email";
 import {ExpectedError, ValidationError} from "../modules/lib/errors";
 import {persistSession} from "../modules/lib/session";
-import {buildGuestLink, merge} from "../modules/lib/util";
+import {buildGuestLink, convertToSingleList, merge} from "../modules/lib/util";
 import * as oidc from "../modules/oidc";
 import settings from "../modules/settings";
 import {DashboardDTO, GuestLinkData} from "../types/UserTypes";
@@ -82,20 +82,37 @@ export async function loginUser(body: any, session: Request["session"]) {
 }
 
 export async function getUserDashboardEntities(user: User) {
-    const surveys = await surveyService.getSurveysByUserId(user.id);
-    const partSurveys = await surveyService.getSurveysByParticipantUserId(user.id);
-    const ownPacklists = await packingService.getPackingListByUserId(user.id);
-    const adminPacklists = await packingService.getManagedListsForUser(user.id);
-    const partPackLists = await packingService.getPackingListByParticipantUserId(user.id);
-    const ownActivityplans = await activityService.getActivityPlansByUserId(user.id);
-    const adminActivityplans = await activityService.getManagedPlansForUser(user.id);
-    const partActivityPlans = await activityService.getActivityPlansByParticipantUserId(user.id);
-    const ownDriverslists = await driverService.getDriversListByUserId(user.id);
-    const adminDriverslists = await driverService.getManagedListsForUser(user.id);
-    const partDriversLists = await driverService.getDriversListByParticipantUserId(user.id);
-    const ownEvents = await eventService.getEventsByOwnerId(user.id);
-    const adminEvents = await eventService.getActiveManagedEventsForUser(user.id);
-    const registeredEvents = await eventService.getRegisteredEventsFor({userId: user.id});
+    const [
+        surveys,
+        partSurveys,
+        ownPacklists,
+        adminPacklists,
+        partPackLists,
+        ownActivityplans,
+        adminActivityplans,
+        partActivityPlans,
+        ownDriverslists,
+        adminDriverslists,
+        partDriversLists,
+        ownEvents,
+        adminEvents,
+        registeredEvents
+    ] = await Promise.all([
+        surveyService.getSurveysByUserId(user.id),
+        surveyService.getSurveysByParticipantUserId(user.id),
+        packingService.getPackingListByUserId(user.id),
+        packingService.getManagedListsForUser(user.id),
+        packingService.getPackingListByParticipantUserId(user.id),
+        activityService.getActivityPlansByUserId(user.id),
+        activityService.getManagedPlansForUser(user.id),
+        activityService.getActivityPlansByParticipantUserId(user.id),
+        driverService.getDriversListByUserId(user.id),
+        driverService.getManagedListsForUser(user.id),
+        driverService.getDriversListByParticipantUserId(user.id),
+        eventService.getEventsByOwnerId(user.id),
+        eventService.getActiveManagedEventsForUser(user.id),
+        eventService.getRegisteredEventsFor({userId: user.id}),
+    ])
 
     const packlists = merge(ownPacklists, adminPacklists, (a, b) => a.id === b.id);
     const activityplans = merge(ownActivityplans, adminActivityplans, (a, b) => a.id === b.id);
@@ -120,28 +137,26 @@ export async function getUserDashboardEntities(user: User) {
     } as DashboardDTO;
 }
 
-export async function getUserAdminDashboardEntities(user: User) {
-    const packlists = await packingService.getManagedListsForUser(user.id);
-    const activityplans = await activityService.getManagedPlansForUser(user.id);
-    const driverslists = await driverService.getManagedListsForUser(user.id);
-    const events = await eventService.getActiveManagedEventsForUser(user.id);
-    return {
-        owner: {
-            packingLists: packlists,
-            activityPlans: activityplans,
-            driversLists: driverslists,
-            events: events
-        },
-        admin_flag: true,
-    } as DashboardDTO;
+export async function getUserEntityList(user: User) {
+    const dto = await getUserDashboardEntities(user);
+    return {owner: convertToSingleList(dto.owner ?? {}), participant: convertToSingleList(dto.participant ?? {})}
 }
 
 export async function getGuestDashboardEntities(guest: Guest) {
-    const partSurveys = await surveyService.getSurveysByParticipantGuestId(guest.id);
-    const partPackLists = await packingService.getPackingListByParticipantGuestId(guest.id);
-    const partActivityPlans = await activityService.getActivityPlansByParticipantGuestId(guest.id);
-    const partDriversLists = await driverService.getDriversListByParticipantGuestId(guest.id);
-    const registeredEvents = await eventService.getRegisteredEventsFor({guestId: guest.id});
+    const [
+        partSurveys,
+        partPackLists,
+        partActivityPlans,
+        partDriversLists,
+        registeredEvents
+    ] = await Promise.all([
+        surveyService.getSurveysByParticipantGuestId(guest.id),
+        packingService.getPackingListByParticipantGuestId(guest.id),
+        activityService.getActivityPlansByParticipantGuestId(guest.id),
+        driverService.getDriversListByParticipantGuestId(guest.id),
+        eventService.getRegisteredEventsFor({guestId: guest.id})
+    ]);
+
     return {
         participant: {
             surveys: partSurveys,
@@ -151,6 +166,11 @@ export async function getGuestDashboardEntities(guest: Guest) {
             events: registeredEvents
         }
     } as DashboardDTO;
+}
+
+export async function getGuestEntityList(guest: Guest) {
+    const dto = await getGuestDashboardEntities(guest);
+    return {participant: convertToSingleList(dto.participant ?? {})}
 }
 
 export async function sendPasswordForgotMail(username: string) {
@@ -240,7 +260,7 @@ export async function loginGuest(guestId: string, token: string, session: Reques
 
 export async function recoverGuestAccount(email: string) {
     const guests = await userService.getGuestByEmail(email);
-    const guestLinkData: GuestLinkData = [];
+    const guestLinkData: GuestLinkData[] = [];
     for (let guest of guests) {
         guestLinkData.push({...guest, link: buildGuestLink(guest.id, guest.token)});
     }

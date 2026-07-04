@@ -1,11 +1,13 @@
-import Joi from 'joi';
 import {Request} from "express";
+import Joi from 'joi';
+import {Survey} from "../modules/database/entities/surveys/Survey";
+import {SurveyCombination} from "../modules/database/entities/surveys/SurveyCombination";
 
 import * as surveyService from "../modules/database/services/SurveyService";
 import {ExpectedError, ValidationError} from "../modules/lib/errors";
-import {Survey} from "../modules/database/entities/surveys/Survey";
+import {performImageSwap} from "../modules/lib/fileCommons";
 import type {SurveyAnswer, WeekDay, WeekInMonth} from "../types/SurveyTypes";
-import {SurveyCombination} from "../modules/database/entities/surveys/SurveyCombination";
+import type {EntityBase} from "../types/UserTypes";
 
 const CREATE_TEMPLATE = 'surveyor/survey-create';
 
@@ -79,11 +81,11 @@ async function createEntity(
         ownerId,
         p.title!,
         p.description!,
-
         p.combinations.map((it) => ({
             weekday: it.weekday!,
             week: it.nthWeek!,
         })),
+        p.headerImg,
     );
 }
 
@@ -127,6 +129,16 @@ async function submitResponses(survey: Survey, session: Request['session'], body
     }
 }
 
+async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
+    performImageSwap(entity, surveyService.updateHeaderImage, file);
+    return 'Image updated';
+}
+
+async function deleteHeaderImg(entity: EntityBase) {
+    performImageSwap(entity, surveyService.updateHeaderImage, undefined);
+    return 'Image deleted';
+}
+
 export default {
     preprocessCreate,
     createEntity,
@@ -137,4 +149,7 @@ export default {
 
     addCombination,
     submitResponses,
+
+    updateHeaderImg,
+    deleteHeaderImg,
 }

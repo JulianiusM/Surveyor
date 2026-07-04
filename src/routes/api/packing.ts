@@ -3,6 +3,7 @@ import express, {Request, Response} from 'express';
 import controller from "../../controller/packingController";
 import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
 import {attachAssignRoutes} from '../../middleware/assignFlowFactory';
+import {createEntityHeaderUpdateRouter} from "../../middleware/entityHeaderUpdateHandler";
 
 import {apiParamHandler} from "../../middleware/paramHandler";
 import {attachPermBundle, requireItemPermissionApi, requirePermissionApi} from '../../middleware/permissionMiddleware';
@@ -52,6 +53,7 @@ app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), asyn
 /* ───────────────── ASSIGN / UNASSIGN (JSON) ───────────────── */
 
 attachAssignRoutes(app, controller.getAssignmentAccessMapping());
+createEntityHeaderUpdateRouter(app, permFct, resFct, controller.updateHeaderImg, controller.deleteHeaderImg);
 
 /* ───────────────── REORDER (Owner) ────────────────────────── */
 

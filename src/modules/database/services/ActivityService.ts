@@ -192,6 +192,7 @@ export async function createActivityPlanTx(
     endDate: string,
     slots: Partial<ActivitySlot>[],
     eventId?: string,
+    headerImg?: string | null,
 ) {
     return await AppDataSource.transaction(async (manager) => {
         const id = generateUniqueId();
@@ -205,6 +206,7 @@ export async function createActivityPlanTx(
             description: desc,
             startDate,
             endDate,
+            headerImg,
             ...(eventId !== undefined ? {event: {id: eventId}} : {}),
         });
 
@@ -307,6 +309,10 @@ export async function updateActivityPlanTextField(id: string, text: string, titl
 
 export async function deleteActivityPlanTextField(id: string) {
     await AppDataSource.getRepository(ActivityPlanTextField).delete(id);
+}
+
+export async function updateHeaderImage(id: string, headerImg?: string | null) {
+    await AppDataSource.getRepository(ActivityPlan).update(id, {headerImg});
 }
 
 export async function getManagedPlansForUser(userId: number) {

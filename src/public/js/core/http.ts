@@ -65,6 +65,16 @@ export async function del(url: string, body?: any): Promise<any> {
 }
 
 /**
+ * Make a PUT request
+ * @param url Request URL (can include /api prefix or be relative)
+ * @param body Request body (optional)
+ * @returns Response data
+ */
+export async function put(url: string, body?: any): Promise<any> {
+    return http('PUT', url, body);
+}
+
+/**
  * Make a PATCH request
  * @param url Request URL (can include /api prefix or be relative)
  * @param payload Request payload

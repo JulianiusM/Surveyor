@@ -4,9 +4,8 @@ block meta
     title #{data.list.title} | Surveyor
 
 block title
-    h1.card-header.text-center
-        i.bi.bi-bag-check.me-2
-        | #{data.list.title}
+    +entityHeader(data.list, "packing", "bi-bag-check-check", permData)
+    +entityImageModal(data.list, "packing")
 
 block content
     // ─── Description (editable) ──────────────────────────────

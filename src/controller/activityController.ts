@@ -20,11 +20,13 @@ import * as requirementService from "../modules/database/services/ActivityRequir
 import * as activityService from "../modules/database/services/ActivityService";
 import * as eventService from "../modules/database/services/EventService";
 import {APIError, ValidationError} from '../modules/lib/errors';
+import {performImageSwap} from "../modules/lib/fileCommons";
 
 import {ENTITIES, fromISOtoLocal, generateUniqueId} from '../modules/lib/util';
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
 import type {SlotAssignee} from "../types/ActivityTypes";
 import type {PermBundle} from "../types/PermissionTypes";
+import type {EntityBase} from "../types/UserTypes";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'activity/activity-create';
@@ -231,6 +233,7 @@ async function createEntity(
         planData.endDate!,
         planData.slots,
         planData.eventId,
+        planData.headerImg,
     );
 }
 
@@ -1119,6 +1122,16 @@ async function updateRoleAssignments(slotId: string, body: any) {
     return "Assignments updated";
 }
 
+async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
+    performImageSwap(entity, activityService.updateHeaderImage, file);
+    return 'Image updated';
+}
+
+async function deleteHeaderImg(entity: EntityBase) {
+    performImageSwap(entity, activityService.updateHeaderImage, undefined);
+    return 'Image deleted';
+}
+
 function getAssignmentAccessMapping() {
     return {
         assignToUser: (body: any, userId: number) => activityService.assignActivitySlotToUser(body.slotId, userId),
@@ -1168,6 +1181,9 @@ export default {
     addSlotRole,
     addActivityRole,
     updateRoleAssignments,
+
+    updateHeaderImg,
+    deleteHeaderImg,
 
     getAssignmentWarnings,
     getAssignmentAccessMapping,

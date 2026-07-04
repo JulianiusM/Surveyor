@@ -1,44 +1,13 @@
 import express, {Request} from "express";
-import fs from "fs";
-import path from "path";
-import multer from "multer";
-import {v4 as uuidv4} from "uuid";
-import {asyncHandler} from "../../modules/lib/asyncHandler";
-import renderer from "../../modules/renderer";
 import eventPoolController from "../../controller/eventPoolController";
 import {requireEventParticipantAPI, requirePermissionApi,} from "../../middleware/permissionMiddleware";
+import {asyncHandler} from "../../modules/lib/asyncHandler";
+import {prepareFileUploader} from "../../modules/lib/fileCommons";
 import {PERM} from "../../modules/lib/permissions";
+import renderer from "../../modules/renderer";
 import settings from "../../modules/settings";
 
-// Storage setup for invoice proofs. Files are placed in /uploads/invoices and referenced by relative path.
-const proofDir = path.join(process.cwd(), settings.value.invoiceDir);
-const proofStorage = multer.diskStorage({
-    destination: (_req, _file, cb) => {
-        fs.mkdirSync(proofDir, {recursive: true});
-        cb(null, proofDir);
-    },
-    filename: (_req, file, cb) => {
-        const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.pdf'];
-        const ext = path.extname(file.originalname).toLowerCase();
-        if (!allowedExts.includes(ext)) {
-            return cb(new Error('Invalid file extension'), '');
-        }
-        cb(null, `${Date.now()}-${uuidv4()}${ext}`);
-    },
-});
-
-const proofUpload = multer({
-    storage: proofStorage,
-    limits: {fileSize: 10 * 1024 * 1024},
-    fileFilter: (_req, file, cb) => {
-        const ok = file.mimetype === "application/pdf" || file.mimetype.startsWith("image/");
-        if (ok) {
-            cb(null, true);
-        } else {
-            cb(new Error("Only images or PDFs allowed"));
-        }
-    },
-});
+const proofUpload = prepareFileUploader(settings.value.invoiceDir, true, true);
 
 // Split invoice routes out of the crowded event router to keep handlers focused
 export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req: Request) => any) {

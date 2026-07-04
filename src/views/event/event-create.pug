@@ -23,7 +23,7 @@ block content
             }
         }
 
-    form#eventForm(action="/event/create" method="POST")
+    form#eventForm(action="/event/create" method="POST" enctype="multipart/form-data")
         // Titel
         .mb-3
             label.form-label(for="title")
@@ -62,7 +62,7 @@ block content
             .col-md-8
                 label.form-label(for="location")
                     i.bi.bi-geo-alt.me-1
-                    | Location
+                    | Location (optional)
                 input#location.form-control.text-bg-dark(
                     type="text"
                     name="location"
@@ -72,7 +72,7 @@ block content
             .col-md-4
                 label.form-label(for="maxParticipants")
                     i.bi.bi-people.me-1
-                    | Max Participants
+                    | Max Participants (optional)
                 input#maxParticipants.form-control.text-bg-dark(
                     type="number"
                     name="maxParticipants"
@@ -114,8 +114,15 @@ block content
         .mb-3
             label.form-label(for="desc")
                 i.bi.bi-pencil-square.me-1
-                | Description
+                | Description (optional)
             textarea#desc.form-control.text-bg-dark(name="description" rows="4") #{parsed.description || ''}
+
+        .row.mb-3
+            .col-12
+                label.form-label(for="headerImg")
+                    i.bi.bi-card-image.me-1
+                    | Header image (optional)
+                input#headerImg.form-control.text-bg-dark(type="file" name="headerImg" accept="image/jpeg,image/png,image/gif")
 
         .row.mb-3
             .col-md-12

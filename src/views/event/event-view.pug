@@ -6,9 +6,8 @@ block meta
     title #{ev.title} | Event
 
 block title
-    h1.card-header.text-center
-        i.bi.bi-calendar2-event.me-2
-        | #{ev.title}
+    +entityHeader(ev, "event", "bi-calendar2-event", permData)
+    +entityImageModal(ev, "event")
 
 block content
     -
@@ -196,6 +195,8 @@ block content
             - let shownSegments = 0;
             if permData.entity.has("ACCESS_ITEMS")
                 .accordion.accordion-dark#entityLists
+                    +entityOverview('sec-related', 'Things to do', 'bi-clipboard-check', data.relatedEntities, "Nothing to do...", "entityLists", false)
+                //-
                     if data.surveys && data.surveys.length > 0
                         - shownSegments++;
                         +entityList(
@@ -259,10 +260,6 @@ block content
                             'bi-car-front',
                             false
                         )
-            if shownSegments === 0
-                .alert.alert-info
-                    i.bi.bi-info-circle.me-2
-                    | No actions are currently added to the event.
 
         if permData.entity.has("ACCESS_PARTICIPANTS")
             +eventParticipants({

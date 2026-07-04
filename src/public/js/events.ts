@@ -3,11 +3,13 @@
  * Handles event registration, participant management, and invoice operations
  */
 
+import {formatISOInTimeZone} from './core/formatting';
+import {post} from './core/http';
 import {initEntityLists, setCurrentNavLocation} from './core/navigation';
 import {loadPerms, requireEntityPerm, requireEntityPermsForForm} from './core/permissions';
-import {post} from './core/http';
+import {initEntityOverview} from "./modules/entity-cards-overview";
+import {initEntityHeader} from "./modules/entity-header";
 import {showInlineAlert} from './shared/alerts';
-import {formatISOInTimeZone} from './core/formatting';
 import {formatDuration, parseJsonScript, reloadAfterDelay, updateToLocalString} from './shared/ui-helpers';
 
 /**
@@ -612,6 +614,7 @@ export function init(): void {
     initDateRange();
     initRegistrationDateRange();
     initEntityLists();
+    initEntityOverview("#entityLists");
 
     initTakeoverModal();
     initInvoiceAdmin();
@@ -621,6 +624,8 @@ export function init(): void {
         initRegistration();
         initCancelRegistration();
         initUpdate();
+
+        initEntityHeader();
     }
 }
 

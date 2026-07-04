@@ -13,6 +13,7 @@ export async function createDriversList(
     title: string,
     desc: string,
     eventId?: string,
+    headerImg?: string | null,
     listId: string = generateUniqueId(),
 ): Promise<string> {
     const repo = AppDataSource.getRepository(DriversList);
@@ -21,6 +22,7 @@ export async function createDriversList(
         owner: {id: ownerId},
         title,
         description: desc,
+        headerImg,
     };
     if (eventId) creator.event = {id: eventId};
     const list = repo.create(creator);
@@ -46,6 +48,10 @@ export async function getDriversListByUserId(userId: number): Promise<DriversLis
 
 export async function updateDriversListDescription(listId: string, description: string): Promise<void> {
     await AppDataSource.getRepository(DriversList).update({id: listId}, {description});
+}
+
+export async function updateHeaderImage(listId: string, headerImg?: string | null) {
+    await AppDataSource.getRepository(DriversList).update(listId, {headerImg});
 }
 
 export async function getManagedListsForUser(userId: number) {

@@ -24,6 +24,8 @@ block content
         p.text-center Here are all entities that you participate in. Open the respective section to see and access them.
         hr
         .accordion.accordion-dark#participationLists
+            +entityOverview('sec-parts', 'Your participation', 'bi-clipboard-check', data.participant, "You are not participating anywhere", "participationLists", false)
+        //-
             +entityList(
                 'sec-surveys',
                 'Your survey registrations',
@@ -101,6 +103,8 @@ block content
         p.text-center These are the entities that you either own or are an admin to. Open the respective section to see and access them.
         hr
         .accordion.accordion-dark#entityLists
+            +entityOverview('sec-own-parts', 'Administrable entities', 'bi-shield-check', data.owner, "You don't have any administrable entities yet", "entityLists", true)
+        //-
             +entityList(
                 'own-sec-surveys',
                 'Your surveys',

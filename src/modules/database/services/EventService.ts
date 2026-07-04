@@ -30,6 +30,7 @@ export async function createEventTx(
     requireDietaryInfo: boolean,
     maxParticipants: number | null,
     timezone: string | null,
+    headerImg?: string | null,
 ) {
     return await AppDataSource.transaction('READ COMMITTED', async (manager) => {
         const id = generateUniqueId();
@@ -47,6 +48,7 @@ export async function createEventTx(
             bindingDeadline: bindingDeadline,
             requireDietaryInfo: requireDietaryInfo,
             maxParticipants: maxParticipants,
+            headerImg,
         });
 
         await repo.save(ev);
@@ -451,4 +453,8 @@ export async function canBypassDeadlineWithToken(
     const row = await validateDeadlineBypassToken(eventId, token);
     if (!row) return {ok: false};
     return {ok: true, linkId: row.id};
+}
+
+export async function updateHeaderImage(eventId: string, headerImg?: string | null) {
+    await AppDataSource.getRepository(Event).update(eventId, {headerImg});
 }

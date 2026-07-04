@@ -1,0 +1,73 @@
+mixin entityHeader(entity, entityType, icon, permData)
+    .card-header.p-0
+        if entity.headerImg
+            img.card-img-top(
+                src=`/${entityType}/${entity.id}/header`
+                alt=entity.title
+                style="object-fit:cover;height:250px;"
+            )
+
+        .p-3.d-flex.flex-column.flex-md-row.align-items-md-center.justify-content-between.gap-3
+            .d-none.d-md-inline
+
+            h1.mb-0.text-center
+                i(class=`bi ${icon} me-2`)
+                | #{entity.title}
+
+            if permData.entity.has("EDIT_META")
+                .btn-group
+                    if entity.headerImg
+                        button.btn.btn-outline-light(
+                            type="button"
+                            data-bs-toggle="modal"
+                            data-bs-target="#entityImageModal"
+                        )
+                            i.bi.bi-pencil.me-1
+                            | Change image
+                        button.btn.btn-outline-danger.js-delete-image(
+                            type="button"
+                            data-api=`/api/${entityType}/${entity.id}/header`
+                        )
+                            i.bi.bi-trash.me-1
+                            | Remove
+                    else
+                        button.btn.btn-outline-light(
+                            type="button"
+                            data-bs-toggle="modal"
+                            data-bs-target="#entityImageModal"
+                        )
+                            i.bi.bi-image.me-1
+                            | Add image
+            else
+                .d-none.d-md-inline
+
+mixin entityImageModal(entity, entityType)
+    .modal.fade#entityImageModal(tabindex="-1")
+        .modal-dialog
+            .modal-content.bg-dark.text-white
+                .modal-header
+                    h5.modal-title
+                        | Header image
+                    button.btn-close.btn-close-white(
+                        type="button"
+                        data-bs-dismiss="modal"
+                    )
+
+                .modal-body
+                    input.form-control(
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif"
+                        id="entityImageInput"
+                    )
+
+                .modal-footer
+                    button.btn.btn-secondary(
+                        type="button"
+                        data-bs-dismiss="modal"
+                    )
+                        | Cancel
+                    button.btn.btn-primary#uploadEntityImage(
+                        type="button"
+                        data-api=`/api/${entityType}/${entity.id}/header`
+                    )
+                        | Upload

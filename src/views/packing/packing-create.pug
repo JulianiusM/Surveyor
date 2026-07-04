@@ -35,7 +35,7 @@ block content
             eventIdQuery = `?eventId=${parsed.eventId}`
         }
 
-    form#packingForm(action=`/packing/create${eventIdQuery}` method="POST")
+    form#packingForm(action=`/packing/create${eventIdQuery}` method="POST" enctype="multipart/form-data")
         // Titel
         .mb-3
             label.form-label(for="title")
@@ -51,13 +51,23 @@ block content
             .col-md-12
                 label.form-label(for="desc")
                     i.bi.bi-pencil-square.me-1
-                    | Description
+                    | Description (optional)
                 textarea#desc.form-control.text-bg-dark(name="description")
                     | #{parsed.description || ''}
 
         .row.mb-3
+            .col-12
+                label.form-label(for="headerImg")
+                    i.bi.bi-card-image.me-1
+                    | Header image(optional)
+                input#headerImg.form-control.text-bg-dark(type="file" name="headerImg" accept="image/jpeg,image/png,image/gif")
+
+        .row.mb-3
             .col-md-12
-                +entityPicker('event_id', parsedEventData.events, {label: 'Assign to event', value: parsedEventData.id})
+                +entityPicker('event_id', parsedEventData.events, {
+                    label: 'Assign to event (optional)',
+                    value: parsedEventData.id
+                })
 
         .row.mb-3
             .col-md-12

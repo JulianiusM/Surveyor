@@ -1,22 +1,23 @@
 import express, {Request, Response} from 'express';
-import {asyncHandler} from '../../modules/lib/asyncHandler';
-import * as eventService from '../../modules/database/services/EventService';
-
-import renderer from '../../modules/renderer';
-import {ENTITIES, getItemFromEntityPermFct, getPermFct, getResource} from "../../modules/lib/util";
-import {apiParamHandler} from "../../middleware/paramHandler";
 
 import eventController from '../../controller/eventController';
+import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
+import {createEntityHeaderUpdateRouter} from "../../middleware/entityHeaderUpdateHandler";
+import {apiParamHandler} from "../../middleware/paramHandler";
 import {
     attachPermBundle,
     requireEventParticipantAPI,
     requirePermissionApi
 } from "../../middleware/permissionMiddleware";
+import * as eventService from '../../modules/database/services/EventService';
+import {asyncHandler} from '../../modules/lib/asyncHandler';
 import {PERM} from "../../modules/lib/permissions";
-import type {EntityType} from "../../types/UtilTypes";
-import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
-import buildInvoiceRouter from "./eventInvoices";
+import {ENTITIES, getItemFromEntityPermFct, getPermFct, getResource} from "../../modules/lib/util";
+
+import renderer from '../../modules/renderer';
 import type {ItemGetter} from "../../types/PermissionTypes";
+import type {EntityType} from "../../types/UtilTypes";
+import buildInvoiceRouter from "./eventInvoices";
 
 const app = express.Router();
 const entityName: EntityType = ENTITIES.EVENT;
@@ -28,6 +29,7 @@ apiParamHandler('id', app, eventService.getEventById, entityName);
 app.use("/:id", attachPermBundle(permFct, itemPermFct));
 
 createEntityAdminApiRouter(app, entityName, permFct)
+createEntityHeaderUpdateRouter(app, permFct, resFct, eventController.updateHeaderImg, eventController.deleteHeaderImg);
 
 // Register current user to event
 app.post('/:id/register', requirePermissionApi(permFct, PERM.ACCESS_REGISTRATION), asyncHandler(async (req: Request, res: Response) => {

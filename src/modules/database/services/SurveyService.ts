@@ -29,7 +29,7 @@ export async function getCombinationsBySurveyId(surveyId: string) {
 export async function createSurveyTx(userId: number, title: string, desc: string, combinations: {
     weekday: WeekDay,
     week: WeekInMonth,
-}[]): Promise<string> {
+}[], headerImg?: string | null,): Promise<string> {
     return await AppDataSource.transaction(async (manager) => {
         const surveyId = generateUniqueId();
 
@@ -38,6 +38,7 @@ export async function createSurveyTx(userId: number, title: string, desc: string
             owner: {id: userId},
             title,
             description: desc,
+            headerImg,
         });
         await manager.save(survey);
 
@@ -187,3 +188,6 @@ export async function getResponsesSorted(surveyId: string): Promise<GroupedRespo
     }, {});
 }
 
+export async function updateHeaderImage(surveyId: string, headerImg?: string | null) {
+    await AppDataSource.getRepository(Survey).update(surveyId, {headerImg});
+}

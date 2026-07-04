@@ -1,11 +1,12 @@
 import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
+import type {EntityBase} from "../../../../types/UserTypes";
+import {Event} from "../event/Event";
+import {User} from "../user/User";
 import {DriversAssignment} from "./DriversAssignment";
 import {DriversItem} from "./DriversItem";
-import {User} from "../user/User";
-import {Event} from "../event/Event";
 
 @Entity("drivers_lists", {schema: "surveyor"})
-export class DriversList {
+export class DriversList implements EntityBase {
     @PrimaryGeneratedColumn("uuid", {name: "id"})
     id!: string;
 
@@ -14,6 +15,9 @@ export class DriversList {
 
     @Column("text", {name: "description", nullable: true})
     description?: string | null;
+
+    @Column("varchar", {name: "header_img", length: 255, nullable: true})
+    headerImg?: string | null;
 
     @Column("timestamp", {
         name: "created_at",

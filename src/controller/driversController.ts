@@ -5,8 +5,10 @@ import {DriversList} from "../modules/database/entities/drivers/DriversList";
 
 import * as driverService from '../modules/database/services/DriverService';
 import {APIError, ValidationError} from '../modules/lib/errors';
+import {performImageSwap} from "../modules/lib/fileCommons";
 import {ENTITIES, generateUniqueId} from "../modules/lib/util";
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
+import type {EntityBase} from "../types/UserTypes";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'drivers/drivers-create';
@@ -48,6 +50,7 @@ async function createEntity(
         listData.title!,
         listData.description!,
         listData.eventId,
+        listData.headerImg,
     );
 }
 
@@ -185,6 +188,16 @@ async function deleteItem(itemId: string) {
     return 'Item deleted';
 }
 
+async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
+    performImageSwap(entity, driverService.updateHeaderImage, file);
+    return 'Image updated';
+}
+
+async function deleteHeaderImg(entity: EntityBase) {
+    performImageSwap(entity, driverService.updateHeaderImage, undefined);
+    return 'Image deleted';
+}
+
 function getAssignmentAccessMapping() {
     return {
         assignToUser: (body: any, userId: number) => driverService.assignDriversItemToUser(body.itemId, userId),
@@ -210,6 +223,9 @@ export default {
     deleteAssignment,
     updateSettings,
     deleteItem,
+
+    updateHeaderImg,
+    deleteHeaderImg,
 
     getAssignmentAccessMapping,
 }

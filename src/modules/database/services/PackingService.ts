@@ -8,19 +8,20 @@ import {PackingList} from '../entities/packing/PackingList';
 import * as entityAdminService from "./EntityAdminService";
 
 // Packing Lists
-export async function createPackingList(listId: string, ownerId: number, title: string, desc: string, eventId?: string,) {
+export async function createPackingList(listId: string, ownerId: number, title: string, desc: string, eventId?: string, headerImg?: string | null,) {
     const repo = AppDataSource.getRepository(PackingList);
     const list = repo.create({
         id: listId,
         owner: {id: ownerId},
         title,
         description: desc,
+        headerImg,
         ...(eventId !== undefined ? {event: {id: eventId}} : {}),
     });
     await repo.save(list);
 }
 
-export async function createPackingListTx(ownerId: number, title: string, desc: string, items: Partial<PackingItem>[], eventId?: string,) {
+export async function createPackingListTx(ownerId: number, title: string, desc: string, items: Partial<PackingItem>[], eventId?: string, headerImg?: string | null,) {
     return await AppDataSource.transaction(async (manager) => {
         const listId = generateUniqueId();
         const listRepo = manager.getRepository(PackingList);
@@ -31,6 +32,7 @@ export async function createPackingListTx(ownerId: number, title: string, desc: 
             owner: {id: ownerId},
             title,
             description: desc,
+            headerImg,
             ...(eventId !== undefined ? {event: {id: eventId}} : {}),
         });
         await listRepo.save(list);
@@ -70,6 +72,10 @@ export async function getPackingListByUserId(userId: number) {
 
 export async function updatePackingListDescription(listId: string, description: string) {
     await AppDataSource.getRepository(PackingList).update(listId, {description});
+}
+
+export async function updateHeaderImage(listId: string, headerImg?: string | null) {
+    await AppDataSource.getRepository(PackingList).update(listId, {headerImg});
 }
 
 export async function getManagedListsForUser(userId: number) {

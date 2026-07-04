@@ -3,6 +3,7 @@ import type {DriversList} from "../modules/database/entities/drivers/DriversList
 import type {Event} from "../modules/database/entities/event/Event";
 import type {PackingList} from "../modules/database/entities/packing/PackingList";
 import type {Survey} from "../modules/database/entities/surveys/Survey";
+import {Guest} from "../modules/database/entities/user/Guest";
 import type * as userService from "../modules/database/services/UserService";
 import type {EntityItemType, EntityType} from "./UtilTypes";
 
@@ -59,6 +60,21 @@ export type DashboardDTO = {
     owner?: Partial<DashboardEntities>;
     participant?: Partial<DashboardEntities>;
     admin_flag?: boolean;
+}
+
+export type EntityBase = {
+    id: string;
+    title: string;
+    ownerId: number;
+    eventId?: string | null;
+    description?: string | null;
+    headerImg?: string | null;
+}
+
+export type Entity = EntityBase & {
+    url: string;
+    type: EntityType;
+    imageUrl?: string | null;
 }
 
 export type GuestLinkData = Guest & { link: string }

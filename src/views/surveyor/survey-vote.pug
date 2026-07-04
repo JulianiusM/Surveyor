@@ -4,9 +4,8 @@ block meta
     title Vote on #{data.survey.title} | Surveyor
 
 block title
-    h1(class="card-header text-center")
-        i.bi.bi-clipboard-check.me-2
-        | Vote on “#{data.survey.title}”
+    +entityHeader(data.survey, "survey", "bi-clipboard-check", permData)
+    +entityImageModal(data.survey, "survey")
 
 block content
     -

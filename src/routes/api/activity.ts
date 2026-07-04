@@ -3,6 +3,7 @@ import express, {Request, Response} from 'express';
 import controller from '../../controller/activityController';
 import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
 import {attachAssignRoleRoutes, attachAssignRoutes} from '../../middleware/assignFlowFactory';
+import {createEntityHeaderUpdateRouter} from "../../middleware/entityHeaderUpdateHandler";
 
 import {apiParamHandler} from "../../middleware/paramHandler";
 import {attachPermBundle, requireItemPermissionApi, requirePermissionApi} from '../../middleware/permissionMiddleware';
@@ -43,6 +44,7 @@ apiParamHandler('textFieldId', app, activityService.getActivityPlanTextFieldById
 app.use("/:id", attachPermBundle(permFct, itemPermFct));
 
 createEntityAdminApiRouter(app, entityName, permFct)
+createEntityHeaderUpdateRouter(app, permFct, resFct, controller.updateHeaderImg, controller.deleteHeaderImg);
 
 app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), async (req: Request, res: Response) => {
     const msg = await controller.updateDescription(resFct(req).id, req.body);

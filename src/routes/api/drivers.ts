@@ -1,7 +1,15 @@
 import express, {Request, Response} from 'express';
+
+import controller from "../../controller/driversController";
+import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
+import {attachAssignRoutes} from '../../middleware/assignFlowFactory';
+import {createEntityHeaderUpdateRouter} from "../../middleware/entityHeaderUpdateHandler";
+
+import {apiParamHandler} from "../../middleware/paramHandler";
+import {attachPermBundle, requireItemPermissionApi, requirePermissionApi} from '../../middleware/permissionMiddleware';
 import * as driverService from '../../modules/database/services/DriverService';
 import {asyncHandler} from '../../modules/lib/asyncHandler';
-import renderer from '../../modules/renderer';
+import {PERM} from "../../modules/lib/permissions";
 import {
     ENTITIES,
     ENTITY_ITEMS,
@@ -12,16 +20,9 @@ import {
     getPermFctItems,
     getResource
 } from "../../modules/lib/util";
-
-import {apiParamHandler} from "../../middleware/paramHandler";
-import {attachPermBundle, requireItemPermissionApi, requirePermissionApi} from '../../middleware/permissionMiddleware';
-import {attachAssignRoutes} from '../../middleware/assignFlowFactory';
-
-import controller from "../../controller/driversController";
-import {PERM} from "../../modules/lib/permissions";
-import type {EntityItemType, EntityType} from "../../types/UtilTypes";
-import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
+import renderer from '../../modules/renderer';
 import type {ItemGetter} from "../../types/PermissionTypes";
+import type {EntityItemType, EntityType} from "../../types/UtilTypes";
 
 const app = express.Router();
 
@@ -52,6 +53,7 @@ app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), asyn
 /* ───────────────── ASSIGN / UNASSIGN (JSON) ───────────────── */
 
 attachAssignRoutes(app, controller.getAssignmentAccessMapping());
+createEntityHeaderUpdateRouter(app, permFct, resFct, controller.updateHeaderImg, controller.deleteHeaderImg);
 
 /* ───────────────── REORDER (Owner) ────────────────────────── */
 

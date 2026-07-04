@@ -4,9 +4,8 @@ block meta
     title #{data.list.title} | Surveyor
 
 block title
-    h1.card-header.text-center
-        i.bi.bi-car-front.me-2
-        | #{data.list.title}
+    +entityHeader(data.list, "drivers", "bi-car-front", permData)
+    +entityImageModal(data.list, "drivers")
 
 block content
     // ─── Description (editable) ──────────────────────────────

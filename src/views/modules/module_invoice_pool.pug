@@ -204,7 +204,7 @@ mixin invoiceSubmission(eventId, pools, mode, invoices, allPools = [])
                                     input#invoiceDescription.form-control.text-bg-dark(type="text" name="description")
                                 .col-12
                                     label.form-label(for="invoiceProof") Proof (image or PDF)
-                                    input#invoiceProof.form-control.text-bg-dark(type="file" name="proof" accept="image/*,application/pdf" required)
+                                    input#invoiceProof.form-control.text-bg-dark(type="file" name="proof" accept="image/jpeg,image/png,image/gif,application/pdf" required)
                             .d-flex.justify-content-end.mt-2
                                 button.btn.btn-primary(type="submit")
                                     i.bi.bi-cloud-upload.me-1

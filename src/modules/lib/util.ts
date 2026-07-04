@@ -11,6 +11,7 @@ import type {
     ItemSubject,
     ItemWithParentGetter
 } from "../../types/PermissionTypes";
+import {DashboardEntities, Entity, EntityBase} from "../../types/UserTypes";
 import type {EntityItemType, EntityType} from "../../types/UtilTypes";
 import settings from "../settings";
 
@@ -389,4 +390,38 @@ export function merge<A>(a: A[], b: A[], predicate = (a: A, b: A) => a === b) {
     // add all items from B to copy C if they're not already present
     b.forEach((bItem) => (c.some((cItem) => predicate(bItem, cItem)) ? null : c.push(bItem)))
     return c;
+}
+
+export function convertToSingleList(entities: Partial<DashboardEntities>) {
+    const list: Entity[] = [];
+    for (const survey of entities.surveys ?? []) {
+        list.push(convertEntity(survey, ENTITIES.SURVEY));
+    }
+    for (const activity of entities.activityPlans ?? []) {
+        list.push(convertEntity(activity, ENTITIES.ACTIVITY));
+    }
+    for (const packing of entities.packingLists ?? []) {
+        list.push(convertEntity(packing, ENTITIES.PACKING));
+    }
+    for (const driver of entities.driversLists ?? []) {
+        list.push(convertEntity(driver, ENTITIES.DRIVERS));
+    }
+    for (const event of entities.events ?? []) {
+        list.push(convertEntity(event, ENTITIES.EVENT));
+    }
+    return list;
+}
+
+export function convertEntity(entity: EntityBase, entityType: EntityType) {
+    const entityUrl = `/${entityType}/${entity.id}`
+    return {
+        id: entity.id,
+        title: entity.title,
+        description: entity.description,
+        imageUrl: entity.headerImg ? `${entityUrl}/header` : undefined,
+        type: entityType,
+        ownerId: entity.ownerId,
+        url: entityUrl,
+        eventId: entity.eventId,
+    } as Entity;
 }

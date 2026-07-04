@@ -5,6 +5,7 @@
 
 import {setCurrentNavLocation} from './core/navigation';
 import {loadPerms, requireEntityPerm} from './core/permissions';
+import {initEntityHeader} from "./modules/entity-header";
 import {initTableReorder} from './shared/drag-drop';
 import {initAssignButtons} from './shared/entity-assign';
 import {startInlineEdit, startInlineEditArea} from './shared/inline-edit';
@@ -85,6 +86,8 @@ export function init(): void {
             confirmMessage: 'Delete this driver permanently?',
             successMessage: 'Driver deleted',
         });
+
+        initEntityHeader();
     }
 }
 

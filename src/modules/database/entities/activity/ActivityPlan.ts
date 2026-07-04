@@ -1,16 +1,17 @@
 import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
-import {ActivityAssignment} from "./ActivityAssignment";
+import type {EntityBase} from "../../../../types/UserTypes";
+import {Event} from "../event/Event";
 import {User} from "../user/User";
-import {ActivitySlot} from "./ActivitySlot";
+import {ActivityAssignment} from "./ActivityAssignment";
+import {ActivityAssignmentRecommendation} from "./ActivityAssignmentRecommendation";
 import {ActivityPlanRequirement} from "./ActivityPlanRequirement";
 import {ActivityPlanRequirementOverride} from "./ActivityPlanRequirementOverride";
-import {ActivityAssignmentRecommendation} from "./ActivityAssignmentRecommendation";
-import {Event} from "../event/Event";
-import {ActivityRole} from "./ActivityRole";
 import {ActivityPlanTextField} from "./ActivityPlanTextField";
+import {ActivityRole} from "./ActivityRole";
+import {ActivitySlot} from "./ActivitySlot";
 
 @Entity("activity_plans", {schema: "surveyor"})
-export class ActivityPlan {
+export class ActivityPlan implements EntityBase {
     @PrimaryGeneratedColumn("uuid", {name: "id"})
     id!: string;
 
@@ -46,6 +47,9 @@ export class ActivityPlan {
 
     @Column("tinyint", {name: "allow_departure_day_morning", width: 1, default: () => "1"})
     allowDepartureDayMorning!: boolean;
+
+    @Column("varchar", {name: "header_img", length: 255, nullable: true})
+    headerImg?: string | null;
 
     @Column("timestamp", {
         name: "created_at",

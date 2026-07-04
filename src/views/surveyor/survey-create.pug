@@ -33,7 +33,7 @@ block content
             eventIdQuery = `?eventId=${parsed.eventId}`
         }
 
-    form#surveyForm.row.gy-4.justify-content-center(action=`/survey/create${eventIdQuery}` method="POST")
+    form#surveyForm.row.gy-4.justify-content-center(action=`/survey/create${eventIdQuery}` method="POST" enctype="multipart/form-data")
         //── Survey Title ─────────────────────────────────────
         .col-md-12
             label.form-label.mb-1(for="title")
@@ -51,6 +51,12 @@ block content
                 | Description
             textarea#description.form-control.text-bg-dark(name="description"
                 value=(parsed.description || ''))
+
+        .col-12
+            label.form-label(for="headerImg")
+                i.bi.bi-card-image.me-1
+                | Header image (optional)
+            input#headerImg.form-control.text-bg-dark(type="file" name="headerImg" accept="image/jpeg,image/png,image/gif")
 
         //── Combinations Table ────────────────────────────────
         .col-12

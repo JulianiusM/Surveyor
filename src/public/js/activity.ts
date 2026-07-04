@@ -20,6 +20,7 @@ import {initSlotEditorModal} from './modules/activity/activity-slot-editor';
 import {initDelete, initDnD, initInlineEdit} from './modules/activity/activity-slot-operations';
 import {initTextFields} from './modules/activity/activity-text-fields';
 import type {AssignmentWarning, RecommendationRow} from "./modules/activity/activity-types";
+import {initEntityHeader} from "./modules/entity-header";
 import {initAssignmentRemoval} from './shared/list-actions';
 
 
@@ -135,6 +136,8 @@ export function init(): void {
         initAssignmentRemoval({
             baseUrl: `/api/activity/${planId}`,
         });
+
+        initEntityHeader();
     }
 }
 

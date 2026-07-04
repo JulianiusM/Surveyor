@@ -1,7 +1,7 @@
 // src/settings-csv.ts
-import fs from "node:fs";
-import crypto from "node:crypto";
 import * as dotenv from "dotenv";
+import crypto from "node:crypto";
+import fs from "node:fs";
 
 // Load env before anything else.
 // Priority: E2E_DOTENV_FILE > .env.e2e (when NODE_ENV=e2e) > .env
@@ -36,6 +36,7 @@ export type Settings = {
     oidcClientSecret: string;
     oidcRedirectUrl: string;
     invoiceDir: string;
+    headerImgDir: string;
     imprintUrl: string;
     privacyPolicyUrl: string;
     initialized: boolean;
@@ -79,10 +80,11 @@ const defaults: Settings = {
     file: "./settings.csv",
 
     invoiceDir: "uploads/invoices/",
+    headerImgDir: "uploads/headerImgs/",
 
     imprintUrl: "http://example.com/imprint",
     privacyPolicyUrl: "http://example.com/privacy",
-    
+
     activityAvailabilityWeight: 0.30,
     activitySwapOptimizationIterations: 10,
     activityArrivalDeparturePenalty: 0.2,
@@ -114,6 +116,7 @@ const keyMap: Record<string, keyof Settings> = {
     SESSION_SECRET: "sessionSecret",
     APP_PORT: "appPort",
     INVOICE_DIR: "invoiceDir",
+    HEADER_IMG_DIR: "headerImgDir",
     IMPRINT_URL: "imprintUrl",
     PRIVACY_POLICY_URL: "privacyPolicyUrl",
     ACTIVITY_AVAILABILITY_WEIGHT: "activityAvailabilityWeight",

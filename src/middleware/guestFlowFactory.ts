@@ -1,17 +1,21 @@
 import express, {NextFunction, Request, Response} from 'express';
+import fs from "fs";
+import path from "node:path";
 import * as eventService from "../modules/database/services/EventService";
 import * as userService from "../modules/database/services/UserService";
 import mailer from '../modules/email';
 import {asyncHandler} from '../modules/lib/asyncHandler';
-import {ExpectedError, ValidationError} from '../modules/lib/errors';
+import {APIError, ExpectedError, ValidationError} from '../modules/lib/errors';
+import {checkNewImage, prepareFileUploader, removeImage} from "../modules/lib/fileCommons";
 import {getGuestRegistrationNags} from "../modules/lib/guestRegistrationNags";
 import {PERM} from "../modules/lib/permissions";
 import {buildGuestLink, getItemFromEntityPermFct, getResource} from "../modules/lib/util";
 import {can} from "../modules/permissionEngine";
 
 import renderer from '../modules/renderer';
+import settings from "../modules/settings";
 import type {EntityDescriptor, EntityGetter, GetResource, ItemGetter} from "../types/PermissionTypes";
-import type {GuestFlowConfig, GuestFlowDb} from "../types/UserTypes";
+import type {EntityBase, GuestFlowConfig, GuestFlowDb} from "../types/UserTypes";
 import {paramHandler, queryHandler} from "./paramHandler";
 import {
     attachAdminData,
@@ -72,6 +76,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
     }: GuestFlowDb = Object.assign(initConfig(), db);
 
     const guest = 'users/register-guest';
+    const headerImgUpload = prepareFileUploader(settings.value.headerImgDir);
 
     const router = express.Router();
 
@@ -105,32 +110,43 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
 
     // GET+POST /create
     router.route('/create')
-        .get(isAuthenticated, optionalPermission(eventPermFct, PERM.MANAGE_ASSIGNMENTS, eventNewResFn), asyncHandler(async (req: Request, res: Response) => {
-            renderer.renderWithData(res, create, {
-                eventId: req.query.eventId,
-                events: await eventService.getActiveManagedEventsForUser(req.session.user!.id)
-            });
-        }))
-        .post(isAuthenticated, optionalPermission(eventPermFct, PERM.MANAGE_ASSIGNMENTS, eventNewResFn), asyncHandler(async (req: Request, res: Response) => {
-            const parsed = preprocessCreate(req.body);
-            if (parsed.error) {
-                throw new ValidationError(create, parsed.error.msg, parsed.error.data);
-            }
-            if (addToEvent) {
-                parsed._injectedEventId = req.query.eventId;
-            }
-            parsed._body = req.body;
-            let id;
-            try {
-                id = await createEntity(req.session.user!.id, parsed);
-                await afterCreateItems(id, parsed);
-            } catch (e) {
-                const message = e instanceof Error ? e.message : 'Failed to create the resource.';
-                throw new ValidationError(create, message, parsed);
-            }
-            req.flash('success', `${entityType} created`);
-            res.redirect(buildRedirect(id));
-        }));
+        .get(isAuthenticated,
+            optionalPermission(eventPermFct, PERM.MANAGE_ASSIGNMENTS, eventNewResFn),
+            asyncHandler(async (req: Request, res: Response) => {
+                renderer.renderWithData(res, create, {
+                    eventId: req.query.eventId,
+                    events: await eventService.getActiveManagedEventsForUser(req.session.user!.id)
+                });
+            }))
+        .post(isAuthenticated,
+            optionalPermission(eventPermFct, PERM.MANAGE_ASSIGNMENTS, eventNewResFn),
+            headerImgUpload.single("headerImg"),
+            asyncHandler(async (req: Request, res: Response) => {
+                checkNewImage(req.file);
+                req.body.headerImg = req.file ? path.relative(process.cwd(), req.file.path) : undefined;
+                const parsed = preprocessCreate(req.body);
+                if (parsed.error) {
+                    throw new ValidationError(create, parsed.error.msg, parsed.error.data);
+                }
+                if (addToEvent) {
+                    parsed._injectedEventId = req.query.eventId;
+                }
+                parsed._body = req.body;
+                parsed._file = req.file;
+                if (!parsed.headerImg && req.file) {
+                    parsed.headerImg = req.body.headerImg;
+                }
+                let id;
+                try {
+                    id = await createEntity(req.session.user!.id, parsed);
+                    await afterCreateItems(id, parsed);
+                } catch (e) {
+                    const message = e instanceof Error ? e.message : 'Failed to create the resource.';
+                    throw new ValidationError(create, message, parsed);
+                }
+                req.flash('success', `${entityType} created`);
+                res.redirect(buildRedirect(id));
+            }));
 
     router.use("/:id", attachPermBundle(permFct, itemPermFct), attachPermMeta(entityType, (req) => req.params['id']), attachAdminData(entityType, (req) => req.params['id']));
 
@@ -182,9 +198,41 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
 
     // POST /:id/delete
     router.post('/:id/delete', requireOwner(resFct), asyncHandler(async (req: Request, res: Response) => {
-        await deleteEntity(resFct(req), req.session);
+        const entity: EntityBase = resFct(req);
+        await deleteEntity(entity, req.session);
+        if (entity.headerImg) {
+            removeImage(entity.headerImg);
+        }
         req.flash('success', `${entityType} deleted`);
         res.redirect('/users/dashboard');
+    }));
+
+    // Serve header image files securely
+    router.get("/:id/header", asyncHandler(async (req: Request, res: Response) => {
+        const entity = resFct(req);
+        if (!entity || !entity.headerImg) {
+            throw new APIError('No image available', {}, 404)
+        }
+
+        // Sanitize and validate the path to prevent directory traversal
+        const uploadsDir = path.resolve(process.cwd(), settings.value.headerImgDir);
+        const fullPath = path.resolve(process.cwd(), entity.headerImg);
+
+        // Use path.relative to ensure the resolved path is within uploads directory
+        const relativePath = path.relative(uploadsDir, fullPath);
+        if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+            throw new APIError('No image available', {}, 400);
+        }
+
+        // Check if file exists (async)
+        try {
+            await fs.promises.access(fullPath, fs.constants.R_OK);
+        } catch {
+            throw new APIError('No image available', {}, 404);
+        }
+
+        // Serve the file
+        res.sendFile(fullPath);
     }));
 
     // SAFE-ZONE middleware before accessing /:id routes

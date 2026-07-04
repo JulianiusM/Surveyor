@@ -4,9 +4,8 @@ block meta
     title #{data.plan.title} | Activity planner
 
 block title
-    h1.card-header.text-center
-        i.bi.bi-calendar-check.me-2
-        | #{data.plan.title}
+    +entityHeader(data.plan, "activity", "bi-calendar-check", permData)
+    +entityImageModal(data.plan, "activity")
 
 block content
     //- helper in pug (this won’t be sent to the client)

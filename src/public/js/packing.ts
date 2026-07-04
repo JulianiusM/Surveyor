@@ -6,6 +6,7 @@
 import {post} from './core/http';
 import {setCurrentNavLocation} from './core/navigation';
 import {loadPerms, requireEntityPerm, requireItemPerm} from './core/permissions';
+import {initEntityHeader} from "./modules/entity-header";
 import {showInlineAlert} from './shared/alerts';
 import {initTableReorder} from './shared/drag-drop';
 import {initAssignButtons} from './shared/entity-assign';
@@ -182,6 +183,8 @@ export function init(): void {
             confirmMessage: 'Delete this item permanently?',
             successMessage: 'Item deleted',
         });
+
+        initEntityHeader();
     }
 }
 
