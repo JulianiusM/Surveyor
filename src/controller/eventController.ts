@@ -206,6 +206,29 @@ async function registerAttendance(event: Event, body: any, req: Request) {
 
     const dietary: DIETARY[] = Array.isArray(value.dietary) ? value.dietary : (value.dietary ? [value.dietary] : []);
     const allergyNotes: string = value.allergyNotes || '';
+    if (dietary.includes("ALLERGIES") && !allergyNotes) {
+        throw new APIError('Allergies require additional information', body, 400);
+    }
+
+    const meals = dietary.filter(d =>
+        ['MEAT', 'FISH', 'VEGETARIAN', 'VEGAN'].includes(d)
+    );
+
+    if (dietary.length > 0 && meals.length === 0) {
+        throw new APIError('At least one meal preference must be selected.', body, 400);
+    }
+
+    if (meals.includes('VEGETARIAN')) {
+        if (meals.includes('MEAT') || meals.includes('FISH') || meals.includes('VEGAN')) {
+            throw new APIError('Vegetarian cannot be combined with meat, fish or vegan.', body, 400);
+        }
+    }
+
+    if (meals.includes('VEGAN')) {
+        if (meals.includes('MEAT') || meals.includes('FISH') || meals.includes('VEGETARIAN')) {
+            throw new APIError('Vegan cannot be combined with meat, fish or vegetarian.', body, 400);
+        }
+    }
 
     if (session.user?.id) {
         await eventService.registerUser(event.id, session.user.id, value.arrivalDate, value.departureDate, dietary, allergyNotes.trim() || null, bypass);
@@ -365,7 +388,23 @@ async function getParticipantsExtended(event: Event) {
     const participants = await eventService.getEventParticipants(event.id);
     const totals: Record<string, number> = {};
     for (const p of participants) {
-        for (const k of p.dietaryChoices) totals[k.choice] = (totals[k.choice] || 0) + 1;
+        const choices = new Set(p.dietaryChoices.map(c => c.choice));
+
+        const hasMeat = choices.has('MEAT');
+        const hasFish = choices.has('FISH');
+
+        if (hasMeat && hasFish) {
+            totals['MEAT_AND_FISH'] = (totals['MEAT_AND_FISH'] || 0) + 1;
+        } else {
+            if (hasMeat) totals['MEAT_NO_FISH'] = (totals['MEAT_NO_FISH'] || 0) + 1;
+            if (hasFish) totals['FISH_NO_MEAT'] = (totals['FISH_NO_MEAT'] || 0) + 1;
+        }
+
+        // Count all remaining dietary choices normally.
+        for (const choice of choices) {
+            if (choice === 'MEAT' || choice === 'FISH') continue;
+            totals[choice] = (totals[choice] || 0) + 1;
+        }
     }
     const dateTotals: Record<string, number> = buildDateTotals(event.startDate, event.endDate, participants);
     return {

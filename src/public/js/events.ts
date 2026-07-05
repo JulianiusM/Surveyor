@@ -106,6 +106,45 @@ export function deadlineUpdater(): void {
  * Initialize event registration form
  */
 export function initRegistration(): void {
+    const mealOptions = ['meat', 'fish', 'vegetarian', 'vegan'];
+
+    const mealBoxes = mealOptions.map(v =>
+        document.querySelector<HTMLInputElement>(`input[value="${v}"]`)!
+    );
+
+    function updateMealRules(this: HTMLInputElement, ev: Event) {
+        const meat = mealBoxes[0];
+        const fish = mealBoxes[1];
+        const vegetarian = mealBoxes[2];
+        const vegan = mealBoxes[3];
+
+        // Vegetarian disables meat/fish/vegan
+        if (this == vegetarian && vegetarian.checked) {
+            meat.checked = false;
+            fish.checked = false;
+            vegan.checked = false;
+        }
+
+        // Vegan disables meat/fish/vegetarian
+        if (this == vegan && vegan.checked) {
+            meat.checked = false;
+            fish.checked = false;
+            vegetarian.checked = false;
+        }
+
+        // Meat/Fish disable vegetarian & vegan
+        if ((this == meat || this == fish) && (meat.checked || fish.checked)) {
+            vegetarian.checked = false;
+            vegan.checked = false;
+        }
+    }
+
+    if (mealBoxes.length > 0 && mealBoxes[0] instanceof HTMLInputElement) {
+        mealBoxes.forEach(cb =>
+            cb.addEventListener('change', updateMealRules)
+        );
+    }
+
     const form = document.getElementById('registrationForm');
     if (!form) {
         return;
@@ -113,6 +152,15 @@ export function initRegistration(): void {
 
     form.addEventListener('submit', async (e: Event) => {
         e.preventDefault();
+
+        if (mealBoxes.length > 0 && mealBoxes[0] instanceof HTMLInputElement) {
+            const selectedMeals = mealBoxes.filter(cb => cb.checked);
+            if (selectedMeals.length === 0) {
+                showInlineAlert('error', 'Please select at least one meal preference.');
+                return;
+            }
+        }
+
         try {
             requireEntityPerm('ACCESS_REGISTRATION', 'register for this event');
             const formData = new FormData(form as HTMLFormElement);
