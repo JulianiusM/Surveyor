@@ -143,7 +143,13 @@ export const requireEventParticipant = (getResource: GetResource = defaultGetRes
 export function isAuthenticated(req: Request, res: Response, next: NextFunction) {
     if (req.session.user) return next();
     req.flash("info", "You must be logged in to access this site.");
-    res.redirect("/users/login");
+    let nxt = "";
+    if (typeof req.query.next === "string") {
+        nxt = `?next=${req.query.next}`;
+    } else {
+        nxt = `?next=${req.baseUrl}${req.path}`;
+    }
+    res.redirect(`/users/login${nxt}`);
 }
 
 export function isGuest(req: Request, res: Response, next: NextFunction) {

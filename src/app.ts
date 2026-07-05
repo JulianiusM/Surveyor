@@ -76,6 +76,7 @@ app.use(function (req: Request, res: Response, next: NextFunction) {
         imprintUrl: settings.value.imprintUrl,
         privacyPolicyUrl: settings.value.privacyPolicyUrl,
     };
+    res.locals.nxtUrl = req.query.next ?? req.baseUrl + req.path;
     next();
 });
 

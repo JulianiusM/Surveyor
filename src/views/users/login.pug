@@ -13,7 +13,7 @@ block content
     h2.text-center
         | Already got a user account?
     p.text-center Login here using your credentials or visit the external authentication provider if enabled.
-    form.row.gy-3.justify-content-center(action="/users/login" method="post")
+    form.row.gy-3.justify-content-center(action=`/users/login?next=${nxtUrl}` method="post")
         if settings.localLoginEnabled
             //── Username ────────────────────────────────────────
             .col-md-6
@@ -25,7 +25,7 @@ block content
                     name="username"
                     maxlength="100"
                     value= (data && data.username) ? data.username : ''
-                placeholder="your login name"
+                    placeholder="your login name"
                     required)
 
             //── Passwort ────────────────────────────────────────
@@ -55,7 +55,7 @@ block content
     h2.text-center
         | Looking for your guest account?
     p.text-center If you have added your email upon registration, you will be able to recover it here. We will send a link of all associated guest accounts to the provided email address.
-    form.row.gy-3.justify-content-center(action="/guest/recovery" method="post")
+    form.row.gy-3.justify-content-center(action=`/guest/recovery?next=${nxtUrl}` method="post")
         .col-md-6
             label.form-label.mb-1(for="email")
                 i.bi.bi-envelope.me-1

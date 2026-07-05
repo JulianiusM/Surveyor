@@ -18,7 +18,7 @@ import {DashboardDTO, GuestLinkData} from "../types/UserTypes";
 const CREATE_TEMPLATE = 'users/register';
 const LOGIN_TEMPLATE = 'users/login';
 
-export async function registerUser(body: any) {
+export async function registerUser(body: any, next?: string) {
     const {username, displayname, password, password_repeat, email} = body;
     const returnInfo = {username, email};
 
@@ -40,7 +40,8 @@ export async function registerUser(body: any) {
 
     // Generiere den Aktivierungs-Token und sende ihn per E-Mail
     const token = await userService.generateActivationToken(userId);
-    const activationLink = `${settings.value.rootUrl}/users/activate/${token}`;
+    const nextLink = next ? `?next=${next}` : "";
+    const activationLink = `${settings.value.rootUrl}/users/activate/${token}${nextLink}`;
 
     await mailer.sendActivationEmail(email, activationLink);
 }

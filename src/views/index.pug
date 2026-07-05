@@ -83,10 +83,10 @@ block content
                     | See everything you created on your personal dashboard.
 
         .d-flex.flex-wrap.justify-content-center.gap-2.mb-3
-            a.btn.btn-primary.btn-lg.d-inline-flex.align-items-center.gap-2(href="/users/register")
+            a.btn.btn-primary.btn-lg.d-inline-flex.align-items-center.gap-2(href=`/users/register?next=${nxtUrl}`)
                 i.bi.bi-person-plus
                 | Create account
-            a.btn.btn-outline-light.btn-lg.d-inline-flex.align-items-center.gap-2(href="/users/login")
+            a.btn.btn-outline-light.btn-lg.d-inline-flex.align-items-center.gap-2(href=`/users/login?next=${nxtUrl}`)
                 i.bi.bi-box-arrow-in-right
                 | Log in
 

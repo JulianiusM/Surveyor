@@ -45,13 +45,13 @@ block content
 
     //- Primary actions
     .d-flex.flex-wrap.justify-content-center.gap-2.mb-4
-        a.btn.btn-primary.d-inline-flex.align-items-center.gap-2(href="/users/login")
+        a.btn.btn-primary.d-inline-flex.align-items-center.gap-2(href=`/users/login?next=${nxtUrl}`)
             i.bi.bi-box-arrow-in-right
             | Log in
-        a.btn.btn-outline-warning.d-inline-flex.align-items-center.gap-2(href="/guest/recovery")
+        a.btn.btn-outline-warning.d-inline-flex.align-items-center.gap-2(href=`/guest/recovery?next=${nxtUrl}`)
             i.bi.bi-envelope
             | Recover guest account
-        a.btn.btn-outline-primary.d-inline-flex.align-items-center.gap-2(href="/users/register")
+        a.btn.btn-outline-primary.d-inline-flex.align-items-center.gap-2(href=`/users/register?next=${nxtUrl}`)
             i.bi.bi-person-plus
             | Create account
 
@@ -124,7 +124,7 @@ block content
                     | Continue as guest
 
     //- Recovery form used by the modal choice
-    form#guestRecoveryForm.d-none(method="post" action="/guest/recovery" autocomplete="on")
+    form#guestRecoveryForm.d-none(method="post" action=`/guest/recovery?next=${nxtUrl}` autocomplete="on")
         input(type="hidden" name="email")
 
     //- Modal choice when an email already belongs to a guest account
@@ -142,9 +142,9 @@ block content
 
     //- Subtle footer links
     .text-center.mt-4
-        a.text-decoration-none.me-3(href="/users/login")
+        a.text-decoration-none.me-3(href=`/users/login?next=${nxtUrl}`)
             i.bi.bi-arrow-left-circle.me-1
             | Back to login
-        a.text-decoration-none(href="/users/register")
+        a.text-decoration-none(href=`/users/register?next=${nxtUrl}`)
             i.bi.bi-person-plus.me-1
             | Create a full account

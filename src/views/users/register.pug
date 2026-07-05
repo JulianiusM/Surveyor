@@ -13,7 +13,7 @@ block title
         | Register
 
 block content
-    form#form.row.gy-3.justify-content-center(action="/users/register" method="post")
+    form#form.row.gy-3.justify-content-center(action=`/users/register?next=${nxtUrl}` method="post")
         if settings.localLoginEnabled
             //── Username ────────────────────────────────────────
             .col-md-6

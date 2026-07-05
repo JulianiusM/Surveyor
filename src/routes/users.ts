@@ -2,12 +2,14 @@ import express, {Request, Response} from 'express';
 
 import * as userController from "../controller/userController";
 import {isAuthenticated} from "../middleware/permissionMiddleware";
+import {addNextQuery} from "../middleware/referrerUpdater";
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {ExpectedError} from "../modules/lib/errors";
 import renderer from "../modules/renderer";
 import settings from "../modules/settings";
 
 const app = express.Router();
+const root = "/users"
 
 /* GET users listing. */
 app.get('/', asyncHandler((req: Request, res: Response) => {
@@ -15,19 +17,23 @@ app.get('/', asyncHandler((req: Request, res: Response) => {
 }));
 
 // Registrierung von Benutzern
-app.get('/register', asyncHandler((req: Request, res: Response) => {
+app.get('/register', addNextQuery("/users/register", root), asyncHandler((req: Request, res: Response) => {
     if (!settings.value.localLoginEnabled) return res.redirect("/users/oidc/login");
     renderer.render(res, 'users/register');  // Zeige das Registrierungsformular an
 }));
 
 app.post('/register', asyncHandler(async (req: Request, res: Response) => {
     if (!settings.value.localLoginEnabled) throw new ExpectedError('Login is not enabled!', 'error', 500);
-    await userController.registerUser(req.body);
+    let next: string | undefined = undefined;
+    if (typeof req.query.next === 'string') {
+        next = req.query.next;
+    }
+    await userController.registerUser(req.body, next);
     renderer.renderInfo(res, 'Account successfully registered. Please activate it using the link sent to your email.');
 }));
 
 // Login-Funktionalität
-app.get('/login', asyncHandler((req: Request, res: Response) => {
+app.get('/login', addNextQuery("/users/login", root), asyncHandler((req: Request, res: Response) => {
     if (!settings.value.localLoginEnabled) return res.redirect("/users/oidc/login");
     renderer.render(res, 'users/login');  // Zeige das Login-Formular an
 }));
@@ -36,12 +42,19 @@ app.post('/login', asyncHandler(async (req: Request, res: Response) => {
     if (!settings.value.localLoginEnabled) throw new ExpectedError('Login is not enabled!', 'error', 500);
     await userController.loginUser(req.body, req.session);
     req.flash('success', 'Login successful');
+    if (typeof req.query.next === 'string') {
+        return res.redirect(req.query.next);
+    }
     res.redirect('/users/dashboard');  // Weiterleitung nach dem Login
 }));
 
 // Logout
-app.get('/logout', asyncHandler(async (req: Request, res: Response) => {
+app.get('/logout', addNextQuery("/users/logout", root), asyncHandler(async (req: Request, res: Response) => {
     const redirect = await userController.logoutUserOidc(req.session);
+    req.flash('success', 'Logout successful');
+    if (typeof req.query.next === 'string') {
+        return res.redirect(req.query.next);
+    }
     res.redirect(redirect);
 }));
 
@@ -76,7 +89,11 @@ app.post('/reset-password/:token', asyncHandler(async (req: Request, res: Respon
 app.get('/activate/:token', asyncHandler(async (req: Request, res: Response) => {
     if (!settings.value.localLoginEnabled) throw new ExpectedError('Login is not enabled!', 'error', 500);
     await userController.activateAccount(req.params.token);
-    renderer.renderSuccess(res, 'Your account has been activated. You can log in now.')
+    req.flash('success', 'Account successfully activated');
+    if (typeof req.query.next === 'string') {
+        return res.redirect(`/users/login?next=${req.query.next}`);
+    }
+    res.redirect('/users/login');
 }));
 
 app.get('/oidc/login', asyncHandler(async (req: Request, res: Response) => {
