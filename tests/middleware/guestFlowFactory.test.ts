@@ -21,7 +21,7 @@ jest.mock('../../src/modules/email', () => ({
 
 jest.mock('../../src/modules/settings', () => ({
     __esModule: true,
-    default: {value: {rootUrl: 'http://app.local'}},
+    default: {value: {rootUrl: 'http://app.local', headerImgDir: 'uploads/headerImgs/'}},
 }));
 
 jest.mock('../../src/middleware/permissionMiddleware', () => ({

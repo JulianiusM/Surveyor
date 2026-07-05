@@ -13,6 +13,7 @@ export const ENTITIES_MOCK = {
 export const mockUtil = (overrides = {}) => ({
     generateUniqueId: jest.fn(() => 'uid-xyz'),
     ENTITIES: ENTITIES_MOCK,
+    convertToSingleList: jest.fn(() => []),
     ...overrides,
 });
 

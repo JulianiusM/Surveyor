@@ -105,6 +105,7 @@ describe('driversService (mysql)', () => {
             testCase.initialData.title,
             testCase.initialData.description,
             undefined, // eventId
+            undefined, // headerImg
             listId
         );
 
@@ -140,6 +141,7 @@ describe('driversService (mysql)', () => {
             testCase.listData.title,
             testCase.listData.description,
             undefined, // eventId
+            undefined, // headerImg
             listId
         );
 
@@ -223,6 +225,7 @@ describe('driversService (mysql)', () => {
             testCase.listData.title,
             testCase.listData.description,
             undefined, // eventId
+            undefined, // headerImg
             listId
         );
 
