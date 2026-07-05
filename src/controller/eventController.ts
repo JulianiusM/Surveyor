@@ -394,10 +394,10 @@ async function getParticipantsExtended(event: Event) {
         const hasFish = choices.has('FISH');
 
         if (hasMeat && hasFish) {
-            totals['MEAT_AND_FISH'] = (totals['MEAT_AND_FISH'] || 0) + 1;
+            totals['MEAT_OR_FISH'] = (totals['MEAT_OR_FISH'] || 0) + 1;
         } else {
-            if (hasMeat) totals['MEAT_NO_FISH'] = (totals['MEAT_NO_FISH'] || 0) + 1;
-            if (hasFish) totals['FISH_NO_MEAT'] = (totals['FISH_NO_MEAT'] || 0) + 1;
+            if (hasMeat) totals['JUST_MEAT'] = (totals['JUST_MEAT'] || 0) + 1;
+            if (hasFish) totals['JUST_FISH'] = (totals['JUST_FISH'] || 0) + 1;
         }
 
         // Count all remaining dietary choices normally.
