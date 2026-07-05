@@ -3,11 +3,14 @@
  * Follows data-driven and keyword-driven test patterns
  */
 
-import { userDashboardInitTestData as _userDashboardInitTestData, userDashboardCallOrderData as _userDashboardCallOrderData } from '../data/userDashboardData';
+import {
+    userDashboardCallOrderData as _userDashboardCallOrderData,
+    userDashboardInitTestData as _userDashboardInitTestData
+} from '../data/userDashboardData';
+import {setupTest} from '../helpers/testSetup';
 
 const userDashboardInitTestData = _userDashboardInitTestData();
 const userDashboardCallOrderData = _userDashboardCallOrderData();
-import { setupTest } from '../helpers/testSetup';
 
 // Mock dependencies
 jest.mock('../../../src/public/js/core/navigation', () => ({
@@ -19,10 +22,15 @@ jest.mock('../../../src/public/js/core/permissions', () => ({
     loadPerms: jest.fn()
 }));
 
+jest.mock('../../../src/public/js/modules/entity-cards-overview', () => ({
+    initEntityOverview: jest.fn(),
+}))
+
 describe('user-dashboard module', () => {
     let mockSetCurrentNavLocation: jest.Mock;
     let mockLoadPerms: jest.Mock;
     let mockInitEntityLists: jest.Mock;
+    let mockInitEntityOverview: jest.Mock;
 
     setupTest({
         beforeEach: () => {
@@ -34,9 +42,11 @@ describe('user-dashboard module', () => {
             // Get mock functions
             const navigation = require('../../../src/public/js/core/navigation');
             const permissions = require('../../../src/public/js/core/permissions');
+            const entityOverview = require('../../../src/public/js/modules/entity-cards-overview');
             mockSetCurrentNavLocation = navigation.setCurrentNavLocation as jest.Mock;
             mockLoadPerms = permissions.loadPerms as jest.Mock;
             mockInitEntityLists = navigation.initEntityLists as jest.Mock;
+            mockInitEntityOverview = entityOverview.initEntityOverview as jest.Mock;
         },
         afterEach: () => {
             // Clean up
@@ -64,6 +74,9 @@ describe('user-dashboard module', () => {
             expect(mockInitEntityLists).toHaveBeenCalledTimes(
                 testCase.expectedCalls.initEntityLists
             );
+            expect(mockInitEntityOverview).toHaveBeenCalledTimes(
+                testCase.expectedCalls.initEntityOverview
+            )
         });
 
         test(userDashboardCallOrderData.description, async () => {
@@ -82,13 +95,17 @@ describe('user-dashboard module', () => {
                 callOrder.push('initEntityLists');
             });
 
+            mockInitEntityOverview.mockImplementation(() => {
+                callOrder.push('initEntityOverview');
+            });
+
             dashboardModule.init();
 
             expect(callOrder).toEqual(userDashboardCallOrderData.expectedOrder);
         });
 
         test('should expose init function to global scope', async () => {
-            const { init } = await import('../../../src/public/js/user-dashboard');
+            const {init} = await import('../../../src/public/js/user-dashboard');
 
             // The module exports the function and assigns it to window.Surveyor.init
             expect(init).toBeDefined();
@@ -106,17 +123,8 @@ describe('user-dashboard module', () => {
 
             expect(mockSetCurrentNavLocation).toHaveBeenCalledTimes(3);
             expect(mockLoadPerms).toHaveBeenCalledTimes(3);
-            expect(mockInitEntityLists).toHaveBeenCalledTimes(3);
-        });
-
-        test('should initialize entity lists for dashboard table functionality', async () => {
-            const dashboardModule = await import('../../../src/public/js/user-dashboard');
-
-            dashboardModule.init();
-
-            // Verify entity lists are initialized (for dashboard tables)
-            expect(mockInitEntityLists).toHaveBeenCalledTimes(1);
-            expect(mockInitEntityLists).toHaveBeenCalledWith();
+            expect(mockInitEntityLists).toHaveBeenCalledTimes(0);
+            expect(mockInitEntityOverview).toHaveBeenCalledTimes(6);
         });
     });
 });

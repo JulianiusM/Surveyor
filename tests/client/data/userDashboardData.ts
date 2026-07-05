@@ -11,6 +11,7 @@ export interface UserDashboardTestData {
         setCurrentNavLocation: number;
         loadPerms: number;
         initEntityLists: number;
+        initEntityOverview: number;
     };
 }
 
@@ -20,7 +21,8 @@ const _userDashboardInitTestData: UserDashboardTestData[] = [
         expectedCalls: {
             setCurrentNavLocation: 1,
             loadPerms: 1,
-            initEntityLists: 1
+            initEntityLists: 0,
+            initEntityOverview: 2
         }
     }
 ];
@@ -29,7 +31,7 @@ export const userDashboardInitTestData = () => deepCopy(_userDashboardInitTestDa
 
 const _userDashboardCallOrderData = {
     description: 'should call functions in correct order',
-    expectedOrder: ['setCurrentNavLocation', 'loadPerms', 'initEntityLists']
+    expectedOrder: ['setCurrentNavLocation', 'loadPerms', 'initEntityOverview', 'initEntityOverview']
 };
 
 export const userDashboardCallOrderData = () => deepCopy(_userDashboardCallOrderData) as typeof _userDashboardCallOrderData;
