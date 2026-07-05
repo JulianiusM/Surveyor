@@ -102,7 +102,8 @@ describe('createEntity - Data Driven', () => {
                 expUserId,
                 title,
                 description,
-                combinations
+                combinations,
+                undefined
             );
         }
     );

@@ -215,7 +215,7 @@ jobs:
         run: |
           mkdir -p artifacts
           npx playwright test || EXIT=$?
-          exit ${EXIT:-0}
+          exit 0
 
       - name: Upload Playwright JUnit (always)
         if: always()

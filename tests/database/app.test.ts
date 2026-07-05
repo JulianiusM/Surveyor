@@ -25,6 +25,7 @@ jest.mock('../../src/modules/settings', () => ({
             oidcEnabled: false,
             oidcName: 'OIDC',
             invoiceDir: 'uploads/invoices/',
+            headerImgDir: 'uploads/headerImgs/',
             initialized: true,
             smtpPool: false,
             smtpSecure: false,

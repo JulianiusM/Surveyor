@@ -21,6 +21,7 @@ jest.mock('../../src/modules/settings', () => ({
             imprintUrl: '',
             privacyPolicyUrl: '',
             invoiceDir: 'uploads/invoices/',
+            headerImgDir: 'uploads/headerImgs/',
         },
     }
 }));

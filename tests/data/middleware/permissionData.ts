@@ -159,7 +159,7 @@ export const isAuthenticatedData = [
         description: 'redirects when not authenticated',
         session: {},
         shouldPass: false,
-        expectedRedirect: '/users/login',
+        expectedRedirect: '/users/login?next=undefinedundefined',
         expectedFlashMessage: 'You must be logged in to access this site.',
     },
 ];

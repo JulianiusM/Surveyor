@@ -77,7 +77,7 @@ export const createEntityData = {
     },
     userId: 7,
     expectedId: 'plan-123',
-    expectedArgs: [7, 'T', 'D', '2024-01-01', '2024-01-03', [{id: 's1'}], undefined],
+    expectedArgs: [7, 'T', 'D', '2024-01-01', '2024-01-03', [{id: 's1'}], undefined, undefined],
 };
 
 export const fetchForViewData = {

@@ -86,7 +86,7 @@ describe('createEntity / afterCreateItems', () => {
         const id = await createEntity(userId, listData);
         
         verifyResult(id, expectedId);
-        verifyMockCall(driverService.createDriversList, userId, listData.title, listData.description, listData.eventId);
+        verifyMockCall(driverService.createDriversList, userId, listData.title, listData.description, listData.eventId, undefined);
 
         await expect(afterCreateItems(expectedId, {_body: {}})).resolves.toBeUndefined();
     });
