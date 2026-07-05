@@ -198,14 +198,27 @@ export const registerAttendanceData = {
             body: {
                 arrivalDate: '2025-01-03',
                 departureDate: '2025-01-04',
-                dietary: ['FISH', 'VEGETARIAN'],
+                dietary: ['FISH', 'MEAT'],
                 allergyNotes: '',
             },
             session: {guest: {id: 9}},
             expectedCall: {
                 service: 'registerGuest',
-                args: ['e1', 9, '2025-01-03', '2025-01-04', ['FISH', 'VEGETARIAN'], null, {ok: false}],
+                args: ['e1', 9, '2025-01-03', '2025-01-04', ['FISH', 'MEAT'], null, {ok: false}],
             },
+        },
+        {
+            description: 'registers guest; dietary array, empty allergy -> null',
+            mockFull: false,
+            mockWithinWindow: true,
+            body: {
+                arrivalDate: '2025-01-03',
+                departureDate: '2025-01-04',
+                dietary: ['FISH', 'VEGETARIAN'],
+                allergyNotes: '',
+            },
+            session: {guest: {id: 9}},
+            shouldThrow: 'APIError'
         },
         {
             description: 'blocks when event is full and user not already registered',
