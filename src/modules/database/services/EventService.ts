@@ -264,10 +264,11 @@ async function replaceDietaryChoicesTx(
 export async function replaceDietaryChoices(
     registrationId: number,
     choices?: DIETARY[] | null,
-    additionalInfo?: string | null
+    allergy?: string | null,
+    comment?: string | null,
 ) {
     await AppDataSource.transaction('READ COMMITTED', async (manager) => {
-        await replaceDietaryChoicesTx(manager, registrationId, choices, additionalInfo);
+        await replaceDietaryChoicesTx(manager, registrationId, choices, allergy, comment);
     });
 }
 

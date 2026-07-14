@@ -7,6 +7,14 @@ jest.mock('../../src/modules/database/dataSource', () =>
     require('../util/db/mariadb-datasource.mock')
 );
 
+import {AppDataSource, initDataSource} from '../../src/modules/database/dataSource';
+
+// Entities for setup/cleanup
+import {Event} from '../../src/modules/database/entities/event/Event';
+import {EventRegistration} from '../../src/modules/database/entities/event/EventRegistration';
+import {EventRegistrationDietary} from '../../src/modules/database/entities/event/EventRegistrationDietary';
+import {Guest} from '../../src/modules/database/entities/user/Guest';
+import {User} from '../../src/modules/database/entities/user/User';
 import {
     createEventTx,
     deleteEvent,
@@ -29,23 +37,13 @@ import {
     updateRegistrationDates,
 } from '../../src/modules/database/services/EventService';
 
-import {AppDataSource, initDataSource} from '../../src/modules/database/dataSource';
-
-// Entities for setup/cleanup
-import {Event} from '../../src/modules/database/entities/event/Event';
-import {EventRegistration} from '../../src/modules/database/entities/event/EventRegistration';
-import {EventRegistrationDietary} from '../../src/modules/database/entities/event/EventRegistrationDietary';
-import {User} from '../../src/modules/database/entities/user/User';
-import {Guest} from '../../src/modules/database/entities/user/Guest';
-import type {DIETARY} from '../../src/types/EventTypes';
-
 // Test data
 import {
     eventCrudData,
-    eventRegistrationData,
-    registeredEventsData,
     eventFullData,
     eventRegistrationCheckData,
+    eventRegistrationData,
+    registeredEventsData,
     updateRegistrationDatesData,
 } from '../data/database/eventServiceData';
 
@@ -106,6 +104,7 @@ describe('eventService (mysql)', () => {
             testCase.initialData.location,
             binding,
             testCase.initialData.requireDietaryInfo,
+            testCase.initialData.allowDietComment,
             testCase.initialData.maxParticipants,
             testCase.initialData.timezone
         );
@@ -120,6 +119,7 @@ describe('eventService (mysql)', () => {
         expect(ev1!.location).toBe(testCase.expectedInitial.location);
         expect(ev1!.bindingDeadline).toStrictEqual(new Date(binding!));
         expect(ev1!.requireDietaryInfo).toBe(testCase.expectedInitial.requireDietaryInfo);
+        expect(ev1!.allowDietComment).toBe(testCase.expectedInitial.allowDietComment);
         expect(ev1!.maxParticipants).toBe(testCase.expectedInitial.maxParticipants);
         expect(ev1!.timezone).toBe(testCase.expectedInitial.timezone);
 
@@ -139,6 +139,7 @@ describe('eventService (mysql)', () => {
         expect(ev2!.location).toBe(testCase.expectedAfterUpdates.location);
         expect(ev2!.bindingDeadline).toStrictEqual(new Date(testCase.expectedAfterUpdates.bindingDeadline));
         expect(ev2!.requireDietaryInfo).toBe(testCase.expectedAfterUpdates.requireDietaryInfo);
+        expect(ev2!.allowDietComment).toBe(testCase.expectedAfterUpdates.allowDietComment);
         expect(ev2!.maxParticipants).toBe(testCase.expectedAfterUpdates.maxParticipants);
         expect(ev2!.timezone).toBe(testCase.expectedAfterUpdates.timezone);
         expect(ev2!.startDate).toBe(testCase.expectedAfterUpdates.startDate);
@@ -170,6 +171,7 @@ describe('eventService (mysql)', () => {
             testCase.eventData.location,
             testCase.eventData.bindingDeadline,
             testCase.eventData.requireDietaryInfo,
+            testCase.initialData.allowDietComment,
             testCase.eventData.maxParticipants,
             testCase.eventData.timezone
         );
@@ -181,7 +183,8 @@ describe('eventService (mysql)', () => {
             testCase.userRegistration.arrivalDate,
             testCase.userRegistration.departureDate,
             testCase.userRegistration.initialChoices,
-            testCase.userRegistration.note
+            testCase.userRegistration.note,
+            testCase.userRegistration.comment
         );
         expect(typeof uid).toBe('number');
 
@@ -198,7 +201,8 @@ describe('eventService (mysql)', () => {
             testCase.userRegistration.updatedArrivalDate,
             testCase.userRegistration.updatedDepartureDate,
             testCase.userRegistration.updatedChoices,
-            testCase.userRegistration.updatedNote
+            testCase.userRegistration.updatedNote,
+            testCase.userRegistration.updatedComment,
         );
         expect(uid2).toBe(uid); // same registration id updated
 
@@ -214,7 +218,8 @@ describe('eventService (mysql)', () => {
             testCase.guestRegistration.arrivalDate,
             testCase.guestRegistration.departureDate,
             testCase.guestRegistration.dietaryChoices,
-            testCase.guestRegistration.note
+            testCase.guestRegistration.note,
+            testCase.guestRegistration.comment
         );
         expect(typeof gid).toBe('number');
 
@@ -237,7 +242,7 @@ describe('eventService (mysql)', () => {
         expect(regsAfter).toHaveLength(testCase.expected.afterDeleteCount);
 
         // Replace dietary choices directly clears when empty
-        await replaceDietaryChoices(uid!, testCase.clearDietary.choices, testCase.clearDietary.note);
+        await replaceDietaryChoices(uid!, testCase.clearDietary.choices, testCase.clearDietary.note, testCase.clearDietary.comment);
         const cleared = await getRegistrationFor({userId: testCase.userRegistration.userId}, eid);
         expect(cleared!.dietaryChoices ?? []).toHaveLength(testCase.expected.clearedDietaryCount);
     });
@@ -263,6 +268,7 @@ describe('eventService (mysql)', () => {
             testCase.event1.location,
             testCase.event1.bindingDeadline,
             testCase.event1.requireDietaryInfo,
+            testCase.event1.allowDietComment,
             testCase.event1.maxParticipants,
             testCase.event1.timezone
         );
@@ -275,6 +281,7 @@ describe('eventService (mysql)', () => {
             testCase.event2.location,
             testCase.event2.bindingDeadline,
             testCase.event2.requireDietaryInfo,
+            testCase.event2.allowDietComment,
             testCase.event2.maxParticipants,
             testCase.event2.timezone
         );
@@ -305,6 +312,7 @@ describe('eventService (mysql)', () => {
                 testCase.event.location,
                 testCase.event.bindingDeadline,
                 testCase.event.requireDietaryInfo,
+                testCase.event.allowDietComment,
                 testCase.event.maxParticipants,
                 testCase.event.timezone
             );
@@ -320,11 +328,12 @@ describe('eventService (mysql)', () => {
                 testCase.event.location,
                 testCase.event.bindingDeadline,
                 testCase.event.requireDietaryInfo,
+                testCase.event.allowDietComment,
                 testCase.event.maxParticipants,
                 testCase.event.timezone
             );
             expect(await isEventFull(eLimited)).toBe(testCase.expected.initialFull);
-            
+
             await AppDataSource.getRepository(User).save(
                 AppDataSource.getRepository(User).create(testCase.user)
             );
@@ -339,7 +348,7 @@ describe('eventService (mysql)', () => {
     test.each(eventRegistrationCheckData)('$description', async (testCase) => {
         // Ensure clean state before this test
         await truncateAll();
-        
+
         // Recreate owner from beforeEach
         const owner = AppDataSource.getRepository(User).create({
             id: 1,
@@ -348,7 +357,7 @@ describe('eventService (mysql)', () => {
             email: 'owner@example.com',
         });
         await AppDataSource.getRepository(User).save(owner);
-        
+
         const user2 = AppDataSource.getRepository(User).create(testCase.principals.user);
         await AppDataSource.getRepository(User).save(user2);
         const guest1 = AppDataSource.getRepository(Guest).create({
@@ -367,6 +376,7 @@ describe('eventService (mysql)', () => {
             testCase.event.location,
             testCase.event.bindingDeadline,
             testCase.event.requireDietaryInfo,
+            testCase.event.allowDietComment,
             testCase.event.maxParticipants,
             testCase.event.timezone
         );
@@ -394,6 +404,7 @@ describe('eventService (mysql)', () => {
                 testCase.event.location,
                 testCase.event.bindingDeadline,
                 testCase.event.requireDietaryInfo,
+                testCase.event.allowDietComment,
                 testCase.event.maxParticipants,
                 testCase.event.timezone
             );
@@ -413,6 +424,7 @@ describe('eventService (mysql)', () => {
                 testCase.event.location,
                 testCase.event.bindingDeadline,
                 testCase.event.requireDietaryInfo,
+                testCase.event.allowDietComment,
                 testCase.event.maxParticipants,
                 testCase.event.timezone
             );
