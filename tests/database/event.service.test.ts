@@ -104,7 +104,7 @@ describe('eventService (mysql)', () => {
             testCase.initialData.location,
             binding,
             testCase.initialData.requireDietaryInfo,
-            testCase.initialData?.allowDietComment,
+            testCase.initialData.allowDietComment,
             testCase.initialData.maxParticipants,
             testCase.initialData.timezone
         );
@@ -171,7 +171,7 @@ describe('eventService (mysql)', () => {
             testCase.eventData.location,
             testCase.eventData.bindingDeadline,
             testCase.eventData.requireDietaryInfo,
-            testCase.initialData.allowDietComment,
+            testCase.eventData.allowDietComment,
             testCase.eventData.maxParticipants,
             testCase.eventData.timezone
         );
