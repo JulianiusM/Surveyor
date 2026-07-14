@@ -103,7 +103,7 @@ describe('createEntity / afterCreateItems / deleteEntity', () => {
         verifyResult(id, expectedId);
         verifyMockCall(eventService.createEventTx,
             userId, data.title, data.description, data.startDate, data.endDate,
-            data.location, data.bindingDeadline, data.requireDietaryInfo, data.maxParticipants, data.timezone, undefined
+            data.location, data.bindingDeadline, data.requireDietaryInfo, data.allowDietComment, data.maxParticipants, data.timezone, undefined
         );
         await expect(afterCreateItems(expectedId, {_body: {}})).resolves.toBeUndefined();
     });
