@@ -47,6 +47,15 @@ function renderRows(root: HTMLElement, data: any): void {
     const cnt = qs<HTMLElement>('.js-count', root)!;
     tb.innerHTML = '';
 
+    const summaryBtn = root.querySelector('.js-show-allergy-summary') as HTMLElement;
+    if (summaryBtn) {
+        if (!(data.allergies?.length) && !(data.comments?.length)) {
+            summaryBtn.classList.add('d-none');
+        } else {
+            summaryBtn.classList.remove('d-none');
+        }
+    }
+
     const rows: ParticipantRow[] = data.participants;
     if (!rows?.length) {
         const tr = document.createElement('tr');
@@ -81,15 +90,6 @@ function renderRows(root: HTMLElement, data: any): void {
         tr.dataset.dietary = dietary.join(',').toLowerCase();
         tr.dataset.arrival = p.arrivalDate;
         tr.dataset.departure = p.departureDate;
-
-        const summaryBtn = root.querySelector('.js-show-allergy-summary') as HTMLElement;
-        if (summaryBtn) {
-            if (!(data.allergies?.length) && !(data.comments?.length)) {
-                summaryBtn.classList.add('d-none');
-            } else {
-                summaryBtn.classList.remove('d-none');
-            }
-        }
 
         const emailCell = p.email ? `<span class="d-none d-md-inline">${p.email}</span>` : '<span class="text-secondary d-none d-md-inline">—</span>';
 
