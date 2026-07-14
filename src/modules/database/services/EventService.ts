@@ -28,6 +28,7 @@ export async function createEventTx(
     location: string | null,
     bindingDeadline: string | null, // ISO-like string from <input type="datetime-local">, may be null/empty
     requireDietaryInfo: boolean,
+    allowDietComment: boolean,
     maxParticipants: number | null,
     timezone: string | null,
     headerImg?: string | null,
@@ -47,6 +48,7 @@ export async function createEventTx(
             timezone,
             bindingDeadline: bindingDeadline,
             requireDietaryInfo: requireDietaryInfo,
+            allowDietComment,
             maxParticipants: maxParticipants,
             headerImg,
         });
@@ -80,6 +82,7 @@ export async function updateEventMeta(eventId: string, fields: {
     location?: string | null;
     bindingDeadline?: string | null;
     requireDietaryInfo?: boolean;
+    allowDietComment?: boolean;
     maxParticipants?: number;
     timezone?: string | null;
 }) {
@@ -88,6 +91,7 @@ export async function updateEventMeta(eventId: string, fields: {
     if (fields.maxParticipants !== undefined) patch.maxParticipants = fields.maxParticipants;
     if (fields.bindingDeadline !== undefined) patch.bindingDeadline = fields.bindingDeadline;
     if (fields.requireDietaryInfo !== undefined) patch.requireDietaryInfo = fields.requireDietaryInfo;
+    if (fields.allowDietComment !== undefined) patch.allowDietComment = fields.allowDietComment;
     if (fields.timezone !== undefined) patch.timezone = fields.timezone;
     if (Object.keys(patch).length === 0) return;
     await AppDataSource.getRepository(Event).update(eventId, patch);
@@ -137,9 +141,10 @@ export async function registerUser(
     departureDate: string,
     dietaryChoices?: DIETARY[] | null,
     dietaryAllergies?: string | null,
+    dietComment?: string | null,
     bypass?: { ok: boolean, linkId?: string },
 ) {
-    return register(eventId, arrivalDate, departureDate, {userId}, dietaryChoices, dietaryAllergies, bypass);
+    return register(eventId, arrivalDate, departureDate, {userId}, dietaryChoices, dietaryAllergies, dietComment, bypass);
 }
 
 export async function registerGuest(
@@ -149,9 +154,10 @@ export async function registerGuest(
     departureDate: string,
     dietaryChoices?: DIETARY[] | null,
     dietaryAllergies?: string | null,
+    dietComment?: string | null,
     bypass?: { ok: boolean, linkId?: string },
 ) {
-    return register(eventId, arrivalDate, departureDate, {guestId}, dietaryChoices, dietaryAllergies, bypass);
+    return register(eventId, arrivalDate, departureDate, {guestId}, dietaryChoices, dietaryAllergies, dietComment, bypass);
 }
 
 export async function register(
@@ -161,6 +167,7 @@ export async function register(
     actor: { userId?: number, guestId?: string },
     dietaryChoices?: DIETARY[] | null,
     dietaryAllergies?: string | null,
+    dietComment?: string | null,
     bypass?: { ok: boolean, linkId?: string },
 ) {
     if (!actor.userId && !actor.guestId) return undefined;
@@ -181,7 +188,7 @@ export async function register(
                 party: {user: actor.userId, guest: actor.guestId}
             });
         }
-        await replaceDietaryChoicesTx(manager, reg.id, dietaryChoices, dietaryAllergies);
+        await replaceDietaryChoicesTx(manager, reg.id, dietaryChoices, dietaryAllergies, dietComment);
         if (bypass && bypass.ok && bypass.linkId) {
             const ok = await consumeDeadlineBypassToken(bypass.linkId, actor);
             if (!ok) throw new ExpectedError('This link has already been used', 'error', 409);
@@ -239,13 +246,18 @@ async function replaceDietaryChoicesTx(
     manager: EntityManager,
     registrationId: number,
     choices?: DIETARY[] | null,
-    additionalInfo?: string | null
+    allergyInfo?: string | null,
+    dietComment?: string | null,
 ) {
     const repo = manager.getRepository(EventRegistrationDietary);
     await repo.delete({registration: {id: registrationId}});
     if (!choices || !choices.length) return;
     const unique = Array.from(new Set(choices));
-    const rows = unique.map(c => repo.create({registration: {id: registrationId}, choice: c, additionalInfo}));
+    const rows = unique.map(c => repo.create({
+        registration: {id: registrationId},
+        choice: c,
+        additionalInfo: c === "ALLERGIES" ? allergyInfo : dietComment
+    }));
     await repo.save(rows);
 }
 

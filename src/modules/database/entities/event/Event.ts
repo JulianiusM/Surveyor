@@ -36,6 +36,9 @@ export class Event implements EntityBase {
     @Column("tinyint", {name: "require_dietary_info", width: 1, default: 0})
     requireDietaryInfo!: boolean;
 
+    @Column("tinyint", {name: "allow_diet_comment", width: 1, default: 0})
+    allowDietComment!: boolean;
+
     @Column("int", {name: "max_participants", nullable: true})
     maxParticipants?: number | null;
 

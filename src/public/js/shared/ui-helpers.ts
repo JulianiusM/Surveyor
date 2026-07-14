@@ -20,7 +20,7 @@ export function createBadge(status: string, colorMap?: Record<string, string>): 
         warning: 'warning',
         danger: 'danger',
     };
-    
+
     const map = colorMap || defaultMap;
     const cls = map[status.toLowerCase()] || 'secondary';
     return `<span class="badge text-bg-${cls} text-uppercase">${status}</span>`;
@@ -42,7 +42,7 @@ export function createChip(text: string, variant: string = 'secondary'): string 
  * @returns HTML string for dietary chip
  */
 export function createDietaryChip(choice: string): string {
-    const variant = choice === 'ALLERGIES' ? 'danger' : 'secondary';
+    const variant = choice === 'ALLERGIES' ? 'danger' : choice === 'COMMENT' ? 'warning' : 'secondary';
     return createChip(choice, variant);
 }
 
@@ -90,7 +90,6 @@ export function reloadAfterDelay(delayMs: number = 100): void {
 }
 
 
-
 /**
  * Update element text content to localized date string
  * @param element Element to update
@@ -100,7 +99,7 @@ export function reloadAfterDelay(delayMs: number = 100): void {
 export function updateToLocalString(
     element: HTMLElement,
     date: Date | string,
-    options: Intl.DateTimeFormatOptions = { dateStyle: "full" }
+    options: Intl.DateTimeFormatOptions = {dateStyle: "full"}
 ): void {
     const dateObj = typeof date === 'string' ? new Date(Date.parse(date)) : date;
     element.textContent = dateObj.toLocaleString(undefined, options);
@@ -128,7 +127,7 @@ export function formatDuration(ms: number): string {
  */
 export async function copyWithFeedback(text: string, btn?: HTMLButtonElement): Promise<void> {
     if (btn) showSpinner(btn);
-    
+
     try {
         if (navigator.clipboard) {
             await navigator.clipboard.writeText(text);

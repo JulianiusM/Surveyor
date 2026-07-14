@@ -9,10 +9,10 @@ import {
     PrimaryGeneratedColumn,
     RelationId
 } from "typeorm";
-import {EventRegistration} from "./EventRegistration";
 import type {DIETARY} from "../../../../types/EventTypes";
+import {EventRegistration} from "./EventRegistration";
 
-export const ALLOWED_DIETARY: DIETARY[] = ["MEAT", "FISH", "VEGETARIAN", "VEGAN", "HALAL", "KOSHER", "ALLERGIES"];
+export const ALLOWED_DIETARY: DIETARY[] = ["MEAT", "FISH", "VEGETARIAN", "VEGAN", "HALAL", "KOSHER", "ALLERGIES", "COMMENT"];
 
 @Entity("event_registration_dietary", {schema: "surveyor"})
 @Index("uk_registration_choice", ["registration", "choice"], {unique: true})
@@ -22,7 +22,7 @@ export class EventRegistrationDietary {
 
     @Column("simple-enum", {
         name: "choice",
-        enum: ["MEAT", "FISH", "VEGETARIAN", "VEGAN", "HALAL", "KOSHER", "ALLERGIES"]
+        enum: ALLOWED_DIETARY
     })
     choice!: DIETARY;
 

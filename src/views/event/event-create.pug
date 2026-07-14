@@ -109,6 +109,15 @@ block content
                     label.form-check-label(for="requireDiet")
                         i.bi.bi-egg-fried.me-1
                         | Require dietary info during registration
+            .col-md-6
+                .form-check
+                    input#allowDietComment.form-check-input(
+                        type="checkbox"
+                        name="allowDietComment"
+                        checked=!!parsed.allowDietComment)
+                    label.form-check-label(for="allowDietComment")
+                        i.bi.bi-chat-dots.me-1
+                        | Allow diet comments during registration
 
         // Beschreibung
         .mb-3

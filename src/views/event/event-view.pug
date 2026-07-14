@@ -113,6 +113,22 @@ block content
                                         label.form-label(for="allergyNotes") Allergies (if selected)
                                         input#allergyNotes.form-control.text-bg-dark(
                                             type="text" name="allergyNotes" placeholder="e.g., peanuts, lactose" value=regAllergies)
+                                    if ev.allow_diet_comment || ev.allowDietComment
+                                        hr
+                                        label.form-label
+                                            i.bi.bi-chat-dots.me-1
+                                            | Additional diet comments (optional)
+                                        .row.row-cols-3.row-cols-md-4.g-2
+                                            each opt in ['comment']
+                                                .col
+                                                    .form-check
+                                                        input.form-check-input(type="checkbox" name="dietary" value=opt id=`diet-${opt}`)
+                                                        label.form-check-label(for=`diet-${opt}`)= opt.charAt(0).toUpperCase() + opt.slice(1)
+                                        .form-text Can be used to tell the organizers what else to consider (i.e. foods that are not liked, etc.)
+                                        .mt-2
+                                            label.form-label(for="dietComment") Comment (if selected)
+                                            input#dietComment.form-control.text-bg-dark(
+                                                type="text" name="dietComment" placeholder="e.g. no tomatos, soup only" value=regComment)
                             if data.regToken
                                 input(type="hidden" name="regToken" value=data.regToken)
 
@@ -127,6 +143,7 @@ block content
         else
             - const regDiet = reg.dietaryChoices ? reg.dietaryChoices.map(d => d.choice.toLowerCase()) : [];
             - const regAllergies = reg.dietaryChoices ? reg.dietaryChoices.find(d => d.choice === "ALLERGIES")?.additionalInfo : '';
+            - const regComment = reg.dietaryChoices ? reg.dietaryChoices.find(d => d.choice === "COMMENT")?.additionalInfo : '';
             .card.mb-3.bg-dark.text-white.border-secondary-subtle
                 .card-header.py-2
                     i.bi.bi-person-check.me-2
@@ -172,7 +189,7 @@ block content
                                 .form-text Select at least one option.
                                 hr
                                 label.form-label
-                                    i.bi.bi-egg-fried.me-1
+                                    i.bi.bi-exclamation-circle.me-1
                                     | Dietary requirements (optional)
                                 .row.row-cols-3.row-cols-md-4.g-2
                                     each opt in ['halal','kosher','allergies']
@@ -184,7 +201,24 @@ block content
                                 .mt-2
                                     label.form-label(for="allergyNotes") Allergies (if selected)
                                     input#allergyNotes.form-control.text-bg-dark(
-                                        type="text" name="allergyNotes" placeholder="e.g., peanuts, lactose" value=regAllergies)
+                                        type="text" name="allergyNotes" placeholder="e.g. peanuts, lactose" value=regAllergies)
+                                if ev.allow_diet_comment || ev.allowDietComment
+                                    hr
+                                    label.form-label
+                                        i.bi.bi-chat-dots.me-1
+                                        | Additional diet comments (optional)
+                                    .row.row-cols-3.row-cols-md-4.g-2
+                                        each opt in ['comment']
+                                            - const checked = regDiet.includes(opt);
+                                            .col
+                                                .form-check
+                                                    input.form-check-input(type="checkbox" name="dietary" value=opt id=`diet-${opt}` checked=checked)
+                                                    label.form-check-label(for=`diet-${opt}`)= opt.charAt(0).toUpperCase() + opt.slice(1)
+                                    .form-text Can be used to tell the organizers what else to consider (i.e. foods that are not liked, etc.)
+                                    .mt-2
+                                        label.form-label(for="dietComment") Comment (if selected)
+                                        input#dietComment.form-control.text-bg-dark(
+                                            type="text" name="dietComment" placeholder="e.g. no tomatos, soup only" value=regComment)
                         .col-12.d-flex.justify-content-end.gap-2
                             button.btn.btn-primary(type="submit")
                                 i.bi.bi-save.me-1

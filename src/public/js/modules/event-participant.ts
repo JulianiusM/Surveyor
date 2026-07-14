@@ -5,11 +5,11 @@
 
 import type {ParticipantRow} from "../../../types/EventTypes";
 import {qs, qsAll} from '../core/dom';
-import {del, get, patch} from '../core/http';
 import {formatDate} from '../core/formatting';
-import {createDietaryChip, hideSpinner, showSpinner} from '../shared/ui-helpers';
+import {del, get, patch} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
 import {populateDateRangeModal, submitDateRangeModal} from '../shared/date-range-modal';
+import {createDietaryChip, hideSpinner, showSpinner} from '../shared/ui-helpers';
 
 /**
  * Render dietary totals as colored badges
@@ -27,6 +27,9 @@ function renderTotals(root: HTMLElement, sel: string, totals: Record<string, num
             if (k === "ALLERGIES") {
                 txtClass = "text-danger";
                 brdClass = "border-danger-subtle";
+            } else if (k === "COMMENT") {
+                txtClass = "text-warning";
+                brdClass = "border-warning-subtle";
             }
             return `<span class="badge text-bg-dark border ${brdClass} me-1"><span class="${txtClass}">${k}:</span> ${totals[k]}</span>`;
         })
@@ -56,12 +59,18 @@ function renderRows(root: HTMLElement, data: any): void {
         return;
     }
 
+    (root as any)._allergySummary = data.allergies ?? new Set<string>();
+    (root as any)._commentSummary = data.comments ?? new Set<string>();
+
     const canDelete = root.dataset.canDelete === '1';
 
     rows.forEach(p => {
         const tr = document.createElement('tr');
         const dietary = (p.dietaryChoices || []).map(d => d.choice);
         const allergiesText = (p.dietaryChoices || []).filter(d => d.choice === "ALLERGIES")
+            .map(d => d.additionalInfo)
+            .join("; ");
+        const commentsText = (p.dietaryChoices || []).filter(d => d.choice === "COMMENT")
             .map(d => d.additionalInfo)
             .join("; ");
 
@@ -73,13 +82,24 @@ function renderRows(root: HTMLElement, data: any): void {
         tr.dataset.arrival = p.arrivalDate;
         tr.dataset.departure = p.departureDate;
 
+        const summaryBtn = root.querySelector('.js-show-allergy-summary') as HTMLElement;
+
+        if (
+            !(data.allergies?.length) &&
+            !(data.comments?.length)
+        ) {
+            summaryBtn.classList.add('d-none');
+        } else {
+            summaryBtn.classList.remove('d-none');
+        }
+
         const emailCell = p.email ? `<span class="d-none d-md-inline">${p.email}</span>` : '<span class="text-secondary d-none d-md-inline">—</span>';
 
         const dietBadges = dietary.map(createDietaryChip).join('') || '<span class="text-secondary">—</span>';
 
-        const hasAll = dietary.includes("ALLERGIES") && !!allergiesText;
+        const hasAll = (dietary.includes("ALLERGIES") && !!allergiesText) || (dietary.includes("COMMENT") && !!commentsText);
         const allergyBtn = hasAll
-            ? `<button type="button" class="btn btn-sm btn-outline-warning btn-show-allergies" data-text="${encodeURIComponent(allergiesText || '')}">
+            ? `<button type="button" class="btn btn-sm btn-outline-warning btn-show-allergies" data-allergytext="${encodeURIComponent(allergiesText || '')}" data-commenttext="${encodeURIComponent(commentsText || '')}">
            <i class="bi bi-exclamation-triangle"></i> Details
          </button>`
             : '';
@@ -249,12 +269,73 @@ export function initEventParticipants(): void {
             return;
         }
 
-        const btnAll = t.closest<HTMLButtonElement>('.btn-show-allergies');
+        const btnAll = t.closest<HTMLButtonElement>('.btn-show-allergies, .js-show-allergy-summary');
         if (btnAll) {
             ev.preventDefault();
-            const modal = btnAll.closest('.event-participants')!.querySelector('.modal') as HTMLElement;
-            const pre = modal.querySelector('.js-allergy-text') as HTMLElement;
-            pre.textContent = decodeURIComponent(btnAll.dataset.text || '');
+            const container = btnAll.closest('.event-participants') as HTMLElement;
+            const modal = container.querySelector('.modal') as HTMLElement;
+            const allergySection = modal.querySelector('.js-allergy-section') as HTMLElement;
+            const allergyList = modal.querySelector('.js-allergy-list') as HTMLUListElement;
+            const commentSection = modal.querySelector('.js-comment-section') as HTMLElement;
+            const commentList = modal.querySelector('.js-comment-list') as HTMLUListElement;
+            let allergies: string[] = [];
+            let comments: string[] = [];
+
+            if (btnAll.classList.contains('btn-show-allergies')) {
+                // Participant-specific
+                const allergyText = decodeURIComponent(btnAll.dataset.allergytext || '').trim();
+                const commentText = decodeURIComponent(btnAll.dataset.commenttext || '').trim();
+
+                if (allergyText) {
+                    allergies = allergyText
+                        .split(';')
+                        .map(v => v.trim())
+                        .filter(Boolean).sort();
+                }
+
+                if (commentText) {
+                    comments = commentText
+                        .split(';')
+                        .map(v => v.trim())
+                        .filter(Boolean).sort();
+                }
+            } else {
+                // Global overview
+                const allergySet = (container as any)._allergySummary ?? [];
+                const commentSet = (container as any)._commentSummary ?? [];
+
+                allergies = [...allergySet].sort();
+                comments = [...commentSet].sort();
+            }
+
+            // Reset modal state
+            allergyList.innerHTML = '';
+            commentList.innerHTML = '';
+
+            if (allergies.length) {
+                allergySection.classList.remove('d-none');
+
+                allergies.forEach(text => {
+                    const li = document.createElement('li');
+                    li.textContent = text;
+                    allergyList.appendChild(li);
+                });
+            } else {
+                allergySection.classList.add('d-none');
+            }
+
+            if (comments.length) {
+                commentSection.classList.remove('d-none');
+
+                comments.forEach(text => {
+                    const li = document.createElement('li');
+                    li.textContent = text;
+                    commentList.appendChild(li);
+                });
+            } else {
+                commentSection.classList.add('d-none');
+            }
+
             // bootstrap show if present
             (window as any).bootstrap?.Modal.getOrCreateInstance(modal)?.show();
             return;

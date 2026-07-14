@@ -45,14 +45,21 @@ mixin eventParticipants(opts)
                             .input-group.input-group-sm.w-auto
                                 span.input-group-text.bg-secondary.text-light
                                     i.bi.bi-search
-                                input.form-control.text-bg-dark.js-filter(type="text" placeholder="Filter name, email, dietary…")
-                            small.text-secondary= help
+                                input.form-control.text-bg-dark.js-filter(
+                                    type="text"
+                                    placeholder="Filter name, email, dietary…"
+                                )
 
                         //- Totals bar
-                        .mb-2
+                        .d-flex.align-items-center.mb-2
                             .js-totals.small.text-secondary
                                 // will be filled by JS
 
+                            button.btn.btn-sm.btn-outline-warning.ms-auto.js-show-allergy-summary(type="button")
+                                i.bi.bi-exclamation-triangle.me-1
+                                | Allergy / Comment Details
+
+                        small.text-secondary= help
                         .table-responsive
                             table.table.table-dark.table-striped.table-bordered.align-middle.mb-0
                                 thead
@@ -72,10 +79,20 @@ mixin eventParticipants(opts)
             .modal-dialog.modal-dialog-centered
                 .modal-content.bg-dark.text-light.border.border-secondary
                     .modal-header
-                        h5.modal-title(id=`${accId}-allergies-title`) Allergies
+                        h5.modal-title(id=`${accId}-allergies-title`) Allergies / Comments
                         button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
                     .modal-body
-                        pre.js-allergy-text.mb-0(style="white-space:pre-wrap")
+                        .js-allergy-section.mb-3.d-none
+                            h6.text-danger
+                                i.bi.bi-exclamation-triangle-fill.me-1
+                                | Allergies
+                            ul.list-unstyled.mb-0.js-allergy-list
+
+                        .js-comment-section.d-none
+                            h6.text-warning
+                                i.bi.bi-chat-left-text-fill.me-1
+                                | Comments
+                            ul.list-unstyled.mb-0.js-comment-list
 
         +dateRangeModal(`${accId}-dates`, {
             title: 'Adjust attendance window',

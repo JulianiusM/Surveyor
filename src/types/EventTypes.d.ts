@@ -11,7 +11,7 @@ export type CreateEventDTO = {
     allowOverfillAfterFull?: boolean;
 };
 
-export type DIETARY = "MEAT" | "FISH" | "VEGETARIAN" | "VEGAN" | "HALAL" | "KOSHER" | "ALLERGIES";
+export type DIETARY = "MEAT" | "FISH" | "VEGETARIAN" | "VEGAN" | "HALAL" | "KOSHER" | "ALLERGIES" | "COMMENT";
 
 type ParticipantRow = {
     id: string | number;

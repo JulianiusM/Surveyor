@@ -41,6 +41,7 @@ function preprocessCreate(body: any): Partial<Event> {
         // HTML datetime-local comes as 'YYYY-MM-DDTHH:mm' (no seconds or TZ) — let backend parse/normalize
         bindingDeadline: Joi.string().allow(''),
         requireDietaryInfo: Joi.allow('').allow('on'),
+        allowDietComment: Joi.allow('').allow('on'),
         maxParticipants: Joi.number().positive().allow('').optional(),
         deadlineTz: Joi.string().allow(''),
     });
@@ -69,6 +70,7 @@ function preprocessCreate(body: any): Partial<Event> {
         location: value.location || null,
         bindingDeadline: timedDeadline || null,
         requireDietaryInfo: value.requireDietaryInfo === 'on',
+        allowDietComment: value.allowDietComment === 'on',
         maxParticipants: value.maxParticipants || null,
         timezone: value.deadlineTz || null,
     };
@@ -84,6 +86,7 @@ async function createEntity(ownerId: number, eventData: Partial<Event>) {
         eventData.location!,
         eventData.bindingDeadline!,
         eventData.requireDietaryInfo!,
+        eventData.allowDietComment!,
         eventData.maxParticipants!,
         eventData.timezone!,
         eventData.headerImg,
@@ -193,6 +196,7 @@ async function registerAttendance(event: Event, body: any, req: Request) {
             Joi.string().valid(...ALLOWED_DIETARY).uppercase() // handles single value form-post
         ).optional(),
         allergyNotes: Joi.string().max(255).allow(''),
+        dietComment: Joi.string().max(255).allow(''),
     });
     const {error, value} = schema.validate(body, {abortEarly: false, allowUnknown: true});
     if (error) {
@@ -206,8 +210,12 @@ async function registerAttendance(event: Event, body: any, req: Request) {
 
     const dietary: DIETARY[] = Array.isArray(value.dietary) ? value.dietary : (value.dietary ? [value.dietary] : []);
     const allergyNotes: string = value.allergyNotes || '';
+    const dietComment: string = value.dietComment || '';
     if (dietary.includes("ALLERGIES") && !allergyNotes) {
         throw new APIError('Allergies require additional information', body, 400);
+    }
+    if (dietary.includes("COMMENT") && !dietComment) {
+        throw new APIError('Comment requires additional information', body, 400);
     }
 
     const meals = dietary.filter(d =>
@@ -231,9 +239,9 @@ async function registerAttendance(event: Event, body: any, req: Request) {
     }
 
     if (session.user?.id) {
-        await eventService.registerUser(event.id, session.user.id, value.arrivalDate, value.departureDate, dietary, allergyNotes.trim() || null, bypass);
+        await eventService.registerUser(event.id, session.user.id, value.arrivalDate, value.departureDate, dietary, allergyNotes?.trim() || null, dietComment?.trim() || null, bypass);
     } else if (session.guest?.id) {
-        await eventService.registerGuest(event.id, session.guest.id, value.arrivalDate, value.departureDate, dietary, allergyNotes.trim() || null, bypass);
+        await eventService.registerGuest(event.id, session.guest.id, value.arrivalDate, value.departureDate, dietary, allergyNotes?.trim() || null, dietComment?.trim() || null, bypass);
     } else {
         throw new APIError('Authentication required', body, 401);
     }
@@ -286,6 +294,7 @@ async function updateEventSettings(event: Event, body: any, permData?: PermBundl
         location: Joi.string().max(255).allow(''),
         bindingDeadline: Joi.string().allow(''),
         requireDietaryInfo: Joi.allow('').allow('on'),
+        allowDietComment: Joi.allow('').allow('on'),
         maxParticipants: Joi.number().positive().allow('').optional(),
         deadlineTz: Joi.string().allow(''),
     });
@@ -311,6 +320,7 @@ async function updateEventSettings(event: Event, body: any, permData?: PermBundl
         location?: string | null;
         bindingDeadline?: string | null;
         requireDietaryInfo?: boolean;
+        allowDietComment?: boolean;
         maxParticipants?: number;
         timezone?: string | null;
     } = {};
@@ -318,6 +328,7 @@ async function updateEventSettings(event: Event, body: any, permData?: PermBundl
     // Keep existing deadline unless the field was explicitly submitted.
     if (value.bindingDeadline !== undefined) update.bindingDeadline = timedDeadline || null;
     if (value.requireDietaryInfo !== undefined) update.requireDietaryInfo = value.requireDietaryInfo === 'on';
+    if (value.allowDietComment !== undefined) update.allowDietComment = value.allowDietComment === 'on';
     if (value.maxParticipants !== undefined) update.maxParticipants = value.maxParticipants || null;
     if (value.deadlineTz !== undefined) update.timezone = value.deadlineTz || null;
 
@@ -387,8 +398,28 @@ async function updateRegistrationDates(event: Event, registrationId: string, bod
 async function getParticipantsExtended(event: Event) {
     const participants = await eventService.getEventParticipants(event.id);
     const totals: Record<string, number> = {};
+    const allergies: Set<string> = new Set();
+    const comments: Set<string> = new Set();
     for (const p of participants) {
         const choices = new Set(p.dietaryChoices.map(c => c.choice));
+        const allergy = p.dietaryChoices.find(c => c.choice === "ALLERGIES")?.additionalInfo;
+        if (allergy) {
+            const alls = allergy.split(';')
+                .map(v => v.trim())
+                .filter(Boolean);
+            for (const all of alls) {
+                allergies.add(all);
+            }
+        }
+        const comment = p.dietaryChoices.find(c => c.choice === "COMMENT")?.additionalInfo;
+        if (comment) {
+            const coms = comment.split(';')
+                .map(v => v.trim())
+                .filter(Boolean);
+            for (const com of coms) {
+                comments.add(com);
+            }
+        }
 
         const hasMeat = choices.has('MEAT');
         const hasFish = choices.has('FISH');
@@ -412,6 +443,8 @@ async function getParticipantsExtended(event: Event) {
         participants: participants,
         totals: totals,
         dateTotals: dateTotals,
+        allergies: [...allergies],
+        comments: [...comments],
         generatedAt: new Date().toISOString(),
     }
 }

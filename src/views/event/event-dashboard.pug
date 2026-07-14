@@ -127,6 +127,15 @@ block content
                                 label.form-check-label(for="requireDietEdit")
                                     i.bi.bi-egg-fried.me-1
                                     | Require dietary info during registration
+                        .col-md-4.d-flex.align-items-end
+                            .form-check
+                                input#allowDietCommentEdit.form-check-input(
+                                    type="checkbox"
+                                    name="allowDietComment"
+                                    checked=!!ev.allowDietComment)
+                                label.form-check-label(for="allowDietCommentEdit")
+                                    i.bi.bi-chat-dots.me-1
+                                    | Allow diet comment during registration
                     .col-12.d-flex.justify-content-end.gap-2
                         button.btn.btn-primary(type="submit")
                             i.bi.bi-save.me-1
