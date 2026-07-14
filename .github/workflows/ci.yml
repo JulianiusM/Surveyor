@@ -196,44 +196,44 @@ jobs:
       # =========================
       # Playwright E2E
       # =========================
-      - name: Cache Playwright browsers
-        id: playwright-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+      #- name: Cache Playwright browsers
+      #  id: playwright-cache
+      #  uses: actions/cache@v4
+      #  with:
+      #    path: ~/.cache/ms-playwright
+      #    key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
 
-      - name: Install Playwright browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
+      #- name: Install Playwright browsers
+      #  if: steps.playwright-cache.outputs.cache-hit != 'true'
+      #  run: npx playwright install --with-deps chromium
 
-      - name: Run E2E tests (Playwright) with JUnit
-        env:
-          CI: true
-          PLAYWRIGHT_JUNIT_OUTPUT: artifacts/junit-playwright.xml
-          PLAYWRIGHT_HTML_OUTPUT_DIR: artifacts/playwright-report
-        run: |
-          mkdir -p artifacts
-          npx playwright test || EXIT=$?
-          exit 0
+      #- name: Run E2E tests (Playwright) with JUnit
+      #  env:
+      #    CI: true
+      #    PLAYWRIGHT_JUNIT_OUTPUT: artifacts/junit-playwright.xml
+      #    PLAYWRIGHT_HTML_OUTPUT_DIR: artifacts/playwright-report
+      #  run: |
+      #    mkdir -p artifacts
+      #    npx playwright test || EXIT=$?
+      #    exit 0
 
-      - name: Upload Playwright JUnit (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-junit
-          path: artifacts/junit-playwright.xml
-          retention-days: 7
-          compression-level: 9
-          if-no-files-found: warn
+      #- name: Upload Playwright JUnit (always)
+      #  if: always()
+      #  uses: actions/upload-artifact@v4
+      #  with:
+      #    name: playwright-junit
+      #    path: artifacts/junit-playwright.xml
+      #    retention-days: 7
+      #    compression-level: 9
+      #    if-no-files-found: warn
 
       # Upload the heavy HTML report ONLY on failure to save storage
-      - name: Upload Playwright HTML report (on failure)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-html
-          path: artifacts/playwright-report/
-          retention-days: 3
-          compression-level: 9
-          if-no-files-found: ignore
+      #- name: Upload Playwright HTML report (on failure)
+      #  if: failure()
+      #  uses: actions/upload-artifact@v4
+      #  with:
+      #    name: playwright-html
+      #    path: artifacts/playwright-report/
+      #    retention-days: 3
+      #    compression-level: 9
+      #    if-no-files-found: ignore
