@@ -9,7 +9,7 @@ import {formatDate} from '../core/formatting';
 import {del, get, patch} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
 import {populateDateRangeModal, submitDateRangeModal} from '../shared/date-range-modal';
-import {createDietaryChip, hideSpinner, showSpinner} from '../shared/ui-helpers';
+import {copyWithFeedback, createDietaryChip, hideSpinner, showSpinner} from '../shared/ui-helpers';
 
 /**
  * Render dietary totals as colored badges
@@ -83,14 +83,12 @@ function renderRows(root: HTMLElement, data: any): void {
         tr.dataset.departure = p.departureDate;
 
         const summaryBtn = root.querySelector('.js-show-allergy-summary') as HTMLElement;
-
-        if (
-            !(data.allergies?.length) &&
-            !(data.comments?.length)
-        ) {
-            summaryBtn.classList.add('d-none');
-        } else {
-            summaryBtn.classList.remove('d-none');
+        if (summaryBtn) {
+            if (!(data.allergies?.length) && !(data.comments?.length)) {
+                summaryBtn.classList.add('d-none');
+            } else {
+                summaryBtn.classList.remove('d-none');
+            }
         }
 
         const emailCell = p.email ? `<span class="d-none d-md-inline">${p.email}</span>` : '<span class="text-secondary d-none d-md-inline">—</span>';
@@ -264,8 +262,7 @@ export function initEventParticipants(): void {
         if (btnCopy) {
             ev.preventDefault();
             const email = btnCopy.dataset.email || '';
-            if (email) navigator.clipboard?.writeText(email).catch(() => {
-            });
+            copyWithFeedback(email, btnCopy);
             return;
         }
 
