@@ -1,15 +1,16 @@
 import express, {Request, Response} from 'express';
-import {createGuestFlowRouter} from '../middleware/guestFlowFactory';
 import controller from '../controller/eventController';
-import * as eventService from '../modules/database/services/EventService';
-import {ENTITIES, getResource} from "../modules/lib/util";
-import {requirePermission} from "../middleware/permissionMiddleware";
-import {asyncHandler} from "../modules/lib/asyncHandler";
-import renderer from "../modules/renderer";
-import {PERM} from "../modules/lib/permissions";
-import type {EntityType} from "../types/UtilTypes";
-import type {EntityDescriptor} from "../types/PermissionTypes";
+import {createGuestFlowRouter} from '../middleware/guestFlowFactory';
 import {queryHandler} from "../middleware/paramHandler";
+import {requirePermission} from "../middleware/permissionMiddleware";
+import * as eventService from '../modules/database/services/EventService';
+import {asyncHandler} from "../modules/lib/asyncHandler";
+import {createParticipantsPdf} from "../modules/lib/pdf";
+import {PERM} from "../modules/lib/permissions";
+import {ENTITIES, getResource} from "../modules/lib/util";
+import renderer from "../modules/renderer";
+import type {EntityDescriptor} from "../types/PermissionTypes";
+import type {EntityType} from "../types/UtilTypes";
 
 const app = express.Router();
 const entityName: EntityType = ENTITIES.EVENT;
@@ -41,11 +42,13 @@ app.get('/:id/register', (req: Request, res: Response) => res.redirect(`/event/$
 app.get('/:id/admin', requirePermission(permFct, PERM.ACCESS_ADMIN), asyncHandler(async (req: Request, res: Response) => {
     const data = await controller.fetchForView(resFct(req), req);
     renderer.renderWithData(res, 'event/event-dashboard', data);
-}))
+}));
 
 app.get("/:id/export/participants", requirePermission(permFct, PERM.DATA_EXPORT | PERM.ACCESS_PARTICIPANTS), asyncHandler(async (req: Request, res: Response) => {
     const data = await controller.getParticipantsExtended(resFct(req));
-    renderer.renderWithData(res, 'event/export/participants', data);
-}))
+    //renderer.renderWithData(res, 'event/export/participants', data);
+    res.contentType('application/pdf');
+    res.send(await createParticipantsPdf(data).getBuffer());
+}));
 
 export default app;
