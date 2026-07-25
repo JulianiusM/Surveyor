@@ -11,7 +11,7 @@ import type {
     ItemSubject,
     ItemWithParentGetter
 } from "../../types/PermissionTypes";
-import {DashboardEntities, Entity, EntityBase} from "../../types/UserTypes";
+import type {DashboardEntities, Entity, EntityBase} from "../../types/UserTypes";
 import type {EntityItemType, EntityType} from "../../types/UtilTypes";
 import settings from "../settings";
 

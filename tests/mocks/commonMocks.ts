@@ -14,6 +14,15 @@ export const mockUtil = (overrides = {}) => ({
     generateUniqueId: jest.fn(() => 'uid-xyz'),
     ENTITIES: ENTITIES_MOCK,
     convertToSingleList: jest.fn(() => []),
+    normalizeToArray: jest.fn(<A>(thing: A | A[]) => {
+        let arr: A[] = [];
+        if (Array.isArray(thing)) {
+            arr = thing;
+        } else if (thing) {
+            arr = [thing];
+        }
+        return arr;
+    }),
     ...overrides,
 });
 
