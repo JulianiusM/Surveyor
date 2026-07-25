@@ -1,14 +1,14 @@
 import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
-import {Event} from "./Event";
-import {EventInvoice} from "./EventInvoice";
-import {EventPoolAssignment} from "./EventPoolAssignment";
-import {EventInvoiceShare} from "./EventInvoiceShare";
-import {EventPoolTakeover} from "./EventPoolTakeover";
-import {EventInvoiceSurcharge} from "./EventInvoiceSurcharge";
 import type {InvoicePoolDistribution, InvoicePoolStatus} from "../../../../types/InvoicePoolTypes";
 import {currencyTransformer} from "../../transformers";
+import {Event} from "./Event";
+import {EventInvoice} from "./EventInvoice";
+import {EventInvoiceShare} from "./EventInvoiceShare";
+import {EventInvoiceSurcharge} from "./EventInvoiceSurcharge";
+import {EventPoolAssignment} from "./EventPoolAssignment";
+import {EventPoolTakeover} from "./EventPoolTakeover";
 
-export const InvoicePoolDistributions = ['EQUAL', 'TIME_BASED'];
+export const InvoicePoolDistributions = ['EQUAL', 'TIME_BASED', 'NIGHTS'];
 
 @Entity("event_invoice_pools", {schema: "surveyor"})
 export class EventInvoicePool {

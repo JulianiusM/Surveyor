@@ -1,6 +1,6 @@
-import fs from 'fs';
 import {marked} from 'marked';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
 import {ExpectedError} from '../modules/lib/errors';
 
 /**
@@ -40,8 +40,12 @@ function rewriteDocHrefToHelpRoute(href: string): string {
     // Split off query/fragment and preserve it
     const qIdx = href.indexOf('?');
     const hIdx = href.indexOf('#');
-    const cutIdx =
-        qIdx === -1 ? hIdx : hIdx === -1 ? qIdx : Math.min(qIdx, hIdx);
+    let cutIdx = Math.min(qIdx, hIdx);
+    if (qIdx === -1) {
+        cutIdx = hIdx;
+    } else if (hIdx === -1) {
+        cutIdx = qIdx;
+    }
 
     const base = cutIdx === -1 ? href : href.slice(0, cutIdx);
     const suffix = cutIdx === -1 ? '' : href.slice(cutIdx);
@@ -52,7 +56,7 @@ function rewriteDocHrefToHelpRoute(href: string): string {
     // Turn any path into a slug based on the filename
     // e.g. "../DASHBOARD.md" -> "dashboard"
     //      "PACKING_LISTS.md" -> "packing_lists"
-    const normalized = base.replace(/\\/g, '/');
+    const normalized = base.replaceAll('\\', '/');
     const ext = path.posix.extname(normalized);
     const fileName = path.posix.basename(normalized, ext);
     const slug = fileName.toLowerCase();
@@ -112,7 +116,7 @@ function readMarkdownFile(filePath: string): { content: string; title: string } 
         const html = marked.parse(markdown) as string;
 
         // Extract title from first H1 heading
-        const titleMatch = markdown.match(/^#\s+(.+)$/m);
+        const titleMatch = new RegExp(/^#\s+([^\n]+)/m).exec(markdown);
         const title = titleMatch ? titleMatch[1] : 'Help';
 
         return {content: html, title};
@@ -131,12 +135,12 @@ function getDocsList(): Array<{ name: string; title: string; path: string }> {
     try {
         const files = fs.readdirSync(docsBasePath)
             .filter(file => file.endsWith('.md'))
-            .sort();
+            .sort((a, b) => a.localeCompare(b));
 
         return files.map(file => {
             const filePath = path.join(docsBasePath, file);
             const content = fs.readFileSync(filePath, 'utf-8');
-            const titleMatch = content.match(/^#\s+(.+)$/m);
+            const titleMatch = new RegExp(/^#\s+([^\n]+)/m).exec(content);
             const title = titleMatch ? titleMatch[1] : file.replace('.md', '');
             const docPath = file.replace('.md', '').toLowerCase();
 

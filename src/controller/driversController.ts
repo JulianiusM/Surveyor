@@ -62,11 +62,12 @@ async function fetchForView(list: DriversList, req: Request) {
     const items = await driverService.getDriversItems(list.id);
     const session = req.session;
 
-    const assignments = session.user
-        ? await driverService.getDriversAssignmentsForUser(list.id, session.user.id)
-        : session.guest
-            ? await driverService.getDriversAssignmentsForGuest(list.id, session.guest.id)
-            : [];
+    let assignments: string[] = [];
+    if (session.user) {
+        assignments = await driverService.getDriversAssignmentsForUser(list.id, session.user.id)
+    } else if (session.guest) {
+        assignments = await driverService.getDriversAssignmentsForGuest(list.id, session.guest.id)
+    }
 
     const assigneeLists = await driverService.getDriversItemAssignees(list.id);
     // Teilnehmer- und Offene-Zähler (ohne required_by_all-Items)
@@ -194,7 +195,7 @@ async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
 }
 
 async function deleteHeaderImg(entity: EntityBase) {
-    performImageSwap(entity, driverService.updateHeaderImage, undefined);
+    performImageSwap(entity, driverService.updateHeaderImage);
     return 'Image deleted';
 }
 

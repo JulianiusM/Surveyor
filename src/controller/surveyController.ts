@@ -91,6 +91,7 @@ async function createEntity(
 
 
 async function afterCreateItems() {
+    // Nothing to do here.
 }
 
 async function fetchForView(survey: Survey, req: Request) {
@@ -135,7 +136,7 @@ async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
 }
 
 async function deleteHeaderImg(entity: EntityBase) {
-    performImageSwap(entity, surveyService.updateHeaderImage, undefined);
+    performImageSwap(entity, surveyService.updateHeaderImage);
     return 'Image deleted';
 }
 

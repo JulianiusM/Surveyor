@@ -17,6 +17,7 @@ import {
     ENTITIES,
     getResource,
     isWithinWindow,
+    normalizeToArray,
     rewriteISOToZone
 } from "../modules/lib/util";
 import {can, saveDefaultPermsFromBody} from "../modules/permissionEngine";
@@ -30,7 +31,7 @@ const CREATE_TEMPLATE = 'event/event-create';
 
 function preprocessCreate(body: any): Partial<Event> {
     // Basic date validation as strings (YYYY-MM-DD) to match existing patterns
-    const datePattern = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
     const schema = Joi.object({
         title: Joi.string().required(),
@@ -104,11 +105,12 @@ async function afterCreateItems(id: string, data: any) {
  */
 async function fetchForView(event: Event, req: Request) {
     const session = req.session;
-    const registration = session.user
-        ? await eventService.getRegistrationFor({userId: session.user.id}, event.id)
-        : session.guest
-            ? await eventService.getRegistrationFor({guestId: session.guest.id}, event.id)
-            : null;
+    let registration = null;
+    if (session.user) {
+        registration = await eventService.getRegistrationFor({userId: session.user.id}, event.id);
+    } else if (session.guest) {
+        registration = await eventService.getRegistrationFor({guestId: session.guest.id}, event.id);
+    }
 
     // Associated plans/lists (will be empty until event_id exists in schema)
     // Only show lists/plans once the actor is registered (or is owner)
@@ -189,8 +191,8 @@ async function registerAttendance(event: Event, body: any, req: Request) {
     }
 
     const schema = Joi.object({
-        arrivalDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
-        departureDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
+        arrivalDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
+        departureDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
         dietary: Joi.alternatives().try(
             Joi.array().items(Joi.string().valid(...ALLOWED_DIETARY).uppercase()),
             Joi.string().valid(...ALLOWED_DIETARY).uppercase() // handles single value form-post
@@ -208,9 +210,25 @@ async function registerAttendance(event: Event, body: any, req: Request) {
         throw new APIError('Arrival/Departure must be within event dates', body, 400);
     }
 
-    const dietary: DIETARY[] = Array.isArray(value.dietary) ? value.dietary : (value.dietary ? [value.dietary] : []);
+    const dietary: DIETARY[] = normalizeToArray(value.dietary);
+
     const allergyNotes: string = value.allergyNotes || '';
     const dietComment: string = value.dietComment || '';
+    checkMeals(dietary, allergyNotes, dietComment, body);
+
+
+    if (session.user?.id) {
+        await eventService.registerUser(event.id, session.user.id, value.arrivalDate, value.departureDate, dietary, allergyNotes?.trim() || null, dietComment?.trim() || null, bypass);
+    } else if (session.guest?.id) {
+        await eventService.registerGuest(event.id, session.guest.id, value.arrivalDate, value.departureDate, dietary, allergyNotes?.trim() || null, dietComment?.trim() || null, bypass);
+    } else {
+        throw new APIError('Authentication required', body, 401);
+    }
+
+    return 'Registration saved';
+}
+
+function checkMeals(dietary: DIETARY[], allergyNotes: string, dietComment: string, body: any) {
     if (dietary.includes("ALLERGIES") && !allergyNotes) {
         throw new APIError('Allergies require additional information', body, 400);
     }
@@ -237,16 +255,6 @@ async function registerAttendance(event: Event, body: any, req: Request) {
             throw new APIError('Vegan cannot be combined with meat, fish or vegetarian.', body, 400);
         }
     }
-
-    if (session.user?.id) {
-        await eventService.registerUser(event.id, session.user.id, value.arrivalDate, value.departureDate, dietary, allergyNotes?.trim() || null, dietComment?.trim() || null, bypass);
-    } else if (session.guest?.id) {
-        await eventService.registerGuest(event.id, session.guest.id, value.arrivalDate, value.departureDate, dietary, allergyNotes?.trim() || null, dietComment?.trim() || null, bypass);
-    } else {
-        throw new APIError('Authentication required', body, 401);
-    }
-
-    return 'Registration saved';
 }
 
 async function cancelRegistration(event: Event, session: Request['session']) {
@@ -264,33 +272,21 @@ async function cancelRegistration(event: Event, session: Request['session']) {
 
 async function updateEventSettings(event: Event, body: any, permData?: PermBundle) {
     const normalizedBody = {...body};
-    if (normalizedBody.startDate === undefined && normalizedBody.start !== undefined) {
+    if (normalizedBody.startDate === undefined) {
         normalizedBody.startDate = normalizedBody.start;
     }
-    if (normalizedBody.endDate === undefined && normalizedBody.end !== undefined) {
+    if (normalizedBody.endDate === undefined) {
         normalizedBody.endDate = normalizedBody.end;
     }
 
-    // Permission check
-    if (!permData ||
-        ((normalizedBody.location !== undefined
-            || normalizedBody.startDate !== undefined
-            || normalizedBody.endDate !== undefined
-            || normalizedBody.bindingDeadline !== undefined
-            || normalizedBody.deadlineTz !== undefined) && !permData.entity.has("EDIT_META"))
-        || (normalizedBody.title !== undefined && !permData.entity.has("EDIT_TITLE"))
-        || (normalizedBody.description !== undefined && !permData.entity.has("EDIT_DESC"))
-        || (normalizedBody.requireDietaryInfo !== undefined && !permData.entity.has("MANAGE_REQUIREMENTS"))
-        || (normalizedBody.maxParticipants !== undefined && !permData.entity.has("EDIT_CAPACITY"))
-    ) {
-        throw new APIError("Not allowed", normalizedBody, 403);
-    }
+    if (!event) throw new APIError('Event not found', normalizedBody, 404);
+    checkUpdateSettingsPerms(normalizedBody, permData);
 
     const schema = Joi.object({
         title: Joi.string().max(255).allow(''),
         description: Joi.string().max(2000).allow(''),
-        startDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).allow(''),
-        endDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).allow(''),
+        startDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow(''),
+        endDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow(''),
         location: Joi.string().max(255).allow(''),
         bindingDeadline: Joi.string().allow(''),
         requireDietaryInfo: Joi.allow('').allow('on'),
@@ -304,9 +300,6 @@ async function updateEventSettings(event: Event, body: any, permData?: PermBundl
         const msg = error.details.map(d => d.message).join(', ');
         throw new APIError(msg, normalizedBody, 400);
     }
-
-    // Load current for cross-field checks
-    if (!event) throw new APIError('Event not found', normalizedBody, 404);
 
     const start = value.startDate || event.startDate;
     const end = value.endDate || event.endDate;
@@ -339,6 +332,23 @@ async function updateEventSettings(event: Event, body: any, permData?: PermBundl
     await eventService.updateEventDates(event.id, start, end);
 
     return 'Event updated';
+}
+
+function checkUpdateSettingsPerms(normalizedBody: any, permData?: PermBundle) {
+    // Permission check
+    if (!permData ||
+        ((normalizedBody.location !== undefined
+            || normalizedBody.startDate !== undefined
+            || normalizedBody.endDate !== undefined
+            || normalizedBody.bindingDeadline !== undefined
+            || normalizedBody.deadlineTz !== undefined) && !permData.entity.has("EDIT_META"))
+        || (normalizedBody.title !== undefined && !permData.entity.has("EDIT_TITLE"))
+        || (normalizedBody.description !== undefined && !permData.entity.has("EDIT_DESC"))
+        || (normalizedBody.requireDietaryInfo !== undefined && !permData.entity.has("MANAGE_REQUIREMENTS"))
+        || (normalizedBody.maxParticipants !== undefined && !permData.entity.has("EDIT_CAPACITY"))
+    ) {
+        throw new APIError("Not allowed", normalizedBody, 403);
+    }
 }
 
 async function updateSettings(id: string, body: any) {
@@ -378,8 +388,8 @@ async function deleteRegistration(event: Event, registrationId: string) {
 // Note: Permission check for MANAGE_REGISTRATIONS is enforced at the route level
 async function updateRegistrationDates(event: Event, registrationId: string, body: any, permData?: PermBundle) {
     const schema = Joi.object({
-        arrivalDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
-        departureDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
+        arrivalDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
+        departureDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
     });
     const {error, value} = schema.validate(body, {abortEarly: false, allowUnknown: true});
     if (error) {
@@ -404,38 +414,15 @@ async function getParticipantsExtended(event: Event) {
         const choices = new Set(p.dietaryChoices.map(c => c.choice));
         const allergy = p.dietaryChoices.find(c => c.choice === "ALLERGIES")?.additionalInfo;
         if (allergy) {
-            const alls = allergy.split(';')
-                .map(v => v.trim())
-                .filter(Boolean);
-            for (const all of alls) {
-                allergies.add(all);
-            }
+            aggregateInfos(allergies, allergy);
         }
+
         const comment = p.dietaryChoices.find(c => c.choice === "COMMENT")?.additionalInfo;
         if (comment) {
-            const coms = comment.split(';')
-                .map(v => v.trim())
-                .filter(Boolean);
-            for (const com of coms) {
-                comments.add(com);
-            }
+            aggregateInfos(comments, comment);
         }
 
-        const hasMeat = choices.has('MEAT');
-        const hasFish = choices.has('FISH');
-
-        if (hasMeat && hasFish) {
-            totals['MEAT_OR_FISH'] = (totals['MEAT_OR_FISH'] || 0) + 1;
-        } else {
-            if (hasMeat) totals['JUST_MEAT'] = (totals['JUST_MEAT'] || 0) + 1;
-            if (hasFish) totals['JUST_FISH'] = (totals['JUST_FISH'] || 0) + 1;
-        }
-
-        // Count all remaining dietary choices normally.
-        for (const choice of choices) {
-            if (choice === 'MEAT' || choice === 'FISH') continue;
-            totals[choice] = (totals[choice] || 0) + 1;
-        }
+        countChoices(choices, totals);
     }
     const dateTotals: Record<string, number> = buildDateTotals(event.startDate, event.endDate, participants);
     return {
@@ -449,13 +436,40 @@ async function getParticipantsExtended(event: Event) {
     }
 }
 
+function aggregateInfos(infoSet: Set<string>, infoString: string) {
+    const coms = infoString.split(';')
+        .map(v => v.trim())
+        .filter(Boolean);
+    for (const com of coms) {
+        infoSet.add(com);
+    }
+}
+
+function countChoices(choices: Set<DIETARY>, totals: Record<string, number>) {
+    const hasMeat = choices.has('MEAT');
+    const hasFish = choices.has('FISH');
+
+    if (hasMeat && hasFish) {
+        totals['MEAT_OR_FISH'] = (totals['MEAT_OR_FISH'] || 0) + 1;
+    } else {
+        if (hasMeat) totals['JUST_MEAT'] = (totals['JUST_MEAT'] || 0) + 1;
+        if (hasFish) totals['JUST_FISH'] = (totals['JUST_FISH'] || 0) + 1;
+    }
+
+    // Count all remaining dietary choices normally.
+    for (const choice of choices) {
+        if (choice === 'MEAT' || choice === 'FISH') continue;
+        totals[choice] = (totals[choice] || 0) + 1;
+    }
+}
+
 async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
     performImageSwap(entity, eventService.updateHeaderImage, file);
     return 'Image updated';
 }
 
 async function deleteHeaderImg(entity: EntityBase) {
-    performImageSwap(entity, eventService.updateHeaderImage, undefined);
+    performImageSwap(entity, eventService.updateHeaderImage);
     return 'Image deleted';
 }
 

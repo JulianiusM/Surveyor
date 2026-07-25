@@ -1,5 +1,5 @@
 import express, {NextFunction, Request, Response} from 'express';
-import fs from "fs";
+import fs from "node:fs";
 import path from "node:path";
 import * as eventService from "../modules/database/services/EventService";
 import * as userService from "../modules/database/services/UserService";
@@ -210,7 +210,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
     // Serve header image files securely
     router.get("/:id/header", asyncHandler(async (req: Request, res: Response) => {
         const entity = resFct(req);
-        if (!entity || !entity.headerImg) {
+        if (!entity?.headerImg) {
             throw new APIError('No image available', {}, 404)
         }
 

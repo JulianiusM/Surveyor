@@ -1,6 +1,8 @@
+import {ParticipantRow} from "../../types/EventTypes";
 import {ActivityPlan} from "../database/entities/activity/ActivityPlan";
 import {ActivityPlanRequirement} from "../database/entities/activity/ActivityPlanRequirement";
 import {ActivityPlanRequirementOverride} from "../database/entities/activity/ActivityPlanRequirementOverride";
+import {InternalError} from "../lib/errors";
 
 export type RoundingMode = NonNullable<ActivityPlan["roundingMode"]>;
 
@@ -134,10 +136,17 @@ export function applyRounding(value: number, mode: RoundingMode): number {
     }
 }
 
-export function toParticipantKey(participant: ParticipantAttendance): string {
+export function toParticipantKey(participant: ParticipantAttendance | ParticipantRow): string {
     if (participant.userId) return `user:${participant.userId}`;
     if (participant.guestId) return `guest:${participant.guestId}`;
     return "participant:unknown";
+}
+
+export function toParticipantName(participant: ParticipantAttendance | ParticipantRow): string {
+    if (participant.name) return participant.name;
+    if (participant.userId) return `User #${participant.userId}`;
+    if (participant.guestId) return `Guest #${participant.guestId}`;
+    return "Participant";
 }
 
 export function normalizeOverrideInput(input: RequirementOverrideInput): RequirementOverrideInput {
@@ -150,27 +159,27 @@ export function normalizeOverrideInput(input: RequirementOverrideInput): Require
     };
 
     if (!normalized.userId && !normalized.guestId) {
-        throw new Error("Override requires a userId or guestId");
+        throw new InternalError("Override requires a userId or guestId");
     }
 
     if (normalized.userId && normalized.guestId) {
-        throw new Error("Override cannot target both user and guest");
+        throw new InternalError("Override cannot target both user and guest");
     }
 
     if (normalized.requiredShifts == null || Number.isNaN(normalized.requiredShifts)) {
-        throw new Error("Override required shifts must be defined");
+        throw new InternalError("Override required shifts must be defined");
     }
 
     if (!Number.isFinite(normalized.requiredShifts)) {
-        throw new Error("Override required shifts must be finite");
+        throw new InternalError("Override required shifts must be finite");
     }
 
     if (!Number.isInteger(normalized.requiredShifts)) {
-        throw new Error("Override required shifts must be an integer");
+        throw new InternalError("Override required shifts must be an integer");
     }
 
     if (normalized.requiredShifts < 0) {
-        throw new Error("Override required shifts must be non-negative");
+        throw new InternalError("Override required shifts must be non-negative");
     }
 
     return normalized;
@@ -183,23 +192,23 @@ export function normalizeRoleRequirementInput(input: RoleRequirementInput): Role
     };
 
     if (!Number.isInteger(normalized.roleId) || normalized.roleId <= 0) {
-        throw new Error("Role id must be a positive integer");
+        throw new InternalError("Role id must be a positive integer");
     }
 
     if (normalized.requiredShifts == null || Number.isNaN(normalized.requiredShifts)) {
-        throw new Error("Role required shifts must be defined");
+        throw new InternalError("Role required shifts must be defined");
     }
 
     if (!Number.isFinite(normalized.requiredShifts)) {
-        throw new Error("Role required shifts must be finite");
+        throw new InternalError("Role required shifts must be finite");
     }
 
     if (!Number.isInteger(normalized.requiredShifts)) {
-        throw new Error("Role required shifts must be an integer");
+        throw new InternalError("Role required shifts must be an integer");
     }
 
     if (normalized.requiredShifts < 0) {
-        throw new Error("Role required shifts must be non-negative");
+        throw new InternalError("Role required shifts must be non-negative");
     }
 
     return normalized;
@@ -253,12 +262,16 @@ export function selectOverride(participant: ParticipantAttendance, overrides: Ac
             continue;
         }
 
-        const bestSpecificity = (best.roleId ? 1 : 0) + (best.userId ? 1 : 0) + (best.guestId ? 1 : 0);
-        const currentSpecificity = (override.roleId ? 1 : 0) + (override.userId ? 1 : 0) + (override.guestId ? 1 : 0);
+        const bestSpecificity = calculateSpecificity(best);
+        const currentSpecificity = calculateSpecificity(override);
         if (currentSpecificity > bestSpecificity) best = override;
     }
 
     return best;
+}
+
+function calculateSpecificity(best: ActivityPlanRequirementOverride) {
+    return (best.roleId ? 1 : 0) + (best.userId ? 1 : 0) + (best.guestId ? 1 : 0);
 }
 
 function resolveRoleFixedRequirement(roleRequirements: ActivityPlanRequirement[], roleIds: number[] | undefined): number | null {
@@ -372,8 +385,10 @@ export function calculateParticipantRequirement(
     };
 }
 
+type RequiredActivityFields = "assignmentMode" | "generalRequiredShifts" | "roundingMode" | "startDate" | "endDate";
+
 export function calculateRequirementsForParticipants(
-    plan: Pick<ActivityPlan, "assignmentMode" | "generalRequiredShifts" | "roundingMode" | "startDate" | "endDate">,
+    plan: Pick<ActivityPlan, RequiredActivityFields>,
     participants: ParticipantAttendance[],
     roleRequirements: ActivityPlanRequirement[],
     overrides: ActivityPlanRequirementOverride[]
@@ -387,7 +402,7 @@ export function calculateRequirementsForParticipants(
 }
 
 export function summarizeParticipantRequirements(
-    plan: Pick<ActivityPlan, "assignmentMode" | "generalRequiredShifts" | "roundingMode" | "startDate" | "endDate">,
+    plan: Pick<ActivityPlan, RequiredActivityFields>,
     participants: ParticipantAttendance[],
     roleRequirements: ActivityPlanRequirement[],
     overrides: ActivityPlanRequirementOverride[],
@@ -433,11 +448,12 @@ export function calculateShiftRequirementsForParticipants(
         const feasibleSlotIds = normalizeFeasibleSlots(resolvedSlots ?? participant.feasibleSlotIds);
         const participantKey = toShiftParticipantKey(participant);
 
-        const group: ShiftParticipantGroup = participant.explicitFixedShifts != null
-            ? "explicit"
-            : participant.roleFixedRequirement != null
-                ? "role-fixed"
-                : "baseline";
+        let group: ShiftParticipantGroup = "baseline";
+        if (participant.explicitFixedShifts != null) {
+            group = "explicit";
+        } else if (participant.roleFixedRequirement != null) {
+            group = "role-fixed";
+        }
 
         return {
             participant,
@@ -506,45 +522,11 @@ export function calculateShiftRequirementsForParticipants(
     let deficit = Math.max(slotDemand - sumRequiredShifts, 0);
 
     if (overshoot > 0 && baselineParticipants.length > 0) {
-        const orderedBySlack = [...baselineParticipants].sort((a, b) => {
-            const slackA = a.requiredShifts - a.attendanceFactor * baseline;
-            const slackB = b.requiredShifts - b.attendanceFactor * baseline;
-            if (slackA !== slackB) return slackB - slackA;
-            if (a.requiredShifts !== b.requiredShifts) return b.requiredShifts - a.requiredShifts;
-            return String(b.participantKey).localeCompare(String(a.participantKey));
-        });
-
-        while (overshoot > 0) {
-            let adjusted = false;
-            for (const participant of orderedBySlack) {
-                const fractionalTarget = participant.attendanceFactor * baseline;
-                const lowerBound = Math.floor(fractionalTarget);
-                if (participant.requiredShifts > lowerBound && participant.requiredShifts > 0) {
-                    participant.requiredShifts -= 1;
-                    participant.baselineContribution = participant.requiredShifts;
-                    overshoot -= 1;
-                    adjusted = true;
-                    if (overshoot === 0) break;
-                }
-            }
-            if (!adjusted) break;
-        }
+        performOvershootCalculation(baselineParticipants, baseline, overshoot);
     }
 
     if (!infeasibleBaseline && deficit > 0 && baselineParticipants.length > 0) {
-        const orderedByAttendance = [...baselineParticipants].sort((a, b) => {
-            if (a.attendanceFactor !== b.attendanceFactor) return b.attendanceFactor - a.attendanceFactor;
-            return String(a.participantKey).localeCompare(String(b.participantKey));
-        });
-
-        while (deficit > 0) {
-            for (const participant of orderedByAttendance) {
-                participant.requiredShifts += 1;
-                participant.baselineContribution = participant.requiredShifts;
-                deficit -= 1;
-                if (deficit === 0) break;
-            }
-        }
+        performDeficitCalculation(baselineParticipants, deficit);
     }
 
     sumRequiredShifts = participantResults.reduce((total, result) => total + result.requiredShifts, 0);
@@ -564,6 +546,48 @@ export function calculateShiftRequirementsForParticipants(
         overshoot,
         deficit,
     };
+}
+
+function performOvershootCalculation(baselineParticipants: ShiftRequirementParticipantResult[], baseline: number, overshoot: number) {
+    const orderedBySlack = [...baselineParticipants].sort((a, b) => {
+        const slackA = a.requiredShifts - a.attendanceFactor * baseline;
+        const slackB = b.requiredShifts - b.attendanceFactor * baseline;
+        if (slackA !== slackB) return slackB - slackA;
+        if (a.requiredShifts !== b.requiredShifts) return b.requiredShifts - a.requiredShifts;
+        return String(b.participantKey).localeCompare(String(a.participantKey));
+    });
+
+    while (overshoot > 0) {
+        let adjusted = false;
+        for (const participant of orderedBySlack) {
+            const fractionalTarget = participant.attendanceFactor * baseline;
+            const lowerBound = Math.floor(fractionalTarget);
+            if (participant.requiredShifts > lowerBound && participant.requiredShifts > 0) {
+                participant.requiredShifts -= 1;
+                participant.baselineContribution = participant.requiredShifts;
+                overshoot -= 1;
+                adjusted = true;
+            }
+            if (overshoot === 0) break;
+        }
+        if (!adjusted) break;
+    }
+}
+
+function performDeficitCalculation(baselineParticipants: ShiftRequirementParticipantResult[], deficit: number) {
+    const orderedByAttendance = [...baselineParticipants].sort((a, b) => {
+        if (a.attendanceFactor !== b.attendanceFactor) return b.attendanceFactor - a.attendanceFactor;
+        return String(a.participantKey).localeCompare(String(b.participantKey));
+    });
+
+    while (deficit > 0) {
+        for (const participant of orderedByAttendance) {
+            participant.requiredShifts += 1;
+            participant.baselineContribution = participant.requiredShifts;
+            deficit -= 1;
+            if (deficit === 0) break;
+        }
+    }
 }
 
 interface BaselineSlotInput {

@@ -9,7 +9,8 @@ import {
     calculateBaselineRequirementForPlan,
     ParticipantAttendance,
     summarizeParticipantRequirements,
-    toParticipantKey
+    toParticipantKey,
+    toParticipantName
 } from "../modules/activity/requirements";
 import {RecommendationStatus} from "../modules/database/entities/activity/ActivityAssignmentRecommendation";
 import {ActivityPlan} from "../modules/database/entities/activity/ActivityPlan";
@@ -50,7 +51,7 @@ function preprocessCreate(body: any): Partial<ActivityPlan> & { slots: Partial<A
 
     const slotSchema = Joi.object({
         id: Joi.string().guid({version: ['uuidv4', 'uuidv5']}).required(),
-        day: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
+        day: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
         pos: Joi.number().integer().required(),
         title: Joi.string().max(255).required(),
         description: Joi.string().allow(''),
@@ -66,11 +67,11 @@ function preprocessCreate(body: any): Partial<ActivityPlan> & { slots: Partial<A
 
     const schema = Joi.object({
         title: Joi.string().required(),
-        startDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
-        endDate: Joi.string().pattern(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/).required(),
+        startDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
+        endDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
         description: Joi.string().max(2000).allow('').required(),
         slots: Joi.object().pattern(
-            /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/, Joi.array().items(slotSchema)
+            /^\d{4}-\d{2}-\d{2}$/, Joi.array().items(slotSchema)
         ).min(1).required(),
         event_id: Joi.string().uuid().allow('').optional(),
     });
@@ -252,11 +253,12 @@ async function fetchForView(plan: ActivityPlan, req: Request) {
 
     const slotList = Object.values(slotsByDate).flat();
 
-    const assignPromise: Promise<string[]> = session.user
-        ? activityService.getActivitySlotAssignmentsForUser(plan.id, session.user.id)
-        : session.guest
-            ? activityService.getActivitySlotAssignmentsForGuest(plan.id, session.guest.id)
-            : Promise.resolve([]);
+    let assignPromise: Promise<string[]> = Promise.resolve([]);
+    if (session.user) {
+        assignPromise = activityService.getActivitySlotAssignmentsForUser(plan.id, session.user.id)
+    } else if (session.guest) {
+        assignPromise = activityService.getActivitySlotAssignmentsForGuest(plan.id, session.guest.id)
+    }
     const [assignments, assigneeLists, participantList, allRoles, slotRoles] = await Promise.all([
         assignPromise,
         activityService.getActivitySlotAssignees(plan.id),
@@ -428,7 +430,7 @@ async function createTextField(planId: string, body: any) {
 
 async function updateTextField(planId: string, textFieldId: string, body: any, permData?: PermBundle) {
     const field = await activityService.getActivityPlanTextFieldById(textFieldId);
-    if (!field || field.planId !== planId) {
+    if (field?.planId !== planId) {
         throw new APIError('Text field not found', {planId, textFieldId}, 404);
     }
     const {title, text = ''} = body;
@@ -445,7 +447,7 @@ async function updateTextField(planId: string, textFieldId: string, body: any, p
 
 async function deleteTextField(planId: string, textFieldId: string) {
     const field = await activityService.getActivityPlanTextFieldById(textFieldId);
-    if (!field || field.planId !== planId) {
+    if (field?.planId !== planId) {
         throw new APIError('Text field not found', {planId, textFieldId}, 404);
     }
     await activityService.deleteActivityPlanTextField(textFieldId);
@@ -528,7 +530,7 @@ async function updateSlotAttr(slotId: string, body: any, permData?: PermBundle) 
         throw new APIError('Unknown error while saving', body, 500);
     }
 
-    if (!body.roles !== undefined) {
+    if (body.roles !== undefined) {
         await activityService.updateActivitySlotRoles(slotId, body.roles);
     }
 
@@ -577,11 +579,10 @@ async function getRequirements(planId: string) {
     );
 
     const overrideTargets = eventParticipants.map((participant) => ({
-        key: participant.userId ? `user:${participant.userId}` : `guest:${participant.guestId}`,
+        key: toParticipantKey(participant),
         userId: participant.userId ?? null,
         guestId: participant.guestId ?? null,
-        label: participant.name
-            || (participant.userId ? `User #${participant.userId}` : participant.guestId ? `Guest #${participant.guestId}` : 'Participant'),
+        label: toParticipantName(participant),
         arrivalDate: participant.arrivalDate ?? null,
         departureDate: participant.departureDate ?? null,
     }));
@@ -655,9 +656,13 @@ async function updateRequirements(planId: string, body: any) {
     };
 
     if (planSettings.bindingDeadline !== undefined) {
-        normalizedSettings.bindingDeadline = planSettings.bindingDeadline === null
-            ? null
-            : (typeof planSettings.bindingDeadline === 'string' ? new Date(planSettings.bindingDeadline) : planSettings.bindingDeadline);
+        if (planSettings.bindingDeadline === null) {
+            normalizedSettings.bindingDeadline = null;
+        } else if (typeof planSettings.bindingDeadline === 'string') {
+            normalizedSettings.bindingDeadline = new Date(planSettings.bindingDeadline);
+        } else {
+            normalizedSettings.bindingDeadline = planSettings.bindingDeadline;
+        }
     }
 
     await requirementService.replaceRequirements(planId, roleRequirements, overrides, normalizedSettings);
@@ -904,8 +909,7 @@ async function getRecommendations(planId: string) {
         key: toParticipantKey(participant),
         userId: participant.userId ?? null,
         guestId: participant.guestId ?? null,
-        label: participant.name
-            || (participant.userId ? `User #${participant.userId}` : participant.guestId ? `Guest #${participant.guestId}` : 'Participant'),
+        label: toParticipantName(participant),
         arrivalDate: participant.arrivalDate ?? null,
         departureDate: participant.departureDate ?? null,
     }));
@@ -1128,7 +1132,7 @@ async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
 }
 
 async function deleteHeaderImg(entity: EntityBase) {
-    performImageSwap(entity, activityService.updateHeaderImage, undefined);
+    performImageSwap(entity, activityService.updateHeaderImage);
     return 'Image deleted';
 }
 

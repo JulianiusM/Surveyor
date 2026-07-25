@@ -87,3 +87,7 @@ export class ExpectedError extends Error {
         }
     }
 }
+
+export class InternalError extends Error {
+    //Dummy for now
+}

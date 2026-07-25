@@ -1,27 +1,30 @@
 // controller/eventPoolController.ts
-// Invoice pool and invoice workflow handlers extracted from the event controller for clarity and reuse.
-import fs from 'fs';
-import path from 'path';
-import Joi from 'joi';
+import {differenceInCalendarDays} from "date-fns";
 import {Request, Response} from 'express';
+import Joi from 'joi';
+// Invoice pool and invoice workflow handlers extracted from the event controller for clarity and reuse.
+import fs from 'node:fs';
+import path from 'node:path';
+import {Event} from '../modules/database/entities/event/Event';
+import {EventInvoice} from "../modules/database/entities/event/EventInvoice";
+import {EventInvoicePool, InvoicePoolDistributions} from "../modules/database/entities/event/EventInvoicePool";
+import {EventRegistration} from "../modules/database/entities/event/EventRegistration";
+import * as invoiceService from '../modules/database/services/EventInvoiceService';
+import * as eventService from '../modules/database/services/EventService';
 
 import mailer from '../modules/email';
-import {Event} from '../modules/database/entities/event/Event';
-import * as eventService from '../modules/database/services/EventService';
-import * as invoiceService from '../modules/database/services/EventInvoiceService';
 import {APIError} from '../modules/lib/errors';
-import {formatAmount, resolveActorLabel, sanitizeForEmail, toAmount} from '../modules/lib/util';
-import type {PermBundle} from '../types/PermissionTypes';
+import {formatAmount, normalizeToArray, resolveActorLabel, sanitizeForEmail, toAmount} from '../modules/lib/util';
+import type {ParticipantRow} from "../types/EventTypes";
 import type {InvoicePoolDistribution} from "../types/InvoicePoolTypes";
-import {differenceInCalendarDays} from "date-fns";
-import {InvoicePoolDistributions} from "../modules/database/entities/event/EventInvoicePool";
+import type {PermBundle} from '../types/PermissionTypes';
 
 // Remove stored invoice proofs once the event has been finished for more than six months.
 export async function purgeExpiredProofs(pool: Awaited<ReturnType<typeof invoiceService.getPoolWithInvoices>> | null) {
     if (!pool?.event?.endDate || !pool.invoices?.length) return;
     // Parse endDate and add 6 months for expiry check
     const endDate = new Date(pool.event.endDate);
-    if (isNaN(endDate.getTime())) return; // Invalid date format, skip expiry logic
+    if (Number.isNaN(endDate.getTime())) return; // Invalid date format, skip expiry logic
     const expiry = new Date(endDate);
     expiry.setMonth(expiry.getMonth() + 6);
     if (new Date() < expiry) return;
@@ -32,18 +35,19 @@ export async function purgeExpiredProofs(pool: Awaited<ReturnType<typeof invoice
 
 // Resolve the registration ID for the current actor so validation stays localized.
 async function getActorRegistrationId(event: Event, session: Request['session']) {
-    const registration = session.user
-        ? await eventService.getRegistrationFor({userId: session.user.id}, event.id)
-        : session.guest
-            ? await eventService.getRegistrationFor({guestId: session.guest.id}, event.id)
-            : null;
+    let registration = null;
+    if (session.user) {
+        registration = await eventService.getRegistrationFor({userId: session.user.id}, event.id);
+    } else if (session.guest) {
+        registration = await eventService.getRegistrationFor({guestId: session.guest.id}, event.id)
+    }
     return registration?.id;
 }
 
 // Pull the pool and ensure it belongs to the current event, purging expired proofs on access.
 async function ensurePool(event: Event, poolId: string) {
     const pool = await invoiceService.getPoolWithInvoices(poolId);
-    if (!pool || pool.event.id !== event.id) {
+    if (pool?.event.id !== event.id) {
         throw new APIError('Pool not found', {}, 404);
     }
     await purgeExpiredProofs(pool);
@@ -79,7 +83,7 @@ async function createInvoicePool(event: Event, body: any) {
     const isDefault = value.isDefault === true || value.isDefault === 'on';
     const assignAll = value.assignAll === true || value.assignAll === 'on';
     const subtractPersonalInvoices = value.subtractPersonalInvoices === true || value.subtractPersonalInvoices === 'on';
-    const regIdsRaw = Array.isArray(value.registrations) ? value.registrations : (value.registrations ? [value.registrations] : []);
+    const regIdsRaw = normalizeToArray(value.registrations);
     const allowedIds = (await eventService.getRegistrationsForEvent(event.id)).map((r) => r.id);
     const regIds = assignAll ? allowedIds : regIdsRaw.filter((id: number) => allowedIds.includes(Number(id))).map(Number);
 
@@ -104,11 +108,11 @@ async function updatePoolAssignments(event: Event, poolId: string, body: any, al
     const subtractPersonalInvoices = body.subtractPersonalInvoices === undefined
         ? pool.subtractPersonalInvoices
         : body.subtractPersonalInvoices === true || body.subtractPersonalInvoices === 'on';
-    const regIdsRaw = Array.isArray(body.registrations) ? body.registrations : (body.registrations ? [body.registrations] : []);
-    const exemptIdsRaw = Array.isArray(body.exemptions) ? body.exemptions : (body.exemptions ? [body.exemptions] : []);
+    const regIdsRaw = normalizeToArray(body.registrations);
+    const exemptIdsRaw = normalizeToArray(body.exemptions);
     const allowedIds = (await eventService.getRegistrationsForEvent(event.id)).map((r) => r.id);
-    const regIds = assignAll ? allowedIds : regIdsRaw.map((id: any) => Number(id)).filter((id: number) => allowedIds.includes(id));
-    const exemptIds = exemptIdsRaw.map((id: any) => Number(id)).filter((id: number) => allowedIds.includes(id));
+    const regIds = assignAll ? allowedIds : regIdsRaw.map(Number).filter((id: number) => allowedIds.includes(id));
+    const exemptIds = exemptIdsRaw.map(Number).filter((id: number) => allowedIds.includes(id));
     await invoiceService.updateAssignments(poolId, isDefault, assignAll, subtractPersonalInvoices, regIds, exemptIds);
 }
 
@@ -135,7 +139,7 @@ async function addPoolSurcharge(event: Event, poolId: string, body: any, allowCl
 
 // Remove a surcharge so admins can correct mistakes before the pool closes.
 async function removePoolSurcharge(event: Event, poolId: string, surchargeId: string) {
-    const pool = await ensurePool(event, poolId);
+    await ensurePool(event, poolId);
     await invoiceService.removeSurcharge(poolId, Number(surchargeId));
 }
 
@@ -149,7 +153,7 @@ async function notifyTakeoverChanges(
     },
     actorLabel: string,
 ) {
-    if ((!changes.added || !changes.added.length) && (!changes.removed || !changes.removed.length)) return;
+    if ((!changes.added?.length) && (!changes.removed?.length)) return;
     const participants = await eventService.getEventParticipants(event.id);
     const map = new Map(participants.map((p) => [p.id, p]));
     const queue = new Map<string, string[]>();
@@ -163,26 +167,30 @@ async function notifyTakeoverChanges(
     for (const add of changes.added || []) {
         const payer = map.get(add.payerId);
         const beneficiary = map.get(add.beneficiaryId);
+        const beneficiaryName = beneficiary?.name || `participant #${add.beneficiaryId}`;
+        const payerName = payer?.name || `Participant #${add.payerId}`;
         enqueue(
             payer?.email,
-            `You are now covering ${beneficiary?.name || `participant #${add.beneficiaryId}`} in pool "${pool.name}" (set by ${actorLabel}).`,
+            `You are now covering ${beneficiaryName} in pool "${pool.name}" (set by ${actorLabel}).`,
         );
         enqueue(
             beneficiary?.email,
-            `${payer?.name || `Participant #${add.payerId}`} will now pay your share in pool "${pool.name}" (set by ${actorLabel}).`,
+            `${payerName} will now pay your share in pool "${pool.name}" (set by ${actorLabel}).`,
         );
     }
 
     for (const remove of changes.removed || []) {
         const payer = map.get(remove.payerId);
         const beneficiary = map.get(remove.beneficiaryId);
+        const beneficiaryName = beneficiary?.name || `participant #${remove.beneficiaryId}`;
+        const payerName = payer?.name || `Participant #${remove.payerId}`;
         enqueue(
             payer?.email,
-            `You are no longer covering ${beneficiary?.name || `participant #${remove.beneficiaryId}`} in pool "${pool.name}" (updated by ${actorLabel}).`,
+            `You are no longer covering ${beneficiaryName} in pool "${pool.name}" (updated by ${actorLabel}).`,
         );
         enqueue(
             beneficiary?.email,
-            `${payer?.name || `Participant #${remove.payerId}`} will no longer pay your share in pool "${pool.name}" (updated by ${actorLabel}).`,
+            `${payerName} will no longer pay your share in pool "${pool.name}" (updated by ${actorLabel}).`,
         );
     }
 
@@ -208,11 +216,12 @@ async function updateTakeovers(event: Event, poolId: string, body: any, session:
         throw new APIError('Not allowed to assign takeovers for other participants', body, 403);
     }
 
-    const beneficiaries: number[] = Array.isArray(value.beneficiaries)
-        ? value.beneficiaries.map(Number)
-        : value.beneficiaries
-            ? [Number(value.beneficiaries)]
-            : [];
+    let beneficiaries: number[] = [];
+    if (Array.isArray(value.beneficiaries)) {
+        beneficiaries = value.beneficiaries.map(Number);
+    } else if (value.beneficiaries) {
+        beneficiaries = [Number(value.beneficiaries)];
+    }
 
     const allowedIds = pool.assignAll
         ? (await eventService.getRegistrationsForEvent(event.id)).map((r) => r.id)
@@ -339,6 +348,17 @@ async function declineInvoice(event: Event, poolId: string, invoiceId: string, s
     }
 }
 
+type CalculationDto = {
+    pool: EventInvoicePool,
+    targetRegistrations: EventRegistration[],
+    individualCosts: Map<number, { total: number, days?: number }>,
+    exemptIds: Set<number>,
+    surchargeMap: Map<number, { amount: number; note: string }[]>,
+    invoiceCreditMap: Map<number, number>,
+    takeoverMap: Map<number, number>,
+    participantMap: Map<string | number, ParticipantRow>
+}
+
 // Close a pool by distributing approved invoice totals, surcharges, and takeovers into payer shares.
 async function closePool(event: Event, poolId: string, body: any = {}, session?: Request['session']) {
     const pool = await ensurePool(event, poolId);
@@ -347,7 +367,6 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
     // Include all invoices whose status is not 'NEW' (APPROVED, CLOSED, etc.)
     // This is required for pool closing logic, as all non-NEW invoices must be processed.
     const approvedInvoices = (pool.invoices || []).filter((inv) => inv.status !== 'NEW');
-    const total = toAmount(pool.payableAmount);
 
     // Pull full participant list once so we can reuse it for lookups and notifications
     const participants = await eventService.getEventParticipants(event.id);
@@ -364,100 +383,31 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
     const billableRegistrations = targetRegistrations.filter((reg) => !exemptIds.has(reg.id));
 
     // Bucket surcharges per participant so we can attribute them to a single payer later.
-    const surchargeMap = new Map<number, { amount: number; note: string }[]>();
-    for (const surcharge of pool.surcharges || []) {
-        if (!targetIds.has(surcharge.registrationId)) continue;
-        const existing = surchargeMap.get(surcharge.registrationId) || [];
-        existing.push({amount: toAmount(surcharge.amount), note: surcharge.note});
-        surchargeMap.set(surcharge.registrationId, existing);
-    }
+    const surchargeMap = bucketSurcharges(pool, targetIds);
 
     // Aggregate the total approved invoice amounts submitted by each participant.
     // This will later be deducted from their calculated share if pool.subtractPersonalInvoices is enabled.
-    const invoiceCreditMap = new Map<number, number>();
-    for (const invoice of approvedInvoices) {
-        if (!targetIds.has(invoice.registrationId)) continue;
-        const running = invoiceCreditMap.get(invoice.registrationId) || 0;
-        invoiceCreditMap.set(invoice.registrationId, running + toAmount(invoice.amount));
-    }
+    const invoiceCreditMap = bucketInvoiceCredit(approvedInvoices, targetIds);
 
     // Respect pre-agreed takeovers; beneficiaries cannot also cover others by service validation
-    const takeoverMap = new Map<number, number>();
-    for (const takeover of pool.takeovers || []) {
-        if (!targetIds.has(takeover.beneficiaryRegistrationId) || !targetIds.has(takeover.payerRegistrationId)) continue;
-        takeoverMap.set(takeover.beneficiaryRegistrationId, takeover.payerRegistrationId);
+    const takeoverMap = calculateTakeovers(pool, targetIds);
+
+    // Calculate the individual base costs
+    const individualCosts = calculateIndividualCosts(pool, billableRegistrations);
+
+    const calcDto: CalculationDto = {
+        pool,
+        targetRegistrations,
+        individualCosts,
+        exemptIds,
+        surchargeMap,
+        invoiceCreditMap,
+        takeoverMap,
+        participantMap
     }
 
     // Track payer totals alongside detailed notes so breakdowns include amounts for covered beneficiaries and surcharges.
-    const payerShares = new Map<number, {
-        base: number;
-        surcharges: number;
-        invoiceCredits: number;
-        notes: string[];
-        beneficiaries: number[];
-        detailNotes: string[]
-    }>();
-
-    let individualCosts;
-    if (pool.distributionMethod === ("TIME_BASED" as InvoicePoolDistribution)) {
-        const individualDays = billableRegistrations.reduce((acc, reg) => {
-            acc.set(reg.id, differenceInCalendarDays(reg.departureDate, reg.arrivalDate) + 1)
-            return acc;
-        }, new Map<number, number>());
-        const totalDays = Array.from(individualDays.values()).reduce((total, val) => total + val, 0);
-        const costPerDay = totalDays ? total / totalDays : 0;
-        individualCosts = Array.from(individualDays.entries()).reduce((acc, reg) => {
-            acc.set(reg[0], {total: costPerDay * reg[1], days: reg[1]});
-            return acc;
-        }, new Map());
-    } else if (pool.distributionMethod === ("EQUAL" as InvoicePoolDistribution)) {
-        const perPerson = billableRegistrations.length ? total / billableRegistrations.length : 0;
-        individualCosts = billableRegistrations.reduce((acc, reg) => {
-            acc.set(reg.id, {total: perPerson});
-            return acc;
-        }, new Map())
-    }
-
-    for (const registration of targetRegistrations) {
-        const personalCost = individualCosts?.get(registration.id) || {};
-        const baseShare = exemptIds.has(registration.id) ? 0 : (personalCost.total || 0);
-        const extras = surchargeMap.get(registration.id) || [];
-        const extraTotal = extras.reduce((sum, entry) => sum + entry.amount, 0);
-        // If subtractPersonalInvoices is enabled, participants receive credit for their submitted invoices.
-        // This reduces their share by the amount they've already contributed via invoices.
-        const invoiceCredit = pool.subtractPersonalInvoices ? (invoiceCreditMap.get(registration.id) || 0) : 0;
-        const payerId = takeoverMap.get(registration.id) ?? registration.id;
-        const participantLabel = participantMap.get(registration.id)?.name || `Participant #${registration.id}`;
-        const beneficiaryName = payerId !== registration.id ? participantLabel : null;
-        const bucket = payerShares.get(payerId) || {
-            base: 0,
-            surcharges: 0,
-            invoiceCredits: 0,
-            notes: [],
-            beneficiaries: [],
-            detailNotes: []
-        };
-        bucket.base += baseShare;
-        bucket.surcharges += extraTotal;
-        bucket.invoiceCredits += invoiceCredit;
-        bucket.detailNotes.push(`Base share for ${beneficiaryName || 'self'}: ${formatAmount(baseShare)}`);
-        if (exemptIds.has(registration.id)) bucket.detailNotes.push('Exempt from automatic share');
-        if (personalCost.days) bucket.detailNotes.push(`(for ${personalCost.days} days)`);
-        if (beneficiaryName) {
-            bucket.beneficiaries.push(registration.id);
-            bucket.notes.push(`Covering ${beneficiaryName}`);
-        }
-        extras.forEach((entry) => {
-            const adjustmentTarget = beneficiaryName || participantLabel;
-            const detailLabel = entry.note ? `${adjustmentTarget} — ${entry.note}` : adjustmentTarget;
-            bucket.detailNotes.push(`Surcharge for ${detailLabel}: ${formatAmount(entry.amount)}`);
-            if (entry.note) bucket.notes.push(`Surcharge for ${adjustmentTarget}: ${entry.note}`);
-        });
-        if (invoiceCredit) {
-            bucket.detailNotes.push(`Invoice credit for ${beneficiaryName || 'self'}: -${formatAmount(invoiceCredit)}`);
-        }
-        payerShares.set(payerId, bucket);
-    }
+    const payerShares = calculatePayerShares(calcDto);
 
     const sharePayloads = Array.from(payerShares.entries()).map(([registrationId, data]) => {
         const baseShareAmount = toAmount(data.base);
@@ -485,12 +435,120 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
         const totalDue = data.base + data.surcharges - data.invoiceCredits;
         const verb = totalDue < 0 ? 'are owed' : 'owe';
         const formattedTotal = formatAmount(Math.abs(totalDue));
+        const coverageStr = coverageNames ? ` (covering ${coverageNames})` : '';
         void mailer.sendEmail(
             email,
             'Invoice pool closed',
-            `You ${verb} ${formattedTotal} for pool "${sanitizeForEmail(pool.name)}"${coverageNames ? ` (covering ${coverageNames})` : ''}.\nActioned by ${actor}.${noteText}`
+            `You ${verb} ${formattedTotal} for pool "${sanitizeForEmail(pool.name)}"${coverageStr}.\nActioned by ${actor}.${noteText}`
         );
     }
+}
+
+function bucketSurcharges(pool: EventInvoicePool, targetIds: Set<number>) {
+    const surchargeMap = new Map<number, { amount: number; note: string }[]>();
+    for (const surcharge of pool.surcharges || []) {
+        if (!targetIds.has(surcharge.registrationId)) continue;
+        const existing = surchargeMap.get(surcharge.registrationId) || [];
+        existing.push({amount: toAmount(surcharge.amount), note: surcharge.note});
+        surchargeMap.set(surcharge.registrationId, existing);
+    }
+    return surchargeMap;
+}
+
+function bucketInvoiceCredit(approvedInvoices: EventInvoice[], targetIds: Set<number>) {
+    const invoiceCreditMap = new Map<number, number>();
+    for (const invoice of approvedInvoices) {
+        if (!targetIds.has(invoice.registrationId)) continue;
+        const running = invoiceCreditMap.get(invoice.registrationId) || 0;
+        invoiceCreditMap.set(invoice.registrationId, running + toAmount(invoice.amount));
+    }
+    return invoiceCreditMap;
+}
+
+function calculateTakeovers(pool: EventInvoicePool, targetIds: Set<number>) {
+    const takeoverMap = new Map<number, number>();
+    for (const takeover of pool.takeovers || []) {
+        if (!targetIds.has(takeover.beneficiaryRegistrationId) || !targetIds.has(takeover.payerRegistrationId)) continue;
+        takeoverMap.set(takeover.beneficiaryRegistrationId, takeover.payerRegistrationId);
+    }
+    return takeoverMap;
+}
+
+function calculateIndividualCosts(pool: EventInvoicePool, billableRegistrations: EventRegistration[]) {
+    const total = toAmount(pool.payableAmount);
+    let individualCosts = new Map<number, { total: number, days?: number }>();
+    if (pool.distributionMethod === ("TIME_BASED" as InvoicePoolDistribution) || pool.distributionMethod === ("NIGHT_BASED" as InvoicePoolDistribution)) {
+        const baseDayCount = pool.distributionMethod === ("NIGHT_BASED" as InvoicePoolDistribution) ? 0 : 1;
+        const individualDays = billableRegistrations.reduce((acc, reg) => {
+            acc.set(reg.id, differenceInCalendarDays(reg.departureDate, reg.arrivalDate) + baseDayCount);
+            return acc;
+        }, new Map<number, number>());
+        const totalDays = Array.from(individualDays.values()).reduce((total, val) => total + val, 0);
+        const costPerDay = totalDays ? total / totalDays : 0;
+        individualCosts = Array.from(individualDays.entries()).reduce((acc, reg) => {
+            acc.set(reg[0], {total: costPerDay * reg[1], days: reg[1]});
+            return acc;
+        }, new Map<number, { total: number, days?: number }>());
+    } else if (pool.distributionMethod === ("EQUAL" as InvoicePoolDistribution)) {
+        const perPerson = billableRegistrations.length ? total / billableRegistrations.length : 0;
+        individualCosts = billableRegistrations.reduce((acc, reg) => {
+            acc.set(reg.id, {total: perPerson});
+            return acc;
+        }, new Map<number, { total: number, days?: number }>())
+    }
+    return individualCosts;
+}
+
+function calculatePayerShares(dto: CalculationDto) {
+    const payerShares = new Map<number, {
+        base: number;
+        surcharges: number;
+        invoiceCredits: number;
+        notes: string[];
+        beneficiaries: number[];
+        detailNotes: string[]
+    }>();
+    for (const registration of dto.targetRegistrations) {
+        const personalCost: { total?: number, days?: number } = dto.individualCosts.get(registration.id) || {};
+        const baseShare = dto.exemptIds.has(registration.id) ? 0 : (personalCost.total || 0);
+        const extras = dto.surchargeMap.get(registration.id) || [];
+        const extraTotal = extras.reduce((sum, entry) => sum + entry.amount, 0);
+        // If subtractPersonalInvoices is enabled, participants receive credit for their submitted invoices.
+        // This reduces their share by the amount they've already contributed via invoices.
+        const invoiceCredit = dto.pool.subtractPersonalInvoices ? (dto.invoiceCreditMap.get(registration.id) || 0) : 0;
+        const payerId = dto.takeoverMap.get(registration.id) ?? registration.id;
+        const participantLabel = dto.participantMap.get(registration.id)?.name || `Participant #${registration.id}`;
+        const beneficiaryName = payerId !== registration.id ? participantLabel : null;
+        const bucket = payerShares.get(payerId) || {
+            base: 0,
+            surcharges: 0,
+            invoiceCredits: 0,
+            notes: [],
+            beneficiaries: [],
+            detailNotes: []
+        };
+        bucket.base += baseShare;
+        bucket.surcharges += extraTotal;
+        bucket.invoiceCredits += invoiceCredit;
+        bucket.detailNotes.push(`Base share for ${beneficiaryName || 'self'}: ${formatAmount(baseShare)}`);
+        if (dto.exemptIds.has(registration.id)) bucket.detailNotes.push('Exempt from automatic share');
+        if (personalCost.days) bucket.detailNotes.push(`(for ${personalCost.days} days)`);
+        if (beneficiaryName) {
+            bucket.beneficiaries.push(registration.id);
+            bucket.notes.push(`Covering ${beneficiaryName}`);
+        }
+        extras.forEach((entry) => {
+            const adjustmentTarget = beneficiaryName || participantLabel;
+            const detailLabel = entry.note ? `${adjustmentTarget} — ${entry.note}` : adjustmentTarget;
+            bucket.detailNotes.push(`Surcharge for ${detailLabel}: ${formatAmount(entry.amount)}`);
+            if (entry.note) bucket.notes.push(`Surcharge for ${adjustmentTarget}: ${entry.note}`);
+        });
+        if (invoiceCredit) {
+            bucket.detailNotes.push(`Invoice credit for ${beneficiaryName || 'self'}: -${formatAmount(invoiceCredit)}`);
+        }
+        payerShares.set(payerId, bucket);
+    }
+    return payerShares;
 }
 
 // Toggle payment state of a share and inform the participant with actor attribution.
@@ -513,9 +571,9 @@ async function markSharePaid(event: Event, poolId: string, shareId: string, isPa
 
 // Serve invoice proof files securely with authentication and permission checks
 export async function serveInvoiceProof(event: Event, poolId: string, invoiceId: string, session: Request['session'], res: Response, permData?: PermBundle) {
-    const pool = await ensurePool(event, poolId);
+    await ensurePool(event, poolId);
     const invoice = await invoiceService.getInvoiceWithRegistration(poolId, Number(invoiceId));
-    if (!invoice || !invoice.proofPath) {
+    if (!invoice?.proofPath) {
         throw new APIError('Invoice proof not found', {}, 404);
     }
 
@@ -558,27 +616,21 @@ async function recalculatePool(event: Event, poolId: string, body: any = {}, ses
         throw new APIError('Only closed pools can be recalculated', {}, 400);
     }
 
-    try {
-        // Persist any pending assignment or surcharge updates submitted with the recalculation request
-        if (body.assignments) {
-            await updatePoolAssignments(event, poolId, body.assignments, true);
-        }
-
-        if (body.surcharge) {
-            await addPoolSurcharge(event, poolId, body.surcharge, true);
-        }
-
-        // Reopen the pool (uses SERIALIZABLE transaction with pessimistic write lock)
-        await invoiceService.reopenPool(poolId);
-
-        // Re-run the close pool logic which will recalculate all shares
-        // closePool also uses transactions (READ COMMITTED) for share deletion and creation
-        await closePool(event, poolId, body, session);
-    } catch (error) {
-        // If recalculation fails after reopening, the pool will remain open
-        // Admins can fix issues and try closing again
-        throw error;
+    // Persist any pending assignment or surcharge updates submitted with the recalculation request
+    if (body.assignments) {
+        await updatePoolAssignments(event, poolId, body.assignments, true);
     }
+
+    if (body.surcharge) {
+        await addPoolSurcharge(event, poolId, body.surcharge, true);
+    }
+
+    // Reopen the pool (uses SERIALIZABLE transaction with pessimistic write lock)
+    await invoiceService.reopenPool(poolId);
+
+    // Re-run the close pool logic which will recalculate all shares
+    // closePool also uses transactions (READ COMMITTED) for share deletion and creation
+    await closePool(event, poolId, body, session);
 }
 
 export default {

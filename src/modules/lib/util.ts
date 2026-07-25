@@ -1,5 +1,5 @@
-import crypto from 'crypto';
 import {Request} from "express";
+import crypto from 'node:crypto';
 import {v4 as uuidv4} from 'uuid';
 import type {
     EntityDescriptor,
@@ -80,9 +80,7 @@ export function toLocalISOTime(dateObj: Date) {
  */
 export function rewriteISOToZone(isoString: string, timeZone: string): string {
     // 1) Parse *fields only* (ignore original offset when rebuilding)
-    const m = isoString.trim().match(
-        /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(?:Z|[+-]\d{2}:?\d{2})?$/
-    );
+    const m = new RegExp(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(?:Z|[+-]\d{2}:?\d{2})?$/).exec(isoString.trim());
     if (!m) throw new Error("Invalid ISO datetime");
 
     const [, y, mo, d, h, mi, s = "00", ms = "0"] = m;
@@ -96,11 +94,11 @@ export function rewriteISOToZone(isoString: string, timeZone: string): string {
         }).formatToParts(new Date(epochMs)).find(x => x.type === 'timeZoneName');
 
         // p.value examples: "GMT", "GMT+2", "GMT-05:30"
-        const m = p && p.value.match(/^GMT(?:(?<sign>[+-])(?<hh>\d{1,2})(?::?(?<mm>\d{2}))?)?$/);
+        const m = p?.value.match(/^GMT(?:(?<sign>[+-])(?<hh>\d{1,2})(?::?(?<mm>\d{2}))?)?$/);
         if (!m) return 0;
         const sign = (m.groups?.sign === '-') ? -1 : 1;
-        const hh = m.groups?.hh ? parseInt(m.groups.hh, 10) : 0;
-        const mm = m.groups?.mm ? parseInt(m.groups.mm, 10) : 0;
+        const hh = m.groups?.hh ? Number.parseInt(m.groups.hh, 10) : 0;
+        const mm = m.groups?.mm ? Number.parseInt(m.groups.mm, 10) : 0;
         return sign * (hh * 60 + mm);
     }
 
@@ -424,4 +422,15 @@ export function convertEntity(entity: EntityBase, entityType: EntityType) {
         url: entityUrl,
         eventId: entity.eventId,
     } as Entity;
+}
+
+export function normalizeToArray<A>(thing: A | A[]) {
+    let arr: A[] = [];
+    if (Array.isArray(thing)) {
+        arr = thing;
+    } else if (thing) {
+        arr = [thing];
+    }
+
+    return arr;
 }

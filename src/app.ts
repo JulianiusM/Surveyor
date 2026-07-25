@@ -5,7 +5,7 @@ import flash from 'express-flash';
 import session from 'express-session';
 import createError from 'http-errors';
 import logger from 'morgan';
-import path from 'path';
+import path from 'node:path';
 
 // Version aus package.json lesen
 import {version} from '../package.json';
@@ -26,6 +26,7 @@ import surveyRouter from './routes/survey';
 import usersRouter from './routes/users';
 
 const app = express();
+app.disable("x-powered-by");
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));

@@ -88,11 +88,12 @@ async function fetchForView(list: PackingList, req: Request) {
     const items = await packingService.getPackingItems(list.id);
     const session = req.session;
 
-    const assignments = session.user
-        ? await packingService.getPackingAssignmentsForUser(list.id, session.user.id)
-        : session.guest
-            ? await packingService.getPackingAssignmentsForGuest(list.id, session.guest.id)
-            : [];
+    let assignments: string[] = [];
+    if (session.user) {
+        assignments = await packingService.getPackingAssignmentsForUser(list.id, session.user.id);
+    } else if (session.guest) {
+        assignments = await packingService.getPackingAssignmentsForGuest(list.id, session.guest.id);
+    }
 
     const assigneeLists = await packingService.getPackingItemAssignees(list.id);
     // Teilnehmer- und Offene-Zähler (ohne required_by_all-Items)
@@ -215,7 +216,7 @@ async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
 }
 
 async function deleteHeaderImg(entity: EntityBase) {
-    performImageSwap(entity, packingService.updateHeaderImage, undefined);
+    performImageSwap(entity, packingService.updateHeaderImage);
     return 'Image deleted';
 }
 
