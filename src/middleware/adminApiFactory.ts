@@ -1,6 +1,5 @@
 import express, {Request, Response, Router} from 'express';
-import {asyncHandler} from '../modules/lib/asyncHandler';
-import {requirePermissionApi} from './permissionMiddleware';
+import rateLimit from "express-rate-limit";
 import {
     addAdmin,
     removeAdmin,
@@ -8,10 +7,11 @@ import {
     searchUsers,
     updateAdmin
 } from '../controller/entityAdminController';
+import {asyncHandler} from '../modules/lib/asyncHandler';
+import renderer from "../modules/renderer";
 import type {EntityGetter} from "../types/PermissionTypes";
 import type {CombEntityType} from "../types/UtilTypes";
-import renderer from "../modules/renderer";
-import rateLimit from "express-rate-limit";
+import {requirePermissionApi} from './permissionMiddleware';
 
 const searchLimiter = rateLimit({
     windowMs: 10 * 60 * 1000, // 10 minutes
@@ -37,7 +37,7 @@ export function createEntityAdminApiRouter(app: Router, entityType: CombEntityTy
         '/:id/admins',
         requirePermissionApi(getEntity, REQ),
         asyncHandler(async (req: Request, res: Response) => {
-            const msg = await addAdmin(entityType, req.params.id, req.body);
+            const msg = await addAdmin(entityType, req.params.id as string, req.body);
             renderer.respondWithSuccessJson(res, msg);
         })
     );
@@ -47,7 +47,7 @@ export function createEntityAdminApiRouter(app: Router, entityType: CombEntityTy
         '/:id/admins/:userId',
         requirePermissionApi(getEntity, REQ),
         asyncHandler(async (req: Request, res: Response) => {
-            const msg = await updateAdmin(entityType, req.params.id, req.params.userId, req.body);
+            const msg = await updateAdmin(entityType, req.params.id as string, req.params.userId as string, req.body);
             renderer.respondWithSuccessJson(res, msg);
         })
     );
@@ -57,7 +57,7 @@ export function createEntityAdminApiRouter(app: Router, entityType: CombEntityTy
         '/:id/admins/:userId',
         requirePermissionApi(getEntity, REQ),
         asyncHandler(async (req: Request, res: Response) => {
-            const msg = await removeAdmin(entityType, req.params.id, req.params.userId);
+            const msg = await removeAdmin(entityType, req.params.id as string, req.params.userId as string);
             renderer.respondWithSuccessJson(res, msg);
         })
     );

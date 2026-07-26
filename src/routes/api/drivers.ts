@@ -71,13 +71,13 @@ app.post('/:id/items', requirePermissionApi(permFct, PERM.ITEM_ADD), asyncHandle
 }));
 
 app.post('/:id/item/:itemId/description', requireItemPermissionApi(permFctItems, PERM.EDIT_DESC, [PERM.ITEM_EDIT, PERM.ITEM_EDIT_DESC]), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.updateItemDescription(req.params.itemId, req.body);
+    const msg = await controller.updateItemDescription(req.params.itemId as string, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 /* ---------- PATCH einzelnes Attribut -------------------------------- */
 app.post('/:id/item/:itemId/attr', requireItemPermissionApi(permFctItems, PERM.EDIT_META, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.updateItemAttr(req.params.itemId, req.body);
+    const msg = await controller.updateItemAttr(req.params.itemId as string, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
@@ -93,7 +93,7 @@ app.post('/:id/settings', requirePermissionApi(permFct, PERM.MANAGE_PERMISSIONS)
 }));
 
 app.post('/:id/item/:itemId/delete', requireItemPermissionApi(permFctItems, PERM.ITEM_DELETE, PERM.ITEM_DELETE), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.deleteItem(req.params.itemId);
+    const msg = await controller.deleteItem(req.params.itemId as string);
     renderer.respondWithSuccessJson(res, msg);
 }));
 

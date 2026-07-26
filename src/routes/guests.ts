@@ -20,7 +20,7 @@ app.get('/dashboard', isGuest, asyncHandler(async (req: Request, res: Response) 
 }));
 
 app.get('/:id/login/:token', asyncHandler(async (req: Request, res: Response) => {
-    await userController.loginGuest(req.params.id, req.params.token, req.session);
+    await userController.loginGuest(req.params.id as string, req.params.token as string, req.session);
     req.flash('success', 'Login successful');
     if (typeof req.query.next === 'string') {
         res.redirect(req.query.next);

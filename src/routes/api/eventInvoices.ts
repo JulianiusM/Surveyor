@@ -27,7 +27,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {
-            await eventPoolController.updatePoolSettings(resFct(req), req.params.poolId, req.body);
+            await eventPoolController.updatePoolSettings(resFct(req), req.params.poolId as string, req.body);
             renderer.respondWithSuccessJson(res, "pool settings updated");
         })
     )
@@ -36,7 +36,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/assignments',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {
-            await eventPoolController.updatePoolAssignments(resFct(req), req.params.poolId, req.body);
+            await eventPoolController.updatePoolAssignments(resFct(req), req.params.poolId as string, req.body);
             renderer.respondWithSuccessJson(res, "assignments updated");
         })
     );
@@ -45,7 +45,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/takeovers',
         requireEventParticipantAPI(resFct),
         asyncHandler(async (req, res) => {
-            await eventPoolController.updateTakeovers(resFct(req), req.params.poolId, req.body, req.session, false);
+            await eventPoolController.updateTakeovers(resFct(req), req.params.poolId as string, req.body, req.session, false);
             renderer.respondWithSuccessJson(res, "takeovers updated");
         })
     );
@@ -54,7 +54,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/takeovers/manage',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {
-            await eventPoolController.updateTakeovers(resFct(req), req.params.poolId, req.body, req.session, true);
+            await eventPoolController.updateTakeovers(resFct(req), req.params.poolId as string, req.body, req.session, true);
             renderer.respondWithSuccessJson(res, "takeovers updated");
         })
     );
@@ -63,7 +63,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/surcharges',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {
-            await eventPoolController.addPoolSurcharge(resFct(req), req.params.poolId, req.body);
+            await eventPoolController.addPoolSurcharge(resFct(req), req.params.poolId as string, req.body);
             renderer.respondWithSuccessJson(res, "surcharge added");
         })
     );
@@ -72,7 +72,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/surcharges/:surchargeId/delete',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {
-            await eventPoolController.removePoolSurcharge(resFct(req), req.params.poolId, req.params.surchargeId);
+            await eventPoolController.removePoolSurcharge(resFct(req), req.params.poolId as string, req.params.surchargeId as string);
             renderer.respondWithSuccessJson(res, "surcharge removed");
         })
     );
@@ -82,7 +82,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         requireEventParticipantAPI(resFct),
         proofUpload.single("proof"),
         asyncHandler(async (req, res) => {
-            await eventPoolController.submitInvoice(resFct(req), req.params.poolId, req.body, req.session, req.file);
+            await eventPoolController.submitInvoice(resFct(req), req.params.poolId as string, req.body, req.session, req.file);
             renderer.respondWithSuccessJson(res, "invoice submitted");
         })
     );
@@ -91,7 +91,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/invoices/:invoiceId/approve',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {
-            await eventPoolController.approveInvoice(resFct(req), req.params.poolId, req.params.invoiceId, req.session);
+            await eventPoolController.approveInvoice(resFct(req), req.params.poolId as string, req.params.invoiceId as string, req.session);
             renderer.respondWithSuccessJson(res, "approved");
         })
     );
@@ -100,7 +100,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/invoices/:invoiceId/close',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {
-            await eventPoolController.closeInvoice(resFct(req), req.params.poolId, req.params.invoiceId, req.session, res.locals.permData);
+            await eventPoolController.closeInvoice(resFct(req), req.params.poolId as string, req.params.invoiceId as string, req.session, res.locals.permData);
             renderer.respondWithSuccessJson(res, "closed");
         })
     );
@@ -109,7 +109,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/invoices/:invoiceId/close-self',
         requireEventParticipantAPI(resFct),
         asyncHandler(async (req, res) => {
-            await eventPoolController.closeInvoice(resFct(req), req.params.poolId, req.params.invoiceId, req.session, res.locals.permData, false);
+            await eventPoolController.closeInvoice(resFct(req), req.params.poolId as string, req.params.invoiceId as string, req.session, res.locals.permData, false);
             renderer.respondWithSuccessJson(res, "closed");
         })
     );
@@ -118,7 +118,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/invoices/:invoiceId/decline',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {
-            await eventPoolController.declineInvoice(resFct(req), req.params.poolId, req.params.invoiceId, req.session);
+            await eventPoolController.declineInvoice(resFct(req), req.params.poolId as string, req.params.invoiceId as string, req.session);
             renderer.respondWithSuccessJson(res, "declined");
         })
     );
@@ -127,7 +127,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/close',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {
-            await eventPoolController.closePool(resFct(req), req.params.poolId, req.body, req.session);
+            await eventPoolController.closePool(resFct(req), req.params.poolId as string, req.body, req.session);
             renderer.respondWithSuccessJson(res, "pool closed");
         })
     );
@@ -136,7 +136,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/recalculate',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {
-            await eventPoolController.recalculatePool(resFct(req), req.params.poolId, req.body, req.session);
+            await eventPoolController.recalculatePool(resFct(req), req.params.poolId as string, req.body, req.session);
             renderer.respondWithSuccessJson(res, "pool recalculated");
         })
     );
@@ -146,7 +146,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {
             const isPaid = req.body.isPaid === true || req.body.isPaid === 'true' || req.body.isPaid === 'on';
-            await eventPoolController.markSharePaid(resFct(req), req.params.poolId, req.params.shareId, isPaid, req.session);
+            await eventPoolController.markSharePaid(resFct(req), req.params.poolId as string, req.params.shareId as string, isPaid, req.session);
             renderer.respondWithSuccessJson(res, "share updated");
         })
     );
@@ -156,7 +156,7 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/invoices/:invoiceId/proof',
         requireEventParticipantAPI(resFct),
         asyncHandler(async (req, res) => {
-            const filePath = await eventPoolController.serveInvoiceProof(resFct(req), req.params.poolId, req.params.invoiceId, req.session, res.locals.permData);
+            const filePath = await eventPoolController.serveInvoiceProof(resFct(req), req.params.poolId as string, req.params.invoiceId as string, req.session, res.locals.permData);
             res.sendFile(filePath);
         })
     );

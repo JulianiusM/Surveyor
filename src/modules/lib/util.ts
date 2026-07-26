@@ -297,7 +297,7 @@ export function getPermFctItems(resFct: GetResource, resFctItems: GetAdditional,
 
 export function getPermFctAssign(resFct: GetResource, resFctItems: GetAdditional, entityName: EntityType, additionalName: EntityItemType): ItemWithParentGetter {
     const permFctItems = (req: Request): ItemSubject => {
-        const param: number = Number.parseInt(req.params.assignId);
+        const param: number = Number.parseInt(req.params.assignId as string);
         const assign = resFctItems(req).find(r => r?.id === param);
         const resource = assign?.item;
         const parent = resFct(req);

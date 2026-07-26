@@ -47,7 +47,7 @@ export function attachGenericAssignRoutes(router: Router, assignRoute: string, u
 }
 
 export async function enforcePlanBindingDeadline(req: Request, permData?: PermBundle) {
-    const planId = req.params?.id;
+    const planId = req.params?.id as string;
     if (!planId) return;
 
     const plan = await activityService.getActivityPlanById(planId);

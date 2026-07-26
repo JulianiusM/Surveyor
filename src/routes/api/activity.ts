@@ -66,7 +66,7 @@ app.post(
     asyncHandler(async (req: Request, res: Response) => {
         const msg = await controller.updateTextField(
             resFct(req).id,
-            req.params.textFieldId,
+            req.params.textFieldId as string,
             req.body,
             res.locals.permData as PermBundle | undefined,
         );
@@ -78,7 +78,7 @@ app.post(
     '/:id/text-field/:textFieldId/delete',
     requirePermissionApi(permFct, PERM.MANAGE_REQUIREMENTS),
     asyncHandler(async (req: Request, res: Response) => {
-        const msg = await controller.deleteTextField(resFct(req).id, req.params.textFieldId);
+        const msg = await controller.deleteTextField(resFct(req).id, req.params.textFieldId as string);
         renderer.respondWithSuccessJson(res, msg);
     }),
 );
@@ -93,7 +93,7 @@ app.post(
     asyncHandler(async (req: Request, res: Response) => {
         const warnings = await controller.getAssignmentWarnings(
             resFct(req).id,
-            req.params.slotId,
+            req.params.slotId as string,
             req.session,
             res.locals.permData as PermBundle | undefined,
             req.body,
@@ -191,13 +191,13 @@ app.post('/:id/slot/add', requirePermissionApi(permFct, PERM.ITEM_ADD), asyncHan
 }));
 
 app.post('/:id/slot/:slotId/description', requireItemPermissionApi(permFctItems, PERM.EDIT_DESC, [PERM.ITEM_EDIT, PERM.ITEM_EDIT_DESC]), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.updateSlotDescription(req.params.slotId, req.body);
+    const msg = await controller.updateSlotDescription(req.params.slotId as string, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 /* ---------- PATCH einzelnes Attribut -------------------------------- */
 app.post('/:id/slot/:slotId/attr', requireItemPermissionApi(permFctItems, PERM.EDIT_META, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.updateSlotAttr(req.params.slotId, req.body, res.locals.permData);
+    const msg = await controller.updateSlotAttr(req.params.slotId as string, req.body, res.locals.permData);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
@@ -213,17 +213,17 @@ app.post('/:id/settings', requirePermissionApi(permFct, PERM.MANAGE_PERMISSIONS)
 }));
 
 app.post('/:id/slot/:slotId/delete', requireItemPermissionApi(permFctItems, PERM.ITEM_DELETE, PERM.ITEM_DELETE), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.deleteSlot(req.params.slotId);
+    const msg = await controller.deleteSlot(req.params.slotId as string);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 app.post('/:id/slot/:slotId/addRole', requireItemPermissionApi(permFctItems, PERM.EDIT_META, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.addSlotRole(req.params.slotId, req.body);
+    const msg = await controller.addSlotRole(req.params.slotId as string, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 app.post('/:id/slot/:slotId/roles/admin', requireItemPermissionApi(permFctItems, PERM.MANAGE_ASSIGNMENTS, PERM.MANAGE_ASSIGNMENTS), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.updateRoleAssignments(req.params.slotId, req.body);
+    const msg = await controller.updateRoleAssignments(req.params.slotId as string, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 

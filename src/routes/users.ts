@@ -73,7 +73,7 @@ app.post('/forgot-password', asyncHandler(async (req: Request, res: Response) =>
 // Passwort zurücksetzen: Formular anzeigen
 app.get('/reset-password/:token', asyncHandler(async (req: Request, res: Response) => {
     if (!settings.value.localLoginEnabled) throw new ExpectedError('Login is not enabled!', 'error', 500);
-    const token = req.params.token;
+    const token = req.params.token as string;
     await userController.checkPasswordForgotToken(token);
     renderer.renderWithData(res, 'users/reset-password', {token});  // Zeige das Passwort-Reset-Formular an
 }));
@@ -81,14 +81,14 @@ app.get('/reset-password/:token', asyncHandler(async (req: Request, res: Respons
 // Passwort zurücksetzen: Neues Passwort speichern
 app.post('/reset-password/:token', asyncHandler(async (req: Request, res: Response) => {
     if (!settings.value.localLoginEnabled) throw new ExpectedError('Login is not enabled!', 'error', 500);
-    await userController.resetPassword(req.params.token, req.body);
+    await userController.resetPassword(req.params.token as string, req.body);
     renderer.renderSuccess(res, 'Your password has been successfully reset')
 }));
 
 // Aktivierungs-Link
 app.get('/activate/:token', asyncHandler(async (req: Request, res: Response) => {
     if (!settings.value.localLoginEnabled) throw new ExpectedError('Login is not enabled!', 'error', 500);
-    await userController.activateAccount(req.params.token);
+    await userController.activateAccount(req.params.token as string);
     req.flash('success', 'Account successfully activated');
     if (typeof req.query.next === 'string') {
         return res.redirect(`/users/login?next=${req.query.next}`);

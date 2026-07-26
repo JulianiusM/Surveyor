@@ -71,7 +71,7 @@ app.post('/:id/links', requirePermissionApi(permFct, PERM.MANAGE_REGISTRATIONS),
 
 /** Revoke link */
 app.delete('/:id/links/:linkId', requirePermissionApi(permFct, PERM.MANAGE_REGISTRATIONS), asyncHandler(async (req: Request, res: Response) => {
-        await eventController.revokeDeadlineBypassLink(resFct(req), req.params.linkId);
+        await eventController.revokeDeadlineBypassLink(resFct(req), req.params.linkId as string);
         renderer.respondWithSuccessJson(res, "revoked");
     })
 );
@@ -91,7 +91,7 @@ app.delete(
     '/:id/registrations/:regId',
     requirePermissionApi(permFct, PERM.MANAGE_REGISTRATIONS),
     asyncHandler(async (req, res) => {
-        if (await eventController.deleteRegistration(resFct(req), req.params.regId)) {
+        if (await eventController.deleteRegistration(resFct(req), req.params.regId as string)) {
             return renderer.respondWithSuccessJson(res, "Registration deleted")
         }
         renderer.respondWithErrorJson(res)
@@ -102,7 +102,7 @@ app.patch(
     '/:id/registrations/:regId',
     requirePermissionApi(permFct, PERM.MANAGE_REGISTRATIONS),
     asyncHandler(async (req, res) => {
-        const msg = await eventController.updateRegistrationDates(resFct(req), req.params.regId, req.body, res.locals.permData);
+        const msg = await eventController.updateRegistrationDates(resFct(req), req.params.regId as string, req.body, res.locals.permData);
         renderer.respondWithSuccessJson(res, msg);
     })
 );

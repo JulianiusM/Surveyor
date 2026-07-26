@@ -148,7 +148,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
                 res.redirect(buildRedirect(id));
             }));
 
-    router.use("/:id", attachPermBundle(permFct, itemPermFct), attachPermMeta(entityType, (req) => req.params['id']), attachAdminData(entityType, (req) => req.params['id']));
+    router.use("/:id", attachPermBundle(permFct, itemPermFct), attachPermMeta(entityType, (req) => req.params['id'] as string), attachAdminData(entityType, (req) => req.params['id'] as string));
 
     // GET+POST /:id/guest
     router.route('/:id/guest')

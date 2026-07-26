@@ -12,7 +12,7 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
 
 // GET /help/:docName - Specific help document
 router.get('/:docName', asyncHandler(async (req: Request, res: Response) => {
-    const docName = req.params.docName;
+    const docName = req.params.docName as string;
     const data = helpController.fetchHelpDoc(docName);
     res.render('help', data);
 }));
