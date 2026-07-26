@@ -135,6 +135,7 @@ jobs:
           cp -R dist release/dist
           cp -R docs release/docs
           cp -R fonts release/fonts
+          cp package-lock.json release/package-lock.json
 
           # Create a production-safe package.json for the release artifact:
           # - remove devDependencies
