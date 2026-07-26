@@ -1,4 +1,4 @@
-import { PERM } from '../../src/modules/lib/permissions';
+import {PERM} from '../../src/modules/lib/permissions';
 
 const apiParamHandler = jest.fn();
 const requirePermissionApi = jest.fn(() => (_req: any, _res: any, next: any) => next());
@@ -12,8 +12,11 @@ jest.mock('../../src/middleware/paramHandler', () => ({
 }));
 
 jest.mock('../../src/middleware/permissionMiddleware', () => ({
+    // @ts-ignore
     attachPermBundle: (...args: any[]) => attachPermBundle(...args),
+    // @ts-ignore
     requirePermissionApi: (...args: any[]) => requirePermissionApi(...args),
+    // @ts-ignore
     requireItemPermissionApi: (...args: any[]) => requireItemPermissionApi(...args),
 }));
 
@@ -62,14 +65,16 @@ describe('packing API route permission wiring', () => {
     });
 
     it('registers item param under packingItem and enforces item-level delete permission', async () => {
-        await import('../../src/routes/api/packing');
+        await require('../../src/routes/api/packing');
 
         const itemParamCall = apiParamHandler.mock.calls.find((call) => call[0] === 'itemId');
         expect(itemParamCall?.[3]).toBe('packingItem');
 
+        // @ts-ignore
         const deleteItemCalls = requireItemPermissionApi.mock.calls.filter(([, perm]) => perm === PERM.ITEM_DELETE);
         expect(deleteItemCalls).toHaveLength(1);
         expect(deleteItemCalls[0]).toEqual([expect.any(Function), PERM.ITEM_DELETE, PERM.ITEM_DELETE]);
+        // @ts-ignore
         expect(requirePermissionApi.mock.calls.some(([, perm]) => perm === PERM.ITEM_DELETE)).toBe(false);
     });
 });

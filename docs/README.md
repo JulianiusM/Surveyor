@@ -1,29 +1,33 @@
 # Surveyor Documentation
 
-Welcome to the Surveyor documentation. This directory contains comprehensive documentation for developers, testers, and AI agents working on the Surveyor application.
+Welcome to the Surveyor documentation. This directory contains comprehensive documentation for developers, testers, and
+AI agents working on the Surveyor application.
 
 ## Documentation Structure
 
 ### 📚 For Developers
 
 #### Getting Started
+
 - **[../README.md](../README.md)** - Project overview, setup, and quick start
 - **[DEVELOPMENT.md](DEVELOPMENT.md)** - Development workflow and guidelines
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture and design
 
 #### Development Guides
+
 - **[CODING_STANDARDS.md](CODING_STANDARDS.md)** - TypeScript, code style, and best practices
 - **[DATABASE.md](DATABASE.md)** - Database entities, migrations, and patterns
 - **[FRONTEND.md](FRONTEND.md)** - Frontend architecture and modular structure
-- **[ACTIVITY_REQUIREMENTS_ALGORITHM.md](ACTIVITY_REQUIREMENTS_ALGORITHM.md)** - Shift requirement computation and coverage model
+- **[ACTIVITY_REQUIREMENTS_ALGORITHM.md](ACTIVITY_REQUIREMENTS_ALGORITHM.md)** - Shift requirement computation and
+  coverage model
 
 #### Testing
+
 - **[TESTING_GUIDE.md](TESTING_GUIDE.md)** - Complete testing guide (data-driven & keyword-driven)
-- **[TEST_REVIEW.md](TEST_REVIEW.md)** - Comprehensive test suite review
-- **[TEST_RECOMMENDATIONS.md](TEST_RECOMMENDATIONS.md)** - Test improvement recommendations
 - **[FRONTEND_TESTING.md](FRONTEND_TESTING.md)** - Frontend testing with MSW and Testing Library
 
 #### Maintenance
+
 - **[CI_CD.md](CI_CD.md)** - CI/CD pipeline and GitHub Actions
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment procedures and configuration
 - **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
@@ -37,13 +41,13 @@ Welcome to the Surveyor documentation. This directory contains comprehensive doc
 ### 👥 For End Users
 
 - **[user-guide/](user-guide/)** - End-user documentation for app features
-  - **[GETTING_STARTED.md](user-guide/GETTING_STARTED.md)** - Registration and login
-  - **[SURVEYS.md](user-guide/SURVEYS.md)** - Creating and managing surveys
-  - **[EVENTS.md](user-guide/EVENTS.md)** - Event registration and management
-  - **[PACKING_LISTS.md](user-guide/PACKING_LISTS.md)** - Managing packing lists
-  - **[ACTIVITY_PLANS.md](user-guide/ACTIVITY_PLANS.md)** - Activity planning and scheduling
-  - **[DRIVERS_LISTS.md](user-guide/DRIVERS_LISTS.md)** - Driver coordination
-  - **[DASHBOARD.md](user-guide/DASHBOARD.md)** - Using your dashboard
+    - **[GETTING_STARTED.md](user-guide/GETTING_STARTED.md)** - Registration and login
+    - **[SURVEYS.md](user-guide/SURVEYS.md)** - Creating and managing surveys
+    - **[EVENTS.md](user-guide/EVENTS.md)** - Event registration and management
+    - **[PACKING_LISTS.md](user-guide/PACKING_LISTS.md)** - Managing packing lists
+    - **[ACTIVITY_PLANS.md](user-guide/ACTIVITY_PLANS.md)** - Activity planning and scheduling
+    - **[DRIVERS_LISTS.md](user-guide/DRIVERS_LISTS.md)** - Driver coordination
+    - **[DASHBOARD.md](user-guide/DASHBOARD.md)** - Using your dashboard
 
 ### 📋 Reference
 
@@ -54,6 +58,7 @@ Welcome to the Surveyor documentation. This directory contains comprehensive doc
 ### 📦 Archive
 
 Historical and deprecated documentation:
+
 - **[archive/REFACTORING_SUMMARY.md](archive/REFACTORING_SUMMARY.md)** - Test refactoring history
 - **[archive/TESTING_INFRASTRUCTURE.md](archive/TESTING_INFRASTRUCTURE.md)** - Original testing infrastructure docs
 
@@ -92,13 +97,13 @@ When adding or updating documentation:
 
 ### Document Ownership
 
-| Document | Owner | Update Frequency |
-|----------|-------|------------------|
-| TESTING_GUIDE.md | Test team | With test changes |
-| ARCHITECTURE.md | Tech lead | With major changes |
-| User guides | Product team | With feature releases |
-| API.md | Backend team | With API changes |
-| CI_CD.md | DevOps team | With pipeline changes |
+| Document         | Owner        | Update Frequency      |
+|------------------|--------------|-----------------------|
+| TESTING_GUIDE.md | Test team    | With test changes     |
+| ARCHITECTURE.md  | Tech lead    | With major changes    |
+| User guides      | Product team | With feature releases |
+| API.md           | Backend team | With API changes      |
+| CI_CD.md         | DevOps team  | With pipeline changes |
 
 ## Getting Help
 

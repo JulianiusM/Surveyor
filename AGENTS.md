@@ -1,10 +1,13 @@
 # AI Agent Guide for Surveyor
 
-This document provides guidance for AI coding agents working on the Surveyor project. Whether you're using GitHub Copilot, Cursor, Claude, or another AI assistant, this guide will help you understand the project structure and conventions.
+This document provides guidance for AI coding agents working on the Surveyor project. Whether you're using GitHub
+Copilot, Cursor, Claude, or another AI assistant, this guide will help you understand the project structure and
+conventions.
 
 ## Project Overview
 
-Surveyor is a TypeScript-based event and collaboration management application with comprehensive testing and documentation. The project uses:
+Surveyor is a TypeScript-based event and collaboration management application with comprehensive testing and
+documentation. The project uses:
 
 - **Backend**: Express.js + TypeORM + MariaDB
 - **Frontend**: Pug templates + Bootstrap + Vanilla TypeScript
@@ -14,32 +17,31 @@ Surveyor is a TypeScript-based event and collaboration management application wi
 
 ## Quick Start for AI Agents
 
-1. **Read the documentation first**: 
-   - [README.md](README.md) - Project setup and quick start
-   - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture and design
-   - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) - Development workflow and guidelines
-   - [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) - Comprehensive testing guide
-   - [.github/copilot-instructions.md](.github/copilot-instructions.md) - GitHub Copilot-specific instructions
+1. **Read the documentation first**:
+    - [README.md](README.md) - Project setup and quick start
+    - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture and design
+    - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) - Development workflow and guidelines
+    - [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) - Comprehensive testing guide
+    - [.github/copilot-instructions.md](.github/copilot-instructions.md) - GitHub Copilot-specific instructions
 
 2. **Understand the documentation structure**:
-   - **Developer docs**: `docs/` directory - architecture, development, testing
-   - **User guides**: `docs/user-guide/` - end-user documentation
-   - **AI-specific**: `.github/copilot-instructions.md` and this file
+    - **Developer docs**: `docs/` directory - architecture, development, testing
+    - **User guides**: `docs/user-guide/` - end-user documentation
+    - **AI-specific**: `.github/copilot-instructions.md` and this file
 
 3. **Understand the testing approach**:
-   - All tests use **data-driven** and **keyword-driven** patterns
-   - Test data externalized to `tests/data/`
-   - Reusable keywords in `tests/keywords/`
-   - See [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for comprehensive patterns
-   - Test quality is excellent (see [docs/TEST_REVIEW.md](docs/TEST_REVIEW.md))
+    - All tests use **data-driven** and **keyword-driven** patterns
+    - Test data externalized to `tests/data/`
+    - Reusable keywords in `tests/keywords/`
+    - See [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for comprehensive patterns
 
 4. **Follow the conventions**:
-   - TypeScript for all code
-   - Async/await over promises
-   - Interfaces over types
-   - Always create migrations for database changes
-   - Data-driven testing for all new tests
-   - NEVER commit anything included in .gitignore, especially not generated files (like __index__.ts, *.ge.js, ...)
+    - TypeScript for all code
+    - Async/await over promises
+    - Interfaces over types
+    - Always create migrations for database changes
+    - Data-driven testing for all new tests
+    - NEVER commit anything included in .gitignore, especially not generated files (like __index__.ts, *.ge.js, ...)
 
 ## Key Directories
 
@@ -91,12 +93,12 @@ surveyor/
 ```typescript
 // ✅ Good: Async/await
 async function getUser(id: number): Promise<User> {
-    return await userRepository.findOne({ where: { id } });
+    return await userRepository.findOne({where: {id}});
 }
 
 // ❌ Bad: Promises
 function getUser(id: number): Promise<User> {
-    return userRepository.findOne({ where: { id } }).then(user => user);
+    return userRepository.findOne({where: {id}}).then(user => user);
 }
 
 // ✅ Good: Interface
@@ -128,37 +130,39 @@ type CreateUserDto = {
 }
 
 // ✅ Good: Timezone-aware dates
-@CreateDateColumn({ type: 'datetime', precision: 0, default: () => 'CURRENT_TIMESTAMP' })
-createdAt: Date;
+@CreateDateColumn({type: 'datetime', precision: 0, default: () => 'CURRENT_TIMESTAMP'})
+createdAt
+:
+Date;
 ```
 
 ### Testing
 
 ```typescript
 // ✅ Good: Data-driven test
-import { loginTestData } from '../data/controller/authData';
+import {loginTestData} from '../data/controller/authData';
 
-test.each(loginTestData)('$description', async ({ input, expected }) => {
+test.each(loginTestData)('$description', async ({input, expected}) => {
     const result = await login(input);
     expect(result).toEqual(expected);
 });
 
 // ❌ Bad: Hard-coded test data
 test('logs in user', async () => {
-    const result = await login({ username: 'test', password: 'pass123' });
+    const result = await login({username: 'test', password: 'pass123'});
     expect(result).toBeDefined();
 });
 
 // ✅ Good: Keyword-driven test
-import { loginUser, verifyDashboard } from '../keywords/e2e/authKeywords';
+import {loginUser, verifyDashboard} from '../keywords/e2e/authKeywords';
 
-test('successful login shows dashboard', async ({ page }) => {
+test('successful login shows dashboard', async ({page}) => {
     await loginUser(page, 'testuser', 'password');
     await verifyDashboard(page);
 });
 
 // ❌ Bad: Inline test actions
-test('successful login shows dashboard', async ({ page }) => {
+test('successful login shows dashboard', async ({page}) => {
     await page.goto('/users/login');
     await page.fill('input[name="username"]', 'testuser');
     await page.fill('input[name="password"]', 'password');
@@ -172,9 +176,9 @@ test('successful login shows dashboard', async ({ page }) => {
 ### Adding a New Feature
 
 1. **Plan the feature**:
-   - Identify required database changes
-   - Design the API/controller interface
-   - Plan test coverage
+    - Identify required database changes
+    - Design the API/controller interface
+    - Plan test coverage
 
 2. **Database changes** (if needed):
    ```bash
@@ -188,21 +192,21 @@ test('successful login shows dashboard', async ({ page }) => {
    ```
 
 3. **Implement the feature**:
-   - Create/update entities in `src/modules/database/entities/`
-   - Create service layer in module
-   - Create controller endpoints
-   - Add validation and error handling
+    - Create/update entities in `src/modules/database/entities/`
+    - Create service layer in module
+    - Create controller endpoints
+    - Add validation and error handling
 
 4. **Write tests** (in order):
-   - Unit tests for business logic
-   - Controller tests for orchestration
-   - Database tests for data operations
-   - E2E tests for user workflows
+    - Unit tests for business logic
+    - Controller tests for orchestration
+    - Database tests for data operations
+    - E2E tests for user workflows
 
 5. **Update documentation**:
-   - Update README.md if user-facing
-   - Update TESTING.md if new patterns introduced
-   - Add comments for complex logic
+    - Update README.md if user-facing
+    - Update TESTING.md if new patterns introduced
+    - Add comments for complex logic
 
 ### Writing Tests
 
@@ -296,6 +300,7 @@ npm run test:all
 This one command sets up everything and runs all tests (Jest + E2E). Perfect for CI or comprehensive testing.
 
 **Options:**
+
 - `npm run test:all -- --skip-deps` - Skip npm install
 - `npm run test:all -- --skip-build` - Skip building
 - `npm run test:all -- --skip-e2e` - Skip E2E tests
@@ -316,10 +321,12 @@ npm run e2e
 ### Database
 
 Tests use two databases:
+
 - `surveyor_test` - Unit and integration tests
 - `surveyor_e2e` - E2E tests (name must contain 'e2e')
 
 Configuration:
+
 - `tests/.env.test` - Unit/integration test config
 - `.env.e2e` - E2E test config
 
@@ -328,6 +335,7 @@ The `test:all` script automatically sets up and configures both databases.
 ## CI/CD
 
 The project uses GitHub Actions for CI:
+
 - Runs on push/PR to main branches
 - Sets up MariaDB 10.11
 - Runs all tests (Jest + Playwright)
@@ -357,6 +365,7 @@ See `.github/workflows/ci.yml` for details.
 ## Common Pitfalls
 
 ❌ **Don't**:
+
 - Use `synchronize: true` in database config
 - Hard-code test data in test files
 - Duplicate test actions instead of using keywords
@@ -367,6 +376,7 @@ See `.github/workflows/ci.yml` for details.
 - Use `any` type excessively
 
 ✅ **Do**:
+
 - Create migrations for schema changes
 - Externalize test data to data files
 - Use keywords for reusable test actions
@@ -386,10 +396,13 @@ See `.github/workflows/ci.yml` for details.
 ## Agent-Specific Notes
 
 ### GitHub Copilot
+
 See [.github/copilot-instructions.md](.github/copilot-instructions.md) for Copilot-specific instructions and patterns.
 
 ### Other AI Agents
+
 This file serves as the primary guide. Read it along with:
+
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system design
 - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for development workflow
 - [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for testing patterns
@@ -400,6 +413,7 @@ This file serves as the primary guide. Read it along with:
 Surveyor has comprehensive, well-organized documentation:
 
 ### For Developers
+
 - **[docs/README.md](docs/README.md)** - Documentation navigation
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture
 - **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** - Development workflow
@@ -408,10 +422,12 @@ Surveyor has comprehensive, well-organized documentation:
 - **[docs/FRONTEND_TESTING.md](docs/FRONTEND_TESTING.md)** - Frontend testing
 
 ### For End Users
+
 - **[docs/user-guide/](docs/user-guide/)** - Complete user documentation
-  - Getting started, dashboard, surveys, events, packing, activities, drivers
+    - Getting started, dashboard, surveys, events, packing, activities, drivers
 
 ### For AI Agents
+
 - **This file** - General AI agent guidance
 - **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - Copilot-specific
 - **[.github/copilot/](..github/copilot/)** - Modular Copilot guidelines

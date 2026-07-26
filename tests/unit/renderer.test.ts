@@ -3,9 +3,9 @@ export {}; // ensure this file is a module to avoid global var collisions
 /**
  * Unit tests for the page/JSON response wrapper - Data Driven
  */
-import { messageRenderingData, pageRenderingData, jsonResponseData, rawResponseData } from '../data/unit/rendererData';
+import {jsonResponseData, messageRenderingData, pageRenderingData, rawResponseData} from '../data/unit/rendererData';
 
-const importModule = async () => (await import('../../src/modules/renderer')).default;
+const importModule = async () => (await require('../../src/modules/renderer')).default;
 
 type MockRes = {
     render: jest.Mock<any, any>,
@@ -20,7 +20,7 @@ const makeRes = (): MockRes => ({
 });
 
 describe('message rendering helpers - Data Driven', () => {
-    test.each(messageRenderingData)('$description', async ({ method, args, expected }) => {
+    test.each(messageRenderingData)('$description', async ({method, args, expected}) => {
         const mod = await importModule();
         const res = makeRes();
         (mod as any)[method](res as any, ...args);
@@ -29,7 +29,7 @@ describe('message rendering helpers - Data Driven', () => {
 });
 
 describe('page rendering helpers - Data Driven', () => {
-    test.each(pageRenderingData)('$description', async ({ method, args, expected }) => {
+    test.each(pageRenderingData)('$description', async ({method, args, expected}) => {
         const mod = await importModule();
         const res = makeRes();
         (mod as any)[method](res as any, ...args);
@@ -47,18 +47,18 @@ describe('JSON response helpers - Data Driven', () => {
         expect(parsed).toEqual(obj);
     }
 
-    test.each(jsonResponseData)('$description', async ({ method, args, expected }) => {
+    test.each(jsonResponseData)('$description', async ({method, args, expected}) => {
         const mod = await importModule();
         const res = makeRes();
         (mod as any)[method](res as any, ...args);
         expectJson(res, expected);
     });
 
-    test.each(rawResponseData)('$description', async ({ method, args, expectedJson, expectedRaw, expectsHeader }) => {
+    test.each(rawResponseData)('$description', async ({method, args, expectedJson, expectedRaw, expectsHeader}) => {
         const mod = await importModule();
         const res = makeRes();
         (mod as any)[method](res as any, ...args);
-        
+
         if (expectsHeader) {
             expect(res.header).toHaveBeenCalledWith('Content-Type', 'application/json');
             expect(res.end).toHaveBeenCalledTimes(1);

@@ -43,7 +43,7 @@ async function loadModule() {
         default: {randomBytes: rb},
         randomBytes: rb,
     }));
-    return await import('../../src/modules/settings');
+    return await require('../../src/modules/settings');
 }
 
 describe('settings', () => {
@@ -53,8 +53,16 @@ describe('settings', () => {
     });
 
     test(testData.bootstrapTestData.description, async () => {
-        const {file, expectInitializedBefore, expectInitializedAfter, expectSessionSecretPrefix, expectFileExists, expectConsoleLogCalled} = testData.bootstrapTestData;
-        const spyWriteLog = jest.spyOn(console, 'log').mockImplementation(() => {});
+        const {
+            file,
+            expectInitializedBefore,
+            expectInitializedAfter,
+            expectSessionSecretPrefix,
+            expectFileExists,
+            expectConsoleLogCalled
+        } = testData.bootstrapTestData;
+        const spyWriteLog = jest.spyOn(console, 'log').mockImplementation(() => {
+        });
         const {SettingsStore} = await loadModule();
         const store = new SettingsStore();
 
@@ -77,7 +85,8 @@ describe('settings', () => {
 
     test(testData.parseCSVTestData.description, async () => {
         const {file, csvContent, expected, expectConsoleWarnCalled} = testData.parseCSVTestData;
-        const spyWarn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        const spyWarn = jest.spyOn(console, 'warn').mockImplementation(() => {
+        });
         const {SettingsStore} = await loadModule();
         const store = new SettingsStore();
         (store.value as any).file = file;
@@ -88,7 +97,7 @@ describe('settings', () => {
 
         const s = store.value as Settings;
         Object.keys(expected).forEach(key => {
-            expect(s[key]).toBe(expected[key]);
+            expect((s as any)[key]).toBe((expected as any)[key]);
         });
 
         if (expectConsoleWarnCalled) {

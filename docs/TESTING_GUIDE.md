@@ -1,6 +1,7 @@
 # Testing Guide
 
-This document provides a comprehensive guide to testing in the Surveyor application, covering our data-driven and keyword-driven testing approaches.
+This document provides a comprehensive guide to testing in the Surveyor application, covering our data-driven and
+keyword-driven testing approaches.
 
 ## Table of Contents
 
@@ -26,30 +27,32 @@ The Surveyor test suite uses a combination of data-driven and keyword-driven tes
 ### Data-Driven Testing
 
 Data-driven testing separates test data from test logic, enabling:
+
 - Multiple test cases from a single test function
 - Easy addition of new test scenarios without code changes
 - Clear test data management and organization
 
 **Example:**
+
 ```typescript
 // Test data (in tests/data/controller/surveyData.ts)
 export const preprocessCreateData = [
     {
         description: 'normalizes combos and trims strings',
-        input: { title: '  My Survey  ', description: '', combinations: [...] },
-        expected: { title: 'My Survey', description: null, combinations: [...] },
+        input: {title: '  My Survey  ', description: '', combinations: [...]},
+        expected: {title: 'My Survey', description: null, combinations: [...]},
     },
     {
         description: 'handles single combination',
-        input: { title: 'Single', description: 'Test', combinations: [...] },
-        expected: { title: 'Single', description: 'Test', combinations: [...] },
+        input: {title: 'Single', description: 'Test', combinations: [...]},
+        expected: {title: 'Single', description: 'Test', combinations: [...]},
     },
 ];
 
 // Test (in tests/controller/survey.controller.test.ts)
 test.each(preprocessCreateData)(
     '$description',
-    ({ input, expected }) => {
+    ({input, expected}) => {
         const result = preprocessCreate(input);
         expect(result).toEqual(expected);
     }
@@ -59,11 +62,13 @@ test.each(preprocessCreateData)(
 ### Keyword-Driven Testing
 
 Keyword-driven testing uses reusable, high-level test actions (keywords) to compose tests:
+
 - Abstract implementation details behind meaningful actions
 - Enable test code reuse across multiple test files
 - Make tests read like business requirements
 
 **Example:**
+
 ```typescript
 // Keywords (in tests/keywords/middleware/middlewareKeywords.ts)
 export async function expectMiddlewareSuccess(
@@ -71,7 +76,7 @@ export async function expectMiddlewareSuccess(
     session: any,
     resource: any
 ): Promise<void> {
-    const app = buildMiddlewareApp(middleware, { session, resource });
+    const app = buildMiddlewareApp(middleware, {session, resource});
     const response = await makeGetRequest(app);
     verifyMiddlewareAllows(response);
 }
@@ -80,8 +85,8 @@ export async function expectMiddlewareSuccess(
 test('allows when user owns resource', async () => {
     await expectMiddlewareSuccess(
         requireOwner(),
-        { user: { id: 1 } },
-        { ownerId: 1 }
+        {user: {id: 1}},
+        {ownerId: 1}
     );
 });
 ```
@@ -129,8 +134,8 @@ Test data files export arrays of test cases:
 export const preprocessCreateData = [
     {
         description: 'test case description',
-        input: { /* input data */ },
-        expected: { /* expected output */ },
+        input: { /* input data */},
+        expected: { /* expected output */},
     },
     // ... more test cases
 ];
@@ -138,7 +143,7 @@ export const preprocessCreateData = [
 export const preprocessCreateErrorData = [
     {
         description: 'error case description',
-        input: { /* input that should cause error */ },
+        input: { /* input that should cause error */},
         errorType: 'ValidationError',
         errorMessage: /pattern/i,
     },
@@ -170,15 +175,17 @@ export function verifyMockCall(mockFn: jest.Mock, ...args: any[]): void {
 Unit tests focus on testing individual functions in isolation:
 
 1. **Import test data and keywords**:
+
 ```typescript
-import { utilTestData } from '../data/unit/utilData';
-import { verifyResult } from '../keywords/common/controllerKeywords';
+import {utilTestData} from '../data/unit/utilData';
+import {verifyResult} from '../keywords/common/controllerKeywords';
 ```
 
 2. **Use data-driven approach**:
+
 ```typescript
 describe('toLocalISODate', () => {
-    test.each(toLocalISODateData)('$description', ({ input, expected }) => {
+    test.each(toLocalISODateData)('$description', ({input, expected}) => {
         const result = toLocalISODate(input);
         verifyResult(result, expected);
     });
@@ -190,17 +197,19 @@ describe('toLocalISODate', () => {
 Controller tests verify business logic with mocked services:
 
 1. **Setup mocks using keywords**:
+
 ```typescript
-import { setupMock, verifyMockCall } from '../keywords/common/controllerKeywords';
+import {setupMock, verifyMockCall} from '../keywords/common/controllerKeywords';
 
 setupMock(surveyService.createSurveyTx as jest.Mock, 'survey-123');
 ```
 
 2. **Use data-driven tests**:
+
 ```typescript
 test.each(createEntityData)(
     '$description',
-    async ({ userId, payload, expectedServiceCall, mockReturnValue }) => {
+    async ({userId, payload, expectedServiceCall, mockReturnValue}) => {
         setupMock(surveyService.createSurveyTx as jest.Mock, mockReturnValue);
         const result = await createEntity(userId, payload);
         verifyResult(result, mockReturnValue);
@@ -214,6 +223,7 @@ test.each(createEntityData)(
 Middleware tests verify request/response handling:
 
 1. **Use middleware keywords**:
+
 ```typescript
 import {
     expectMiddlewareSuccess,
@@ -222,10 +232,11 @@ import {
 ```
 
 2. **Test with data**:
+
 ```typescript
 test.each(requireOwnerSuccessData)(
     '$description',
-    async ({ session, resource, additional }) => {
+    async ({session, resource, additional}) => {
         await expectMiddlewareSuccess(requireOwner(), session, resource, additional);
     }
 );
@@ -236,6 +247,7 @@ test.each(requireOwnerSuccessData)(
 Database integration tests verify database operations:
 
 1. **Use database keywords**:
+
 ```typescript
 import {
     createTestEntity,
@@ -245,19 +257,22 @@ import {
 ```
 
 2. **Test with real database**:
+
 ```typescript
 test('creates entity with valid data', async () => {
-    const id = await createTestEntity({ title: 'Test' });
-    await verifyEntityExists(id, { title: 'Test' });
+    const id = await createTestEntity({title: 'Test'});
+    await verifyEntityExists(id, {title: 'Test'});
 });
 ```
 
 3. **UUID Handling in Tests**:
-Database entities with UUID primary keys require valid UUIDs. **Never use simple strings** like `'item-1'` or `'test-id'` in test data.
+   Database entities with UUID primary keys require valid UUIDs. **Never use simple strings** like `'item-1'` or
+   `'test-id'` in test data.
 
 **Correct approach** - Generate UUIDs at runtime:
+
 ```typescript
-import { v4 as uuidv4 } from 'uuid';
+import {v4 as uuidv4} from 'uuid';
 
 test.each(testData)('$description', async (testCase) => {
     // Generate UUIDs for items at runtime
@@ -265,16 +280,16 @@ test.each(testData)('$description', async (testCase) => {
     testCase.items.forEach(item => {
         itemIdMap.set(item.id, uuidv4());
     });
-    
+
     // Map items to use real UUIDs
     const items = testCase.items.map(item => ({
         ...item,
         id: itemIdMap.get(item.id)!
     }));
-    
+
     // Use mapped items in service calls
     await createItems(listId, items);
-    
+
     // Map expected results using itemIdMap
     const expectedIds = testCase.expectedIds.map(id => itemIdMap.get(id)!);
     expect(actualIds).toEqual(expectedIds);
@@ -282,27 +297,30 @@ test.each(testData)('$description', async (testCase) => {
 ```
 
 **Why this pattern?**
+
 - Entities use `@PrimaryGeneratedColumn("uuid")` which requires valid UUID format
 - Test data should use readable IDs ('item-1', 'pack-item-1') for clarity
 - Runtime mapping provides both readability and database compatibility
 
 ### E2E Tests
 
-E2E tests verify complete user workflows using Playwright. They follow the same data-driven and keyword-driven patterns as other tests.
+E2E tests verify complete user workflows using Playwright. They follow the same data-driven and keyword-driven patterns
+as other tests.
 
 1. **Use test data and keywords**:
+
 ```typescript
 // Import test data with all constants
-import { surveyCreationData } from '../data/e2e/surveyData';
-import { testCredentials, authUrls, formFields, successMessages, selectors } from '../data/e2e/authData';
+import {surveyCreationData} from '../data/e2e/surveyData';
+import {testCredentials, authUrls, formFields, successMessages, selectors} from '../data/e2e/authData';
 
 // Import keywords
-import { loginUser } from '../keywords/e2e/authKeywords';
-import { createSurvey, generateEntityTitle } from '../keywords/e2e/entityKeywords';
+import {loginUser} from '../keywords/e2e/authKeywords';
+import {createSurvey, generateEntityTitle} from '../keywords/e2e/entityKeywords';
 
 // Data-driven test using for loop (Playwright pattern)
 for (const data of surveyCreationData) {
-    test(data.description, async ({ page }) => {
+    test(data.description, async ({page}) => {
         await loginUser(page, testCredentials.username, testCredentials.password);
         const surveyTitle = generateEntityTitle(data.title);
         await page.goto(data.createUrl);
@@ -313,6 +331,7 @@ for (const data of surveyCreationData) {
 ```
 
 2. **Test data structure with all constants externalized**:
+
 ```typescript
 // Common constants (authData.ts)
 export const authUrls = {
@@ -351,6 +370,7 @@ export const surveyCreationData = [
 ```
 
 3. **Consolidated success/failure data**:
+
 ```typescript
 // Single array with flag indicating expected outcome
 export const loginData = [
@@ -375,10 +395,10 @@ export const loginData = [
 
 // Test uses conditional logic based on data
 for (const data of loginData) {
-    test(data.description, async ({ page }) => {
+    test(data.description, async ({page}) => {
         await page.goto(data.url);
         await fillLoginForm(page, data.username, data.password);
-        
+
         if (data.shouldSucceed) {
             await expect(page).toHaveURL(data.expectedUrl);
         } else {
@@ -389,6 +409,7 @@ for (const data of loginData) {
 ```
 
 4. **Use keywords for common operations**:
+
 ```typescript
 // Authentication keyword
 await loginUser(page, username, password);
@@ -408,6 +429,7 @@ await verifyFieldRequired(page, fieldName);
 ```
 
 5. **E2E test organization**:
+
 - Test files: `tests/e2e/*.test.ts`
 - Test data: `tests/data/e2e/*.ts` (includes all URLs, selectors, messages, field names)
 - Test keywords: `tests/keywords/e2e/*.ts`
@@ -417,27 +439,32 @@ await verifyFieldRequired(page, fieldName);
 ## Running Tests
 
 ### All Tests
+
 ```bash
 npm test
 ```
 
 ### Specific Test Suite
+
 ```bash
 npm test -- tests/unit/util.test.ts
 npm test -- tests/controller/survey.controller.test.ts
 ```
 
 ### Watch Mode
+
 ```bash
 npm run test:watch
 ```
 
 ### With Coverage
+
 ```bash
 npm test -- --coverage
 ```
 
 ### E2E Tests
+
 ```bash
 npm run e2e
 npm run e2e:headed  # With browser visible
@@ -473,12 +500,14 @@ npm run e2e:ui      # With Playwright UI
 ### Naming Conventions
 
 **Test Data**:
+
 - `*Data.ts` - test data files
 - `*SuccessData` - success scenario test cases
 - `*FailureData` - failure scenario test cases
 - `*ErrorData` - error condition test cases
 
 **Keywords**:
+
 - `*Keywords.ts` - keyword files
 - `create*` - create entities or data
 - `verify*` - verify conditions or state
@@ -487,6 +516,7 @@ npm run e2e:ui      # With Playwright UI
 - `cleanup*` - cleanup test data
 
 **Test Files**:
+
 - `*.test.ts` - test files
 - `*.refactored.test.ts` - temporary refactored version (before replacement)
 - `*.backup` - backup of original test (kept for reference)
@@ -528,11 +558,11 @@ export const toLocalISODateData = [
 ];
 
 // tests/unit/util.test.ts
-import { toLocalISODateData } from '../data/unit/utilData';
+import {toLocalISODateData} from '../data/unit/utilData';
 
 describe('toLocalISODate', () => {
-    test.each(toLocalISODateData)('$description', async ({ input, expected }) => {
-        const { toLocalISODate } = await importWithMocks();
+    test.each(toLocalISODateData)('$description', async ({input, expected}) => {
+        const {toLocalISODate} = await importWithMocks();
         const result = toLocalISODate(input);
         expect(result).toBe(expected);
     });
@@ -547,19 +577,19 @@ export const createEntityData = [
     {
         description: 'creates survey with basic data',
         userId: 42,
-        payload: { title: 'Test', description: 'Desc', combinations: [...] },
-        expectedServiceCall: { userId: 42, title: 'Test', ... },
+        payload: {title: 'Test', description: 'Desc', combinations: [...]},
+        expectedServiceCall: {userId: 42, title: 'Test', ...},
         mockReturnValue: 'survey-123',
     },
 ];
 
 // tests/controller/survey.controller.test.ts
-import { createEntityData } from '../data/controller/surveyData';
-import { setupMock, verifyMockCall, verifyResult } from '../keywords/common/controllerKeywords';
+import {createEntityData} from '../data/controller/surveyData';
+import {setupMock, verifyMockCall, verifyResult} from '../keywords/common/controllerKeywords';
 
 test.each(createEntityData)(
     '$description',
-    async ({ userId, payload, expectedServiceCall, mockReturnValue }) => {
+    async ({userId, payload, expectedServiceCall, mockReturnValue}) => {
         setupMock(surveyService.createSurveyTx as jest.Mock, mockReturnValue);
         const result = await createEntity(userId, payload);
         verifyResult(result, mockReturnValue);
@@ -567,108 +597,6 @@ test.each(createEntityData)(
     }
 );
 ```
-
-## Frontend Testing
-
-### Overview
-
-Frontend tests run **without a backend** and use MSW (Mock Service Worker) to mock HTTP requests. They provide fast, reliable testing of client-side code.
-
-### Test Types
-
-**Unit Tests** (`tests/client/unit/`):
-- Test pure JavaScript/TypeScript logic
-- No DOM or HTTP dependencies
-- Examples: formatting utils, validation logic, permission checks
-
-**UI Tests** (`tests/client/ui/`):
-- Test DOM behavior and user interactions
-- Use Testing Library for accessibility-oriented queries
-- Examples: form validation UI, interactive components
-
-**Flow Tests** (`tests/client/flows/`):
-- Test complete user workflows with mocked APIs
-- Multi-step interactions
-- Examples: registration flows, form submissions
-
-### Running Frontend Tests
-
-```bash
-# All frontend tests
-npm run test:client
-
-# Specific test suites
-npm run test:client:unit
-npm run test:client:ui
-npm run test:client:flows
-
-# With coverage
-npm run test:client:coverage
-```
-
-### MSW (Mock Service Worker)
-
-MSW intercepts HTTP requests and provides mocked responses:
-
-```typescript
-// Using default handlers
-import { post } from '../../../src/public/js/core/http';
-
-test('registers for event', async () => {
-    const result = await post('/api/event/123/register', { userId: 1 });
-    expect(result.status).toBe('success');
-});
-
-// Overriding handlers for specific tests
-import { server } from '../msw/server';
-import { http, HttpResponse } from 'msw';
-
-test('handles error', async () => {
-    server.use(
-        http.post('/api/event/123/register', () => {
-            return HttpResponse.json({
-                status: 'error',
-                message: 'Event is full',
-            }, { status: 409 });
-        })
-    );
-    
-    await expect(
-        post('/api/event/123/register', { userId: 1 })
-    ).rejects.toThrow('Event is full');
-});
-```
-
-### Testing Library
-
-Use accessibility-oriented queries:
-
-```typescript
-import { screen } from '@testing-library/dom';
-import userEvent from '@testing-library/user-event';
-
-test('validates password', async () => {
-    document.body.innerHTML = `
-        <label for="password">Password</label>
-        <input id="password" type="password" />
-    `;
-    
-    const passwordInput = screen.getByLabelText('Password');
-    await userEvent.type(passwordInput, 'short');
-    
-    expect(passwordInput).toHaveClass('is-invalid');
-});
-```
-
-### Frontend Testing Best Practices
-
-1. **Test behavior, not implementation** - Focus on what users see and do
-2. **Keep tests independent** - Each test should set up its own state
-3. **Use descriptive names** - Describe what and why
-4. **Test edge cases** - Empty inputs, validation errors, etc.
-5. **Mock only external dependencies** - Don't mock internal functions
-
-For detailed frontend testing documentation, see [tests/client/README.md](tests/client/README.md).
 
 ## Contributing
 
