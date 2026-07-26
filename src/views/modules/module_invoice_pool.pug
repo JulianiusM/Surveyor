@@ -313,6 +313,8 @@ mixin poolStats(pool)
                             |  Equally among participants
                         else if pool.distributionMethod === "TIME_BASED"
                             |  Days attended
+                        else if pool.distributionMethod === "NIGHTS"
+                            |  Nights stayed
             .col-sm-6
                 ul.list-unstyled.mb-0.small
                     li.mb-1
@@ -453,6 +455,8 @@ mixin poolManagementSection(ev, pool, participants)
                 .row.mt-2
                     .col-md-4
                         +poolStats(pool)
+                        .mt-3
+                            +poolBaseSettingsForm(ev, pool)
                     .col-md-8
                         +poolAssignmentsForm(ev, pool, participants)
                         if pool.status === 'CLOSED'
@@ -475,7 +479,7 @@ mixin poolManagementSection(ev, pool, participants)
                             strong  Manually applied surcharges might reduce the open invoice amount to be distributed.
                             |  Only surcharges marked to offset the pool total will reduce the shared cost; others are added on top of the payer's share.
                         p.text-secondary.small.mb-2
-                            strong  Check and adjust the participant attendance periods before closing the pool when using the "Days Attended" distribution mode.
+                            strong  Check and adjust the participant attendance periods before closing the pool when using the "Days Attended" or "Nights stayed" distribution mode.
                             |  This way you ensure a fair distribution of the costs among all participants-
                         .d-flex.justify-content-between.align-items-end.flex-wrap.gap-2.mb-3
                             button.btn.btn-sm.btn-warning.pool-close(type="button" data-id=pool.id)
@@ -505,6 +509,38 @@ mixin invoicePoolManageTab(ev, pools, participants)
     else
         p.text-secondary.mb-0 No invoice pools created yet.
 
+//- Shared distribution selector to keep create/edit forms in sync
+mixin poolDistributionSelect(name, selected, id = null)
+    select.form-select.text-bg-dark(name=name id=id required)
+        option(value="TIME_BASED" selected=selected === 'TIME_BASED') Distribute among days attended
+        option(value="NIGHTS" selected=selected === 'NIGHTS') Distribute among nights stayed
+        option(value="EQUAL" selected=selected === 'EQUAL') Distribute among participants
+
+//- Shared base settings fields used for pool creation and later edits
+mixin poolBaseSettingsFields(pool = {})
+    - const selectedDistribution = pool.distributionMethod || pool.distribution || 'TIME_BASED';
+    .row.g-3
+        .col-md-6
+            label.form-label(for=pool.id ? `poolDistribution-${pool.id}` : 'poolDistribution') Share distribution mode
+            +poolDistributionSelect('distribution', selectedDistribution, pool.id ? `poolDistribution-${pool.id}` : 'poolDistribution')
+        .col-md-6
+            label.form-label(for=pool.id ? `poolDescription-${pool.id}` : 'poolDescription') Description
+            input.form-control.text-bg-dark(
+                type="text"
+                name="description"
+                id=pool.id ? `poolDescription-${pool.id}` : 'poolDescription'
+                value=pool.description || ''
+            )
+
+//- Compact editable form for the base pool parameters
+mixin poolBaseSettingsForm(ev, pool)
+    form.pool-base-form(data-api=`/api/event/${ev.id}/invoice-pools/${pool.id}` data-pool-status=pool.status)
+        +poolBaseSettingsFields(pool)
+        .d-flex.justify-content-end.mt-2
+            button.btn.btn-outline-light.btn-sm(type="submit")
+                i.bi.bi-save.me-1
+                | Save base settings
+
 //- Pool creation tab content for the admin dashboard
 mixin invoicePoolCreateModal(ev, participants)
     .modal.fade#poolCreateModal(tabindex="-1" aria-labelledby="poolCreateLabel" aria-hidden="true")
@@ -516,18 +552,12 @@ mixin invoicePoolCreateModal(ev, participants)
                 form#poolCreateForm(data-api=`/api/event/${ev.id}/invoice-pools`)
                     .modal-body
                         .row.g-3
-                            .col-md-6
-                                label.form-label(for="poolDistribution") Share distribution mode
-                                select#poolDistribution.form-select.text-bg-dark(name="distribution" required)
-                                    option(value="TIME_BASED") Distribute among days attended
-                                    option(value="EQUAL") Distribute among participants
-                        .row.g-3
-                            .col-md-4
+                            .col-md-12
                                 label.form-label(for="poolName") Pool name
                                 input#poolName.form-control.text-bg-dark(type="text" name="name" required maxlength="255")
-                            .col-md-4
-                                label.form-label(for="poolDescription") Description
-                                input#poolDescription.form-control.text-bg-dark(type="text" name="description")
+                        .row.g-3.mt-0
+                            .col-md-8
+                                +poolBaseSettingsFields({})
                             .col-md-4
                                 label.form-label.text-secondary Allocation
                                 .form-check

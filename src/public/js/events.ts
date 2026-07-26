@@ -80,7 +80,7 @@ export function deadlineUpdater(): void {
         });
 
         const t = Date.parse(date.toISOString());
-        if (!isNaN(t)) {
+        if (!Number.isNaN(t)) {
             const _deadlineCnt = deadlineCnt;
 
             function tick() {
@@ -99,6 +99,7 @@ export function deadlineUpdater(): void {
         }
     } catch (e) {
         // Silently fail if deadline elements not present
+        console.debug(e);
     }
 }
 
@@ -282,6 +283,17 @@ function requireManageAssignments(action: string): void {
 }
 
 /**
+ * Serialize the editable invoice pool base parameters
+ */
+function serializePoolBaseSettings(form: HTMLFormElement): Record<string, FormDataEntryValue> {
+    const formData = new FormData(form);
+    return {
+        description: formData.get('description') || '',
+        distribution: formData.get('distribution') || '',
+    };
+}
+
+/**
  * Initialize invoice pool administration
  */
 export function initInvoiceAdmin(): void {
@@ -321,6 +333,26 @@ export function initInvoiceAdmin(): void {
         syncDisabled();
     }
 
+    // Pool base settings handler
+    document.addEventListener('submit', async (e: Event) => {
+        const target = e.target as HTMLElement;
+        if (target.classList.contains('pool-base-form')) {
+            e.preventDefault();
+            const form = target as HTMLFormElement;
+            const api = form.dataset.api;
+            if (!api) return;
+            try {
+                requireManageAssignments('update invoice pool settings');
+                await post(api, serializePoolBaseSettings(form));
+                showInlineAlert('success', 'Pool settings updated');
+                reloadAfterDelay(RELOAD_DELAY_MS);
+            } catch (err) {
+                const message = err instanceof Error ? err.message : 'Unable to update the pool settings.';
+                showInlineAlert('error', message);
+            }
+        }
+    });
+
     // Invoice action handlers
     document.addEventListener('click', async (e: Event) => {
         const target = e.target as HTMLElement;
@@ -355,40 +387,7 @@ export function initInvoiceAdmin(): void {
                 showInlineAlert('success', 'Pool closed with adjustments');
                 return reloadAfterDelay(RELOAD_DELAY_MS);
             }
-            if (target.classList.contains('pool-recalculate')) {
-                requireManageAssignments('recalculate invoice pools');
-                if (!confirm("WARNING: This will delete all existing shares and recalculate them based on current pool settings. All participants will be notified again. This action cannot be undone. Are you sure you want to proceed?")) return;
-                const poolRoot = target.closest('.invoice-pool');
-                const payload: Record<string, unknown> = {};
-
-                const assignmentForm = poolRoot?.querySelector('form.pool-assignment') as HTMLFormElement | null;
-                if (assignmentForm) {
-                    const formData = new FormData(assignmentForm);
-                    const assignments: Record<string, FormDataEntryValue | FormDataEntryValue[]> = Object.fromEntries(formData.entries());
-                    assignments.registrations = formData.getAll('registrations');
-                    assignments.exemptions = formData.getAll('exemptions');
-                    const subtract = formData.get('subtractPersonalInvoices') === "on"
-                    assignments.subtractPersonalInvoices = subtract ? 'on' : '';
-                    payload.assignments = assignments;
-                }
-
-                const surchargeForm = poolRoot?.querySelector('form.surcharge-form') as HTMLFormElement | null;
-                if (surchargeForm) {
-                    const formData = new FormData(surchargeForm);
-                    const registrationId = formData.get('registrationId');
-                    const amount = formData.get('amount');
-                    const note = formData.get('note');
-                    const subtract = formData.get('subtractFromPool') === "on"
-                    formData.set('subtractFromPool', subtract ? 'on' : '');
-                    if (registrationId && amount && note) {
-                        payload.surcharge = Object.fromEntries(formData.entries());
-                    }
-                }
-
-                await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.id}/recalculate`, payload);
-                showInlineAlert('success', 'Pool recalculated successfully');
-                return reloadAfterDelay(RELOAD_DELAY_MS);
-            }
+            checkRecalculatePool(target);
             if (target.classList.contains('surcharge-remove')) {
                 requireManageAssignments('remove surcharges');
                 await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/surcharges/${target.dataset.id}/delete`);
@@ -404,37 +403,17 @@ export function initInvoiceAdmin(): void {
     // Form submission handlers
     document.addEventListener('submit', async (e: Event) => {
         const target = e.target as HTMLElement;
-        if (target.classList.contains('pool-assignment')) {
-            e.preventDefault();
-            const poolStatus = (target as HTMLElement).getAttribute('data-pool-status');
-            if (poolStatus === 'CLOSED') {
-                showInlineAlert('error', 'Pool is closed. Use the "Recalculate pool" button to apply changes.');
-                return;
-            }
-            const api = (target as HTMLElement).getAttribute('data-api')!;
-            const formData = new FormData(target as HTMLFormElement);
-            const payload: {
-                [k: string]: FormDataEntryValue | FormDataEntryValue[]
-            } = Object.fromEntries(formData.entries());
-            payload.registrations = formData.getAll('registrations');
-            try {
-                requireManageAssignments('update pool assignments');
-                await post(api, payload);
-                showInlineAlert('success', 'Assignments updated');
-                reloadAfterDelay(RELOAD_DELAY_MS);
-            } catch (err) {
-                const message = err instanceof Error ? err.message : 'Unable to update assignments.';
-                showInlineAlert('error', message);
-            }
+        if (await checkPoolAssigment(e)) {
+            return;
         }
         if (target.classList.contains('surcharge-form')) {
             e.preventDefault();
-            const poolStatus = (target as HTMLElement).getAttribute('data-pool-status');
+            const poolStatus = target.dataset.poolStatus;
             if (poolStatus === 'CLOSED') {
                 showInlineAlert('error', 'Pool is closed. Use the "Recalculate pool" button to apply changes.');
                 return;
             }
-            const api = (target as HTMLElement).getAttribute('data-api')!;
+            const api = target.dataset.api!;
             const formData = new FormData(target as HTMLFormElement);
             const subtract = formData.get('subtractFromPool') === "on"
             formData.set('subtractFromPool', subtract ? 'on' : '');
@@ -458,24 +437,24 @@ export function initInvoiceAdmin(): void {
             const form = target.closest('.pool-assignment') as HTMLFormElement | null;
             if (!form) return;
             const assignAll = form.querySelector('input[name="assignAll"]') as HTMLInputElement | null;
-            const isDefault = form.querySelector('input[name="isDefault"]') as HTMLInputElement | null;
+            //const isDefault = form.querySelector('input[name="isDefault"]') as HTMLInputElement | null;
             const registrations = Array.from(form.querySelectorAll<HTMLInputElement>('input[name="registrations"]'));
             const disable = !!(assignAll?.checked);
             registrations.forEach((input) => {
                 if (disable) {
                     // Store original state before modifying (only if not already stored)
-                    if (!input.hasAttribute('data-original-checked')) {
-                        input.setAttribute('data-original-checked', String(input.checked));
+                    if (!Object.hasOwn(input.dataset, 'originalChecked')) {
+                        input.dataset.originalChecked = String(input.checked);
                     }
                     input.disabled = true;
                     input.checked = true;
                 } else {
                     // Restore original state when re-enabling
                     input.disabled = false;
-                    if (input.hasAttribute('data-original-checked')) {
-                        const originalState = input.getAttribute('data-original-checked') ?? 'false';
+                    if (Object.hasOwn(input.dataset, 'originalChecked')) {
+                        const originalState = input.dataset.originalChecked ?? 'false';
                         input.checked = originalState === 'true';
-                        input.removeAttribute('data-original-checked');
+                        delete input.dataset.originalChecked;
                     }
                 }
             });
@@ -489,7 +468,7 @@ export function initInvoiceAdmin(): void {
             const list = target.closest('.pool-assignment')?.querySelector('.assignments-list');
             if (!list) return;
             list.querySelectorAll<HTMLElement>('[data-search-text]').forEach((row) => {
-                const text = (row.getAttribute('data-search-text') || '').toLowerCase();
+                const text = (row.dataset.searchText || '').toLowerCase();
                 row.classList.toggle('d-none', !!term && !text.includes(term));
             });
         }
@@ -514,6 +493,75 @@ export function initInvoiceAdmin(): void {
     });
 }
 
+async function checkRecalculatePool(target: HTMLElement) {
+    if (target.classList.contains('pool-recalculate')) {
+        requireManageAssignments('recalculate invoice pools');
+        if (!confirm("WARNING: This will delete all existing shares and recalculate them based on current pool settings. All participants will be notified again. This action cannot be undone. Are you sure you want to proceed?")) return;
+        const poolRoot = target.closest('.invoice-pool');
+        const payload: Record<string, unknown> = {};
+
+        const assignmentForm = poolRoot?.querySelector('form.pool-assignment') as HTMLFormElement | null;
+        if (assignmentForm) {
+            const formData = new FormData(assignmentForm);
+            const assignments: Record<string, FormDataEntryValue | FormDataEntryValue[]> = Object.fromEntries(formData.entries());
+            assignments.registrations = formData.getAll('registrations');
+            assignments.exemptions = formData.getAll('exemptions');
+            const subtract = formData.get('subtractPersonalInvoices') === "on"
+            assignments.subtractPersonalInvoices = subtract ? 'on' : '';
+            payload.assignments = assignments;
+        }
+
+        processRecalcSurchargeForm(poolRoot, payload);
+
+        await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.id}/recalculate`, payload);
+        showInlineAlert('success', 'Pool recalculated successfully');
+        return reloadAfterDelay(RELOAD_DELAY_MS);
+    }
+}
+
+function processRecalcSurchargeForm(poolRoot: Element | null, payload: Record<string, unknown>) {
+    const surchargeForm = poolRoot?.querySelector('form.surcharge-form') as HTMLFormElement | null;
+    if (surchargeForm) {
+        const formData = new FormData(surchargeForm);
+        const registrationId = formData.get('registrationId');
+        const amount = formData.get('amount');
+        const note = formData.get('note');
+        const subtract = formData.get('subtractFromPool') === "on"
+        formData.set('subtractFromPool', subtract ? 'on' : '');
+        if (registrationId && amount && note) {
+            payload.surcharge = Object.fromEntries(formData.entries());
+        }
+    }
+}
+
+async function checkPoolAssigment(e: Event) {
+    const target = e.target as HTMLElement;
+    if (target.classList.contains('pool-assignment')) {
+        e.preventDefault();
+        const poolStatus = (target as HTMLElement).dataset.poolStatus;
+        if (poolStatus === 'CLOSED') {
+            showInlineAlert('error', 'Pool is closed. Use the "Recalculate pool" button to apply changes.');
+            return true;
+        }
+        const api = (target as HTMLElement).dataset.api!;
+        const formData = new FormData(target as HTMLFormElement);
+        const payload: {
+            [k: string]: FormDataEntryValue | FormDataEntryValue[]
+        } = Object.fromEntries(formData.entries());
+        payload.registrations = formData.getAll('registrations');
+        try {
+            requireManageAssignments('update pool assignments');
+            await post(api, payload);
+            showInlineAlert('success', 'Assignments updated');
+            reloadAfterDelay(RELOAD_DELAY_MS);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Unable to update assignments.';
+            showInlineAlert('error', message);
+        }
+    }
+    return false;
+}
+
 /**
  * Initialize takeover modal for invoice management
  */
@@ -534,7 +582,7 @@ function initTakeoverModal(): void {
     const filterBeneficiaries = () => {
         const term = (searchInput?.value || '').toLowerCase();
         beneficiaryList.querySelectorAll('[data-search-text]').forEach((row) => {
-            const text = (row as HTMLElement).getAttribute('data-search-text') || '';
+            const text = (row as HTMLElement).dataset.searchText || '';
             (row as HTMLElement).classList.toggle('d-none', !!term && !text.includes(term));
         });
     };
@@ -552,7 +600,7 @@ function initTakeoverModal(): void {
             const participant = participantsData.find((p) => p.id === id);
             const row = document.createElement('label');
             row.className = 'list-group-item bg-dark text-white d-flex align-items-center gap-2';
-            row.setAttribute('data-search-text', (participant?.name || `participant ${id}`).toLowerCase());
+            row.dataset.searchText = (participant?.name || `participant ${id}`).toLowerCase();
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.className = 'form-check-input me-2';
@@ -573,12 +621,12 @@ function initTakeoverModal(): void {
     document.addEventListener('click', (e: Event) => {
         const btn = (e.target as HTMLElement).closest('.manage-takeovers') as HTMLElement | null;
         if (!btn) return;
-        const poolRoot = btn.closest('.invoice-pool') || btn.closest('[data-pool]');
+        const poolRoot = btn.closest<HTMLElement>('.invoice-pool') || btn.closest<HTMLElement>('[data-pool]');
         if (!poolRoot) return;
-        activePoolId = poolRoot.getAttribute('data-pool');
-        assignedIds = JSON.parse(poolRoot.getAttribute('data-assigned') || '[]');
-        takeovers = JSON.parse(poolRoot.getAttribute('data-takeovers') || '[]');
-        activeMode = (btn.getAttribute('data-mode') as 'admin' | 'participant') || 'participant';
+        activePoolId = poolRoot.dataset.pool || null;
+        assignedIds = JSON.parse(poolRoot.dataset.assigned || '[]');
+        takeovers = JSON.parse(poolRoot.dataset.takeovers || '[]');
+        activeMode = (btn.dataset.mode as 'admin' | 'participant') || 'participant';
         if (payerWrapper) payerWrapper.classList.toggle('d-none', activeMode === 'participant');
         if (activeMode === 'admin' && payerSelect) {
             requireManageAssignments('manage takeovers');

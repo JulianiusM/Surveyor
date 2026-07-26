@@ -11,7 +11,7 @@ mixin eventParticipants(opts)
     - const allowDelete = Boolean(opts?.apiDelete !== undefined)
     - const allowUpdate = Boolean(opts?.apiUpdate !== undefined)
 
-    .event-participants.text-bg-dark.border.border-secondary.rounded-2.py-1.my-2(
+    .event-participants.text-bg-dark.border.border-secondary-subtile.rounded-2.py-1.mb-3(
         data-api-list=opts.apiList
         data-event-id=opts.eventId
         data-can-delete=allowDelete ? '1' : '0'

@@ -1,6 +1,6 @@
 // controller/eventPoolController.ts
 import {differenceInCalendarDays} from "date-fns";
-import {Request, Response} from 'express';
+import {Request} from 'express';
 import Joi from 'joi';
 // Invoice pool and invoice workflow handlers extracted from the event controller for clarity and reuse.
 import fs from 'node:fs';
@@ -97,6 +97,19 @@ async function createInvoicePool(event: Event, body: any) {
         subtractPersonalInvoices,
         regIds,
     );
+}
+
+async function updatePoolSettings(event: Event, poolId: string, body: any) {
+    await ensurePool(event, poolId);
+
+    const schema = Joi.object({
+        description: Joi.string().allow('').optional(),
+        distribution: Joi.string().valid(...InvoicePoolDistributions).required(),
+    });
+    const {error, value} = schema.validate(body, {abortEarly: false, allowUnknown: true});
+    if (error) throw new APIError(error.message, body, 400);
+
+    await invoiceService.updatePoolSettings(poolId, value.distribution, value.description);
 }
 
 // Update pool assignments before closure, respecting default/assign-all toggles and allowed participants.
@@ -477,8 +490,8 @@ function calculateTakeovers(pool: EventInvoicePool, targetIds: Set<number>) {
 function calculateIndividualCosts(pool: EventInvoicePool, billableRegistrations: EventRegistration[]) {
     const total = toAmount(pool.payableAmount);
     let individualCosts = new Map<number, { total: number, days?: number }>();
-    if (pool.distributionMethod === ("TIME_BASED" as InvoicePoolDistribution) || pool.distributionMethod === ("NIGHT_BASED" as InvoicePoolDistribution)) {
-        const baseDayCount = pool.distributionMethod === ("NIGHT_BASED" as InvoicePoolDistribution) ? 0 : 1;
+    if (pool.distributionMethod === "TIME_BASED" || pool.distributionMethod === "NIGHTS") {
+        const baseDayCount = pool.distributionMethod === "NIGHTS" ? 0 : 1;
         const individualDays = billableRegistrations.reduce((acc, reg) => {
             acc.set(reg.id, differenceInCalendarDays(reg.departureDate, reg.arrivalDate) + baseDayCount);
             return acc;
@@ -530,13 +543,7 @@ function calculatePayerShares(dto: CalculationDto) {
         bucket.base += baseShare;
         bucket.surcharges += extraTotal;
         bucket.invoiceCredits += invoiceCredit;
-        bucket.detailNotes.push(`Base share for ${beneficiaryName || 'self'}: ${formatAmount(baseShare)}`);
-        if (dto.exemptIds.has(registration.id)) bucket.detailNotes.push('Exempt from automatic share');
-        if (personalCost.days) bucket.detailNotes.push(`(for ${personalCost.days} days)`);
-        if (beneficiaryName) {
-            bucket.beneficiaries.push(registration.id);
-            bucket.notes.push(`Covering ${beneficiaryName}`);
-        }
+        calculatePayerSharesInitialNotes(dto, registration, beneficiaryName, baseShare, personalCost, bucket);
         extras.forEach((entry) => {
             const adjustmentTarget = beneficiaryName || participantLabel;
             const detailLabel = entry.note ? `${adjustmentTarget} — ${entry.note}` : adjustmentTarget;
@@ -549,6 +556,31 @@ function calculatePayerShares(dto: CalculationDto) {
         payerShares.set(payerId, bucket);
     }
     return payerShares;
+}
+
+function calculatePayerSharesInitialNotes(dto: CalculationDto, registration: EventRegistration, beneficiaryName: string | null, baseShare: number, personalCost: {
+    total?: number;
+    days?: number
+}, bucket: {
+    base: number;
+    surcharges: number;
+    invoiceCredits: number;
+    notes: string[];
+    beneficiaries: number[];
+    detailNotes: string[]
+}) {
+    const dayLabel = dto.pool.distributionMethod === "NIGHTS" ? "nights" : "days";
+    bucket.detailNotes.push(`Base share for ${beneficiaryName || 'self'}: ${formatAmount(baseShare)}`);
+    if (dto.exemptIds.has(registration.id)) bucket.detailNotes.push('Exempt from automatic share');
+    if (personalCost.days) {
+        bucket.detailNotes.push(`(for ${personalCost.days} ${dayLabel})`);
+    } else if (dto.pool.distributionMethod === "NIGHTS") {
+        bucket.detailNotes.push('(no nights stayed)')
+    }
+    if (beneficiaryName) {
+        bucket.beneficiaries.push(registration.id);
+        bucket.notes.push(`Covering ${beneficiaryName}`);
+    }
 }
 
 // Toggle payment state of a share and inform the participant with actor attribution.
@@ -570,7 +602,7 @@ async function markSharePaid(event: Event, poolId: string, shareId: string, isPa
 }
 
 // Serve invoice proof files securely with authentication and permission checks
-export async function serveInvoiceProof(event: Event, poolId: string, invoiceId: string, session: Request['session'], res: Response, permData?: PermBundle) {
+export async function serveInvoiceProof(event: Event, poolId: string, invoiceId: string, session: Request['session'], permData?: PermBundle) {
     await ensurePool(event, poolId);
     const invoice = await invoiceService.getInvoiceWithRegistration(poolId, Number(invoiceId));
     if (!invoice?.proofPath) {
@@ -603,8 +635,7 @@ export async function serveInvoiceProof(event: Event, poolId: string, invoiceId:
         throw new APIError('Proof file not found', {}, 404);
     }
 
-    // Serve the file
-    res.sendFile(fullPath);
+    return fullPath;
 }
 
 // Recalculate a closed pool by deleting existing shares and re-running the closePool logic
@@ -636,6 +667,7 @@ async function recalculatePool(event: Event, poolId: string, body: any = {}, ses
 export default {
     purgeExpiredProofs,
     createInvoicePool,
+    updatePoolSettings,
     updatePoolAssignments,
     addPoolSurcharge,
     removePoolSurcharge,

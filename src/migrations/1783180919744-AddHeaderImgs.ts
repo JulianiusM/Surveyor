@@ -1,26 +1,8 @@
 import {MigrationInterface, QueryRunner} from "typeorm";
+import {columnExists} from "../modules/database/utils/migration-helper";
 
 export class AddHeaderImgs1783180919744 implements MigrationInterface {
     name = 'AddHeaderImgs1783180919744'
-
-    private async columnExists(
-        queryRunner: QueryRunner,
-        table: string,
-        column: string
-    ): Promise<boolean> {
-        const result = await queryRunner.query(
-            `
-                SELECT COUNT(*) as count
-                FROM information_schema.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE()
-                  AND TABLE_NAME = ?
-                  AND COLUMN_NAME = ?
-            `,
-            [table, column]
-        );
-
-        return result[0].count > 0;
-    }
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         const tables = [
@@ -32,7 +14,7 @@ export class AddHeaderImgs1783180919744 implements MigrationInterface {
         ];
 
         for (const table of tables) {
-            const exists = await this.columnExists(queryRunner, table, "header_img");
+            const exists = await columnExists(queryRunner, table, "header_img");
 
             if (!exists) {
                 await queryRunner.query(
@@ -53,7 +35,7 @@ export class AddHeaderImgs1783180919744 implements MigrationInterface {
         ];
 
         for (const table of tables) {
-            const exists = await this.columnExists(queryRunner, table, "header_img");
+            const exists = await columnExists(queryRunner, table, "header_img");
 
             if (exists) {
                 await queryRunner.query(

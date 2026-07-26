@@ -1,17 +1,17 @@
-import fs from "fs";
-import path from "path";
-import {AppDataSource} from "../dataSource";
-import {EventInvoicePool} from "../entities/event/EventInvoicePool";
-import {EventInvoice, InvoiceStatus} from "../entities/event/EventInvoice";
-import {EventPoolAssignment} from "../entities/event/EventPoolAssignment";
-import {EventInvoiceShare} from "../entities/event/EventInvoiceShare";
-import {EventRegistration} from "../entities/event/EventRegistration";
-import {Event} from "../entities/event/Event";
-import {EventPoolTakeover} from "../entities/event/EventPoolTakeover";
-import {EventInvoiceSurcharge} from "../entities/event/EventInvoiceSurcharge";
-import {formatAmount, toAmount} from "../../lib/util";
-import type {InvoicePoolDistribution, InvoicePoolStatus} from "../../../types/InvoicePoolTypes";
+import fs from "node:fs";
+import path from "node:path";
 import {EntityManager} from "typeorm";
+import type {InvoicePoolDistribution, InvoicePoolStatus} from "../../../types/InvoicePoolTypes";
+import {formatAmount, toAmount} from "../../lib/util";
+import {AppDataSource} from "../dataSource";
+import {Event} from "../entities/event/Event";
+import {EventInvoice, InvoiceStatus} from "../entities/event/EventInvoice";
+import {EventInvoicePool} from "../entities/event/EventInvoicePool";
+import {EventInvoiceShare} from "../entities/event/EventInvoiceShare";
+import {EventInvoiceSurcharge} from "../entities/event/EventInvoiceSurcharge";
+import {EventPoolAssignment} from "../entities/event/EventPoolAssignment";
+import {EventPoolTakeover} from "../entities/event/EventPoolTakeover";
+import {EventRegistration} from "../entities/event/EventRegistration";
 
 // Centralized pool loader to keep relation loading consistent across controllers
 async function loadPool(poolId: string) {
@@ -106,6 +106,13 @@ export async function createPool(
             await assignmentRepo.save(rows);
         }
         return saved.id;
+    });
+}
+
+export async function updatePoolSettings(poolId: string, distribution: InvoicePoolDistribution, description?: string) {
+    await AppDataSource.getRepository(EventInvoicePool).update(poolId, {
+        distributionMethod: distribution,
+        description: description
     });
 }
 
@@ -279,7 +286,6 @@ export async function closePool(
     await AppDataSource.transaction("READ COMMITTED", async (manager) => {
         const poolRepo = manager.getRepository(EventInvoicePool);
         const shareRepo = manager.getRepository(EventInvoiceShare);
-        const invoiceRepo = manager.getRepository(EventInvoice);
 
         const pool = await poolRepo.findOne({where: {id: poolId}});
         if (!pool) throw new Error("Pool not found");
@@ -511,7 +517,7 @@ export async function registerForDefaultPools(
             .leftJoinAndSelect('reg.event', 'event')
             .where('reg.id = :id', {id: reg.id})
             .getOne();
-        
+
         if (!regWithEvent?.event) {
             return [];
         }

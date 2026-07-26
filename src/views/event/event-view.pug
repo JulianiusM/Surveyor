@@ -241,26 +241,25 @@ block content
                                     .mt-4
                                         +participantTakeoverList(data.participantPools, data.participants)
                                 +participantShareSummary(data.registration.id, data.invoicePools)
+
+            if permData.entity.has("ACCESS_PARTICIPANTS")
+                +eventParticipants({
+                    eventId: ev.id,
+                    apiList: `/api/event/${ev.id}/participants`,
+                    startDate: startDate,
+                    endDate: endDate,
+                })
+
+            if permData.entity.has("ACCESS_ITEMS")
+                .accordion.accordion-dark#entityLists
+                    +entityOverview('sec-related', 'Things to do', 'bi-clipboard-check', data.relatedEntities, "Nothing to do...", "entityLists", false)
+
     else
         .alert.alert-info.mx-1
             i.bi.bi-info-circle.me-2
             | Log in or use your guest link to register for this event.
 
     // ─── Associated content within this event ────────────────
-    if reg
-        .row
-            - let shownSegments = 0;
-            if permData.entity.has("ACCESS_ITEMS")
-                .accordion.accordion-dark#entityLists
-                    +entityOverview('sec-related', 'Things to do', 'bi-clipboard-check', data.relatedEntities, "Nothing to do...", "entityLists", false)
-
-        if permData.entity.has("ACCESS_PARTICIPANTS")
-            +eventParticipants({
-                eventId: ev.id,
-                apiList: `/api/event/${ev.id}/participants`,
-                startDate: startDate,
-                endDate: endDate,
-            })
 
     +takeoverModal('takeoverModal')
 

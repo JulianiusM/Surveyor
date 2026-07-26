@@ -24,6 +24,15 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
     );
 
     router.post(
+        '/:poolId',
+        requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
+        asyncHandler(async (req, res) => {
+            await eventPoolController.updatePoolSettings(resFct(req), req.params.poolId, req.body);
+            renderer.respondWithSuccessJson(res, "pool settings updated");
+        })
+    )
+
+    router.post(
         '/:poolId/assignments',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {
@@ -147,7 +156,8 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/invoices/:invoiceId/proof',
         requireEventParticipantAPI(resFct),
         asyncHandler(async (req, res) => {
-            await eventPoolController.serveInvoiceProof(resFct(req), req.params.poolId, req.params.invoiceId, req.session, res, res.locals.permData);
+            const filePath = await eventPoolController.serveInvoiceProof(resFct(req), req.params.poolId, req.params.invoiceId, req.session, res.locals.permData);
+            res.sendFile(filePath);
         })
     );
 
