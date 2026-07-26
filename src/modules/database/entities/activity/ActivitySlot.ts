@@ -33,10 +33,16 @@ export class ActivitySlot {
     })
     maxAssignees?: number | null;
 
-    @Column("tinyint", {name: "is_arrival_evening", width: 1, nullable: true})
+    @Column("tinyint", {
+        name: "is_arrival_evening",
+        nullable: true
+    })
     isArrivalEvening?: boolean | null;
 
-    @Column("tinyint", {name: "is_departure_morning", width: 1, nullable: true})
+    @Column("tinyint", {
+        name: "is_departure_morning",
+        nullable: true
+    })
     isDepartureMorning?: boolean | null;
 
     @Column("timestamp", {

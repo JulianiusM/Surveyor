@@ -11,5 +11,5 @@ import {formatAmount, toAmount} from "../lib/util";
  */
 export const currencyTransformer = {
     to: (value: number | string) => formatAmount(toAmount(value)),
-    from: (value: string) => Number(value),
+    from: Number,
 };

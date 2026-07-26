@@ -3,7 +3,7 @@ import type {PermData, PermMeta, PermPreset} from "../../types/PermissionTypes";
 import type {CombEntityType} from "../../types/UtilTypes";
 
 export const PERM = {
-    EDIT_TITLE: 1 << 0,
+    EDIT_TITLE: 1,
     EDIT_DESC: 1 << 1,
     EDIT_CAPACITY: 1 << 2,
     EDIT_META: 1 << 3,
@@ -59,12 +59,10 @@ export const DEFAULT_PERM = (() => {
 })();
 
 export function getInitialPerms(entityType: CombEntityType): PermData {
-    switch (entityType) {
-        case "event":
-            return {public: DEFAULT_PERM.DEFAULT_ENTITY, participant: PERM.ACCESS_PARTICIPANTS}
-        default:
-            return {public: DEFAULT_PERM.DEFAULT_ENTITY};
+    if (entityType == "event") {
+        return {public: DEFAULT_PERM.DEFAULT_ENTITY, participant: PERM.ACCESS_PARTICIPANTS}
     }
+    return {public: DEFAULT_PERM.DEFAULT_ENTITY};
 }
 
 
@@ -73,7 +71,7 @@ export const ALL_MASK = Object.values(PERM).reduce((m, v) => m | (v as number), 
 export function labelFromKey(k: string) {
     return k
         .toLowerCase()
-        .replace(/_/g, ' ')
+        .replaceAll('_', ' ')
         .replace(/\b\w/g, c => c.toUpperCase()); // EDIT_META -> Edit Meta
 }
 
@@ -105,9 +103,12 @@ export function toMask(keys: string[] | undefined, perms: Record<string, number>
 /** Convert posted keys (perm names) to a bitmask. Returns undefined if value is truly absent. */
 export function toMaskFromBodyValue(val: unknown, permMap: Record<string, number>): number | undefined {
     if (val === undefined) return undefined; // key not present → leave unchanged
-    const arr: string[] = Array.isArray(val)
-        ? (val as unknown[]).filter((v): v is string => typeof v === 'string')
-        : (val == null || val === '' ? [] : [String(val)]);
+    let arr: string[] = [];
+    if (Array.isArray(val)) {
+        arr = val.filter((v): v is string => typeof v === 'string');
+    } else if (!(val == null || val === '')) {
+        arr = [String(val)];
+    }
     let mask = 0;
     for (const k of arr) {
         const bit = permMap[k];

@@ -23,7 +23,10 @@ export class EventPoolAssignment {
     registrationId!: number;
 
     // Exempt participants skip automatic share calculation but still allow manual surcharges
-    @Column("tinyint", {name: "is_exempt", width: 1, default: 0})
+    @Column("tinyint", {
+        name: "is_exempt",
+        default: 0
+    })
     isExempt!: boolean;
 
     @Column("timestamp", {name: "created_at", default: () => "CURRENT_TIMESTAMP"})

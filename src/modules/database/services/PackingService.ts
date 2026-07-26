@@ -63,7 +63,11 @@ export async function deletePackingList(listId: string) {
 }
 
 export async function getPackingListById(listId: string) {
-    return await AppDataSource.getRepository(PackingList).findOne({where: {id: listId}, relations: ["event"]});
+    return await AppDataSource.getRepository(PackingList).findOne({
+        where: {id: listId}, relations: {
+            event: true
+        }
+    });
 }
 
 export async function getPackingListByUserId(userId: number) {
@@ -80,7 +84,6 @@ export async function updateHeaderImage(listId: string, headerImg?: string | nul
 
 export async function getManagedListsForUser(userId: number) {
     const ids = await entityAdminService.getIdsForUser('packing', userId);
-    const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
     return await AppDataSource.getRepository(PackingList).find({
         where: [
             {
@@ -189,7 +192,7 @@ export async function getPackingAssignmentCounts(listId: string) {
 }
 
 export async function getLastPackingItemNumber(listId: string): Promise<number> {
-    return await AppDataSource.getRepository(PackingItem).maximum("pos", {list: {id: listId},}) ?? 0;
+    return (await AppDataSource.getRepository(PackingItem).maximum("pos", {list: {id: listId},})) ?? 0;
 }
 
 // Assignments
@@ -239,7 +242,10 @@ export async function getPackingAssignmentsForGuest(listId: string, guestId: str
 export async function getPackingItemAssignees(listId: string) {
     const rows = await AppDataSource.getRepository(PackingAssignment).find({
         where: {list: {id: listId}},
-        relations: ['user', 'guest']
+        relations: {
+            user: true,
+            guest: true
+        }
     });
     const map: Record<string, any[]> = {};
     for (const r of rows) {
@@ -258,8 +264,10 @@ export async function getPackingItemAssignees(listId: string) {
 export async function getPackingAssignmentById(assignId: number) {
     return await AppDataSource.getRepository(PackingAssignment).findOne({
         where: {id: assignId},
-        relations: ['item']
-    })
+        relations: {
+            item: true
+        }
+    });
 }
 
 export async function deletePackingAssignment(assignId: string) {

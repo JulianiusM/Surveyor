@@ -36,8 +36,7 @@ export class User {
     @Column("tinyint", {
         name: "is_active",
         nullable: true,
-        width: 1,
-        default: 0,
+        default: 0
     })
     isActive?: boolean | null;
 

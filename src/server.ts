@@ -1,6 +1,6 @@
-import http from 'http';
-import settings from './modules/settings';
+import http from 'node:http';
 import {initDataSource} from "./modules/database/dataSource";
+import settings from './modules/settings';
 
 async function bootstrap() {
     try {
@@ -8,7 +8,7 @@ async function bootstrap() {
         await settings.read();
         await initDataSource();
 
-        const {default: app} = await import('./app');
+        const {default: app} = await require('./app');
         const server = http.createServer(app);
         server.listen(settings.value.appPort, () => {
             console.log(`🚀 Server listening on ${settings.value.rootUrl}`);

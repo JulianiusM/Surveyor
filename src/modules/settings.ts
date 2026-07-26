@@ -126,16 +126,16 @@ const keyMap: Record<string, keyof Settings> = {
 
 // per-field coercion
 const coerce: Partial<Record<keyof Settings, (v: string) => any>> = {
-    dbPort: (v) => Number(v),
-    smtpPort: (v) => Number(v),
-    appPort: (v) => Number(v),
+    dbPort: Number,
+    smtpPort: Number,
+    appPort: Number,
     smtpPool: (v) => /^(1|true|yes|on)$/i.test(v),
     smtpSecure: (v) => /^(1|true|yes|on)$/i.test(v),
     localLoginEnabled: (v) => /^(1|true|yes|on)$/i.test(v),
     oidcEnabled: (v) => /^(1|true|yes|on)$/i.test(v),
-    activityAvailabilityWeight: (v) => Number(v),
-    activitySwapOptimizationIterations: (v) => Number(v),
-    activityArrivalDeparturePenalty: (v) => Number(v),
+    activityAvailabilityWeight: Number,
+    activitySwapOptimizationIterations: Number,
+    activityArrivalDeparturePenalty: Number,
 };
 
 // Apply environment variable overrides AFTER reading CSV.
@@ -178,7 +178,7 @@ function applyEnvOverrides(target: Settings): void {
 }
 
 export class SettingsStore {
-    private _settings: Settings = {...defaults};
+    private readonly _settings: Settings = {...defaults};
 
     get value(): Settings {
         return this._settings;

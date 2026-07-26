@@ -183,7 +183,8 @@ export async function getResponsesSorted(surveyId: string): Promise<GroupedRespo
     return combined.reduce<GroupedResponses>((acc, item) => {
         const key: GroupKey =
             item.kind === "user" ? `u_${item.userId}` : `g_${item.guestId}`;
-        (acc[key] ??= []).push(item);
+        acc[key] ??= [];
+        acc[key].push(item);
         return acc;
     }, {});
 }

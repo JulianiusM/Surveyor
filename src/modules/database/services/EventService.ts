@@ -204,7 +204,9 @@ export async function getRegistrationFor(actor: { userId?: number; guestId?: str
     if (actor.guestId) where.guest = {id: actor.guestId};
     return await AppDataSource.getRepository(EventRegistration).findOne({
         where,
-        relations: ['dietaryChoices'], // pull normalized rows
+        relations: {
+            dietaryChoices: true
+        }, // pull normalized rows
         order: {id: 'DESC'},
     });
 }
@@ -217,7 +219,11 @@ export async function getEventParticipants(eventId: string): Promise<Participant
     const repo = AppDataSource.getRepository(EventRegistration);
     const rows = await repo.find({
         where: {event: {id: eventId}},
-        relations: ['user', 'guest', 'dietaryChoices'],
+        relations: {
+            user: true,
+            guest: true,
+            dietaryChoices: true
+        },
         order: {id: 'ASC'},
     });
     return rows.map((r): ParticipantRow => ({
@@ -288,7 +294,9 @@ export async function getRegisteredEventsFor(actor: { userId?: number; guestId?:
                 guest: {id: actor.guestId ?? IsNull()},
             }
         },
-        relations: ['registrations'],
+        relations: {
+            registrations: true
+        },
         order: {startDate: 'DESC'},
     });
 }
@@ -298,7 +306,7 @@ export async function deleteRegistration(eventId: string, regId: string | number
 
     // Only delete within the event scope
     const res = await repo.delete({id: Number(regId), event: {id: eventId}});
-    return res?.affected ?? 0 > 0;
+    return (res?.affected ?? 0) > 0;
 }
 
 export async function updateRegistrationDates(eventId: string, regId: number, arrivalDate: string, departureDate: string) {
@@ -402,14 +410,19 @@ export async function listDeadlineBypassLinks(eventId: string) {
         used: r.usedCount > 0 || !!r.usedAt,
         userId: r.userId ?? null,
         guestId: r.guestId ?? null,
-        status: r.revokedAt
-            ? 'revoked'
-            : (r.expiresAt && r.expiresAt < now())
-                ? 'expired'
-                : (r.usedCount >= r.maxUses)
-                    ? 'consumed'
-                    : 'active'
+        status: calculateBypassLinkStatus(r)
     }));
+}
+
+function calculateBypassLinkStatus(r: EventRegBypassLink) {
+    if (r.revokedAt) {
+        return 'revoked'
+    } else if (r.expiresAt && r.expiresAt < now()) {
+        return 'expired';
+    } else if (r.usedCount >= r.maxUses) {
+        return 'consumed';
+    }
+    return 'active';
 }
 
 export async function revokeDeadlineBypassLink(eventId: string, linkId: string) {

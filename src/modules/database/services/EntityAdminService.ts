@@ -26,7 +26,9 @@ export async function removeAdmin(entityType: CombEntityType, entityId: string, 
 export async function listAdmins(entityType: CombEntityType, entityId: string) {
     const repo = AppDataSource.getRepository(ACL);
     // join users if you want to render names/emails
-    return await repo.find({where: {entityType, entityId}, relations: ['user']});
+    return await repo.find({where: {entityType, entityId}, relations: {
+        user: true
+    }});
 }
 
 export async function updateAdminPerms(entityType: CombEntityType, entityId: string, userId: number, perms: number) {

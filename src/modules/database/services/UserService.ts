@@ -19,21 +19,31 @@ export async function getUserByUsername(username: string) {
     const repo = AppDataSource.getRepository(User);
     return await repo.findOne({
         where: {username},
-        select: ['id', 'name', 'username', 'email', 'isActive']
+        select: {
+            id: true,
+            name: true,
+            username: true,
+            email: true,
+            isActive: true
+        }
     });
 }
 
 export async function verifyPassword(userId: number, password: string) {
     const repo = AppDataSource.getRepository(User);
-    const user = await repo.findOne({where: {id: userId}, select: ['password']});
-    if (!user || !user.password) return false;
+    const user = await repo.findOne({
+        where: {id: userId}, select: {
+            password: true
+        }
+    });
+    if (!user?.password) return false;
     return bcrypt.compare(password, user.password);
 }
 
 export async function generateActivationToken(userId: number) {
     const repo = AppDataSource.getRepository(User);
     const token = generateUniqueToken();
-    const expiration = new Date(Date.now() + 3600_000);
+    const expiration = new Date(Date.now() + 3_600_000);
     await repo.update({id: userId}, {
         activationToken: token,
         activationTokenExpiration: expiration
@@ -48,7 +58,13 @@ export async function verifyActivationToken(token: string) {
             activationToken: token,
             activationTokenExpiration: MoreThan(new Date())
         },
-        select: ['id', 'name', 'username', 'email', 'isActive']
+        select: {
+            id: true,
+            name: true,
+            username: true,
+            email: true,
+            isActive: true
+        }
     });
 }
 
@@ -64,7 +80,7 @@ export async function activateUser(userId: number) {
 export async function generatePasswordResetToken(username: string) {
     const repo = AppDataSource.getRepository(User);
     const token = generateUniqueToken();
-    const expiration = new Date(Date.now() + 3600_000);
+    const expiration = new Date(Date.now() + 3_600_000);
     await repo.update({username}, {
         resetToken: token,
         resetTokenExpiration: expiration
@@ -79,7 +95,13 @@ export async function verifyPasswordResetToken(token: string) {
             resetToken: token,
             resetTokenExpiration: MoreThan(new Date())
         },
-        select: ['id', 'name', 'username', 'email', 'isActive']
+        select: {
+            id: true,
+            name: true,
+            username: true,
+            email: true,
+            isActive: true
+        }
     });
 }
 
@@ -106,7 +128,11 @@ export async function getGuestByToken(token: string, guestId: string) {
     const repo = AppDataSource.getRepository(Guest);
     return await repo.findOne({
         where: {id: guestId, token: token},
-        select: ['id', 'username', 'email']
+        select: {
+            id: true,
+            username: true,
+            email: true
+        }
     });
 }
 
@@ -114,7 +140,12 @@ export async function getGuestInternal(guestId: string) {
     const repo = AppDataSource.getRepository(Guest);
     return await repo.findOne({
         where: {id: guestId},
-        select: ['id', 'username', 'email', 'token']
+        select: {
+            id: true,
+            username: true,
+            email: true,
+            token: true
+        }
     });
 }
 
@@ -167,7 +198,13 @@ export async function getUserByOidc(oidcIssuer: string, oidcSub: string) {
     const repo = AppDataSource.getRepository(User);
     return await repo.findOne({
         where: {oidcIssuer, oidcSub},
-        select: ['id', 'name', 'username', 'email', 'isActive'],
+        select: {
+            id: true,
+            name: true,
+            username: true,
+            email: true,
+            isActive: true
+        },
     });
 }
 
@@ -193,7 +230,7 @@ export async function linkUserToOidc(
 export async function findOrCreateUserFromOidc(
     oidcIssuer: string,
     claims: OidcClaims,
-    opts: { linkByEmail?: boolean } = {linkByEmail: true}
+    {linkByEmail = true} = {}
 ) {
     const repo = AppDataSource.getRepository(User);
     const {sub, email, preferred_username, name} = claims;
@@ -204,7 +241,7 @@ export async function findOrCreateUserFromOidc(
     });
 
     // 2) If not found: try link-by-email (optional)
-    if (!user && opts.linkByEmail && email) {
+    if (!user && linkByEmail && email) {
         user = await repo.findOne({where: {email}});
         if (user) {
             user.oidcIssuer = oidcIssuer;
@@ -227,8 +264,8 @@ export async function findOrCreateUserFromOidc(
 
         // If linkByEmail is disabled OR the email is already taken, use a synthetic email
         if (email) {
-            const emailTaken = await repo.exist({where: {email}});
-            if (!opts.linkByEmail || emailTaken) {
+            const emailTaken = await repo.exists({where: {email}});
+            if (!linkByEmail || emailTaken) {
                 emailToUse = `${sub}@no-email.local`;
             }
         }
@@ -243,24 +280,30 @@ export async function findOrCreateUserFromOidc(
             oidcSub: sub,
         });
 
-        try {
-            user = await repo.save(user);
-        } catch (err: any) {
-            // Last-chance fallback for race conditions (MySQL/PG/SQLite)
-            const message = String(err?.message || '');
-            if (
-                err?.code === 'ER_DUP_ENTRY' || // MySQL/MariaDB
-                err?.code === '23505' ||        // Postgres
-                message.includes('UNIQUE')      // SQLite/others
-            ) {
-                user.email = `${sub}@no-email.local`;
-                user = await repo.save(user);
-            } else {
-                throw err;
-            }
-        }
+        user = await handleUserSaving(user, sub);
     }
 
+    return user;
+}
+
+async function handleUserSaving(user: User, sub: string) {
+    const repo = AppDataSource.getRepository(User);
+    try {
+        user = await repo.save(user);
+    } catch (err: any) {
+        // Last-chance fallback for race conditions (MySQL/PG/SQLite)
+        const message = String(err?.message || '');
+        if (
+            err?.code === 'ER_DUP_ENTRY' || // MySQL/MariaDB
+            err?.code === '23505' ||        // Postgres
+            message.includes('UNIQUE')      // SQLite/others
+        ) {
+            user.email = `${sub}@no-email.local`;
+            user = await repo.save(user);
+        } else {
+            throw err;
+        }
+    }
     return user;
 }
 
@@ -345,15 +388,15 @@ export async function searchUsersSubstringStrict(query: string, limit = 10): Pro
     const lim = coerceLimit(limit, 10, 10);
 
     // Escape LIKE wildcards
-    const esc = q.replace(/[%_\\]/g, '\\$&');
+    const esc = q.replace(/[%_\\]/g, String.raw`\$&`);
     const likeAny = `%${esc}%`;
 
     const rows = await repo
         .createQueryBuilder('u')
         .select(['u.id', 'u.username', 'u.email', 'u.name'])
-        .where('u.username LIKE :like ESCAPE "\\\\"', {like: likeAny})
-        .orWhere('u.email LIKE :like ESCAPE "\\\\"', {like: likeAny})
-        .orWhere('u.name LIKE :like ESCAPE "\\\\"', {like: likeAny})
+        .where(String.raw`u.username LIKE :like ESCAPE "\\"`, {like: likeAny})
+        .orWhere(String.raw`u.email LIKE :like ESCAPE "\\"`, {like: likeAny})
+        .orWhere(String.raw`u.name LIKE :like ESCAPE "\\"`, {like: likeAny})
         .orderBy('u.username', 'ASC')
         .limit(lim)
         .getMany();

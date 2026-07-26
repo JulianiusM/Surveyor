@@ -131,12 +131,12 @@ async function submitResponses(survey: Survey, session: Request['session'], body
 }
 
 async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
-    performImageSwap(entity, surveyService.updateHeaderImage, file);
+    await performImageSwap(entity, surveyService.updateHeaderImage, file);
     return 'Image updated';
 }
 
 async function deleteHeaderImg(entity: EntityBase) {
-    performImageSwap(entity, surveyService.updateHeaderImage);
+    await performImageSwap(entity, surveyService.updateHeaderImage);
     return 'Image deleted';
 }
 

@@ -49,7 +49,7 @@ export default {
 /*-----------[ERROR]----------*/
 
 function renderError(res: Response, message?: string) {
-    renderErrorData(res, message, undefined);
+    renderErrorData(res, message);
 }
 
 function renderErrorData(res: Response, message?: string, data?: any) {
@@ -59,7 +59,7 @@ function renderErrorData(res: Response, message?: string, data?: any) {
 /*-----------[INFO]----------*/
 
 function renderInfo(res: Response, message?: string) {
-    renderInfoData(res, message, undefined);
+    renderInfoData(res, message);
 }
 
 function renderInfoData(res: Response, message?: string, data?: any) {
@@ -69,7 +69,7 @@ function renderInfoData(res: Response, message?: string, data?: any) {
 /*-----------[SUCCESS]----------*/
 
 function renderSuccess(res: Response, message?: string) {
-    renderSuccessData(res, message, undefined);
+    renderSuccessData(res, message);
 }
 
 function renderSuccessData(res: Response, message?: string, data?: any) {
@@ -79,7 +79,7 @@ function renderSuccessData(res: Response, message?: string, data?: any) {
 /*-----------[GENERIC]----------*/
 
 function renderMessage(res: Response, status: Status, message?: string) {
-    renderMessageData(res, status, message, undefined);
+    renderMessageData(res, status, message);
 }
 
 function renderMessageData(res: Response, status: Status, message?: string, data?: any) {
@@ -94,7 +94,7 @@ function renderMessageData(res: Response, status: Status, message?: string, data
 /*-----------[ERROR]----------*/
 
 function renderWithError(res: Response, page: string, message?: string) {
-    renderWithErrorData(res, page, message, undefined);
+    renderWithErrorData(res, page, message);
 }
 
 function renderWithErrorData(res: Response, page: string, message?: string, data?: any) {
@@ -104,7 +104,7 @@ function renderWithErrorData(res: Response, page: string, message?: string, data
 /*-----------[INFO]----------*/
 
 function renderWithInfo(res: Response, page: string, message?: string) {
-    renderWithInfoData(res, page, message, undefined);
+    renderWithInfoData(res, page, message);
 }
 
 function renderWithInfoData(res: Response, page: string, message?: string, data?: any) {
@@ -114,7 +114,7 @@ function renderWithInfoData(res: Response, page: string, message?: string, data?
 /*-----------[SUCCESS]----------*/
 
 function renderWithSuccess(res: Response, page: string, message?: string) {
-    renderWithSuccessData(res, page, message, undefined);
+    renderWithSuccessData(res, page, message);
 }
 
 function renderWithSuccessData(res: Response, page: string, message?: string, data?: any) {
@@ -124,7 +124,7 @@ function renderWithSuccessData(res: Response, page: string, message?: string, da
 /*-----------[GENERIC]----------*/
 
 function render(res: Response, page: string) {
-    renderWithData(res, page, undefined);
+    renderWithData(res, page);
 }
 
 function renderWithData(res: Response, page: string, data?: any) {
@@ -132,7 +132,7 @@ function renderWithData(res: Response, page: string, data?: any) {
 }
 
 function renderWithMessage(res: Response, page: string, status: Status, message?: string) {
-    renderWithMessageData(res, page, status, message, undefined);
+    renderWithMessageData(res, page, status, message);
 }
 
 function renderWithMessageData(res: Response, page: string, status: Status, message?: string, data?: any) {

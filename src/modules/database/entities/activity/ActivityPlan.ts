@@ -33,7 +33,10 @@ export class ActivityPlan implements EntityBase {
     @Column('smallint', {name: 'general_required_shifts', nullable: true})
     generalRequiredShifts?: number | null;
 
-    @Column("tinyint", {name: "allow_overfill_after_full", width: 1, default: () => 0})
+    @Column("tinyint", {
+        name: "allow_overfill_after_full",
+        default: () => 0
+    })
     allowOverfillAfterFull!: boolean;
 
     @Column('simple-enum', {name: 'rounding_mode', enum: ['CEIL', 'ROUND', 'FLOOR'], nullable: true})
@@ -42,10 +45,16 @@ export class ActivityPlan implements EntityBase {
     @Column("timestamp", {name: "binding_deadline", nullable: true})
     bindingDeadline?: Date | null;
 
-    @Column("tinyint", {name: "allow_arrival_day_evening", width: 1, default: () => "1"})
+    @Column("tinyint", {
+        name: "allow_arrival_day_evening",
+        default: () => "1"
+    })
     allowArrivalDayEvening!: boolean;
 
-    @Column("tinyint", {name: "allow_departure_day_morning", width: 1, default: () => "1"})
+    @Column("tinyint", {
+        name: "allow_departure_day_morning",
+        default: () => "1"
+    })
     allowDepartureDayMorning!: boolean;
 
     @Column("varchar", {name: "header_img", length: 255, nullable: true})

@@ -211,12 +211,12 @@ async function deleteItem(itemId: string) {
 }
 
 async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
-    performImageSwap(entity, packingService.updateHeaderImage, file);
+    await performImageSwap(entity, packingService.updateHeaderImage, file);
     return 'Image updated';
 }
 
 async function deleteHeaderImg(entity: EntityBase) {
-    performImageSwap(entity, packingService.updateHeaderImage);
+    await performImageSwap(entity, packingService.updateHeaderImage);
     return 'Image deleted';
 }
 

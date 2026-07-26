@@ -1127,12 +1127,12 @@ async function updateRoleAssignments(slotId: string, body: any) {
 }
 
 async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
-    performImageSwap(entity, activityService.updateHeaderImage, file);
+    await performImageSwap(entity, activityService.updateHeaderImage, file);
     return 'Image updated';
 }
 
 async function deleteHeaderImg(entity: EntityBase) {
-    performImageSwap(entity, activityService.updateHeaderImage);
+    await performImageSwap(entity, activityService.updateHeaderImage);
     return 'Image deleted';
 }
 

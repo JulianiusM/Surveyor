@@ -50,7 +50,10 @@ export class EventInvoiceShare {
     @Column("text", {name: "note", nullable: true})
     note?: string | null;
 
-    @Column("tinyint", {name: "is_paid", width: 1, default: 0})
+    @Column("tinyint", {
+        name: "is_paid",
+        default: 0
+    })
     isPaid!: boolean;
 
     @Column("timestamp", {name: "paid_at", nullable: true})

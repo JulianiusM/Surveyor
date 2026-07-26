@@ -33,10 +33,16 @@ export class Event implements EntityBase {
     @Column("varchar", {name: "timezone", length: 255, nullable: true})
     timezone?: string | null;
 
-    @Column("tinyint", {name: "require_dietary_info", width: 1, default: 0})
+    @Column("tinyint", {
+        name: "require_dietary_info",
+        default: 0
+    })
     requireDietaryInfo!: boolean;
 
-    @Column("tinyint", {name: "allow_diet_comment", width: 1, default: 0})
+    @Column("tinyint", {
+        name: "allow_diet_comment",
+        default: 0
+    })
     allowDietComment!: boolean;
 
     @Column("int", {name: "max_participants", nullable: true})

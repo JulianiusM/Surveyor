@@ -34,7 +34,10 @@ export class EventInvoiceSurcharge {
     note!: string;
 
     // Whether this surcharge should be removed from the shared pool total
-    @Column("tinyint", {name: "subtract_from_pool", width: 1, default: 1})
+    @Column("tinyint", {
+     name: "subtract_from_pool",
+     default: 1
+    })
     subtractFromPool!: boolean;
 
     @Column("timestamp", {name: "created_at", default: () => "CURRENT_TIMESTAMP"})

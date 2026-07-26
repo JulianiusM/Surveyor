@@ -1,6 +1,6 @@
 import {EntitySubscriberInterface, EventSubscriber, InsertEvent} from "typeorm";
-import {ActivityAssignmentRole} from "../entities/activity/ActivityAssignmentRole";
 import {ActivityAssignment} from "../entities/activity/ActivityAssignment";
+import {ActivityAssignmentRole} from "../entities/activity/ActivityAssignmentRole";
 import {ActivitySlotRole} from "../entities/activity/ActivitySlotRole";
 
 /**
@@ -61,7 +61,7 @@ export class ActivityAssignmentRolesSubscriber
             .getCount();
 
         // Only enforce when a slotRole row exists and max_qty is set
-        if (slotRole && slotRole.maxQty != null && currentCount >= slotRole.maxQty) {
+        if (slotRole?.maxQty != null && currentCount >= slotRole.maxQty) {
             throw new Error("Role capacity reached for this slot");
         }
     }

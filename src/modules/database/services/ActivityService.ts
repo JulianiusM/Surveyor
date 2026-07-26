@@ -27,11 +27,11 @@ export async function ensureRoleId(planId: string, roleNames: string[] | string,
         const roles = await repo.findBy({name: In(roleNames), plan: {id: planId}});
 
         for (const name of roleNames) {
-            if (roles.find(val => val.name === name)) continue;
+            if (roles.some(val => val.name === name)) continue;
 
             roles.push(repo.create({
                 name: name,
-                isDefault: isDefault === undefined ? name === "default" : isDefault,
+                isDefault: isDefault ?? name === "default",
                 description: description,
                 plan: {id: planId}
             }));
@@ -137,7 +137,9 @@ export async function updateRoleAssignments(slotId: string, assign: {
         // 1. Get all assignments for this slot
         const assignments = await assRepo.find({
             where: {slot: {id: slotId}}, // relations ARE allowed in find()
-            select: ["id"],
+            select: {
+                id: true
+            },
         });
 
         const assignmentIds = assignments.map(a => a.id);
@@ -234,7 +236,9 @@ export async function createActivityPlanTx(
 export async function getActivityPlanById(id: string) {
     return await AppDataSource.getRepository(ActivityPlan).findOne({
         where: {id},
-        relations: ['event'],
+        relations: {
+            event: true
+        },
     });
 }
 
@@ -245,7 +249,10 @@ export async function deleteActivityPlan(id: string) {
 export async function getActivityPlansByUserId(userId: number) {
     return await AppDataSource.getRepository(ActivityPlan).find({
         where: {owner: {id: userId}},
-        relations: ['event', 'owner'],
+        relations: {
+            event: true,
+            owner: true
+        },
     });
 }
 
@@ -284,7 +291,9 @@ export async function getActivityPlanTextFields(planId: string) {
 export async function getActivityPlanTextFieldById(id: string) {
     return await AppDataSource.getRepository(ActivityPlanTextField).findOne({
         where: {id},
-        relations: ["plan"],
+        relations: {
+            plan: true
+        },
     });
 }
 
@@ -317,7 +326,6 @@ export async function updateHeaderImage(id: string, headerImg?: string | null) {
 
 export async function getManagedPlansForUser(userId: number) {
     const ids = await entityAdminService.getIdsForUser('activity', userId);
-    const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
     return await AppDataSource.getRepository(ActivityPlan).find({
         where: [
             {
@@ -371,25 +379,28 @@ export async function addActivitySlots(planId: string, slots: Partial<ActivitySl
 export async function getActivitySlotsFlat(planId: string) {
     const repo = AppDataSource.getRepository(ActivitySlot);
 
-    const slots = await repo
+    const {entities: slots, raw} = await repo
         .createQueryBuilder("s")
         //.leftJoin("s.assignments", "a", "a.planId = :planId", {planId})
-        .loadRelationCountAndMap(
-            "s.assignedCount",
-            "s.activityAssignments",
-            "a",
-            (qb) => qb.where("a.plan_id = :planId", {planId})
+        .addSelect((qb) =>
+                qb.select("COUNT(*)")
+                    .from("activity_assignments", "a")
+                    .where("a.slot_id = s.id"),
+            "assignedCount"
         )
         .where("s.plan_id = :planId", {planId})
         .orderBy("s.day", "ASC")
         .addOrderBy("s.start_time IS NULL", "ASC")
         .addOrderBy("s.start_time", "ASC")
         .addOrderBy("s.pos", "ASC")
-        .getMany(); // entities now have s.assignedCount
+        .getRawAndEntities(); // entities now have s.assignedCount
 
     // Type hint: (ActivitySlot & { assignedCount: number })[]
     // Group slots by day using reduce (Object.groupBy not available in Node.js 24)
-    return slots as (ActivitySlot & { assignedCount: number })[];
+    return slots.map((slot, i) => ({
+        ...slot,
+        assignedCount: Number(raw[i].assignedCount),
+    })) as (ActivitySlot & { assignedCount: number })[];
 }
 
 export async function getActivitySlots(planId: string) {
@@ -447,7 +458,7 @@ export async function reorderActivitySlots(planId: string, order: { slotId: stri
 }
 
 export async function getLastActivitySlotNumber(planId: string, date: string) {
-    return await AppDataSource.getRepository(ActivitySlot).maximum("pos", {plan: {id: planId}, day: date}) ?? 0;
+    return (await AppDataSource.getRepository(ActivitySlot).maximum("pos", {plan: {id: planId}, day: date})) ?? 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -459,7 +470,7 @@ export async function assignActivityAssignmentRoleToUser(
     userId: number,
     roleName = "default"
 ) {
-    const assignmentId = await ensureAssignment(slotId, userId, undefined);
+    const assignmentId = await ensureAssignment(slotId, userId);
     await assignRole(assignmentId, roleName);
 }
 
@@ -511,9 +522,13 @@ export const unassignActivitySlotGuest = unassignActivityAssignmentRoleFromGuest
 
 export async function getActivitySlotAssignmentsForUser(planId: string, userId: number) {
     const assignments = await AppDataSource.getRepository(ActivityAssignment).find({
-        select: ["slot"],
+        select: {
+            slot: true
+        },
         where: {plan: {id: planId}, user: {id: userId}},
-        relations: ["slot"]
+        relations: {
+            slot: true
+        }
     });
 
     return assignments.map(a => a.slot.id);
@@ -521,9 +536,13 @@ export async function getActivitySlotAssignmentsForUser(planId: string, userId: 
 
 export async function getActivitySlotAssignmentsForGuest(planId: string, guestId: string) {
     const assignments = await AppDataSource.getRepository(ActivityAssignment).find({
-        select: ["slot"],
+        select: {
+            slot: true
+        },
         where: {plan: {id: planId}, guest: {id: guestId}},
-        relations: ["slot"]
+        relations: {
+            slot: true
+        }
     });
 
     return assignments.map(a => a.slot.id);
@@ -571,8 +590,10 @@ export async function getParticipantAssignmentsWithSlots(planId: string): Promis
 export async function getActivitySlotAssignmentById(assignId: number) {
     return await AppDataSource.getRepository(ActivityAssignment).findOne({
         where: {id: assignId},
-        relations: ['slot']
-    })
+        relations: {
+            slot: true
+        }
+    });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -580,8 +601,6 @@ export async function getActivitySlotAssignmentById(assignId: number) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function getActivitySlotAssignees(planId: string): Promise<SlotAssignmentMap> {
-    const repo = AppDataSource.getRepository(ActivityAssignment);
-
     // Use QueryBuilder to avoid DISTINCT alias issues in MySQL/MariaDB when loading nested relations.
     const assignments = await AppDataSource.getRepository(ActivityAssignment)
         .createQueryBuilder('aa')
@@ -626,7 +645,9 @@ export async function getActivitySlotAssignees(planId: string): Promise<SlotAssi
 export async function getActivityPlanParticipants(planId: string): Promise<PlanParticipant[]> {
     const plan = await AppDataSource.getRepository(ActivityPlan).findOne({
         where: {id: planId},
-        relations: ['event']
+        relations: {
+            event: true
+        }
     });
 
     // Get assigned participants
@@ -659,7 +680,7 @@ export async function getActivityPlanParticipants(planId: string): Promise<PlanP
 
     // If plan is associated with an event, also include all event participants
     if (plan?.event?.id) {
-        const eventService = await import("./EventService");
+        const eventService = await require("./EventService");
         const eventParticipants = await eventService.getEventParticipants(plan.event.id);
 
         for (const ep of eventParticipants) {
@@ -686,7 +707,14 @@ export async function getParticipantRolesForPlan(planId: string): Promise<{
         .getRepository(ActivityAssignment)
         .find({
             where: {plan: {id: planId}},
-            relations: ['user', 'guest', 'activityAssignmentRoles', 'activityAssignmentRoles.role'],
+            relations: {
+                user: true,
+                guest: true,
+
+                activityAssignmentRoles: {
+                    role: true
+                }
+            },
         });
 
     const roleMap = new Map<string, Set<number>>();
@@ -759,8 +787,13 @@ export async function updateActivitySlotRoles(slotId: string, roles: number[]) {
         // 1. Get all roles for this slot
         const currentRoles = await repo.find({
             where: {slot: {id: slotId}}, // relations ARE allowed in find()
-            select: ["id", "role"],
-            relations: ["role"]
+            select: {
+                id: true,
+                role: true
+            },
+            relations: {
+                role: true
+            }
         });
 
         const toDelete = currentRoles.filter(r => !roles.includes(r.id));

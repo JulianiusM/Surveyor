@@ -35,14 +35,23 @@ export class EventInvoicePool {
     @Column("enum", {name: "distribution_method", enum: InvoicePoolDistributions, default: "EQUAL"})
     distributionMethod!: InvoicePoolDistribution;
 
-    @Column("tinyint", {name: "is_default", width: 1, default: 0})
+    @Column("tinyint", {
+        name: "is_default",
+        default: 0
+    })
     isDefault!: boolean;
 
-    @Column("tinyint", {name: "assign_all", width: 1, default: 1})
+    @Column("tinyint", {
+        name: "assign_all",
+        default: 1
+    })
     assignAll!: boolean;
 
     // Toggle whether the submitter's invoices reduce their own share during distribution
-    @Column("tinyint", {name: "subtract_personal_invoices", width: 1, default: 1})
+    @Column("tinyint", {
+        name: "subtract_personal_invoices",
+        default: 1
+    })
     subtractPersonalInvoices!: boolean;
 
     @Column("decimal", {

@@ -464,12 +464,12 @@ function countChoices(choices: Set<DIETARY>, totals: Record<string, number>) {
 }
 
 async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
-    performImageSwap(entity, eventService.updateHeaderImage, file);
+    await performImageSwap(entity, eventService.updateHeaderImage, file);
     return 'Image updated';
 }
 
 async function deleteHeaderImg(entity: EntityBase) {
-    performImageSwap(entity, eventService.updateHeaderImage);
+    await performImageSwap(entity, eventService.updateHeaderImage);
     return 'Image deleted';
 }
 

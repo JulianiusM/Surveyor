@@ -22,8 +22,7 @@ export class PackingItem {
 
     @Column("tinyint", {
         name: "required_by_all",
-        width: 1,
-        default: 0,
+        default: 0
     })
     requiredByAll!: boolean;
 

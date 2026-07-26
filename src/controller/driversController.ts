@@ -190,12 +190,12 @@ async function deleteItem(itemId: string) {
 }
 
 async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
-    performImageSwap(entity, driverService.updateHeaderImage, file);
+    await performImageSwap(entity, driverService.updateHeaderImage, file);
     return 'Image updated';
 }
 
 async function deleteHeaderImg(entity: EntityBase) {
-    performImageSwap(entity, driverService.updateHeaderImage);
+    await performImageSwap(entity, driverService.updateHeaderImage);
     return 'Image deleted';
 }
 

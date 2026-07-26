@@ -7,18 +7,16 @@ import settings from './settings';
 let transporter: Transporter<SentMessageInfo, Options> | undefined = undefined;
 
 function init() {
-    if (!transporter) {
-        transporter = nodemailer.createTransport({
-            pool: true,
-            host: settings.value.smtpHost,
-            port: settings.value.smtpPort,
-            secure: settings.value.smtpSecure, // use TLS
-            auth: {
-                user: settings.value.smtpUser,
-                pass: settings.value.smtpPassword,
-            },
-        });
-    }
+    transporter ??= nodemailer.createTransport({
+        pool: true,
+        host: settings.value.smtpHost,
+        port: settings.value.smtpPort,
+        secure: settings.value.smtpSecure, // use TLS
+        auth: {
+            user: settings.value.smtpUser,
+            pass: settings.value.smtpPassword,
+        },
+    });
 }
 
 // Funktion zum Senden einer E-Mail
@@ -33,7 +31,7 @@ async function sendEmail(to: string, subject: string, text: string) {
     };
 
     try {
-        const info = await transporter!.sendMail(mailOptions);
+        await transporter!.sendMail(mailOptions);
     } catch (error) {
         console.error('Error sending E-Mail:', error);
     }

@@ -49,18 +49,18 @@ export async function getRequirementConfiguration(planId: string): Promise<Requi
     const planRepo = AppDataSource.getRepository(ActivityPlan);
     const plan = await planRepo.findOne({
         where: {id: planId},
-        select: [
-            "id",
-            "assignmentMode",
-            "generalRequiredShifts",
-            "roundingMode",
-            "startDate",
-            "endDate",
-            "bindingDeadline",
-            "allowOverfillAfterFull",
-            "allowArrivalDayEvening",
-            "allowDepartureDayMorning",
-        ],
+        select: {
+            id: true,
+            assignmentMode: true,
+            generalRequiredShifts: true,
+            roundingMode: true,
+            startDate: true,
+            endDate: true,
+            bindingDeadline: true,
+            allowOverfillAfterFull: true,
+            allowArrivalDayEvening: true,
+            allowDepartureDayMorning: true
+        },
         relations: {
             activityPlanRequirements: {role: true},
             activityPlanRequirementOverrides: {role: true, user: true, guest: true},

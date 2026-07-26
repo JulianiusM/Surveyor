@@ -1,5 +1,5 @@
 // src/modules/database/driversService.ts
-import {DeepPartial, In} from "typeorm";
+import {DeepPartial, EntityNotFoundError, In} from "typeorm";
 import type {DriversItemAssignee, EnrichedDriversItem} from "../../../types/DriversTypes";
 import {generateUniqueId} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
@@ -39,7 +39,11 @@ export async function deleteDriversList(listId: string): Promise<void> {
 }
 
 export async function getDriversListById(listId: string): Promise<DriversList | null> {
-    return await AppDataSource.getRepository(DriversList).findOne({where: {id: listId}, relations: ["event"]});
+    return await AppDataSource.getRepository(DriversList).findOne({
+        where: {id: listId}, relations: {
+            event: true
+        }
+    });
 }
 
 export async function getDriversListByUserId(userId: number): Promise<DriversList[]> {
@@ -56,7 +60,6 @@ export async function updateHeaderImage(listId: string, headerImg?: string | nul
 
 export async function getManagedListsForUser(userId: number) {
     const ids = await entityAdminService.getIdsForUser('drivers', userId);
-    const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
     return await AppDataSource.getRepository(DriversList).find({
         where: [
             {
@@ -141,7 +144,10 @@ export async function getDriversItems(listId: string): Promise<EnrichedDriversIt
 
     const entities = await repo.find({
         where: {list: {id: listId}},
-        relations: ['user', 'guest'],             // join user & guest
+        relations: {
+            user: true,
+            guest: true
+        },             // join user & guest
         loadRelationIds: {relations: ['driversAssignments']}, // get IDs, not full rows
         order: {pos: 'ASC'},
     });
@@ -168,13 +174,25 @@ export async function getDriversItems(listId: string): Promise<EnrichedDriversIt
 export async function getDriversItemById(itemId: string): Promise<EnrichedDriversItem> {
     const repo = AppDataSource.getRepository(DriversItem);
 
-    const item = await repo
+    const {entities, raw} = await repo
         .createQueryBuilder("pi")
         .leftJoinAndSelect("pi.user", "u")
         .leftJoinAndSelect("pi.guest", "g")
-        .loadRelationCountAndMap("pi.assignedCount", "pi.driversAssignments")
+        .addSelect((qb) =>
+                qb
+                    .select("COUNT(*)")
+                    .from("drivers_assignments", "da")
+                    .where("da.item_id = pi.id")
+            , "pi_assignedCount")
         .where("pi.id = :itemId", {itemId})
-        .getOneOrFail() as DriversItem & { assignedCount: number | null };
+        .getRawAndEntities();
+
+    if (entities.length === 0) {
+        throw new EntityNotFoundError(DriversItem, `pi.id = ${itemId}`);
+    }
+
+    const item = entities[0] as DriversItem & { assignedCount: number | null };
+    item.assignedCount = raw[0] ? Number(raw[0].pi_assignedCount) : null;
 
     const assignedCount = item.assignedCount ?? 0;
 
@@ -205,7 +223,7 @@ export async function getDriversAssignmentCounts(
 
 
 export async function getLastDriversItemNumber(listId: string): Promise<number> {
-    return await AppDataSource.getRepository(DriversItem).maximum("pos", {list: {id: listId}}) ?? 0;
+    return (await AppDataSource.getRepository(DriversItem).maximum("pos", {list: {id: listId}})) ?? 0;
 }
 
 // Assignments
@@ -272,14 +290,18 @@ export async function unassignDriversItemGuest(itemId: string, guestId: string):
 export async function getDriversAssignmentById(assignId: number) {
     return await AppDataSource.getRepository(DriversAssignment).findOne({
         where: {id: assignId},
-        relations: ['item']
-    })
+        relations: {
+            item: true
+        }
+    });
 }
 
 export async function getDriversAssignmentsForUser(listId: string, userId: number): Promise<string[]> {
     const rows = await AppDataSource.getRepository(DriversAssignment).find({
         where: {list: {id: listId}, user: {id: userId}},
-        relations: ['item'],   // this ensures `item` is joined
+        relations: {
+            item: true
+        },   // this ensures `item` is joined
         select: {
             item: {id: true}   // only fetch the id of item
         }
@@ -290,7 +312,9 @@ export async function getDriversAssignmentsForUser(listId: string, userId: numbe
 export async function getDriversAssignmentsForGuest(listId: string, guestId: string): Promise<string[]> {
     const rows = await AppDataSource.getRepository(DriversAssignment).find({
         where: {list: {id: listId}, guest: {id: guestId}},
-        relations: ['item'],   // this ensures `item` is joined
+        relations: {
+            item: true
+        },   // this ensures `item` is joined
         select: {
             item: {id: true}   // only fetch the id of item
         }
@@ -301,12 +325,17 @@ export async function getDriversAssignmentsForGuest(listId: string, guestId: str
 export async function getDriversItemAssignees(listId: string) {
     const rows = await AppDataSource.getRepository(DriversAssignment).find({
         where: {list: {id: listId}},  // if `list` is a relation
-        relations: ['user', 'guest', 'item'],
+        relations: {
+            user: true,
+            guest: true,
+            item: true
+        },
     });
 
     return rows.reduce((map, r) => {
         const key = r.item.id;
-        (map[key] = map[key] || []).push({
+        map[key] = map[key] || [];
+        map[key].push({
             id: r.id,
             userId: r.user?.id,
             guestId: r.guest?.id,

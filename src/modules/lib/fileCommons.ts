@@ -1,6 +1,6 @@
-import fs from "fs";
 import multer from "multer";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import {v4 as uuidv4} from "uuid";
 import {EntityBase} from "../../types/UserTypes";
 import {APIError} from "./errors";
@@ -53,11 +53,11 @@ export function prepareFileUploader(dir: string, allowImg: boolean = true, allow
     return proofUpload;
 }
 
-export function performImageSwap(entity: EntityBase, updateFct: (id: string, path?: string | null) => Promise<void>, file?: Express.Multer.File) {
+export async function performImageSwap(entity: EntityBase, updateFct: (id: string, path?: string | null) => Promise<void>, file?: Express.Multer.File) {
     checkNewImage(file);
 
     try {
-        updateFct(entity.id, file ? file.path : null);
+        await updateFct(entity.id, file ? file.path : null);
     } catch (err) {
         if (file) {
             removeImage(file.path);

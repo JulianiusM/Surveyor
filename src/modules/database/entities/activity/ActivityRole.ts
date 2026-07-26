@@ -17,7 +17,10 @@ export class ActivityRole {
     @Column("text", {name: "description", nullable: true})
     description: string | null;
 
-    @Column("tinyint", {name: "is_default", width: 1, default: () => "'0'"})
+    @Column("tinyint", {
+        name: "is_default",
+        default: () => "'0'"
+    })
     isDefault: boolean;
 
     @RelationId((role: ActivityRole) => role.plan)
