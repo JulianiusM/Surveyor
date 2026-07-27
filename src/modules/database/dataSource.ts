@@ -27,6 +27,10 @@ export async function initDataSource() {
         migrations: migrations,
         subscribers: subscribers,
         synchronize: false,
+        invalidWhereValuesBehavior: {
+            null: "sql-null",
+            undefined: "ignore",
+        },
     });
 
     await AppDataSource.initialize();

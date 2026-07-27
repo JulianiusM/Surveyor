@@ -7,6 +7,7 @@ import {isRegisteredForEvent} from "../modules/database/services/EventService";
 import {asyncHandler} from "../modules/lib/asyncHandler";
 import {APIError, ExpectedError} from "../modules/lib/errors";
 import {getPermMeta, getPresets} from "../modules/lib/permissions";
+import {normalizeToArray} from "../modules/lib/util";
 import {buildPermBundle, can, getDefaultPerms} from "../modules/permissionEngine";
 import type {
     EntityGetter,
@@ -161,14 +162,18 @@ export function isGuest(req: Request, res: Response, next: NextFunction) {
 /* ---------- Entity Administration ---------- */
 /** Core requirePerm, now delegates to engine.can(...) */
 function requirePermInternal(
-    getSubject: (req: Request) => Promise<Subject> | Subject,
+    getSubjects: ((req: Request) => Promise<Subject> | Subject)[],
     requiredPerm: number,
     err: ErrorAdapter,
-    requiredParentPerm?: number | number[]
+    requiredParentPerm?: number | number[],
 ) {
     return async (req: Request, _res: Response, next: NextFunction) => {
-        const subject = await getSubject(req);
-        const ok = await can(subject, req.session ?? {}, requiredPerm, requiredParentPerm);
+        let ok = false;
+        for (const getSubject of getSubjects) {
+            const subject = await getSubject(req);
+            ok = await can(subject, req.session ?? {}, requiredPerm, requiredParentPerm)
+            if (ok) break; // break early
+        }
         if (!ok) {
             return err.forbidden();
         }
@@ -176,25 +181,45 @@ function requirePermInternal(
     };
 }
 
-/** Entity version */
-export function requirePermissionApi(getEntity: EntityGetter, requiredPerm: number) {
-    return requirePermInternal((req) => ({kind: 'entity', entity: getEntity(req) as any}), requiredPerm, apiErrors);
+function transformEntityGetter(getEntity: EntityGetter[]) {
+    const getters: ((req: Request) => Promise<Subject> | Subject)[] = [];
+    for (const getter of getEntity) {
+        getters.push(async (req: Request) => ({
+            kind: 'entity',
+            entity: (await getter(req))
+        }))
+    }
+    return getters;
 }
 
-export function requirePermission(getEntity: EntityGetter, requiredPerm: number) {
-    return requirePermInternal((req) => ({
-        kind: 'entity',
-        entity: getEntity(req) as any
-    }), requiredPerm, expectedErrors);
+function transformItemGetter(getItem: ItemWithParentGetter[]) {
+    const getters: ((req: Request) => Promise<Subject> | Subject)[] = [];
+    for (const getter of getItem) {
+        getters.push(async (req: Request) => ({
+            kind: 'item',
+            ...(await getter(req))
+        }))
+    }
+    return getters;
+}
+
+/** Entity version */
+export function requirePermissionApi(getEntity: EntityGetter | EntityGetter[], requiredPerm: number) {
+    return requirePermInternal(transformEntityGetter(normalizeToArray(getEntity)), requiredPerm, apiErrors);
+}
+
+export function requirePermission(getEntity: EntityGetter | EntityGetter[], requiredPerm: number) {
+    return requirePermInternal(transformEntityGetter(normalizeToArray(getEntity)), requiredPerm, expectedErrors);
 }
 
 /** Item version (with parent). You may pass a different requiredParentPerm; if omitted, same perm is checked on parent. */
-export function requireItemPermissionApi(get: ItemWithParentGetter, requiredPerm: number, requiredParentPerm?: number | number[]) {
-    return requirePermInternal((req) => ({kind: 'item', ...(get(req) as any)}), requiredPerm, apiErrors, requiredParentPerm);
+export function requireItemPermissionApi(get: ItemWithParentGetter | ItemWithParentGetter[], requiredPerm: number, requiredParentPerm?: number | number[]) {
+    return requirePermInternal(transformItemGetter(normalizeToArray(get)), requiredPerm, apiErrors, requiredParentPerm);
 }
 
-export function requireItemPermission(get: ItemWithParentGetter, requiredPerm: number, requiredParentPerm?: number | number[]) {
-    return requirePermInternal((req) => ({kind: 'item', ...(get(req) as any)}), requiredPerm, expectedErrors, requiredParentPerm);
+export function requireItemPermission(get: ItemWithParentGetter | ItemWithParentGetter[], requiredPerm: number, requiredParentPerm?: number | number[]) {
+
+    return requirePermInternal(transformItemGetter(normalizeToArray(get)), requiredPerm, expectedErrors, requiredParentPerm);
 }
 
 // Checks for a permission to an optional entity. getEntity must return the entity in question (will skip the check if missing).

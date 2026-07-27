@@ -186,7 +186,7 @@ app.post('/:id/slot/reorder', requirePermissionApi(permFct, PERM.ITEM_EDIT), asy
 /* ───────────────── QUICK-ADD ──────────────────────────────── */
 
 app.post('/:id/slot/add', requirePermissionApi(permFct, PERM.ITEM_ADD), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.quickAddSlot(resFct(req), req.body);
+    const msg = await controller.quickAddSlot(resFct(req), req.body, req.session);
     renderer.respondWithSuccessJson(res, msg);
 }));
 

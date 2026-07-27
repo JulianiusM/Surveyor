@@ -1,4 +1,6 @@
 import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
+import {Guest} from "../user/Guest";
+import {User} from "../user/User";
 import {PackingAssignment} from "./PackingAssignment";
 import {PackingList} from "./PackingList";
 
@@ -56,4 +58,24 @@ export class PackingItem {
     })
     @JoinColumn([{name: "list_id", referencedColumnName: "id"}])
     list!: PackingList;
+
+    @RelationId((a: PackingItem) => a.user)
+    userId?: number;
+
+    @ManyToOne(() => User, (users) => users.packingItems, {
+        onDelete: "CASCADE",
+        onUpdate: "RESTRICT",
+    })
+    @JoinColumn([{name: "user_id", referencedColumnName: "id"}])
+    user?: User;
+
+    @RelationId((a: PackingItem) => a.guest)
+    guestId?: string;
+
+    @ManyToOne(() => Guest, (guests) => guests.packingItems, {
+        onDelete: "CASCADE",
+        onUpdate: "RESTRICT",
+    })
+    @JoinColumn([{name: "guest_id", referencedColumnName: "id"}])
+    guest?: Guest;
 }

@@ -12,7 +12,7 @@ import type {RecommendationParticipantOption, RecommendationRow} from './activit
  * Handles all recommendation operations without DOM concerns
  */
 export class RecommendationsLogic {
-    constructor(private state: ActivityRecommendationsState) {
+    constructor(private readonly state: ActivityRecommendationsState) {
     }
 
     /**
@@ -71,15 +71,19 @@ export class RecommendationsLogic {
     /**
      * Parse participant value from form
      */
-    parseParticipantValue(value: string): { type: string; id: number } {
+    parseParticipantValue(value: string): { type: string; id: string | number } {
         const [type, idStr] = value.split(':');
-        return {type, id: parseInt(idStr, 10)};
+        let id: string | number = idStr;
+        if (type === "user") {
+            id = Number.parseInt(idStr, 10);
+        }
+        return {type, id};
     }
 
     /**
      * Find participant by ID
      */
-    findParticipant(userId: number | null, guestId: number | null): RecommendationParticipantOption | undefined {
+    findParticipant(userId: number | null, guestId: string | null): RecommendationParticipantOption | undefined {
         const options = this.state.getParticipantOptions();
         return options.find((p) =>
             (userId && p.userId === userId) || (guestId && p.guestId === guestId)
@@ -125,7 +129,7 @@ export class RecommendationsLogic {
     /**
      * Check for duplicate recommendation
      */
-    isDuplicate(slotId: string, userId: number | null, guestId: number | null): boolean {
+    isDuplicate(slotId: string, userId: number | null, guestId: string | null): boolean {
         return this.state.hasDuplicateRecommendation(slotId, userId, guestId);
     }
 
@@ -134,7 +138,7 @@ export class RecommendationsLogic {
      */
     hasOverlappingAssignment(
         userId: number | null,
-        guestId: number | null,
+        guestId: string | null,
         slotId: string
     ): boolean {
         const slots = this.state.getSlots();
@@ -161,29 +165,6 @@ export class RecommendationsLogic {
             const assignmentEnd = new Date(`${assignment.slot.day}T${assignment.slot.endTime}`);
 
             return slotStart < assignmentEnd && slotEnd > assignmentStart;
-        });
-    }
-
-    /**
-     * Check for overlapping recommendations
-     */
-    hasOverlappingRecommendation(
-        userId: number | null,
-        guestId: number | null,
-        slotDay: string | null,
-        slotStartTime: string | null,
-        slotEndTime: string | null
-    ): boolean {
-        if (!slotDay || !slotStartTime || !slotEndTime) return false;
-
-        const recommendations = this.state.getRecommendations();
-        return recommendations.some(r => {
-            // Must be same participant
-            if (!(r.user?.id === userId || r.guest?.id === guestId)) return false;
-
-            // Must be same day (comparing with DOM would require UI layer)
-            // This is a simplified check - full implementation would need slot day info
-            return false; // Placeholder - actual implementation needs more context
         });
     }
 
@@ -232,7 +213,7 @@ export class RecommendationsLogic {
         slot: any,
         participant: RecommendationParticipantOption,
         userId: number | null,
-        guestId: number | null
+        guestId: string | null
     ): RecommendationRow {
         return {
             slot,

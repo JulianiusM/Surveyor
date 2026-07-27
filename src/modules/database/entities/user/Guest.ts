@@ -1,11 +1,13 @@
 import {Column, Entity, OneToMany, PrimaryGeneratedColumn} from "typeorm";
 import {ActivityAssignment} from "../activity/ActivityAssignment";
 import {ActivityPlanRequirementOverride} from "../activity/ActivityPlanRequirementOverride";
+import {ActivitySlot} from "../activity/ActivitySlot";
 import {DriversAssignment} from "../drivers/DriversAssignment";
 import {DriversItem} from "../drivers/DriversItem";
 import {EventRegBypassLink} from "../event/EventRegBypassLink";
 import {EventRegistration} from "../event/EventRegistration";
 import {PackingAssignment} from "../packing/PackingAssignment";
+import {PackingItem} from "../packing/PackingItem";
 import {SurveyResponse} from "../surveys/SurveyResponse";
 
 @Entity("guests", {schema: "surveyor"})
@@ -40,6 +42,9 @@ export class Guest {
     )
     activityAssignments: ActivityAssignment[];
 
+    @OneToMany(() => ActivitySlot, (activitySlot) => activitySlot.guest)
+    activitySlots: ActivitySlot[];
+
     @OneToMany(
         () => DriversAssignment,
         (driversAssignments) => driversAssignments.guest
@@ -54,6 +59,9 @@ export class Guest {
         (packingAssignments) => packingAssignments.guest
     )
     packingAssignments: PackingAssignment[];
+
+    @OneToMany(() => PackingItem, (packingItems) => packingItems.guest)
+    packingItems: PackingItem[];
 
     @OneToMany(() => SurveyResponse, (surveyResponses) => surveyResponses.guest)
     surveyResponses: SurveyResponse[];

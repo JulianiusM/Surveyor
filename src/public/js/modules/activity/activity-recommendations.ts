@@ -56,7 +56,7 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
         target.textContent = message;
     };
 
-    const warningKey = (slotId: string, userId?: number | null, guestId?: number | null) => {
+    const warningKey = (slotId: string, userId?: number | null, guestId?: string | null) => {
         if (userId) return `${slotId}:u${userId}`;
         if (guestId) return `${slotId}:g${guestId}`;
         return `${slotId}:unknown`;
@@ -97,7 +97,7 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
     const currentRecKey = (row: HTMLElement) => warningKey(
         row.dataset.slotId || '',
         row.dataset.userId ? Number(row.dataset.userId) : null,
-        row.dataset.guestId ? Number(row.dataset.guestId) : null,
+        row.dataset.guestId ? row.dataset.guestId : null,
     );
 
     const markDirty = (row: HTMLElement) => {
@@ -111,7 +111,7 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
         warningCell.innerHTML = '';
 
         const warningList = warningMap.get(row.dataset.recKey || '');
-        if (warningList && warningList.length) {
+        if (warningList?.length) {
             const list = document.createElement('ul');
             list.className = 'mb-0 small ps-3';
             warningList.forEach((warn) => {
@@ -227,7 +227,12 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
             const participantSelect = document.createElement('select');
             participantSelect.className = 'form-select form-select-sm text-bg-dark';
             const participantList = [...participantOptions];
-            const selectedValue = rec.user?.id ? `user:${rec.user.id}` : rec.guest?.id ? `guest:${rec.guest.id}` : '';
+            let selectedValue = '';
+            if (rec.user?.id) {
+                selectedValue = `user:${rec.user.id}`;
+            } else if (rec.guest?.id) {
+                selectedValue = `guest:${rec.guest.id}`;
+            }
             if (selectedValue && !participantList.some((opt) => participantValue(opt) === selectedValue)) {
                 participantList.push({
                     key: selectedValue,
@@ -354,8 +359,8 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
             showInlineAlert('success', res?.message || 'Recommendations applied');
 
             // Store current tab before reload
-            const activeTab = document.querySelector('.nav-link.active');
-            const activeTabId = activeTab?.getAttribute('data-bs-target');
+            const activeTab = document.querySelector<HTMLElement>('.nav-link.active');
+            const activeTabId = activeTab?.dataset.bsTarget;
             if (activeTabId) {
                 sessionStorage.setItem('activity-active-tab', activeTabId);
             }

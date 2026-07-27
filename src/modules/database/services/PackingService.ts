@@ -1,5 +1,6 @@
 // TypeORM-based implementation of the packing list module
 import {In} from "typeorm";
+import type {Agent} from "../../../types/UtilTypes";
 import {generateUniqueId} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {PackingAssignment} from '../entities/packing/PackingAssignment';
@@ -115,7 +116,7 @@ export async function getPackingListByParticipantGuestId(guestId: string) {
 }
 
 // Packing Items
-export async function createPackingItem(listId: string, item: Partial<PackingItem>) {
+export async function createPackingItem(listId: string, item: Partial<PackingItem>, agent: Agent) {
     const repo = AppDataSource.getRepository(PackingItem);
     const entity = repo.create({
         id: item.id,
@@ -123,12 +124,13 @@ export async function createPackingItem(listId: string, item: Partial<PackingIte
         title: item.title,
         description: item.description,
         maxAssignees: item.maxAssignees,
-        pos: item.pos
+        pos: item.pos,
+        ...agent
     });
     await repo.save(entity);
 }
 
-export async function addPackingItems(listId: string, items: Partial<PackingItem>[]) {
+export async function addPackingItems(listId: string, items: Partial<PackingItem>[], agent: Agent) {
     if (!items.length) return;
     const repo = AppDataSource.getRepository(PackingItem);
     const entities = items.map(it => repo.create({
@@ -137,7 +139,8 @@ export async function addPackingItems(listId: string, items: Partial<PackingItem
         title: it.title,
         description: it.description,
         maxAssignees: it.maxAssignees,
-        pos: it.pos
+        pos: it.pos,
+        ...agent
     }));
     await repo.save(entities);
 }

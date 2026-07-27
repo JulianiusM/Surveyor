@@ -66,7 +66,7 @@ app.post('/:id/reorder', requirePermissionApi(permFct, PERM.ITEM_EDIT), asyncHan
 /* ───────────────── QUICK-ADD ──────────────────────────────── */
 
 app.post('/:id/items', requirePermissionApi(permFct, PERM.ITEM_ADD), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.quickAddItem(resFct(req), req.body);
+    const msg = await controller.quickAddItem(resFct(req), req.body, req.session);
     renderer.respondWithSuccessJson(res, msg);
 }));
 

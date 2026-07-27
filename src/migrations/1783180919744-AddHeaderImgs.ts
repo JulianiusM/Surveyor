@@ -1,5 +1,5 @@
 import {MigrationInterface, QueryRunner} from "typeorm";
-import {columnExists} from "../modules/database/utils/migration-helper";
+import {addColumnIfNotExists, dropColumnIfExists} from "../modules/database/utils/migration-helper";
 
 export class AddHeaderImgs1783180919744 implements MigrationInterface {
     name = 'AddHeaderImgs1783180919744'
@@ -14,14 +14,7 @@ export class AddHeaderImgs1783180919744 implements MigrationInterface {
         ];
 
         for (const table of tables) {
-            const exists = await columnExists(queryRunner, table, "header_img");
-
-            if (!exists) {
-                await queryRunner.query(
-                    `ALTER TABLE \`${table}\`
-                        ADD \`header_img\` varchar(255) NULL`
-                );
-            }
+            await addColumnIfNotExists(queryRunner, table, "header_img", "varchar(255)", "NULL");
         }
     }
 
@@ -35,13 +28,7 @@ export class AddHeaderImgs1783180919744 implements MigrationInterface {
         ];
 
         for (const table of tables) {
-            const exists = await columnExists(queryRunner, table, "header_img");
-
-            if (exists) {
-                await queryRunner.query(
-                    `ALTER TABLE \`${table}\` DROP COLUMN \`header_img\``
-                );
-            }
+            await dropColumnIfExists(queryRunner, table, "header_img");
         }
     }
 }

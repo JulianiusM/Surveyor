@@ -4,11 +4,11 @@
  * assignment removal, item deletion, and quick add flows.
  */
 
-import { post } from '../core/http';
-import { showInlineAlert } from './alerts';
-import { reloadAfterDelay } from './ui-helpers';
-import { requireEntityPerm, requireItemPerm } from '../core/permissions';
-import type { PermType } from '../../../types/PermissionTypes';
+import type {PermType} from '../../../types/PermissionTypes';
+import {post} from '../core/http';
+import {requireEntityPerm, requireItemPerm} from '../core/permissions';
+import {showInlineAlert} from './alerts';
+import {reloadAfterDelay} from './ui-helpers';
 
 interface PermissionGuard {
     key: PermType;
@@ -53,7 +53,7 @@ export function initAssignmentRemoval(config: AssignmentRemovalConfig): void {
         if (!btn) return;
 
         const assignId = (btn as HTMLElement).dataset.assignid;
-        const itemId = (btn as HTMLElement).closest('[data-itemid]')?.getAttribute('data-itemid');
+        const itemId = (btn as HTMLElement).closest<HTMLElement>('[data-itemid]')?.dataset.itemid;
         try {
             guardItemAction(itemId, guard);
             await post(`${config.baseUrl}/assignment/${assignId}/delete`, {});
@@ -141,7 +141,7 @@ export function initQuickAdd(config: QuickAddConfig): void {
     if (!quickForm) return;
 
     const reloadDelay = config.reloadDelay ?? 100;
-    const guard = config.guard ?? { key: 'ITEM_ADD', action: 'add new items' };
+    const guard = config.guard ?? {key: 'ITEM_ADD', action: 'add new items'};
 
     quickForm.addEventListener('submit', async (e: Event) => {
         e.preventDefault();

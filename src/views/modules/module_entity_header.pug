@@ -8,11 +8,24 @@ mixin entityHeader(entity, entityType, icon, permData)
             )
 
         .p-3.d-flex.flex-column.flex-md-row.align-items-md-center.justify-content-between.gap-3
-            .d-none.d-md-inline
+            if entity.eventId
+                .btn-group.d-md-inline.d-none
+                    a.btn.btn-outline-light(href=`/event/${entity.eventId}`)
+                        i.bi.bi-arrow-left-circle.me-1
+                        | Go to event
+            else
+                .d-none.d-md-inline
 
             h1.mb-0.text-center
                 i(class=`bi ${icon} me-2`)
                 | #{entity.title}
+
+            // Event moved down under title header for small devices
+            if entity.eventId
+                .btn-group.d-md-none
+                    a.btn.btn-outline-light(href=`/event/${entity.eventId}`)
+                        i.bi.bi-arrow-left-circle.me-1
+                        | Go to event
 
             if permData.entity.has("EDIT_META")
                 .btn-group

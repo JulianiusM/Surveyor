@@ -1,18 +1,20 @@
 import {BeforeInsert, BeforeUpdate, Column, Entity, Index, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
 import {ActivityAssignment} from "../activity/ActivityAssignment";
 import {ActivityPlan} from "../activity/ActivityPlan";
+import {ActivityPlanRequirementOverride} from "../activity/ActivityPlanRequirementOverride";
+import {ActivitySlot} from "../activity/ActivitySlot";
 import {DriversAssignment} from "../drivers/DriversAssignment";
 import {DriversItem} from "../drivers/DriversItem";
 import {DriversList} from "../drivers/DriversList";
-import {PackingList} from "../packing/PackingList";
-import {SurveyResponse} from "../surveys/SurveyResponse";
-import {Survey} from "../surveys/Survey";
-import {PackingAssignment} from "../packing/PackingAssignment";
 import {Event} from "../event/Event";
-import {EventRegistration} from "../event/EventRegistration";
-import {EntityAdminAssignment} from "../permissions/EntityAdminAssignment";
 import {EventRegBypassLink} from "../event/EventRegBypassLink";
-import {ActivityPlanRequirementOverride} from "../activity/ActivityPlanRequirementOverride";
+import {EventRegistration} from "../event/EventRegistration";
+import {PackingAssignment} from "../packing/PackingAssignment";
+import {PackingItem} from "../packing/PackingItem";
+import {PackingList} from "../packing/PackingList";
+import {EntityAdminAssignment} from "../permissions/EntityAdminAssignment";
+import {Survey} from "../surveys/Survey";
+import {SurveyResponse} from "../surveys/SurveyResponse";
 
 @Index("email", ["email"], {unique: true})
 @Index("username", ["username"], {unique: true})
@@ -76,6 +78,9 @@ export class User {
     )
     activityAssignments: ActivityAssignment[];
 
+    @OneToMany(() => ActivitySlot, (activitySlots) => activitySlots.user)
+    activitySlots: ActivitySlot[];
+
     @OneToMany(() => ActivityPlan, (activityPlans) => activityPlans.owner)
     activityPlans: ActivityPlan[];
 
@@ -96,6 +101,9 @@ export class User {
         (packingAssignments) => packingAssignments.user
     )
     packingAssignments: PackingAssignment[];
+
+    @OneToMany(() => PackingItem, (packingItems) => packingItems.user)
+    packingItems: PackingItem[];
 
     @OneToMany(() => PackingList, (packingLists) => packingLists.owner)
     packingLists: PackingList[];

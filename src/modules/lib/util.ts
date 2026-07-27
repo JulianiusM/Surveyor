@@ -9,10 +9,11 @@ import type {
     ItemDescriptor,
     ItemGetter,
     ItemSubject,
-    ItemWithParentGetter
+    ItemWithParentGetter,
+    SessionLike
 } from "../../types/PermissionTypes";
 import type {DashboardEntities, Entity, EntityBase} from "../../types/UserTypes";
-import type {EntityItemType, EntityType} from "../../types/UtilTypes";
+import type {Agent, EntityItemType, EntityType} from "../../types/UtilTypes";
 import settings from "../settings";
 
 import {APIError} from "./errors";
@@ -272,7 +273,7 @@ export function getPermFct(resFct: GetResource, entityName: EntityType): EntityG
 
 export function getPermFctItems(resFct: GetResource, resFctItems: GetAdditional, entityName: EntityType, additionalName: EntityItemType): ItemWithParentGetter {
     const permFctItems = (req: Request): ItemSubject => {
-        const param: any = req.params.itemId;
+        const param: any = req.params.itemId || req.params.slotId;
         const resource = resFctItems(req).find(r => r?.id === param);
         const parent = resFct(req);
         const result: ItemSubject = {
@@ -299,7 +300,7 @@ export function getPermFctAssign(resFct: GetResource, resFctItems: GetAdditional
     const permFctItems = (req: Request): ItemSubject => {
         const param: number = Number.parseInt(req.params.assignId as string);
         const assign = resFctItems(req).find(r => r?.id === param);
-        const resource = assign?.item;
+        const resource = assign?.item || assign?.slot;
         const parent = resFct(req);
         const result: ItemSubject = {
             item: {
@@ -424,8 +425,8 @@ export function convertEntity(entity: EntityBase, entityType: EntityType) {
     } as Entity;
 }
 
-export function normalizeToArray<A>(thing: A | A[]) {
-    let arr: A[] = [];
+export function normalizeToArray<A>(thing: A | A[], fallback: A[] = []) {
+    let arr: A[] = fallback;
     if (Array.isArray(thing)) {
         arr = thing;
     } else if (thing) {
@@ -433,4 +434,14 @@ export function normalizeToArray<A>(thing: A | A[]) {
     }
 
     return arr;
+}
+
+export function convertToAgent(session: SessionLike): Agent {
+    if (session.user) {
+        return {user: {id: session.user.id}};
+    }
+    if (session.guest) {
+        return {guest: {id: session.guest.id}};
+    }
+    return {};
 }

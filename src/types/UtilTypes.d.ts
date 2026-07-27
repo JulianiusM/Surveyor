@@ -49,3 +49,5 @@ export type DualParty<L extends string, R extends string> =
 export type EntityType = "activity" | "drivers" | "packing" | "event" | "survey";
 export type EntityItemType = "activitySlot" | "driversItem" | "packingItem" | "eventRegistration" | "surveyItem";
 export type CombEntityType = EntityType | EntityItemType;
+
+export type Agent = { user: { id: number } } | { guest: { id: string } } | {}

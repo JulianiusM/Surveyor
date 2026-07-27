@@ -14,19 +14,19 @@ declare const bootstrap: BootstrapGlobal;
  * Handles all DOM operations and user interactions
  */
 export class RecommendationsUI {
-    private scheduleView: HTMLElement | null;
-    private alertBox: HTMLElement | null;
-    private summaryStats: HTMLElement | null;
-    private addModal: HTMLElement | null;
-    private addSlotIdInput: HTMLInputElement | null;
-    private addParticipantSelect: HTMLSelectElement | null;
-    private addConfirmBtn: HTMLButtonElement | null;
-    private addWarningBox: HTMLElement | null;
+    private readonly scheduleView: HTMLElement | null;
+    private readonly alertBox: HTMLElement | null;
+    private readonly summaryStats: HTMLElement | null;
+    private readonly addModal: HTMLElement | null;
+    private readonly addSlotIdInput: HTMLInputElement | null;
+    private readonly addParticipantSelect: HTMLSelectElement | null;
+    private readonly addConfirmBtn: HTMLButtonElement | null;
+    private readonly addWarningBox: HTMLElement | null;
 
     constructor(
-        private state: ActivityRecommendationsState,
-        private logic: RecommendationsLogic,
-        private container: HTMLElement
+        private readonly state: ActivityRecommendationsState,
+        private readonly logic: RecommendationsLogic,
+        private readonly container: HTMLElement
     ) {
         this.scheduleView = container.querySelector<HTMLElement>('#recommendationScheduleView');
         this.alertBox = container.querySelector<HTMLElement>('[data-recommendations-alert]');
@@ -123,9 +123,12 @@ export class RecommendationsUI {
 
         // Icon
         const icon = document.createElement('i');
-        icon.className = rec.status === 'APPROVED' ? 'bi bi-check-circle-fill text-success' :
-            rec.status === 'REJECTED' ? 'bi bi-x-circle-fill text-danger' :
-                'bi bi-clock-fill text-warning';
+        icon.className = 'bi bi-clock-fill text-warning';
+        if (rec.status === 'APPROVED') {
+            icon.className = 'bi bi-check-circle-fill text-success'
+        } else if (rec.status === 'REJECTED') {
+            icon.className = 'bi bi-x-circle-fill text-danger';
+        }
         recDiv.append(icon);
 
         // Participant name
@@ -240,7 +243,7 @@ export class RecommendationsUI {
 
             // Get slot date from DOM to filter participants
             const slotElement = this.scheduleView!.querySelector(`[data-slot-id="${slotId}"]`);
-            const slotDay = slotElement?.closest('[data-day]')?.getAttribute('data-day');
+            const slotDay = slotElement?.closest<HTMLElement>('[data-day]')?.dataset.day;
 
             // Populate modal
             if (this.addSlotIdInput) this.addSlotIdInput.value = slotId;
@@ -297,8 +300,8 @@ export class RecommendationsUI {
 
         // Check for overlap using logic layer
         const {type, id} = this.logic.parseParticipantValue(participantValue);
-        const userId = type === 'user' ? id : null;
-        const guestId = type === 'guest' ? id : null;
+        const userId = type === 'user' ? id as number : null;
+        const guestId = type === 'guest' ? id as string : null;
 
         const hasOverlap = this.logic.hasOverlappingAssignment(userId, guestId, slotId);
 

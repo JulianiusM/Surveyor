@@ -151,7 +151,7 @@ each week in weeks
                                                         guest)
 
                                                 // single admin button per slot – opens modal
-                                                if permData.entity.has('MANAGE_ASSIGNMENTS')
+                                                if permData.itemAllow(slot.id, 'MANAGE_ASSIGNMENTS', 'MANAGE_ASSIGNMENTS')
                                                     button.btn.btn-sm.btn-outline-light.mt-1.w-100(
                                                         type="button"
                                                         data-slot-role-admin
@@ -170,13 +170,13 @@ each week in weeks
                                                         data-id=slot.id
                                                         data-max)= slot.maxAssignees
 
-                                            if permData.entity.has("ACCESS_PARTICIPANTS")
+                                            if permData.itemAllow(slot.id, "ACCESS_PARTICIPANTS", "ACCESS_PARTICIPANTS")
                                                 ul.list-unstyled.mb-0
                                                     each asg in data.assigneeLists[slot.id] || []
                                                         li.d-flex.align-items-center.gap-1
                                                             i.bi.bi-person-fill
                                                             span.flex-grow-1= asg.name || asg.username
-                                                            if permData.itemAllow(slot.id, 'EDIT_ASSIGNMENTS', 'MANAGE_ASSIGNMENTS')
+                                                            if permData.itemAllow(slot.id, 'MANAGE_ASSIGNMENTS', 'MANAGE_ASSIGNMENTS')
                                                                 button.btn.btn-sm.btn-outline-danger.ms-1(
                                                                     data-owner-remove
                                                                     data-assignid=asg.id) ×

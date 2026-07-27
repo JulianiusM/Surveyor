@@ -59,7 +59,7 @@ export interface RecommendationRow {
         endTime?: string | null;
     };
     user?: { id: number; username: string; name?: string } | null;
-    guest?: { id: number; username: string } | null;
+    guest?: { id: string; username: string } | null;
     status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'APPLIED';
 }
 
@@ -67,7 +67,7 @@ export interface RecommendationWarning {
     recommendation: {
         slotId: string;
         userId?: number | null;
-        guestId?: number | null;
+        guestId?: string | null;
     };
     warnings: AssignmentWarning[];
 }
@@ -90,7 +90,7 @@ export interface RequirementOverrideTarget {
     key: string;
     label: string;
     userId?: number | null;
-    guestId?: number | null;
+    guestId?: string | null;
     arrivalDate?: string | null;
     departureDate?: string | null;
 }
@@ -113,7 +113,7 @@ export interface RequirementConfiguration {
         role?: RoleSummary | null;
         userId?: number | null;
         user?: { username: string, name?: string } | null;
-        guestId?: number | null;
+        guestId?: string | null;
         guest?: { username: string } | null;
         requiredShifts: number;
     }[];
@@ -137,7 +137,7 @@ export interface RecommendationParticipantOption {
     key: string;
     label: string;
     userId?: number | null;
-    guestId?: number | null;
+    guestId?: string | null;
     arrivalDate?: string | null;
     departureDate?: string | null;
 }

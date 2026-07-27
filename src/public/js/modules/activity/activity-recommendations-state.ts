@@ -89,7 +89,7 @@ export class ActivityRecommendationsState {
     }
 
     // Update methods
-    updateRecommendationStatus(slotId: string, userId: number | null, guestId: number | null, status: string): boolean {
+    updateRecommendationStatus(slotId: string, userId: number | null, guestId: string | null, status: string): boolean {
         const idx = this.recommendations.findIndex((r) =>
             r.slot.id === slotId &&
             (r.user?.id ?? null) === userId &&
@@ -108,7 +108,7 @@ export class ActivityRecommendationsState {
     }
 
     // Check for duplicates
-    hasDuplicateRecommendation(slotId: string, userId: number | null, guestId: number | null): boolean {
+    hasDuplicateRecommendation(slotId: string, userId: number | null, guestId: string | null): boolean {
         return this.recommendations.some(r =>
             r.slot.id === slotId &&
             (r.user?.id ?? null) === userId &&

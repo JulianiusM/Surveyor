@@ -23,10 +23,10 @@ import * as eventService from "../modules/database/services/EventService";
 import {APIError, ValidationError} from '../modules/lib/errors';
 import {performImageSwap} from "../modules/lib/fileCommons";
 
-import {ENTITIES, fromISOtoLocal, generateUniqueId} from '../modules/lib/util';
+import {convertToAgent, ENTITIES, fromISOtoLocal, generateUniqueId} from '../modules/lib/util';
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
 import type {SlotAssignee} from "../types/ActivityTypes";
-import type {PermBundle} from "../types/PermissionTypes";
+import type {PermBundle, SessionLike} from "../types/PermissionTypes";
 import type {EntityBase} from "../types/UserTypes";
 
 // Template constant for create errors
@@ -459,7 +459,7 @@ async function reorderSlots(id: string, order: { slotId: string, pos: number }[]
     return 'Order saved';
 }
 
-async function quickAddSlot(plan: ActivityPlan, body: any) {
+async function quickAddSlot(plan: ActivityPlan, body: any, session: SessionLike) {
     const {date, title = '', description = '', startTime, endTime, maxAssignees = 1, roles = []} = body;
     const d = fromISOtoLocal(date);
     if (d < fromISOtoLocal(plan.startDate) || d > fromISOtoLocal(plan.endDate))
@@ -490,10 +490,10 @@ async function quickAddSlot(plan: ActivityPlan, body: any) {
         pos: last + 1
     };
 
-    await activityService.addActivitySlot(plan.id, slot);
+    await activityService.addActivitySlot(plan.id, slot, convertToAgent(session));
 
     if (roles.length > 0) {
-        await activityService.ensureRoleId(plan.id, roles);
+        await activityService.addActivitySlotRoles(slot.id!, roles);
     }
     return 'Slot added';
 }

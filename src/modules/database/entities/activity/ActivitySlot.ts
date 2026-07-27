@@ -1,7 +1,9 @@
 import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
+import {Guest} from "../user/Guest";
+import {User} from "../user/User";
 import {ActivityAssignment} from "./ActivityAssignment";
-import {ActivitySlotRole} from "./ActivitySlotRole";
 import {ActivityPlan} from "./ActivityPlan";
+import {ActivitySlotRole} from "./ActivitySlotRole";
 
 @Entity("activity_slots", {schema: "surveyor"})
 export class ActivitySlot {
@@ -81,4 +83,24 @@ export class ActivitySlot {
     )
     @JoinColumn([{name: "plan_id", referencedColumnName: "id"}])
     plan!: ActivityPlan;
+
+    @RelationId((a: ActivitySlot) => a.user)
+    userId?: string;
+
+    @ManyToOne(() => User, (users) => users.activitySlots, {
+        onDelete: "CASCADE",
+        onUpdate: "RESTRICT",
+    })
+    @JoinColumn([{name: "user_id", referencedColumnName: "id"}])
+    user?: User;
+
+    @RelationId((a: ActivitySlot) => a.guest)
+    guestId?: string;
+
+    @ManyToOne(() => Guest, (guests) => guests.activitySlots, {
+        onDelete: "CASCADE",
+        onUpdate: "RESTRICT",
+    })
+    @JoinColumn([{name: "guest_id", referencedColumnName: "id"}])
+    guest?: Guest;
 }

@@ -6,8 +6,9 @@ import {PackingList} from "../modules/database/entities/packing/PackingList";
 import * as packingService from '../modules/database/services/PackingService';
 import {APIError, ValidationError} from '../modules/lib/errors';
 import {performImageSwap} from "../modules/lib/fileCommons";
-import {ENTITIES, generateUniqueId} from "../modules/lib/util";
+import {convertToAgent, ENTITIES, generateUniqueId} from "../modules/lib/util";
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
+import {SessionLike} from "../types/PermissionTypes";
 import type {EntityBase} from "../types/UserTypes";
 
 // Template constant for create errors
@@ -153,7 +154,7 @@ async function reorderItems(id: string, order: any) {
     return 'Order saved';
 }
 
-async function quickAddItem(list: PackingList, body: any) {
+async function quickAddItem(list: PackingList, body: any, session: SessionLike) {
     const {title = '', description = '', max = 1} = body;
     if (!title) throw new APIError('Title required', body, 400);
 
@@ -166,7 +167,7 @@ async function quickAddItem(list: PackingList, body: any) {
         position: last + 1
     };
 
-    await packingService.addPackingItems(list.id, [item]);
+    await packingService.addPackingItems(list.id, [item], convertToAgent(session));
     return 'Item added';
 }
 

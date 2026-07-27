@@ -16,7 +16,7 @@ import * as entityAdminService from './database/services/EntityAdminService';
 import {getUserPerms, updatePerms} from './database/services/EntityAdminService';
 import {isRegisteredForEvent} from './database/services/EventService';
 import {ALL_MASK, getInitialPerms, hasPerm, PERM, toMaskFromBodyValue} from './lib/permissions';
-import {jsonReplacer} from "./lib/util";
+import {jsonReplacer, normalizeToArray} from "./lib/util";
 
 function keyUser(t: CombEntityType, id: string, userId: number) {
     return `${t}:${id}:${userId}`;
@@ -55,23 +55,16 @@ async function computeMaskFor(
     const userId = session.user?.id ?? null;
     const guestId = session.guest?.id ?? null;
 
-    // Per-user ACL
+    // The effective ACL including all inheritances
     let eff = 0;
-    if (userId) {
-        const k = keyUser(t, id, userId);
-        if (caches?.userPerms?.has(k)) eff = caches.userPerms.get(k)!;
-        else {
-            const u = await getUserPerms(t, id, userId);
-            caches?.userPerms?.set?.(k, u);
-            eff |= u;
-        }
-    }
+    eff |= await loadUserPerms(t, id, userId, caches);
 
-    // Default ACLs
+    // Load Default ACLs
     let defaults: Record<string, number> | undefined;
     const kd = keyEnt(t, id);
-    if (caches?.defaults?.has(kd)) defaults = caches.defaults.get(kd)!;
-    else {
+    if (caches?.defaults?.has(kd)) {
+        defaults = caches.defaults.get(kd)!;
+    } else {
         defaults = await getDefaultPerms(t, id);
         caches?.defaults?.set?.(kd, defaults);
     }
@@ -81,6 +74,26 @@ async function computeMaskFor(
     if ((userId || guestId) && defaults?.guest) eff |= defaults.guest;
 
     // Participant audience
+    eff |= await loadEventParticipantPerms(eventId, userId, guestId, defaults, caches);
+
+    return eff;
+}
+
+async function loadUserPerms(t: CombEntityType, id: string, userId: number | null, caches?: PermEngineCaches) {
+    if (userId) {
+        const k = keyUser(t, id, userId);
+        if (caches?.userPerms?.has(k)) {
+            return caches.userPerms.get(k)!;
+        } else {
+            const u = await getUserPerms(t, id, userId);
+            caches?.userPerms?.set?.(k, u);
+            return u;
+        }
+    }
+    return 0;
+}
+
+async function loadEventParticipantPerms(eventId: string | null | undefined, userId: number | null, guestId: string | null, defaults?: Record<string, number>, caches?: PermEngineCaches) {
     if (eventId) {
         const eid = String(eventId);
         let isPart: boolean | undefined = caches?.participant?.get(eid);
@@ -91,10 +104,9 @@ async function computeMaskFor(
             );
             caches?.participant?.set?.(eid, isPart);
         }
-        if (isPart && defaults?.participant) eff |= defaults.participant;
+        if (isPart && defaults?.participant) return defaults.participant;
     }
-
-    return eff;
+    return 0;
 }
 
 function makePermView(mask: number, parentMask: number): PermView {
@@ -106,9 +118,7 @@ function makePermView(mask: number, parentMask: number): PermView {
         parentMask,
         has: selfHas,
         allow: (k, parentKey) => {
-            const parentKeys = parentKey !== undefined
-                ? (Array.isArray(parentKey) ? parentKey : [parentKey])
-                : [k];
+            const parentKeys = normalizeToArray(parentKey, [k]) as PermType[];
 
             return selfHas(k) || parentKeys.some(parentHas);
         },
@@ -210,14 +220,12 @@ export async function can(
     // self
     if (hasPerm(view.mask, requiredPerm)) return true;
 
-    const parentPerms = requiredParentPerm !== undefined
-        ? (Array.isArray(requiredParentPerm) ? requiredParentPerm : [requiredParentPerm])
-        : [requiredPerm];
+    const parentPerms = normalizeToArray(requiredParentPerm, [requiredPerm]) as number[];
 
     // item: optionally allow via parent
-    if ('parentMask' in view && parentPerms.some((perm) => hasPerm(view.parentMask, perm))) return true;
+    return 'parentMask' in view && parentPerms.some((perm) => hasPerm(view.parentMask, perm));
 
-    return false;
+
 }
 
 // Load current defaultPerms (bitmasks per audience) from DB
@@ -243,7 +251,7 @@ export async function saveDefaultPermsFromBody(
     const audiences: Audience[] = opts.audiences ?? ['guest', 'participant', 'authenticated', 'public'];
 
     // The mixin posts: body[fieldBase][audience] = [ 'EDIT_META', 'EDIT_STRUCTURE', ... ]
-    const src = (body && body[fieldBase]) ? body[fieldBase] : {};
+    const src = (body?.[fieldBase]) ? body[fieldBase] : {};
 
     // Build the upsert payload; undefined means "leave as-is"
     const partial: { [K in Audience]?: number } = {};

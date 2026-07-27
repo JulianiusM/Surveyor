@@ -1,5 +1,6 @@
 import {EntityManager, In, Not} from "typeorm";
 import type {PlanParticipant, PlanParticipantRow, SlotAssignmentMap} from "../../../types/ActivityTypes";
+import type {Agent} from "../../../types/UtilTypes";
 import {AssignmentCandidate} from "../../activity/availability";
 import {toParticipantKey} from "../../activity/requirements";
 import {generateUniqueId} from "../../lib/util";
@@ -342,7 +343,7 @@ export async function getManagedPlansForUser(userId: number) {
 // Slot CRUD
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function addActivitySlot(planId: string, slot: Partial<ActivitySlot>) {
+export async function addActivitySlot(planId: string, slot: Partial<ActivitySlot>, agent: Agent) {
     const repo = AppDataSource.getRepository(ActivitySlot);
     const slotEntity = repo.create({
         id: slot.id,
@@ -354,11 +355,12 @@ export async function addActivitySlot(planId: string, slot: Partial<ActivitySlot
         startTime: slot.startTime,
         endTime: slot.endTime,
         maxAssignees: slot.maxAssignees,
+        ...agent,
     });
     await repo.save(slotEntity);
 }
 
-export async function addActivitySlots(planId: string, slots: Partial<ActivitySlot>[]) {
+export async function addActivitySlots(planId: string, slots: Partial<ActivitySlot>[], agent: Agent) {
     const repo = AppDataSource.getRepository(ActivitySlot);
     const slotEntities = slots.map((s) =>
         repo.create({
@@ -371,6 +373,7 @@ export async function addActivitySlots(planId: string, slots: Partial<ActivitySl
             startTime: s.startTime,
             endTime: s.endTime,
             maxAssignees: s.maxAssignees,
+            ...agent
         })
     );
     await repo.save(slotEntities);

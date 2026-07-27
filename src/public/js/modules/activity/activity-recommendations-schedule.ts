@@ -125,7 +125,7 @@ export async function initRecommendationScheduleView(planId: string, describeSlo
 
             const activeTabEl = document.querySelector<HTMLElement>('.nav-link.active[data-bs-target]');
             if (activeTabEl) {
-                sessionStorage.setItem('activity-active-tab', activeTabEl.getAttribute('data-bs-target') || '');
+                sessionStorage.setItem('activity-active-tab', activeTabEl.dataset.bsTarget || '');
             }
 
             reloadAfterDelay(500);
@@ -137,8 +137,8 @@ export async function initRecommendationScheduleView(planId: string, describeSlo
 
     const handleAddConfirm = (slotId: string, participantValue: string) => {
         const {type, id} = logic!.parseParticipantValue(participantValue);
-        const userId = type === 'user' ? id : null;
-        const guestId = type === 'guest' ? id : null;
+        const userId = type === 'user' ? id as number : null;
+        const guestId = type === 'guest' ? id as string : null;
 
         const participant = logic!.findParticipant(userId, guestId);
         if (!participant) return;
