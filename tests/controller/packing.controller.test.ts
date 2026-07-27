@@ -24,7 +24,7 @@ jest.mock('../../src/modules/database/services/PackingService', () => ({
     deletePackingList: jest.fn(),
 }));
 
-import { mockUtil, mockPermissionEngine } from '../mocks/commonMocks';
+const {mockUtil, mockPermissionEngine} = require('../mocks/commonMocks');
 
 jest.mock('../../src/modules/lib/util', () => mockUtil({
     generateUniqueId: jest.fn(() => 'uid-123'),
@@ -34,10 +34,10 @@ jest.mock('../../src/modules/permissionEngine', () => mockPermissionEngine());
 
 import controller from '../../src/controller/packingController';
 import * as packingService from '../../src/modules/database/services/PackingService';
-import * as permissionEngine from '../../src/modules/permissionEngine';
 import {APIError, ValidationError} from '../../src/modules/lib/errors';
-import {setupMock, verifyMockCall, verifyResult} from '../keywords/common/controllerKeywords';
+import * as permissionEngine from '../../src/modules/permissionEngine';
 import * as testData from '../data/controller/packingData';
+import {setupMock, verifyMockCall, verifyResult} from '../keywords/common/controllerKeywords';
 
 const {
     preprocessCreate,
@@ -89,7 +89,7 @@ describe('createEntity / afterCreateItems', () => {
         setupMock(packingService.createPackingListTx, expectedId);
 
         const id = await createEntity(userId, listData as any);
-        
+
         verifyResult(id, expectedId);
         expect(packingService.createPackingListTx).toHaveBeenCalledTimes(1);
         const args = (packingService.createPackingListTx as jest.Mock).mock.calls[0];
@@ -119,10 +119,10 @@ describe('fetchForView', () => {
             if (mockFunc) {
                 setupMock(packingService[mockFunc], mockAssignments);
             }
-            
+
             const req = {session} as any;
             const res = await fetchForView(list as any, req);
-            
+
             verifyResult(res.items, items);
             verifyResult(res.assignments, expectedAssignments);
             if (expectedCounters) {
@@ -136,17 +136,17 @@ describe('fetchForDuplicate / deleteEntity', () => {
     it('returns items from service', async () => {
         const {list, items} = testData.fetchForDuplicateData;
         setupMock(packingService.getPackingItems, items);
-        
+
         const out = await fetchForDuplicate(list as any, {} as any);
-        
+
         verifyResult(out, items);
     });
 
     it('delegates deletion to service', async () => {
         const {list} = testData.deleteEntityData;
-        
+
         await deleteEntity(list as any, {} as any);
-        
+
         verifyMockCall(packingService.deletePackingList, list.id);
     });
 });
@@ -169,9 +169,9 @@ describe('API helpers', () => {
 
     it('reorderItems passes through', async () => {
         const {listId, order, expectedMessage} = testData.reorderItemsData;
-        
+
         const result = await reorderItems(listId, order);
-        
+
         verifyResult(result, expectedMessage);
         verifyMockCall(packingService.reorderPackingItems, listId, order);
     });
@@ -181,22 +181,31 @@ describe('API helpers', () => {
 
         test.each(scenarios)(
             '$description',
-            async ({lastPos, body, expectedMessage, expectedItem, expectedMaxAssignees, expectedPosition, shouldThrow}) => {
+            async ({
+                       lastPos,
+                       body,
+                       expectedMessage,
+                       expectedItem,
+                       expectedMaxAssignees,
+                       expectedPosition,
+                       shouldThrow
+                   }) => {
                 if (lastPos !== undefined) {
                     setupMock(packingService.getLastPackingItemNumber, lastPos);
                 }
-                
+
                 if (shouldThrow) {
                     await expect(quickAddItem(list as any, body)).rejects.toBeInstanceOf(APIError);
                 } else if (expectedItem) {
                     const result = await quickAddItem(list as any, body);
                     verifyResult(result, expectedMessage);
-                    verifyMockCall(packingService.addPackingItems, list.id, [expectedItem]);
+                    verifyMockCall(packingService.addPackingItems, list.id, [expectedItem], undefined);
                 } else if (expectedMaxAssignees) {
                     await quickAddItem(list as any, body);
                     expect(packingService.addPackingItems).toHaveBeenCalledWith(
                         list.id,
-                        [expect.objectContaining({maxAssignees: expectedMaxAssignees, position: expectedPosition})]
+                        [expect.objectContaining({maxAssignees: expectedMaxAssignees, position: expectedPosition})],
+                        undefined
                     );
                 }
             }
@@ -208,7 +217,7 @@ describe('API helpers', () => {
             '$description',
             async ({itemId, body, mockResolve, expectedMessage, shouldThrow}) => {
                 setupMock(packingService.updatePackingItem, mockResolve);
-                
+
                 if (shouldThrow) {
                     await expect(updateItemDescription(itemId, body)).rejects.toBeInstanceOf(APIError);
                 } else {
@@ -227,7 +236,7 @@ describe('API helpers', () => {
                 if (mockResolve !== undefined) {
                     setupMock(packingService.updatePackingItem, mockResolve);
                 }
-                
+
                 if (shouldThrow) {
                     await expect(updateItemAttr(itemId, body)).rejects.toBeInstanceOf(APIError);
                 } else {
@@ -241,36 +250,36 @@ describe('API helpers', () => {
 
     it('updateRequired toggles requiredByAll', async () => {
         const {itemId, body, expectedMessage} = testData.updateRequiredData;
-        
+
         const result = await updateRequired(itemId, body);
-        
+
         verifyResult(result, expectedMessage);
         verifyMockCall(packingService.togglePackingItemRequiredByAll, itemId, body.flag);
     });
 
     it('deleteAssignment passes through', async () => {
         const {assignmentId, expectedMessage} = testData.deleteAssignmentData;
-        
+
         const result = await deleteAssignment(assignmentId);
-        
+
         verifyResult(result, expectedMessage);
         verifyMockCall(packingService.deletePackingAssignment, assignmentId);
     });
 
     it('updateSettings passes through', async () => {
         const {listId, body, expectedMessage} = testData.updateSettingsData;
-        
+
         const result = await updateSettings(listId, body);
-        
+
         verifyResult(result, expectedMessage);
         verifyMockCall(permissionEngine.saveDefaultPermsFromBody, 'packing', listId, body);
     });
 
     it('deleteItem passes through', async () => {
         const {itemId, expectedMessage} = testData.deleteItemData;
-        
+
         const result = await deleteItem(itemId);
-        
+
         verifyResult(result, expectedMessage);
         verifyMockCall(packingService.deletePackingItem, itemId);
     });
@@ -279,7 +288,7 @@ describe('API helpers', () => {
 describe('getAssignmentAccessMapping', () => {
     it('routes to correct packingService functions', async () => {
         const {assignToUser, assignToGuest, unassignFromUser, unassignFromGuest} = testData.assignmentAccessMappingData;
-        
+
         const m = getAssignmentAccessMapping();
 
         await m.assignToUser(assignToUser, assignToUser.userId);
