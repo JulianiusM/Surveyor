@@ -29,6 +29,19 @@ export async function getUserByUsername(username: string) {
     });
 }
 
+export async function getUserByEmail(email: string) {
+    return await AppDataSource.getRepository(User).findOne({
+        where: {email},
+        select: {
+            id: true,
+            name: true,
+            username: true,
+            email: true,
+            isActive: true
+        }
+    });
+}
+
 export async function verifyPassword(userId: number, password: string) {
     const repo = AppDataSource.getRepository(User);
     const user = await repo.findOne({

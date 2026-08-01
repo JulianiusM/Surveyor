@@ -109,7 +109,7 @@ block content
                             label.form-label(for="deadlineEdit")
                                 i.bi.bi-hourglass-split.me-1
                                 | Binding deadline
-                            input#deadlineEdit.form-control.text-bg-dark(type="datetime-local" name="bindingDeadline" value=(deadline ? new Date(deadline).toISOString().slice(0, 16) : ''))
+                            input#deadlineEdit.form-control.text-bg-dark(type="datetime-local" name="bindingDeadline" step=1 value=(deadline ? new Date(deadline).toISOString().slice(0, 19) : ''))
                         .col-md-4
                             +timezonePicker('deadlineTz', {
                                 label: 'Time zone',

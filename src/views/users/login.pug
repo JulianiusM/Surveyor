@@ -51,6 +51,13 @@ block content
                     i.bi.bi-person-vcard.me-1
                     | Login using #{settings.oidcName}
 
+        if settings.localLoginEnabled
+            // Forgot-pasword
+            .col-6.text-center.mt-3
+                a.text-decoration-none(href="/users/forgot-password")
+                    i.bi.bi-arrow-left-circle.me-1
+                    | Forgot password?
+
     hr
     h2.text-center
         | Looking for your guest account?

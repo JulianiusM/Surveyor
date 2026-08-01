@@ -175,13 +175,13 @@ export async function getGuestEntityList(guest: Guest) {
 }
 
 export async function sendPasswordForgotMail(username: string) {
-    const user = await userService.getUserByUsername(username);
+    const user = (await userService.getUserByUsername(username)) || (await userService.getUserByEmail(username));
     if (!user) {
         return;
     }
 
     // Generiere ein Passwort-Zurücksetzungs-Token und speichere es in der Datenbank
-    const token = await userService.generatePasswordResetToken(username);
+    const token = await userService.generatePasswordResetToken(user.username);
     const resetLink = `${settings.value.rootUrl}/users/reset-password/${token}`;
 
     // Sende eine E-Mail mit dem Zurücksetzungs-Link
