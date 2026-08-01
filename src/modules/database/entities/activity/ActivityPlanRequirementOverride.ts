@@ -52,7 +52,7 @@ export class ActivityPlanRequirementOverride {
     @RelationId((override: ActivityPlanRequirementOverride) => override.user)
     userId?: number | null;
 
-    @ManyToOne(() => User, (user) => user.activityPlanRequirementOverrides, {
+    @ManyToOne(() => User, {
         onDelete: "CASCADE",
         onUpdate: "NO ACTION",
         nullable: true,
@@ -63,7 +63,7 @@ export class ActivityPlanRequirementOverride {
     @RelationId((override: ActivityPlanRequirementOverride) => override.guest)
     guestId?: string | null;
 
-    @ManyToOne(() => Guest, (guest) => guest.activityPlanRequirementOverrides, {
+    @ManyToOne(() => Guest, {
         onDelete: "CASCADE",
         onUpdate: "NO ACTION",
         nullable: true,

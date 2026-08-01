@@ -26,14 +26,14 @@ export class EventRegistration {
     @RelationId((a: EventRegistration) => a.user)
     userId?: number;
 
-    @ManyToOne(() => User, (u) => u.eventRegistrations, {onDelete: "CASCADE", onUpdate: "RESTRICT"})
+    @ManyToOne(() => User, {onDelete: "CASCADE", onUpdate: "CASCADE"})
     @JoinColumn([{name: "user_id", referencedColumnName: "id"}])
     user?: User | null;
 
     @RelationId((a: EventRegistration) => a.guest)
     guestId?: string;
 
-    @ManyToOne(() => Guest, (g) => g.eventRegistrations, {onDelete: "CASCADE", onUpdate: "RESTRICT"})
+    @ManyToOne(() => Guest, {onDelete: "CASCADE", onUpdate: "CASCADE"})
     @JoinColumn([{name: "guest_id", referencedColumnName: "id"}])
     guest?: Guest | null;
 

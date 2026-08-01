@@ -26,7 +26,7 @@ export class DriversAssignment {
     @RelationId((a: DriversAssignment) => a.user)
     userId?: number;
 
-    @ManyToOne(() => User, (users) => users.driversAssignments, {
+    @ManyToOne(() => User, {
         onDelete: "CASCADE",
         onUpdate: "RESTRICT",
     })
@@ -36,7 +36,7 @@ export class DriversAssignment {
     @RelationId((a: DriversAssignment) => a.guest)
     guestId?: string;
 
-    @ManyToOne(() => Guest, (guests) => guests.driversAssignments, {
+    @ManyToOne(() => Guest, {
         onDelete: "CASCADE",
         onUpdate: "RESTRICT",
     })

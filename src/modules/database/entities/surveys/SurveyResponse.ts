@@ -32,7 +32,7 @@ export class SurveyResponse {
     @RelationId((c: SurveyResponse) => c.user)
     userId?: number;
 
-    @ManyToOne(() => User, (users) => users.surveyResponses, {
+    @ManyToOne(() => User, {
         onDelete: "CASCADE",
         onUpdate: "RESTRICT",
     })
@@ -42,7 +42,7 @@ export class SurveyResponse {
     @RelationId((c: SurveyResponse) => c.guest)
     guestId?: string;
 
-    @ManyToOne(() => Guest, (guests) => guests.surveyResponses, {
+    @ManyToOne(() => Guest, {
         onDelete: "CASCADE",
         onUpdate: "RESTRICT",
     })

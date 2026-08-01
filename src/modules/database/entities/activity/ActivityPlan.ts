@@ -83,7 +83,7 @@ export class ActivityPlan implements EntityBase {
     @RelationId((a: ActivityPlan) => a.owner)
     ownerId!: number;
 
-    @ManyToOne(() => User, (users) => users.activityPlans, {
+    @ManyToOne(() => User, {
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })

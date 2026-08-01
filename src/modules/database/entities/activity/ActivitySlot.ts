@@ -87,7 +87,7 @@ export class ActivitySlot {
     @RelationId((a: ActivitySlot) => a.user)
     userId?: string;
 
-    @ManyToOne(() => User, (users) => users.activitySlots, {
+    @ManyToOne(() => User, {
         onDelete: "CASCADE",
         onUpdate: "RESTRICT",
     })
@@ -97,7 +97,7 @@ export class ActivitySlot {
     @RelationId((a: ActivitySlot) => a.guest)
     guestId?: string;
 
-    @ManyToOne(() => Guest, (guests) => guests.activitySlots, {
+    @ManyToOne(() => Guest, {
         onDelete: "CASCADE",
         onUpdate: "RESTRICT",
     })

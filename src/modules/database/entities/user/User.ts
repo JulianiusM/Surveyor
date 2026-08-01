@@ -1,25 +1,11 @@
 import {BeforeInsert, BeforeUpdate, Column, Entity, Index, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
-import {ActivityAssignment} from "../activity/ActivityAssignment";
-import {ActivityPlan} from "../activity/ActivityPlan";
-import {ActivityPlanRequirementOverride} from "../activity/ActivityPlanRequirementOverride";
-import {ActivitySlot} from "../activity/ActivitySlot";
-import {DriversAssignment} from "../drivers/DriversAssignment";
-import {DriversItem} from "../drivers/DriversItem";
-import {DriversList} from "../drivers/DriversList";
-import {Event} from "../event/Event";
-import {EventRegBypassLink} from "../event/EventRegBypassLink";
-import {EventRegistration} from "../event/EventRegistration";
-import {PackingAssignment} from "../packing/PackingAssignment";
-import {PackingItem} from "../packing/PackingItem";
-import {PackingList} from "../packing/PackingList";
-import {EntityAdminAssignment} from "../permissions/EntityAdminAssignment";
-import {Survey} from "../surveys/Survey";
-import {SurveyResponse} from "../surveys/SurveyResponse";
+import {TrackedBase} from "../abstract/TrackedBase";
+import {Profile} from "./Profile";
 
 @Index("email", ["email"], {unique: true})
 @Index("username", ["username"], {unique: true})
 @Entity("users", {schema: "surveyor"})
-export class User {
+export class User extends TrackedBase {
     @PrimaryGeneratedColumn({type: "int", name: "id"})
     id!: number;
 
@@ -42,18 +28,6 @@ export class User {
     })
     isActive?: boolean | null;
 
-    @Column("timestamp", {
-        name: "created_at",
-        default: () => "CURRENT_TIMESTAMP",
-    })
-    createdAt: Date;
-
-    @Column("timestamp", {
-        name: "updated_at",
-        default: () => "CURRENT_TIMESTAMP",
-    })
-    updatedAt: Date;
-
     @Column("varchar", {name: "activation_token", nullable: true, length: 255})
     activationToken?: string | null;
 
@@ -72,65 +46,8 @@ export class User {
     @Column('varchar', {name: 'oidc_issuer', nullable: true, length: 255})
     oidcIssuer?: string | null;
 
-    @OneToMany(
-        () => ActivityAssignment,
-        (activityAssignments) => activityAssignments.user
-    )
-    activityAssignments: ActivityAssignment[];
-
-    @OneToMany(() => ActivitySlot, (activitySlots) => activitySlots.user)
-    activitySlots: ActivitySlot[];
-
-    @OneToMany(() => ActivityPlan, (activityPlans) => activityPlans.owner)
-    activityPlans: ActivityPlan[];
-
-    @OneToMany(
-        () => DriversAssignment,
-        (driversAssignments) => driversAssignments.user
-    )
-    driversAssignments: DriversAssignment[];
-
-    @OneToMany(() => DriversItem, (driversItems) => driversItems.user)
-    driversItems: DriversItem[];
-
-    @OneToMany(() => DriversList, (driversLists) => driversLists.owner)
-    driversLists: DriversList[];
-
-    @OneToMany(
-        () => PackingAssignment,
-        (packingAssignments) => packingAssignments.user
-    )
-    packingAssignments: PackingAssignment[];
-
-    @OneToMany(() => PackingItem, (packingItems) => packingItems.user)
-    packingItems: PackingItem[];
-
-    @OneToMany(() => PackingList, (packingLists) => packingLists.owner)
-    packingLists: PackingList[];
-
-    @OneToMany(() => SurveyResponse, (surveyResponses) => surveyResponses.user)
-    surveyResponses: SurveyResponse[];
-
-    @OneToMany(() => Survey, (surveys) => surveys.owner)
-    surveys: Survey[];
-
-    @OneToMany(() => Event, (event) => event.owner)
-    events: Event[];
-
-    @OneToMany(() => EventRegistration, (eventRegistration) => eventRegistration.user)
-    eventRegistrations: EventRegistration[];
-
-    @OneToMany(() => EntityAdminAssignment, (entityAdminAssignments) => entityAdminAssignments.user)
-    entityAdminAssignments: EntityAdminAssignment[];
-
-    @OneToMany(() => EventRegBypassLink, (link) => link.user)
-    eventRegBypassLinksUsed: EventRegBypassLink[];
-
-    @OneToMany(
-        () => ActivityPlanRequirementOverride,
-        (activityPlanRequirementOverrides) => activityPlanRequirementOverrides.user
-    )
-    activityPlanRequirementOverrides: ActivityPlanRequirementOverride[];
+    @OneToMany(() => Profile, (profile) => profile.user)
+    profiles: Profile[];
 
     @BeforeInsert()
     @BeforeUpdate()

@@ -40,7 +40,7 @@ export class EventRegBypassLink {
     @RelationId((a: EventRegBypassLink) => a.user)
     userId?: number;
 
-    @ManyToOne(() => User, (users) => users.eventRegBypassLinksUsed, {
+    @ManyToOne(() => User, {
         onDelete: "CASCADE",
         onUpdate: "RESTRICT",
     })
@@ -50,7 +50,7 @@ export class EventRegBypassLink {
     @RelationId((a: EventRegBypassLink) => a.guest)
     guestId?: string;
 
-    @ManyToOne(() => Guest, (guests) => guests.eventRegBypassLinksUsed, {
+    @ManyToOne(() => Guest, {
         onDelete: "CASCADE",
         onUpdate: "RESTRICT",
     })

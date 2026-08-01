@@ -44,7 +44,7 @@ export class PackingList implements EntityBase {
     @RelationId((pl: PackingList) => pl.owner)
     ownerId!: number;
 
-    @ManyToOne(() => User, (users) => users.packingLists, {
+    @ManyToOne(() => User, {
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })

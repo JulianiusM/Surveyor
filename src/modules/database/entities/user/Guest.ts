@@ -1,14 +1,5 @@
-import {Column, Entity, OneToMany, PrimaryGeneratedColumn} from "typeorm";
-import {ActivityAssignment} from "../activity/ActivityAssignment";
-import {ActivityPlanRequirementOverride} from "../activity/ActivityPlanRequirementOverride";
-import {ActivitySlot} from "../activity/ActivitySlot";
-import {DriversAssignment} from "../drivers/DriversAssignment";
-import {DriversItem} from "../drivers/DriversItem";
-import {EventRegBypassLink} from "../event/EventRegBypassLink";
-import {EventRegistration} from "../event/EventRegistration";
-import {PackingAssignment} from "../packing/PackingAssignment";
-import {PackingItem} from "../packing/PackingItem";
-import {SurveyResponse} from "../surveys/SurveyResponse";
+import {Column, Entity, OneToOne, PrimaryGeneratedColumn} from "typeorm";
+import {Profile} from "./Profile";
 
 @Entity("guests", {schema: "surveyor"})
 export class Guest {
@@ -36,45 +27,6 @@ export class Guest {
     })
     updatedAt: Date;
 
-    @OneToMany(
-        () => ActivityAssignment,
-        (activityAssignments) => activityAssignments.guest
-    )
-    activityAssignments: ActivityAssignment[];
-
-    @OneToMany(() => ActivitySlot, (activitySlot) => activitySlot.guest)
-    activitySlots: ActivitySlot[];
-
-    @OneToMany(
-        () => DriversAssignment,
-        (driversAssignments) => driversAssignments.guest
-    )
-    driversAssignments: DriversAssignment[];
-
-    @OneToMany(() => DriversItem, (driversItems) => driversItems.guest)
-    driversItems: DriversItem[];
-
-    @OneToMany(
-        () => PackingAssignment,
-        (packingAssignments) => packingAssignments.guest
-    )
-    packingAssignments: PackingAssignment[];
-
-    @OneToMany(() => PackingItem, (packingItems) => packingItems.guest)
-    packingItems: PackingItem[];
-
-    @OneToMany(() => SurveyResponse, (surveyResponses) => surveyResponses.guest)
-    surveyResponses: SurveyResponse[];
-
-    @OneToMany(() => EventRegistration, (eventRegistration) => eventRegistration.guest)
-    eventRegistrations: EventRegistration[];
-
-    @OneToMany(() => EventRegBypassLink, (link) => link.guest)
-    eventRegBypassLinksUsed: EventRegBypassLink[];
-
-    @OneToMany(
-        () => ActivityPlanRequirementOverride,
-        (activityPlanRequirementOverrides) => activityPlanRequirementOverrides.guest
-    )
-    activityPlanRequirementOverrides: ActivityPlanRequirementOverride[];
+    @OneToOne(() => Profile, (profile) => profile.guest)
+    profile!: Profile;
 }

@@ -26,7 +26,7 @@ export class PackingAssignment {
     @RelationId((a: PackingAssignment) => a.user)
     userId?: number;
 
-    @ManyToOne(() => User, (users) => users.packingAssignments, {
+    @ManyToOne(() => User, {
         onDelete: "CASCADE",
         onUpdate: "RESTRICT",
     })
@@ -36,7 +36,7 @@ export class PackingAssignment {
     @RelationId((a: PackingAssignment) => a.guest)
     guestId?: string;
 
-    @ManyToOne(() => Guest, (guests) => guests.packingAssignments, {
+    @ManyToOne(() => Guest, {
         onDelete: "CASCADE",
         onUpdate: "RESTRICT",
     })

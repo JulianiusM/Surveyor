@@ -56,7 +56,7 @@ export class DriversItem {
     @RelationId((a: DriversItem) => a.user)
     userId?: number;
 
-    @ManyToOne(() => User, (users) => users.driversItems, {
+    @ManyToOne(() => User, {
         onDelete: "CASCADE",
         onUpdate: "RESTRICT",
     })
@@ -66,7 +66,7 @@ export class DriversItem {
     @RelationId((a: DriversItem) => a.guest)
     guestId?: string;
 
-    @ManyToOne(() => Guest, (guests) => guests.driversItems, {
+    @ManyToOne(() => Guest, {
         onDelete: "CASCADE",
         onUpdate: "RESTRICT",
     })

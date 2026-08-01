@@ -58,7 +58,7 @@ export class ActivityAssignment {
     @RelationId((aa: ActivityAssignment) => aa.user)
     userId?: number;
 
-    @ManyToOne(() => User, (users) => users.activityAssignments, {
+    @ManyToOne(() => User, {
         onDelete: "CASCADE",
         onUpdate: "NO ACTION",
     })
@@ -68,7 +68,7 @@ export class ActivityAssignment {
     @RelationId((aa: ActivityAssignment) => aa.guest)
     guestId?: string;
 
-    @ManyToOne(() => Guest, (guests) => guests.activityAssignments, {
+    @ManyToOne(() => Guest, {
         onDelete: "CASCADE",
         onUpdate: "NO ACTION",
     })

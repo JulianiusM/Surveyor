@@ -44,7 +44,7 @@ export class DriversList implements EntityBase {
     @RelationId((a: DriversList) => a.owner)
     ownerId!: number;
 
-    @ManyToOne(() => User, (users) => users.driversLists, {
+    @ManyToOne(() => User, {
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })

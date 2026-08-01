@@ -42,7 +42,7 @@ export class Survey implements EntityBase {
     @RelationId((a: Survey) => a.owner)
     ownerId!: number;
 
-    @ManyToOne(() => User, (users) => users.surveys, {
+    @ManyToOne(() => User, {
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })

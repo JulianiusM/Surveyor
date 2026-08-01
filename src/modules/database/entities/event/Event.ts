@@ -75,7 +75,7 @@ export class Event implements EntityBase {
     @RelationId((a: Event) => a.owner)
     ownerId!: number;
 
-    @ManyToOne(() => User, (users) => users.events, {
+    @ManyToOne(() => User, {
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })

@@ -1,6 +1,6 @@
 import {Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId, Unique} from "typeorm";
-import {User} from "../user/User";
 import type {CombEntityType} from "../../../../types/UtilTypes";
+import {User} from "../user/User";
 
 @Entity("entity_admin_assignments")
 @Unique("uk_entity_admin_assignment_user", ["entityType", "entityId", "user"])
@@ -35,7 +35,7 @@ export class EntityAdminAssignment {
     @RelationId((ea: EntityAdminAssignment) => ea.user)
     userId!: number;
 
-    @ManyToOne(() => User, (users) => users.entityAdminAssignments, {
+    @ManyToOne(() => User, {
         onDelete: "CASCADE",
         onUpdate: "CASCADE",
     })
