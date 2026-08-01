@@ -5,6 +5,7 @@
 
 jest.mock('../../src/modules/database/services/UserService', () => ({
     getUserByUsername: jest.fn(),
+    getUserByEmail: jest.fn(),
     registerUser: jest.fn(),
     generateActivationToken: jest.fn(),
     verifyPassword: jest.fn(),
@@ -220,6 +221,7 @@ describe('password reset flow - Data Driven', () => {
         // Setup mocks based on action
         if (testCase.mockUser !== undefined) {
             (userService.getUserByUsername as jest.Mock).mockResolvedValue(testCase.mockUser);
+            (userService.getUserByEmail as jest.Mock).mockResolvedValue(testCase.mockUser);
         }
         if (testCase.mockToken) {
             (userService.generatePasswordResetToken as jest.Mock).mockResolvedValue(testCase.mockToken);
