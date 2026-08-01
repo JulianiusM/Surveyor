@@ -38,6 +38,42 @@ export async function constraintExists(
     return result[0].count > 0;
 }
 
+export async function tableExists(
+    queryRunner: QueryRunner,
+    table: string
+): Promise<boolean> {
+    const result = await queryRunner.query(
+        `
+            SELECT COUNT(*) as count
+            FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = ?
+        `,
+        [table]
+    );
+
+    return result[0].count > 0;
+}
+
+export async function indexExists(
+    queryRunner: QueryRunner,
+    table: string,
+    index: string
+): Promise<boolean> {
+    const result = await queryRunner.query(
+        `
+            SELECT COUNT(*) as count
+            FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = ?
+              AND INDEX_NAME = ?
+        `,
+        [table, index]
+    );
+
+    return result[0].count > 0;
+}
+
 export async function addColumn(queryRunner: QueryRunner, table: string, column: string, type: string, params: string = '') {
     return await queryRunner.query(`ALTER TABLE \`${table}\`
         ADD \`${column}\` ${type} ${params}`);
@@ -79,5 +115,23 @@ export async function dropFkConstraint(queryRunner: QueryRunner, table: string, 
 export async function dropFkConstraintIfExists(queryRunner: QueryRunner, table: string, constraint: string) {
     if (await constraintExists(queryRunner, table, constraint)) {
         return await dropFkConstraint(queryRunner, table, constraint);
+    }
+}
+
+export async function createIndexIfNotExists(queryRunner: QueryRunner, table: string, index: string, columns: string) {
+    if (!await indexExists(queryRunner, table, index)) {
+        return await queryRunner.query(`CREATE INDEX \`${index}\` ON \`${table}\` (${columns})`);
+    }
+}
+
+export async function createUniqueIndexIfNotExists(queryRunner: QueryRunner, table: string, index: string, columns: string) {
+    if (!await indexExists(queryRunner, table, index)) {
+        return await queryRunner.query(`CREATE UNIQUE INDEX \`${index}\` ON \`${table}\` (${columns})`);
+    }
+}
+
+export async function dropIndexIfExists(queryRunner: QueryRunner, table: string, index: string) {
+    if (await indexExists(queryRunner, table, index)) {
+        return await queryRunner.query(`DROP INDEX \`${index}\` ON \`${table}\``);
     }
 }
