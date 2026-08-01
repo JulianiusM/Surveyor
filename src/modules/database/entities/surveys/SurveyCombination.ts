@@ -1,50 +1,39 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
+import type {WeekDay, WeekInMonth} from "../../../../types/SurveyTypes";
+import {NumericDefaultEntityItem} from "../abstract/ProfileEntityItem";
 import {Survey} from "./Survey";
 import {SurveyResponse} from "./SurveyResponse";
-import type {WeekDay, WeekInMonth} from "../../../../types/SurveyTypes";
 
-@Index("combinations_single_entry", ["weekday", "survey", "nthWeek"], {
+export const WEEKDAYS: WeekDay[] = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+export const WEEKNUMS: WeekInMonth[] = ["1", "2", "3", "4", "LAST"];
+
+@Index("combinations_single_entry", ["weekday", "entity", "nthWeek"], {
     unique: true,
 })
 @Entity("survey_combinations", {schema: "surveyor"})
-export class SurveyCombination {
-    @PrimaryGeneratedColumn({type: "int", name: "id"})
-    id: number;
-
+export class SurveyCombination extends NumericDefaultEntityItem {
     @Column("simple-enum", {
         name: "WEEKDAY",
-        enum: ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
+        enum: WEEKDAYS,
     })
     weekday: WeekDay;
 
-    @Column("simple-enum", {name: "nth_week", enum: ["1", "2", "3", "4", "LAST"]})
+    @Column("simple-enum", {name: "nth_week", enum: WEEKNUMS})
     nthWeek: WeekInMonth;
-
-    @Column("timestamp", {
-        name: "created_at",
-        default: () => "CURRENT_TIMESTAMP",
-    })
-    createdAt: Date;
-
-    @Column("timestamp", {
-        name: "updated_at",
-        default: () => "CURRENT_TIMESTAMP",
-    })
-    updatedAt: Date;
-
-    @RelationId((c: SurveyCombination) => c.survey)
-    surveyId!: string;
-
-    @ManyToOne(() => Survey, (surveys) => surveys.surveyCombinations, {
-        onDelete: "CASCADE",
-        onUpdate: "CASCADE",
-    })
-    @JoinColumn([{name: "survey_id", referencedColumnName: "id"}])
-    survey!: Survey;
 
     @OneToMany(
         () => SurveyResponse,
-        (surveyResponses) => surveyResponses.combination
+        (surveyResponses) => surveyResponses.item
     )
-    surveyResponses!: SurveyResponse[];
+    assignments!: SurveyResponse[];
+
+    @RelationId((a: SurveyCombination) => a.entity)
+    entityId!: string;
+
+    @ManyToOne(
+        () => Survey,
+        {onDelete: "CASCADE", onUpdate: "CASCADE"}
+    )
+    @JoinColumn([{name: "entity_id", referencedColumnName: "id"}])
+    entity!: Survey;
 }

@@ -115,7 +115,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
             asyncHandler(async (req: Request, res: Response) => {
                 renderer.renderWithData(res, create, {
                     eventId: req.query.eventId,
-                    events: await eventService.getActiveManagedEventsForUser(req.session.user!.id)
+                    events: await eventService.getActiveManagedEvents(String(req.session.user!.id))
                 });
             }))
         .post(isAuthenticated,
@@ -138,7 +138,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
                 }
                 let id;
                 try {
-                    id = await createEntity(req.session.user!.id, parsed);
+                    id = await createEntity(String(req.session.user!.id), parsed);
                     await afterCreateItems(id, parsed);
                 } catch (e) {
                     const message = e instanceof Error ? e.message : 'Failed to create the resource.';
@@ -191,7 +191,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
             entity: resFct(req),
             data: data,
             eventId: req.query.eventId,
-            events: await eventService.getActiveManagedEventsForUser(req.session.user!.id),
+            events: await eventService.getActiveManagedEvents(String(req.session.user!.id)),
             isDuplicate: true
         });
     }));
@@ -240,10 +240,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         const entity = resFct(req);
         const event = eventResFn(req);
         if (addToEvent && event) {
-            if (await eventService.isRegisteredForEvent({
-                userId: req.session.user?.id,
-                guestId: req.session.guest?.id
-            }, event.id)) {
+            if (await eventService.isRegisteredForEvent(req.session.guest?.id || '', event.id)) {
                 // We have a valid registration --> Don't need to check in more detail.
                 return next();
             }

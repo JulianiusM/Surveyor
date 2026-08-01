@@ -1,73 +1,33 @@
-import {Check, Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId,} from "typeorm";
-import {Guest} from "../user/Guest";
-import {User} from "../user/User";
+import {Column, Entity, Index, JoinColumn, ManyToOne, RelationId,} from "typeorm";
+import {NumericProfileBase} from "../abstract/Base";
+import {ParentEntityRelation} from "../abstract/BaseEntity";
 import {ActivityPlan} from "./ActivityPlan";
 import {ActivityRole} from "./ActivityRole";
 
 @Entity("activity_plan_requirement_overrides", {schema: "surveyor"})
-@Index("uk_plan_participant_role", ["plan", "user", "guest", "role"], {unique: true})
-@Check(`(user_id IS NOT NULL AND guest_id IS NULL) OR (user_id IS NULL AND guest_id IS NOT NULL)`)
-export class ActivityPlanRequirementOverride {
-    @PrimaryGeneratedColumn({type: "int", name: "id"})
-    id!: number;
-
+@Index("uk_plan_participant_role", ["entity", "profile", "role"], {unique: true})
+export class ActivityPlanRequirementOverride extends NumericProfileBase implements ParentEntityRelation {
     @Column("smallint", {name: "required_shifts"})
     requiredShifts!: number;
 
-    @Column("timestamp", {
-        name: "created_at",
-        nullable: true,
-        default: () => "CURRENT_TIMESTAMP",
-    })
-    createdAt: Date | null;
+    @RelationId((a: ActivityPlanRequirementOverride) => a.entity)
+    entityId!: string;
 
-    @Column("timestamp", {
-        name: "updated_at",
-        nullable: true,
-        default: () => "CURRENT_TIMESTAMP",
-    })
-    updatedAt: Date | null;
-
-    @RelationId((override: ActivityPlanRequirementOverride) => override.plan)
-    planId!: string;
-
-    @ManyToOne(() => ActivityPlan, (plan) => plan.activityPlanRequirementOverrides, {
-        onDelete: "CASCADE",
-        onUpdate: "NO ACTION",
-    })
-    @JoinColumn([{name: "plan_id", referencedColumnName: "id"}])
-    plan!: ActivityPlan;
+    @ManyToOne(
+        () => ActivityPlan,
+        {onDelete: "CASCADE", onUpdate: "CASCADE"}
+    )
+    @JoinColumn([{name: "entity_id", referencedColumnName: "id"}])
+    entity!: ActivityPlan;
 
     @RelationId((override: ActivityPlanRequirementOverride) => override.role)
     roleId?: number | null;
 
-    @ManyToOne(() => ActivityRole, (role) => role.activityPlanRequirementOverrides, {
+    @ManyToOne(() => ActivityRole, {
         onDelete: "RESTRICT",
         onUpdate: "CASCADE",
         nullable: true,
     })
     @JoinColumn([{name: "role_id", referencedColumnName: "id"}])
     role?: ActivityRole | null;
-
-    @RelationId((override: ActivityPlanRequirementOverride) => override.user)
-    userId?: number | null;
-
-    @ManyToOne(() => User, {
-        onDelete: "CASCADE",
-        onUpdate: "NO ACTION",
-        nullable: true,
-    })
-    @JoinColumn([{name: "user_id", referencedColumnName: "id"}])
-    user?: User | null;
-
-    @RelationId((override: ActivityPlanRequirementOverride) => override.guest)
-    guestId?: string | null;
-
-    @ManyToOne(() => Guest, {
-        onDelete: "CASCADE",
-        onUpdate: "NO ACTION",
-        nullable: true,
-    })
-    @JoinColumn([{name: "guest_id", referencedColumnName: "id"}])
-    guest?: Guest | null;
 }

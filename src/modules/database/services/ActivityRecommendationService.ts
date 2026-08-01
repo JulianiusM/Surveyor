@@ -46,8 +46,8 @@ export function normalizeRecommendationInput(input: RecommendationInput): Recomm
 
 export async function getRecommendations(planId: string) {
     return await AppDataSource.getRepository(ActivityAssignmentRecommendation).find({
-        where: {plan: {id: planId}},
-        relations: {slot: true, user: true, guest: true},
+        where: {entity: {id: planId}},
+        relations: {item: true, profile: true},
     });
 }
 
@@ -55,7 +55,7 @@ export async function markRecommendationsApplied(planId: string, ids: string[]):
     if (!ids.length) return;
 
     await AppDataSource.getRepository(ActivityAssignmentRecommendation).update(
-        {id: In(ids), plan: {id: planId}},
+        {id: In(ids), entity: {id: planId}},
         {status: "APPLIED"},
     );
 }
@@ -65,16 +65,15 @@ export async function replaceRecommendations(planId: string, recommendations: Re
         const repo = manager.getRepository(ActivityAssignmentRecommendation);
         const normalized = recommendations.map(normalizeRecommendationInput);
 
-        await repo.delete({plan: {id: planId}});
+        await repo.delete({entity: {id: planId}});
 
         if (!normalized.length) return;
 
         const rows = normalized.map((rec) =>
             repo.create({
-                plan: {id: planId},
-                slot: {id: rec.slotId},
-                user: rec.userId ? {id: rec.userId} : undefined,
-                guest: rec.guestId ? {id: rec.guestId} : undefined,
+                entity: {id: planId},
+                item: {id: rec.slotId},
+                profile: {id: rec.guestId ?? ''},
                 status: rec.status ?? "PENDING",
             })
         );

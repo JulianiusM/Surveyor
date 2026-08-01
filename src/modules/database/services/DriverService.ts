@@ -9,7 +9,7 @@ import {DriversList} from '../entities/drivers/DriversList';
 import * as entityAdminService from "./EntityAdminService";
 
 export async function createDriversList(
-    ownerId: number,
+    ownerId: string,
     title: string,
     desc: string,
     eventId?: string,
@@ -46,8 +46,8 @@ export async function getDriversListById(listId: string): Promise<DriversList | 
     });
 }
 
-export async function getDriversListByUserId(userId: number): Promise<DriversList[]> {
-    return await AppDataSource.getRepository(DriversList).find({where: {owner: {id: userId}}});
+export async function getDriversListByProfileId(profileId: string): Promise<DriversList[]> {
+    return await AppDataSource.getRepository(DriversList).find({where: {owner: {id: profileId}}});
 }
 
 export async function updateDriversListDescription(listId: string, description: string): Promise<void> {
@@ -58,12 +58,12 @@ export async function updateHeaderImage(listId: string, headerImg?: string | nul
     await AppDataSource.getRepository(DriversList).update(listId, {headerImg});
 }
 
-export async function getManagedListsForUser(userId: number) {
-    const ids = await entityAdminService.getIdsForUser('drivers', userId);
+export async function getManagedListsForProfile(profileId: string) {
+    const ids = await entityAdminService.getIdsForUser('drivers', profileId);
     return await AppDataSource.getRepository(DriversList).find({
         where: [
             {
-                owner: {id: userId},
+                owner: {id: profileId},
             },
             {
                 id: In(ids),
@@ -72,45 +72,25 @@ export async function getManagedListsForUser(userId: number) {
     });
 }
 
-export async function getDriversListByParticipantUserId(userId: number) {
+export async function getDriversListByParticipant(profileId: string) {
     return await AppDataSource.getRepository(DriversList).createQueryBuilder('list')
         .whereExists(AppDataSource.getRepository(DriversAssignment)
             .createQueryBuilder("ass")
-            .where("ass.list_id = list.id")
-            .andWhere("ass.user_id = :userId", {userId: userId})
+            .where("ass.entity_id = list.id")
+            .andWhere("ass.profile_id = :userId", {userId: profileId})
         ).andWhereExists(AppDataSource.getRepository(DriversItem)
             .createQueryBuilder("item")
-            .where("item.list_id = list.id")
-            .andWhere("item.user_id = :userId", {userId: userId})
-        ).getMany();
-}
-
-export async function getDriversListByParticipantGuestId(guestId: string) {
-    return await AppDataSource.getRepository(DriversList).createQueryBuilder('list')
-        .whereExists(AppDataSource.getRepository(DriversAssignment)
-            .createQueryBuilder("ass")
-            .where("ass.list_id = list.id")
-            .andWhere("ass.guest_id = :guestId", {guestId: guestId})
-        ).andWhereExists(AppDataSource.getRepository(DriversItem)
-            .createQueryBuilder("item")
-            .where("item.list_id = list.id")
-            .andWhere("item.guest_id = :guestId", {guestId: guestId})
+            .where("item.entity_id = list.id")
+            .andWhere("item.profile_id = :userId", {userId: profileId})
         ).getMany();
 }
 
 // Drivers Items
 
-export async function createDriversItemUser(listId: string, userId: number, item: Partial<DriversItem>) {
+export async function createDriversItem(listId: string, profileId: string, item: Partial<DriversItem>) {
     const repo = AppDataSource.getRepository(DriversItem);
     const list = await AppDataSource.getRepository(DriversList).findOneByOrFail({id: listId});
-    const entity = repo.create({...item, list, user: {id: userId}});
-    await repo.save(entity);
-}
-
-export async function createDriversItemGuest(listId: string, guestId: string, item: Partial<DriversItem>) {
-    const repo = AppDataSource.getRepository(DriversItem);
-    const list = await AppDataSource.getRepository(DriversList).findOneByOrFail({id: listId});
-    const entity = repo.create({...item, list, guest: {id: guestId}});
+    const entity = repo.create({...item, entity: list, profile: {id: profileId}});
     await repo.save(entity);
 }
 
@@ -135,7 +115,7 @@ export async function deleteDriversItem(itemId: string): Promise<void> {
 export async function reorderDriversItems(listId: string, orders: Array<{ itemId: string; position: number }>) {
     const repo = AppDataSource.getRepository(DriversItem);
     await Promise.all(
-        orders.map((o) => repo.update({id: o.itemId, list: {id: listId}}, {pos: o.position}))
+        orders.map((o) => repo.update({id: o.itemId, entity: {id: listId}}, {pos: o.position}))
     );
 }
 
@@ -143,10 +123,9 @@ export async function getDriversItems(listId: string): Promise<EnrichedDriversIt
     const repo = AppDataSource.getRepository(DriversItem);
 
     const entities = await repo.find({
-        where: {list: {id: listId}},
+        where: {entity: {id: listId}},
         relations: {
-            user: true,
-            guest: true
+            profile: true
         },             // join user & guest
         loadRelationIds: {relations: ['driversAssignments']}, // get IDs, not full rows
         order: {pos: 'ASC'},
@@ -157,11 +136,7 @@ export async function getDriversItems(listId: string): Promise<EnrichedDriversIt
         const relIds = (item as any).driversAssignments as unknown[] | undefined;
         const assignedCount = Array.isArray(relIds) ? relIds.length : 0;
 
-        const driverName =
-            item.user?.name ??
-            item.user?.username ??
-            item.guest?.username ??
-            '—';
+        const driverName = item.profile?.name;
 
         return {
             ...item,
@@ -199,11 +174,7 @@ export async function getDriversItemById(itemId: string): Promise<EnrichedDriver
     return {
         ...item,
         assignedCount,
-        driverName:
-            item.user?.name ??
-            item.user?.username ??
-            item.guest?.username ??
-            "—",
+        driverName: item.profile.name,
     };
 }
 
@@ -223,68 +194,42 @@ export async function getDriversAssignmentCounts(
 
 
 export async function getLastDriversItemNumber(listId: string): Promise<number> {
-    return (await AppDataSource.getRepository(DriversItem).maximum("pos", {list: {id: listId}})) ?? 0;
+    return (await AppDataSource.getRepository(DriversItem).maximum("pos", {entity: {id: listId}})) ?? 0;
 }
 
 // Assignments
-export async function assignDriversItemToUser(
+export async function assignDriversItem(
     itemId: string,
-    userId: number
+    profileId: string
 ): Promise<void> {
     const repo = AppDataSource.getRepository(DriversAssignment);
 
-    const {listId} = await getDriversItemById(itemId);
+    const {entity: {id: listId}} = await getDriversItemById(itemId);
 
     // construct the assignment entity
     const assignment = repo.create({
         item: {id: itemId},
-        user: {id: userId},
-        list: {id: listId},
+        profile: {id: profileId},
+        entity: {id: listId},
     });
 
-    const existing = await repo.findOneBy({item: {id: itemId}, user: {id: userId}});
+    const existing = await repo.findOneBy({item: {id: itemId}, profile: {id: profileId}});
     if (existing) {
         assignment.id = existing.id;
     }
 
     // if you want to ignore duplicates, use upsert with conflict paths
     await repo.upsert(assignment, {
-        conflictPaths: ["item", "user", "list"], // adjust to your unique constraint
+        conflictPaths: ["item", "profile", "entity"], // adjust to your unique constraint
         skipUpdateIfNoValuesChanged: true,
     });
 }
 
-export async function unassignDriversItemUser(itemId: string, userId: number): Promise<void> {
-    await AppDataSource.getRepository(DriversAssignment).delete({item: {id: itemId}, user: {id: userId}});
-}
-
-export async function assignDriversItemToGuest(itemId: string, guestId: string): Promise<void> {
-    const repo = AppDataSource.getRepository(DriversAssignment);
-
-    // you still need the listId from the item
-    const {listId} = await getDriversItemById(itemId);
-
-    // construct the assignment entity
-    const assignment = repo.create({
+export async function unassignDriversItem(itemId: string, profileId: string): Promise<void> {
+    await AppDataSource.getRepository(DriversAssignment).delete({
         item: {id: itemId},
-        guest: {id: guestId},
-        list: {id: listId},
+        profile: {id: profileId}
     });
-
-    const existing = await repo.findOneBy({item: {id: itemId}, guest: {id: guestId}});
-    if (existing) {
-        assignment.id = existing.id;
-    }
-
-    // if you want to ignore duplicates, use upsert with conflict paths
-    await repo.upsert(assignment, {
-        conflictPaths: ["item", "guest", "list"], // adjust to your unique constraint
-        skipUpdateIfNoValuesChanged: true,
-    });
-}
-
-export async function unassignDriversItemGuest(itemId: string, guestId: string): Promise<void> {
-    await AppDataSource.getRepository(DriversAssignment).delete({item: {id: itemId}, guest: {id: guestId}});
 }
 
 export async function getDriversAssignmentById(assignId: number) {
@@ -296,22 +241,9 @@ export async function getDriversAssignmentById(assignId: number) {
     });
 }
 
-export async function getDriversAssignmentsForUser(listId: string, userId: number): Promise<string[]> {
+export async function getDriversAssignments(listId: string, profileId: string): Promise<string[]> {
     const rows = await AppDataSource.getRepository(DriversAssignment).find({
-        where: {list: {id: listId}, user: {id: userId}},
-        relations: {
-            item: true
-        },   // this ensures `item` is joined
-        select: {
-            item: {id: true}   // only fetch the id of item
-        }
-    });
-    return rows.map(r => r.item.id);
-}
-
-export async function getDriversAssignmentsForGuest(listId: string, guestId: string): Promise<string[]> {
-    const rows = await AppDataSource.getRepository(DriversAssignment).find({
-        where: {list: {id: listId}, guest: {id: guestId}},
+        where: {entity: {id: listId}, profile: {id: profileId}},
         relations: {
             item: true
         },   // this ensures `item` is joined
@@ -324,10 +256,9 @@ export async function getDriversAssignmentsForGuest(listId: string, guestId: str
 
 export async function getDriversItemAssignees(listId: string) {
     const rows = await AppDataSource.getRepository(DriversAssignment).find({
-        where: {list: {id: listId}},  // if `list` is a relation
+        where: {entity: {id: listId}},  // if `list` is a relation
         relations: {
-            user: true,
-            guest: true,
+            profile: true,
             item: true
         },
     });
@@ -337,9 +268,9 @@ export async function getDriversItemAssignees(listId: string) {
         map[key] = map[key] || [];
         map[key].push({
             id: r.id,
-            userId: r.user?.id,
-            guestId: r.guest?.id,
-            name: r.user?.name ?? r.user?.username ?? r.guest?.username ?? '—'
+            userId: undefined,
+            guestId: r.profile.id,
+            name: r.profile.name,
         });
         return map;
     }, {} as Record<string, DriversItemAssignee[]>);

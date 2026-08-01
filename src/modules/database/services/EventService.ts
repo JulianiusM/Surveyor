@@ -1,5 +1,5 @@
 // TypeORM-based implementation of the event module
-import {EntityManager, FindOptionsWhere, In, IsNull, MoreThanOrEqual} from 'typeorm';
+import {EntityManager, In, MoreThanOrEqual} from 'typeorm';
 import type {DIETARY, ParticipantRow} from "../../../types/EventTypes";
 import {ExpectedError} from "../../lib/errors";
 import {generateUniqueId, generateUniqueToken, now} from '../../lib/util';
@@ -20,7 +20,7 @@ import {registerForDefaultPools} from "./EventInvoiceService";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function createEventTx(
-    ownerId: number,
+    ownerId: string,
     title: string,
     desc: string | null,
     startDate: string,       // 'YYYY-MM-DD'
@@ -66,7 +66,7 @@ export async function getEventById(eventId: string) {
     return await AppDataSource.getRepository(Event).findOneBy({id: eventId});
 }
 
-export async function getEventsByOwnerId(ownerId: number) {
+export async function getEventsByOwnerId(ownerId: string) {
     return await AppDataSource.getRepository(Event).findBy({owner: {id: ownerId}});
 }
 
@@ -101,7 +101,7 @@ export async function updateEventDates(eventId: string, startDate: string, endDa
     await AppDataSource.getRepository(Event).update(eventId, {startDate, endDate});
 }
 
-export async function getActiveEventsByOwnerId(ownerId: number) {
+export async function getActiveEventsByOwnerId(ownerId: string) {
     const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
     return await AppDataSource.getRepository(Event).find({
         where: {
@@ -112,13 +112,13 @@ export async function getActiveEventsByOwnerId(ownerId: number) {
     });
 }
 
-export async function getActiveManagedEventsForUser(userId: number) {
-    const ids = await entityAdminService.getIdsForUser('event', userId);
+export async function getActiveManagedEvents(profileId: string) {
+    const ids = await entityAdminService.getIdsForUser('event', profileId);
     const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
     return await AppDataSource.getRepository(Event).find({
         where: [
             {
-                owner: {id: userId},
+                owner: {id: profileId},
                 endDate: MoreThanOrEqual(today),
             },
             {
@@ -134,48 +134,21 @@ export async function getActiveManagedEventsForUser(userId: number) {
 // Registrations (no validation — controller handles it)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function registerUser(
-    eventId: string,
-    userId: number,
-    arrivalDate: string,
-    departureDate: string,
-    dietaryChoices?: DIETARY[] | null,
-    dietaryAllergies?: string | null,
-    dietComment?: string | null,
-    bypass?: { ok: boolean, linkId?: string },
-) {
-    return register(eventId, arrivalDate, departureDate, {userId}, dietaryChoices, dietaryAllergies, dietComment, bypass);
-}
-
-export async function registerGuest(
-    eventId: string,
-    guestId: string,
-    arrivalDate: string,
-    departureDate: string,
-    dietaryChoices?: DIETARY[] | null,
-    dietaryAllergies?: string | null,
-    dietComment?: string | null,
-    bypass?: { ok: boolean, linkId?: string },
-) {
-    return register(eventId, arrivalDate, departureDate, {guestId}, dietaryChoices, dietaryAllergies, dietComment, bypass);
-}
-
 export async function register(
     eventId: string,
     arrivalDate: string,
     departureDate: string,
-    actor: { userId?: number, guestId?: string },
+    profileId: string,
     dietaryChoices?: DIETARY[] | null,
     dietaryAllergies?: string | null,
     dietComment?: string | null,
     bypass?: { ok: boolean, linkId?: string },
 ) {
-    if (!actor.userId && !actor.guestId) return undefined;
     return await AppDataSource.transaction('READ COMMITTED', async (manager) => {
         const repo = manager.getRepository(EventRegistration);
         let reg = await findOneByObjectsAuthed(repo, {
             relations: {event: eventId},
-            party: {user: actor.userId, guest: actor.guestId}
+            party: {guest: profileId}
         });
         if (reg) {
             reg.arrivalDate = arrivalDate;
@@ -185,12 +158,12 @@ export async function register(
             reg = await ensureOneByObjectsAuthed(repo, {
                 relations: {event: eventId},
                 columns: {arrivalDate, departureDate},
-                party: {user: actor.userId, guest: actor.guestId}
+                party: {guest: profileId}
             });
         }
         await replaceDietaryChoicesTx(manager, reg.id, dietaryChoices, dietaryAllergies, dietComment);
         if (bypass && bypass.ok && bypass.linkId) {
-            const ok = await consumeDeadlineBypassToken(bypass.linkId, actor);
+            const ok = await consumeDeadlineBypassToken(bypass.linkId, profileId);
             if (!ok) throw new ExpectedError('This link has already been used', 'error', 409);
         }
         await registerForDefaultPools(manager, reg)
@@ -198,12 +171,9 @@ export async function register(
     });
 }
 
-export async function getRegistrationFor(actor: { userId?: number; guestId?: string }, eventId: string) {
-    const where: FindOptionsWhere<EventRegistration> = {event: {id: eventId}};
-    if (actor.userId) where.user = {id: actor.userId};
-    if (actor.guestId) where.guest = {id: actor.guestId};
+export async function getRegistrationFor(profileId: string, eventId: string) {
     return await AppDataSource.getRepository(EventRegistration).findOne({
-        where,
+        where: {event: {id: eventId}, profile: {id: profileId}},
         relations: {
             dietaryChoices: true
         }, // pull normalized rows
@@ -220,31 +190,26 @@ export async function getEventParticipants(eventId: string): Promise<Participant
     const rows = await repo.find({
         where: {event: {id: eventId}},
         relations: {
-            user: true,
-            guest: true,
+            profile: true,
             dietaryChoices: true
         },
         order: {id: 'ASC'},
     });
     return rows.map((r): ParticipantRow => ({
         id: r.id,
-        userId: r.user?.id ?? null,
-        guestId: r.guest?.id ?? null,
-        name: r.user?.name || r.user?.username || r.guest?.username || '—',
-        email: r.user?.email || r.guest?.email || '—',
+        userId: r.profile.user?.id ?? null,
+        guestId: r.profile.guest?.id ?? null,
+        name: r.profile.name || '—',
+        email: r.profile.user?.email || r.profile.guest?.email || '—',
         arrivalDate: r.arrivalDate,
         departureDate: r.departureDate,
         dietaryChoices: r.dietaryChoices ?? null,
     }));
 }
 
-export async function deleteRegistrationFor(eventId: string, actor: { userId?: number; guestId?: string }) {
+export async function deleteRegistrationFor(eventId: string, profileId: string) {
     const repo = AppDataSource.getRepository(EventRegistration);
-    if (actor.userId) {
-        await repo.delete({event: {id: eventId}, user: {id: actor.userId}});
-    } else if (actor.guestId) {
-        await repo.delete({event: {id: eventId}, guest: {id: actor.guestId}});
-    }
+    await repo.delete({event: {id: eventId}, profile: {id: profileId}});
 }
 
 // Replace all dietary rows for a registration
@@ -283,15 +248,12 @@ export async function replaceDietaryChoices(
  * - If both userId and guestId are provided, results are OR-combined.
  * - Sorted by event start date descending.
  */
-export async function getRegisteredEventsFor(actor: { userId?: number; guestId?: string }): Promise<Event[]> {
-    if (!actor.userId && !actor.guestId) return [];
-
+export async function getRegisteredEventsFor(profileId: string): Promise<Event[]> {
     const repo = AppDataSource.getRepository(Event);
     return repo.find({
         where: {
             registrations: {
-                user: {id: actor.userId ?? IsNull()},
-                guest: {id: actor.guestId ?? IsNull()},
+                profile: {id: profileId},
             }
         },
         relations: {
@@ -335,27 +297,18 @@ export async function isEventFull(eventId: string): Promise<boolean> {
     return registrations >= event.maxParticipants;
 }
 
-export async function isRegisteredForEvent(actor: { userId?: number; guestId?: string }, eventId: string) {
-    if (!actor.userId && !actor.guestId) return false;
-
+export async function isRegisteredForEvent(profileId: string, eventId: string) {
     const repo = AppDataSource.getRepository(EventRegistration);
 
     // Check if user or guest is registered (use separate queries for clarity)
-    let isRegistered = false;
-    if (actor.userId) {
-        isRegistered = await repo.exists({
-            where: {event: {id: eventId}, user: {id: actor.userId}}
-        });
-    } else if (actor.guestId) {
-        isRegistered = await repo.exists({
-            where: {event: {id: eventId}, guest: {id: actor.guestId}}
-        });
-    }
+    let isRegistered = await repo.exists({
+        where: {event: {id: eventId}, profile: {id: profileId}}
+    });
 
     // Also check if user is the event owner
-    if (!isRegistered && actor.userId) {
+    if (!isRegistered) {
         isRegistered = await AppDataSource.getRepository(Event).exists({
-            where: {id: eventId, owner: {id: actor.userId}}
+            where: {id: eventId, owner: {id: profileId}}
         });
     }
 
@@ -400,16 +353,16 @@ export async function createDeadlineBypassLink(
 
 export async function listDeadlineBypassLinks(eventId: string) {
     const repo = AppDataSource.getRepository(EventRegBypassLink);
-    const rows = await repo.find({where: {event: {id: eventId}}, order: {createdAt: 'DESC'}});
+    const rows = await repo.find({where: {event: {id: eventId}}, order: {track: {createdAt: 'DESC'}}});
     return rows.map(r => ({
         id: r.id,
         token: r.token, // you may redact on the UI if preferred
-        createdAt: r.createdAt,
+        createdAt: r.track.createdAt,
         expiresAt: r.expiresAt,
         revokedAt: r.revokedAt,
         used: r.usedCount > 0 || !!r.usedAt,
-        userId: r.userId ?? null,
-        guestId: r.guestId ?? null,
+        userId: r.profile.userId ?? null,
+        guestId: r.profile.guestId ?? null,
         status: calculateBypassLinkStatus(r)
     }));
 }
@@ -446,7 +399,7 @@ export async function validateDeadlineBypassToken(eventId: string, token: string
  */
 export async function consumeDeadlineBypassToken(
     linkId: string,
-    actor: { userId?: number; guestId?: string }
+    profileId: string
 ): Promise<boolean> {
     return await AppDataSource.transaction(async (manager) => {
         const repo = manager.getRepository(EventRegBypassLink);
@@ -455,10 +408,8 @@ export async function consumeDeadlineBypassToken(
             .update(EventRegBypassLink)
             .set({
                 usedCount: () => 'used_count + 1',
-                user: {id: actor.userId},
-                guest: {id: actor.guestId},
+                profile: {id: profileId},
                 usedAt: () => 'CURRENT_TIMESTAMP',
-                updatedAt: () => 'CURRENT_TIMESTAMP'
             })
             .where('id = :id', {id: linkId})
             .andWhere('revoked_at IS NULL')

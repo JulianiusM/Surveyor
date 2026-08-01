@@ -62,7 +62,7 @@ export async function listPools(eventId: string) {
             takeovers: {payerRegistration: true, beneficiaryRegistration: true},
             surcharges: {registration: true},
         },
-        order: {createdAt: "ASC"},
+        order: {track: {createdAt: "ASC"}},
     });
     return pools;
 }
@@ -260,10 +260,10 @@ export async function declineInvoice(poolId: string, invoiceId: number) {
     const repo = AppDataSource.getRepository(EventInvoice);
     const invoice = await repo.findOne({
         where: {id: invoiceId, pool: {id: poolId}},
-        relations: {registration: {user: true, guest: true}},
+        relations: {registration: {profile: true}},
     });
     if (!invoice) throw new Error("Invoice not found");
-    const email = invoice.registration.user?.email || invoice.registration.guest?.email;
+    const email = invoice.registration.profile?.user?.email || invoice.registration.profile.guest?.email;
     deleteProofFile(invoice.proofPath);
     await repo.remove(invoice);
     await recalcPoolTotals(poolId);
@@ -483,14 +483,14 @@ export async function getApprovedInvoices(poolId: string) {
 export async function getInvoiceWithRegistration(poolId: string, invoiceId: number) {
     return AppDataSource.getRepository(EventInvoice).findOne({
         where: {id: invoiceId, pool: {id: poolId}},
-        relations: {registration: {user: true, guest: true}},
+        relations: {registration: {profile: true}},
     });
 }
 
 export async function getShareWithRegistration(poolId: string, shareId: number) {
     return AppDataSource.getRepository(EventInvoiceShare).findOne({
         where: {id: shareId, pool: {id: poolId}},
-        relations: {registration: {user: true, guest: true}},
+        relations: {registration: {profile: true}},
     });
 }
 

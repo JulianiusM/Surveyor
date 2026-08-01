@@ -69,10 +69,7 @@ function isOwner(
 async function isEventParticipant(req: Request, resource?: Record<string, any>) {
     const eventId = resource?.eventId;
     if (!eventId) return true; // Non-event resources are allowed
-    return await isRegisteredForEvent(
-        {userId: req.session.user?.id, guestId: req.session.guest?.id},
-        eventId
-    );
+    return await isRegisteredForEvent(req.session.guest?.id || '', eventId);
 }
 
 /* -------------------- One generic builder -------------------- */

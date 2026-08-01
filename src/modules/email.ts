@@ -65,7 +65,7 @@ async function sendGuestRecoveryEmail(email: string, guestLinkData: GuestLinkDat
     for (let guest of guestLinkData) {
         guestSection += guest.username;
         guestSection += ' ----------\n';
-        guestSection += `Created: ${toLocalISOTime(guest.createdAt)}\n`;
+        guestSection += `Created: ${toLocalISOTime(guest.track.createdAt)}\n`;
         guestSection += `Link: ${guest.link}\n`
         guestSection += '---------- ';
     }

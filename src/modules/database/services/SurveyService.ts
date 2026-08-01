@@ -21,12 +21,12 @@ export async function getSurveyById(id: string) {
 
 export async function getCombinationsBySurveyId(surveyId: string) {
     return await AppDataSource.getRepository(SurveyCombination).find({
-        where: {survey: {id: surveyId}},
+        where: {entity: {id: surveyId}},
         order: {weekday: 'ASC', nthWeek: 'ASC'},
     });
 }
 
-export async function createSurveyTx(userId: number, title: string, desc: string, combinations: {
+export async function createSurveyTx(userId: string, title: string, desc: string, combinations: {
     weekday: WeekDay,
     week: WeekInMonth,
 }[], headerImg?: string | null,): Promise<string> {
@@ -57,7 +57,7 @@ export async function createSurveyTx(userId: number, title: string, desc: string
 
 export async function addCombination(surveyId: string, weekday: WeekDay, nthWeek: WeekInMonth) {
     const combo = AppDataSource.getRepository(SurveyCombination).create({
-        survey: {id: surveyId},
+        entity: {id: surveyId},
         weekday,
         nthWeek,
     });
@@ -65,27 +65,18 @@ export async function addCombination(surveyId: string, weekday: WeekDay, nthWeek
     return combo.id;
 }
 
-export async function getSurveysByUserId(userId: number) {
+export async function getSurveysByProfileId(profileId: string) {
     return await AppDataSource.getRepository(Survey).find({
-        where: {owner: {id: userId}},
+        where: {owner: {id: profileId}},
     });
 }
 
-export async function getSurveysByParticipantUserId(userId: number) {
+export async function getSurveysByParticipant(profileId: string) {
     return await AppDataSource.getRepository(Survey).createQueryBuilder('survey')
         .whereExists(AppDataSource.getRepository(SurveyResponse)
             .createQueryBuilder("resp")
-            .where("resp.survey_id = survey.id")
-            .andWhere("resp.user_id = :userId", {userId: userId})
-        ).getMany();
-}
-
-export async function getSurveysByParticipantGuestId(guestId: string) {
-    return await AppDataSource.getRepository(Survey).createQueryBuilder('survey')
-        .whereExists(AppDataSource.getRepository(SurveyResponse)
-            .createQueryBuilder("resp")
-            .where("resp.survey_id = survey.id")
-            .andWhere("resp.guest_id = :guestId", {guestId: guestId})
+            .where("resp.entity_id = survey.id")
+            .andWhere("resp.profile_id = :userId", {userId: profileId})
         ).getMany();
 }
 
@@ -95,44 +86,27 @@ export async function deleteSurvey(id: string) {
 
 // Responses
 
-export async function saveResponseGuest(surveyId: string, guestId: string, combinationId: number, answer: SurveyAnswer) {
+export async function saveResponse(surveyId: string, profileId: string, combinationId: number, answer: SurveyAnswer) {
     const response = AppDataSource.getRepository(SurveyResponse).create({
-        survey: {id: surveyId},
-        guest: {id: guestId},
-        combination: {id: combinationId},
+        entity: {id: surveyId},
+        profile: {id: profileId},
+        item: {id: combinationId},
         answer: answer || 'no',
     });
     await AppDataSource.getRepository(SurveyResponse).save(response);
 }
 
-export async function saveResponseUser(surveyId: string, userId: number, combinationId: number, answer: SurveyAnswer) {
-    const response = AppDataSource.getRepository(SurveyResponse).create({
-        survey: {id: surveyId},
-        user: {id: userId},
-        combination: {id: combinationId},
-        answer: answer || 'no',
-    });
-    await AppDataSource.getRepository(SurveyResponse).save(response);
-}
-
-export async function deleteResponsesByGuestId(guestId: string, surveyId: string) {
+export async function deleteResponsesByProfileId(profileId: string, surveyId: string) {
     await AppDataSource.getRepository(SurveyResponse).delete({
-        guest: {id: guestId},
-        survey: {id: surveyId},
+        profile: {id: profileId},
+        entity: {id: surveyId},
     });
 }
 
-export async function deleteResponsesByUserId(userId: number, surveyId: string) {
-    await AppDataSource.getRepository(SurveyResponse).delete({
-        user: {id: userId},
-        survey: {id: surveyId},
-    });
-}
-
-export async function getResponsesByGuestId(guestId: string) {
+export async function getResponsesByProfileId(profileId: string) {
     return await AppDataSource.getRepository(SurveyResponse).find({
-        where: {guest: {id: guestId}},
-        order: {combination: {id: 'ASC'}},
+        where: {profile: {id: profileId}},
+        order: {item: {id: 'ASC'}},
     });
 }
 
@@ -147,32 +121,32 @@ export async function getResponsesSorted(surveyId: string): Promise<GroupedRespo
 
     // Load all responses for the survey with both possible assignee relations
     const responses = await repo.find({
-        where: {survey: {id: surveyId}},
-        relations: {user: true, guest: true, combination: true},
+        where: {entity: {id: surveyId}},
+        relations: {profile: true, item: true},
     });
 
     const combined: Array<UserResponseItem | GuestResponseItem> = [];
 
     for (const r of responses) {
-        if (r.user) {
+        if (r.profile.user) {
             const item: UserResponseItem = {
                 kind: "user",
                 id: r.id,
                 answer: r.answer,
-                combinationId: r.combinationId,
-                userId: r.user.id,
-                username: r.user.username,
-                name: r.user.name,
+                combinationId: r.item.id,
+                userId: r.profile.id,
+                username: r.profile.name,
+                name: r.profile.name,
             };
             combined.push(item);
-        } else if (r.guest) {
+        } else if (r.profile.guest) {
             const item: GuestResponseItem = {
                 kind: "guest",
                 id: r.id,
                 answer: r.answer,
-                combinationId: r.combinationId,
-                guestId: r.guest.id,
-                username: r.guest.username,
+                combinationId: r.item.id,
+                guestId: r.profile.id,
+                username: r.profile.name,
             };
             combined.push(item);
         }

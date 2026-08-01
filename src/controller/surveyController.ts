@@ -74,7 +74,7 @@ function preprocessCreate(body: any): Partial<Survey> & { combinations: Partial<
 }
 
 async function createEntity(
-    ownerId: number,
+    ownerId: string,
     p: Partial<Survey> & { combinations: Partial<SurveyCombination>[] },
 ) {
     return surveyService.createSurveyTx(
@@ -115,17 +115,11 @@ async function addCombination(survey: Survey, weekday: WeekDay, nth: WeekInMonth
 
 async function submitResponses(survey: Survey, session: Request['session'], body: any) {
     const answers: { [p: string]: SurveyAnswer } = body;
-    if (session.user) {
-        const uid = session.user.id;
-        await surveyService.deleteResponsesByUserId(uid, survey.id);
-        for (const [combId, ans] of Object.entries(answers)) {
-            await surveyService.saveResponseUser(survey.id, uid, Number(combId), ans);
-        }
-    } else if (session.guest) {
+    if (session.guest) {
         const gid = session.guest.id;
-        await surveyService.deleteResponsesByGuestId(gid, survey.id);
+        await surveyService.deleteResponsesByProfileId(gid, survey.id);
         for (const [combId, ans] of Object.entries(answers)) {
-            await surveyService.saveResponseGuest(survey.id, gid, Number(combId), ans);
+            await surveyService.saveResponse(survey.id, gid, Number(combId), ans);
         }
     }
 }

@@ -743,8 +743,8 @@ function mergeParticipants(
 
     for (const override of overrides) {
         const participant: ParticipantAttendance = {
-            userId: override.userId ?? undefined,
-            guestId: override.guestId ?? undefined,
+            userId: undefined,
+            guestId: override.profile.id ?? undefined,
             roleIds: override.roleId ? [override.roleId] : undefined,
         };
         upsert(participant);
@@ -784,9 +784,9 @@ export async function generatePlanRecommendations(
 
     // Convert RecommendationDb[] to RecommendationInput[] format for rejection memory
     const existingRecommendationsInput: RecommendationInput[] | undefined = existingRecommendations?.map(rec => ({
-        slotId: rec.slot.id,
-        userId: rec.user?.id ?? undefined,
-        guestId: rec.guest?.id ?? undefined,
+        slotId: rec.item.id,
+        userId: undefined,
+        guestId: rec.profile.id ?? undefined,
         status: rec.status,
     }));
 

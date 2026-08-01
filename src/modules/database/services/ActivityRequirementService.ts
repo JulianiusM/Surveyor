@@ -1,13 +1,13 @@
-import {AppDataSource} from "../dataSource";
-import {ActivityPlanRequirement} from "../entities/activity/ActivityPlanRequirement";
-import {ActivityPlanRequirementOverride} from "../entities/activity/ActivityPlanRequirementOverride";
-import {ActivityPlan} from "../entities/activity/ActivityPlan";
 import {
     normalizeOverrideInput,
     normalizeRoleRequirementInput,
     RequirementOverrideInput,
     RoleRequirementInput,
 } from "../../activity/requirements";
+import {AppDataSource} from "../dataSource";
+import {ActivityPlan} from "../entities/activity/ActivityPlan";
+import {ActivityPlanRequirement} from "../entities/activity/ActivityPlanRequirement";
+import {ActivityPlanRequirementOverride} from "../entities/activity/ActivityPlanRequirementOverride";
 
 /**
  * Persistence layer for requirement settings. This service centralizes transactional updates
@@ -63,7 +63,7 @@ export async function getRequirementConfiguration(planId: string): Promise<Requi
         },
         relations: {
             activityPlanRequirements: {role: true},
-            activityPlanRequirementOverrides: {role: true, user: true, guest: true},
+            activityPlanRequirementOverrides: {role: true, profile: true},
         },
     });
 
@@ -82,13 +82,13 @@ export async function replaceRoleRequirements(planId: string, requirements: Role
     await AppDataSource.transaction(async (manager) => {
         const repo = manager.getRepository(ActivityPlanRequirement);
         const normalized = requirements.map(normalizeRoleRequirementInput);
-        await repo.delete({plan: {id: planId}});
+        await repo.delete({entity: {id: planId}});
 
         if (!normalized.length) return;
 
         const rows = normalized.map((req) =>
             repo.create({
-                plan: {id: planId},
+                entity: {id: planId},
                 role: {id: req.roleId},
                 requiredShifts: req.requiredShifts,
             })
@@ -101,17 +101,16 @@ export async function replaceRequirementOverrides(planId: string, overrides: Req
     await AppDataSource.transaction(async (manager) => {
         const repo = manager.getRepository(ActivityPlanRequirementOverride);
         const normalized = overrides.map(normalizeOverrideInput);
-        await repo.delete({plan: {id: planId}});
+        await repo.delete({entity: {id: planId}});
 
         if (!normalized.length) return;
 
         const rows = normalized.map((override) =>
             repo.create({
                 id: override.id,
-                plan: {id: planId},
+                entity: {id: planId},
                 role: override.roleId ? {id: override.roleId} : undefined,
-                user: override.userId ? {id: override.userId} : undefined,
-                guest: override.guestId ? {id: override.guestId} : undefined,
+                profile: {id: override.guestId ?? ''},
                 requiredShifts: override.requiredShifts,
             })
         );
@@ -158,8 +157,8 @@ export async function replaceRequirements(
         }
 
         // Delete old requirements and overrides sequentially
-        await roleRepo.delete({plan: {id: planId}});
-        await overrideRepo.delete({plan: {id: planId}});
+        await roleRepo.delete({entity: {id: planId}});
+        await overrideRepo.delete({entity: {id: planId}});
 
         if (Object.keys(planPatch).length) {
             await planRepo.update({id: planId}, planPatch);
@@ -168,7 +167,7 @@ export async function replaceRequirements(
         if (normalizedRoles.length) {
             const roleRows = normalizedRoles.map((req) =>
                 roleRepo.create({
-                    plan: {id: planId},
+                    entity: {id: planId},
                     role: {id: req.roleId},
                     requiredShifts: req.requiredShifts,
                 })
@@ -180,10 +179,9 @@ export async function replaceRequirements(
             const overrideRows = normalizedOverrides.map((override) =>
                 overrideRepo.create({
                     id: override.id,
-                    plan: {id: planId},
+                    entity: {id: planId},
                     role: override.roleId ? {id: override.roleId} : undefined,
-                    user: override.userId ? {id: override.userId} : undefined,
-                    guest: override.guestId ? {id: override.guestId} : undefined,
+                    profile: {id: override.guestId ?? ''},
                     requiredShifts: override.requiredShifts,
                 })
             );

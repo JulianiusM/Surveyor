@@ -114,7 +114,7 @@ function preprocessCreate(body: any): Partial<ActivityPlan> & { slots: Partial<A
         startDate: value.startDate,
         endDate: value.endDate,
         slots: flattenedSlots,
-        eventId: value.event_id || null,
+        event: value.event_id || null,
     };
 }
 
@@ -223,7 +223,7 @@ function preprocessRecommendationUpdate(body: any) {
  */
 
 async function createEntity(
-    ownerId: number,
+    ownerId: string,
     planData: Partial<ActivityPlan> & { slots: Partial<ActivitySlot>[] }
 ): Promise<string> {
     return await activityService.createActivityPlanTx(
@@ -233,7 +233,7 @@ async function createEntity(
         planData.startDate!,
         planData.endDate!,
         planData.slots,
-        planData.eventId,
+        planData.event?.id,
         planData.headerImg,
     );
 }
@@ -254,10 +254,8 @@ async function fetchForView(plan: ActivityPlan, req: Request) {
     const slotList = Object.values(slotsByDate).flat();
 
     let assignPromise: Promise<string[]> = Promise.resolve([]);
-    if (session.user) {
-        assignPromise = activityService.getActivitySlotAssignmentsForUser(plan.id, session.user.id)
-    } else if (session.guest) {
-        assignPromise = activityService.getActivitySlotAssignmentsForGuest(plan.id, session.guest.id)
+    if (session.guest) {
+        assignPromise = activityService.getActivitySlotAssignments(plan.id, session.guest.id)
     }
     const [assignments, assigneeLists, participantList, allRoles, slotRoles] = await Promise.all([
         assignPromise,
@@ -430,7 +428,7 @@ async function createTextField(planId: string, body: any) {
 
 async function updateTextField(planId: string, textFieldId: string, body: any, permData?: PermBundle) {
     const field = await activityService.getActivityPlanTextFieldById(textFieldId);
-    if (field?.planId !== planId) {
+    if (field?.entityId !== planId) {
         throw new APIError('Text field not found', {planId, textFieldId}, 404);
     }
     const {title, text = ''} = body;
@@ -447,7 +445,7 @@ async function updateTextField(planId: string, textFieldId: string, body: any, p
 
 async function deleteTextField(planId: string, textFieldId: string) {
     const field = await activityService.getActivityPlanTextFieldById(textFieldId);
-    if (field?.planId !== planId) {
+    if (field?.entityId !== planId) {
         throw new APIError('Text field not found', {planId, textFieldId}, 404);
     }
     await activityService.deleteActivityPlanTextField(textFieldId);
@@ -755,10 +753,10 @@ async function buildParticipantAttendanceMap(
 
     for (const override of overrides) {
         upsert({
-            userId: override.userId ?? undefined,
-            guestId: override.guestId ?? undefined,
+            userId: undefined,
+            guestId: override.profile.id ?? undefined,
             roleIds: override.roleId ? [override.roleId] : undefined,
-            name: override.user?.name ?? override.user?.username ?? override.guest?.username ?? undefined,
+            name: override.profile.name ?? undefined,
         });
     }
 
@@ -889,9 +887,9 @@ async function getRecommendations(planId: string) {
     }
 
     const normalized = recommendations.map((rec) => ({
-        slotId: rec.slot.id,
-        userId: rec.user?.id ?? null,
-        guestId: rec.guest?.id ?? null,
+        slotId: rec.item.id,
+        userId: null,
+        guestId: rec.profileId ?? null,
         status: rec.status,
     }));
 
@@ -998,9 +996,8 @@ async function applyRecommendations(planId: string, body?: any) {
         approved = statusUpdates.approved.map((r: any) => {
             // Find full recommendation data from database
             const dbRec = recommendations.find(rec =>
-                rec.slot.id === r.slotId &&
-                rec.user?.id === r.userId &&
-                rec.guest?.id === r.guestId
+                rec.item.id === r.slotId &&
+                rec.profile.id === r.guestId
             );
             return dbRec || r; // Fallback to body data if not in DB
         });
@@ -1140,8 +1137,8 @@ function getAssignmentAccessMapping() {
     return {
         assignToUser: (body: any, userId: number) => activityService.assignActivitySlotToUser(body.slotId, userId),
         assignToGuest: (body: any, guestId: string) => activityService.assignActivitySlotToGuest(body.slotId, guestId),
-        unassignFromUser: (body: any, userId: number) => activityService.unassignActivitySlotUser(body.slotId, userId),
-        unassignFromGuest: (body: any, guestId: string) => activityService.unassignActivitySlotGuest(body.slotId, guestId),
+        unassignFromUser: (body: any, userId: number) => activityService.unassignActivityAssignmentRole(body.slotId, String(userId)),
+        unassignFromGuest: (body: any, guestId: string) => activityService.unassignActivityAssignmentRole(body.slotId, guestId),
     };
 }
 
@@ -1149,8 +1146,8 @@ function getRoleAccessMapping() {
     return {
         assignToUser: (body: any, userId: number) => activityService.assignActivityAssignmentRoleToUser(body.slotId, userId, body.role),
         assignToGuest: (body: any, guestId: string) => activityService.assignActivityAssignmentRoleToGuest(body.slotId, guestId, body.role),
-        unassignFromUser: (body: any, userId: number) => activityService.unassignActivityAssignmentRoleFromUser(body.slotId, userId, body.role),
-        unassignFromGuest: (body: any, guestId: string) => activityService.unassignActivityAssignmentRoleFromGuest(body.slotId, guestId, body.role),
+        unassignFromUser: (body: any, userId: number) => activityService.unassignActivityAssignmentRole(body.slotId, String(userId), body.role),
+        unassignFromGuest: (body: any, guestId: string) => activityService.unassignActivityAssignmentRole(body.slotId, guestId, body.role),
     };
 }
 

@@ -85,7 +85,7 @@ async function loadUserPerms(t: CombEntityType, id: string, userId: number | nul
         if (caches?.userPerms?.has(k)) {
             return caches.userPerms.get(k)!;
         } else {
-            const u = await getUserPerms(t, id, userId);
+            const u = await getUserPerms(t, id, String(userId));
             caches?.userPerms?.set?.(k, u);
             return u;
         }
@@ -98,10 +98,7 @@ async function loadEventParticipantPerms(eventId: string | null | undefined, use
         const eid = String(eventId);
         let isPart: boolean | undefined = caches?.participant?.get(eid);
         if (isPart === undefined) {
-            isPart = await isRegisteredForEvent(
-                {userId: userId ?? undefined, guestId: guestId ?? undefined},
-                eid
-            );
+            isPart = await isRegisteredForEvent(guestId || '', eid);
             caches?.participant?.set?.(eid, isPart);
         }
         if (isPart && defaults?.participant) return defaults.participant;

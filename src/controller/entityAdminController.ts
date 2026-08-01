@@ -43,7 +43,7 @@ export async function addAdmin(entityType: CombEntityType, entityId: string, bod
         mask = presetMask;
     }
 
-    await entityAdminService.upsertAdmin(entityType, entityId, userId!, mask);
+    await entityAdminService.upsertAdmin(entityType, entityId, String(userId!), mask);
     return 'Admin added';
 }
 
@@ -65,7 +65,7 @@ export async function updateAdmin(entityType: CombEntityType, entityId: string, 
     else if (Array.isArray(value.perms)) mask = toMask(value.perms);
     else throw new Error('Either mask or perms must be provided');
 
-    await entityAdminService.upsertAdmin(entityType, entityId, userId, mask);
+    await entityAdminService.upsertAdmin(entityType, entityId, String(userId), mask);
     return 'Permissions updated';
 }
 
@@ -74,7 +74,7 @@ export async function removeAdmin(entityType: CombEntityType, entityId: string, 
     const userId = Number(pathUserId);
     if (!Number.isFinite(userId) || userId <= 0) throw new Error('Invalid userId');
 
-    await entityAdminService.removeAdmin(entityType, entityId, userId);
+    await entityAdminService.removeAdmin(entityType, entityId, String(userId));
     return 'Admin removed';
 }
 

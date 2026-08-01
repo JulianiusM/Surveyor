@@ -250,8 +250,8 @@ export function selectOverride(participant: ParticipantAttendance, overrides: Ac
     let best: ActivityPlanRequirementOverride | undefined;
 
     for (const override of overrides) {
-        const matchesUser = override.userId != null && keyUser === override.userId;
-        const matchesGuest = override.guestId != null && keyGuest === override.guestId;
+        const matchesUser = false;
+        const matchesGuest = override.profile.id != null && keyGuest === override.profile.id;
         if (!matchesUser && !matchesGuest) continue;
 
         const roleMatch = override.roleId == null || roleIds.includes(override.roleId);
@@ -271,7 +271,7 @@ export function selectOverride(participant: ParticipantAttendance, overrides: Ac
 }
 
 function calculateSpecificity(best: ActivityPlanRequirementOverride) {
-    return (best.roleId ? 1 : 0) + (best.userId ? 1 : 0) + (best.guestId ? 1 : 0);
+    return (best.roleId ? 1 : 0) + (best.profile.id ? 1 : 0);
 }
 
 function resolveRoleFixedRequirement(roleRequirements: ActivityPlanRequirement[], roleIds: number[] | undefined): number | null {

@@ -1,7 +1,6 @@
-import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
-import type {EntityBase} from "../../../../types/UserTypes";
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
+import {DefaultEntity} from "../abstract/BaseEntity";
 import {Event} from "../event/Event";
-import {User} from "../user/User";
 import {ActivityAssignment} from "./ActivityAssignment";
 import {ActivityAssignmentRecommendation} from "./ActivityAssignmentRecommendation";
 import {ActivityPlanRequirement} from "./ActivityPlanRequirement";
@@ -11,16 +10,7 @@ import {ActivityRole} from "./ActivityRole";
 import {ActivitySlot} from "./ActivitySlot";
 
 @Entity("activity_plans", {schema: "surveyor"})
-export class ActivityPlan implements EntityBase {
-    @PrimaryGeneratedColumn("uuid", {name: "id"})
-    id!: string;
-
-    @Column("varchar", {name: "title", length: 255})
-    title!: string;
-
-    @Column("text", {name: "description", nullable: true})
-    description?: string | null;
-
+export class ActivityPlan extends DefaultEntity {
     @Column("date", {name: "start_date"})
     startDate!: string;
 
@@ -57,73 +47,43 @@ export class ActivityPlan implements EntityBase {
     })
     allowDepartureDayMorning!: boolean;
 
-    @Column("varchar", {name: "header_img", length: 255, nullable: true})
-    headerImg?: string | null;
-
-    @Column("timestamp", {
-        name: "created_at",
-        nullable: true,
-        default: () => "CURRENT_TIMESTAMP",
-    })
-    createdAt: Date | null;
-
-    @Column("timestamp", {
-        name: "updated_at",
-        nullable: true,
-        default: () => "CURRENT_TIMESTAMP",
-    })
-    updatedAt: Date | null;
-
     @OneToMany(
         () => ActivityAssignment,
-        (activityAssignments) => activityAssignments.plan
+        (activityAssignments) => activityAssignments.entity
     )
-    activityAssignments: ActivityAssignment[];
+    assignments: ActivityAssignment[];
 
-    @RelationId((a: ActivityPlan) => a.owner)
-    ownerId!: number;
-
-    @ManyToOne(() => User, {
-        onDelete: "CASCADE",
-        onUpdate: "CASCADE",
-    })
-    @JoinColumn([{name: "owner_id", referencedColumnName: "id"}])
-    owner!: User;
-
-    @RelationId((a: ActivityPlan) => a.event)
+    @RelationId((r: ActivityPlan) => r.event)
     eventId?: string;
 
-    @ManyToOne(() => Event, (event) => event.activityPlans, {
-        onDelete: "CASCADE",
-        onUpdate: "CASCADE",
-    })
+    @ManyToOne(() => Event, {onDelete: "CASCADE", onUpdate: "CASCADE"})
     @JoinColumn([{name: "event_id", referencedColumnName: "id"}])
     event?: Event;
 
-    @OneToMany(() => ActivitySlot, (activitySlots) => activitySlots.plan)
-    activitySlots: ActivitySlot[];
+    @OneToMany(() => ActivitySlot, (activitySlots) => activitySlots.entity)
+    items: ActivitySlot[];
 
-    @OneToMany(() => ActivityRole, (role) => role.plan)
+    @OneToMany(() => ActivityRole, (role) => role.entity)
     roles?: ActivityRole[];
 
     @OneToMany(
         () => ActivityPlanRequirement,
-        (activityPlanRequirements) => activityPlanRequirements.plan
+        (activityPlanRequirements) => activityPlanRequirements.entity
     )
     activityPlanRequirements: ActivityPlanRequirement[];
 
     @OneToMany(
         () => ActivityPlanRequirementOverride,
-        (activityPlanRequirementOverrides) => activityPlanRequirementOverrides.plan
+        (activityPlanRequirementOverrides) => activityPlanRequirementOverrides.entity
     )
     activityPlanRequirementOverrides: ActivityPlanRequirementOverride[];
 
     @OneToMany(
         () => ActivityAssignmentRecommendation,
-        (recommendation) => recommendation.plan
+        (recommendation) => recommendation.entity
     )
     activityAssignmentRecommendations: ActivityAssignmentRecommendation[];
 
-    @OneToMany(() => ActivityPlanTextField, (textField) => textField.plan)
+    @OneToMany(() => ActivityPlanTextField, (textField) => textField.entity)
     textFields?: ActivityPlanTextField[];
 }

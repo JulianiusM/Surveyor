@@ -78,7 +78,7 @@ function preprocessCreate(body: any): Partial<Event> {
 }
 
 /*  ---- Transaction handled in service ---- */
-async function createEntity(ownerId: number, eventData: Partial<Event>) {
+async function createEntity(ownerId: string, eventData: Partial<Event>) {
     return await eventService.createEventTx(ownerId,
         eventData.title!,
         eventData.description!,
@@ -106,10 +106,8 @@ async function afterCreateItems(id: string, data: any) {
 async function fetchForView(event: Event, req: Request) {
     const session = req.session;
     let registration = null;
-    if (session.user) {
-        registration = await eventService.getRegistrationFor({userId: session.user.id}, event.id);
-    } else if (session.guest) {
-        registration = await eventService.getRegistrationFor({guestId: session.guest.id}, event.id);
+    if (session.guest) {
+        registration = await eventService.getRegistrationFor(session.guest.id, event.id);
     }
 
     // Associated plans/lists (will be empty until event_id exists in schema)
@@ -174,10 +172,9 @@ async function registerAttendance(event: Event, body: any, req: Request) {
     const session = req.session;
 
     // Deny registration if not already registered (allow updates to registration)
-    if (await eventService.isEventFull(event.id) && !(await eventService.isRegisteredForEvent({
-        guestId: session.guest?.id,
-        userId: session.user?.id,
-    }, event.id))) throw new APIError('Event is full', body, 403);
+    if (await eventService.isEventFull(event.id) && !(await eventService.isRegisteredForEvent(session.guest?.id || '', event.id))) {
+        throw new APIError('Event is full', body, 403);
+    }
 
     // Deny registration if past binding deadline
     let bypass: { ok: boolean; linkId?: string } = {ok: false};
@@ -217,10 +214,8 @@ async function registerAttendance(event: Event, body: any, req: Request) {
     checkMeals(dietary, allergyNotes, dietComment, body);
 
 
-    if (session.user?.id) {
-        await eventService.registerUser(event.id, session.user.id, value.arrivalDate, value.departureDate, dietary, allergyNotes?.trim() || null, dietComment?.trim() || null, bypass);
-    } else if (session.guest?.id) {
-        await eventService.registerGuest(event.id, session.guest.id, value.arrivalDate, value.departureDate, dietary, allergyNotes?.trim() || null, dietComment?.trim() || null, bypass);
+    if (session.guest?.id) {
+        await eventService.register(event.id, session.guest.id, value.arrivalDate, value.departureDate, dietary, allergyNotes?.trim() || null, dietComment?.trim() || null, bypass);
     } else {
         throw new APIError('Authentication required', body, 401);
     }
@@ -258,10 +253,8 @@ function checkMeals(dietary: DIETARY[], allergyNotes: string, dietComment: strin
 }
 
 async function cancelRegistration(event: Event, session: Request['session']) {
-    if (session.user?.id) {
-        await eventService.deleteRegistrationFor(event.id, {userId: session.user.id});
-    } else if (session.guest?.id) {
-        await eventService.deleteRegistrationFor(event.id, {guestId: session.guest.id});
+    if (session.guest?.id) {
+        await eventService.deleteRegistrationFor(event.id, session.guest.id);
     } else {
         throw new APIError('Authentication required', {}, 401);
     }

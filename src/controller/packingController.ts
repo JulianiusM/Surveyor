@@ -60,7 +60,7 @@ function preprocessCreate(body: any): Partial<PackingList> & { items: Partial<Pa
 
 /*  ---- NEU: alles in einer Transaktion ---- */
 async function createEntity(
-    ownerId: number,
+    ownerId: string,
     listData: Partial<PackingList> & { items: Partial<PackingItem>[] },
 ) {
     return await packingService.createPackingListTx(
@@ -90,10 +90,8 @@ async function fetchForView(list: PackingList, req: Request) {
     const session = req.session;
 
     let assignments: string[] = [];
-    if (session.user) {
-        assignments = await packingService.getPackingAssignmentsForUser(list.id, session.user.id);
-    } else if (session.guest) {
-        assignments = await packingService.getPackingAssignmentsForGuest(list.id, session.guest.id);
+    if (session.guest) {
+        assignments = await packingService.getPackingAssignments(list.id, session.guest.id);
     }
 
     const assigneeLists = await packingService.getPackingItemAssignees(list.id);
@@ -223,10 +221,10 @@ async function deleteHeaderImg(entity: EntityBase) {
 
 function getAssignmentAccessMapping() {
     return {
-        assignToUser: (body: any, userId: number) => packingService.assignPackingItemToUser(body.itemId, userId),
-        assignToGuest: (body: any, guestId: string) => packingService.assignPackingItemToGuest(body.itemId, guestId),
-        unassignFromUser: (body: any, userId: number) => packingService.unassignPackingItemUser(body.itemId, userId),
-        unassignFromGuest: (body: any, guestId: string) => packingService.unassignPackingItemGuest(body.itemId, guestId),
+        assignToUser: (body: any, userId: number) => packingService.assignPackingItem(body.itemId, String(userId)),
+        assignToGuest: (body: any, guestId: string) => packingService.assignPackingItem(body.itemId, guestId),
+        unassignFromUser: (body: any, userId: number) => packingService.unassignPackingItemUser(body.itemId, String(userId)),
+        unassignFromGuest: (body: any, guestId: string) => packingService.unassignPackingItemUser(body.itemId, guestId),
     };
 }
 

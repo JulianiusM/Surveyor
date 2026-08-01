@@ -1,15 +1,11 @@
 // src/modules/database/entities/event/EventRegBypassLink.ts
-import {Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId} from 'typeorm';
-import {Guest} from "../user/Guest";
-import {User} from "../user/User";
+import {Column, Entity, Index, JoinColumn, ManyToOne, RelationId} from 'typeorm';
+import {UuidProfileBase} from "../abstract/Base";
 import {Event} from "./Event";
 
 @Entity('event_reg_links')
 @Index('uk_event_token', ['event', 'token'], {unique: true})
-export class EventRegBypassLink {
-    @PrimaryGeneratedColumn("uuid", {name: "id"})
-    id!: string;
-
+export class EventRegBypassLink extends UuidProfileBase {
     @Column('varchar', {length: 64, name: 'token', unique: true})
     token!: string;
 
@@ -28,34 +24,8 @@ export class EventRegBypassLink {
     @Column('timestamp', {name: 'revoked_at', nullable: true})
     revokedAt?: Date | null;
 
-    @Column('timestamp', {name: 'created_at', default: () => 'CURRENT_TIMESTAMP'})
-    createdAt!: Date;
-
-    @Column('timestamp', {name: 'updated_at', default: () => 'CURRENT_TIMESTAMP'})
-    updatedAt!: Date;
-
     @Column('timestamp', {name: 'used_at', nullable: true})
     usedAt?: Date | null;
-
-    @RelationId((a: EventRegBypassLink) => a.user)
-    userId?: number;
-
-    @ManyToOne(() => User, {
-        onDelete: "CASCADE",
-        onUpdate: "RESTRICT",
-    })
-    @JoinColumn([{name: "user_id", referencedColumnName: "id"}])
-    user?: User;
-
-    @RelationId((a: EventRegBypassLink) => a.guest)
-    guestId?: string;
-
-    @ManyToOne(() => Guest, {
-        onDelete: "CASCADE",
-        onUpdate: "RESTRICT",
-    })
-    @JoinColumn([{name: "guest_id", referencedColumnName: "id"}])
-    guest?: Guest;
 
     @RelationId((a: EventRegBypassLink) => a.event)
     eventId!: string;

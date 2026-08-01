@@ -1,21 +1,12 @@
-import {
-    Column,
-    Entity,
-    JoinColumn,
-    ManyToOne,
-    PrimaryGeneratedColumn,
-    RelationId,
-} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, RelationId,} from "typeorm";
+import {NumericBase} from "../abstract/TrackedBase";
 import {EventInvoicePool} from "./EventInvoicePool";
 import {EventRegistration} from "./EventRegistration";
 
 export type InvoiceStatus = 'NEW' | 'APPROVED' | 'CLOSED';
 
 @Entity("event_invoices", {schema: "surveyor"})
-export class EventInvoice {
-    @PrimaryGeneratedColumn({type: "int", name: "id"})
-    id!: number;
-
+export class EventInvoice extends NumericBase {
     @ManyToOne(() => EventInvoicePool, (pool) => pool.invoices, {onDelete: "CASCADE", onUpdate: "CASCADE"})
     @JoinColumn([{name: "pool_id", referencedColumnName: "id"}])
     pool!: EventInvoicePool;
@@ -48,10 +39,4 @@ export class EventInvoice {
 
     @Column("enum", {name: "status", enum: ["NEW", "APPROVED", "CLOSED"], default: "NEW"})
     status!: InvoiceStatus;
-
-    @Column("timestamp", {name: "created_at", default: () => "CURRENT_TIMESTAMP"})
-    createdAt!: Date;
-
-    @Column("timestamp", {name: "updated_at", default: () => "CURRENT_TIMESTAMP"})
-    updatedAt!: Date;
 }

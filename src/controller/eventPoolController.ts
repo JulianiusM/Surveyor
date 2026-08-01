@@ -36,10 +36,8 @@ export async function purgeExpiredProofs(pool: Awaited<ReturnType<typeof invoice
 // Resolve the registration ID for the current actor so validation stays localized.
 async function getActorRegistrationId(event: Event, session: Request['session']) {
     let registration = null;
-    if (session.user) {
-        registration = await eventService.getRegistrationFor({userId: session.user.id}, event.id);
-    } else if (session.guest) {
-        registration = await eventService.getRegistrationFor({guestId: session.guest.id}, event.id)
+    if (session.guest) {
+        registration = await eventService.getRegistrationFor(session.guest.id, event.id);
     }
     return registration?.id;
 }
@@ -301,7 +299,7 @@ async function approveInvoice(event: Event, poolId: string, invoiceId: string, s
     const invoice = await invoiceService.getInvoiceWithRegistration(poolId, Number(invoiceId));
     if (!invoice) throw new APIError('Invoice not found', {}, 404);
     await invoiceService.approveInvoice(poolId, Number(invoiceId));
-    const email = invoice.registration.user?.email || invoice.registration.guest?.email;
+    const email = invoice.registration.profile.user?.email || invoice.registration.profile.guest?.email;
     if (email) {
         const actor = resolveActorLabel(session);
         void mailer.sendEmail(
@@ -335,7 +333,7 @@ async function closeInvoice(
     }
 
     await invoiceService.closeInvoice(poolId, Number(invoiceId));
-    const email = invoice.registration.user?.email || invoice.registration.guest?.email;
+    const email = invoice.registration.profile.user?.email || invoice.registration.profile.guest?.email;
     if (email) {
         const actor = resolveActorLabel(session);
         void mailer.sendEmail(
@@ -589,7 +587,7 @@ async function markSharePaid(event: Event, poolId: string, shareId: string, isPa
     const share = await invoiceService.getShareWithRegistration(poolId, Number(shareId));
     if (!share) throw new APIError('Share not found', {}, 404);
     await invoiceService.setSharePaid(poolId, Number(shareId), isPaid);
-    const email = share.registration.user?.email || share.registration.guest?.email;
+    const email = share.registration.profile.user?.email || share.registration.profile.guest?.email;
     if (email) {
         const statusText = isPaid ? 'marked as paid' : 'marked as unpaid';
         const actor = resolveActorLabel(session);

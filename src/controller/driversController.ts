@@ -36,20 +36,20 @@ function preprocessCreate(body: any): Partial<DriversList> {
     return {
         title: value.title,
         description: value.description || null,
-        eventId: value.event_id || null,
+        event: value.event_id || null,
     };
 }
 
 /*  ---- NEU: alles in einer Transaktion ---- */
 async function createEntity(
-    ownerId: number,
+    ownerId: string,
     listData: Partial<DriversList>
 ) {
     return await driverService.createDriversList(
         ownerId,
         listData.title!,
         listData.description!,
-        listData.eventId,
+        listData.event?.id,
         listData.headerImg,
     );
 }
@@ -63,10 +63,8 @@ async function fetchForView(list: DriversList, req: Request) {
     const session = req.session;
 
     let assignments: string[] = [];
-    if (session.user) {
-        assignments = await driverService.getDriversAssignmentsForUser(list.id, session.user.id)
-    } else if (session.guest) {
-        assignments = await driverService.getDriversAssignmentsForGuest(list.id, session.guest.id)
+    if (session.guest) {
+        assignments = await driverService.getDriversAssignments(list.id, session.guest.id)
     }
 
     const assigneeLists = await driverService.getDriversItemAssignees(list.id);
@@ -141,10 +139,8 @@ async function quickAddItem(list: DriversList, body: any, session: Request['sess
         pos: last + 1
     };
 
-    if (session.user) {
-        await driverService.createDriversItemUser(list.id, session.user.id, item);
-    } else if (session.guest) {
-        await driverService.createDriversItemGuest(list.id, session.guest.id, item);
+    if (session.guest) {
+        await driverService.createDriversItem(list.id, session.guest.id, item);
     } else {
         throw new APIError('Not logged in', body, 400);
     }
@@ -201,10 +197,10 @@ async function deleteHeaderImg(entity: EntityBase) {
 
 function getAssignmentAccessMapping() {
     return {
-        assignToUser: (body: any, userId: number) => driverService.assignDriversItemToUser(body.itemId, userId),
-        assignToGuest: (body: any, guestId: string) => driverService.assignDriversItemToGuest(body.itemId, guestId),
-        unassignFromUser: (body: any, userId: number) => driverService.unassignDriversItemUser(body.itemId, userId),
-        unassignFromGuest: (body: any, guestId: string) => driverService.unassignDriversItemGuest(body.itemId, guestId),
+        assignToUser: (body: any, userId: number) => driverService.assignDriversItem(body.itemId, String(userId)),
+        assignToGuest: (body: any, guestId: string) => driverService.assignDriversItem(body.itemId, guestId),
+        unassignFromUser: (body: any, userId: number) => driverService.unassignDriversItem(body.itemId, String(userId)),
+        unassignFromGuest: (body: any, guestId: string) => driverService.unassignDriversItem(body.itemId, guestId),
     };
 }
 

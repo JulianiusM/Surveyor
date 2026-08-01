@@ -1,13 +1,11 @@
-import {Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, RelationId} from "typeorm";
+import {currencyTransformer} from "../../transformers";
+import {NumericBase} from "../abstract/TrackedBase";
 import {EventInvoicePool} from "./EventInvoicePool";
 import {EventRegistration} from "./EventRegistration";
-import {currencyTransformer} from "../../transformers";
 
 @Entity("event_invoice_shares", {schema: "surveyor"})
-export class EventInvoiceShare {
-    @PrimaryGeneratedColumn({type: "int", name: "id"})
-    id!: number;
-
+export class EventInvoiceShare extends NumericBase {
     @ManyToOne(() => EventInvoicePool, (pool) => pool.shares, {onDelete: "CASCADE", onUpdate: "CASCADE"})
     @JoinColumn([{name: "pool_id", referencedColumnName: "id"}])
     pool!: EventInvoicePool;
@@ -30,7 +28,13 @@ export class EventInvoiceShare {
     })
     baseShareAmount!: number;
 
-    @Column("decimal", {name: "extra_amount", precision: 10, scale: 2, default: "0.00", transformer: currencyTransformer})
+    @Column("decimal", {
+        name: "extra_amount",
+        precision: 10,
+        scale: 2,
+        default: "0.00",
+        transformer: currencyTransformer
+    })
     extraAmount!: number;
 
     // Amount of the participant's own invoices credited against their share
@@ -58,7 +62,4 @@ export class EventInvoiceShare {
 
     @Column("timestamp", {name: "paid_at", nullable: true})
     paidAt?: Date | null;
-
-    @Column("timestamp", {name: "created_at", default: () => "CURRENT_TIMESTAMP"})
-    createdAt!: Date;
 }

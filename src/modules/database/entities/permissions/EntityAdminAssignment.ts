@@ -1,13 +1,10 @@
-import {Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId, Unique} from "typeorm";
+import {Column, Entity, Unique} from "typeorm";
 import type {CombEntityType} from "../../../../types/UtilTypes";
-import {User} from "../user/User";
+import {NumericProfileBase} from "../abstract/Base";
 
 @Entity("entity_admin_assignments")
-@Unique("uk_entity_admin_assignment_user", ["entityType", "entityId", "user"])
-export class EntityAdminAssignment {
-    @PrimaryGeneratedColumn({type: "int", name: "id"})
-    id!: number;
-
+@Unique("uk_entity_admin_assignment_user", ["entityType", "entityId", "profile"])
+export class EntityAdminAssignment extends NumericProfileBase {
     @Column("varchar", {name: "entity_type", length: 32})
     entityType!: CombEntityType;
 
@@ -19,26 +16,4 @@ export class EntityAdminAssignment {
 
     @Column("int", {name: "created_by", nullable: true})
     createdBy?: number | null;
-
-    @Column("timestamp", {
-        name: "created_at",
-        default: () => "CURRENT_TIMESTAMP",
-    })
-    createdAt: Date;
-
-    @Column("timestamp", {
-        name: "updated_at",
-        default: () => "CURRENT_TIMESTAMP",
-    })
-    updatedAt: Date;
-
-    @RelationId((ea: EntityAdminAssignment) => ea.user)
-    userId!: number;
-
-    @ManyToOne(() => User, {
-        onDelete: "CASCADE",
-        onUpdate: "CASCADE",
-    })
-    @JoinColumn([{name: "user_id", referencedColumnName: "id"}])
-    user!: User;
 }

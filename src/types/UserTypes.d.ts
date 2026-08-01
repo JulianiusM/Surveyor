@@ -25,7 +25,7 @@ export type GuestFlowConfig = {
     templates: { create: string, view: string },
     buildRedirect: (id: any) => string,
     preprocessCreate: (body: any) => any,
-    createEntity: (ownerId: number, data: any) => Promise<any>,
+    createEntity: (ownerId: string, data: any) => Promise<any>,
     afterCreateItems: (id: any, data: any) => Promise<void>,
     fetchForView: (entity: any, Request) => Promise<any | null>,
     fetchForDuplicate: (entity: any, session: Request['session']) => Promise<any | null>,
@@ -78,3 +78,5 @@ export type Entity = EntityBase & {
 }
 
 export type GuestLinkData = Guest & { link: string }
+
+export type ProfileType = "user" | "guest";

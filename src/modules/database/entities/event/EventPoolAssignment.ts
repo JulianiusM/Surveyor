@@ -1,12 +1,10 @@
-import {Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, RelationId} from "typeorm";
+import {NumericBase} from "../abstract/TrackedBase";
 import {EventInvoicePool} from "./EventInvoicePool";
 import {EventRegistration} from "./EventRegistration";
 
 @Entity("event_invoice_assignments", {schema: "surveyor"})
-export class EventPoolAssignment {
-    @PrimaryGeneratedColumn({type: "int", name: "id"})
-    id!: number;
-
+export class EventPoolAssignment extends NumericBase {
     @ManyToOne(() => EventInvoicePool, (pool) => pool.assignments, {onDelete: "CASCADE", onUpdate: "CASCADE"})
     @JoinColumn([{name: "pool_id", referencedColumnName: "id"}])
     pool!: EventInvoicePool;
@@ -28,7 +26,4 @@ export class EventPoolAssignment {
         default: 0
     })
     isExempt!: boolean;
-
-    @Column("timestamp", {name: "created_at", default: () => "CURRENT_TIMESTAMP"})
-    createdAt!: Date;
 }
