@@ -18,7 +18,7 @@ export class Profile extends UuidBase {
     userId?: number;
 
     @ManyToOne(() => User, (users) => users.profiles, {
-        onDelete: "CASCADE",
+        onDelete: "SET NULL",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "user_id", referencedColumnName: "id"}])
@@ -28,7 +28,7 @@ export class Profile extends UuidBase {
     guestId?: string;
 
     @OneToOne(() => Guest, (guests) => guests.profile, {
-        onDelete: "CASCADE",
+        onDelete: "SET NULL",
         onUpdate: "CASCADE",
     })
     @JoinColumn([{name: "guest_id", referencedColumnName: "id"}])
