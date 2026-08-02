@@ -1,6 +1,6 @@
-import {APIError, ExpectedError} from "../modules/lib/errors";
-import {asyncHandler, asyncParamHandler} from "../modules/lib/asyncHandler";
 import {NextFunction, Request, Response, Router} from "express";
+import {asyncHandler, asyncParamHandler} from "../modules/lib/asyncHandler";
+import {APIError, ExpectedError} from "../modules/lib/errors";
 import type {GuestFlowDb} from "../types/UserTypes";
 
 export function apiParamHandler(param: string, router: Router, getById: GuestFlowDb['getById'], entityType: string) {
@@ -20,7 +20,6 @@ export function queryHandler(param: string, router: Router, getById: GuestFlowDb
 export function createPathQueryHandler(param: string, router: Router, getById: GuestFlowDb['getById'], entityName: string, error?: Error) {
     router.use(asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
             if (!req.path.endsWith("/create") && !req.path.endsWith("/duplicate")) {
-                console.log(req.path);
                 return next();
             }
 

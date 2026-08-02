@@ -52,14 +52,11 @@ function isOwner(
     resource?: any,
     additional: any[] = []
 ): boolean {
-    const own = req.session.user && req.session.user.id === resource?.ownerId;
+    const own = req.session.profile && req.session.profile.id === resource?.ownerId;
     if (own) return true;
 
     for (const item of additional) {
-        if (
-            (req.session.user && req.session.user.id === item.userId) ||
-            (req.session.guest && req.session.guest.id === item.guestId)
-        ) {
+        if (req.session.profile && req.session.profile.id === item.profileId) {
             return true;
         }
     }
@@ -69,7 +66,8 @@ function isOwner(
 async function isEventParticipant(req: Request, resource?: Record<string, any>) {
     const eventId = resource?.eventId;
     if (!eventId) return true; // Non-event resources are allowed
-    return await isRegisteredForEvent(req.session.guest?.id || '', eventId);
+    if (!req.session.profile) return false;
+    return await isRegisteredForEvent(req.session.profile.id, eventId);
 }
 
 /* -------------------- One generic builder -------------------- */
@@ -139,7 +137,7 @@ export const requireEventParticipant = (getResource: GetResource = defaultGetRes
 
 /* -------------------- Unchanged auth redirect middleware -------------------- */
 export function isAuthenticated(req: Request, res: Response, next: NextFunction) {
-    if (req.session.user) return next();
+    if (req.session.auth?.user && req.session.profile) return next();
     req.flash("info", "You must be logged in to access this site.");
     let nxt = "";
     if (typeof req.query.next === "string") {
@@ -151,7 +149,7 @@ export function isAuthenticated(req: Request, res: Response, next: NextFunction)
 }
 
 export function isGuest(req: Request, res: Response, next: NextFunction) {
-    if (req.session.guest) return next();
+    if (req.session.auth?.guest && req.session.profile) return next();
     req.flash("info", "You must be logged in as guest to access this site.");
     res.redirect("/guest/recovery");
 }

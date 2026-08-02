@@ -1,18 +1,26 @@
 import bcrypt from 'bcryptjs';
-import {MoreThan} from "typeorm";
+import {EntityManager, MoreThan, Repository} from "typeorm";
 import type {OidcClaims, UserInfo} from "../../../types/UserTypes";
 import {coerceLimit, generateUniqueToken, maskEmail, SQL_ALLOW_LIST} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {Guest} from '../entities/user/Guest';
+import {Profile} from "../entities/user/Profile";
 import {User} from '../entities/user/User';
 
 export async function registerUser(username: string, name: string, password: string, email: string) {
-    const repo = AppDataSource.getRepository(User);
-    const hashed = await bcrypt.hash(password, 10);
+    return await AppDataSource.transaction(async (em: EntityManager) => {
+        const repo = em.getRepository(User);
+        const hashed = await bcrypt.hash(password, 10);
 
-    const user = repo.create({username, name, password: hashed, email, isActive: false});
-    const result = await repo.save(user);
-    return result.id;
+        const user = repo.create({username, name, password: hashed, email, isActive: false});
+        const result = await repo.save(user);
+
+        const profileRepo = em.getRepository(Profile);
+        const profile = profileRepo.create({name, type: 'user', user: result});
+        const profRes = await profileRepo.save(profile);
+
+        return result.id;
+    });
 }
 
 export async function getUserByUsername(username: string) {
@@ -25,6 +33,9 @@ export async function getUserByUsername(username: string) {
             username: true,
             email: true,
             isActive: true
+        },
+        relations: {
+            profiles: true,
         }
     });
 }
@@ -38,6 +49,9 @@ export async function getUserByEmail(email: string) {
             username: true,
             email: true,
             isActive: true
+        },
+        relations: {
+            profiles: true,
         }
     });
 }
@@ -131,10 +145,22 @@ export async function resetPassword(username: string, newPassword: string) {
 // Guests
 
 export async function createGuest(username: string, email: string | null = null) {
-    const repo = AppDataSource.getRepository(Guest);
-    const token = generateUniqueToken();
-    const guest = repo.create({username, email, token});
-    return await repo.save(guest);
+    return await AppDataSource.transaction(async (em) => {
+        const repo = em.getRepository(Guest);
+        const token = generateUniqueToken();
+        const guest = repo.create({username, email, token});
+        const result = await repo.save(guest);
+
+        const profileRepo = em.getRepository(Profile);
+        const profile = profileRepo.create({name: username, type: 'guest', guest: guest});
+        const profileRes = await profileRepo.save(profile);
+
+        if (!result.profile) {
+            result.profile = profileRes;
+        }
+
+        return result;
+    });
 }
 
 export async function getGuestByToken(token: string, guestId: string) {
@@ -145,6 +171,9 @@ export async function getGuestByToken(token: string, guestId: string) {
             id: true,
             username: true,
             email: true
+        },
+        relations: {
+            profile: true
         }
     });
 }
@@ -158,6 +187,9 @@ export async function getGuestInternal(guestId: string) {
             username: true,
             email: true,
             token: true
+        },
+        relations: {
+            profile: true
         }
     });
 }
@@ -218,6 +250,9 @@ export async function getUserByOidc(oidcIssuer: string, oidcSub: string) {
             email: true,
             isActive: true
         },
+        relations: {
+            profiles: true,
+        }
     });
 }
 
@@ -251,11 +286,12 @@ export async function findOrCreateUserFromOidc(
     // 1) Try exact OIDC match first
     let user = await repo.findOne({
         where: {oidcIssuer, oidcSub: sub},
+        relations: {profiles: true},
     });
 
     // 2) If not found: try link-by-email (optional)
     if (!user && linkByEmail && email) {
-        user = await repo.findOne({where: {email}});
+        user = await repo.findOne({where: {email}, relations: {profiles: true}});
         if (user) {
             user.oidcIssuer = oidcIssuer;
             user.oidcSub = sub;
@@ -283,24 +319,32 @@ export async function findOrCreateUserFromOidc(
             }
         }
 
-        user = repo.create({
-            username: uniqueUsername,
-            name: name || baseUsername,
-            email: emailToUse,
-            password: null,
-            isActive: true,
-            oidcIssuer,
-            oidcSub: sub,
-        });
+        return await AppDataSource.transaction(async (em) => {
+            const newUsr = em.getRepository(User).create({
+                username: uniqueUsername,
+                name: name || baseUsername,
+                email: emailToUse,
+                password: null,
+                isActive: true,
+                oidcIssuer,
+                oidcSub: sub,
+            });
+            const newProfile = em.getRepository(Profile).create({name: newUsr.name, type: 'user', user: newUsr});
+            const savedProfile = await em.getRepository(Profile).save(newProfile);
+            user = await handleUserSaving(newUsr, sub, em.getRepository(User));
+            if (!user.profiles || user.profiles.length === 0) {
+                user.profiles = [savedProfile];
+            }
 
-        user = await handleUserSaving(user, sub);
+            return user;
+        });
     }
 
     return user;
 }
 
-async function handleUserSaving(user: User, sub: string) {
-    const repo = AppDataSource.getRepository(User);
+async function handleUserSaving(user: User, sub: string, repo?: Repository<User>) {
+    repo ??= AppDataSource.getRepository(User);
     try {
         user = await repo.save(user);
     } catch (err: any) {
@@ -384,40 +428,11 @@ export async function searchUsersSecure(query: string, limit = 10): Promise<Arra
     return rows.map(u => ({id: u.id, username: u.username, email: maskEmail(u.email), name: u.name}));
 }
 
-/**
- * Optional fallback when admins explicitly want substring search.
- * Still validated and heavily limited to avoid table scans abuse.
- */
-export async function searchUsersSubstringStrict(query: string, limit = 10): Promise<Array<{
-    id: number;
-    username: string;
-    emailMasked: string
-}>> {
-    const repo = AppDataSource.getRepository(User);
-    const q = (query || '').trim();
-
-    // require >=3 chars for substring and allowlist
-    if (q.length < 3 || !SQL_ALLOW_LIST.test(q)) return [];
-    const lim = coerceLimit(limit, 10, 10);
-
-    // Escape LIKE wildcards
-    const esc = q.replace(/[%_\\]/g, String.raw`\$&`);
-    const likeAny = `%${esc}%`;
-
-    const rows = await repo
-        .createQueryBuilder('u')
-        .select(['u.id', 'u.username', 'u.email', 'u.name'])
-        .where(String.raw`u.username LIKE :like ESCAPE "\\"`, {like: likeAny})
-        .orWhere(String.raw`u.email LIKE :like ESCAPE "\\"`, {like: likeAny})
-        .orWhere(String.raw`u.name LIKE :like ESCAPE "\\"`, {like: likeAny})
-        .orderBy('u.username', 'ASC')
-        .limit(lim)
-        .getMany();
-
-    return rows.map(u => ({id: u.id, username: u.username, emailMasked: maskEmail(u.email)}));
-}
-
 /** Optional helpers you might find useful elsewhere */
 export async function getUserById(id: number): Promise<User | null> {
     return await AppDataSource.getRepository(User).findOne({where: {id}});
+}
+
+export async function getProfileById(id: string) {
+    return await AppDataSource.getRepository(Profile).findOneBy({id});
 }

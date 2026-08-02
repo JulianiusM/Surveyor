@@ -84,7 +84,6 @@ function renderRows(root: HTMLElement, data: any): void {
             .join("; ");
 
         tr.dataset.id = String(p.id);
-        tr.dataset.kind = p.userId ? "user" : "guest";
         tr.dataset.name = p.name.toLowerCase();
         tr.dataset.email = (p.email || '').toLowerCase();
         tr.dataset.dietary = dietary.join(',').toLowerCase();

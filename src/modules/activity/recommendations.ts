@@ -1,6 +1,6 @@
 import {ActivitySlot} from "../database/entities/activity/ActivitySlot";
-import {AssignmentCandidate, AttendancePolicy, collectAssignmentWarnings, toAssignmentCandidate} from "./availability";
 import {normalizeRecommendationInput, RecommendationInput} from "../database/services/ActivityRecommendationService";
+import {AssignmentCandidate, AttendancePolicy, collectAssignmentWarnings, toAssignmentCandidate} from "./availability";
 import {ParticipantAttendance, toParticipantKey} from "./requirements";
 
 /**
@@ -25,14 +25,14 @@ export interface RecommendationWarningOptions {
 }
 
 export function buildRecommendationWarnings({
-    slots,
-    recommendations,
-    existingAssignments = {},
-    participantAttendance = {},
-    slotCapacities = {},
-    allowOverfill = false,
-    attendancePolicy,
-}: RecommendationWarningOptions): RecommendationWarningResult[] {
+                                                slots,
+                                                recommendations,
+                                                existingAssignments = {},
+                                                participantAttendance = {},
+                                                slotCapacities = {},
+                                                allowOverfill = false,
+                                                attendancePolicy,
+                                            }: RecommendationWarningOptions): RecommendationWarningResult[] {
     const slotMap = new Map<string, ActivitySlot>();
     for (const slot of slots) {
         slotMap.set(slot.id, slot);
@@ -43,13 +43,13 @@ export function buildRecommendationWarnings({
     const results: RecommendationWarningResult[] = [];
 
     for (const rec of recommendations.map(normalizeRecommendationInput)) {
-        const slot = slotMap.get(rec.slotId);
+        const slot = slotMap.get(rec.itemId);
         if (!slot) {
-            throw new Error(`Slot ${rec.slotId} not found for recommendation warnings`);
+            throw new Error(`Slot ${rec.itemId} not found for recommendation warnings`);
         }
 
-        const participantKey = toParticipantKey({userId: rec.userId ?? undefined, guestId: rec.guestId ?? undefined});
-        const attendance = participantAttendance[participantKey] ?? {userId: rec.userId ?? undefined, guestId: rec.guestId ?? undefined};
+        const participantKey = toParticipantKey({profileId: rec.profileId});
+        const attendance = participantAttendance[participantKey] ?? {profileId: rec.profileId};
         const existing = existingAssignments[participantKey] ?? [];
         const prior = participantQueue.get(participantKey) ?? [];
 

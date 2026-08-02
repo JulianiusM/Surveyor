@@ -12,7 +12,10 @@ import {
     toParticipantKey,
     toParticipantName
 } from "../modules/activity/requirements";
-import {RecommendationStatus} from "../modules/database/entities/activity/ActivityAssignmentRecommendation";
+import {
+    ActivityAssignmentRecommendation,
+    RecommendationStatus
+} from "../modules/database/entities/activity/ActivityAssignmentRecommendation";
 import {ActivityPlan} from "../modules/database/entities/activity/ActivityPlan";
 import {ActivitySlot} from "../modules/database/entities/activity/ActivitySlot";
 import * as recommendationService from "../modules/database/services/ActivityRecommendationService";
@@ -23,7 +26,7 @@ import * as eventService from "../modules/database/services/EventService";
 import {APIError, ValidationError} from '../modules/lib/errors';
 import {performImageSwap} from "../modules/lib/fileCommons";
 
-import {convertToAgent, ENTITIES, fromISOtoLocal, generateUniqueId} from '../modules/lib/util';
+import {ENTITIES, fromISOtoLocal, generateUniqueId} from '../modules/lib/util';
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
 import type {SlotAssignee} from "../types/ActivityTypes";
 import type {PermBundle, SessionLike} from "../types/PermissionTypes";
@@ -114,7 +117,7 @@ function preprocessCreate(body: any): Partial<ActivityPlan> & { slots: Partial<A
         startDate: value.startDate,
         endDate: value.endDate,
         slots: flattenedSlots,
-        event: value.event_id || null,
+        eventId: value.event_id || null,
     };
 }
 
@@ -127,17 +130,8 @@ function preprocessRequirementUpdate(body: any) {
     const overrideSchema = Joi.object({
         id: Joi.number().integer().positive().optional(),
         roleId: Joi.number().integer().positive().allow(null),
-        userId: Joi.number().integer().positive().allow(null),
-        guestId: Joi.number().integer().positive().allow(null),
+        profileId: Joi.string().uuid().required(),
         requiredShifts: Joi.number().integer().min(0).required(),
-    }).custom((value, helpers) => {
-        if (!value.userId && !value.guestId) {
-            return helpers.error("any.custom", {message: "Override requires a userId or guestId"});
-        }
-        if (value.userId && value.guestId) {
-            return helpers.error("any.custom", {message: "Override cannot target both user and guest"});
-        }
-        return value;
     });
 
     const schema = Joi.object({
@@ -184,18 +178,9 @@ function preprocessRecommendationUpdate(body: any) {
         recommendations: Joi.array()
             .items(
                 Joi.object({
-                    slotId: Joi.string().uuid().required(),
-                    userId: Joi.number().integer().positive().allow(null),
-                    guestId: Joi.string().uuid().allow(null),
+                    itemId: Joi.string().uuid().required(),
+                    profileId: Joi.string().uuid().required(),
                     status: Joi.string().valid("PENDING", "APPROVED", "APPLIED", "REJECTED").optional(),
-                }).custom((value, helpers) => {
-                    if (!value.userId && !value.guestId) {
-                        return helpers.error("any.custom", {message: "Recommendation requires a userId or guestId"});
-                    }
-                    if (value.userId && value.guestId) {
-                        return helpers.error("any.custom", {message: "Recommendation cannot target both user and guest"});
-                    }
-                    return value;
                 })
             )
             .default([]),
@@ -209,9 +194,8 @@ function preprocessRecommendationUpdate(body: any) {
 
     return value as {
         recommendations: {
-            slotId: string;
-            userId?: number | null;
-            guestId?: string | null;
+            itemId: string;
+            profileId: string;
             status?: RecommendationStatus
         }[]
     };
@@ -233,7 +217,7 @@ async function createEntity(
         planData.startDate!,
         planData.endDate!,
         planData.slots,
-        planData.event?.id,
+        planData.eventId,
         planData.headerImg,
     );
 }
@@ -253,12 +237,8 @@ async function fetchForView(plan: ActivityPlan, req: Request) {
 
     const slotList = Object.values(slotsByDate).flat();
 
-    let assignPromise: Promise<string[]> = Promise.resolve([]);
-    if (session.guest) {
-        assignPromise = activityService.getActivitySlotAssignments(plan.id, session.guest.id)
-    }
     const [assignments, assigneeLists, participantList, allRoles, slotRoles] = await Promise.all([
-        assignPromise,
+        activityService.getActivitySlotAssignments(plan.id, session.profile!.id),
         activityService.getActivitySlotAssignees(plan.id),
         activityService.getActivityPlanParticipants(plan.id),
         activityService.getAllRoles(plan.id),
@@ -400,7 +380,7 @@ async function fetchForDuplicate(plan: ActivityPlan, session: Request['session']
 }
 
 /**
- * Delete plan if owned by current user.
+ * Delete plan if owned by current profile.
  */
 
 async function deleteEntity(plan: ActivityPlan, session: Request['session']) {
@@ -488,7 +468,7 @@ async function quickAddSlot(plan: ActivityPlan, body: any, session: SessionLike)
         pos: last + 1
     };
 
-    await activityService.addActivitySlot(plan.id, slot, convertToAgent(session));
+    await activityService.addActivitySlot(plan.id, slot, session.profile!.id);
 
     if (roles.length > 0) {
         await activityService.addActivitySlotRoles(slot.id!, roles);
@@ -578,8 +558,7 @@ async function getRequirements(planId: string) {
 
     const overrideTargets = eventParticipants.map((participant) => ({
         key: toParticipantKey(participant),
-        userId: participant.userId ?? null,
-        guestId: participant.guestId ?? null,
+        profileId: participant.profileId ?? null,
         label: toParticipantName(participant),
         arrivalDate: participant.arrivalDate ?? null,
         departureDate: participant.departureDate ?? null,
@@ -630,12 +609,10 @@ async function updateRequirements(planId: string, body: any) {
     }
 
     const eventParticipants = await eventService.getEventParticipants(plan.event.id);
-    const allowedUsers = new Set(eventParticipants.map((p) => p.userId).filter((id): id is number => id != null));
-    const allowedGuests = new Set(eventParticipants.map((p) => p.guestId).filter((id): id is string => id != null));
+    const allowed = new Set(eventParticipants.map((p) => p.profileId).filter((id): id is string => id != null));
 
     const invalidOverride = overrides.find((override) => {
-        if (override.userId) return !allowedUsers.has(override.userId);
-        if (override.guestId) return !allowedGuests.has(override.guestId);
+        if (override.profileId) return !allowed.has(override.profileId);
         return false;
     });
 
@@ -668,9 +645,8 @@ async function updateRequirements(planId: string, body: any) {
 }
 
 async function collectRecommendationWarnings(planId: string, recommendations: {
-    slotId: string;
-    userId?: number | null;
-    guestId?: string | null;
+    itemId: string;
+    profileId?: string | null;
     status?: RecommendationStatus
 }[]) {
     const [plan, slots, existingAssignments] = await Promise.all([
@@ -718,7 +694,7 @@ async function buildParticipantAttendanceMap(
         endTime?: string | null;
         pos?: number | null
     }[]>,
-    recommendations: { slotId: string; userId?: number | null; guestId?: string | null }[],
+    recommendations: { itemId: string; profileId: string }[],
     eventParticipants: Awaited<ReturnType<typeof eventService.getEventParticipants>> = [],
 ): Promise<Record<string, ParticipantAttendance>> {
     const attendance: Record<string, ParticipantAttendance> = {};
@@ -743,8 +719,7 @@ async function buildParticipantAttendanceMap(
 
     eventParticipants.forEach((participant) => {
         upsert({
-            userId: participant.userId ?? undefined,
-            guestId: participant.guestId ?? undefined,
+            profileId: participant.profileId ?? undefined,
             arrivalDate: participant.arrivalDate ?? undefined,
             departureDate: participant.departureDate ?? undefined,
             name: participant.name ?? undefined,
@@ -753,8 +728,7 @@ async function buildParticipantAttendanceMap(
 
     for (const override of overrides) {
         upsert({
-            userId: undefined,
-            guestId: override.profile.id ?? undefined,
+            profileId: override.profile.id ?? undefined,
             roleIds: override.roleId ? [override.roleId] : undefined,
             name: override.profile.name ?? undefined,
         });
@@ -762,16 +736,13 @@ async function buildParticipantAttendanceMap(
 
     Object.keys(existingAssignments).forEach((key) => {
         const [type, id] = key.split(":");
-        if (type === "user") {
-            upsert({userId: Number(id)});
-        }
-        if (type === "guest") {
-            upsert({guestId: String(id)});
+        if (type === "profile") {
+            upsert({profileId: String(id)});
         }
     });
 
     for (const rec of recommendations) {
-        upsert({userId: rec.userId ?? undefined, guestId: rec.guestId ?? undefined});
+        upsert({profileId: rec.profileId ?? undefined});
     }
 
     // Load roleIds from ActivityAssignmentRole for each participant
@@ -788,20 +759,19 @@ async function buildParticipantAttendanceMap(
 function resolveWarningTarget(
     session: Request["session"],
     permData: PermBundle | undefined,
-    body: { userId?: number | null; guestId?: string | null } = {},
+    body: { profileId?: string | null } = {},
 ) {
-    if (body.userId || body.guestId) {
+    if (body.profileId) {
         const isManager = permData?.entity?.has('MANAGE_ASSIGNMENTS');
         if (!isManager) {
             throw new APIError("Insufficient permissions to view warnings for other participants", body, 403);
         }
-        return {userId: body.userId ?? undefined, guestId: body.guestId ?? undefined};
+        return {profileId: body.profileId};
     }
 
-    if (session?.user?.id) return {userId: session.user.id};
-    if (session?.guest?.id) return {guestId: session.guest.id};
+    if (session?.profile?.id) return {profileId: session.profile.id};
 
-    throw new APIError("Unknown user", body, 401);
+    throw new APIError("Unknown profile", body, 401);
 }
 
 function shouldAutoGenerateRecommendations(plan: ActivityPlan, recommendations: unknown[]): boolean {
@@ -820,7 +790,7 @@ async function getAssignmentWarnings(
     slotId: string,
     session: Request["session"],
     permData?: PermBundle,
-    body?: { userId?: number | null; guestId?: string | null },
+    body?: { profileId?: string | null },
 ) {
     const target = resolveWarningTarget(session, permData, body);
     const participantKey = toParticipantKey(target);
@@ -887,9 +857,8 @@ async function getRecommendations(planId: string) {
     }
 
     const normalized = recommendations.map((rec) => ({
-        slotId: rec.item.id,
-        userId: null,
-        guestId: rec.profileId ?? null,
+        itemId: rec.item.id,
+        profileId: rec.profileId ?? null,
         status: rec.status,
     }));
 
@@ -905,8 +874,7 @@ async function getRecommendations(planId: string) {
 
     const participants = Object.values(attendance).map((participant) => ({
         key: toParticipantKey(participant),
-        userId: participant.userId ?? null,
-        guestId: participant.guestId ?? null,
+        profileId: participant.profileId ?? null,
         label: toParticipantName(participant),
         arrivalDate: participant.arrivalDate ?? null,
         departureDate: participant.departureDate ?? null,
@@ -966,11 +934,15 @@ async function applyRecommendations(planId: string, body?: any) {
 
     // If body contains recommendations array with statuses, use that (new format)
     // Otherwise fall back to filtering database recommendations for APPROVED (legacy)
-    let approved: any[];
-    let statusUpdates: { pending: any[], rejected: any[], approved: any[] } = {pending: [], rejected: [], approved: []};
+    let approved: ActivityAssignmentRecommendation[];
+    let statusUpdates: {
+        pending: ActivityAssignmentRecommendation[],
+        rejected: ActivityAssignmentRecommendation[],
+        approved: ActivityAssignmentRecommendation[]
+    } = {pending: [], rejected: [], approved: []};
 
     if (body?.recommendations && Array.isArray(body.recommendations)) {
-        // New format: {recommendations: [{slotId, userId, guestId, status}]}
+        // New format: {recommendations: [{itemId, profileId, status}]}
         const withStatus = body.recommendations;
 
         // Group by status
@@ -983,9 +955,8 @@ async function applyRecommendations(planId: string, body?: any) {
         // Update recommendation statuses in database
         // Create new input array from current recommendations, updating statuses from body
         const updatedRecommendations: RecommendationInput[] = withStatus.map((r: any) => ({
-            slotId: r.slotId,
-            userId: r.userId || null,
-            guestId: r.guestId || null,
+            itemId: r.itemId,
+            profileId: r.profileId || null,
             status: r.status as RecommendationStatus,
         }));
 
@@ -993,11 +964,11 @@ async function applyRecommendations(planId: string, body?: any) {
         await recommendationService.replaceRecommendations(planId, updatedRecommendations);
 
         // Get approved ones for processing
-        approved = statusUpdates.approved.map((r: any) => {
+        approved = statusUpdates.approved.map((r) => {
             // Find full recommendation data from database
             const dbRec = recommendations.find(rec =>
-                rec.item.id === r.slotId &&
-                rec.profile.id === r.guestId
+                rec.item.id === r.itemId &&
+                rec.profile.id === r.profileId
             );
             return dbRec || r; // Fallback to body data if not in DB
         });
@@ -1009,9 +980,8 @@ async function applyRecommendations(planId: string, body?: any) {
     // Proceed even if no approved recommendations - we still want to regenerate
     const normalized = approved.map((rec) => ({
         id: rec.id ?? undefined,
-        slotId: rec.slotId ?? rec.slot?.id,
-        userId: rec.userId ?? rec.user?.id ?? null,
-        guestId: rec.guestId ?? rec.guest?.id ?? null,
+        itemId: rec.itemId ?? rec.item?.id,
+        profileId: rec.profileId ?? rec.profile?.id,
         status: rec.status ?? 'APPROVED',
     }));
 
@@ -1064,10 +1034,8 @@ async function applyRecommendations(planId: string, body?: any) {
 
     const applicable = normalized.filter((rec) => !rec.id || !blockedIds.has(rec.id));
     for (const rec of applicable) {
-        if (rec.userId) {
-            await activityService.assignActivitySlotToUser(rec.slotId, rec.userId);
-        } else if (rec.guestId) {
-            await activityService.assignActivitySlotToGuest(rec.slotId, rec.guestId);
+        if (rec.profileId) {
+            await activityService.assignActivityAssignmentRole(rec.itemId, rec.profileId);
         }
     }
 
@@ -1135,19 +1103,15 @@ async function deleteHeaderImg(entity: EntityBase) {
 
 function getAssignmentAccessMapping() {
     return {
-        assignToUser: (body: any, userId: number) => activityService.assignActivitySlotToUser(body.slotId, userId),
-        assignToGuest: (body: any, guestId: string) => activityService.assignActivitySlotToGuest(body.slotId, guestId),
-        unassignFromUser: (body: any, userId: number) => activityService.unassignActivityAssignmentRole(body.slotId, String(userId)),
-        unassignFromGuest: (body: any, guestId: string) => activityService.unassignActivityAssignmentRole(body.slotId, guestId),
+        assign: (body: any, profileId: string) => activityService.assignActivityAssignmentRole(body.itemId, profileId),
+        unassign: (body: any, profileId: string) => activityService.unassignActivityAssignmentRole(body.itemId, profileId),
     };
 }
 
 function getRoleAccessMapping() {
     return {
-        assignToUser: (body: any, userId: number) => activityService.assignActivityAssignmentRoleToUser(body.slotId, userId, body.role),
-        assignToGuest: (body: any, guestId: string) => activityService.assignActivityAssignmentRoleToGuest(body.slotId, guestId, body.role),
-        unassignFromUser: (body: any, userId: number) => activityService.unassignActivityAssignmentRole(body.slotId, String(userId), body.role),
-        unassignFromGuest: (body: any, guestId: string) => activityService.unassignActivityAssignmentRole(body.slotId, guestId, body.role),
+        assign: (body: any, profileId: string) => activityService.assignActivityAssignmentRole(body.itemId, profileId, body.role),
+        unassign: (body: any, profileId: string) => activityService.unassignActivityAssignmentRole(body.itemId, profileId, body.role),
     };
 }
 

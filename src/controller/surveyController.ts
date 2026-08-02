@@ -115,8 +115,8 @@ async function addCombination(survey: Survey, weekday: WeekDay, nth: WeekInMonth
 
 async function submitResponses(survey: Survey, session: Request['session'], body: any) {
     const answers: { [p: string]: SurveyAnswer } = body;
-    if (session.guest) {
-        const gid = session.guest.id;
+    if (session.profile) {
+        const gid = session.profile.id;
         await surveyService.deleteResponsesByProfileId(gid, survey.id);
         for (const [combId, ans] of Object.entries(answers)) {
             await surveyService.saveResponse(survey.id, gid, Number(combId), ans);

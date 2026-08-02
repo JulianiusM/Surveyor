@@ -10,38 +10,32 @@ import renderer from '../modules/renderer';
 import type {PermBundle} from "../types/PermissionTypes";
 
 export function attachAssignRoutes(router: Router, opts: {
-    assignToUser: (body: any, userId: number) => Promise<void>,
-    assignToGuest: (body: any, guestId: string) => Promise<void>,
-    unassignFromUser: (body: any, userId: number) => Promise<void>,
-    unassignFromGuest: (body: any, guestId: string) => Promise<void>
+    assign: (body: any, profileId: string) => Promise<void>,
+    unassign: (body: any, profileId: string) => Promise<void>
 }) {
     attachGenericAssignRoutes(router, '/:id/assign', '/:id/unassign', opts);
 }
 
 export function attachAssignRoleRoutes(router: Router, opts: {
-    assignToUser: (body: any, userId: number) => Promise<void>;
-    assignToGuest: (body: any, guestId: string) => Promise<void>;
-    unassignFromUser: (body: any, userId: number) => Promise<void>;
-    unassignFromGuest: (body: any, guestId: string) => Promise<void>;
+    assign: (body: any, guestId: string) => Promise<void>;
+    unassign: (body: any, guestId: string) => Promise<void>;
 }) {
     attachGenericAssignRoutes(router, '/:id/take-role', '/:id/leave-role', opts);
 }
 
 export function attachGenericAssignRoutes(router: Router, assignRoute: string, unassignRoute: string, opts: {
-    assignToUser: (body: any, userId: number) => Promise<void>,
-    assignToGuest: (body: any, guestId: string) => Promise<void>,
-    unassignFromUser: (body: any, userId: number) => Promise<void>,
-    unassignFromGuest: (body: any, guestId: string) => Promise<void>
+    assign: (body: any, profileId: string) => Promise<void>,
+    unassign: (body: any, profileId: string) => Promise<void>
 }) {
     router.post(assignRoute, asyncHandler(async (req: Request, res: Response) => {
         await enforcePlanBindingDeadline(req, res.locals.permData as PermBundle | undefined);
-        await performAPIAction(req, {actionUser: opts.assignToUser, actionGuest: opts.assignToGuest});
+        await performAPIAction(req, opts.assign);
         renderer.respondWithSuccessJson(res, 'Assigned');
     }));
 
     router.post(unassignRoute, asyncHandler(async (req: Request, res: Response) => {
         await enforcePlanBindingDeadline(req, res.locals.permData as PermBundle | undefined);
-        await performAPIAction(req, {actionUser: opts.unassignFromUser, actionGuest: opts.unassignFromGuest});
+        await performAPIAction(req, opts.unassign);
         renderer.respondWithSuccessJson(res, 'Unassigned');
     }));
 }

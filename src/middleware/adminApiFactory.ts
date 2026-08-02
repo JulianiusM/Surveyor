@@ -25,9 +25,9 @@ const searchLimiter = rateLimit({
  * Mount under your entity API router (which already has :id).
  *
  * Routes:
- *   POST   /:id/admins            { userId, preset?, perms?[], mask? }
- *   PATCH  /:id/admins/:userId    { perms?[], mask? }
- *   DELETE /:id/admins/:userId
+ *   POST   /:id/admins            { userprofileId, preset?, perms?[], mask? }
+ *   PATCH  /:id/admins/:profileId    { perms?[], mask? }
+ *   DELETE /:id/admins/:profileId
  */
 export function createEntityAdminApiRouter(app: Router, entityType: CombEntityType, getEntity: EntityGetter) {
     const REQ = requiredAdminManagePerm();
@@ -44,20 +44,20 @@ export function createEntityAdminApiRouter(app: Router, entityType: CombEntityTy
 
     // Update mask/keys
     app.patch(
-        '/:id/admins/:userId',
+        '/:id/admins/:profileId',
         requirePermissionApi(getEntity, REQ),
         asyncHandler(async (req: Request, res: Response) => {
-            const msg = await updateAdmin(entityType, req.params.id as string, req.params.userId as string, req.body);
+            const msg = await updateAdmin(entityType, req.params.id as string, req.params.profileId as string, req.body);
             renderer.respondWithSuccessJson(res, msg);
         })
     );
 
     // Remove
     app.delete(
-        '/:id/admins/:userId',
+        '/:id/admins/:profileId',
         requirePermissionApi(getEntity, REQ),
         asyncHandler(async (req: Request, res: Response) => {
-            const msg = await removeAdmin(entityType, req.params.id as string, req.params.userId as string);
+            const msg = await removeAdmin(entityType, req.params.id as string, req.params.profileId as string);
             renderer.respondWithSuccessJson(res, msg);
         })
     );

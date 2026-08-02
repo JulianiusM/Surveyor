@@ -16,7 +16,7 @@ app.post("/recovery", asyncHandler(async (req: Request, res: Response) => {
 }));
 
 app.get('/dashboard', isGuest, asyncHandler(async (req: Request, res: Response) => {
-    renderer.renderWithData(res, 'users/dashboard', await userController.getEntityList(req.session.guest! as any));
+    renderer.renderWithData(res, 'users/dashboard', await userController.getEntityList(req.session.profile!));
 }));
 
 app.get('/:id/login/:token', asyncHandler(async (req: Request, res: Response) => {

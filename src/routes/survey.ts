@@ -1,8 +1,8 @@
 import express, {Request, Response} from 'express';
+import controller from "../controller/surveyController";
+import {createGuestFlowRouter} from "../middleware/guestFlowFactory";
 import * as surveyService from "../modules/database/services/SurveyService";
 import {asyncHandler} from "../modules/lib/asyncHandler";
-import {createGuestFlowRouter} from "../middleware/guestFlowFactory";
-import controller from "../controller/surveyController";
 import {ENTITIES, ENTITY_ITEMS, getResource} from "../modules/lib/util";
 import type {EntityType} from "../types/UtilTypes";
 
@@ -56,7 +56,7 @@ app.use('/', createGuestFlowRouter({
 app.post(
     '/:id/add-combination',
     handleAction(
-        (req: Request) => controller.addCombination(resFct(req), req.body.weekday, req.body.nth),
+        (req: Request) => controller.addCombination(resFct(req), req.body.weekday, req.body.nthWeek),
         'Combination successfully added'
     )
 );

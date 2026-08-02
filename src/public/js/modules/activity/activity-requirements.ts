@@ -52,16 +52,14 @@ export function initRequirementPanel(planId: string): void {
 
     const participantValue = (target?: OverrideTarget) => {
         if (!target) return '';
-        if (target.userId) return `user:${target.userId}`;
-        if (target.guestId) return `guest:${target.guestId}`;
+        if (target.profileId) return `profile:${target.profileId}`;
         return target.key || '';
     };
 
     const findTargetForOverride = (override?: RequirementConfiguration['overrides'][number]) => {
         if (!overrideTargets) return undefined;
         return overrideTargets.find((target) => {
-            if (override?.userId && target.userId) return target.userId === override.userId;
-            if (override?.guestId && target.guestId) return target.guestId === override.guestId;
+            if (override?.profileId && target.profileId) return target.profileId === override.profileId;
             return false;
         });
     };
@@ -95,8 +93,7 @@ export function initRequirementPanel(planId: string): void {
         const attendance = describeAttendance(target);
         hint.classList.remove('text-warning');
         hint.classList.add('text-secondary');
-        const badge = target?.userId ? 'User' : 'Guest';
-        hint.textContent = attendance ? `${badge} • ${attendance}` : badge;
+        hint.textContent = attendance ? `${attendance}` : '';
     };
 
     const setOverrideControlsState = () => {
@@ -220,7 +217,7 @@ export function initRequirementPanel(planId: string): void {
 
             const label = document.createElement('label');
             label.className = 'form-label small mb-0';
-            label.textContent = role.name;
+            label.textContent = role.title;
 
             const input = document.createElement('input');
             input.type = 'number';
@@ -269,11 +266,7 @@ export function initRequirementPanel(planId: string): void {
             participantSelect.append(opt);
         });
 
-        const overrideValue = override?.userId
-            ? `user:${override.userId}`
-            : override?.guestId
-                ? `guest:${override.guestId}`
-                : '';
+        const overrideValue = override?.profileId ? `profile:${override.profile}` : '';
 
         const matchedTarget = findTargetForOverride(override);
         if (matchedTarget) {
@@ -282,9 +275,7 @@ export function initRequirementPanel(planId: string): void {
             const missingOpt = document.createElement('option');
             missingOpt.value = overrideValue;
             missingOpt.dataset.invalid = 'true';
-            missingOpt.textContent = override?.user?.name || override?.user?.username
-                || override?.guest?.username
-                || `Not registered (${overrideValue.replace(':', ' #')})`;
+            missingOpt.textContent = override?.profile?.name || `Not registered (${overrideValue.replace(':', ' #')})`;
             participantSelect.append(missingOpt);
             participantSelect.value = overrideValue;
         } else if (participantSelect.querySelector('option:not([disabled])')) {
@@ -311,7 +302,7 @@ export function initRequirementPanel(planId: string): void {
         roleSelect.className = 'form-select form-select-sm text-bg-dark';
         roleSelect.dataset.overrideTarget = 'role';
         roleSelect.innerHTML = '<option value="">Any role</option>' +
-            getAllRoles().map((r) => `<option value="${r.id}">${r.name}</option>`).join('');
+            getAllRoles().map((r) => `<option value="${r.id}">${r.title}</option>`).join('');
         if (override?.roleId) roleSelect.value = String(override.roleId);
 
         colRole.append(roleLabel, roleSelect);
@@ -453,8 +444,8 @@ export function initRequirementPanel(planId: string): void {
             participantSelect?.classList.remove('is-invalid');
 
             const [targetType, rawId] = selection.split(':');
-            const participantId = Number(rawId);
-            if (!targetType || Number.isNaN(participantId)) return;
+            const participantId = rawId;
+            if (!targetType || !participantId) return;
 
             const entry: any = {
                 roleId: roleSelect?.value ? Number(roleSelect.value) : null,
@@ -463,10 +454,8 @@ export function initRequirementPanel(planId: string): void {
 
             if (row.dataset.overrideId) entry.id = Number(row.dataset.overrideId);
 
-            if (targetType === 'guest') {
-                entry.guestId = participantId;
-            } else {
-                entry.userId = participantId;
+            if (targetType === 'profile') {
+                entry.profileId = participantId;
             }
 
             entries.push(entry);

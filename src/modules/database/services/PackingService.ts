@@ -1,6 +1,5 @@
 // TypeORM-based implementation of the packing list module
 import {In} from "typeorm";
-import type {Agent} from "../../../types/UtilTypes";
 import {generateUniqueId} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {PackingAssignment} from '../entities/packing/PackingAssignment';
@@ -84,7 +83,7 @@ export async function updateHeaderImage(listId: string, headerImg?: string | nul
 }
 
 export async function getManagedLists(profileId: string) {
-    const ids = await entityAdminService.getIdsForUser('packing', profileId);
+    const ids = await entityAdminService.getIds('packing', profileId);
     return await AppDataSource.getRepository(PackingList).find({
         where: [
             {
@@ -102,12 +101,12 @@ export async function getPackingListByParticipant(profileId: string) {
         .whereExists(AppDataSource.getRepository(PackingAssignment)
             .createQueryBuilder("ass")
             .where("ass.entity_id = list.id")
-            .andWhere("ass.profile_id = :userId", {profileId})
+            .andWhere("ass.profile_id = :profileId", {profileId: profileId})
         ).getMany();
 }
 
 // Packing Items
-export async function createPackingItem(listId: string, item: Partial<PackingItem>, agent: Agent) {
+export async function createPackingItem(listId: string, item: Partial<PackingItem>, profileId: string) {
     const repo = AppDataSource.getRepository(PackingItem);
     const entity = repo.create({
         id: item.id,
@@ -116,12 +115,12 @@ export async function createPackingItem(listId: string, item: Partial<PackingIte
         description: item.description,
         maxAssignees: item.maxAssignees,
         pos: item.pos,
-        ...agent
+        profile: {id: profileId},
     });
     await repo.save(entity);
 }
 
-export async function addPackingItems(listId: string, items: Partial<PackingItem>[], agent: Agent) {
+export async function addPackingItems(listId: string, items: Partial<PackingItem>[], profileId: string) {
     if (!items.length) return;
     const repo = AppDataSource.getRepository(PackingItem);
     const entities = items.map(it => repo.create({
@@ -131,7 +130,7 @@ export async function addPackingItems(listId: string, items: Partial<PackingItem
         description: it.description,
         maxAssignees: it.maxAssignees,
         pos: it.pos,
-        ...agent
+        profile: {id: profileId}
     }));
     await repo.save(entities);
 }
@@ -170,17 +169,31 @@ export async function reorderPackingItems(listId: string, orders: any[]) {
 
 export async function getPackingItems(listId: string): Promise<(PackingItem & { assignedCount: number })[]> {
     const repo = AppDataSource.getRepository(PackingItem);
-    const items = await repo.find({where: {entity: {id: listId}}, order: {pos: 'ASC'}});
 
-    const assignmentCounts = await getPackingAssignmentCounts(listId);
-    return items.map(item => ({...item, assignedCount: assignmentCounts[item.id] || 0}));
+    const entities = await repo.find({
+        where: {entity: {id: listId}},
+        relations: {
+            profile: true
+        },
+        loadRelationIds: {relations: ['assignments']}, // get IDs, not full rows
+        order: {pos: 'ASC'},
+    });
+
+    return entities.map((item) => {
+        const assignedCount = item.assignments?.length ?? 0;
+
+        return {
+            ...item,
+            assignedCount,
+        };
+    });
 }
 
 export async function getPackingAssignmentCounts(listId: string) {
     const repo = AppDataSource.getRepository(PackingAssignment);
     const assignments = await repo.findBy({entity: {id: listId}});
     return assignments.reduce((map: Record<string, number>, a) => {
-        map[a.item.id] = (map[a.item.id] || 0) + 1;
+        map[a.itemId] = (map[a.itemId] || 0) + 1;
         return map;
     }, {});
 }
@@ -200,12 +213,12 @@ export async function assignPackingItem(itemId: string, profileId: string) {
         await repo.save(repo.create({
             item: {id: itemId},
             profile: {id: profileId},
-            entity: {id: item.entity.id}
+            entity: {id: item.entityId}
         }));
     }
 }
 
-export async function unassignPackingItemUser(itemId: string, profileId: string) {
+export async function unassignPackingItem(itemId: string, profileId: string) {
     await AppDataSource.getRepository(PackingAssignment).delete({item: {id: itemId}, profile: {id: profileId}});
 }
 
@@ -214,7 +227,7 @@ export async function getPackingAssignments(listId: string, profileId: string) {
         entity: {id: listId},
         profile: {id: profileId},
     });
-    return rows.map(r => r.item.id);
+    return rows.map(r => r.itemId);
 }
 
 export async function getPackingItemAssignees(listId: string) {
@@ -224,14 +237,13 @@ export async function getPackingItemAssignees(listId: string) {
             profile: true
         }
     });
-    const map: Record<string, any[]> = {};
+    const map: Record<string, { id: number, profileId: string, name: string }[]> = {};
     for (const r of rows) {
         const name = r.profile.name || '—';
-        if (!map[r.item.id]) map[r.item.id] = [];
-        map[r.item.id].push({
+        if (!map[r.itemId]) map[r.itemId] = [];
+        map[r.itemId].push({
             id: r.id,
-            user_id: r.profile.userId,
-            guest_id: r.profile.guestId,
+            profileId: r.profileId,
             name
         });
     }

@@ -46,7 +46,7 @@ function describeSlot(slotId: string): string {
     return `${title || 'Slot'}${day ? ` on ${day}` : ''}${timePart}`;
 }
 
-function formatSlotLabel(slot: RecommendationRow['slot']): string {
+function formatSlotLabel(slot: RecommendationRow['item']): string {
     const day = slot.day ? ` on ${slot.day}` : '';
     const start = formatTimeLabel(slot.startTime || null);
     const end = formatTimeLabel(slot.endTime || null);

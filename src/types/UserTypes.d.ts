@@ -65,7 +65,7 @@ export type DashboardDTO = {
 export type EntityBase = {
     id: string;
     title: string;
-    ownerId: number;
+    ownerId: string;
     eventId?: string | null;
     description?: string | null;
     headerImg?: string | null;

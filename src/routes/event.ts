@@ -17,7 +17,7 @@ const entityName: EntityType = ENTITIES.EVENT;
 const resFct = (req: Request) => getResource(req, entityName);
 const permFct = (req: Request): EntityDescriptor => {
     const resource = getResource(req, entityName);
-    return {entityType: entityName, entityId: resource.id, ownerUserId: resource.ownerId, eventId: resource.id};
+    return {entityType: entityName, entityId: resource.id, ownerId: resource.ownerId, eventId: resource.id};
 }
 
 queryHandler("regToken", app, (id) => id, 'regToken');

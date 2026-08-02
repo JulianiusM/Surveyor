@@ -1,6 +1,6 @@
-import {buildPermBundle, can} from '../../src/modules/permissionEngine';
-import {PERM} from '../../src/modules/lib/permissions';
 import * as entityAdminService from '../../src/modules/database/services/EntityAdminService';
+import {PERM} from '../../src/modules/lib/permissions';
+import {buildPermBundle, can} from '../../src/modules/permissionEngine';
 
 jest.mock('../../src/modules/database/services/EntityAdminService', () => ({
     getUserPerms: jest.fn(),
@@ -13,7 +13,7 @@ jest.mock('../../src/modules/database/services/EventService', () => ({
 }));
 
 describe('item description parent permission', () => {
-    const getUserPerms = entityAdminService.getUserPerms as jest.Mock;
+    const getUserPerms = entityAdminService.getProfilePerms as jest.Mock;
 
     beforeEach(() => {
         jest.clearAllMocks();

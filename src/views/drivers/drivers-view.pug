@@ -149,7 +149,7 @@ block content
                 .col-md-4
                     label.form-label.mb-1(for="title") Driver
                     input#title.form-control.text-bg-dark.text-secondary(
-                        name="title" value=`${user ? user.name : guest ? guest.username : 'ERROR'}` readonly required)
+                        name="title" value=`${profile ? profile.name : 'ERROR'}` readonly required)
 
                 //Beschreibung
                 .col-md-4

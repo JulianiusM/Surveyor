@@ -110,7 +110,7 @@ export async function replaceRequirementOverrides(planId: string, overrides: Req
                 id: override.id,
                 entity: {id: planId},
                 role: override.roleId ? {id: override.roleId} : undefined,
-                profile: {id: override.guestId ?? ''},
+                profile: {id: override.profileId ?? ''},
                 requiredShifts: override.requiredShifts,
             })
         );
@@ -181,7 +181,7 @@ export async function replaceRequirements(
                     id: override.id,
                     entity: {id: planId},
                     role: override.roleId ? {id: override.roleId} : undefined,
-                    profile: {id: override.guestId ?? ''},
+                    profile: {id: override.profileId ?? ''},
                     requiredShifts: override.requiredShifts,
                 })
             );

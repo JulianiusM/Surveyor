@@ -252,7 +252,7 @@ export function generateAutoRecommendations(
         ctx.existingRecommendations
             .filter(r => r.status === 'REJECTED')
             .forEach(r => {
-                const key = `${r.slotId}:${r.userId || ''}:${r.guestId || ''}`;
+                const key = `${r.itemId}:${r.profileId || ''}`;
                 rejectedSet.add(key);
             });
     }
@@ -288,7 +288,7 @@ export function generateAutoRecommendations(
     // mark it as REJECTED to signal: "This was rejected before, but it's the best fit available"
     if (ctx.existingRecommendations) {
         recommendations.forEach(rec => {
-            const key = `${rec.slotId}:${rec.userId || ''}:${rec.guestId || ''}`;
+            const key = `${rec.itemId}:${rec.profileId || ''}`;
             if (rejectedSet.has(key)) {
                 rec.status = 'REJECTED';
             }
@@ -321,7 +321,7 @@ function assignFairly(
     const slotAssignmentCounts = new Map<string, number>();
     for (const slot of slots) {
         const existing = Number(slot.slot.assignedCount ?? 0);
-        const newAssignments = recommendations.filter(r => r.slotId === slot.slot.id).length;
+        const newAssignments = recommendations.filter(r => r.itemId === slot.slot.id).length;
         slotAssignmentCounts.set(slot.slot.id, existing + newAssignments);
     }
 
@@ -374,9 +374,8 @@ function assignFairly(
 
                 // Check if this (participant, slot) pair is already in recommendations (F8: prevent duplicates)
                 const alreadyRecommended = recommendations.some(r =>
-                    r.slotId === slot.slot.id &&
-                    r.userId === (state.participant.userId ?? null) &&
-                    r.guestId === (state.participant.guestId ?? null)
+                    r.itemId === slot.slot.id &&
+                    r.profileId === (state.participant.profileId ?? null)
                 );
                 if (alreadyRecommended) continue;
 
@@ -432,7 +431,7 @@ function assignFairly(
                 }
 
                 // Check if this (participant, slot) combination was previously rejected
-                const rejectionKey = `${slot.slot.id}:${state.participant.userId || ''}:${state.participant.guestId || ''}`;
+                const rejectionKey = `${slot.slot.id}:${state.participant.profileId || ''}`;
                 const rejectionPenalty = rejectedSet.has(rejectionKey) ? 1000 : 0;
 
                 // Slot scoring:
@@ -466,9 +465,8 @@ function assignFairly(
 
         // F10: Create recommendation
         recommendations.push({
-            slotId: slot.slot.id,
-            userId: participant.participant.userId ?? null,
-            guestId: participant.participant.guestId ?? null,
+            itemId: slot.slot.id,
+            profileId: participant.participant.profileId ?? null,
             status: "PENDING",
         });
 
@@ -549,7 +547,7 @@ function optimizeViaSwaps(
 
     const recByParticipant = new Map<string, RecommendationInput[]>();
     for (const rec of recommendations) {
-        const key = rec.userId ? `user:${rec.userId}` : `guest:${rec.guestId}`;
+        const key = `profile:${rec.profileId}`;
         const existing = recByParticipant.get(key) ?? [];
         existing.push(rec);
         recByParticipant.set(key, existing);
@@ -593,14 +591,14 @@ function optimizeViaSwaps(
         if (filteredAssignments.some(a => a.id === slot.id)) {
             return false;
         }
-        if (currentRecs.some(rec => rec.slotId === slot.id && rec.slotId !== excludeSlotId)) {
+        if (currentRecs.some(rec => rec.itemId === slot.id && rec.itemId !== excludeSlotId)) {
             return false;
         }
 
         // Add currently recommended slots (except the one being swapped out)
         for (const rec of currentRecs) {
-            if (rec.slotId === excludeSlotId) continue;
-            const recSlot = slotMap.get(rec.slotId);
+            if (rec.itemId === excludeSlotId) continue;
+            const recSlot = slotMap.get(rec.itemId);
             if (recSlot) {
                 filteredAssignments.push(toAssignmentCandidate(recSlot));
             }
@@ -637,7 +635,7 @@ function optimizeViaSwaps(
                 for (const [otherKey, otherRecs] of recByParticipant.entries()) {
                     if (otherKey === underservedKey) continue;
 
-                    const recUsingThisSlot = otherRecs.find(r => r.slotId === slot.id);
+                    const recUsingThisSlot = otherRecs.find(r => r.itemId === slot.id);
                     if (!recUsingThisSlot) continue;
 
                     const otherDeficit = getDeficit(otherKey);
@@ -654,7 +652,7 @@ function optimizeViaSwaps(
 
                         // Check capacity constraint for alternative slot
                         // Count existing assignments + recommendations for alternative slot
-                        const alternativeSlotRecs = recommendations.filter(r => r.slotId === alternativeSlot.id && r.slotId !== slot.id);
+                        const alternativeSlotRecs = recommendations.filter(r => r.itemId === alternativeSlot.id && r.itemId !== slot.id);
                         const alternativeSlotExisting = Object.values(assignmentMap).reduce((count, assignments) => {
                             return count + assignments.filter(a => a.id === alternativeSlot.id).length;
                         }, 0);
@@ -668,13 +666,12 @@ function optimizeViaSwaps(
 
                         // Perform the swap: move other participant to alternative slot,
                         // free up original slot for underserved participant
-                        recUsingThisSlot.slotId = alternativeSlot.id;
+                        recUsingThisSlot.itemId = alternativeSlot.id;
 
                         // Add new recommendation for underserved participant
                         const newRec: RecommendationInput = {
-                            slotId: slot.id,
-                            userId: underservedState.participant.userId ?? null,
-                            guestId: underservedState.participant.guestId ?? null,
+                            itemId: slot.id,
+                            profileId: underservedState.participant.profileId ?? null,
                             status: "PENDING",
                         };
                         recommendations.push(newRec);
@@ -700,7 +697,7 @@ function optimizeViaSwaps(
                             break; // Found a good swap, move to next underserved participant
                         } else {
                             // Revert the changes
-                            recUsingThisSlot.slotId = slot.id;
+                            recUsingThisSlot.itemId = slot.id;
                             recommendations.pop();
                             underservedRecs.pop();
                             assignmentMap[underservedKey] = underservedAssignments;
@@ -743,8 +740,7 @@ function mergeParticipants(
 
     for (const override of overrides) {
         const participant: ParticipantAttendance = {
-            userId: undefined,
-            guestId: override.profile.id ?? undefined,
+            profileId: override.profile.id ?? undefined,
             roleIds: override.roleId ? [override.roleId] : undefined,
         };
         upsert(participant);
@@ -756,11 +752,8 @@ function mergeParticipants(
 function toParticipantAttendanceFromAssignments(assignments: Record<string, AssignmentCandidate[]>): ParticipantAttendance[] {
     return Object.keys(assignments).map((key) => {
         const [type, id] = key.split(":");
-        if (type === "user") {
-            return {userId: Number(id)};
-        }
-        if (type === "guest") {
-            return {guestId: String(id)};
+        if (type === "profile") {
+            return {profileId: id};
         }
         return {};
     });
@@ -778,15 +771,12 @@ export async function generatePlanRecommendations(
     ]);
 
     // If existing recommendations not provided, load them for rejection memory
-    if (!existingRecommendations) {
-        existingRecommendations = await recommendationService.getRecommendations(planId).catch(() => [] as ActivityAssignmentRecommendation[]);
-    }
+    existingRecommendations ??= await recommendationService.getRecommendations(planId).catch(() => [] as ActivityAssignmentRecommendation[]);
 
     // Convert RecommendationDb[] to RecommendationInput[] format for rejection memory
     const existingRecommendationsInput: RecommendationInput[] | undefined = existingRecommendations?.map(rec => ({
-        slotId: rec.item.id,
-        userId: undefined,
-        guestId: rec.profile.id ?? undefined,
+        itemId: rec.item.id,
+        profileId: rec.profile.id ?? undefined,
         status: rec.status,
     }));
 
@@ -797,8 +787,7 @@ export async function generatePlanRecommendations(
         : [];
 
     const participantsFromEvent: ParticipantAttendance[] = eventParticipants.map((p) => ({
-        userId: p.userId ?? undefined,
-        guestId: p.guestId ?? undefined,
+        profileId: p.profileId ?? undefined,
         arrivalDate: p.arrivalDate ?? undefined,
         departureDate: p.departureDate ?? undefined,
     }));

@@ -143,7 +143,7 @@ export function initSlotEditorModal(planId: string): void {
 
         selectedRoleIds.forEach((id) => {
             const role = allRoles.find((r) => r.id === id);
-            const label = role?.name ?? `Role #${id}`;
+            const label = role?.title ?? `Role #${id}`;
 
             const badge = document.createElement('span');
             badge.className =
@@ -198,7 +198,7 @@ export function initSlotEditorModal(planId: string): void {
         const available = allRoles.filter(
             (r) =>
                 !selectedRoleIds.has(r.id) &&
-                (r.name.toLowerCase().includes(lower) ||
+                (r.title.toLowerCase().includes(lower) ||
                     (r.description ?? '').toLowerCase().includes(lower)),
         );
 
@@ -213,7 +213,7 @@ export function initSlotEditorModal(planId: string): void {
                 btn.dataset.roleId = String(role.id);
 
                 const labelSpan = document.createElement('span');
-                labelSpan.textContent = `Add role "${role.name}" to this slot`;
+                labelSpan.textContent = `Add role "${role.title}" to this slot`;
 
                 const icon = document.createElement('i');
                 icon.className = 'bi bi-plus-circle';
@@ -329,7 +329,7 @@ export function initSlotEditorModal(planId: string): void {
 
         // if it already exists, just return existing
         const existing = getAllRoles().find(
-            (r) => r.name.toLowerCase() === trimmed.toLowerCase(),
+            (r) => r.title.toLowerCase() === trimmed.toLowerCase(),
         );
         if (existing) return existing;
 

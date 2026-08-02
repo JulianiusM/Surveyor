@@ -1,17 +1,14 @@
 export type SlotAssignmentRow = {
-    assignment_id: number;
-    slot_id: string;
-    uname: string | null;
-    gname: string | null;
-    user_id: number | null;
-    guest_id: string | null;
+    assignmentId: number;
+    itemId: string;
+    name: string;
+    profileId: string;
     roles: string | null;
 };
 
 export type SlotAssignee = {
     id: number;
-    user_id: number | null;
-    guest_id: string | null;
+    profileId: string;
     name: string;
     roles: string[];
 };

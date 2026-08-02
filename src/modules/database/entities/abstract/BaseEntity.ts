@@ -43,7 +43,7 @@ export abstract class BaseEntity extends UuidBase implements EntityBase {
     headerImg?: string | null;
 
     @RelationId((a: BaseEntity) => a.owner)
-    ownerId!: number;
+    ownerId!: string;
 
     @ManyToOne(() => Profile, {
         onDelete: "CASCADE",

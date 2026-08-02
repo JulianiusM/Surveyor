@@ -36,7 +36,7 @@ function preprocessCreate(body: any): Partial<DriversList> {
     return {
         title: value.title,
         description: value.description || null,
-        event: value.event_id || null,
+        eventId: value.event_id || null,
     };
 }
 
@@ -49,7 +49,7 @@ async function createEntity(
         ownerId,
         listData.title!,
         listData.description!,
-        listData.event?.id,
+        listData.eventId,
         listData.headerImg,
     );
 }
@@ -62,10 +62,7 @@ async function fetchForView(list: DriversList, req: Request) {
     const items = await driverService.getDriversItems(list.id);
     const session = req.session;
 
-    let assignments: string[] = [];
-    if (session.guest) {
-        assignments = await driverService.getDriversAssignments(list.id, session.guest.id)
-    }
+    const assignments = await driverService.getDriversAssignments(list.id, session.profile!.id)
 
     const assigneeLists = await driverService.getDriversItemAssignees(list.id);
     // Teilnehmer- und Offene-Zähler (ohne required_by_all-Items)
@@ -77,10 +74,8 @@ async function fetchForView(list: DriversList, req: Request) {
         const arr = assigneeLists[it.id] || [];
         arr.forEach((a) => {
             let id;
-            if (a.userId) {
-                id = `u_${a.userId}`;
-            } else if (a.guestId) {
-                id = `g_${a.guestId}`;
+            if (a.profileId) {
+                id = `p_${a.profileId}`;
             } else {
                 id = a.name;
             }
@@ -127,7 +122,7 @@ async function reorderItems(id: string, order: Array<{ itemId: string; position:
 
 
 async function quickAddItem(list: DriversList, body: any, session: Request['session']) {
-    const {title = '', description = '', max = 1} = body;
+    const {title = '', description = '', maxAssignees = '1'} = body;
     if (!title) throw new APIError('Title required', body, 400);
 
     const last = Number(await driverService.getLastDriversItemNumber(list.id,)) || 0;
@@ -135,12 +130,12 @@ async function quickAddItem(list: DriversList, body: any, session: Request['sess
         id: generateUniqueId(),
         title,
         description,
-        maxAssignees: Number(max) || 1,
+        maxAssignees: Number(maxAssignees) || 1,
         pos: last + 1
     };
 
-    if (session.guest) {
-        await driverService.createDriversItem(list.id, session.guest.id, item);
+    if (session.profile) {
+        await driverService.createDriversItem(list.id, session.profile.id, item);
     } else {
         throw new APIError('Not logged in', body, 400);
     }
@@ -197,10 +192,8 @@ async function deleteHeaderImg(entity: EntityBase) {
 
 function getAssignmentAccessMapping() {
     return {
-        assignToUser: (body: any, userId: number) => driverService.assignDriversItem(body.itemId, String(userId)),
-        assignToGuest: (body: any, guestId: string) => driverService.assignDriversItem(body.itemId, guestId),
-        unassignFromUser: (body: any, userId: number) => driverService.unassignDriversItem(body.itemId, String(userId)),
-        unassignFromGuest: (body: any, guestId: string) => driverService.unassignDriversItem(body.itemId, guestId),
+        assign: (body: any, profileId: string) => driverService.assignDriversItem(body.itemId, profileId),
+        unassign: (body: any, profileId: string) => driverService.unassignDriversItem(body.itemId, profileId),
     };
 }
 

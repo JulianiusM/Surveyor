@@ -29,10 +29,10 @@ block title
 
 block content
     //- Intro block – signed-in focused, with random quick-create target
-    if user
+    if profile
         .text-center.mb-4
             p.lead.mb-2
-                | Welcome back, #{user.name || user.username}.
+                | Welcome back, #{profile.name}.
             ul.list-unstyled.small.d-inline-block.text-start.mb-0
                 li.mb-1
                     i.bi.bi-check-circle-fill.me-2

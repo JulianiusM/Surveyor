@@ -11,7 +11,6 @@ import {EventRegBypassLink} from "../entities/event/EventRegBypassLink";
 import {EventRegistration} from '../entities/event/EventRegistration';
 import {EventRegistrationDietary} from "../entities/event/EventRegistrationDietary";
 import {PackingList} from "../entities/packing/PackingList";
-import {ensureOneByObjectsAuthed, findOneByObjectsAuthed} from "../utils/relation-upsert";
 import * as entityAdminService from "./EntityAdminService";
 import {registerForDefaultPools} from "./EventInvoiceService";
 
@@ -113,7 +112,7 @@ export async function getActiveEventsByOwnerId(ownerId: string) {
 }
 
 export async function getActiveManagedEvents(profileId: string) {
-    const ids = await entityAdminService.getIdsForUser('event', profileId);
+    const ids = await entityAdminService.getIds('event', profileId);
     const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
     return await AppDataSource.getRepository(Event).find({
         where: [
@@ -146,20 +145,19 @@ export async function register(
 ) {
     return await AppDataSource.transaction('READ COMMITTED', async (manager) => {
         const repo = manager.getRepository(EventRegistration);
-        let reg = await findOneByObjectsAuthed(repo, {
-            relations: {event: eventId},
-            party: {guest: profileId}
-        });
+        let reg = await repo.findOneBy({event: {id: eventId}, profile: {id: profileId}});
         if (reg) {
             reg.arrivalDate = arrivalDate;
             reg.departureDate = departureDate;
             reg = await repo.save(reg);
         } else {
-            reg = await ensureOneByObjectsAuthed(repo, {
-                relations: {event: eventId},
-                columns: {arrivalDate, departureDate},
-                party: {guest: profileId}
+            reg = repo.create({
+                event: {id: eventId},
+                profile: {id: profileId},
+                arrivalDate: arrivalDate,
+                departureDate: departureDate
             });
+            reg = await repo.save(reg);
         }
         await replaceDietaryChoicesTx(manager, reg.id, dietaryChoices, dietaryAllergies, dietComment);
         if (bypass && bypass.ok && bypass.linkId) {
@@ -197,8 +195,7 @@ export async function getEventParticipants(eventId: string): Promise<Participant
     });
     return rows.map((r): ParticipantRow => ({
         id: r.id,
-        userId: r.profile.user?.id ?? null,
-        guestId: r.profile.guest?.id ?? null,
+        profileId: r.profile.id ?? null,
         name: r.profile.name || '—',
         email: r.profile.user?.email || r.profile.guest?.email || '—',
         arrivalDate: r.arrivalDate,
@@ -244,8 +241,7 @@ export async function replaceDietaryChoices(
 }
 
 /**
- * Get all Events a user or guest is registered at.
- * - If both userId and guestId are provided, results are OR-combined.
+ * Get all Events a profile is registered at.
  * - Sorted by event start date descending.
  */
 export async function getRegisteredEventsFor(profileId: string): Promise<Event[]> {
@@ -300,12 +296,12 @@ export async function isEventFull(eventId: string): Promise<boolean> {
 export async function isRegisteredForEvent(profileId: string, eventId: string) {
     const repo = AppDataSource.getRepository(EventRegistration);
 
-    // Check if user or guest is registered (use separate queries for clarity)
+    // Check if profile is registered (use separate queries for clarity)
     let isRegistered = await repo.exists({
         where: {event: {id: eventId}, profile: {id: profileId}}
     });
 
-    // Also check if user is the event owner
+    // Also check if profile is the event owner
     if (!isRegistered) {
         isRegistered = await AppDataSource.getRepository(Event).exists({
             where: {id: eventId, owner: {id: profileId}}
@@ -361,8 +357,7 @@ export async function listDeadlineBypassLinks(eventId: string) {
         expiresAt: r.expiresAt,
         revokedAt: r.revokedAt,
         used: r.usedCount > 0 || !!r.usedAt,
-        userId: r.profile.userId ?? null,
-        guestId: r.profile.guestId ?? null,
+        profileId: r.profileId,
         status: calculateBypassLinkStatus(r)
     }));
 }

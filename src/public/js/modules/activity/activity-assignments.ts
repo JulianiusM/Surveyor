@@ -128,7 +128,7 @@ export function initAssign(planId: string, warningModal: WarningModal): void {
         const shouldCheckWarnings = act === 'assign' || (act === 'take-role' && !hasExistingAssignment);
 
         const performUpdate = async () => {
-            await post(`/api/activity/${planId}/${act}`, {slotId, role});
+            await post(`/api/activity/${planId}/${act}`, {itemId: slotId, role});
             showInlineAlert('success', 'Updated');
             reloadAfterDelay(120);
         };

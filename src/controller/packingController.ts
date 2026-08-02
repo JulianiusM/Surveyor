@@ -6,7 +6,7 @@ import {PackingList} from "../modules/database/entities/packing/PackingList";
 import * as packingService from '../modules/database/services/PackingService';
 import {APIError, ValidationError} from '../modules/lib/errors';
 import {performImageSwap} from "../modules/lib/fileCommons";
-import {convertToAgent, ENTITIES, generateUniqueId} from "../modules/lib/util";
+import {ENTITIES, generateUniqueId} from "../modules/lib/util";
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
 import {SessionLike} from "../types/PermissionTypes";
 import type {EntityBase} from "../types/UserTypes";
@@ -89,10 +89,7 @@ async function fetchForView(list: PackingList, req: Request) {
     const items = await packingService.getPackingItems(list.id);
     const session = req.session;
 
-    let assignments: string[] = [];
-    if (session.guest) {
-        assignments = await packingService.getPackingAssignments(list.id, session.guest.id);
-    }
+    let assignments = await packingService.getPackingAssignments(list.id, session.profile!.id);
 
     const assigneeLists = await packingService.getPackingItemAssignees(list.id);
     // Teilnehmer- und Offene-Zähler (ohne required_by_all-Items)
@@ -103,12 +100,10 @@ async function fetchForView(list: PackingList, req: Request) {
     items.forEach((it) => {
         if (it.requiredByAll) return;                      // überspringen
         const arr = assigneeLists[it.id] || [];
-        arr.forEach((a: any) => {
+        arr.forEach((a) => {
             let id;
-            if (a.user_id) {
-                id = `u_${a.user_id}`;
-            } else if (a.guest_id) {
-                id = `g_${a.guest_id}`;
+            if (a.profileId) {
+                id = `p_${a.profileId}`;
             } else {
                 id = a.name;
             }
@@ -153,7 +148,7 @@ async function reorderItems(id: string, order: any) {
 }
 
 async function quickAddItem(list: PackingList, body: any, session: SessionLike) {
-    const {title = '', description = '', max = 1} = body;
+    const {title = '', description = '', maxAssignees = '1'} = body;
     if (!title) throw new APIError('Title required', body, 400);
 
     const last = await packingService.getLastPackingItemNumber(list.id,) || 0;
@@ -161,11 +156,11 @@ async function quickAddItem(list: PackingList, body: any, session: SessionLike) 
         id: generateUniqueId(),
         title,
         description,
-        maxAssignees: Number(max) || 1,
+        maxAssignees: Number(maxAssignees) || 1,
         position: last + 1
     };
 
-    await packingService.addPackingItems(list.id, [item], convertToAgent(session));
+    await packingService.addPackingItems(list.id, [item], session.profile!.id);
     return 'Item added';
 }
 
@@ -221,10 +216,8 @@ async function deleteHeaderImg(entity: EntityBase) {
 
 function getAssignmentAccessMapping() {
     return {
-        assignToUser: (body: any, userId: number) => packingService.assignPackingItem(body.itemId, String(userId)),
-        assignToGuest: (body: any, guestId: string) => packingService.assignPackingItem(body.itemId, guestId),
-        unassignFromUser: (body: any, userId: number) => packingService.unassignPackingItemUser(body.itemId, String(userId)),
-        unassignFromGuest: (body: any, guestId: string) => packingService.unassignPackingItemUser(body.itemId, guestId),
+        assign: (body: any, profileId: string) => packingService.assignPackingItem(body.itemId, profileId),
+        unassign: (body: any, profileId: string) => packingService.unassignPackingItem(body.itemId, profileId),
     };
 }
 

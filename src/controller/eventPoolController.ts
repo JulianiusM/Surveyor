@@ -35,10 +35,9 @@ export async function purgeExpiredProofs(pool: Awaited<ReturnType<typeof invoice
 
 // Resolve the registration ID for the current actor so validation stays localized.
 async function getActorRegistrationId(event: Event, session: Request['session']) {
-    let registration = null;
-    if (session.guest) {
-        registration = await eventService.getRegistrationFor(session.guest.id, event.id);
-    }
+    if (!session.profile) return undefined;
+
+    const registration = await eventService.getRegistrationFor(session.profile.id, event.id);
     return registration?.id;
 }
 

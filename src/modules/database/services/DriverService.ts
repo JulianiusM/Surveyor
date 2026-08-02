@@ -59,7 +59,7 @@ export async function updateHeaderImage(listId: string, headerImg?: string | nul
 }
 
 export async function getManagedListsForProfile(profileId: string) {
-    const ids = await entityAdminService.getIdsForUser('drivers', profileId);
+    const ids = await entityAdminService.getIds('drivers', profileId);
     return await AppDataSource.getRepository(DriversList).find({
         where: [
             {
@@ -126,15 +126,14 @@ export async function getDriversItems(listId: string): Promise<EnrichedDriversIt
         where: {entity: {id: listId}},
         relations: {
             profile: true
-        },             // join user & guest
-        loadRelationIds: {relations: ['driversAssignments']}, // get IDs, not full rows
+        },
+        loadRelationIds: {relations: ['assignments']}, // get IDs, not full rows
         order: {pos: 'ASC'},
     });
 
     // `driversAssignments` is now an array of IDs — use its length
     return entities.map((item) => {
-        const relIds = (item as any).driversAssignments as unknown[] | undefined;
-        const assignedCount = Array.isArray(relIds) ? relIds.length : 0;
+        const assignedCount = item.assignments?.length ?? 0;
 
         const driverName = item.profile?.name;
 
@@ -151,8 +150,7 @@ export async function getDriversItemById(itemId: string): Promise<EnrichedDriver
 
     const {entities, raw} = await repo
         .createQueryBuilder("pi")
-        .leftJoinAndSelect("pi.user", "u")
-        .leftJoinAndSelect("pi.guest", "g")
+        .leftJoinAndSelect("pi.profile", "p")
         .addSelect((qb) =>
                 qb
                     .select("COUNT(*)")
@@ -185,7 +183,7 @@ export async function getDriversAssignmentCounts(
         .createQueryBuilder("da")
         .select("da.item_id", "itemId")
         .addSelect("COUNT(*)", "cnt")
-        .where("da.list = :listId", {listId})
+        .where("da.entity_id = :listId", {listId})
         .groupBy("da.item_id")
         .getRawMany<{ itemId: string; cnt: string }>();
 
@@ -204,7 +202,7 @@ export async function assignDriversItem(
 ): Promise<void> {
     const repo = AppDataSource.getRepository(DriversAssignment);
 
-    const {entity: {id: listId}} = await getDriversItemById(itemId);
+    const {entityId: listId} = await getDriversItemById(itemId);
 
     // construct the assignment entity
     const assignment = repo.create({
@@ -268,8 +266,7 @@ export async function getDriversItemAssignees(listId: string) {
         map[key] = map[key] || [];
         map[key].push({
             id: r.id,
-            userId: undefined,
-            guestId: r.profile.id,
+            profileId: r.profile.id,
             name: r.profile.name,
         });
         return map;

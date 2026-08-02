@@ -147,8 +147,7 @@ each week in weeks
                                                         slotRole.name,
                                                         slotRole.description || slotRole.name,
                                                         data.assigneeLists[slot.id],
-                                                        user,
-                                                        guest)
+                                                        profile)
 
                                                 // single admin button per slot – opens modal
                                                 if permData.itemAllow(slot.id, 'MANAGE_ASSIGNMENTS', 'MANAGE_ASSIGNMENTS')

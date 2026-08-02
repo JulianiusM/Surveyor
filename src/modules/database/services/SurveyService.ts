@@ -1,12 +1,4 @@
-import type {
-    GroupedResponses,
-    GroupKey,
-    GuestResponseItem,
-    SurveyAnswer,
-    UserResponseItem,
-    WeekDay,
-    WeekInMonth
-} from "../../../types/SurveyTypes";
+import type {BasePicked, GroupedResponses, SurveyAnswer, WeekDay, WeekInMonth} from "../../../types/SurveyTypes";
 import {generateUniqueId} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {Survey} from '../entities/surveys/Survey';
@@ -26,7 +18,7 @@ export async function getCombinationsBySurveyId(surveyId: string) {
     });
 }
 
-export async function createSurveyTx(userId: string, title: string, desc: string, combinations: {
+export async function createSurveyTx(ownerId: string, title: string, desc: string, combinations: {
     weekday: WeekDay,
     week: WeekInMonth,
 }[], headerImg?: string | null,): Promise<string> {
@@ -35,7 +27,7 @@ export async function createSurveyTx(userId: string, title: string, desc: string
 
         const survey: Survey = manager.create(Survey, {
             id: surveyId,
-            owner: {id: userId},
+            owner: {id: ownerId},
             title,
             description: desc,
             headerImg,
@@ -43,7 +35,7 @@ export async function createSurveyTx(userId: string, title: string, desc: string
         await manager.save(survey);
 
         const plainCombos = combinations.map(c => ({
-            survey: {id: surveyId},
+            entity: {id: surveyId},
             weekday: c.weekday,
             nthWeek: c.week,
         }));
@@ -110,12 +102,6 @@ export async function getResponsesByProfileId(profileId: string) {
     });
 }
 
-function isUserResponse(
-    r: UserResponseItem | GuestResponseItem
-): r is UserResponseItem {
-    return (r as UserResponseItem).kind === "user";
-}
-
 export async function getResponsesSorted(surveyId: string): Promise<GroupedResponses> {
     const repo = AppDataSource.getRepository(SurveyResponse);
 
@@ -125,38 +111,22 @@ export async function getResponsesSorted(surveyId: string): Promise<GroupedRespo
         relations: {profile: true, item: true},
     });
 
-    const combined: Array<UserResponseItem | GuestResponseItem> = [];
+    const combined: Array<BasePicked> = [];
 
     for (const r of responses) {
-        if (r.profile.user) {
-            const item: UserResponseItem = {
-                kind: "user",
-                id: r.id,
-                answer: r.answer,
-                combinationId: r.item.id,
-                userId: r.profile.id,
-                username: r.profile.name,
-                name: r.profile.name,
-            };
-            combined.push(item);
-        } else if (r.profile.guest) {
-            const item: GuestResponseItem = {
-                kind: "guest",
-                id: r.id,
-                answer: r.answer,
-                combinationId: r.item.id,
-                guestId: r.profile.id,
-                username: r.profile.name,
-            };
-            combined.push(item);
-        }
-        // If a row could have neither, it’s ignored (matches your original inner joins).
+        const item: BasePicked = {
+            id: r.id,
+            answer: r.answer,
+            combinationId: r.item.id,
+            profileId: r.profile.id,
+            name: r.profile.name,
+        };
+        combined.push(item);
     }
 
-    // Group into u_<id> / g_<id> buckets
+    // Group into buckets
     return combined.reduce<GroupedResponses>((acc, item) => {
-        const key: GroupKey =
-            item.kind === "user" ? `u_${item.userId}` : `g_${item.guestId}`;
+        const key: string = item.profileId;
         acc[key] ??= [];
         acc[key].push(item);
         return acc;

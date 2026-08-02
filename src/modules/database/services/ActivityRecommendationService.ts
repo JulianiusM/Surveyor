@@ -13,33 +13,26 @@ import {
 
 export interface RecommendationInput {
     id?: string;
-    slotId: string;
-    userId?: number | null;
-    guestId?: string | null;
+    itemId: string;
+    profileId?: string | null;
     status?: RecommendationStatus;
 }
 
 export function normalizeRecommendationInput(input: RecommendationInput): RecommendationInput {
-    if (!input.slotId) {
+    if (!input.itemId) {
         throw new Error("Recommendation requires a slotId");
     }
 
-    const hasUser = input.userId != null;
-    const hasGuest = input.guestId != null;
+    const hasProfile = input.profileId != null;
 
-    if (!hasUser && !hasGuest) {
-        throw new Error("Recommendation requires a userId or guestId");
-    }
-
-    if (hasUser && hasGuest) {
-        throw new Error("Recommendation cannot target both user and guest");
+    if (!hasProfile) {
+        throw new Error("Recommendation requires a profileId");
     }
 
     return {
         id: input.id,
-        slotId: input.slotId,
-        userId: hasUser ? Number(input.userId) : null,
-        guestId: hasGuest ? String(input.guestId) : null,
+        itemId: input.itemId,
+        profileId: String(input.profileId),
         status: input.status ?? "PENDING",
     };
 }
@@ -72,8 +65,8 @@ export async function replaceRecommendations(planId: string, recommendations: Re
         const rows = normalized.map((rec) =>
             repo.create({
                 entity: {id: planId},
-                item: {id: rec.slotId},
-                profile: {id: rec.guestId ?? ''},
+                item: {id: rec.itemId},
+                profile: {id: rec.profileId ?? ''},
                 status: rec.status ?? "PENDING",
             })
         );

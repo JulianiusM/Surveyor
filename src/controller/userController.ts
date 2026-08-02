@@ -76,8 +76,8 @@ export async function loginUser(body: any, session: Request["session"]) {
         throw new ValidationError(LOGIN_TEMPLATE, errorMsg, returnInfo);
     }
 
-    session.user = user;
-    session.guest = undefined;
+    session.auth = {user};
+    session.profile = user.profiles[0];
     await persistSession(session);
 }
 
@@ -104,7 +104,7 @@ export async function getDashboardEntities(profile: Profile) {
         packingService.getManagedLists(profile.id),
         packingService.getPackingListByParticipant(profile.id),
         activityService.getActivityPlansByProfileId(profile.id),
-        activityService.getManagedPlansForUser(profile.id),
+        activityService.getManagedPlans(profile.id),
         activityService.getActivityPlansByParticipant(profile.id),
         driverService.getDriversListByProfileId(profile.id),
         driverService.getManagedListsForProfile(profile.id),
@@ -222,8 +222,8 @@ export async function loginGuest(guestId: string, token: string, session: Reques
         throw new ExpectedError('Invalid or mismatched token', 'error', 401);
     }
     // switch to guest session
-    session.user = undefined;
-    session.guest = guest;
+    session.auth = {guest};
+    session.profile = guest.profile;
     await persistSession(session);
 }
 

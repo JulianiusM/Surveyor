@@ -126,16 +126,16 @@ html(lang="en" data-bs-theme="dark")
 
                         // Right side: user account
                         ul.navbar-nav.ms-auto
-                            if user || guest
+                            if profile
                                 li.nav-item.dropdown
                                     a.nav-link.dropdown-toggle(href="#" id="userMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false")
                                         i.bi.bi-person-circle.me-1
-                                        if user
-                                            | #{user.username}
-                                        else if guest
-                                            | #{guest.username} (Guest)
+                                        if profile.userId
+                                            | #{profile.name}
+                                        else if profile.guestId
+                                            | #{profile.name} (Guest)
                                     ul.dropdown-menu.dropdown-menu-end(aria-labelledby="userMenu")
-                                        if user
+                                        if profile.userId
                                             li
                                                 a.dropdown-item(href="/users/dashboard")
                                                     i.bi.bi-speedometer2.me-1
@@ -144,7 +144,7 @@ html(lang="en" data-bs-theme="dark")
                                                 a.dropdown-item(href="/users/manage-dashboard")
                                                     i.bi.bi-people-fill.me-1
                                                     | Managed items
-                                        if guest
+                                        if profile.guestId
                                             li
                                                 a.dropdown-item(href="/guest/dashboard")
                                                     i.bi.bi-speedometer2.me-1
