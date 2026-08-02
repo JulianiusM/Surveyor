@@ -5,9 +5,6 @@ import {DriversList} from "./DriversList";
 
 @Entity("drivers_assignments", {schema: "surveyor"})
 export class DriversAssignment extends DefaultNumericEntityItemAssignment {
-    @RelationId((a: DriversAssignment) => a.entity)
-    entityId!: string;
-
     @RelationId((a: DriversAssignment) => a.item)
     itemId!: string;
 
@@ -17,6 +14,9 @@ export class DriversAssignment extends DefaultNumericEntityItemAssignment {
     )
     @JoinColumn([{name: "item_id", referencedColumnName: "id"}])
     item!: DriversItem;
+
+    @RelationId((a: DriversAssignment) => a.entity)
+    entityId!: string;
 
     @ManyToOne(
         () => DriversList,

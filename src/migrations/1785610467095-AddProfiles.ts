@@ -3,6 +3,7 @@ import {
     addColumnIfNotExists,
     columnExists,
     createConstraintIfNotExists,
+    createIndexIfNotExists,
     createUniqueIndexIfNotExists,
     dropColumnIfExists,
     dropFkConstraintIfExists,
@@ -20,6 +21,7 @@ interface IndexDef {
     table: string;
     name: string;
     columns: string;
+    unique: boolean;
 }
 
 interface RelationMapping {
@@ -355,23 +357,50 @@ export class AddProfiles1785610467095 implements MigrationInterface {
         ];
 
         const newIndexes: IndexDef[] = [
-            {table: 'activity_slot_role', name: 'unique_act_slot_role_map', columns: '`item_id`, `role_id`'},
-            {table: 'activity_plan_requirements', name: 'uk_plan_role', columns: '`entity_id`, `role_id`'},
+            {
+                table: 'activity_slot_role',
+                name: 'unique_act_slot_role_map',
+                columns: '`item_id`, `role_id`',
+                unique: true
+            },
+            {
+                table: 'activity_plan_requirements',
+                name: 'uk_plan_role',
+                columns: '`entity_id`, `role_id`',
+                unique: true
+            },
             {
                 table: 'activity_plan_requirement_overrides',
                 name: 'uk_plan_participant_role',
-                columns: '`entity_id`, `profile_id`, `role_id`'
+                columns: '`entity_id`, `profile_id`, `role_id`', unique: true
             },
-            {table: 'activity_roles', name: 'act_roles_name_plan', columns: '`title`, `entity_id`'},
+            {table: 'activity_roles', name: 'act_roles_name_plan', columns: '`title`, `entity_id`', unique: true},
             {
                 table: 'entity_admin_assignments',
                 name: 'uk_entity_admin_assignment_user',
-                columns: '`entity_type`, `entity_id`, `profile_id`'
+                columns: '`entity_type`, `entity_id`, `profile_id`', unique: true
             },
             {
                 table: 'survey_combinations',
                 name: 'combinations_single_entry',
-                columns: '`WEEKDAY`, `entity_id`, `nth_week`'
+                columns: '`WEEKDAY`, `entity_id`, `nth_week`', unique: true
+            },
+            {
+                table: 'drivers_assignments',
+                name: 'FK_b2fa5cb20b56122626e22bce5ee',
+                columns: '`item_id`', unique: false
+            },
+            {
+                table: 'event_registrations',
+                name: 'FK_28b0a253c87a80a4b013c437f7d',
+                columns: '`event_id`',
+                unique: false
+            },
+            {
+                table: 'packing_assignments',
+                name: 'FK_8424e042fc819f09baadaf30bb8',
+                columns: '`item_id`',
+                unique: false
             }
         ];
 
@@ -660,7 +689,11 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             }
 
             for (const index of newIndexes) {
-                await createUniqueIndexIfNotExists(queryRunner, index.table, index.name, index.columns);
+                if (index.unique) {
+                    await createUniqueIndexIfNotExists(queryRunner, index.table, index.name, index.columns);
+                } else {
+                    await createIndexIfNotExists(queryRunner, index.table, index.name, index.columns);
+                }
             }
 
             for (const fk of newForeignKeys) {
@@ -718,7 +751,10 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             ['activity_roles', 'act_roles_name_plan'],
             ['activity_plan_requirement_overrides', 'uk_plan_participant_role'],
             ['activity_plan_requirements', 'uk_plan_role'],
-            ['activity_slot_role', 'unique_act_slot_role_map']
+            ['activity_slot_role', 'unique_act_slot_role_map'],
+            ['drivers_assignments', 'FK_b2fa5cb20b56122626e22bce5ee'],
+            ['event_registrations', 'FK_28b0a253c87a80a4b013c437f7d'],
+            ['packing_assignments', 'FK_8424e042fc819f09baadaf30bb8'],
         ] as const;
 
         const mappings: RelationMapping[] = [
@@ -780,35 +816,70 @@ export class AddProfiles1785610467095 implements MigrationInterface {
         ];
 
         const oldIndexes: IndexDef[] = [
-            {table: 'drivers_assignments', name: 'uk_driver_assignment_user', columns: '`item_id`, `user_id`'},
-            {table: 'drivers_assignments', name: 'uk_driver_assignment_guest', columns: '`item_id`, `guest_id`'},
-            {table: 'packing_assignments', name: 'uk_packing_assignment_user', columns: '`item_id`, `user_id`'},
-            {table: 'packing_assignments', name: 'uk_packing_assignment_guest', columns: '`item_id`, `guest_id`'},
-            {table: 'event_registrations', name: 'uk_event_participant', columns: '`event_id`, `user_id`, `guest_id`'},
-            {table: 'activity_slot_role', name: 'unique_act_slot_role_map', columns: '`slot_id`, `role_id`'},
-            {table: 'activity_plan_requirements', name: 'uk_plan_role', columns: '`plan_id`, `role_id`'},
+            {
+                table: 'drivers_assignments',
+                name: 'uk_driver_assignment_user',
+                columns: '`item_id`, `user_id`',
+                unique: true
+            },
+            {
+                table: 'drivers_assignments',
+                name: 'uk_driver_assignment_guest',
+                columns: '`item_id`, `guest_id`',
+                unique: true
+            },
+            {
+                table: 'packing_assignments',
+                name: 'uk_packing_assignment_user',
+                columns: '`item_id`, `user_id`',
+                unique: true
+            },
+            {
+                table: 'packing_assignments',
+                name: 'uk_packing_assignment_guest',
+                columns: '`item_id`, `guest_id`',
+                unique: true
+            },
+            {
+                table: 'event_registrations',
+                name: 'uk_event_participant',
+                columns: '`event_id`, `user_id`, `guest_id`',
+                unique: true
+            },
+            {
+                table: 'activity_slot_role',
+                name: 'unique_act_slot_role_map',
+                columns: '`slot_id`, `role_id`',
+                unique: true
+            },
+            {table: 'activity_plan_requirements', name: 'uk_plan_role', columns: '`plan_id`, `role_id`', unique: true},
             {
                 table: 'activity_plan_requirement_overrides',
                 name: 'uk_plan_participant_role',
-                columns: '`plan_id`, `user_id`, `guest_id`, `role_id`'
+                columns: '`plan_id`, `user_id`, `guest_id`, `role_id`', unique: true
             },
-            {table: 'activity_roles', name: 'act_roles_name_plan', columns: '`name`, `plan_id`'},
+            {table: 'activity_roles', name: 'act_roles_name_plan', columns: '`name`, `plan_id`', unique: true},
             {
                 table: 'activity_assignments',
                 name: 'uk_unique_activity_assignment_user',
-                columns: '`slot_id`, `user_id`'
+                columns: '`slot_id`, `user_id`', unique: true
             },
-            {table: 'activity_assignments', name: 'uk_activity_assignment_guest', columns: '`slot_id`, `guest_id`'},
+            {
+                table: 'activity_assignments',
+                name: 'uk_activity_assignment_guest',
+                columns: '`slot_id`, `guest_id`',
+                unique: true
+            },
             {
                 table: 'entity_admin_assignments',
                 name: 'uk_entity_admin_assignment_user',
-                columns: '`entity_type`, `entity_id`, `user_id`'
+                columns: '`entity_type`, `entity_id`, `user_id`', unique: true
             },
             {
                 table: 'survey_combinations',
                 name: 'combinations_single_entry',
-                columns: '`WEEKDAY`, `survey_id`, `nth_week`'
-            }
+                columns: '`WEEKDAY`, `survey_id`, `nth_week`', unique: true
+            },
         ];
 
         const oldForeignKeys: ForeignKeyDef[] = [
@@ -1101,7 +1172,11 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             }
 
             for (const index of oldIndexes) {
-                await createUniqueIndexIfNotExists(queryRunner, index.table, index.name, index.columns);
+                if (index.unique) {
+                    await createUniqueIndexIfNotExists(queryRunner, index.table, index.name, index.columns);
+                } else {
+                    await createIndexIfNotExists(queryRunner, index.table, index.name, index.columns);
+                }
             }
 
             for (const fk of oldForeignKeys) {
