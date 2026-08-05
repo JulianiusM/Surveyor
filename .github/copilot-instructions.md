@@ -50,13 +50,21 @@ The project uses **data-driven** and **keyword-driven** testing approaches. For 
 ```typescript
 // Import data and keywords
 import { testData } from '../data/controller/featureData';
-import { setupMock, verifyResult } from '../keywords/common/controllerKeywords';
+import { test } from '@playwright/test';
+import { createAsyncFake, verifyResult } from '../keywords/common/controllerKeywords';
 
 // Data-driven test
-test.each(testData)('$description', async (testCase) => {
-    setupMock(service.method, testCase.expected);
-    const result = await controller.method(testCase.input);
-    verifyResult(result, testCase.expected);
+test.describe('feature controller', () => {
+    for (const testCase of testData) {
+        test(testCase.description, async ({}, testInfo) => {
+            await test.step(`run ${testInfo.title}`, async () => {
+                const methodFake = createAsyncFake<[FeatureInput], Feature>(testCase.expected);
+                service.method = methodFake.fn;
+                const result = await controller.method(testCase.input);
+                verifyResult(result, testCase.expected);
+            });
+        });
+    }
 });
 ```
 

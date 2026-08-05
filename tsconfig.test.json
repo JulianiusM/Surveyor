@@ -5,8 +5,9 @@
     "allowSyntheticDefaultImports": true,
     "isolatedModules": true,
     "types": [
-      "jest",
-      "node"
+      "@playwright/test",
+      "node",
+      "jquery"
     ]
   },
   "include": [

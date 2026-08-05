@@ -5,8 +5,7 @@ Surveyor is a TypeScript-based survey management application built with:
 - Express.js for the web server
 - TypeORM for database operations
 - MariaDB as the database
-- Jest for unit and integration testing
-- Playwright for end-to-end testing
+- Playwright Test for unit, integration, and end-to-end testing
 - Pug for templating
 - Bootstrap for styling
 
@@ -25,7 +24,6 @@ Surveyor is a TypeScript-based survey management application built with:
 ### Key Development Dependencies
 
 - typescript - Type checking and compilation
-- jest - Testing framework
-- @playwright/test - E2E testing
+- @playwright/test - Testing framework
 - ts-node - TypeScript execution
 - supertest - HTTP testing

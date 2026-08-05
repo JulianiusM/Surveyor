@@ -106,7 +106,7 @@ surveyor/
 │   ├── views/                  # Pug templates
 │   └── server.ts               # Application entry point
 ├── tests/                      # Test suite
-│   ├── client/                 # Frontend tests (Jest + MSW)
+│   ├── client/                 # Frontend tests (Playwright Test + MSW)
 │   ├── controller/             # Controller tests
 │   ├── database/               # Database integration tests
 │   ├── e2e/                    # End-to-end tests (Playwright)
@@ -142,9 +142,9 @@ surveyor/
 
 4. **Run tests:**
    ```bash
-   npm test              # Fast Jest tests
+   npm run test:quick      # Fast Playwright-compatible tests
    npm run test:watch    # Watch mode
-   npm run test:all      # Full suite (Jest + E2E)
+   npm run test:all      # Full suite (unit/integration + E2E)
    ```
 
 5. **Commit your changes:**
@@ -314,8 +314,8 @@ See [TESTING_GUIDE.md](TESTING_GUIDE.md) for comprehensive testing documentation
 ### Quick Reference
 
 ```bash
-# Jest tests (fast)
-npm test                  # All Jest tests
+# Fast tests
+npm run test:quick        # Unit/integration tests
 npm run test:watch        # Watch mode
 npm run test:client       # Frontend tests only
 npm run test:debug        # With database logging
@@ -350,8 +350,20 @@ Follow these patterns:
 2. **Create or use keywords:**
    ```typescript
    // tests/keywords/common/controllerKeywords.ts
-   export function setupMock(mockFn: jest.Mock, returnValue: any): void {
-       mockFn.mockResolvedValue(returnValue);
+   import {expect} from '@playwright/test';
+
+   export interface FakeAsyncFunction<TArgs extends unknown[] = unknown[], TResult = unknown> {
+       calls: TArgs[];
+       fn: (...args: TArgs) => Promise<TResult>;
+   }
+
+   export function createAsyncFake<TArgs extends unknown[], TResult>(returnValue: TResult): FakeAsyncFunction<TArgs, TResult> {
+       const calls: TArgs[] = [];
+       return {calls, fn: async (...args: TArgs) => { calls.push(args); return returnValue; }};
+   }
+
+   export function verifyResult(actual: unknown, expected: unknown): void {
+       expect(actual).toEqual(expected);
    }
    ```
 
@@ -359,12 +371,20 @@ Follow these patterns:
    ```typescript
    // tests/controller/myFeature.test.ts
    import { createFeatureData } from '../data/controller/myFeatureData';
-   import { setupMock, verifyResult } from '../keywords/common/controllerKeywords';
+   import { test } from '@playwright/test';
+   import { createAsyncFake, verifyResult } from '../keywords/common/controllerKeywords';
    
-   test.each(createFeatureData)('$description', async (testCase) => {
-       setupMock(service.create, testCase.expected);
-       const result = await controller.create(testCase.input);
-       verifyResult(result, testCase.expected);
+   test.describe('create feature', () => {
+       for (const testCase of createFeatureData) {
+           test(testCase.description, async ({}, testInfo) => {
+               await test.step(`run ${testInfo.title}`, async () => {
+                   const createFake = createAsyncFake<[CreateFeatureInput], Feature>(testCase.expected);
+                   service.create = createFake.fn;
+                   const result = await controller.create(testCase.input);
+                   verifyResult(result, testCase.expected);
+               });
+           });
+       }
    });
    ```
 
@@ -415,16 +435,16 @@ debugger; // Breakpoint in browser devtools
 
 ```bash
 # Run specific test with debugging
-npm test -- tests/unit/myTest.test.ts --verbose
+npx playwright test tests/unit/myTest.test.ts --debug
 
 # Debug with VS Code
 # Add to launch.json:
 {
     "type": "node",
     "request": "launch",
-    "name": "Debug Jest Tests",
-    "program": "${workspaceFolder}/node_modules/.bin/jest",
-    "args": ["--runInBand", "${file}"],
+    "name": "Debug Playwright Tests",
+    "program": "${workspaceFolder}/node_modules/.bin/playwright",
+    "args": ["test", "${file}"],
     "console": "integratedTerminal"
 }
 ```
@@ -648,7 +668,7 @@ Set environment variables in deployment platform:
 rm -rf node_modules package-lock.json
 npm install
 npm run build
-npm test
+npm run test:all
 ```
 
 #### Database Connection Errors

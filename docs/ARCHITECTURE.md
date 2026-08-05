@@ -23,7 +23,7 @@ Surveyor is a **monolithic web application** for survey and event management wit
 - **Database**: MariaDB with TypeORM
 - **Frontend**: Server-rendered Pug templates + vanilla JavaScript/TypeScript
 - **Authentication**: OIDC (OpenID Connect)
-- **Testing**: Jest + Playwright
+- **Testing**: Playwright Test
 
 ### High-Level Architecture
 
@@ -89,8 +89,7 @@ Surveyor is a **monolithic web application** for survey and event management wit
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| Jest | Latest | Unit/integration testing |
-| Playwright | Latest | E2E testing |
+| Playwright Test | Latest | Unit, integration, and E2E testing |
 | MSW | Latest | API mocking |
 | Testing Library | Latest | DOM testing |
 
@@ -444,8 +443,17 @@ export const createSurveyData = [
 ];
 
 // tests/controller/survey.test.ts
-test.each(createSurveyData)('$description', async (testCase) => {
-    // Test implementation
+import {test, expect} from '@playwright/test';
+
+test.describe('create survey', () => {
+    for (const testCase of createSurveyData) {
+        test(testCase.description, async ({request}) => {
+            await test.step('create survey through the API fixture', async () => {
+                const response = await request.post('/surveys', {data: testCase.input});
+                expect(await response.json()).toEqual(testCase.expected);
+            });
+        });
+    }
 });
 ```
 
@@ -453,16 +461,25 @@ test.each(createSurveyData)('$description', async (testCase) => {
 
 ```typescript
 // tests/keywords/common/controllerKeywords.ts
-export function setupMock(mockFn: jest.Mock, returnValue: any): void {
-    mockFn.mockResolvedValue(returnValue);
+import {expect} from '@playwright/test';
+
+export interface FakeAsyncFunction<TArgs extends unknown[] = unknown[], TResult = unknown> {
+    calls: TArgs[];
+    fn: (...args: TArgs) => Promise<TResult>;
 }
 
-export function verifyResult(actual: any, expected: any): void {
+export function createAsyncFake<TArgs extends unknown[], TResult>(returnValue: TResult): FakeAsyncFunction<TArgs, TResult> {
+    const calls: TArgs[] = [];
+    return {calls, fn: async (...args: TArgs) => { calls.push(args); return returnValue; }};
+}
+
+export function verifyResult(actual: unknown, expected: unknown): void {
     expect(actual).toEqual(expected);
 }
 
 // Usage in tests
-setupMock(service.create, testCase.expected);
+const createFake = createAsyncFake<[CreateSurveyInput], Survey>(testCase.expected);
+service.create = createFake.fn;
 const result = await controller.create(testCase.input);
 verifyResult(result, testCase.expected);
 ```
