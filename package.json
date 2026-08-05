@@ -21,7 +21,18 @@
     "build:sass": "sass src/public/style:src/public/style --no-source-map",
     "build:server": "npm run generate && tsc --project tsconfig.server.json",
     "build:client": "cross-env NODE_ENV=production node esbuild.client.js",
-    "build": "npm run build:sass && npm run build:server && npm run build:client && npm run copy"
+    "build": "npm run build:sass && npm run build:server && npm run build:client && npm run copy",
+    "test": "vitest run",
+    "test:quick": "vitest run tests/backend tests/frontend",
+    "test:unit": "vitest run tests/backend",
+    "test:api": "vitest run tests/api",
+    "test:integration": "vitest run tests/backend tests/api tests/frontend",
+    "test:frontend": "vitest run tests/frontend",
+    "e2e:prepare": "ts-node --project tsconfig.server.json scripts/e2e.db.init.ts",
+    "e2e:init": "npm run e2e:prepare && npm run run",
+    "e2e": "playwright test",
+    "test:all": "npm test && npm run build && npm run e2e",
+    "test:ci": "vitest run --reporter=default --reporter=junit --outputFile.junit=artifacts/junit-vitest.xml"
   },
   "overrides": {
     "connect-typeorm": {
@@ -78,6 +89,7 @@
     "nodemon": "^3.1.14",
     "sass": "^1.102.0",
     "ts-node": "^10.9.2",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
   }
 }

@@ -11,9 +11,9 @@ documentation. The project uses:
 
 - **Backend**: Express.js + TypeORM + MariaDB
 - **Frontend**: Pug templates + Bootstrap + Vanilla TypeScript
-- **Testing**: Jest (unit/integration) + Playwright (E2E) + MSW (frontend mocking)
+- **Testing**: Vitest for fast backend/API/frontend tests and Playwright for focused E2E workflows
 - **Language**: TypeScript with strict type checking
-- **Testing Approach**: Data-driven and keyword-driven patterns
+- **Testing Approach**: Use-case-focused, factory-backed tests that avoid brittle implementation details
 
 ## Quick Start for AI Agents
 
@@ -30,9 +30,15 @@ documentation. The project uses:
     - **AI-specific**: `.github/copilot-instructions.md` and this file
 
 3. **Understand the testing approach**:
-    - All tests use **data-driven** and **keyword-driven** patterns
-    - Test data externalized to `tests/data/`
-    - Reusable keywords in `tests/keywords/`
+    - Vitest runs fast backend, API-contract, and frontend-helper tests
+    - Playwright runs focused E2E workflows only
+    - All test files use the `*.spec.ts` suffix
+    - Reusable production-shaped factories live in `tests/factories/`; use common entity factories before specialized builders
+    - Reusable workflow/assertion keywords live in `tests/keywords/` when they clarify smoke-test intent
+    - Shared runner setup and small helpers live in `tests/support/`
+    - Prefer stable use-case coverage over implementation-detail assertions
+    - Add comments to grouped smoke assertions explaining the user-facing regression being protected
+    - Keep imports order-independent; browser-facing production modules must guard global registration with `typeof window !== 'undefined'` so IDE import reordering cannot break tests
     - See [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for comprehensive patterns
 
 4. **Follow the conventions**:
@@ -40,7 +46,7 @@ documentation. The project uses:
     - Async/await over promises
     - Interfaces over types
     - Always create migrations for database changes
-    - Data-driven testing for all new tests
+    - Factory-backed data for realistic production scenarios
     - NEVER commit anything included in .gitignore, especially not generated files (like __index__.ts, *.ge.js, ...)
 
 ## Key Directories
@@ -74,15 +80,14 @@ surveyor/
 │   ├── views/           # Pug templates
 │   └── server.ts        # Application entry point
 ├── tests/
-│   ├── client/          # Frontend tests (Jest + MSW)
-│   ├── controller/      # Controller tests
-│   ├── database/        # Database integration tests
-│   ├── e2e/             # End-to-end tests (Playwright)
-│   ├── middleware/      # Middleware tests
-│   ├── unit/            # Backend unit tests
-│   ├── data/            # Test data (data-driven testing)
-│   ├── keywords/        # Test keywords (keyword-driven testing)
-│   └── util/            # Test utilities and mocks
+│   ├── backend/         # Fast Vitest backend transformations, permissions, and services
+│   ├── api/             # Fast Vitest API contract/input-shaping tests
+│   ├── frontend/        # Fast Vitest frontend helper/component tests
+│   ├── e2e/             # Focused Playwright critical-flow tests
+│   ├── factories/       # Reusable production-shaped test data builders
+│   ├── keywords/        # Reusable smoke-test workflow/assertion keywords
+│   ├── fixtures/        # Shared fixture assets and seed data
+│   └── support/         # Runner setup and shared test utilities
 └── scripts/             # Build and utility scripts
 ```
 
@@ -139,35 +144,26 @@ Date;
 ### Testing
 
 ```typescript
-// ✅ Good: Data-driven test
-import {loginTestData} from '../data/controller/authData';
+// ✅ Good: factory-backed Vitest test against production code
+import {describe, expect, it} from 'vitest';
+import {buildDateTotals} from '../../src/modules/lib/util';
+import {createDateTotalsCase} from '../factories/dateTotalsFactory';
 
-test.each(loginTestData)('$description', async ({input, expected}) => {
-    const result = await login(input);
-    expect(result).toEqual(expected);
+const cases = [createDateTotalsCase()];
+
+describe('date totals transformation', () => {
+    it.each(cases)('$description', (testCase) => {
+        expect(buildDateTotals(
+            testCase.eventStart,
+            testCase.eventEnd,
+            testCase.registrations,
+        )).toEqual(testCase.expectedTotals);
+    });
 });
 
-// ❌ Bad: Hard-coded test data
-test('logs in user', async () => {
-    const result = await login({username: 'test', password: 'pass123'});
-    expect(result).toBeDefined();
-});
-
-// ✅ Good: Keyword-driven test
-import {loginUser, verifyDashboard} from '../keywords/e2e/authKeywords';
-
-test('successful login shows dashboard', async ({page}) => {
-    await loginUser(page, 'testuser', 'password');
-    await verifyDashboard(page);
-});
-
-// ❌ Bad: Inline test actions
-test('successful login shows dashboard', async ({page}) => {
-    await page.goto('/users/login');
-    await page.fill('input[name="username"]', 'testuser');
-    await page.fill('input[name="password"]', 'password');
-    await page.click('button[type="submit"]');
-    await expect(page).toHaveURL('/users/dashboard');
+// ❌ Bad: testing a test-only helper or an implementation detail
+it('adds two numbers', () => {
+    expect(addNumbers(2, 3)).toBe(5);
 });
 ```
 
@@ -210,41 +206,48 @@ test('successful login shows dashboard', async ({page}) => {
 
 ### Writing Tests
 
-**Always use the data-driven and keyword-driven approach:**
+Use the cheapest stable test that protects the use case:
 
-1. **Create test data**:
-   ```typescript
-   // tests/data/controller/featureData.ts
-   export const createFeatureData = [
-       {
-           description: 'creates feature with valid input',
-           input: { name: 'Test', value: 42 },
-           expected: { id: 'feature-123', name: 'Test', value: 42 },
-       },
-       // More test cases...
-   ];
-   ```
+1. **Choose the test type**:
+    - Backend transformation/permission/service behavior → `tests/backend/` with Vitest
+    - API-facing input or response contract → `tests/api/` with Vitest
+    - Frontend helper/component behavior → `tests/frontend/` with Vitest
+    - Critical user workflow → `tests/e2e/` with Playwright
 
-2. **Create/reuse keywords**:
+2. **Create reusable factory data when useful**:
    ```typescript
-   // tests/keywords/common/controllerKeywords.ts
-   export function setupMock(mockFn: jest.Mock, returnValue: any): void {
-       mockFn.mockResolvedValue(returnValue);
+   // tests/factories/eventFactory.ts
+   export function createEventInput(overrides: Partial<EventInput> = {}): EventInput {
+       return {
+           title: 'Summer Camp',
+           startDate: '2026-08-05',
+           endDate: '2026-08-07',
+           ...overrides,
+       };
    }
    ```
 
-3. **Write the test**:
+3. **Write the test against production behavior**:
    ```typescript
-   // tests/controller/feature.test.ts
-   import { createFeatureData } from '../data/controller/featureData';
-   import { setupMock, verifyResult } from '../keywords/common/controllerKeywords';
-   
-   test.each(createFeatureData)('$description', async (testCase) => {
-       setupMock(service.create, testCase.expected);
-       const result = await controller.create(testCase.input);
-       verifyResult(result, testCase.expected);
+   // tests/backend/application-behaviors.spec.ts
+   import {describe, expect, it} from 'vitest';
+   import {buildDateTotals} from '../../src/modules/lib/util';
+   import {createDateTotalsCase} from '../factories/dateTotalsFactory';
+
+   const cases = [createDateTotalsCase()];
+
+   describe('date totals transformation', () => {
+       it.each(cases)('$description', (testCase) => {
+           expect(buildDateTotals(
+               testCase.eventStart,
+               testCase.eventEnd,
+               testCase.registrations,
+           )).toEqual(testCase.expectedTotals);
+       });
    });
    ```
+
+Avoid broad snapshots, private implementation assertions, tests of convenience wrappers that mostly delegate to third-party code, and E2E tests that duplicate every validation branch.
 
 ### Fixing a Bug
 
@@ -258,26 +261,27 @@ test('successful login shows dashboard', async ({page}) => {
 
 ### Test Coverage
 
-- **Unit tests**: All business logic functions
-- **Controller tests**: All endpoints and validation
-- **Middleware tests**: All authentication and authorization
-- **Database tests**: All CRUD operations and complex queries
-- **E2E tests**: All user-facing workflows
+- **Backend Vitest tests**: Important transformations, permissions, services, and business rules
+- **API Vitest tests**: HTTP/API-facing contracts, input shaping, and stable response behavior
+- **Frontend Vitest tests**: Client-side helpers/components and future SPA behavior
+- **Playwright E2E tests**: Critical user workflows only
 
 ### Test Organization
 
-- Place test files in appropriate directory (`tests/unit/`, `tests/controller/`, etc.)
-- Create test data in `tests/data/<type>/` matching test file name
-- Use or create keywords in `tests/keywords/<type>/`
-- Mock external dependencies (database in unit/controller, OIDC, email)
+- Place fast tests under `tests/backend/`, `tests/api/`, or `tests/frontend/`; place only critical workflows under `tests/e2e/`; name all test files `*.spec.ts`
+- Group related examples by behavior/use case instead of creating one spec file per assertion
+- Create reusable production-shaped factories in `tests/factories/`, using common entity factories before specialized builders
+- Create reusable keywords in `tests/keywords/` only when they make smoke-test workflows/assertions clearer
+- Use small shared helpers in `tests/support/` or E2E screen/page helpers only when they reduce brittle selectors
+- Mock external dependencies where possible and reserve full database/browser setup for integration or E2E value
 
 ### E2E Test Specifics
 
-- **Authentication**: Use `loginUser()` keyword, not inline login
-- **Navigation**: Use `navigateToEntityCreatePage()` and similar keywords
-- **Validation**: Use `verifyErrorMessage()`, `verifyFieldRequired()` keywords
-- **Database**: Use `dbKeywords.ts` for token/query helpers
-- **Data**: Externalize ALL constants (URLs, selectors, messages) to data files
+- Keep E2E broad and shallow: protect login, event creation, registration, survey voting, packing, activity, drivers, and dashboard visibility workflows first.
+- Prefer API/database setup over long UI setup paths.
+- Use accessibility selectors or stable `data-testid` anchors; avoid DOM-depth and styling selectors.
+- Put reusable E2E screen/page helpers near `tests/e2e/` only when they reduce selector brittleness.
+- Keep constants and realistic data in factories or fixtures instead of hard-coded inline values.
 
 ## Environment Setup
 
@@ -297,18 +301,12 @@ npm run server  # Runs server + client watch
 npm run test:all
 ```
 
-This one command sets up everything and runs all tests (Jest + E2E). Perfect for CI or comprehensive testing.
-
-**Options:**
-
-- `npm run test:all -- --skip-deps` - Skip npm install
-- `npm run test:all -- --skip-build` - Skip building
-- `npm run test:all -- --skip-e2e` - Skip E2E tests
+This one command sets up everything and runs all tests (Vitest + E2E). Perfect for CI or comprehensive testing.
 
 **Individual test commands:**
 
 ```bash
-# Jest tests only (fast)
+# Vitest tests only (fast)
 npm test
 npm run test:quick
 
@@ -338,7 +336,7 @@ The project uses GitHub Actions for CI:
 
 - Runs on push/PR to main branches
 - Sets up MariaDB 10.11
-- Runs all tests (Jest + Playwright)
+- Runs Vitest and focused Playwright E2E tests
 - Uploads coverage and test reports
 
 See `.github/workflows/ci.yml` for details.
@@ -368,7 +366,7 @@ See `.github/workflows/ci.yml` for details.
 
 - Use `synchronize: true` in database config
 - Hard-code test data in test files
-- Duplicate test actions instead of using keywords
+- Duplicate brittle selectors or long UI setup in multiple E2E tests
 - Skip writing tests
 - Ignore TypeScript errors
 - Commit environment files (`.env`, `.env.e2e`)
@@ -379,7 +377,7 @@ See `.github/workflows/ci.yml` for details.
 
 - Create migrations for schema changes
 - Externalize test data to data files
-- Use keywords for reusable test actions
+- Use small shared helpers or E2E screen/page helpers when they reduce brittle repetition
 - Write tests for all code changes
 - Fix TypeScript errors
 - Use environment variables for config
@@ -448,7 +446,7 @@ When making changes:
 - **Node.js**: >= 24
 - **TypeScript**: Latest stable
 - **MariaDB**: >= 10.4
+- **Vitest**: Latest stable
 - **Playwright**: Latest stable
-- **Jest**: Latest stable
 
 For license information, see [README.md](README.md).

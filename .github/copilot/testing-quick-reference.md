@@ -1,68 +1,41 @@
 # Testing Quick Reference
 
-For comprehensive testing guidelines, see [TESTING.md](../../TESTING.md).
+## Strategy
 
-## Quick Start
+Surveyor uses **Vitest** for fast backend/API/frontend regression tests and **Playwright** for focused E2E workflows.
 
-**Run all tests (one command):**
+Use the cheapest stable test that protects the use case. Do not add every layer for every feature.
 
-```bash
-npm run test:all
-```
-
-This automatically sets up database, builds, and runs all tests (Jest + E2E).
-
-**Run only Jest tests (fast):**
+## Commands
 
 ```bash
-npm test
-# or
-npm run test:quick
+npm test                    # Fast Vitest suite
+npm run test:quick          # Fast backend + frontend examples
+npm run test:unit           # Backend-focused Vitest tests
+npm run test:api            # API contract Vitest tests
+npm run test:frontend       # Frontend Vitest tests
+npm run test:integration    # Fast non-E2E regression set
+npm run e2e                 # Playwright E2E tests
+npm run test:all            # Vitest + build + Playwright E2E
 ```
 
-**Options for test:all:**
-- `--skip-deps` - Skip npm install
-- `--skip-build` - Skip building
-- `--skip-e2e` - Skip E2E tests
+## Structure
 
-## Overview
+- `tests/backend/` - Fast Vitest tests for backend transformations, permissions, and services.
+- `tests/api/` - Fast Vitest API contract/input-shaping tests.
+- `tests/frontend/` - Fast Vitest frontend helper/component tests.
+- `tests/e2e/` - Focused Playwright critical-flow tests.
+- `tests/factories/` - Reusable production-shaped test data builders.
+- `tests/fixtures/` - Shared fixture assets and seed data.
+- `tests/support/` - Runner setup and shared utilities.
 
-The project uses **data-driven** and **keyword-driven** testing approaches.
+All test files use `*.spec.ts`.
 
-- **Test data** is separated into `tests/data/` directory organized by test type
-- **Test keywords** (reusable actions) are in `tests/keywords/` directory
-- **Test builders** for creating test objects are in `tests/data/builders/`
+## Anti-Brittleness Rules
 
-## Test Organization
-
-- Place unit tests in `tests/unit/`
-- Place controller tests in `tests/controller/`
-- Place middleware tests in `tests/middleware/`
-- Place database integration tests in `tests/database/`
-- Place E2E tests in `tests/e2e/`
-
-## Writing Tests
-
-- **Use data-driven tests**: Externalize test data into data files, use `test.each()` for parameterized tests
-- **Use test keywords**: Leverage reusable keywords from `tests/keywords/` for common operations
-- **Use builders**: Use test data builders from `tests/data/builders/` for creating test objects
-- **Separate concerns**: Test data in `tests/data/`, test logic in test files, test utilities in keywords
-- **Mock wisely**: Mock external dependencies using existing mock utilities in `tests/util/`
-- **Database tests**: Must use the MariaDB test datasource mock
-- **E2E tests**: Must use the `.env.e2e` configuration
-
-## Test Data Guidelines
-
-- Create test data files in `tests/data/<type>/` matching the test file name
-- Export arrays of test cases with descriptive names
-- Include both success and failure scenarios
-- Cover edge cases and boundary conditions
-- Use test builders for complex objects
-
-## Test Keywords Guidelines
-
-- Create keywords in `tests/keywords/<type>/` for reusable test actions
-- Use clear, action-oriented names (create*, verify*, setup*, expect*)
-- Keywords should be composable and single-purpose
-- Return useful data to enable further assertions
-- Handle errors gracefully within keywords
+- Test production behavior, not test-only helpers.
+- Prefer user-visible outcomes and input/output contracts.
+- Keep E2E broad and shallow.
+- Use factories for realistic data with small overrides.
+- Avoid broad snapshots and implementation-detail selectors.
+- Use stable E2E selectors or role/name locators.

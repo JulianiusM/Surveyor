@@ -19,10 +19,9 @@ npm run build:client    # Build client only
 ## Testing
 
 ```bash
-npm test                # Run all tests
-npm run test:watch      # Run tests in watch mode
-npm run e2e             # Run E2E tests
-npm run e2e:headed      # Run E2E tests with browser
+npm test                # Run fast Vitest tests
+npm run test:quick      # Run backend + frontend Vitest examples
+npm run e2e             # Run focused Playwright E2E tests
 ```
 
 ## CI Pipeline
@@ -34,11 +33,11 @@ The GitHub Actions CI pipeline:
 - Sets up MariaDB 10.11 service container
 - Sets up Node.js 24
 - Creates test and E2E databases with proper users
-- Runs all unit, integration, and E2E tests
-- Uploads Playwright reports as artifacts
+- Runs fast Vitest tests and focused Playwright E2E tests
+- Uploads test reports as artifacts
 
 ### Environment Files
 
-- `tests/.env.test` - Configuration for unit/integration tests
+- `tests/.env.test` - Configuration for fast backend/API tests that need persistence
 - `.env.e2e` - Configuration for E2E tests
 - Both files are created automatically in CI

@@ -36,6 +36,9 @@ export async function createSurveyTx(ownerId: string, title: string, desc: strin
 
         const plainCombos = combinations.map(c => ({
             entity: {id: surveyId},
+            // Survey combinations inherit the generic item title column; keep it deterministic
+            // so form-created surveys persist with the same production entity shape as other item lists.
+            title: `${c.week} ${c.weekday}`,
             weekday: c.weekday,
             nthWeek: c.week,
         }));
@@ -50,6 +53,7 @@ export async function createSurveyTx(ownerId: string, title: string, desc: strin
 export async function addCombination(surveyId: string, weekday: WeekDay, nthWeek: WeekInMonth) {
     const combo = AppDataSource.getRepository(SurveyCombination).create({
         entity: {id: surveyId},
+        title: `${nthWeek} ${weekday}`,
         weekday,
         nthWeek,
     });
