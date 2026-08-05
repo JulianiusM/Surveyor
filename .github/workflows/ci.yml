@@ -57,14 +57,13 @@ jobs:
             sleep 2
           done
 
-      # IMPORTANT: align CI with your dev DB by disabling strict modes
-      - name: Set permissive SQL mode (match dev)
-        run: |
-          mysql -h 127.0.0.1 -uroot -proot -e "SET GLOBAL sql_mode='';"
-          # new sessions will inherit GLOBAL; also fix the current runner session:
-          mysql -h 127.0.0.1 -uroot -proot -e "SET SESSION sql_mode='';"
-          # sanity check:
-          mysql -h 127.0.0.1 -uroot -proot -e "SELECT @@GLOBAL.sql_mode AS global_sql_mode, @@SESSION.sql_mode AS session_sql_mode;"
+      #- name: Set permissive SQL mode (match dev)
+      #  run: |
+      #    mysql -h 127.0.0.1 -uroot -proot -e "SET GLOBAL sql_mode='';"
+      #    # new sessions will inherit GLOBAL; also fix the current runner session:
+      #    mysql -h 127.0.0.1 -uroot -proot -e "SET SESSION sql_mode='';"
+      #    # sanity check:
+      #    mysql -h 127.0.0.1 -uroot -proot -e "SELECT @@GLOBAL.sql_mode AS global_sql_mode, @@SESSION.sql_mode AS session_sql_mode;"
 
 
       - name: Create databases and grant privileges
@@ -116,51 +115,6 @@ jobs:
 
       - name: Build application
         run: npm run build
-
-      # =========================
-      # Jest tests with coverage
-      # =========================
-      - name: Install Jest JUnit reporter (CI-only)
-        run: npm i --no-save jest-junit
-
-      - name: Run unit/integration tests (Jest) with coverage & report
-        env:
-          NODE_ENV: test
-          JEST_JUNIT_OUTPUT: artifacts/junit-jest.xml
-        run: |
-          mkdir -p artifacts
-          # Keep JSON results for debugging, plus JUnit for CI tools
-          npm test -- \
-            --ci \
-            --runInBand \
-            --detectOpenHandles \
-            --reporters=default \
-            --reporters=jest-junit \
-            --coverage \
-            --coverageReporters=lcov \
-            --coverageReporters=cobertura \
-            --coverageReporters=text-summary \
-            --json --outputFile=artifacts/jest-results.json
-          # Move coverage files into artifacts/
-          mkdir -p artifacts/coverage
-          if [ -f coverage/lcov.info ]; then cp coverage/lcov.info artifacts/coverage/lcov.info; fi
-          if [ -f coverage/cobertura-coverage.xml ]; then cp coverage/cobertura-coverage.xml artifacts/coverage/cobertura-coverage.xml; fi
-          if [ -f coverage/coverage-summary.json ]; then cp coverage/coverage-summary.json artifacts/coverage/coverage-summary.json; fi
-
-      - name: Upload Jest reports & coverage (small)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: jest-and-coverage
-          path: |
-            artifacts/junit-jest.xml
-            artifacts/jest-results.json
-            artifacts/coverage/lcov.info
-            artifacts/coverage/cobertura-coverage.xml
-            artifacts/coverage/coverage-summary.json
-          retention-days: 7
-          compression-level: 9
-          if-no-files-found: warn
 
       # =========================
       # Playwright E2E

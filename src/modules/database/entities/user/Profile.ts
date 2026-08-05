@@ -1,5 +1,5 @@
 import {Column, Entity, JoinColumn, ManyToOne, OneToOne, RelationId} from "typeorm";
-import {ProfileType} from "../../../../types/UserTypes";
+import type {ProfileType} from "../../../../types/UserTypes";
 import {UuidBase} from "../abstract/TrackedBase";
 import {Guest} from "./Guest";
 import {User} from "./User";

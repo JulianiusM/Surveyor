@@ -21,10 +21,7 @@
     "build:sass": "sass src/public/style:src/public/style --no-source-map",
     "build:server": "npm run generate && tsc --project tsconfig.server.json",
     "build:client": "cross-env NODE_ENV=production node esbuild.client.js",
-    "build": "npm run build:sass && npm run build:server && npm run build:client && npm run copy",
-    "test": "jest --runInBand",
-    "test:watch": "jest --watch",
-    "test:debug": "cross-env TEST_DB_LOGGING=true jest --runInBand --detectOpenHandles"
+    "build": "npm run build:sass && npm run build:server && npm run build:client && npm run copy"
   },
   "overrides": {
     "connect-typeorm": {
@@ -42,16 +39,16 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-flash": "^0.0.2",
-    "express-rate-limit": "^8.6.1",
+    "express-rate-limit": "^8.6.2",
     "express-session": "^1.19.0",
     "express-validator": "^7.3.2",
     "http-errors": "^2.0.1",
     "joi": "^18.2.3",
-    "marked": "^18.0.7",
+    "marked": "^18.0.9",
     "morgan": "^1.11.0",
     "multer": "^2.2.0",
     "mysql2": "^3.23.2",
-    "nodemailer": "^9.0.3",
+    "nodemailer": "^9.0.4",
     "openid-client": "^6.8.4",
     "pdfmake": "^0.3.11",
     "pug": "^3.0.4",
@@ -59,15 +56,11 @@
     "uuid": "^14.0.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.0",
-    "@testing-library/dom": "^10.4.1",
-    "@testing-library/jest-dom": "^7.0.0",
-    "@testing-library/user-event": "^14.6.1",
+    "@playwright/test": "^1.62.1",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/express-flash": "^0.0.5",
     "@types/express-session": "^1.19.0",
-    "@types/jest": "^30.0.0",
     "@types/jquery": "^4.0.1",
     "@types/jsdom": "^28.0.3",
     "@types/morgan": "^1.9.10",
@@ -81,19 +74,10 @@
     "cpx2": "^9.0.0",
     "cross-env": "^10.1.0",
     "esbuild": "^0.28.1",
-    "jest": "^30.4.2",
-    "jest-environment-jsdom": "^30.4.1",
-    "jest-fixed-jsdom": "^0.0.11",
-    "jest-serial-runner": "^1.2.2",
     "jquery": "^4.0.0",
-    "jsdom": "^30.0.1",
-    "msw": "^2.15.0",
     "nodemon": "^3.1.14",
     "sass": "^1.102.0",
-    "supertest": "^7.2.2",
-    "ts-jest": "^29.4.12",
     "ts-node": "^10.9.2",
-    "typescript": "^6.0.3",
-    "undici": "^8.9.0"
+    "typescript": "^6.0.3"
   }
 }

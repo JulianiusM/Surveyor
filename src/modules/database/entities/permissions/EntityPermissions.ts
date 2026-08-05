@@ -1,6 +1,6 @@
 // src/modules/database/entities/common/EntityPermissions.ts
 import {Column, Entity, Index} from "typeorm";
-import {Audience} from "../../../../types/PermissionTypes";
+import type {Audience} from "../../../../types/PermissionTypes";
 import type {CombEntityType} from "../../../../types/UtilTypes";
 import {NumericBase} from "../abstract/TrackedBase";
 

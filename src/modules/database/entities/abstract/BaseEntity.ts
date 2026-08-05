@@ -1,5 +1,5 @@
 import {Column, JoinColumn, ManyToOne, RelationId} from "typeorm";
-import {EntityBase} from "../../../../types/UserTypes";
+import type {EntityBase} from "../../../../types/UserTypes";
 import {Profile} from "../user/Profile";
 import {BaseEntityItem} from "./BaseEntityItem";
 import type {EntityItemAssignment} from "./ProfileEntityItemAssignment";
