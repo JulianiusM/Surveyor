@@ -50,13 +50,18 @@ export const preprocessCreateData = [
 ];
 
 // Test (in tests/controller/survey.controller.test.ts)
-test.each(preprocessCreateData)(
-    '$description',
-    ({input, expected}) => {
-        const result = preprocessCreate(input);
-        expect(result).toEqual(expected);
+import {test, expect} from '@playwright/test';
+
+test.describe('preprocessCreate', () => {
+    for (const {description, input, expected} of preprocessCreateData) {
+        test(description, async () => {
+            await test.step('preprocess survey input', async () => {
+                const result = preprocessCreate(input);
+                expect(result).toEqual(expected);
+            });
+        });
     }
-);
+});
 ```
 
 ### Keyword-Driven Testing
@@ -157,14 +162,26 @@ Keyword files export reusable test functions:
 
 ```typescript
 // tests/keywords/common/controllerKeywords.ts
-export function setupMock(mockFn: jest.Mock, returnValue?: any): void {
-    if (returnValue !== undefined) {
-        mockFn.mockResolvedValue(returnValue);
-    }
+import {expect} from '@playwright/test';
+
+export interface FakeAsyncFunction<TArgs extends unknown[] = unknown[], TResult = unknown> {
+    calls: TArgs[];
+    fn: (...args: TArgs) => Promise<TResult>;
 }
 
-export function verifyMockCall(mockFn: jest.Mock, ...args: any[]): void {
-    expect(mockFn).toHaveBeenCalledWith(...args);
+export function createAsyncFake<TArgs extends unknown[], TResult>(returnValue: TResult): FakeAsyncFunction<TArgs, TResult> {
+    const calls: TArgs[] = [];
+    return {
+        calls,
+        fn: async (...args: TArgs) => {
+            calls.push(args);
+            return returnValue;
+        },
+    };
+}
+
+export function verifyFakeCall<TArgs extends unknown[]>(fake: FakeAsyncFunction<TArgs>, ...args: TArgs): void {
+    expect(fake.calls).toContainEqual(args);
 }
 ```
 
@@ -184,38 +201,51 @@ import {verifyResult} from '../keywords/common/controllerKeywords';
 2. **Use data-driven approach**:
 
 ```typescript
-describe('toLocalISODate', () => {
-    test.each(toLocalISODateData)('$description', ({input, expected}) => {
-        const result = toLocalISODate(input);
-        verifyResult(result, expected);
-    });
+import {test} from '@playwright/test';
+
+test.describe('toLocalISODate', () => {
+    for (const {description, input, expected} of toLocalISODateData) {
+        test(description, async () => {
+            await test.step('format the date', async () => {
+                const result = toLocalISODate(input);
+                verifyResult(result, expected);
+            });
+        });
+    }
 });
 ```
 
 ### Controller Tests
 
-Controller tests verify business logic with mocked services:
+Controller tests verify business logic with framework-neutral fakes for service dependencies:
 
-1. **Setup mocks using keywords**:
+1. **Set up fakes using keywords**:
 
 ```typescript
-import {setupMock, verifyMockCall} from '../keywords/common/controllerKeywords';
+import {createAsyncFake, verifyFakeCall} from '../keywords/common/controllerKeywords';
 
-setupMock(surveyService.createSurveyTx as jest.Mock, 'survey-123');
+const createSurveyTxFake = createAsyncFake<[CreateSurveyInput], string>('survey-123');
+surveyService.createSurveyTx = createSurveyTxFake.fn;
 ```
 
 2. **Use data-driven tests**:
 
 ```typescript
-test.each(createEntityData)(
-    '$description',
-    async ({userId, payload, expectedServiceCall, mockReturnValue}) => {
-        setupMock(surveyService.createSurveyTx as jest.Mock, mockReturnValue);
-        const result = await createEntity(userId, payload);
-        verifyResult(result, mockReturnValue);
-        verifyMockCall(surveyService.createSurveyTx as jest.Mock, ...);
+import {test} from '@playwright/test';
+
+test.describe('createEntity', () => {
+    for (const {description, userId, payload, expectedServiceCall, mockReturnValue} of createEntityData) {
+        test(description, async ({}, testInfo) => {
+            await test.step(`create entity for ${testInfo.title}`, async () => {
+                const createSurveyTxFake = createAsyncFake<[CreateSurveyInput], string>(mockReturnValue);
+                surveyService.createSurveyTx = createSurveyTxFake.fn;
+                const result = await createEntity(userId, payload);
+                verifyResult(result, mockReturnValue);
+                verifyFakeCall(createSurveyTxFake, expectedServiceCall);
+            });
+        });
     }
-);
+});
 ```
 
 ### Middleware Tests
@@ -234,12 +264,15 @@ import {
 2. **Test with data**:
 
 ```typescript
-test.each(requireOwnerSuccessData)(
-    '$description',
-    async ({session, resource, additional}) => {
-        await expectMiddlewareSuccess(requireOwner(), session, resource, additional);
+test.describe('requireOwner', () => {
+    for (const {description, session, resource, additional} of requireOwnerSuccessData) {
+        test(description, async ({request}) => {
+            await test.step('verify owner middleware succeeds', async () => {
+                await expectMiddlewareSuccess(requireOwner(), session, resource, additional, request);
+            });
+        });
     }
-);
+});
 ```
 
 ### Database Tests
@@ -272,27 +305,34 @@ test('creates entity with valid data', async () => {
 **Correct approach** - Generate UUIDs at runtime:
 
 ```typescript
+import {test, expect} from '@playwright/test';
 import {v4 as uuidv4} from 'uuid';
 
-test.each(testData)('$description', async (testCase) => {
-    // Generate UUIDs for items at runtime
-    const itemIdMap = new Map<string, string>();
-    testCase.items.forEach(item => {
-        itemIdMap.set(item.id, uuidv4());
-    });
+test.describe('item UUID mapping', () => {
+    for (const testCase of testData) {
+        test(testCase.description, async () => {
+            await test.step('map readable IDs to UUIDs', async () => {
+                // Generate UUIDs for items at runtime
+                const itemIdMap = new Map<string, string>();
+                testCase.items.forEach(item => {
+                    itemIdMap.set(item.id, uuidv4());
+                });
 
-    // Map items to use real UUIDs
-    const items = testCase.items.map(item => ({
-        ...item,
-        id: itemIdMap.get(item.id)!
-    }));
+                // Map items to use real UUIDs
+                const items = testCase.items.map(item => ({
+                    ...item,
+                    id: itemIdMap.get(item.id)!,
+                }));
 
-    // Use mapped items in service calls
-    await createItems(listId, items);
+                // Use mapped items in service calls
+                await createItems(listId, items);
 
-    // Map expected results using itemIdMap
-    const expectedIds = testCase.expectedIds.map(id => itemIdMap.get(id)!);
-    expect(actualIds).toEqual(expectedIds);
+                // Map expected results using itemIdMap
+                const expectedIds = testCase.expectedIds.map(id => itemIdMap.get(id)!);
+                expect(actualIds).toEqual(expectedIds);
+            });
+        });
+    }
 });
 ```
 
@@ -441,14 +481,14 @@ await verifyFieldRequired(page, fieldName);
 ### All Tests
 
 ```bash
-npm test
+npm run test:all
 ```
 
 ### Specific Test Suite
 
 ```bash
-npm test -- tests/unit/util.test.ts
-npm test -- tests/controller/survey.controller.test.ts
+npx playwright test tests/unit/util.test.ts
+npx playwright test tests/controller/survey.controller.test.ts
 ```
 
 ### Watch Mode
@@ -460,7 +500,7 @@ npm run test:watch
 ### With Coverage
 
 ```bash
-npm test -- --coverage
+npx playwright test --reporter=html
 ```
 
 ### E2E Tests
@@ -491,10 +531,10 @@ npm run e2e:ui      # With Playwright UI
 
 ### Test Code
 
-1. **Use data-driven tests**: Prefer `test.each()` over multiple similar tests
+1. **Use data-driven tests**: Prefer iterating shared data inside `test.describe()` over duplicating similar tests
 2. **Use keywords**: Abstract common operations into reusable keywords
 3. **Clear assertions**: Use descriptive keywords like `verifyResult()`
-4. **Minimal mocking**: Mock only external dependencies
+4. **Minimal faking**: Fake only external dependencies
 5. **Clean setup/teardown**: Use `beforeEach`/`afterEach` for test isolation
 
 ### Naming Conventions
@@ -560,12 +600,18 @@ export const toLocalISODateData = [
 // tests/unit/util.test.ts
 import {toLocalISODateData} from '../data/unit/utilData';
 
-describe('toLocalISODate', () => {
-    test.each(toLocalISODateData)('$description', async ({input, expected}) => {
-        const {toLocalISODate} = await importWithMocks();
-        const result = toLocalISODate(input);
-        expect(result).toBe(expected);
-    });
+import {test, expect} from '@playwright/test';
+
+test.describe('toLocalISODate', () => {
+    for (const {description, input, expected} of toLocalISODateData) {
+        test(description, async ({}, testInfo) => {
+            await test.step(`run ${testInfo.title}`, async () => {
+                const {toLocalISODate} = await importWithFakes();
+                const result = toLocalISODate(input);
+                expect(result).toBe(expected);
+            });
+        });
+    }
 });
 ```
 
@@ -585,17 +631,23 @@ export const createEntityData = [
 
 // tests/controller/survey.controller.test.ts
 import {createEntityData} from '../data/controller/surveyData';
-import {setupMock, verifyMockCall, verifyResult} from '../keywords/common/controllerKeywords';
+import {createAsyncFake, verifyFakeCall, verifyResult} from '../keywords/common/controllerKeywords';
 
-test.each(createEntityData)(
-    '$description',
-    async ({userId, payload, expectedServiceCall, mockReturnValue}) => {
-        setupMock(surveyService.createSurveyTx as jest.Mock, mockReturnValue);
-        const result = await createEntity(userId, payload);
-        verifyResult(result, mockReturnValue);
-        verifyMockCall(surveyService.createSurveyTx as jest.Mock, ...);
+import {test} from '@playwright/test';
+
+test.describe('createEntity', () => {
+    for (const {description, userId, payload, expectedServiceCall, mockReturnValue} of createEntityData) {
+        test(description, async ({}, testInfo) => {
+            await test.step(`create entity for ${testInfo.title}`, async () => {
+                const createSurveyTxFake = createAsyncFake<[CreateSurveyInput], string>(mockReturnValue);
+                surveyService.createSurveyTx = createSurveyTxFake.fn;
+                const result = await createEntity(userId, payload);
+                verifyResult(result, mockReturnValue);
+                verifyFakeCall(createSurveyTxFake, expectedServiceCall);
+            });
+        });
     }
-);
+});
 ```
 
 ## Contributing
@@ -612,8 +664,7 @@ When contributing tests:
 
 ## Resources
 
-- [Jest Documentation](https://jestjs.io/docs/getting-started)
-- [Playwright Documentation](https://playwright.dev/)
+- [Playwright Test Documentation](https://playwright.dev/docs/test-intro)
 - [MSW Documentation](https://mswjs.io/docs/)
 - [Testing Library](https://testing-library.com/docs/)
 - [Frontend Testing Guide](tests/client/README.md)
