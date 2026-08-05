@@ -14,8 +14,8 @@ const junitReporter: ReporterDescription | null = process.env.PLAYWRIGHT_JUNIT_O
         ? ['junit']
         : null;
 
-const reporters: ReporterDescription[] = IS_CI
-    ? [['line'], ...(junitReporter ? [junitReporter] : []), ['html', {open: 'never', outputFolder: HTML_REPORT_DIR}]]
+const reporters: ReporterDescription[] = IS_CI || junitReporter
+    ? [[IS_CI ? 'line' : 'list'], ...(junitReporter ? [junitReporter] : []), ['html', {open: 'never', outputFolder: HTML_REPORT_DIR}]]
     : [['list'], ['html', {open: 'never'}]];
 
 export default defineConfig({

@@ -11,6 +11,7 @@ export interface E2ECreateCase<TForm extends E2ECreateForm> {
     title: string;
     createPath: string;
     expectedViewText: string;
+    expectedDetailTexts: string[];
     form: TForm;
 }
 
@@ -56,6 +57,7 @@ export function createE2EEvent(overrides: Partial<E2ECreateCase<E2EEventForm>> =
         title: 'E2E Core Event',
         createPath: '/event/create',
         expectedViewText: 'E2E Core Event',
+        expectedDetailTexts: ['E2E Core Event', 'Core workflow event created by smoke E2E', 'E2E Camp Site'],
         form: {
             title: 'E2E Core Event',
             description: 'Core workflow event created by smoke E2E',
@@ -77,6 +79,7 @@ export function createE2ESurvey(overrides: Partial<E2ECreateCase<E2ESurveyForm>>
         title: 'E2E Core Survey',
         createPath: '/survey/create',
         expectedViewText: 'E2E Core Survey',
+        expectedDetailTexts: ['E2E Core Survey', 'Monday of the month'],
         form: {
             title: 'E2E Core Survey',
             description: 'Choose a date',
@@ -94,6 +97,7 @@ export function createE2EActivityPlan(overrides: Partial<E2ECreateCase<E2EActivi
         title: 'E2E Core Activity Plan',
         createPath: '/activity/create',
         expectedViewText: 'E2E Core Activity Plan',
+        expectedDetailTexts: ['E2E Core Activity Plan', 'Shared camp duties', 'Breakfast help', 'Serve breakfast'],
         form: {
             title: 'E2E Core Activity Plan',
             description: 'Shared camp duties',
@@ -110,6 +114,7 @@ export function createE2EDriversList(overrides: Partial<E2ECreateCase<E2EDrivers
         title: 'E2E Core Drivers List',
         createPath: '/drivers/create',
         expectedViewText: 'E2E Core Drivers List',
+        expectedDetailTexts: ['E2E Core Drivers List', 'Airport pickup coordination'],
         form: {
             title: 'E2E Core Drivers List',
             description: 'Airport pickup coordination',
@@ -125,6 +130,7 @@ export function createE2EPackingList(overrides: Partial<E2ECreateCase<E2EPacking
         title: 'E2E Core Packing List',
         createPath: '/packing/create',
         expectedViewText: 'E2E Core Packing List',
+        expectedDetailTexts: ['E2E Core Packing List', 'Shared equipment', 'Tent', 'Two person tent'],
         form: {
             title: 'E2E Core Packing List',
             description: 'Shared equipment',

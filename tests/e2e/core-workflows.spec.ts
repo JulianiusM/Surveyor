@@ -7,7 +7,7 @@ import {
     createE2EPackingList,
     createE2ESurvey,
 } from '../factories/e2eCoreFactory';
-import {createResourceViaForm, expectPageContains, loginForE2E, type CreatedResource} from '../keywords/e2eCoreKeywords';
+import {createResourceViaForm, expectCreatedResourceLoaded, expectPageContains, loginForE2E, type CreatedResource} from '../keywords/e2eCoreKeywords';
 
 // These smoke tests intentionally run serially because they build one authenticated user's
 // realistic core workspace and then verify the high-value pages that depend on that setup.
@@ -40,12 +40,12 @@ test.describe('authenticated core workflow smoke suite', () => {
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
     test('opens the created event detail page', async () => {
-        await expectPageContains(authedRequest.get(resources.event.path), createE2EEvent().expectedViewText);
+        await expectCreatedResourceLoaded(authedRequest, resources.event, createE2EEvent().expectedDetailTexts);
     });
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
     test('opens the created event admin page for the owner', async () => {
-        await expectPageContains(authedRequest.get(`${resources.event.path}/admin`), createE2EEvent().expectedViewText);
+        await expectCreatedResourceLoaded(authedRequest, {...resources.event, path: `${resources.event.path}/admin`}, createE2EEvent().expectedDetailTexts);
     });
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
@@ -56,13 +56,21 @@ test.describe('authenticated core workflow smoke suite', () => {
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
     test('opens the created survey voting page', async () => {
-        await expectPageContains(authedRequest.get(resources.survey.path), createE2ESurvey().expectedViewText);
+        await expectCreatedResourceLoaded(authedRequest, resources.survey, createE2ESurvey().expectedDetailTexts);
     });
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
     test('creates an event-scoped survey from the same reusable factory data', async () => {
-        resources.eventSurvey = await createResourceViaForm(authedRequest, createE2ESurvey({title: 'E2E Event Survey', createPath: `/survey/create?eventId=${resources.event.id}`, expectedViewText: 'E2E Event Survey', form: {...createE2ESurvey().form, title: 'E2E Event Survey'}}));
+        const eventSurvey = createE2ESurvey({
+            title: 'E2E Event Survey',
+            createPath: `/survey/create?eventId=${resources.event.id}`,
+            expectedViewText: 'E2E Event Survey',
+            expectedDetailTexts: ['E2E Event Survey', 'Monday of the month'],
+            form: {...createE2ESurvey().form, title: 'E2E Event Survey'},
+        });
+        resources.eventSurvey = await createResourceViaForm(authedRequest, eventSurvey);
         expect(resources.eventSurvey.path).toContain('/survey/');
+        await expectCreatedResourceLoaded(authedRequest, resources.eventSurvey, eventSurvey.expectedDetailTexts);
     });
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
@@ -73,13 +81,21 @@ test.describe('authenticated core workflow smoke suite', () => {
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
     test('opens the created activity plan page', async () => {
-        await expectPageContains(authedRequest.get(resources.activity.path), createE2EActivityPlan().expectedViewText);
+        await expectCreatedResourceLoaded(authedRequest, resources.activity, createE2EActivityPlan().expectedDetailTexts);
     });
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
     test('creates an event-scoped activity plan', async () => {
-        resources.eventActivity = await createResourceViaForm(authedRequest, createE2EActivityPlan({title: 'E2E Event Activity Plan', createPath: `/activity/create?eventId=${resources.event.id}`, expectedViewText: 'E2E Event Activity Plan', form: {...createE2EActivityPlan().form, title: 'E2E Event Activity Plan'}}));
+        const eventActivity = createE2EActivityPlan({
+            title: 'E2E Event Activity Plan',
+            createPath: `/activity/create?eventId=${resources.event.id}`,
+            expectedViewText: 'E2E Event Activity Plan',
+            expectedDetailTexts: ['E2E Event Activity Plan', 'Shared camp duties', 'Breakfast help', 'Serve breakfast'],
+            form: {...createE2EActivityPlan().form, title: 'E2E Event Activity Plan'},
+        });
+        resources.eventActivity = await createResourceViaForm(authedRequest, eventActivity);
         expect(resources.eventActivity.path).toContain('/activity/');
+        await expectCreatedResourceLoaded(authedRequest, resources.eventActivity, eventActivity.expectedDetailTexts);
     });
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
@@ -90,7 +106,7 @@ test.describe('authenticated core workflow smoke suite', () => {
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
     test('opens the created drivers list page', async () => {
-        await expectPageContains(authedRequest.get(resources.drivers.path), createE2EDriversList().expectedViewText);
+        await expectCreatedResourceLoaded(authedRequest, resources.drivers, createE2EDriversList().expectedDetailTexts);
     });
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
@@ -101,7 +117,7 @@ test.describe('authenticated core workflow smoke suite', () => {
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
     test('opens the created packing list page', async () => {
-        await expectPageContains(authedRequest.get(resources.packing.path), createE2EPackingList().expectedViewText);
+        await expectCreatedResourceLoaded(authedRequest, resources.packing, createE2EPackingList().expectedDetailTexts);
     });
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.

@@ -32,9 +32,23 @@ export async function createResourceViaForm(request: APIRequestContext, testCase
 }
 
 export async function expectPageContains(responsePromise: Promise<APIResponse>, expectedText: string): Promise<string> {
+    return await expectPageContainsAll(responsePromise, [expectedText]);
+}
+
+export async function expectPageContainsAll(responsePromise: Promise<APIResponse>, expectedTexts: string[], context = 'page'): Promise<string> {
     const response = await responsePromise;
-    expect(response.status()).toBe(200);
+    expect(response.status(), `${context} should load successfully`).toBe(200);
     const body = await response.text();
-    expect(body).toContain(expectedText);
+
+    for (const expectedText of expectedTexts) {
+        expect(body, `${context} should include ${expectedText}`).toContain(expectedText);
+    }
+
     return body;
+}
+
+export async function expectCreatedResourceLoaded(request: APIRequestContext, resource: CreatedResource, expectedTexts: string[]): Promise<string> {
+    // A useful E2E canary must prove that the redirected entity actually loaded, not only
+    // that a generic page responded. These assertions verify the persisted entity fields.
+    return await expectPageContainsAll(request.get(resource.path), expectedTexts, resource.title);
 }
