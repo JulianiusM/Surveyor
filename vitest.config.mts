@@ -13,6 +13,13 @@ export default defineConfig({
         coverage: {
             provider: 'v8',
             reportsDirectory: 'coverage',
+            reporter: ['text', 'lcov', 'json'],
+            include: ['src/**/*.ts'],
+            exclude: [
+                'src/migrations/**',
+                'src/modules/database/__index__.ts',
+                'src/types/**',
+            ],
         },
     },
 });

@@ -153,6 +153,8 @@ jobs:
             artifacts/junit-vitest.xml
             artifacts/junit-playwright.xml
             artifacts/playwright-report/
+            coverage/lcov.info
+            coverage/coverage-final.json
           retention-days: 7
           compression-level: 9
           if-no-files-found: warn
@@ -169,6 +171,7 @@ jobs:
           args: >
             -Dsonar.projectVersion=${{ steps.package.outputs.version }}
             -Dsonar.junit.reportPaths=artifacts/junit-vitest.xml,artifacts/junit-playwright.xml
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}

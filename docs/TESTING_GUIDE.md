@@ -57,7 +57,7 @@ Do not add every layer for every feature. Add one high-value test at the layer t
 
 ```bash
 npm test                    # Fast Vitest suite
-npm run test:ci             # Fast Vitest suite with JUnit report for CI/SonarQube
+npm run test:ci             # Fast Vitest suite with JUnit and LCOV coverage reports for CI/SonarQube
 npm run test:quick          # Fast backend + frontend examples
 npm run test:unit           # Backend-focused Vitest tests
 npm run test:api            # API contract Vitest tests
@@ -125,5 +125,5 @@ For future tests, keep the same canary model: protect the most important Surveyo
 - **Single-developer maintainability**: keep the default signal in `npm test`, group related checks in canary suites, and place reusable production-shaped data in factories so updates usually happen in one place.
 - **Resistance to small implementation changes**: tests assert public payloads, permission outcomes, and user-visible workflow availability instead of class member counts, private methods, DOM depth, or styling details.
 - **Core regression value**: current canaries cover authentication, permissions, event registration, invoice pool settings, surveys, activity plans, recommendations, packing lists, drivers lists, API contracts, backend transformations, and focused E2E availability/workflow checks.
-- **Passing tests expectation**: CI runs the fast Vitest suite with JUnit output, builds the app, installs/caches Playwright browsers, runs focused Playwright E2E with JUnit output, uploads all test reports, and passes the package version plus JUnit report paths to SonarQube.
+- **Passing tests expectation**: CI runs the fast Vitest suite with JUnit output, builds the app, installs/caches Playwright browsers, runs focused Playwright E2E with JUnit output, uploads all test reports, and passes the package version plus JUnit and LCOV coverage report paths to SonarQube.
 - **Low-overhead goal**: add future coverage as broad smoke cases first; only add detailed edge-case tests when a real bug proves the broad canary is insufficient.

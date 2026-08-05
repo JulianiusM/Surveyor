@@ -32,7 +32,7 @@
     "e2e:init": "npm run e2e:prepare && npm run run",
     "e2e": "playwright test",
     "test:all": "npm test && npm run build && npm run e2e",
-    "test:ci": "vitest run --reporter=default --reporter=junit --outputFile.junit=artifacts/junit-vitest.xml"
+    "test:ci": "vitest run --coverage --reporter=default --reporter=junit --outputFile.junit=artifacts/junit-vitest.xml"
   },
   "overrides": {
     "connect-typeorm": {
@@ -81,6 +81,7 @@
     "@types/pdfmake": "^0.3.3",
     "@types/select2": "^4.0.63",
     "@types/supertest": "^7.2.1",
+    "@vitest/coverage-v8": "^4.1.10",
     "concurrently": "^10.0.4",
     "cpx2": "^9.0.0",
     "cross-env": "^10.1.0",

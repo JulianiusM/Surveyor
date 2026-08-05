@@ -125,7 +125,7 @@ Keep E2E broad and shallow, prefer API/database setup over UI setup, and avoid b
 
 ```bash
 npm test                    # Fast Vitest suite
-npm run test:ci             # Fast Vitest suite with JUnit report for CI/SonarQube
+npm run test:ci             # Fast Vitest suite with JUnit and LCOV coverage reports for CI/SonarQube
 npm run test:quick          # Fast backend + frontend examples
 npm run test:unit           # Backend-focused Vitest tests
 npm run test:api            # API contract Vitest tests
