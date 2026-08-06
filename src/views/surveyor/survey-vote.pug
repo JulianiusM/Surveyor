@@ -18,12 +18,7 @@ block content
             'SAT': 'Saturday',
             'SUN': 'Sunday'
         };
-        let userResponse;
-        if (user) {
-            userResponse = data.responses['u_' + user.id];
-        } else {
-            userResponse = data.responses['g_' + guest.id];
-        }
+        const userResponse = data.responses[profile.id];
 
     if data.survey.description
         p#planDesc.mb-0.mt-2
@@ -49,10 +44,8 @@ block content
                             th.text-center #{combination.nthWeek === 'LAST' ? 'Last (4./5.) ' : combination.nthWeek + '. ' } #{weekdays[combination.weekday]} of the month
                 tbody
                     tr
-                        if(user)
-                            td.sticky-col #{user.name}
-                        else if(guest)
-                            td.sticky-col #{guest.username}
+                        if(profile)
+                            td.sticky-col #{profile.name}
                         else
                             td.sticky-col.text-danger ERROR
                         each combination in data.combinations
@@ -88,7 +81,7 @@ block content
                 tbody
                     each responses, res_id in data.responses
                         tr
-                            td.sticky-col #{responses[0].name || responses[0].username}
+                            td.sticky-col #{responses[0].name}
                             each combination in data.combinations
                                 -  const found = responses.find((res) => res.combinationId === combination.id);
                                 if(found)

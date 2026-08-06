@@ -20,9 +20,8 @@ export class RecommendationsLogic {
      */
     approveRecommendation(rec: RecommendationRow): boolean {
         return this.state.updateRecommendationStatus(
-            rec.slot.id,
-            rec.user?.id ?? null,
-            rec.guest?.id ?? null,
+            rec.item.id,
+            rec.profile?.id ?? null,
             'APPROVED'
         );
     }
@@ -32,9 +31,8 @@ export class RecommendationsLogic {
      */
     rejectRecommendation(rec: RecommendationRow): boolean {
         return this.state.updateRecommendationStatus(
-            rec.slot.id,
-            rec.user?.id ?? null,
-            rec.guest?.id ?? null,
+            rec.item.id,
+            rec.profile?.id ?? null,
             'REJECTED'
         );
     }
@@ -44,9 +42,8 @@ export class RecommendationsLogic {
      */
     revertToPending(rec: RecommendationRow): boolean {
         return this.state.updateRecommendationStatus(
-            rec.slot.id,
-            rec.user?.id ?? null,
-            rec.guest?.id ?? null,
+            rec.item.id,
+            rec.profile?.id ?? null,
             'PENDING'
         );
     }
@@ -65,7 +62,7 @@ export class RecommendationsLogic {
      * Get participant value for form
      */
     getParticipantValue(option: RecommendationParticipantOption): string {
-        return option.userId ? `user:${option.userId}` : `guest:${option.guestId}`;
+        return `profile:${option.profileId}`;
     }
 
     /**
@@ -83,10 +80,10 @@ export class RecommendationsLogic {
     /**
      * Find participant by ID
      */
-    findParticipant(userId: number | null, guestId: string | null): RecommendationParticipantOption | undefined {
+    findParticipant(profileId: string | null): RecommendationParticipantOption | undefined {
         const options = this.state.getParticipantOptions();
         return options.find((p) =>
-            (userId && p.userId === userId) || (guestId && p.guestId === guestId)
+            (profileId && p.profileId === profileId)
         );
     }
 
@@ -129,16 +126,15 @@ export class RecommendationsLogic {
     /**
      * Check for duplicate recommendation
      */
-    isDuplicate(slotId: string, userId: number | null, guestId: string | null): boolean {
-        return this.state.hasDuplicateRecommendation(slotId, userId, guestId);
+    isDuplicate(slotId: string, profileId: string | null): boolean {
+        return this.state.hasDuplicateRecommendation(slotId, profileId);
     }
 
     /**
      * Check for overlapping assignments on same day
      */
     hasOverlappingAssignment(
-        userId: number | null,
-        guestId: string | null,
+        profileId: string | null,
         slotId: string
     ): boolean {
         const slots = this.state.getSlots();
@@ -150,8 +146,7 @@ export class RecommendationsLogic {
 
         return existingAssignments.some((assignment: any) => {
             const matchesParticipant =
-                (userId && assignment.user?.id === userId) ||
-                (guestId && assignment.guest?.id === guestId);
+                (profileId && assignment.profile?.id === profileId);
 
             if (!matchesParticipant) return false;
 
@@ -196,7 +191,7 @@ export class RecommendationsLogic {
         const bySlot = new Map<string, RecommendationRow[]>();
 
         recommendations.forEach((rec) => {
-            const slotId = rec.slot.id;
+            const slotId = rec.item.id;
             if (!bySlot.has(slotId)) {
                 bySlot.set(slotId, []);
             }
@@ -212,13 +207,11 @@ export class RecommendationsLogic {
     createRecommendation(
         slot: any,
         participant: RecommendationParticipantOption,
-        userId: number | null,
-        guestId: string | null
+        profileId: string | null
     ): RecommendationRow {
         return {
-            slot,
-            user: userId ? {id: userId, username: participant.label} : null,
-            guest: guestId ? {id: guestId, username: participant.label} : null,
+            item: slot,
+            profile: profileId ? {id: profileId, name: participant.label} : null,
             status: 'APPROVED',
         };
     }

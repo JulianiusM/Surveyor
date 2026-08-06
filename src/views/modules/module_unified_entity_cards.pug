@@ -90,7 +90,7 @@ mixin entityOverview(id, title, iconHeader, items, emptyText, parent, showCreate
                                     .card-footer
                                         span.badge.bg-primary
                                             | #{item.type}
-                                        if showCreate && item.ownerId === user.id
+                                        if showCreate && item.ownerId === profile.id
                                             form.d-inline.btn-group.float-end(method="post" action=`${item.url}/delete` onsubmit="return confirm('Delete this item?');")
                                                 a.btn.btn-sm.btn-info(href=`${item.url}/duplicate`)
                                                     i.bi.bi-files.me-1

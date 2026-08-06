@@ -1,26 +1,16 @@
-import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
-import {Guest} from "../user/Guest";
-import {User} from "../user/User";
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
+import {UuidDefaultEntityItem} from "../abstract/ProfileEntityItem";
 import {ActivityAssignment} from "./ActivityAssignment";
 import {ActivityPlan} from "./ActivityPlan";
 import {ActivitySlotRole} from "./ActivitySlotRole";
 
 @Entity("activity_slots", {schema: "surveyor"})
-export class ActivitySlot {
-    @PrimaryGeneratedColumn("uuid", {name: "id"})
-    id!: string;
-
+export class ActivitySlot extends UuidDefaultEntityItem {
     @Column("date", {name: "day"})
     day!: string;
 
     @Column("int", {name: "pos", default: 0})
     pos!: number;
-
-    @Column("varchar", {name: "title", length: 255})
-    title!: string;
-
-    @Column("text", {name: "description", nullable: true})
-    description?: string | null;
 
     @Column('time', {name: 'start_time', nullable: true})
     startTime?: string | null; // 'HH:MM:SS'
@@ -47,60 +37,25 @@ export class ActivitySlot {
     })
     isDepartureMorning?: boolean | null;
 
-    @Column("timestamp", {
-        name: "created_at",
-        nullable: true,
-        default: () => "CURRENT_TIMESTAMP",
-    })
-    createdAt: Date | null;
-
-    @Column("timestamp", {
-        name: "updated_at",
-        nullable: true,
-        default: () => "CURRENT_TIMESTAMP",
-    })
-    updatedAt: Date | null;
-
     @OneToMany(
         () => ActivityAssignment,
-        (activityAssignments) => activityAssignments.slot
+        (activityAssignments) => activityAssignments.item
     )
-    activityAssignments: ActivityAssignment[];
+    assignments: ActivityAssignment[];
 
     @OneToMany(
         () => ActivitySlotRole,
-        (activitySlotRole) => activitySlotRole.slot
+        (activitySlotRole) => activitySlotRole.item
     )
     activitySlotRoles: ActivitySlotRole[];
 
-    @RelationId((slot: ActivitySlot) => slot.plan)
-    planId!: string;
+    @RelationId((a: ActivitySlot) => a.entity)
+    entityId!: string;
 
     @ManyToOne(
         () => ActivityPlan,
-        (activityPlans) => activityPlans.activitySlots,
-        {onDelete: "CASCADE", onUpdate: "NO ACTION"}
+        {onDelete: "CASCADE", onUpdate: "CASCADE"}
     )
-    @JoinColumn([{name: "plan_id", referencedColumnName: "id"}])
-    plan!: ActivityPlan;
-
-    @RelationId((a: ActivitySlot) => a.user)
-    userId?: string;
-
-    @ManyToOne(() => User, {
-        onDelete: "CASCADE",
-        onUpdate: "RESTRICT",
-    })
-    @JoinColumn([{name: "user_id", referencedColumnName: "id"}])
-    user?: User;
-
-    @RelationId((a: ActivitySlot) => a.guest)
-    guestId?: string;
-
-    @ManyToOne(() => Guest, {
-        onDelete: "CASCADE",
-        onUpdate: "RESTRICT",
-    })
-    @JoinColumn([{name: "guest_id", referencedColumnName: "id"}])
-    guest?: Guest;
+    @JoinColumn([{name: "entity_id", referencedColumnName: "id"}])
+    entity!: ActivityPlan;
 }

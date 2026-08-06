@@ -1,12 +1,4 @@
-import type {
-    GroupedResponses,
-    GroupKey,
-    GuestResponseItem,
-    SurveyAnswer,
-    UserResponseItem,
-    WeekDay,
-    WeekInMonth
-} from "../../../types/SurveyTypes";
+import type {BasePicked, GroupedResponses, SurveyAnswer, WeekDay, WeekInMonth} from "../../../types/SurveyTypes";
 import {generateUniqueId} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {Survey} from '../entities/surveys/Survey';
@@ -21,12 +13,12 @@ export async function getSurveyById(id: string) {
 
 export async function getCombinationsBySurveyId(surveyId: string) {
     return await AppDataSource.getRepository(SurveyCombination).find({
-        where: {survey: {id: surveyId}},
+        where: {entity: {id: surveyId}},
         order: {weekday: 'ASC', nthWeek: 'ASC'},
     });
 }
 
-export async function createSurveyTx(userId: number, title: string, desc: string, combinations: {
+export async function createSurveyTx(ownerId: string, title: string, desc: string, combinations: {
     weekday: WeekDay,
     week: WeekInMonth,
 }[], headerImg?: string | null,): Promise<string> {
@@ -35,7 +27,7 @@ export async function createSurveyTx(userId: number, title: string, desc: string
 
         const survey: Survey = manager.create(Survey, {
             id: surveyId,
-            owner: {id: userId},
+            owner: {id: ownerId},
             title,
             description: desc,
             headerImg,
@@ -43,7 +35,10 @@ export async function createSurveyTx(userId: number, title: string, desc: string
         await manager.save(survey);
 
         const plainCombos = combinations.map(c => ({
-            survey: {id: surveyId},
+            entity: {id: surveyId},
+            // Survey combinations inherit the generic item title column; keep it deterministic
+            // so form-created surveys persist with the same production entity shape as other item lists.
+            title: `${c.week} ${c.weekday}`,
             weekday: c.weekday,
             nthWeek: c.week,
         }));
@@ -57,7 +52,8 @@ export async function createSurveyTx(userId: number, title: string, desc: string
 
 export async function addCombination(surveyId: string, weekday: WeekDay, nthWeek: WeekInMonth) {
     const combo = AppDataSource.getRepository(SurveyCombination).create({
-        survey: {id: surveyId},
+        entity: {id: surveyId},
+        title: `${nthWeek} ${weekday}`,
         weekday,
         nthWeek,
     });
@@ -65,27 +61,18 @@ export async function addCombination(surveyId: string, weekday: WeekDay, nthWeek
     return combo.id;
 }
 
-export async function getSurveysByUserId(userId: number) {
+export async function getSurveysByProfileId(profileId: string) {
     return await AppDataSource.getRepository(Survey).find({
-        where: {owner: {id: userId}},
+        where: {owner: {id: profileId}},
     });
 }
 
-export async function getSurveysByParticipantUserId(userId: number) {
+export async function getSurveysByParticipant(profileId: string) {
     return await AppDataSource.getRepository(Survey).createQueryBuilder('survey')
         .whereExists(AppDataSource.getRepository(SurveyResponse)
             .createQueryBuilder("resp")
-            .where("resp.survey_id = survey.id")
-            .andWhere("resp.user_id = :userId", {userId: userId})
-        ).getMany();
-}
-
-export async function getSurveysByParticipantGuestId(guestId: string) {
-    return await AppDataSource.getRepository(Survey).createQueryBuilder('survey')
-        .whereExists(AppDataSource.getRepository(SurveyResponse)
-            .createQueryBuilder("resp")
-            .where("resp.survey_id = survey.id")
-            .andWhere("resp.guest_id = :guestId", {guestId: guestId})
+            .where("resp.entity_id = survey.id")
+            .andWhere("resp.profile_id = :userId", {userId: profileId})
         ).getMany();
 }
 
@@ -95,51 +82,28 @@ export async function deleteSurvey(id: string) {
 
 // Responses
 
-export async function saveResponseGuest(surveyId: string, guestId: string, combinationId: number, answer: SurveyAnswer) {
+export async function saveResponse(surveyId: string, profileId: string, combinationId: number, answer: SurveyAnswer) {
     const response = AppDataSource.getRepository(SurveyResponse).create({
-        survey: {id: surveyId},
-        guest: {id: guestId},
-        combination: {id: combinationId},
+        entity: {id: surveyId},
+        profile: {id: profileId},
+        item: {id: combinationId},
         answer: answer || 'no',
     });
     await AppDataSource.getRepository(SurveyResponse).save(response);
 }
 
-export async function saveResponseUser(surveyId: string, userId: number, combinationId: number, answer: SurveyAnswer) {
-    const response = AppDataSource.getRepository(SurveyResponse).create({
-        survey: {id: surveyId},
-        user: {id: userId},
-        combination: {id: combinationId},
-        answer: answer || 'no',
-    });
-    await AppDataSource.getRepository(SurveyResponse).save(response);
-}
-
-export async function deleteResponsesByGuestId(guestId: string, surveyId: string) {
+export async function deleteResponsesByProfileId(profileId: string, surveyId: string) {
     await AppDataSource.getRepository(SurveyResponse).delete({
-        guest: {id: guestId},
-        survey: {id: surveyId},
+        profile: {id: profileId},
+        entity: {id: surveyId},
     });
 }
 
-export async function deleteResponsesByUserId(userId: number, surveyId: string) {
-    await AppDataSource.getRepository(SurveyResponse).delete({
-        user: {id: userId},
-        survey: {id: surveyId},
-    });
-}
-
-export async function getResponsesByGuestId(guestId: string) {
+export async function getResponsesByProfileId(profileId: string) {
     return await AppDataSource.getRepository(SurveyResponse).find({
-        where: {guest: {id: guestId}},
-        order: {combination: {id: 'ASC'}},
+        where: {profile: {id: profileId}},
+        order: {item: {id: 'ASC'}},
     });
-}
-
-function isUserResponse(
-    r: UserResponseItem | GuestResponseItem
-): r is UserResponseItem {
-    return (r as UserResponseItem).kind === "user";
 }
 
 export async function getResponsesSorted(surveyId: string): Promise<GroupedResponses> {
@@ -147,42 +111,26 @@ export async function getResponsesSorted(surveyId: string): Promise<GroupedRespo
 
     // Load all responses for the survey with both possible assignee relations
     const responses = await repo.find({
-        where: {survey: {id: surveyId}},
-        relations: {user: true, guest: true, combination: true},
+        where: {entity: {id: surveyId}},
+        relations: {profile: true, item: true},
     });
 
-    const combined: Array<UserResponseItem | GuestResponseItem> = [];
+    const combined: Array<BasePicked> = [];
 
     for (const r of responses) {
-        if (r.user) {
-            const item: UserResponseItem = {
-                kind: "user",
-                id: r.id,
-                answer: r.answer,
-                combinationId: r.combinationId,
-                userId: r.user.id,
-                username: r.user.username,
-                name: r.user.name,
-            };
-            combined.push(item);
-        } else if (r.guest) {
-            const item: GuestResponseItem = {
-                kind: "guest",
-                id: r.id,
-                answer: r.answer,
-                combinationId: r.combinationId,
-                guestId: r.guest.id,
-                username: r.guest.username,
-            };
-            combined.push(item);
-        }
-        // If a row could have neither, it’s ignored (matches your original inner joins).
+        const item: BasePicked = {
+            id: r.id,
+            answer: r.answer,
+            combinationId: r.item.id,
+            profileId: r.profile.id,
+            name: r.profile.name,
+        };
+        combined.push(item);
     }
 
-    // Group into u_<id> / g_<id> buckets
+    // Group into buckets
     return combined.reduce<GroupedResponses>((acc, item) => {
-        const key: GroupKey =
-            item.kind === "user" ? `u_${item.userId}` : `g_${item.guestId}`;
+        const key: string = item.profileId;
         acc[key] ??= [];
         acc[key].push(item);
         return acc;

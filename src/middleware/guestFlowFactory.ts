@@ -9,6 +9,7 @@ import {APIError, ExpectedError, ValidationError} from '../modules/lib/errors';
 import {checkNewImage, prepareFileUploader, removeImage} from "../modules/lib/fileCommons";
 import {getGuestRegistrationNags} from "../modules/lib/guestRegistrationNags";
 import {PERM} from "../modules/lib/permissions";
+import {persistSession} from "../modules/lib/session";
 import {buildGuestLink, getItemFromEntityPermFct, getResource} from "../modules/lib/util";
 import {can} from "../modules/permissionEngine";
 
@@ -89,7 +90,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         return {
             entityType: entityType,
             entityId: resource?.id,
-            ownerUserId: resource?.ownerId,
+            ownerId: resource?.ownerId,
             eventId: entityType === "event" ? resource?.id : resource?.eventId,
         };
     }
@@ -98,7 +99,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         return {
             entityType: 'event',
             entityId: resource.id,
-            ownerUserId: resource.ownerId
+            ownerId: resource.ownerId
         };
     }
     const itemPermFct: ItemGetter = getItemFromEntityPermFct(getItems, resFct, entityItemType);
@@ -115,7 +116,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
             asyncHandler(async (req: Request, res: Response) => {
                 renderer.renderWithData(res, create, {
                     eventId: req.query.eventId,
-                    events: await eventService.getActiveManagedEventsForUser(req.session.user!.id)
+                    events: await eventService.getActiveManagedEvents(String(req.session.profile!.id))
                 });
             }))
         .post(isAuthenticated,
@@ -138,7 +139,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
                 }
                 let id;
                 try {
-                    id = await createEntity(req.session.user!.id, parsed);
+                    id = await createEntity(req.session.profile!.id, parsed);
                     await afterCreateItems(id, parsed);
                 } catch (e) {
                     const message = e instanceof Error ? e.message : 'Failed to create the resource.';
@@ -154,7 +155,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
     router.route('/:id/guest')
         .get(asyncHandler(async (req: Request, res: Response) => {
             const {id, title} = resFct(req);
-            if (req.session.user || req.session.guest) return res.redirect(buildRedirect(id))
+            if (req.session.profile) return res.redirect(buildRedirect(id))
             renderer.renderWithData(res, guest, {
                 entityType,
                 entityId: id,
@@ -176,8 +177,11 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
                     email
                 });
             }
-            req.session.guest = await registerGuest(username, normEmail);
-            const link = buildGuestLink(req.session.guest.id, req.session.guest.token);
+            const newGuest = await registerGuest(username, normEmail);
+            req.session.auth = {guest: newGuest};
+            req.session.profile = newGuest.profile;
+            await persistSession(req.session);
+            const link = buildGuestLink(newGuest.id, newGuest.token);
             if (normEmail) await mailer.sendLinkEmail(normEmail, link);
             req.flash('success', `Login successful. Use ${link} to edit later.`);
             res.redirect(buildRedirect(entityId));
@@ -191,7 +195,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
             entity: resFct(req),
             data: data,
             eventId: req.query.eventId,
-            events: await eventService.getActiveManagedEventsForUser(req.session.user!.id),
+            events: await eventService.getActiveManagedEvents(req.session.profile!.id),
             isDuplicate: true
         });
     }));
@@ -240,21 +244,18 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         const entity = resFct(req);
         const event = eventResFn(req);
         if (addToEvent && event) {
-            if (await eventService.isRegisteredForEvent({
-                userId: req.session.user?.id,
-                guestId: req.session.guest?.id
-            }, event.id)) {
+            if (await eventService.isRegisteredForEvent(req.session.profile?.id || '', event.id)) {
                 // We have a valid registration --> Don't need to check in more detail.
                 return next();
             }
 
-            if (req.session.user) {
+            if (req.session.profile) {
                 const canAccess = await can({
                     entity: {
                         entityId: entity.id,
                         entityType: entityType,
                         eventId: event.id,
-                        ownerUserId: entity.ownerId
+                        ownerId: entity.ownerId
                     },
                     kind: "entity"
                 }, req.session, PERM.ACCESS_VIEW);
@@ -268,7 +269,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
             throw new ExpectedError('You must be registered for the event to access this resource');
         }
         // Active session
-        if (req.session.user || req.session.guest) return next();
+        if (req.session.profile) return next();
 
         // No session → redirect to guest registration
         res.redirect(`${buildRedirect(entity.id)}/guest`);

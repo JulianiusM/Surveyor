@@ -18,9 +18,10 @@ export class ValidationError extends Error {
      * @param {string} template - Template name or identifier for rendering.
      * @param {string} message - Error message to display.
      * @param {object} data - Data to re-populate the form or context.
+     * @param {ErrorOptions} options - ErrorOptions
      */
-    constructor(template: string, message: string, data: object = {}) {
-        super(message);
+    constructor(template: string, message: string, data: object = {}, options?: ErrorOptions) {
+        super(message, options);
         this.name = 'ValidationError';
         this.template = template;
         this.data = data;
@@ -45,9 +46,10 @@ export class APIError extends Error {
      * @param {string} message - Error message to display.
      * @param {object} data - Data to re-populate the form or context.
      * @param {number} status - HTTP status
+     * @param {ErrorOptions} options - ErrorOptions
      */
-    constructor(message: string, data: object = {}, status: number = 500) {
-        super(message);
+    constructor(message: string, data: object = {}, status: number = 500, options?: ErrorOptions) {
+        super(message, options);
         this.name = 'APIError';
         this.data = data;
         this.status = status;
@@ -64,6 +66,7 @@ export class APIError extends Error {
  * @property {Severity} severity - Message severity (error - info - success)
  * @property {object} data - Contextual data to pass back to the client.
  * @property {number} status - HTTP status
+ * @param {ErrorOptions} options - ErrorOptions
  */
 export class ExpectedError extends Error {
     data: object;
@@ -75,9 +78,10 @@ export class ExpectedError extends Error {
      * @param {Severity} severity - Message severity (error - info - success)
      * @param {number} status - HTTP status
      * @param {object} data - Data to re-populate the form or context.
+     * @param {ErrorOptions} options - ErrorOptions
      */
-    constructor(message: string, severity: Severity = 'error', status: number = 400, data: object = {}) {
-        super(message);
+    constructor(message: string, severity: Severity = 'error', status: number = 400, data: object = {}, options?: ErrorOptions) {
+        super(message, options);
         this.name = 'ExpectedError';
         this.severity = severity;
         this.data = data;

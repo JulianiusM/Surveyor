@@ -18,7 +18,7 @@ export interface BootstrapGlobal {
 // Role types
 export interface RoleSummary {
     id: number;
-    name: string;
+    title: string;
     isDefault?: boolean;
     description?: string | null;
 }
@@ -51,23 +51,21 @@ export type ParticipantFilter = 'all' | 'assigned' | 'unassigned';
 // Recommendation types
 export interface RecommendationRow {
     id?: string;
-    slot: {
+    item: {
         id: string;
         title: string;
         day?: string;
         startTime?: string | null;
         endTime?: string | null;
     };
-    user?: { id: number; username: string; name?: string } | null;
-    guest?: { id: string; username: string } | null;
+    profile?: { id: string; name: string } | null;
     status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'APPLIED';
 }
 
 export interface RecommendationWarning {
     recommendation: {
-        slotId: string;
-        userId?: number | null;
-        guestId?: string | null;
+        itemId: string;
+        profileId: string;
     };
     warnings: AssignmentWarning[];
 }
@@ -89,8 +87,7 @@ export interface RequirementParticipantSummary {
 export interface RequirementOverrideTarget {
     key: string;
     label: string;
-    userId?: number | null;
-    guestId?: string | null;
+    profileId: string;
     arrivalDate?: string | null;
     departureDate?: string | null;
 }
@@ -111,10 +108,8 @@ export interface RequirementConfiguration {
         id?: number;
         roleId?: number | null;
         role?: RoleSummary | null;
-        userId?: number | null;
-        user?: { username: string, name?: string } | null;
-        guestId?: string | null;
-        guest?: { username: string } | null;
+        profileId?: string | null;
+        profile?: { id: string, name: string } | null;
         requiredShifts: number;
     }[];
     participants?: RequirementParticipantSummary[];
@@ -136,8 +131,7 @@ export interface RecommendationSlotOption {
 export interface RecommendationParticipantOption {
     key: string;
     label: string;
-    userId?: number | null;
-    guestId?: string | null;
+    profileId?: string;
     arrivalDate?: string | null;
     departureDate?: string | null;
 }

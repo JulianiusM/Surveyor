@@ -6,19 +6,8 @@ export type BasePicked = {
     id: number;
     answer: SurveyAnswer | null;
     combinationId: number;
-    username: string;
+    profileId: string;
+    name: string;
 };
 
-export type GuestResponseItem = BasePicked & {
-    kind: "guest";
-    guestId: string;
-};
-
-export type UserResponseItem = BasePicked & {
-    kind: "user";
-    userId: number;
-    name: string; // only users have a 'name'
-};
-
-export type GroupKey = `u_${number}` | `g_${string}`;
-export type GroupedResponses = Record<GroupKey, Array<UserResponseItem | GuestResponseItem>>;
+export type GroupedResponses = Record<string, Array<UserResponseItem | GuestResponseItem>>;

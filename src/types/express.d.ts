@@ -1,10 +1,11 @@
 import "express";
-import {Guest} from "../modules/database/entities/user/Guest";
-import {User} from "../modules/database/entities/user/User";
-import {Settings} from "../modules/settings";
-import {PermBundle, PermMetaBundle} from "./PermissionTypes";
-import {TokenEndpointResponse} from "openid-client";
-import {EntityAdminAssignment} from "../modules/database/entities/permissions/EntityAdminAssignment";
+import type {TokenEndpointResponse} from "openid-client";
+import type {EntityAdminAssignment} from "../modules/database/entities/permissions/EntityAdminAssignment";
+import type {Guest} from "../modules/database/entities/user/Guest";
+import type {Profile} from "../modules/database/entities/user/Profile";
+import type {User} from "../modules/database/entities/user/User";
+import type {Settings} from "../modules/settings";
+import type {PermBundle, PermMetaBundle} from "./PermissionTypes";
 
 declare module "express" {
     // Inject additional properties on express.Request
@@ -17,8 +18,11 @@ declare module "express" {
 declare module "express-serve-static-core" {
     interface Locals {
         data?: any,
-        user?: User | null,
-        guest?: Guest | null,
+        auth?: {
+            user?: User | null,
+            guest?: Guest | null,
+        },
+        profile?: Profile | null,
         version: string,
         settings?: Partial<Settings>,
         permData?: PermBundle,
@@ -29,8 +33,11 @@ declare module "express-serve-static-core" {
 
 declare module "express-session" {
     interface SessionData {
-        user?: User | null;
-        guest?: Guest | null;
+        auth: {
+            user?: User | null;
+            guest?: Guest | null;
+        },
+        profile?: Profile | null,
         tokens?: TokenEndpointResponse;
         oidc?: { code_verifier: string; state: string; nonce?: string };
     }

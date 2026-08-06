@@ -271,9 +271,9 @@ export function initRegistrationDateRange(): void {
  * @param form Form element
  * @returns Serialized data
  */
-function serializeForm(form: HTMLFormElement): Record<string, any> {
+export function serializeForm(form: HTMLFormElement): Record<string, FormDataEntryValue | FormDataEntryValue[]> {
     const formData = new FormData(form);
-    const payload: Record<string, any> = Object.fromEntries(formData as any);
+    const payload: Record<string, FormDataEntryValue | FormDataEntryValue[]> = Object.fromEntries(formData.entries());
     payload.registrations = formData.getAll('registrations');
     return payload;
 }
@@ -285,7 +285,7 @@ function requireManageAssignments(action: string): void {
 /**
  * Serialize the editable invoice pool base parameters
  */
-function serializePoolBaseSettings(form: HTMLFormElement): Record<string, FormDataEntryValue> {
+export function serializePoolBaseSettings(form: HTMLFormElement): Record<string, FormDataEntryValue> {
     const formData = new FormData(form);
     return {
         description: formData.get('description') || '',
@@ -725,6 +725,8 @@ export function init(): void {
     }
 }
 
-// Expose to global scope
-if (!window.Surveyor) window.Surveyor = {};
-window.Surveyor.init = init;
+// Expose to global scope when running in a browser; keeping this guarded makes imports safe in tests.
+if (typeof window !== 'undefined') {
+    if (!window.Surveyor) window.Surveyor = {};
+    window.Surveyor.init = init;
+}

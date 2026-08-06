@@ -17,7 +17,7 @@ const permFct = (req: Request): EntityDescriptor => {
     return {
         entityType: entityName,
         entityId: resource?.id,
-        ownerUserId: resource?.ownerId,
+        ownerId: resource?.ownerId,
         eventId: resource?.eventId,
     };
 };

@@ -1,20 +1,10 @@
-import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
-import {Guest} from "../user/Guest";
-import {User} from "../user/User";
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
+import {UuidDefaultEntityItem} from "../abstract/ProfileEntityItem";
 import {PackingAssignment} from "./PackingAssignment";
 import {PackingList} from "./PackingList";
 
 @Entity("packing_items", {schema: "surveyor"})
-export class PackingItem {
-    @PrimaryGeneratedColumn("uuid", {name: "id"})
-    id!: string;
-
-    @Column("varchar", {name: "title", length: 255})
-    title!: string;
-
-    @Column("varchar", {name: "description", nullable: true, length: 255})
-    description!: string | null;
-
+export class PackingItem extends UuidDefaultEntityItem {
     @Column("int", {
         name: "max_assignees",
         nullable: true,
@@ -31,51 +21,19 @@ export class PackingItem {
     @Column("int", {name: "pos", default: 0})
     pos!: number;
 
-    @Column("timestamp", {
-        name: "created_at",
-        default: () => "CURRENT_TIMESTAMP",
-    })
-    createdAt: Date;
-
-    @Column("timestamp", {
-        name: "updated_at",
-        default: () => "CURRENT_TIMESTAMP",
-    })
-    updatedAt: Date;
-
     @OneToMany(
         () => PackingAssignment,
         (packingAssignments) => packingAssignments.item
     )
-    packingAssignments!: PackingAssignment[];
+    assignments!: PackingAssignment[];
 
-    @RelationId((p: PackingItem) => p.list)
-    listId!: string;
+    @RelationId((a: PackingItem) => a.entity)
+    entityId!: string;
 
-    @ManyToOne(() => PackingList, (packingLists) => packingLists.packingItems, {
-        onDelete: "CASCADE",
-        onUpdate: "CASCADE",
-    })
-    @JoinColumn([{name: "list_id", referencedColumnName: "id"}])
-    list!: PackingList;
-
-    @RelationId((a: PackingItem) => a.user)
-    userId?: number;
-
-    @ManyToOne(() => User, {
-        onDelete: "CASCADE",
-        onUpdate: "RESTRICT",
-    })
-    @JoinColumn([{name: "user_id", referencedColumnName: "id"}])
-    user?: User;
-
-    @RelationId((a: PackingItem) => a.guest)
-    guestId?: string;
-
-    @ManyToOne(() => Guest, {
-        onDelete: "CASCADE",
-        onUpdate: "RESTRICT",
-    })
-    @JoinColumn([{name: "guest_id", referencedColumnName: "id"}])
-    guest?: Guest;
+    @ManyToOne(
+        () => PackingList,
+        {onDelete: "CASCADE", onUpdate: "CASCADE"}
+    )
+    @JoinColumn([{name: "entity_id", referencedColumnName: "id"}])
+    entity!: PackingList;
 }

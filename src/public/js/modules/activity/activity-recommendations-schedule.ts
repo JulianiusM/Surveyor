@@ -112,9 +112,8 @@ export async function initRecommendationScheduleView(planId: string, describeSlo
     const applyRecommendations = async () => {
         const recommendations = state!.getRecommendations();
         const payload = recommendations.map(r => ({
-            slotId: r.slot.id,
-            userId: r.user?.id || null,
-            guestId: r.guest?.id || null,
+            itemId: r.item.id,
+            profileId: r.profile?.id || null,
             status: r.status
         }));
 
@@ -137,19 +136,18 @@ export async function initRecommendationScheduleView(planId: string, describeSlo
 
     const handleAddConfirm = (slotId: string, participantValue: string) => {
         const {type, id} = logic!.parseParticipantValue(participantValue);
-        const userId = type === 'user' ? id as number : null;
-        const guestId = type === 'guest' ? id as string : null;
+        const profileId = type === 'profile' ? id as string : null;
 
-        const participant = logic!.findParticipant(userId, guestId);
+        const participant = logic!.findParticipant(profileId);
         if (!participant) return;
 
-        if (logic!.isDuplicate(slotId, userId, guestId)) {
+        if (logic!.isDuplicate(slotId, profileId)) {
             alert('This recommendation already exists.');
             return;
         }
 
         const recommendations = state!.getRecommendations();
-        let slot = recommendations.find((r) => r.slot.id === slotId)?.slot;
+        let slot = recommendations.find((r) => r.item.id === slotId)?.item;
         if (!slot) {
             const scheduleView = panel.querySelector<HTMLElement>('#recommendationScheduleView');
             const slotElement = scheduleView?.querySelector(`[data-slot-id="${slotId}"]`);
@@ -157,7 +155,7 @@ export async function initRecommendationScheduleView(planId: string, describeSlo
             slot = {id: slotId, title: slotTitle};
         }
 
-        const newRec = logic!.createRecommendation(slot, participant, userId, guestId);
+        const newRec = logic!.createRecommendation(slot, participant, profileId);
         logic!.addRecommendation(newRec);
         renderAll();
         ui!.hideModal();

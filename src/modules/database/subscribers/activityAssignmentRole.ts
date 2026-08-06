@@ -34,7 +34,7 @@ export class ActivityAssignmentRolesSubscriber
         const assignment = await manager
             .getRepository(ActivityAssignment)
             .createQueryBuilder("aa")
-            .select(["aa.id", "aa.slot_id"])
+            .select(["aa.id", "aa.item_id"])
             .where("aa.id = :id", {id: assignmentId})
             .getOne();
 
@@ -42,21 +42,21 @@ export class ActivityAssignmentRolesSubscriber
             throw new Error("Assignment not found");
         }
 
-        const slotId = (assignment as any).slot_id;
+        const slotId = assignment.itemId;
 
         // Step 2: Fetch slot-role capacity for this (slot, role); avoid nested relation in WHERE
         const slotRole = await manager
             .getRepository(ActivitySlotRole)
             .createQueryBuilder("sr")
             .select(["sr.id", "sr.max_qty"])
-            .where("sr.slot_id = :slotId AND sr.role_id = :roleId", {slotId, roleId})
+            .where("sr.item_id = :slotId AND sr.role_id = :roleId", {slotId, roleId})
             .getOne();
 
         // Step 3: Count how many times this role is already assigned in the same slot
         const currentCount = await manager
             .createQueryBuilder(ActivityAssignmentRole, "ar")
             .innerJoin(ActivityAssignment, "aa", "aa.id = ar.assignment_id")
-            .where("aa.slot_id = :slotId", {slotId})
+            .where("aa.item_id = :slotId", {slotId})
             .andWhere("ar.role_id = :roleId", {roleId})
             .getCount();
 

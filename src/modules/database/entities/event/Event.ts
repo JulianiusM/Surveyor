@@ -1,23 +1,13 @@
-import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId} from "typeorm";
-import type {EntityBase} from "../../../../types/UserTypes";
+import {Column, Entity, OneToMany} from "typeorm";
+import {BaseEntity} from "../abstract/BaseEntity";
 import {ActivityPlan} from "../activity/ActivityPlan";
 import {DriversList} from "../drivers/DriversList";
 import {PackingList} from "../packing/PackingList";
-import {User} from "../user/User";
 import {EventRegBypassLink} from "./EventRegBypassLink";
 import {EventRegistration} from "./EventRegistration";
 
 @Entity("events", {schema: "surveyor"})
-export class Event implements EntityBase {
-    @PrimaryGeneratedColumn("uuid", {name: "id"})
-    id!: string;
-
-    @Column("varchar", {name: "title", length: 255})
-    title!: string;
-
-    @Column("text", {name: "description", nullable: true})
-    description?: string | null;
-
+export class Event extends BaseEntity {
     @Column("date", {name: "start_date"})
     startDate!: string; // YYYY-MM-DD
 
@@ -48,15 +38,6 @@ export class Event implements EntityBase {
     @Column("int", {name: "max_participants", nullable: true})
     maxParticipants?: number | null;
 
-    @Column("varchar", {name: "header_img", length: 255, nullable: true})
-    headerImg?: string | null;
-
-    @Column("timestamp", {name: "created_at", default: () => "CURRENT_TIMESTAMP"})
-    createdAt!: Date;
-
-    @Column("timestamp", {name: "updated_at", default: () => "CURRENT_TIMESTAMP"})
-    updatedAt!: Date;
-
     @OneToMany(() => EventRegistration, (r) => r.event)
     registrations: EventRegistration[];
 
@@ -71,14 +52,4 @@ export class Event implements EntityBase {
 
     @OneToMany(() => EventRegBypassLink, (d) => d.event)
     eventRegBypassLinks: EventRegBypassLink[];
-
-    @RelationId((a: Event) => a.owner)
-    ownerId!: number;
-
-    @ManyToOne(() => User, {
-        onDelete: "CASCADE",
-        onUpdate: "CASCADE",
-    })
-    @JoinColumn([{name: "owner_id", referencedColumnName: "id"}])
-    owner!: User;
 }

@@ -108,9 +108,8 @@ export class RecommendationsUI {
         const recDiv = document.createElement('div');
         recDiv.className = 'd-flex align-items-center gap-2 mb-1 p-1 border rounded';
         recDiv.dataset.recId = rec.id || '';
-        recDiv.dataset.slotId = rec.slot.id;
-        if (rec.user?.id) recDiv.dataset.userId = String(rec.user.id);
-        if (rec.guest?.id) recDiv.dataset.guestId = String(rec.guest.id);
+        recDiv.dataset.slotId = rec.item.id;
+        if (rec.profile?.id) recDiv.dataset.profileId = rec.profile.id;
 
         // Status-based styling
         if (rec.status === 'APPROVED') {
@@ -134,7 +133,7 @@ export class RecommendationsUI {
         // Participant name
         const nameSpan = document.createElement('span');
         nameSpan.className = 'flex-grow-1 small';
-        nameSpan.textContent = rec.user?.name || rec.user?.username || rec.guest?.username || 'Unknown';
+        nameSpan.textContent = rec.profile?.name || 'Unknown';
         recDiv.append(nameSpan);
 
         // Status badge
@@ -300,10 +299,9 @@ export class RecommendationsUI {
 
         // Check for overlap using logic layer
         const {type, id} = this.logic.parseParticipantValue(participantValue);
-        const userId = type === 'user' ? id as number : null;
-        const guestId = type === 'guest' ? id as string : null;
+        const profileId = type === 'profile' ? id as string : null;
 
-        const hasOverlap = this.logic.hasOverlappingAssignment(userId, guestId, slotId);
+        const hasOverlap = this.logic.hasOverlappingAssignment(profileId, slotId);
 
         if (hasOverlap) {
             this.addWarningBox.classList.remove('d-none');

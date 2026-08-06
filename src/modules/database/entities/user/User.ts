@@ -1,14 +1,12 @@
-import {BeforeInsert, BeforeUpdate, Column, Entity, Index, OneToMany, PrimaryGeneratedColumn,} from "typeorm";
-import {TrackedBase} from "../abstract/TrackedBase";
+import {BeforeInsert, BeforeUpdate, Column, Entity, Index, OneToMany,} from "typeorm";
+
+import {NumericBase} from "../abstract/TrackedBase";
 import {Profile} from "./Profile";
 
 @Index("email", ["email"], {unique: true})
 @Index("username", ["username"], {unique: true})
 @Entity("users", {schema: "surveyor"})
-export class User extends TrackedBase {
-    @PrimaryGeneratedColumn({type: "int", name: "id"})
-    id!: number;
-
+export class User extends NumericBase {
     @Column("varchar", {name: "username", unique: true, length: 50})
     username!: string;
 

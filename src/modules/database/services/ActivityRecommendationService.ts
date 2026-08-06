@@ -13,41 +13,34 @@ import {
 
 export interface RecommendationInput {
     id?: string;
-    slotId: string;
-    userId?: number | null;
-    guestId?: string | null;
+    itemId: string;
+    profileId?: string | null;
     status?: RecommendationStatus;
 }
 
 export function normalizeRecommendationInput(input: RecommendationInput): RecommendationInput {
-    if (!input.slotId) {
+    if (!input.itemId) {
         throw new Error("Recommendation requires a slotId");
     }
 
-    const hasUser = input.userId != null;
-    const hasGuest = input.guestId != null;
+    const hasProfile = input.profileId != null;
 
-    if (!hasUser && !hasGuest) {
-        throw new Error("Recommendation requires a userId or guestId");
-    }
-
-    if (hasUser && hasGuest) {
-        throw new Error("Recommendation cannot target both user and guest");
+    if (!hasProfile) {
+        throw new Error("Recommendation requires a profileId");
     }
 
     return {
         id: input.id,
-        slotId: input.slotId,
-        userId: hasUser ? Number(input.userId) : null,
-        guestId: hasGuest ? String(input.guestId) : null,
+        itemId: input.itemId,
+        profileId: String(input.profileId),
         status: input.status ?? "PENDING",
     };
 }
 
 export async function getRecommendations(planId: string) {
     return await AppDataSource.getRepository(ActivityAssignmentRecommendation).find({
-        where: {plan: {id: planId}},
-        relations: {slot: true, user: true, guest: true},
+        where: {entity: {id: planId}},
+        relations: {item: true, profile: true},
     });
 }
 
@@ -55,7 +48,7 @@ export async function markRecommendationsApplied(planId: string, ids: string[]):
     if (!ids.length) return;
 
     await AppDataSource.getRepository(ActivityAssignmentRecommendation).update(
-        {id: In(ids), plan: {id: planId}},
+        {id: In(ids), entity: {id: planId}},
         {status: "APPLIED"},
     );
 }
@@ -65,16 +58,15 @@ export async function replaceRecommendations(planId: string, recommendations: Re
         const repo = manager.getRepository(ActivityAssignmentRecommendation);
         const normalized = recommendations.map(normalizeRecommendationInput);
 
-        await repo.delete({plan: {id: planId}});
+        await repo.delete({entity: {id: planId}});
 
         if (!normalized.length) return;
 
         const rows = normalized.map((rec) =>
             repo.create({
-                plan: {id: planId},
-                slot: {id: rec.slotId},
-                user: rec.userId ? {id: rec.userId} : undefined,
-                guest: rec.guestId ? {id: rec.guestId} : undefined,
+                entity: {id: planId},
+                item: {id: rec.itemId},
+                profile: {id: rec.profileId ?? ''},
                 status: rec.status ?? "PENDING",
             })
         );

@@ -1,14 +1,12 @@
-import {Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId} from "typeorm";
+import {Entity, Index, JoinColumn, ManyToOne, RelationId} from "typeorm";
+import {NumericBase} from "../abstract/TrackedBase";
 import {EventInvoicePool} from "./EventInvoicePool";
 import {EventRegistration} from "./EventRegistration";
 
 // Track pre-close agreements where one participant covers another participant's share
 @Index("uniq_pool_beneficiary", ["pool", "beneficiaryRegistration"], {unique: true})
 @Entity("event_pool_takeovers", {schema: "surveyor"})
-export class EventPoolTakeover {
-    @PrimaryGeneratedColumn({type: "int", name: "id"})
-    id!: number;
-
+export class EventPoolTakeover extends NumericBase {
     @ManyToOne(() => EventInvoicePool, (pool) => pool.takeovers, {onDelete: "CASCADE", onUpdate: "CASCADE"})
     @JoinColumn([{name: "pool_id", referencedColumnName: "id"}])
     pool!: EventInvoicePool;
@@ -29,7 +27,4 @@ export class EventPoolTakeover {
 
     @RelationId((takeover: EventPoolTakeover) => takeover.beneficiaryRegistration)
     beneficiaryRegistrationId!: number;
-
-    @Column("timestamp", {name: "created_at", default: () => "CURRENT_TIMESTAMP"})
-    createdAt!: Date;
 }

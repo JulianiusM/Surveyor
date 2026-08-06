@@ -98,9 +98,11 @@ export async function callback(req: Request) {
 
     // JIT-provision or load your local user
     // Persist your standard session identity (same model as manual login)
-    req.session.user = await findOrCreateUserFromOidc(issuer, identityClaims, {
+    const user = await findOrCreateUserFromOidc(issuer, identityClaims, {
         linkByEmail: true,
     });
+    req.session.auth = {user};
+    req.session.profile = user?.profiles[0];
 
     // Optionally keep tokens for logout/API calls
     req.session.tokens = {
@@ -113,7 +115,6 @@ export async function callback(req: Request) {
 
     // Clear transient OIDC artifacts
     req.session.oidc = undefined;
-    req.session.guest = undefined;
 
     await persistSession(req.session);
 }
@@ -123,8 +124,8 @@ export async function logout(session: Request['session']) {
     const isOidc = !!session.tokens;
 
     // Clear local session first
-    session.user = undefined;
-    session.guest = undefined;
+    session.auth = undefined;
+    session.profile = undefined;
     session.tokens = undefined;
 
     await persistSession(session);

@@ -46,7 +46,7 @@ function describeSlot(slotId: string): string {
     return `${title || 'Slot'}${day ? ` on ${day}` : ''}${timePart}`;
 }
 
-function formatSlotLabel(slot: RecommendationRow['slot']): string {
+function formatSlotLabel(slot: RecommendationRow['item']): string {
     const day = slot.day ? ` on ${slot.day}` : '';
     const start = formatTimeLabel(slot.startTime || null);
     const end = formatTimeLabel(slot.endTime || null);
@@ -141,6 +141,8 @@ export function init(): void {
     }
 }
 
-// Expose to global scope
-if (!window.Surveyor) window.Surveyor = {};
-window.Surveyor.init = init;
+// Expose to global scope when running in a browser; keeping this guarded makes imports safe in tests.
+if (typeof window !== 'undefined') {
+    if (!window.Surveyor) window.Surveyor = {};
+    window.Surveyor.init = init;
+}

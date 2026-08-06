@@ -1,6 +1,7 @@
-import {Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, RelationId,} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
 import type {InvoicePoolDistribution, InvoicePoolStatus} from "../../../../types/InvoicePoolTypes";
 import {currencyTransformer} from "../../transformers";
+import {UuidBase} from "../abstract/TrackedBase";
 import {Event} from "./Event";
 import {EventInvoice} from "./EventInvoice";
 import {EventInvoiceShare} from "./EventInvoiceShare";
@@ -11,10 +12,7 @@ import {EventPoolTakeover} from "./EventPoolTakeover";
 export const InvoicePoolDistributions = ['EQUAL', 'TIME_BASED', 'NIGHTS'];
 
 @Entity("event_invoice_pools", {schema: "surveyor"})
-export class EventInvoicePool {
-    @PrimaryGeneratedColumn("uuid", {name: "id"})
-    id!: string;
-
+export class EventInvoicePool extends UuidBase {
     @ManyToOne(() => Event, (event) => event.eventRegBypassLinks, {onDelete: "CASCADE", onUpdate: "CASCADE"})
     @JoinColumn([{name: "event_id", referencedColumnName: "id"}])
     event!: Event;
@@ -132,12 +130,6 @@ export class EventInvoicePool {
 
     @Column("timestamp", {name: "closed_at", nullable: true})
     closedAt?: Date | null;
-
-    @Column("timestamp", {name: "created_at", default: () => "CURRENT_TIMESTAMP"})
-    createdAt!: Date;
-
-    @Column("timestamp", {name: "updated_at", default: () => "CURRENT_TIMESTAMP"})
-    updatedAt!: Date;
 
     @OneToMany(() => EventInvoice, (invoice) => invoice.pool)
     invoices!: EventInvoice[];

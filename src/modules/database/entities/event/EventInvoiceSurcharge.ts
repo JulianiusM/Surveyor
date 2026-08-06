@@ -1,4 +1,5 @@
-import {Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, RelationId} from "typeorm";
+import {Column, Entity, JoinColumn, ManyToOne, RelationId} from "typeorm";
+import {NumericBase} from "../abstract/TrackedBase";
 import {EventInvoicePool} from "./EventInvoicePool";
 import {EventRegistration} from "./EventRegistration";
 
@@ -7,10 +8,7 @@ import {EventRegistration} from "./EventRegistration";
  * This is paid only by the participant (or their covering payer) rather than split evenly.
  */
 @Entity("event_invoice_surcharges", {schema: "surveyor"})
-export class EventInvoiceSurcharge {
-    @PrimaryGeneratedColumn({type: "int", name: "id"})
-    id!: number;
-
+export class EventInvoiceSurcharge extends NumericBase {
     @ManyToOne(() => EventInvoicePool, (pool) => pool.surcharges, {onDelete: "CASCADE", onUpdate: "CASCADE"})
     @JoinColumn([{name: "pool_id", referencedColumnName: "id"}])
     pool!: EventInvoicePool;
@@ -35,11 +33,8 @@ export class EventInvoiceSurcharge {
 
     // Whether this surcharge should be removed from the shared pool total
     @Column("tinyint", {
-     name: "subtract_from_pool",
-     default: 1
+        name: "subtract_from_pool",
+        default: 1
     })
     subtractFromPool!: boolean;
-
-    @Column("timestamp", {name: "created_at", default: () => "CURRENT_TIMESTAMP"})
-    createdAt!: Date;
 }

@@ -3,6 +3,7 @@
  * Handles dynamic combination row management
  */
 
+import type {SurveyCombination} from "../../modules/database/entities/surveys/SurveyCombination";
 import {setCurrentNavLocation} from './core/navigation';
 import {loadPerms} from './core/permissions';
 
@@ -95,7 +96,7 @@ function createRemoveButton(): HTMLButtonElement {
  * @param weekday Selected weekday (optional)
  * @param week Selected week (optional)
  */
-function addCombinationRow(
+export function addCombinationRow(
     tableBody: HTMLTableSectionElement,
     counter: { value: number },
     weekday?: string,
@@ -132,6 +133,16 @@ function getPrefilledCombinations() {
 /**
  * Initialize combination row management
  */
+export function collectSurveyCombinations(tableBody: Element | null): Partial<SurveyCombination>[] {
+    const combinations: Partial<SurveyCombination>[] = [];
+    tableBody?.querySelectorAll('tr').forEach((tr) => {
+        const weekday = tr.querySelector<HTMLSelectElement>('select[name$="[weekday]"]')?.value as Partial<SurveyCombination>['weekday'] | undefined;
+        const nthWeek = tr.querySelector<HTMLSelectElement>('select[name$="[week]"]')?.value as Partial<SurveyCombination>['nthWeek'] | undefined;
+        if (weekday && nthWeek) combinations.push({weekday, nthWeek});
+    });
+    return combinations;
+}
+
 function initButtons(): void {
     const tableBody = document.getElementById('combinationTable') as HTMLTableSectionElement;
     const addBtn = document.getElementById('addCombinationBtn');
@@ -172,6 +183,8 @@ export function init(): void {
     initButtons();
 }
 
-// Expose to global scope
-if (!window.Surveyor) window.Surveyor = {};
-window.Surveyor.init = init;
+// Expose to global scope when running in a browser; keeping this guarded makes imports safe in tests.
+if (typeof window !== 'undefined') {
+    if (!window.Surveyor) window.Surveyor = {};
+    window.Surveyor.init = init;
+}

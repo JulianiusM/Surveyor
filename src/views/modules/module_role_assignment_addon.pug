@@ -1,9 +1,7 @@
-mixin roleAssignmentAddon(dataId, roleName, roleDisplayName, assignees, user, guest)
+mixin roleAssignmentAddon(dataId, roleName, roleDisplayName, assignees, profile)
     -
         let assignee = (assignees || []).find(a => Array.isArray(a.roles) && a.roles.includes(roleName));
-        let my = assignee ? (user ? assignee.user_id === user.id
-                        : (guest ? assignee.guest_id === guest.id : false))
-                : false;
+        let my = assignee ? (profile ? assignee.profileId === profile.id : false) : false;
 
     .role-assignment.d-flex.align-items-center.gap-2.mt-1(
         data-role-name=roleName

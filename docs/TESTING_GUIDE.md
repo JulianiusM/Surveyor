@@ -1,619 +1,128 @@
 # Testing Guide
 
-This document provides a comprehensive guide to testing in the Surveyor application, covering our data-driven and
-keyword-driven testing approaches.
+Surveyor uses a pragmatic two-runner strategy:
 
-## Table of Contents
+- **Vitest** for isolated utility/frontend tests and database-backed controller integration workflows.
+- **Playwright** for a small E2E suite that verifies critical workflows against the built application.
 
-- [Overview](#overview)
-- [Testing Approaches](#testing-approaches)
-- [Test Structure](#test-structure)
-- [Writing Tests](#writing-tests)
-- [Running Tests](#running-tests)
-- [Best Practices](#best-practices)
-
-## Overview
-
-The Surveyor test suite uses a combination of data-driven and keyword-driven testing approaches to ensure:
-
-1. **Maintainability**: Separation of test data from test logic
-2. **Reusability**: Shared test keywords and data across multiple tests
-3. **Readability**: High-level, business-focused test descriptions
-4. **Coverage**: Comprehensive testing through parameterized test cases
-5. **Consistency**: Standardized patterns across all test types
-
-## Testing Approaches
-
-### Data-Driven Testing
-
-Data-driven testing separates test data from test logic, enabling:
-
-- Multiple test cases from a single test function
-- Easy addition of new test scenarios without code changes
-- Clear test data management and organization
-
-**Example:**
-
-```typescript
-// Test data (in tests/data/controller/surveyData.ts)
-export const preprocessCreateData = [
-    {
-        description: 'normalizes combos and trims strings',
-        input: {title: '  My Survey  ', description: '', combinations: [...]},
-        expected: {title: 'My Survey', description: null, combinations: [...]},
-    },
-    {
-        description: 'handles single combination',
-        input: {title: 'Single', description: 'Test', combinations: [...]},
-        expected: {title: 'Single', description: 'Test', combinations: [...]},
-    },
-];
-
-// Test (in tests/controller/survey.controller.test.ts)
-test.each(preprocessCreateData)(
-    '$description',
-    ({input, expected}) => {
-        const result = preprocessCreate(input);
-        expect(result).toEqual(expected);
-    }
-);
-```
-
-### Keyword-Driven Testing
-
-Keyword-driven testing uses reusable, high-level test actions (keywords) to compose tests:
-
-- Abstract implementation details behind meaningful actions
-- Enable test code reuse across multiple test files
-- Make tests read like business requirements
-
-**Example:**
-
-```typescript
-// Keywords (in tests/keywords/middleware/middlewareKeywords.ts)
-export async function expectMiddlewareSuccess(
-    middleware: any,
-    session: any,
-    resource: any
-): Promise<void> {
-    const app = buildMiddlewareApp(middleware, {session, resource});
-    const response = await makeGetRequest(app);
-    verifyMiddlewareAllows(response);
-}
-
-// Test usage
-test('allows when user owns resource', async () => {
-    await expectMiddlewareSuccess(
-        requireOwner(),
-        {user: {id: 1}},
-        {ownerId: 1}
-    );
-});
-```
+The goal is useful regression signal with low maintenance overhead. Prefer tests that describe expected input/output transformations or user-visible outcomes. Avoid tests that assert private implementation details, fragile DOM structure, broad snapshots, or test-only helpers.
 
 ## Test Structure
 
-### Directory Organization
-
 ```
 tests/
-├── data/                   # Test data (data-driven testing)
-│   ├── unit/              # Unit test data
-│   ├── controller/        # Controller test data
-│   ├── middleware/        # Middleware test data
-│   ├── database/          # Database integration test data
-│   ├── e2e/              # E2E test data
-│   ├── builders/         # Test data builders
-│   └── fixtures/         # Fixed test data sets
-├── keywords/              # Test keywords (keyword-driven testing)
-│   ├── common/           # Shared keywords
-│   ├── controller/       # Controller test keywords
-│   ├── middleware/       # Middleware test keywords
-│   ├── database/         # Database test keywords
-│   └── e2e/             # E2E test keywords
-├── client/               # Frontend tests (no backend required)
-│   ├── unit/            # Pure logic frontend tests
-│   ├── ui/              # DOM behavior tests
-│   ├── flows/           # Multi-step frontend flows
-│   ├── msw/             # MSW server and API handlers
-│   └── mocks/           # Frontend test mocks
-├── unit/                 # Backend unit tests
-├── controller/           # Controller tests
-├── middleware/           # Middleware tests
-├── database/             # Database integration tests
-├── e2e/                 # End-to-end tests (Playwright)
-└── util/                # Test utilities and mocks
+├── unit/                  # Isolated production utilities and transformations only
+├── integration/           # Controller workflows against the disposable MariaDB test schema
+├── frontend/              # Fast Vitest frontend helper/component tests
+│   └── helpers/           # Client-side helper behavior
+├── e2e/                   # Focused Playwright critical-flow tests
+├── factories/             # Reusable production-shaped test data builders
+├── fixtures/              # Shared fixture assets and seed data
+└── support/               # Runner setup and shared test utilities
 ```
 
-### Test Data Files
-
-Test data files export arrays of test cases:
-
-```typescript
-// tests/data/controller/surveyData.ts
-export const preprocessCreateData = [
-    {
-        description: 'test case description',
-        input: { /* input data */},
-        expected: { /* expected output */},
-    },
-    // ... more test cases
-];
-
-export const preprocessCreateErrorData = [
-    {
-        description: 'error case description',
-        input: { /* input that should cause error */},
-        errorType: 'ValidationError',
-        errorMessage: /pattern/i,
-    },
-    // ... more error cases
-];
-```
-
-### Keyword Files
-
-Keyword files export reusable test functions:
-
-```typescript
-// tests/keywords/common/controllerKeywords.ts
-export function setupMock(mockFn: jest.Mock, returnValue?: any): void {
-    if (returnValue !== undefined) {
-        mockFn.mockResolvedValue(returnValue);
-    }
-}
-
-export function verifyMockCall(mockFn: jest.Mock, ...args: any[]): void {
-    expect(mockFn).toHaveBeenCalledWith(...args);
-}
-```
-
-## Writing Tests
-
-### Unit Tests
-
-Unit tests focus on testing individual functions in isolation:
-
-1. **Import test data and keywords**:
-
-```typescript
-import {utilTestData} from '../data/unit/utilData';
-import {verifyResult} from '../keywords/common/controllerKeywords';
-```
-
-2. **Use data-driven approach**:
-
-```typescript
-describe('toLocalISODate', () => {
-    test.each(toLocalISODateData)('$description', ({input, expected}) => {
-        const result = toLocalISODate(input);
-        verifyResult(result, expected);
-    });
-});
-```
-
-### Controller Tests
-
-Controller tests verify business logic with mocked services:
-
-1. **Setup mocks using keywords**:
-
-```typescript
-import {setupMock, verifyMockCall} from '../keywords/common/controllerKeywords';
-
-setupMock(surveyService.createSurveyTx as jest.Mock, 'survey-123');
-```
-
-2. **Use data-driven tests**:
-
-```typescript
-test.each(createEntityData)(
-    '$description',
-    async ({userId, payload, expectedServiceCall, mockReturnValue}) => {
-        setupMock(surveyService.createSurveyTx as jest.Mock, mockReturnValue);
-        const result = await createEntity(userId, payload);
-        verifyResult(result, mockReturnValue);
-        verifyMockCall(surveyService.createSurveyTx as jest.Mock, ...);
-    }
-);
-```
-
-### Middleware Tests
-
-Middleware tests verify request/response handling:
-
-1. **Use middleware keywords**:
-
-```typescript
-import {
-    expectMiddlewareSuccess,
-    expectMiddlewareFailure,
-} from '../keywords/middleware/middlewareKeywords';
-```
-
-2. **Test with data**:
-
-```typescript
-test.each(requireOwnerSuccessData)(
-    '$description',
-    async ({session, resource, additional}) => {
-        await expectMiddlewareSuccess(requireOwner(), session, resource, additional);
-    }
-);
-```
-
-### Database Tests
-
-Database integration tests verify database operations:
-
-1. **Use database keywords**:
-
-```typescript
-import {
-    createTestEntity,
-    verifyEntityExists,
-    cleanupTestData,
-} from '../keywords/database/databaseKeywords';
-```
-
-2. **Test with real database**:
-
-```typescript
-test('creates entity with valid data', async () => {
-    const id = await createTestEntity({title: 'Test'});
-    await verifyEntityExists(id, {title: 'Test'});
-});
-```
-
-3. **UUID Handling in Tests**:
-   Database entities with UUID primary keys require valid UUIDs. **Never use simple strings** like `'item-1'` or
-   `'test-id'` in test data.
-
-**Correct approach** - Generate UUIDs at runtime:
-
-```typescript
-import {v4 as uuidv4} from 'uuid';
-
-test.each(testData)('$description', async (testCase) => {
-    // Generate UUIDs for items at runtime
-    const itemIdMap = new Map<string, string>();
-    testCase.items.forEach(item => {
-        itemIdMap.set(item.id, uuidv4());
-    });
-
-    // Map items to use real UUIDs
-    const items = testCase.items.map(item => ({
-        ...item,
-        id: itemIdMap.get(item.id)!
-    }));
-
-    // Use mapped items in service calls
-    await createItems(listId, items);
-
-    // Map expected results using itemIdMap
-    const expectedIds = testCase.expectedIds.map(id => itemIdMap.get(id)!);
-    expect(actualIds).toEqual(expectedIds);
-});
-```
-
-**Why this pattern?**
-
-- Entities use `@PrimaryGeneratedColumn("uuid")` which requires valid UUID format
-- Test data should use readable IDs ('item-1', 'pack-item-1') for clarity
-- Runtime mapping provides both readability and database compatibility
-
-### E2E Tests
-
-E2E tests verify complete user workflows using Playwright. They follow the same data-driven and keyword-driven patterns
-as other tests.
-
-1. **Use test data and keywords**:
-
-```typescript
-// Import test data with all constants
-import {surveyCreationData} from '../data/e2e/surveyData';
-import {testCredentials, authUrls, formFields, successMessages, selectors} from '../data/e2e/authData';
-
-// Import keywords
-import {loginUser} from '../keywords/e2e/authKeywords';
-import {createSurvey, generateEntityTitle} from '../keywords/e2e/entityKeywords';
-
-// Data-driven test using for loop (Playwright pattern)
-for (const data of surveyCreationData) {
-    test(data.description, async ({page}) => {
-        await loginUser(page, testCredentials.username, testCredentials.password);
-        const surveyTitle = generateEntityTitle(data.title);
-        await page.goto(data.createUrl);
-        await createSurvey(page, surveyTitle, data.surveyDescription, data.submitButtonText);
-        await page.waitForURL((url) => data.expectedRedirectPattern.test(url.pathname));
-    });
-}
-```
-
-2. **Test data structure with all constants externalized**:
-
-```typescript
-// Common constants (authData.ts)
-export const authUrls = {
-    login: '/users/login',
-    register: '/users/register',
-    dashboard: '/users/dashboard',
-};
-
-export const formFields = {
-    username: 'username',
-    password: 'password',
-};
-
-export const successMessages = {
-    accountActivated: 'Your account has been activated',
-};
-
-export const selectors = {
-    alertSuccess: '.alert, .alert-success',
-    alertDanger: '.alert, .alert-danger, [role="alert"]',
-};
-
-// Entity creation data
-export const surveyCreationData = [
-    {
-        description: 'can create a new survey with valid data',
-        createUrl: '/survey/create',
-        title: 'E2E Survey',
-        surveyDescription: 'Test survey description',
-        submitButtonText: /create.*survey/i,
-        expectedRedirectPattern: /\/(users\/dashboard|survey\/[\w-]*-[\w-]+)/,
-        verifyTitleInPage: true,
-        titleSelector: 'h1',
-    },
-];
-```
-
-3. **Consolidated success/failure data**:
-
-```typescript
-// Single array with flag indicating expected outcome
-export const loginData = [
-    {
-        description: 'rejects wrong credentials',
-        url: authUrls.login,
-        username: 'invalid_user',
-        password: 'wrong_password',
-        shouldSucceed: false,
-        expectedUrl: /\/users\/login/,
-        expectedAlert: true,
-    },
-    {
-        description: 'logs in with valid credentials',
-        url: authUrls.login,
-        username: testCredentials.username,
-        password: testCredentials.password,
-        shouldSucceed: true,
-        expectedUrl: /\/users\/dashboard/,
-    },
-];
-
-// Test uses conditional logic based on data
-for (const data of loginData) {
-    test(data.description, async ({page}) => {
-        await page.goto(data.url);
-        await fillLoginForm(page, data.username, data.password);
-
-        if (data.shouldSucceed) {
-            await expect(page).toHaveURL(data.expectedUrl);
-        } else {
-            await verifyErrorAlert(page);
-        }
-    });
-}
-```
-
-4. **Use keywords for common operations**:
-
-```typescript
-// Authentication keyword
-await loginUser(page, username, password);
-
-// Entity management keywords
-await navigateToEntityCreatePage(page, 'survey', expectedUrl, expectedHeading);
-await verifyUnauthenticatedRedirect(page, targetUrl, expectedRedirectUrl);
-await verifyDashboardEmptyState(page, accordionId, buttonText, expectedEmptyText);
-
-// Navigation keywords
-await verifyLinkVisible(page, linkName);
-await navigateThroughSteps(page, steps);
-
-// Validation keywords
-await verifyErrorMessage(page, selector, expectedText);
-await verifyFieldRequired(page, fieldName);
-```
-
-5. **E2E test organization**:
-
-- Test files: `tests/e2e/*.test.ts`
-- Test data: `tests/data/e2e/*.ts` (includes all URLs, selectors, messages, field names)
-- Test keywords: `tests/keywords/e2e/*.ts`
-- Database helpers: `tests/keywords/e2e/dbKeywords.ts`
-- **Zero hardcoded strings** - All constants defined in data files
+All test files use the `*.spec.ts` suffix.
+
+## What to Test
+
+Choose the cheapest stable test that catches the regression:
+
+| Risk | Preferred test |
+| --- | --- |
+| Isolated date, permission, invoice, or request transformation is wrong | Vitest unit test |
+| A controller workflow no longer validates, orchestrates, or persists the expected entity graph | Vitest controller + MariaDB integration test |
+| Frontend helper/component behavior changes | Vitest frontend test |
+| Main user workflow is unusable | Playwright E2E test |
+
+Do not add every layer for every feature. Add one high-value test at the layer that best protects the use case.
+
+## Anti-Brittleness Rules
+
+1. Test production behavior, not implementation details or convenience wrappers that mostly delegate to third-party code. Unit tests are limited to code that is naturally isolated, primarily utilities.
+2. Prefer realistic factories in `tests/factories/` over hard-coded inline objects, and reuse common entity factories such as `createEntityBase()` before adding specialized factories.
+3. Put reusable smoke-test workflow/assertion keywords in `tests/keywords/` only when they clarify intent and remove real repetition.
+4. Keep E2E broad and shallow; do not cover every validation branch in E2E.
+5. Prefer API/database setup over UI setup for E2E prerequisites.
+6. Use accessibility selectors or stable `data-testid` anchors for E2E; avoid Bootstrap class and DOM-depth selectors.
+7. Avoid broad snapshots. Assert the behavior or contract that matters.
+8. Keep helpers small. A helper should reduce brittle repetition, not hide the purpose of the test.
+9. Do not create one spec file per assertion. Group related examples by stable production behavior or use case, then use parameterized cases inside that spec.
+10. Add a short comment to each grouped smoke assertion explaining the user-facing regression it protects.
+11. Keep test imports order-independent: production modules must be safe to import before test setup, so browser globals need guards such as `typeof window !== 'undefined'`.
+12. Do not mock TypeORM repositories or core services. Integration tests enter through production controllers and initialize the production DataSource against `TEST_DB_NAME`, which must contain `test`. Service reads may verify the resulting state, but tests must not make database CRUD the behavior under test.
 
 ## Running Tests
 
-### All Tests
-
 ```bash
-npm test
+npm test                    # Fast Vitest suite
+npm run test:ci             # Fast Vitest suite with JUnit and LCOV coverage reports for CI/SonarQube
+npm run test:quick          # Database-free utility + frontend checks
+npm run test:unit           # Isolated production utilities only
+npm run test:frontend       # Frontend Vitest tests
+npm run test:integration    # Database-backed controller workflow suite
+npm run e2e                 # Playwright E2E tests
+npm run test:all            # Vitest + build + Playwright E2E
 ```
 
-### Specific Test Suite
+`npm test`, `npm run test:integration`, and `npm run test:ci` run the database-index generator through their npm lifecycle hooks before Vitest starts. This keeps the ignored `src/modules/database/__index__.ts` build artifact out of Git while ensuring clean CI checkouts can load the production DataSource.
 
-```bash
-npm test -- tests/unit/util.test.ts
-npm test -- tests/controller/survey.controller.test.ts
-```
+## Example Patterns
 
-### Watch Mode
-
-```bash
-npm run test:watch
-```
-
-### With Coverage
-
-```bash
-npm test -- --coverage
-```
-
-### E2E Tests
-
-```bash
-npm run e2e
-npm run e2e:headed  # With browser visible
-npm run e2e:ui      # With Playwright UI
-```
-
-## Best Practices
-
-### Test Data
-
-1. **Organize by category**: Keep test data files organized by test type
-2. **Use descriptive names**: Name test cases clearly (use `description` field)
-3. **Cover edge cases**: Include boundary conditions, empty inputs, invalid data
-4. **Avoid duplication**: Reuse test data where possible
-5. **Use builders**: Leverage test data builders for complex objects
-
-### Test Keywords
-
-1. **Single responsibility**: Each keyword should do one thing well
-2. **Composable**: Design keywords to be composed into complex scenarios
-3. **Clear naming**: Use action-oriented names (create*, verify*, setup*)
-4. **Return useful data**: Return values that enable further assertions
-5. **Handle errors gracefully**: Include error handling in keywords
-
-### Test Code
-
-1. **Use data-driven tests**: Prefer `test.each()` over multiple similar tests
-2. **Use keywords**: Abstract common operations into reusable keywords
-3. **Clear assertions**: Use descriptive keywords like `verifyResult()`
-4. **Minimal mocking**: Mock only external dependencies
-5. **Clean setup/teardown**: Use `beforeEach`/`afterEach` for test isolation
-
-### Naming Conventions
-
-**Test Data**:
-
-- `*Data.ts` - test data files
-- `*SuccessData` - success scenario test cases
-- `*FailureData` - failure scenario test cases
-- `*ErrorData` - error condition test cases
-
-**Keywords**:
-
-- `*Keywords.ts` - keyword files
-- `create*` - create entities or data
-- `verify*` - verify conditions or state
-- `setup*` - setup test preconditions
-- `expect*` - expect specific outcomes
-- `cleanup*` - cleanup test data
-
-**Test Files**:
-
-- `*.test.ts` - test files
-- `*.refactored.test.ts` - temporary refactored version (before replacement)
-- `*.backup` - backup of original test (kept for reference)
-
-### Test Coverage
-
-- Aim for high coverage of critical paths
-- Cover both success and failure scenarios
-- Include edge cases and boundary conditions
-- Test error handling and validation
-- Focus on behavior, not implementation
-
-### Migration Guidelines
-
-When migrating existing tests to data-driven/keyword-driven approach:
-
-1. **Analyze current tests**: Identify patterns and repetition
-2. **Extract test data**: Move hard-coded values to data files
-3. **Create keywords**: Extract common operations into keywords
-4. **Refactor tests**: Rewrite tests using data and keywords
-5. **Verify coverage**: Ensure new tests cover same scenarios (or more)
-6. **Run tests**: Verify all tests pass
-7. **Compare metrics**: Check that coverage is maintained or improved
-8. **Replace original**: Replace original test file with refactored version
-
-## Examples
-
-### Complete Unit Test Example
+### Factory-backed Vitest test
 
 ```typescript
-// tests/data/unit/utilData.ts
-export const toLocalISODateData = [
-    {
-        description: 'converts UTC date to YYYY-MM-DD format',
-        input: new Date(Date.UTC(2025, 5, 1, 12, 23, 45)),
-        expected: '2025-06-01',
-    },
-    // ... more cases
-];
+import {describe, expect, it} from 'vitest';
+import {buildDateTotals} from '../../src/modules/lib/util';
+import {createDateTotalsCase} from '../factories/dateTotalsFactory';
 
-// tests/unit/util.test.ts
-import {toLocalISODateData} from '../data/unit/utilData';
+const cases = [createDateTotalsCase()];
 
-describe('toLocalISODate', () => {
-    test.each(toLocalISODateData)('$description', async ({input, expected}) => {
-        const {toLocalISODate} = await importWithMocks();
-        const result = toLocalISODate(input);
-        expect(result).toBe(expected);
+describe('date totals transformation', () => {
+    it.each(cases)('$description', (testCase) => {
+        expect(buildDateTotals(
+            testCase.eventStart,
+            testCase.eventEnd,
+            testCase.registrations,
+        )).toEqual(testCase.expectedTotals);
     });
 });
 ```
 
-### Complete Controller Test Example
+### Focused Playwright E2E test
 
 ```typescript
-// tests/data/controller/surveyData.ts
-export const createEntityData = [
-    {
-        description: 'creates survey with basic data',
-        userId: 42,
-        payload: {title: 'Test', description: 'Desc', combinations: [...]},
-        expectedServiceCall: {userId: 42, title: 'Test', ...},
-        mockReturnValue: 'survey-123',
-    },
-];
+import {test, expect} from '@playwright/test';
+import {createHealthCase} from '../factories/healthFactory';
 
-// tests/controller/survey.controller.test.ts
-import {createEntityData} from '../data/controller/surveyData';
-import {setupMock, verifyMockCall, verifyResult} from '../keywords/common/controllerKeywords';
+const cases = [createHealthCase()];
 
-test.each(createEntityData)(
-    '$description',
-    async ({userId, payload, expectedServiceCall, mockReturnValue}) => {
-        setupMock(surveyService.createSurveyTx as jest.Mock, mockReturnValue);
-        const result = await createEntity(userId, payload);
-        verifyResult(result, mockReturnValue);
-        verifyMockCall(surveyService.createSurveyTx as jest.Mock, ...);
+test.describe('application health', () => {
+    for (const testCase of cases) {
+        test(testCase.description, async ({request}) => {
+            const response = await request.get(testCase.endpoint);
+            expect(response.status()).toBe(testCase.expectedStatus);
+            expect(await response.text()).toBe(testCase.expectedBody);
+        });
     }
-);
+});
 ```
 
-## Contributing
+## Current Example Coverage
 
-When contributing tests:
+The scaffold includes useful production-code examples for:
 
-1. Follow the data-driven and keyword-driven patterns (backend)
-2. Use MSW and Testing Library for frontend tests
-3. Add test data to appropriate data files
-4. Create or reuse keywords for common operations
-5. Write clear, descriptive test case descriptions
-6. Ensure tests are isolated and repeatable
-7. Update this documentation if adding new patterns
+- Isolated utilities: date totals, dashboard entity flattening, permission masks, API guards, and query-limit coercion.
+- MariaDB integration canaries: local authentication, events, surveys and responses, activity plans and assignments, packing lists and assignments, drivers lists/items, and persisted permissions.
+- Frontend canaries: authentication validation, permission guards, event registration payloads, invoice pool settings, activity slot payloads, recommendation matching, packing items, driver items, and survey combinations.
+- E2E: public availability and critical core workflow creation checks.
 
-## Resources
+For future tests, keep the same canary model: protect the most important Surveyor workflows first, keep setup factory-backed, and avoid detailed edge-case matrices unless a real regression justifies them.
 
-- [Jest Documentation](https://jestjs.io/docs/getting-started)
-- [Playwright Documentation](https://playwright.dev/)
-- [MSW Documentation](https://mswjs.io/docs/)
-- [Testing Library](https://testing-library.com/docs/)
-- [Frontend Testing Guide](tests/client/README.md)
+## Architecture Review Checklist
+
+- **Single-developer maintainability**: `npm run test:quick` remains database-free for daily edits; `npm test` adds one grouped MariaDB suite that initializes the schema once. Production-shaped factories keep entity changes centralized.
+- **Resistance to small implementation changes**: integration checks call public service functions and assert persisted user-visible state. They do not mock repositories, inspect private methods, count class members, or depend on internal call sequences.
+- **Core regression value**: current canaries cover real authentication transactions, permissions, events, survey voting, activity schedules/assignments, packing assignments, drivers coordination, frontend transformations, and focused E2E workflows.
+- **Database fidelity**: TypeORM integration tests use the same entities, subscribers, relations, transactions, and MariaDB driver as production. The setup refuses to reset a database whose name does not contain `test`.
+- **Passing tests expectation**: CI runs the fast Vitest suite with JUnit output, builds the app, installs/caches Playwright browsers, runs focused Playwright E2E with JUnit output, uploads all test reports, and passes the package version plus JUnit and LCOV coverage report paths to SonarQube.
+- **Low-overhead goal**: add future coverage as broad smoke cases first; only add detailed edge-case tests when a real bug proves the broad canary is insufficient.

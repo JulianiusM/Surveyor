@@ -1,6 +1,5 @@
 import {Request} from "express";
-import {Guest} from "../modules/database/entities/user/Guest";
-import {User} from '../modules/database/entities/user/User';
+import {Profile} from "../modules/database/entities/user/Profile";
 import * as activityService from "../modules/database/services/ActivityService";
 import * as driverService from "../modules/database/services/DriverService";
 import * as eventService from "../modules/database/services/EventService";
@@ -77,12 +76,12 @@ export async function loginUser(body: any, session: Request["session"]) {
         throw new ValidationError(LOGIN_TEMPLATE, errorMsg, returnInfo);
     }
 
-    session.user = user;
-    session.guest = undefined;
+    session.auth = {user};
+    session.profile = user.profiles[0];
     await persistSession(session);
 }
 
-export async function getUserDashboardEntities(user: User) {
+export async function getDashboardEntities(profile: Profile) {
     const [
         surveys,
         partSurveys,
@@ -99,20 +98,20 @@ export async function getUserDashboardEntities(user: User) {
         adminEvents,
         registeredEvents
     ] = await Promise.all([
-        surveyService.getSurveysByUserId(user.id),
-        surveyService.getSurveysByParticipantUserId(user.id),
-        packingService.getPackingListByUserId(user.id),
-        packingService.getManagedListsForUser(user.id),
-        packingService.getPackingListByParticipantUserId(user.id),
-        activityService.getActivityPlansByUserId(user.id),
-        activityService.getManagedPlansForUser(user.id),
-        activityService.getActivityPlansByParticipantUserId(user.id),
-        driverService.getDriversListByUserId(user.id),
-        driverService.getManagedListsForUser(user.id),
-        driverService.getDriversListByParticipantUserId(user.id),
-        eventService.getEventsByOwnerId(user.id),
-        eventService.getActiveManagedEventsForUser(user.id),
-        eventService.getRegisteredEventsFor({userId: user.id}),
+        surveyService.getSurveysByProfileId(profile.id),
+        surveyService.getSurveysByParticipant(profile.id),
+        packingService.getPackingListByProfileId(profile.id),
+        packingService.getManagedLists(profile.id),
+        packingService.getPackingListByParticipant(profile.id),
+        activityService.getActivityPlansByProfileId(profile.id),
+        activityService.getManagedPlans(profile.id),
+        activityService.getActivityPlansByParticipant(profile.id),
+        driverService.getDriversListByProfileId(profile.id),
+        driverService.getManagedListsForProfile(profile.id),
+        driverService.getDriversListByParticipant(profile.id),
+        eventService.getEventsByOwnerId(profile.id),
+        eventService.getActiveManagedEvents(profile.id),
+        eventService.getRegisteredEventsFor(profile.id),
     ])
 
     const packlists = merge(ownPacklists, adminPacklists, (a, b) => a.id === b.id);
@@ -138,40 +137,9 @@ export async function getUserDashboardEntities(user: User) {
     } as DashboardDTO;
 }
 
-export async function getUserEntityList(user: User) {
-    const dto = await getUserDashboardEntities(user);
+export async function getEntityList(profile: Profile) {
+    const dto = await getDashboardEntities(profile);
     return {owner: convertToSingleList(dto.owner ?? {}), participant: convertToSingleList(dto.participant ?? {})}
-}
-
-export async function getGuestDashboardEntities(guest: Guest) {
-    const [
-        partSurveys,
-        partPackLists,
-        partActivityPlans,
-        partDriversLists,
-        registeredEvents
-    ] = await Promise.all([
-        surveyService.getSurveysByParticipantGuestId(guest.id),
-        packingService.getPackingListByParticipantGuestId(guest.id),
-        activityService.getActivityPlansByParticipantGuestId(guest.id),
-        driverService.getDriversListByParticipantGuestId(guest.id),
-        eventService.getRegisteredEventsFor({guestId: guest.id})
-    ]);
-
-    return {
-        participant: {
-            surveys: partSurveys,
-            packingLists: partPackLists,
-            activityPlans: partActivityPlans,
-            driversLists: partDriversLists,
-            events: registeredEvents
-        }
-    } as DashboardDTO;
-}
-
-export async function getGuestEntityList(guest: Guest) {
-    const dto = await getGuestDashboardEntities(guest);
-    return {participant: convertToSingleList(dto.participant ?? {})}
 }
 
 export async function sendPasswordForgotMail(username: string) {
@@ -254,8 +222,8 @@ export async function loginGuest(guestId: string, token: string, session: Reques
         throw new ExpectedError('Invalid or mismatched token', 'error', 401);
     }
     // switch to guest session
-    session.user = undefined;
-    session.guest = guest;
+    session.auth = {guest};
+    session.profile = guest.profile;
     await persistSession(session);
 }
 

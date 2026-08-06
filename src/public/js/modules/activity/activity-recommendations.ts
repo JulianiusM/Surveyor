@@ -16,7 +16,7 @@ import type {
     RecommendationWarning
 } from './activity-types';
 
-function formatSlotLabel(slot: RecommendationRow['slot']): string {
+function formatSlotLabel(slot: RecommendationRow['item']): string {
     const day = slot.day ? ` on ${slot.day}` : '';
     const start = formatTimeLabel(slot.startTime || null);
     const end = formatTimeLabel(slot.endTime || null);
@@ -56,16 +56,15 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
         target.textContent = message;
     };
 
-    const warningKey = (slotId: string, userId?: number | null, guestId?: string | null) => {
-        if (userId) return `${slotId}:u${userId}`;
-        if (guestId) return `${slotId}:g${guestId}`;
+    const warningKey = (slotId: string, profileId?: string | null) => {
+        if (profileId) return `${slotId}:p${profileId}`;
         return `${slotId}:unknown`;
     };
 
     const buildWarningMap = () => {
         const map = new Map<string, AssignmentWarning[]>();
         warnings.forEach((entry) => {
-            const key = warningKey(entry.recommendation.slotId, entry.recommendation.userId, entry.recommendation.guestId);
+            const key = warningKey(entry.recommendation.itemId, entry.recommendation.profileId);
             map.set(key, entry.warnings);
         });
         return map;
@@ -81,23 +80,18 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
         return `${option.label}${attendance}`;
     };
 
-    const participantValue = (option: RecommendationParticipantOption) =>
-        option.userId ? `user:${option.userId}` : `guest:${option.guestId}`;
+    const participantValue = (option: RecommendationParticipantOption) => `profile:${option.profileId}`;
 
     const setParticipantDataset = (row: HTMLElement, value: string) => {
-        delete row.dataset.userId;
-        delete row.dataset.guestId;
-        if (value.startsWith('user:')) {
-            row.dataset.userId = value.replace('user:', '');
-        } else if (value.startsWith('guest:')) {
-            row.dataset.guestId = value.replace('guest:', '');
+        delete row.dataset.profileId;
+        if (value.startsWith('profile:')) {
+            row.dataset.profileId = value.replace('profile:', '');
         }
     };
 
     const currentRecKey = (row: HTMLElement) => warningKey(
         row.dataset.slotId || '',
-        row.dataset.userId ? Number(row.dataset.userId) : null,
-        row.dataset.guestId ? row.dataset.guestId : null,
+        row.dataset.profileId ? row.dataset.profileId : null,
     );
 
     const markDirty = (row: HTMLElement) => {
@@ -196,10 +190,9 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
 
         data.forEach((rec) => {
             const row = document.createElement('tr');
-            row.dataset.slotId = rec.slot.id;
-            if (rec.user?.id) row.dataset.userId = String(rec.user.id);
-            if (rec.guest?.id) row.dataset.guestId = String(rec.guest.id);
-            row.dataset.recKey = warningKey(rec.slot.id, rec.user?.id, rec.guest?.id);
+            row.dataset.slotId = rec.item.id;
+            if (rec.profile?.id) row.dataset.profileId = String(rec.profile.id);
+            row.dataset.recKey = warningKey(rec.item.id, rec.profile?.id);
             delete row.dataset.dirty;
             row.classList.remove('table-warning');
 
@@ -207,14 +200,14 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
             const slotSelect = document.createElement('select');
             slotSelect.className = 'form-select form-select-sm text-bg-dark';
             const slotList = [...slotOptions];
-            if (!slotList.some((opt) => opt.id === rec.slot.id)) slotList.push(rec.slot);
+            if (!slotList.some((opt) => opt.id === rec.item.id)) slotList.push(rec.item);
             slotList.forEach((opt) => {
                 const option = document.createElement('option');
                 option.value = opt.id;
                 option.textContent = formatSlotLabel(opt);
                 slotSelect.append(option);
             });
-            slotSelect.value = rec.slot.id;
+            slotSelect.value = rec.item.id;
             slotSelect.addEventListener('change', () => {
                 row.dataset.slotId = slotSelect.value;
                 row.dataset.recKey = currentRecKey(row);
@@ -228,17 +221,14 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
             participantSelect.className = 'form-select form-select-sm text-bg-dark';
             const participantList = [...participantOptions];
             let selectedValue = '';
-            if (rec.user?.id) {
-                selectedValue = `user:${rec.user.id}`;
-            } else if (rec.guest?.id) {
-                selectedValue = `guest:${rec.guest.id}`;
+            if (rec.profile?.id) {
+                selectedValue = `profile:${rec.profile.id}`;
             }
             if (selectedValue && !participantList.some((opt) => participantValue(opt) === selectedValue)) {
                 participantList.push({
                     key: selectedValue,
-                    label: rec.user?.name || rec.user?.username || rec.guest?.username || selectedValue,
-                    userId: rec.user?.id ?? null,
-                    guestId: rec.guest?.id ?? null,
+                    label: rec.profile?.name || selectedValue,
+                    profileId: rec.profile?.id,
                 });
             }
 
@@ -317,9 +307,8 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
         return Array.from(rows.querySelectorAll<HTMLElement>('tr[data-slot-id]')).map((row) => {
             const status = row.querySelector<HTMLSelectElement>('[data-rec-status]');
             return {
-                slotId: row.dataset.slotId!,
-                userId: row.dataset.userId ? Number(row.dataset.userId) : null,
-                guestId: row.dataset.guestId ? Number(row.dataset.guestId) : null,
+                itemId: row.dataset.slotId!,
+                profileId: row.dataset.profileId ? Number(row.dataset.guestId) : null,
                 status: status?.value,
             };
         });

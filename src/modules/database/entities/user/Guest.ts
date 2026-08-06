@@ -1,11 +1,9 @@
-import {Column, Entity, OneToOne, PrimaryGeneratedColumn} from "typeorm";
+import {Column, Entity, OneToOne} from "typeorm";
+import {UuidBase} from "../abstract/TrackedBase";
 import {Profile} from "./Profile";
 
 @Entity("guests", {schema: "surveyor"})
-export class Guest {
-    @PrimaryGeneratedColumn("uuid", {name: "id"})
-    id!: string;
-
+export class Guest extends UuidBase {
     @Column("varchar", {name: "username", length: 50})
     username!: string;
 
@@ -14,18 +12,6 @@ export class Guest {
 
     @Column("varchar", {name: "token", unique: true, length: 255})
     token!: string;
-
-    @Column("timestamp", {
-        name: "created_at",
-        default: () => "CURRENT_TIMESTAMP",
-    })
-    createdAt: Date;
-
-    @Column("timestamp", {
-        name: "updated_at",
-        default: () => "CURRENT_TIMESTAMP",
-    })
-    updatedAt: Date;
 
     @OneToOne(() => Profile, (profile) => profile.guest)
     profile!: Profile;

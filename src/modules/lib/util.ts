@@ -9,11 +9,10 @@ import type {
     ItemDescriptor,
     ItemGetter,
     ItemSubject,
-    ItemWithParentGetter,
-    SessionLike
+    ItemWithParentGetter
 } from "../../types/PermissionTypes";
 import type {DashboardEntities, Entity, EntityBase} from "../../types/UserTypes";
-import type {Agent, EntityItemType, EntityType} from "../../types/UtilTypes";
+import type {EntityItemType, EntityType} from "../../types/UtilTypes";
 import settings from "../settings";
 
 import {APIError} from "./errors";
@@ -32,9 +31,9 @@ export function formatAmount(amount: number): string {
 // Resolve a human-friendly label for the current actor, falling back to usernames where names are missing.
 // This keeps email/audit messages readable without duplicating lookup logic across controllers.
 export function resolveActorLabel(session: Request['session'] | undefined | null): string {
-    if (session?.user?.name) return session.user.name;
-    if (session?.user?.username) return session.user.username;
-    if (session?.guest?.username) return session.guest.username;
+    if (session?.profile?.name) return session.profile.name;
+    if (session?.profile?.user?.username) return session.profile.user.username;
+    if (session?.profile?.guest?.username) return session.profile.guest.username;
     return 'an organizer';
 }
 
@@ -168,14 +167,9 @@ export function maskEmail(email?: string | null) {
     return `${u}@${d}`;
 }
 
-export async function performAPIAction(req: Request, action: {
-    actionUser: (body: any, userId: number) => Promise<void>,
-    actionGuest: (body: any, guestId: string) => Promise<void>,
-}) {
-    const userId = req.session.user?.id;
-    const guestId = req.session.guest?.id;
-    if (userId) await action.actionUser(req.body, userId);
-    else if (guestId) await action.actionGuest(req.body, guestId);
+export async function performAPIAction(req: Request, action: (body: any, profileId: string) => Promise<void>) {
+    const profileId = req.session.profile?.id;
+    if (profileId) await action(req.body, profileId);
     else throw new APIError('Unknown user', {}, 401);
 }
 
@@ -264,7 +258,7 @@ export function getPermFct(resFct: GetResource, entityName: EntityType): EntityG
         return {
             entityType: entityName,
             entityId: resource?.id,
-            ownerUserId: resource?.ownerId,
+            ownerId: resource?.ownerId,
             eventId: entityName === "event" ? resource?.id : resource?.eventId,
         };
     }
@@ -280,14 +274,13 @@ export function getPermFctItems(resFct: GetResource, resFctItems: GetAdditional,
             item: {
                 entityType: additionalName,
                 entityId: resource?.id,
-                ownerUserId: resource?.ownerId ?? resource?.userId,
-                ownerGuestId: resource?.guestId,
+                ownerId: resource?.ownerId ?? resource?.profileId,
                 eventId: parent?.eventId,
             },
             parent: {
                 entityType: entityName,
-                entityId: resource?.listId ?? resource?.planId ?? parent?.id,
-                ownerUserId: parent?.ownerId,
+                entityId: resource?.entityId ?? parent?.id,
+                ownerId: parent?.ownerId,
                 eventId: parent?.eventId,
             }
         };
@@ -306,14 +299,13 @@ export function getPermFctAssign(resFct: GetResource, resFctItems: GetAdditional
             item: {
                 entityType: additionalName,
                 entityId: resource?.id,
-                ownerUserId: resource?.ownerId ?? resource?.userId,
-                ownerGuestId: resource?.guestId,
+                ownerId: resource?.ownerId ?? resource?.profileId,
                 eventId: parent?.eventId,
             },
             parent: {
                 entityType: entityName,
-                entityId: resource?.listId ?? resource?.planId ?? parent?.id,
-                ownerUserId: parent?.ownerId,
+                entityId: resource?.entityId ?? parent?.id,
+                ownerId: parent?.ownerId,
                 eventId: parent?.eventId,
             }
         };
@@ -333,8 +325,7 @@ export function getItemFromEntityPermFct(getItems: (id: string) => Promise<any[]
             res.push({
                 entityType: entityItemType,
                 entityId: item.id,
-                ownerUserId: item.ownerId ?? item.userId,
-                ownerGuestId: item.guestId,
+                ownerId: item.ownerId ?? item.profileId,
                 eventId: item.eventId ?? resource?.eventId,
             })
         }
@@ -434,14 +425,4 @@ export function normalizeToArray<A>(thing: A | A[], fallback: A[] = []) {
     }
 
     return arr;
-}
-
-export function convertToAgent(session: SessionLike): Agent {
-    if (session.user) {
-        return {user: {id: session.user.id}};
-    }
-    if (session.guest) {
-        return {guest: {id: session.guest.id}};
-    }
-    return {};
 }

@@ -57,14 +57,13 @@ jobs:
             sleep 2
           done
 
-      # IMPORTANT: align CI with your dev DB by disabling strict modes
-      - name: Set permissive SQL mode (match dev)
-        run: |
-          mysql -h 127.0.0.1 -uroot -proot -e "SET GLOBAL sql_mode='';"
-          # new sessions will inherit GLOBAL; also fix the current runner session:
-          mysql -h 127.0.0.1 -uroot -proot -e "SET SESSION sql_mode='';"
-          # sanity check:
-          mysql -h 127.0.0.1 -uroot -proot -e "SELECT @@GLOBAL.sql_mode AS global_sql_mode, @@SESSION.sql_mode AS session_sql_mode;"
+      #- name: Set permissive SQL mode (match dev)
+      #  run: |
+      #    mysql -h 127.0.0.1 -uroot -proot -e "SET GLOBAL sql_mode='';"
+      #    # new sessions will inherit GLOBAL; also fix the current runner session:
+      #    mysql -h 127.0.0.1 -uroot -proot -e "SET SESSION sql_mode='';"
+      #    # sanity check:
+      #    mysql -h 127.0.0.1 -uroot -proot -e "SELECT @@GLOBAL.sql_mode AS global_sql_mode, @@SESSION.sql_mode AS session_sql_mode;"
 
 
       - name: Create databases and grant privileges
@@ -114,101 +113,65 @@ jobs:
           EOF
           echo "Wrote .env.e2e"
 
+      - name: Run Vitest unit, frontend, and MariaDB integration suites with reports
+        run: |
+          mkdir -p artifacts
+          npm run test:ci
+
       - name: Build application
         run: npm run build
 
       # =========================
-      # Jest tests with coverage
+      # Playwright E2E
       # =========================
-      - name: Install Jest JUnit reporter (CI-only)
-        run: npm i --no-save jest-junit
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
 
-      - name: Run unit/integration tests (Jest) with coverage & report
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Run focused Playwright E2E suite with JUnit report
         env:
-          NODE_ENV: test
-          JEST_JUNIT_OUTPUT: artifacts/junit-jest.xml
+          CI: true
+          PLAYWRIGHT_JUNIT_OUTPUT: artifacts/junit-playwright.xml
+          PLAYWRIGHT_HTML_OUTPUT_DIR: artifacts/playwright-report
         run: |
           mkdir -p artifacts
-          # Keep JSON results for debugging, plus JUnit for CI tools
-          npm test -- \
-            --ci \
-            --runInBand \
-            --detectOpenHandles \
-            --reporters=default \
-            --reporters=jest-junit \
-            --coverage \
-            --coverageReporters=lcov \
-            --coverageReporters=cobertura \
-            --coverageReporters=text-summary \
-            --json --outputFile=artifacts/jest-results.json
-          # Move coverage files into artifacts/
-          mkdir -p artifacts/coverage
-          if [ -f coverage/lcov.info ]; then cp coverage/lcov.info artifacts/coverage/lcov.info; fi
-          if [ -f coverage/cobertura-coverage.xml ]; then cp coverage/cobertura-coverage.xml artifacts/coverage/cobertura-coverage.xml; fi
-          if [ -f coverage/coverage-summary.json ]; then cp coverage/coverage-summary.json artifacts/coverage/coverage-summary.json; fi
+          npm run e2e
 
-      - name: Upload Jest reports & coverage (small)
+      - name: Upload test reports (always)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: jest-and-coverage
+          name: test-reports
           path: |
-            artifacts/junit-jest.xml
-            artifacts/jest-results.json
-            artifacts/coverage/lcov.info
-            artifacts/coverage/cobertura-coverage.xml
-            artifacts/coverage/coverage-summary.json
+            artifacts/junit-vitest.xml
+            artifacts/junit-playwright.xml
+            artifacts/playwright-report/
+            coverage/lcov.info
+            coverage/coverage-final.json
           retention-days: 7
           compression-level: 9
           if-no-files-found: warn
 
-      # =========================
-      # Playwright E2E
-      # =========================
-      #- name: Cache Playwright browsers
-      #  id: playwright-cache
-      #  uses: actions/cache@v4
-      #  with:
-      #    path: ~/.cache/ms-playwright
-      #    key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
-
-      #- name: Install Playwright browsers
-      #  if: steps.playwright-cache.outputs.cache-hit != 'true'
-      #  run: npx playwright install --with-deps chromium
-
-      #- name: Run E2E tests (Playwright) with JUnit
-      #  env:
-      #    CI: true
-      #    PLAYWRIGHT_JUNIT_OUTPUT: artifacts/junit-playwright.xml
-      #    PLAYWRIGHT_HTML_OUTPUT_DIR: artifacts/playwright-report
-      #  run: |
-      #    mkdir -p artifacts
-      #    npx playwright test || EXIT=$?
-      #    exit 0
-
-      #- name: Upload Playwright JUnit (always)
-      #  if: always()
-      #  uses: actions/upload-artifact@v4
-      #  with:
-      #    name: playwright-junit
-      #    path: artifacts/junit-playwright.xml
-      #    retention-days: 7
-      #    compression-level: 9
-      #    if-no-files-found: warn
-
-      # Upload the heavy HTML report ONLY on failure to save storage
-      #- name: Upload Playwright HTML report (on failure)
-      #  if: failure()
-      #  uses: actions/upload-artifact@v4
-      #  with:
-      #    name: playwright-html
-      #    path: artifacts/playwright-report/
-      #    retention-days: 3
-      #    compression-level: 9
-      #    if-no-files-found: ignore
+      - name: Read package version
+        id: package
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          echo "version=${PACKAGE_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@master
+        with:
+          args: >
+            -Dsonar.projectVersion=${{ steps.package.outputs.version }}
+            -Dsonar.junit.reportPaths=artifacts/junit-vitest.xml,artifacts/junit-playwright.xml
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}

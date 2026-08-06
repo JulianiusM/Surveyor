@@ -5,43 +5,54 @@ import {AppDataSource} from '../dataSource';
 import {EntityAdminAssignment as ACL} from '../entities/permissions/EntityAdminAssignment';
 import {EntityPermissions} from "../entities/permissions/EntityPermissions";
 
-export async function addAdmin(entityType: CombEntityType, entityId: string, userId: number, perms: number, createdBy?: number) {
+export async function addAdmin(entityType: CombEntityType, entityId: string, profileId: string, perms: number, createdBy?: number) {
     const repo = AppDataSource.getRepository(ACL);
-    await repo.save(repo.create({entityType, entityId, user: {id: userId}, perms, createdBy: createdBy ?? null}));
+    await repo.save(repo.create({entityType, entityId, profile: {id: profileId}, perms, createdBy: createdBy ?? null}));
 }
 
-export async function upsertAdmin(entityType: CombEntityType, entityId: string, userId: number, perms: number) {
+export async function upsertAdmin(entityType: CombEntityType, entityId: string, profileId: string, perms: number) {
     const repo = AppDataSource.getRepository(ACL);
     await repo.upsert(
-        repo.create({entityType, entityId, user: {id: userId}, perms}),
-        ['entityType', 'entityId', 'user']
+        repo.create({entityType, entityId, profile: {id: profileId}, perms}),
+        ['entityType', 'entityId', 'profile']
     );
 }
 
-export async function removeAdmin(entityType: CombEntityType, entityId: string, userId: number) {
+export async function removeAdmin(entityType: CombEntityType, entityId: string, profileId: string) {
     const repo = AppDataSource.getRepository(ACL);
-    await repo.delete({entityType, entityId, user: {id: userId}});
+    await repo.delete({entityType, entityId, profile: {id: profileId}});
 }
 
 export async function listAdmins(entityType: CombEntityType, entityId: string) {
     const repo = AppDataSource.getRepository(ACL);
     // join users if you want to render names/emails
-    return await repo.find({where: {entityType, entityId}, relations: {
-        user: true
-    }});
+    return await repo.find({
+        where: {entityType, entityId}, relations: {
+            profile: {
+                user: true,
+                guest: true,
+            }
+        }
+    });
 }
 
-export async function updateAdminPerms(entityType: CombEntityType, entityId: string, userId: number, perms: number) {
-    await AppDataSource.getRepository(ACL).update({entityType, entityId, user: {id: userId}}, {perms});
+export async function updateAdminPerms(entityType: CombEntityType, entityId: string, profileId: string, perms: number) {
+    await AppDataSource.getRepository(ACL).update({entityType, entityId, profile: {id: profileId}}, {perms});
 }
 
-export async function isUserAdmin(entityType: CombEntityType, entityId: string, userId: number) {
+export async function isAdmin(entityType: CombEntityType, entityId: string, profileId: string) {
     const repo = AppDataSource.getRepository(ACL);
-    return await repo.exists({where: {entityType, entityId, user: {id: userId}}});
+    return await repo.exists({where: {entityType, entityId, profile: {id: profileId}}});
 }
 
-export async function getUserPerms(entityType: CombEntityType, entityId: string, userId: number): Promise<number> {
-    const row = await AppDataSource.getRepository(ACL).findOne({where: {entityType, entityId, user: {id: userId}}});
+export async function getProfilePerms(entityType: CombEntityType, entityId: string, profileId: string): Promise<number> {
+    const row = await AppDataSource.getRepository(ACL).findOne({
+        where: {
+            entityType,
+            entityId,
+            profile: {id: profileId}
+        }
+    });
     return row?.perms ?? 0;
 }
 
@@ -90,11 +101,11 @@ export async function updatePerms(
     });
 }
 
-export async function getIdsForUser(entityType: CombEntityType, userId: number, mask: number = 0): Promise<Array<string>> {
+export async function getIds(entityType: CombEntityType, profileId: string, mask: number = 0): Promise<Array<string>> {
     const repo = AppDataSource.getRepository(ACL);
     const ids = await repo.createQueryBuilder("e")
         .where('(e.perms & :mask) = :mask', {mask})
-        .andWhere('e.user_id = :userId', {userId})
+        .andWhere('e.profile_id = :profileId', {profileId})
         .andWhere('e.entity_type = :entityType', {entityType})
         .select("e.entity_id").getRawMany();
     return (ids ?? []).map(i => i.entity_id);

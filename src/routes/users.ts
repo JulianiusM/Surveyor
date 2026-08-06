@@ -111,7 +111,7 @@ app.get('/oidc/callback', asyncHandler(async (req: Request, res: Response) => {
 
 // Dashboard nach dem Login
 app.get('/dashboard', isAuthenticated, asyncHandler(async (req: Request, res: Response) => {
-    renderer.renderWithData(res, 'users/dashboard', await userController.getUserEntityList(req.session.user!));
+    renderer.renderWithData(res, 'users/dashboard', await userController.getEntityList(req.session.profile!));
 }));
 
 

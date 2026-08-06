@@ -89,6 +89,7 @@ block content
                 input#bindingDeadline.form-control.text-bg-dark(
                     type="datetime-local"
                     name="bindingDeadline"
+                    step=1
                     value=(parsed.bindingDeadline || ''))
             .col-md-4
                 +timezonePicker('deadlineTz', {

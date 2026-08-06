@@ -7,8 +7,7 @@ import {InternalError} from "../lib/errors";
 export type RoundingMode = NonNullable<ActivityPlan["roundingMode"]>;
 
 export interface ParticipantAttendance {
-    userId?: number | null;
-    guestId?: string | null;
+    profileId?: string | null;
     arrivalDate?: string | null;
     departureDate?: string | null;
     roleIds?: number[];
@@ -18,8 +17,7 @@ export interface ParticipantAttendance {
 export interface RequirementOverrideInput {
     id?: number;
     roleId?: number | null;
-    userId?: number | null;
-    guestId?: string | null;
+    profileId?: string | null;
     requiredShifts: number;
 }
 
@@ -137,15 +135,13 @@ export function applyRounding(value: number, mode: RoundingMode): number {
 }
 
 export function toParticipantKey(participant: ParticipantAttendance | ParticipantRow): string {
-    if (participant.userId) return `user:${participant.userId}`;
-    if (participant.guestId) return `guest:${participant.guestId}`;
+    if (participant.profileId) return `profile:${participant.profileId}`;
     return "participant:unknown";
 }
 
 export function toParticipantName(participant: ParticipantAttendance | ParticipantRow): string {
     if (participant.name) return participant.name;
-    if (participant.userId) return `User #${participant.userId}`;
-    if (participant.guestId) return `Guest #${participant.guestId}`;
+    if (participant.profileId) return `Profile #${participant.profileId}`;
     return "Participant";
 }
 
@@ -153,17 +149,12 @@ export function normalizeOverrideInput(input: RequirementOverrideInput): Require
     const normalized: RequirementOverrideInput = {
         id: input.id,
         roleId: input.roleId ?? null,
-        userId: input.userId ?? null,
-        guestId: input.guestId ?? null,
+        profileId: input.profileId ?? null,
         requiredShifts: input.requiredShifts,
     };
 
-    if (!normalized.userId && !normalized.guestId) {
+    if (!normalized.profileId) {
         throw new InternalError("Override requires a userId or guestId");
-    }
-
-    if (normalized.userId && normalized.guestId) {
-        throw new InternalError("Override cannot target both user and guest");
     }
 
     if (normalized.requiredShifts == null || Number.isNaN(normalized.requiredShifts)) {
@@ -243,16 +234,14 @@ function ensureNonNegativeInteger(value: number | null | undefined, fallback = 0
 }
 
 export function selectOverride(participant: ParticipantAttendance, overrides: ActivityPlanRequirementOverride[]): ActivityPlanRequirementOverride | undefined {
-    const keyUser = participant.userId ?? null;
-    const keyGuest = participant.guestId ?? null;
+    const key = participant.profileId ?? null;
     const roleIds = participant.roleIds ?? [];
 
     let best: ActivityPlanRequirementOverride | undefined;
 
     for (const override of overrides) {
-        const matchesUser = override.userId != null && keyUser === override.userId;
-        const matchesGuest = override.guestId != null && keyGuest === override.guestId;
-        if (!matchesUser && !matchesGuest) continue;
+        const matches = override.profile.id != null && key === override.profile.id;
+        if (!matches) continue;
 
         const roleMatch = override.roleId == null || roleIds.includes(override.roleId);
         if (!roleMatch) continue;
@@ -271,7 +260,7 @@ export function selectOverride(participant: ParticipantAttendance, overrides: Ac
 }
 
 function calculateSpecificity(best: ActivityPlanRequirementOverride) {
-    return (best.roleId ? 1 : 0) + (best.userId ? 1 : 0) + (best.guestId ? 1 : 0);
+    return (best.roleId ? 1 : 0) + (best.profile.id ? 1 : 0);
 }
 
 function resolveRoleFixedRequirement(roleRequirements: ActivityPlanRequirement[], roleIds: number[] | undefined): number | null {

@@ -23,7 +23,7 @@ Surveyor is a **monolithic web application** for survey and event management wit
 - **Database**: MariaDB with TypeORM
 - **Frontend**: Server-rendered Pug templates + vanilla JavaScript/TypeScript
 - **Authentication**: OIDC (OpenID Connect)
-- **Testing**: Jest + Playwright
+- **Testing**: Playwright Test
 
 ### High-Level Architecture
 
@@ -89,8 +89,7 @@ Surveyor is a **monolithic web application** for survey and event management wit
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| Jest | Latest | Unit/integration testing |
-| Playwright | Latest | E2E testing |
+| Playwright Test | Latest | Unit, integration, and E2E testing |
 | MSW | Latest | API mocking |
 | Testing Library | Latest | DOM testing |
 
@@ -431,303 +430,23 @@ if (perms.has('EDIT')) {
 
 ### Testing Patterns
 
-#### Data-Driven Testing
+Surveyor uses a pragmatic test architecture: Vitest covers naturally isolated utilities and frontend helpers plus database-backed service integration canaries, while a small Playwright suite protects critical E2E workflows. Core services use the production TypeORM DataSource against disposable MariaDB rather than repository mocks. Tests protect production behavior and entity relationships, not private implementation details.
 
 ```typescript
-// tests/data/controller/surveyData.ts
-export const createSurveyData = [
-    {
-        description: 'creates survey with valid data',
-        input: { title: 'Test' },
-        expected: { id: '123', title: 'Test' },
-    },
-];
-
-// tests/controller/survey.test.ts
-test.each(createSurveyData)('$description', async (testCase) => {
-    // Test implementation
-});
-```
-
-#### Keyword-Driven Testing
-
-```typescript
-// tests/keywords/common/controllerKeywords.ts
-export function setupMock(mockFn: jest.Mock, returnValue: any): void {
-    mockFn.mockResolvedValue(returnValue);
-}
-
-export function verifyResult(actual: any, expected: any): void {
-    expect(actual).toEqual(expected);
-}
-
-// Usage in tests
-setupMock(service.create, testCase.expected);
-const result = await controller.create(testCase.input);
-verifyResult(result, testCase.expected);
-```
-
-### Test Organization
-
-- **Unit tests**: Test individual functions in isolation
-- **Controller tests**: Test business logic with mocked services
-- **Database tests**: Test data operations with real database
-- **Frontend tests**: Test client code with MSW (no backend)
-- **E2E tests**: Test complete workflows with Playwright
-
-See [TESTING_GUIDE.md](TESTING_GUIDE.md) for comprehensive testing documentation.
-
----
-
-## Design Patterns
-
-### 1. Repository Pattern
-
-Service layer uses repository pattern:
-
-```typescript
-class SurveyService {
-    private repository: Repository<Survey>;
-    
-    constructor() {
-        this.repository = AppDataSource.getRepository(Survey);
-    }
-    
-    async findById(id: string): Promise<Survey | null> {
-        return await this.repository.findOne({ where: { id } });
-    }
-}
-```
-
-### 2. DTO Pattern
-
-Data Transfer Objects for API boundaries:
-
-```typescript
-interface CreateSurveyDto {
-    title: string;
-    description: string;
-    combinations: CombinationDto[];
-}
-
-// Validated in controller
-// Transformed to entity in service
-```
-
-### 3. Middleware Chain Pattern
-
-Request processing through middleware chain:
-
-```typescript
-router.post('/create', 
-    requireLogin,        // Authentication
-    requirePerm('EDIT'), // Authorization
-    validate(),          // Validation
-    asyncHandler(        // Error handling
-        controller.create
-    )
-);
-```
-
-### 4. Factory Pattern
-
-Permission middleware factory:
-
-```typescript
-export function requirePerm(permission: string) {
-    return async (req: Request, res: Response, next: NextFunction) => {
-        // Check permission
-        if (hasPermission) next();
-        else res.status(403).send();
-    };
-}
-```
-
-### 5. Strategy Pattern
-
-Authentication strategies:
-
-```typescript
-passport.use('local', new LocalStrategy(...));
-passport.use('oidc', new OIDCStrategy(...));
-
-// Use based on configuration
-app.use(passport.authenticate(strategy));
-```
-
-### 6. Observer Pattern
-
-Event emitters for logging and monitoring:
-
-```typescript
-eventEmitter.on('user.login', (user) => {
-    logger.info(`User ${user.id} logged in`);
-});
-```
-
----
-
-## Performance Considerations
-
-### Database
-
-- **Indexes**: Added on foreign keys and frequently queried columns
-- **Transactions**: Used for multi-step operations
-- **Connection Pooling**: Configured in TypeORM
-- **Query Optimization**: Use `EXPLAIN` for slow queries
-
-### Caching
-
-- **Session Store**: Redis (configurable)
-- **Query Cache**: TypeORM query caching
-- **Static Assets**: Nginx caching (production)
-
-### Frontend
-
-- **Bundling**: esbuild for fast, optimized bundles
-- **Lazy Loading**: Modules loaded on demand
-- **Minification**: Production builds minified
-- **CDN**: Bootstrap and libraries from CDN
-
----
-
-## Security Architecture
-
-### Security Layers
-
-1. **Input Validation**: express-validator on all inputs
-2. **Output Escaping**: Pug auto-escapes by default
-3. **Authentication**: OIDC + bcrypt password hashing
-4. **Authorization**: Permission system on all entities
-5. **Session Security**: Secure cookies, HTTPS-only in production
-6. **CSRF Protection**: CSRF tokens on forms
-7. **SQL Injection**: Parameterized queries via TypeORM
-8. **XSS Protection**: Content Security Policy headers
-
-### Security Best Practices
-
-- ✅ Passwords hashed with bcrypt (10 rounds)
-- ✅ Sessions use secure, httpOnly cookies
-- ✅ Input validated on backend and frontend
-- ✅ Output escaped in templates
-- ✅ HTTPS enforced in production
-- ✅ Database credentials in environment variables
-- ✅ Rate limiting on authentication endpoints
-- ✅ Regular dependency updates
-
----
-
-## Deployment Architecture
-
-### Development
-
-```
-Node.js (nodemon) ──→ TypeScript ──→ Source
-     ↓                                 ↑
-esbuild (watch) ─────────────────────┘
-```
-
-### Production
-
-```
-[Nginx] ──→ [Node.js App] ──→ [MariaDB]
-   ↓              ↓
-[Static         [Sessions]
- Assets]        (Redis)
-```
-
-**Production Checklist:**
-- [ ] Environment variables configured
-- [ ] Database migrations run
-- [ ] Static assets compiled and cached
-- [ ] HTTPS certificates installed
-- [ ] Monitoring and logging configured
-- [ ] Backups configured
-- [ ] Rate limiting enabled
-
----
-
-## Scalability Considerations
-
-### Current State: Monolith
-
-The application is currently a monolith, suitable for:
-- Small to medium user bases (< 10,000 users)
-- Single server deployment
-- Moderate traffic (< 1,000 req/min)
-
-### Future Scaling Options
-
-If needed, consider:
-
-1. **Horizontal Scaling**: Load balancer + multiple app instances
-2. **Database Optimization**: Read replicas, connection pooling
-3. **Caching Layer**: Redis for sessions and data caching
-4. **CDN**: Static assets served from CDN
-5. **Microservices**: Split by feature (if truly necessary)
-
----
-
-## Monitoring and Observability
-
-### Logging
-
-- **Winston**: Structured logging
-- **Levels**: Error, Warn, Info, Debug
-- **Destinations**: Console, Files, External service
-
-### Metrics
-
-Consider adding:
-- Response times
-- Error rates
-- Database query times
-- User activity
-
-### Health Checks
-
-```typescript
-app.get('/health', (req, res) => {
-    res.json({
-        status: 'ok',
-        database: await checkDatabase(),
-        version: process.env.npm_package_version
+// tests/unit/application-utilities.spec.ts
+import {describe, expect, it} from 'vitest';
+import {buildDateTotals} from '../../src/modules/lib/util';
+import {createDateTotalsCase} from '../factories/dateTotalsFactory';
+
+describe('date totals transformation', () => {
+    it.each([createDateTotalsCase()])('$description', (testCase) => {
+        expect(buildDateTotals(
+            testCase.eventStart,
+            testCase.eventEnd,
+            testCase.registrations,
+        )).toEqual(testCase.expectedTotals);
     });
 });
 ```
 
----
-
-## Future Architecture Considerations
-
-### Potential Improvements
-
-1. **API Layer**: Add REST or GraphQL API for mobile apps
-2. **Real-time**: WebSockets for live updates
-3. **Background Jobs**: Queue system for long-running tasks
-4. **File Storage**: S3 or similar for file uploads
-5. **Email Queue**: Asynchronous email sending
-6. **Search**: Elasticsearch for full-text search
-
-### Migration Paths
-
-If requirements grow:
-- Extract services to microservices (feature by feature)
-- Add API gateway for service orchestration
-- Implement event-driven architecture
-- Add message queue (RabbitMQ, Kafka)
-
----
-
-## Documentation Links
-
-- **Testing**: [TESTING_GUIDE.md](TESTING_GUIDE.md)
-- **Development**: [DEVELOPMENT.md](DEVELOPMENT.md)
-- **Frontend Testing**: [FRONTEND_TESTING.md](FRONTEND_TESTING.md)
-- **Database**: [DATABASE.md](DATABASE.md)
-
----
-
-**Last Updated:** December 10, 2025  
-**Architecture Version:** 1.0  
-**Next Review:** Quarterly or with major changes
+Use Playwright only for focused E2E workflows that need the running app. Keep setup stable with factories/fixtures and prefer user-visible outcomes over DOM implementation details.

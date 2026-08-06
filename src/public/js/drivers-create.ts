@@ -11,13 +11,7 @@ import type {DriversItem} from "../../modules/database/entities/drivers/DriversI
  * Handle form submission - build JSON from form and submit
  * @param evt Submit event
  */
-function handleSubmit(evt: Event): void {
-    const form = document.getElementById('packingForm') as HTMLFormElement;
-    const hiddenFld = document.getElementById('itemsJson') as HTMLInputElement;
-    const tableBody = document.getElementById('itemTable');
-
-    evt.preventDefault();
-
+export function collectDriversItems(tableBody: Element | null): Partial<DriversItem>[] {
     const items: Partial<DriversItem>[] = [];
 
     if (tableBody) {
@@ -36,7 +30,16 @@ function handleSubmit(evt: Event): void {
         });
     }
 
-    hiddenFld.value = JSON.stringify(items);
+    return items;
+}
+
+function handleSubmit(evt: Event): void {
+    const form = document.getElementById('packingForm') as HTMLFormElement;
+    const hiddenFld = document.getElementById('itemsJson') as HTMLInputElement;
+    const tableBody = document.getElementById('itemTable');
+
+    evt.preventDefault();
+    hiddenFld.value = JSON.stringify(collectDriversItems(tableBody));
     form.submit();
 }
 
@@ -57,6 +60,8 @@ export function init(): void {
     initListeners();
 }
 
-// Expose to global scope
-if (!window.Surveyor) window.Surveyor = {};
-window.Surveyor.init = init;
+// Expose to global scope when running in a browser; keeping this guarded makes imports safe in tests.
+if (typeof window !== 'undefined') {
+    if (!window.Surveyor) window.Surveyor = {};
+    window.Surveyor.init = init;
+}

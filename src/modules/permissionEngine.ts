@@ -13,51 +13,45 @@ import type {
 } from "../types/PermissionTypes";
 import type {CombEntityType} from "../types/UtilTypes";
 import * as entityAdminService from './database/services/EntityAdminService';
-import {getUserPerms, updatePerms} from './database/services/EntityAdminService';
+import {getProfilePerms, updatePerms} from './database/services/EntityAdminService';
 import {isRegisteredForEvent} from './database/services/EventService';
 import {ALL_MASK, getInitialPerms, hasPerm, PERM, toMaskFromBodyValue} from './lib/permissions';
 import {jsonReplacer, normalizeToArray} from "./lib/util";
 
-function keyUser(t: CombEntityType, id: string, userId: number) {
-    return `${t}:${id}:${userId}`;
+function keyUser(t: CombEntityType, id: string, profileId: string) {
+    return `${t}:${id}:${profileId}`;
 }
 
 function keyEnt(t: CombEntityType, id: string) {
     return `${t}:${id}`;
 }
 
-function isOwnerTyped(
+function isOwner(
     session: SessionLike,
-    ownerUserId?: number | null,
-    ownerGuestId?: string | null
+    ownerId?: string | null
 ): boolean {
-    const uid = session.user?.id ?? null;
-    const gid = session.guest?.id ?? null;
-
-    if (uid && ownerUserId && uid === ownerUserId) return true;
-    return !!(gid && ownerGuestId && gid === ownerGuestId);
-
+    return !!(session.profile && ownerId && session.profile.id === ownerId);
 }
 
 /** Core: compute effective mask for ONE subject (no parent) */
 async function computeMaskFor(
     t: CombEntityType,
     id: string,
-    ownerUserId: number | null | undefined,
-    ownerGuestId: string | null | undefined,
+    ownerId: string | null | undefined,
     eventId: string | null | undefined,
     session: SessionLike,
     caches?: PermEngineCaches
 ): Promise<number> {
     // 0) Owner ⇒ full mask
-    if (isOwnerTyped(session, ownerUserId, ownerGuestId)) return ALL_MASK;
+    if (isOwner(session, ownerId)) return ALL_MASK;
 
-    const userId = session.user?.id ?? null;
-    const guestId = session.guest?.id ?? null;
+    const profileId = session.profile?.id ?? null;
+    const userId = session.profile?.user?.id ?? null;
+    const guestId = session.profile?.guest?.id ?? null;
 
     // The effective ACL including all inheritances
     let eff = 0;
-    eff |= await loadUserPerms(t, id, userId, caches);
+    eff |= await loadUserPerms(t, id, profileId, caches);
 
     // Load Default ACLs
     let defaults: Record<string, number> | undefined;
@@ -74,18 +68,18 @@ async function computeMaskFor(
     if ((userId || guestId) && defaults?.guest) eff |= defaults.guest;
 
     // Participant audience
-    eff |= await loadEventParticipantPerms(eventId, userId, guestId, defaults, caches);
+    eff |= await loadEventParticipantPerms(eventId, profileId, defaults, caches);
 
     return eff;
 }
 
-async function loadUserPerms(t: CombEntityType, id: string, userId: number | null, caches?: PermEngineCaches) {
-    if (userId) {
-        const k = keyUser(t, id, userId);
+async function loadUserPerms(t: CombEntityType, id: string, profileId: string | null, caches?: PermEngineCaches) {
+    if (profileId) {
+        const k = keyUser(t, id, profileId);
         if (caches?.userPerms?.has(k)) {
             return caches.userPerms.get(k)!;
         } else {
-            const u = await getUserPerms(t, id, userId);
+            const u = await getProfilePerms(t, id, profileId);
             caches?.userPerms?.set?.(k, u);
             return u;
         }
@@ -93,16 +87,12 @@ async function loadUserPerms(t: CombEntityType, id: string, userId: number | nul
     return 0;
 }
 
-async function loadEventParticipantPerms(eventId: string | null | undefined, userId: number | null, guestId: string | null, defaults?: Record<string, number>, caches?: PermEngineCaches) {
+async function loadEventParticipantPerms(eventId: string | null | undefined, profileId: string | null, defaults?: Record<string, number>, caches?: PermEngineCaches) {
     if (eventId) {
-        const eid = String(eventId);
-        let isPart: boolean | undefined = caches?.participant?.get(eid);
+        let isPart: boolean | undefined = caches?.participant?.get(eventId);
         if (isPart === undefined) {
-            isPart = await isRegisteredForEvent(
-                {userId: userId ?? undefined, guestId: guestId ?? undefined},
-                eid
-            );
-            caches?.participant?.set?.(eid, isPart);
+            isPart = await isRegisteredForEvent(profileId || '', eventId);
+            caches?.participant?.set?.(eventId, isPart);
         }
         if (isPart && defaults?.participant) return defaults.participant;
     }
@@ -138,8 +128,7 @@ export async function evaluateSubject(
         const m = await computeMaskFor(
             subject.entity.entityType,
             subject.entity.entityId,
-            subject.entity.ownerUserId ?? null,
-            subject.entity.ownerGuestId ?? null,
+            subject.entity.ownerId ?? null,
             subject.entity.eventId ?? null,
             session,
             caches
@@ -149,8 +138,7 @@ export async function evaluateSubject(
         const parentMask = await computeMaskFor(
             subject.parent.entityType,
             subject.parent.entityId,
-            subject.parent.ownerUserId ?? null,
-            subject.parent.ownerGuestId ?? null,
+            subject.parent.ownerId ?? null,
             subject.parent.eventId ?? null,
             session,
             caches
@@ -158,8 +146,7 @@ export async function evaluateSubject(
         const selfMask = await computeMaskFor(
             subject.item.entityType,
             subject.item.entityId,
-            subject.item.ownerUserId ?? null,
-            subject.item.ownerGuestId ?? null,
+            subject.item.ownerId ?? null,
             (subject.item.eventId ?? subject.parent.eventId ?? null),
             session,
             caches
