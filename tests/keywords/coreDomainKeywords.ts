@@ -68,6 +68,24 @@ export async function createActivityPlanWithSlot(ownerId: string): Promise<strin
     return await activityController.createEntity(ownerId, plan);
 }
 
+export async function createEventActivityPlan(ownerId: string, eventId: string): Promise<string> {
+    const morning = createActivitySlotEntity({
+        id: randomUUID(), title: 'Breakfast setup', day: '2027-06-01', startTime: '08:00', endTime: '09:00',
+    });
+    const evening = createActivitySlotEntity({
+        id: randomUUID(), title: 'Dinner cleanup', day: '2027-06-02', startTime: '18:00', endTime: '19:00', pos: 1,
+    });
+    const plan = activityController.preprocessCreate({
+        title: 'Automatic camp duties',
+        description: 'Shared participant duties',
+        startDate: '2027-06-01',
+        endDate: '2027-06-03',
+        event_id: eventId,
+        slots: JSON.stringify({'2027-06-01': [morning], '2027-06-02': [evening]}),
+    });
+    return await activityController.createEntity(ownerId, plan);
+}
+
 export async function createDriversListWithItem(ownerId: string): Promise<[string, DriversItem]> {
     const list = driversController.preprocessCreate({title: 'Camp drivers', description: 'Shared rides'});
     const listId = await driversController.createEntity(ownerId, list);
