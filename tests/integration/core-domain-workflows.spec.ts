@@ -1,4 +1,11 @@
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
+import activityController from '../../src/controller/activityController';
+import driversController from '../../src/controller/driversController';
+import * as entityAdminController from '../../src/controller/entityAdminController';
+import eventController from '../../src/controller/eventController';
+import packingController from '../../src/controller/packingController';
+import surveyController from '../../src/controller/surveyController';
+import * as userController from '../../src/controller/userController';
 import {Profile} from '../../src/modules/database/entities/user/Profile';
 import {PERM} from '../../src/modules/lib/permissions';
 import * as activityService from '../../src/modules/database/services/ActivityService';
@@ -14,13 +21,20 @@ import {
     createPackingItemEntity,
 } from '../factories/integrationEntityFactory';
 import {
+    assignActivitySlot,
+    assignDriversItem,
+    assignPackingItem,
     createActivityPlanWithSlot,
     createDriversListWithItem,
     createIntegrationEvent,
     createPackingListWithItem,
     createSurveyWithCombinations,
     persistIntegrationProfile,
+    registerEventAttendance,
     registerLocalAccount,
+    submitSurveyResponses,
+    unassignDriversItem,
+    unassignPackingItem,
 } from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 
@@ -67,7 +81,7 @@ describe('authentication user stories', () => {
 
         const token = await userService.generateActivationToken(userId);
         expect((await userService.verifyActivationToken(token))?.id).toBe(userId);
-        await userService.activateUser(userId);
+        await userController.activateAccount(token);
         expect(Boolean((await userService.getUserById(userId))?.isActive)).toBe(true);
     });
 
@@ -75,7 +89,7 @@ describe('authentication user stories', () => {
         const {id: userId} = await registerLocalAccount('activation-consumption');
 
         const token = await userService.generateActivationToken(userId);
-        await userService.activateUser(userId);
+        await userController.activateAccount(token);
         expect(await userService.verifyActivationToken(token)).toBeNull();
     });
 
@@ -84,7 +98,7 @@ describe('authentication user stories', () => {
 
         const token = await userService.generatePasswordResetToken(username);
         expect((await userService.verifyPasswordResetToken(token))?.id).toBe(userId);
-        await userService.resetPassword(username, 'replacement-secret');
+        await userController.resetPassword(token, {password: 'replacement-secret', confirmPassword: 'replacement-secret'});
         await expect(userService.verifyPassword(userId, 'replacement-secret')).resolves.toBe(true);
     });
 
@@ -92,7 +106,7 @@ describe('authentication user stories', () => {
         const {username} = await registerLocalAccount('reset-consumption');
 
         const token = await userService.generatePasswordResetToken(username);
-        await userService.resetPassword(username, 'replacement-secret');
+        await userController.resetPassword(token, {password: 'replacement-secret', confirmPassword: 'replacement-secret'});
         expect(await userService.verifyPasswordResetToken(token)).toBeNull();
     });
 
@@ -160,7 +174,7 @@ describe('permission user stories', () => {
     it('delegates view access to an event administrator', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Permission workflow event');
         const viewAdmin = PERM.ACCESS_VIEW;
-        await adminService.addAdmin('event', eventId, participant.id, viewAdmin);
+        await entityAdminController.addAdmin('event', eventId, {profileId: participant.id, mask: viewAdmin});
 
         expect(await adminService.getProfilePerms('event', eventId, participant.id)).toBe(viewAdmin);
     });
@@ -168,16 +182,16 @@ describe('permission user stories', () => {
     it('upgrades a delegated administrator permission mask', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Permission workflow event');
         const viewAdmin = PERM.ACCESS_VIEW;
-        await adminService.addAdmin('event', eventId, participant.id, viewAdmin);
+        await entityAdminController.addAdmin('event', eventId, {profileId: participant.id, mask: viewAdmin});
 
-        await adminService.updateAdminPerms('event', eventId, participant.id, viewAdmin | PERM.ACCESS_ADMIN);
+        await entityAdminController.updateAdmin('event', eventId, participant.id, {mask: viewAdmin | PERM.ACCESS_ADMIN});
         expect(await adminService.getProfilePerms('event', eventId, participant.id)).toBe(viewAdmin | PERM.ACCESS_ADMIN);
     });
 
     it('lists delegated administrators with their profile', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Permission workflow event');
         const viewAdmin = PERM.ACCESS_VIEW;
-        await adminService.addAdmin('event', eventId, participant.id, viewAdmin);
+        await entityAdminController.addAdmin('event', eventId, {profileId: participant.id, mask: viewAdmin});
 
         expect(await adminService.listAdmins('event', eventId)).toContainEqual(expect.objectContaining({profile: expect.objectContaining({id: participant.id})}));
     });
@@ -185,16 +199,16 @@ describe('permission user stories', () => {
     it('removes delegated event administration', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Permission workflow event');
         const viewAdmin = PERM.ACCESS_VIEW;
-        await adminService.addAdmin('event', eventId, participant.id, viewAdmin);
+        await entityAdminController.addAdmin('event', eventId, {profileId: participant.id, mask: viewAdmin});
 
-        await adminService.removeAdmin('event', eventId, participant.id);
+        await entityAdminController.removeAdmin('event', eventId, participant.id);
         expect(await adminService.isAdmin('event', eventId, participant.id)).toBe(false);
     });
 
     it('keeps permissions isolated between entities', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Permission workflow event');
         const viewAdmin = PERM.ACCESS_VIEW;
-        await adminService.addAdmin('event', eventId, participant.id, viewAdmin);
+        await entityAdminController.addAdmin('event', eventId, {profileId: participant.id, mask: viewAdmin});
 
         const otherEventId = await createIntegrationEvent(owner.id, 'Permission isolation event');
         expect(await adminService.getProfilePerms('event', otherEventId, participant.id)).toBe(0);
@@ -204,7 +218,7 @@ describe('permission user stories', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Public permission event');
         const viewAdmin = PERM.ACCESS_VIEW;
 
-        await adminService.updatePerms('event', eventId, {public: viewAdmin});
+        await eventController.updateSettings(eventId, {defaultPerms: {public: ['ACCESS_VIEW']}});
         expect(await adminService.getDefaultPerms('event', eventId)).toMatchObject({public: viewAdmin});
     });
 
@@ -212,7 +226,7 @@ describe('permission user stories', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Authenticated permission event');
         const viewAdmin = PERM.ACCESS_VIEW;
 
-        await adminService.updatePerms('event', eventId, {authenticated: viewAdmin});
+        await eventController.updateSettings(eventId, {defaultPerms: {authenticated: ['ACCESS_VIEW']}});
         expect(await adminService.getDefaultPerms('event', eventId)).toMatchObject({authenticated: viewAdmin});
     });
 
@@ -220,7 +234,7 @@ describe('permission user stories', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Guest permission event');
         const viewAdmin = PERM.ACCESS_VIEW;
 
-        await adminService.updatePerms('event', eventId, {guest: viewAdmin});
+        await eventController.updateSettings(eventId, {defaultPerms: {guest: ['ACCESS_VIEW']}});
         expect(await adminService.getDefaultPerms('event', eventId)).toMatchObject({guest: viewAdmin});
     });
 
@@ -228,7 +242,7 @@ describe('permission user stories', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Participant permission event');
         const viewAdmin = PERM.ACCESS_VIEW;
 
-        await adminService.updatePerms('event', eventId, {participant: viewAdmin});
+        await eventController.updateSettings(eventId, {defaultPerms: {participant: ['ACCESS_VIEW']}});
         expect(await adminService.getDefaultPerms('event', eventId)).toMatchObject({participant: viewAdmin});
     });
 
@@ -236,8 +250,8 @@ describe('permission user stories', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Permission workflow event');
         const viewAdmin = PERM.ACCESS_VIEW;
 
-        await adminService.updatePerms('event', eventId, {public: viewAdmin, authenticated: PERM.ACCESS_CREATE});
-        await adminService.updatePerms('event', eventId, {public: PERM.ACCESS_VIEW | PERM.ACCESS_REGISTRATION});
+        await eventController.updateSettings(eventId, {defaultPerms: {public: ['ACCESS_VIEW'], authenticated: ['ACCESS_CREATE']}});
+        await eventController.updateSettings(eventId, {defaultPerms: {public: ['ACCESS_VIEW', 'ACCESS_REGISTRATION']}});
         expect(await adminService.getDefaultPerms('event', eventId)).toEqual({
             public: PERM.ACCESS_VIEW | PERM.ACCESS_REGISTRATION,
             authenticated: PERM.ACCESS_CREATE,
@@ -248,15 +262,15 @@ describe('permission user stories', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Permission workflow event');
         const viewAdmin = PERM.ACCESS_VIEW;
 
-        await adminService.updatePerms('event', eventId, {public: viewAdmin});
-        await adminService.updatePerms('event', eventId, {public: 0});
+        await eventController.updateSettings(eventId, {defaultPerms: {public: ['ACCESS_VIEW']}});
+        await eventController.updateSettings(eventId, {defaultPerms: {public: []}});
         expect(await adminService.getDefaultPerms('event', eventId)).toMatchObject({public: 0});
     });
 
     it('finds only entities matching the requested permission mask', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Permission workflow event');
         const viewAdmin = PERM.ACCESS_VIEW;
-        await adminService.addAdmin('event', eventId, participant.id, viewAdmin);
+        await entityAdminController.addAdmin('event', eventId, {profileId: participant.id, mask: viewAdmin});
 
         expect(await adminService.getIds('event', participant.id, PERM.ACCESS_VIEW)).toContain(eventId);
         expect(await adminService.getIds('event', participant.id, PERM.ACCESS_ADMIN)).not.toContain(eventId);
@@ -265,21 +279,21 @@ describe('permission user stories', () => {
     it('includes owned and delegated packing lists in management', async () => {
 
         const listId = await packingService.createPackingListTx(owner.id, 'Delegated packing', 'Shared', []);
-        await adminService.addAdmin('packing', listId, participant.id, PERM.ACCESS_ADMIN);
+        await entityAdminController.addAdmin('packing', listId, {profileId: participant.id, mask: PERM.ACCESS_ADMIN});
         expect((await packingService.getManagedLists(participant.id)).map((list) => list.id)).toContain(listId);
     });
 
     it('includes owned and delegated activity plans in management', async () => {
 
         const planId = await activityService.createActivityPlanTx(owner.id, 'Delegated activity', 'Shared', '2027-06-01', '2027-06-03', []);
-        await adminService.addAdmin('activity', planId, participant.id, PERM.ACCESS_ADMIN);
+        await entityAdminController.addAdmin('activity', planId, {profileId: participant.id, mask: PERM.ACCESS_ADMIN});
         expect((await activityService.getManagedPlans(participant.id)).map((plan) => plan.id)).toContain(planId);
     });
 
     it('includes owned and delegated drivers lists in management', async () => {
 
         const listId = await driverService.createDriversList(owner.id, 'Delegated drivers', 'Shared');
-        await adminService.addAdmin('drivers', listId, participant.id, PERM.ACCESS_ADMIN);
+        await entityAdminController.addAdmin('drivers', listId, {profileId: participant.id, mask: PERM.ACCESS_ADMIN});
         expect((await driverService.getManagedListsForProfile(participant.id)).map((list) => list.id)).toContain(listId);
     });
 
@@ -311,23 +325,25 @@ describe('event user stories', () => {
     it('registers a participant for an event', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Workflow event', 20);
 
-        await eventService.register(eventId, '2027-06-01', '2027-06-03', participant.id);
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
         expect(await eventService.getRegistrationFor(participant.id, eventId)).toMatchObject({arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
     });
 
     it('updates an existing registration instead of duplicating it', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Workflow event', 20);
 
-        const firstId = await eventService.register(eventId, '2027-06-01', '2027-06-02', participant.id);
-        const secondId = await eventService.register(eventId, '2027-06-02', '2027-06-03', participant.id);
-        expect(secondId).toBe(firstId);
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-02'});
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-02', departureDate: '2027-06-03'});
         expect(await eventService.getRegistrationsForEvent(eventId)).toHaveLength(1);
     });
 
     it('stores unique dietary choices and participant notes', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Workflow event', 20);
 
-        await eventService.register(eventId, '2027-06-01', '2027-06-03', participant.id, ['VEGETARIAN', 'VEGETARIAN', 'ALLERGIES'], 'Peanuts', 'No fish');
+        await registerEventAttendance(eventId, participant, {
+            arrivalDate: '2027-06-01', departureDate: '2027-06-03',
+            dietary: ['VEGETARIAN', 'VEGETARIAN', 'ALLERGIES'], allergyNotes: 'Peanuts',
+        });
         const registration = await eventService.getRegistrationFor(participant.id, eventId);
         expect(registration?.dietaryChoices).toHaveLength(2);
         expect(registration?.dietaryChoices).toContainEqual(expect.objectContaining({choice: 'ALLERGIES', additionalInfo: 'Peanuts'}));
@@ -336,8 +352,8 @@ describe('event user stories', () => {
     it('replaces dietary choices on an existing registration', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Workflow event', 20);
 
-        const registrationId = await eventService.register(eventId, '2027-06-01', '2027-06-03', participant.id, ['VEGETARIAN']);
-        await eventService.replaceDietaryChoices(registrationId, ['VEGAN'], null, 'Plant based');
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03', dietary: 'VEGETARIAN'});
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03', dietary: 'VEGAN'});
         expect((await eventService.getRegistrationFor(participant.id, eventId))?.dietaryChoices).toMatchObject([{choice: 'VEGAN'}]);
     });
 
@@ -345,8 +361,8 @@ describe('event user stories', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Workflow event', 20);
 
         const laterId = await eventService.createEventTx(owner.id, 'Later event', null, '2027-08-01', '2027-08-03', null, null, false, false, null, 'UTC');
-        await eventService.register(eventId, '2027-06-01', '2027-06-03', participant.id);
-        await eventService.register(laterId, '2027-08-01', '2027-08-03', participant.id);
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        await registerEventAttendance(laterId, participant, {arrivalDate: '2027-08-01', departureDate: '2027-08-03'});
         const registered = await eventService.getRegisteredEventsFor(participant.id);
         expect(registered.findIndex((event) => event.id === laterId)).toBeLessThan(registered.findIndex((event) => event.id === eventId));
     });
@@ -360,7 +376,7 @@ describe('event user stories', () => {
     it('reports an event full when capacity is reached', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Workflow event', 1);
 
-        await eventService.register(eventId, '2027-06-01', '2027-06-03', participant.id);
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
         expect(await eventService.isEventFull(eventId)).toBe(true);
     });
 
@@ -373,16 +389,20 @@ describe('event user stories', () => {
     it('updates registration dates within the correct event', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Workflow event', 20);
 
-        const registrationId = await eventService.register(eventId, '2027-06-01', '2027-06-02', participant.id);
-        await eventService.updateRegistrationDates(eventId, registrationId, '2027-06-02', '2027-06-03');
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-02'});
+        const registration = await eventService.getRegistrationFor(participant.id, eventId);
+        const event = await eventService.getEventById(eventId);
+        await eventController.updateRegistrationDates(event!, String(registration!.id), {arrivalDate: '2027-06-02', departureDate: '2027-06-03'});
         expect(await eventService.getRegistrationFor(participant.id, eventId)).toMatchObject({arrivalDate: '2027-06-02', departureDate: '2027-06-03'});
     });
 
     it('deletes a participant registration within the correct event', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Workflow event', 20);
 
-        const registrationId = await eventService.register(eventId, '2027-06-01', '2027-06-03', participant.id);
-        expect(await eventService.deleteRegistration(eventId, registrationId)).toBe(true);
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        const registration = await eventService.getRegistrationFor(participant.id, eventId);
+        const event = await eventService.getEventById(eventId);
+        expect(await eventController.deleteRegistration(event!, String(registration!.id))).toBe(true);
         expect(await eventService.getRegistrationFor(participant.id, eventId)).toBeNull();
     });
 
@@ -416,56 +436,60 @@ describe('activity plan user stories', () => {
         expect(await activityService.getActivitySlotsFlat(planId)).toHaveLength(1);
     });
 
-    it('creates an empty plan that can receive a later slot', async () => {
-        const initialSlots = [];
-        const planId = await activityService.createActivityPlanTx(owner.id, 'Camp activity plan', 'Shared schedule', '2027-06-01', '2027-06-03', initialSlots);
-
-        await activityService.addActivitySlot(planId, createActivitySlotEntity({title: 'Later slot'}), owner.id);
-        expect(await activityService.getActivitySlotsFlat(planId)).toMatchObject([{title: 'Later slot'}]);
+    it('rejects an activity plan without a participant-visible slot', async () => {
+        expect(() => activityController.preprocessCreate({
+            title: 'Camp activity plan', description: 'Shared schedule',
+            startDate: '2027-06-01', endDate: '2027-06-03', slots: '{}',
+        })).toThrow('slots');
     });
 
     it('adds several organizer-authored slots at once', async () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
-        await activityService.addActivitySlots(planId, [
-            createActivitySlotEntity({title: 'Lunch', pos: 2}),
-            createActivitySlotEntity({title: 'Dinner', pos: 3}),
-        ], owner.id);
+        const plan = await activityService.getActivityPlanById(planId);
+        await activityController.quickAddSlot(plan!, {date: '2027-06-01', title: 'Lunch'}, {profile: owner} as never);
+        await activityController.quickAddSlot(plan!, {date: '2027-06-01', title: 'Dinner'}, {profile: owner} as never);
         expect((await activityService.getActivitySlotsFlat(planId)).map((slot) => slot.title)).toEqual(['Morning activity', 'Lunch', 'Dinner']);
     });
 
     it('orders a daily schedule by time and position', async () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
-        await activityService.addActivitySlots(planId, [
-            createActivitySlotEntity({title: 'Late', startTime: '18:00', pos: 3}),
-            createActivitySlotEntity({title: 'Middle', startTime: '12:00', pos: 2}),
-        ], owner.id);
+        const plan = await activityService.getActivityPlanById(planId);
+        await activityController.quickAddSlot(plan!, {date: '2027-06-01', title: 'Late', startTime: '18:00'}, {profile: owner} as never);
+        await activityController.quickAddSlot(plan!, {date: '2027-06-01', title: 'Middle', startTime: '12:00'}, {profile: owner} as never);
         expect((await activityService.getActivitySlotsFlat(planId)).map((slot) => slot.title)).toEqual(['Morning activity', 'Middle', 'Late']);
     });
 
     it('groups schedule slots by day for the plan view', async () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
-        await activityService.addActivitySlot(planId, createActivitySlotEntity({day: '2027-06-02', title: 'Second day'}), owner.id);
-        expect(Object.keys(await activityService.getActivitySlots(planId))).toEqual(['2026-08-06', '2027-06-02']);
+        const plan = await activityService.getActivityPlanById(planId);
+        await activityController.quickAddSlot(plan!, {date: '2027-06-02', title: 'Second day'}, {profile: owner} as never);
+        expect(Object.keys(await activityService.getActivitySlots(planId))).toEqual(['2027-06-01', '2027-06-02']);
     });
 
     it('updates the participant-visible slot details', async () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
         const [slot] = await activityService.getActivitySlotsFlat(planId);
-        await activityService.updateActivitySlot(slot.id, {title: 'Updated activity', maxAssignees: 8});
+        const permissions = {itemAllow: () => true} as never;
+        await activityController.updateSlotAttr(slot.id, {field: 'title', value: 'Updated activity'}, permissions);
+        await activityController.updateSlotAttr(slot.id, {field: 'maxAssignees', value: 8}, permissions);
         expect(await activityService.getActivitySlotById(slot.id)).toMatchObject({title: 'Updated activity', maxAssignees: 8});
     });
 
     it('reorders slots without recreating assignments', async () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
-        await activityService.addActivitySlot(planId, createActivitySlotEntity({title: 'First after reorder', pos: 2}), owner.id);
+        const plan = await activityService.getActivityPlanById(planId);
+        await activityController.quickAddSlot(plan!, {
+            date: '2027-06-01', title: 'First after reorder', startTime: '08:00', endTime: '09:00',
+        }, {profile: owner} as never);
         const slots = await activityService.getActivitySlotsFlat(planId);
-        const assignmentId = await activityService.ensureAssignment(slots[0].id, participant.id);
-        await activityService.reorderActivitySlots(planId, [{slotId: slots[0].id, pos: 2}, {slotId: slots[1].id, pos: 1}]);
+        await assignActivitySlot(slots[0].id, participant.id);
+        const assignmentId = (await activityService.getActivitySlotAssignees(planId))[slots[0].id][0].id;
+        await activityController.reorderSlots(planId, [{slotId: slots[0].id, pos: 2}, {slotId: slots[1].id, pos: 1}]);
         expect((await activityService.getActivitySlotsFlat(planId))[0].title).toBe('First after reorder');
         expect((await activityService.getActivitySlotAssignmentById(assignmentId))?.id).toBe(assignmentId);
     });
@@ -474,7 +498,7 @@ describe('activity plan user stories', () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
         const [slot] = await activityService.getActivitySlotsFlat(planId);
-        await activityService.deleteActivitySlot(slot.id);
+        await activityController.deleteSlot(slot.id);
         expect(await activityService.getActivitySlotsFlat(planId)).toEqual([]);
     });
 
@@ -482,8 +506,8 @@ describe('activity plan user stories', () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
         const [slot] = await activityService.getActivitySlotsFlat(planId);
-        const first = await activityService.ensureAssignment(slot.id, participant.id);
-        expect(await activityService.ensureAssignment(slot.id, participant.id)).toBe(first);
+        await assignActivitySlot(slot.id, participant.id);
+        await assignActivitySlot(slot.id, participant.id);
         expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toHaveLength(1);
     });
 
@@ -491,7 +515,7 @@ describe('activity plan user stories', () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
         const [slot] = await activityService.getActivitySlotsFlat(planId);
-        await activityService.ensureAssignment(slot.id, participant.id);
+        await assignActivitySlot(slot.id, participant.id);
         expect((await activityService.getActivitySlotsFlat(planId))[0].assignedCount).toBe(1);
         expect((await activityService.getActivityPlansByParticipant(participant.id)).map((plan) => plan.id)).toContain(planId);
     });
@@ -500,18 +524,19 @@ describe('activity plan user stories', () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
         const [slot] = await activityService.getActivitySlotsFlat(planId);
-        const assignmentId = await activityService.ensureAssignment(slot.id, participant.id);
-        await activityService.deleteActivitySlotAssignment(assignmentId);
+        await assignActivitySlot(slot.id, participant.id);
+        const assignmentId = (await activityService.getActivitySlotAssignees(planId))[slot.id][0].id;
+        await activityController.deleteAssignment(assignmentId);
         expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([]);
     });
 
     it('adds, edits, and removes a plan information field', async () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
-        const field = await activityService.createActivityPlanTextField(planId, 'Meeting point', 'Main entrance');
-        await activityService.updateActivityPlanTextField(field.id, 'Side entrance', 'Updated point');
+        const field = await activityController.createTextField(planId, {title: 'Meeting point', text: 'Main entrance'});
+        await activityController.updateTextField(planId, field.id, {text: 'Side entrance', title: 'Updated point'}, {entity: new Set(['MANAGE_REQUIREMENTS'])} as never);
         expect(await activityService.getActivityPlanTextFieldById(field.id)).toMatchObject({title: 'Updated point', text: 'Side entrance'});
-        await activityService.deleteActivityPlanTextField(field.id);
+        await activityController.deleteTextField(planId, field.id);
         expect(await activityService.getActivityPlanTextFields(planId)).toEqual([]);
     });
 
@@ -519,16 +544,19 @@ describe('activity plan user stories', () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
         const [slot] = await activityService.getActivitySlotsFlat(planId);
-        const assignmentId = await activityService.ensureAssignment(slot.id, participant.id);
-        const [role] = await activityService.ensureRoleId(planId, 'Coordinator');
-        await activityService.assignRole(assignmentId, 'Coordinator');
-        expect(await activityService.getParticipantRolesForPlan(planId)).toContainEqual({participantKey: `profile:${participant.id}`, roleIds: [role.id]});
+        await assignActivitySlot(slot.id, participant.id);
+        const plan = await activityService.getActivityPlanById(planId);
+        const [role] = await activityController.addActivityRole(plan!, {name: 'Coordinator'});
+        await activityController.getRoleAccessMapping().assign({itemId: slot.id, role: 'Coordinator'}, participant.id);
+        const [participantRoles] = await activityService.getParticipantRolesForPlan(planId);
+        expect(participantRoles.participantKey).toBe(`profile:${participant.id}`);
+        expect(participantRoles.roleIds).toContain(role.id);
     });
 
     it('updates the plan description and header image', async () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
-        await activityService.updateActivityPlanDescription(planId, 'Updated schedule');
+        await activityController.updateDescription(planId, {description: 'Updated schedule'});
         await activityService.updateHeaderImage(planId, 'activity-header.jpg');
         expect(await activityService.getActivityPlanById(planId)).toMatchObject({description: 'Updated schedule', headerImg: 'activity-header.jpg'});
     });
@@ -536,7 +564,8 @@ describe('activity plan user stories', () => {
     it('deletes a plan and removes it from the owner dashboard', async () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
-        await activityService.deleteActivityPlan(planId);
+        const plan = await activityService.getActivityPlanById(planId);
+        await activityController.deleteEntity(plan!, {} as never);
         expect((await activityService.getActivityPlansByProfileId(owner.id)).map((plan) => plan.id)).not.toContain(planId);
     });
 
@@ -554,7 +583,7 @@ describe('drivers list user stories', () => {
         const listId = await driverService.createDriversList(owner.id, 'Camp drivers', 'Shared rides');
 
         await driverService.updateDriversListTitle(listId, 'Updated drivers');
-        await driverService.updateDriversListDescription(listId, 'Updated rides');
+        await driversController.updateDescription(listId, {description: 'Updated rides'});
         await driverService.updateHeaderImage(listId, 'drivers.jpg');
         expect(await driverService.getDriversListById(listId)).toMatchObject({title: 'Updated drivers', description: 'Updated rides', headerImg: 'drivers.jpg'});
     });
@@ -569,14 +598,17 @@ describe('drivers list user stories', () => {
         const [listId, item] = await createDriversListWithItem(owner.id);
 
         const second = createDriversItemEntity({title: 'Second journey', pos: 2});
-        await driverService.createDriversItem(listId, owner.id, second);
+        const list = await driverService.getDriversListById(listId);
+        await driversController.quickAddItem(list!, second, {profile: owner} as never);
         expect((await driverService.getDriversItems(listId)).map((entry) => entry.title)).toEqual(['Airport journey', 'Second journey']);
     });
 
     it('updates journey details and capacity', async () => {
         const [, item] = await createDriversListWithItem(owner.id);
 
-        await driverService.updateDriversItem(item.id, {title: 'Changed journey', description: 'Changed pickup', maxAssignees: 5});
+        await driversController.updateItemAttr(item.id, {field: 'title', value: 'Changed journey'});
+        await driversController.updateItemDescription(item.id, {description: 'Changed pickup'});
+        await driversController.updateItemAttr(item.id, {field: 'maxAssignees', value: 5});
         expect(await driverService.getDriversItemById(item.id)).toMatchObject({title: 'Changed journey', description: 'Changed pickup', maxAssignees: 5});
     });
 
@@ -584,39 +616,41 @@ describe('drivers list user stories', () => {
         const [listId, item] = await createDriversListWithItem(owner.id);
 
         const second = createDriversItemEntity({title: 'First journey', pos: 2});
-        await driverService.createDriversItem(listId, owner.id, second);
-        await driverService.reorderDriversItems(listId, [{itemId: item.id, position: 2}, {itemId: second.id, position: 1}]);
+        const list = await driverService.getDriversListById(listId);
+        await driversController.quickAddItem(list!, second, {profile: owner} as never);
+        const added = (await driverService.getDriversItems(listId)).find((entry) => entry.title === 'First journey')!;
+        await driversController.reorderItems(listId, [{itemId: item.id, position: 2}, {itemId: added.id, position: 1}]);
         expect((await driverService.getDriversItems(listId)).map((entry) => entry.title)).toEqual(['First journey', 'Airport journey']);
     });
 
     it('assigns a volunteer driver idempotently', async () => {
         const [listId, item] = await createDriversListWithItem(owner.id);
 
-        await driverService.assignDriversItem(item.id, participant.id);
-        await driverService.assignDriversItem(item.id, participant.id);
+        await assignDriversItem(item.id, participant.id);
+        await assignDriversItem(item.id, participant.id);
         expect(await driverService.getDriversAssignments(listId, participant.id)).toEqual([item.id]);
     });
 
     it('shows assignment counts beside journeys', async () => {
         const [listId, item] = await createDriversListWithItem(owner.id);
 
-        await driverService.assignDriversItem(item.id, participant.id);
-        await driverService.assignDriversItem(item.id, secondParticipant.id);
+        await assignDriversItem(item.id, participant.id);
+        await assignDriversItem(item.id, secondParticipant.id);
         expect(await driverService.getDriversAssignmentCounts(listId)).toEqual({[item.id]: 2});
     });
 
     it('shows volunteer names to coordinators', async () => {
         const [listId, item] = await createDriversListWithItem(owner.id);
 
-        await driverService.assignDriversItem(item.id, participant.id);
+        await assignDriversItem(item.id, participant.id);
         expect(await driverService.getDriversItemAssignees(listId)).toEqual({[item.id]: [expect.objectContaining({name: participant.name})]});
     });
 
     it('removes a volunteer from a journey', async () => {
         const [listId, item] = await createDriversListWithItem(owner.id);
 
-        await driverService.assignDriversItem(item.id, participant.id);
-        await driverService.unassignDriversItem(item.id, participant.id);
+        await assignDriversItem(item.id, participant.id);
+        await unassignDriversItem(item.id, participant.id);
         expect(await driverService.getDriversAssignments(listId, participant.id)).toEqual([]);
     });
 
@@ -636,22 +670,23 @@ describe('drivers list user stories', () => {
     it('includes a delegated list in the management dashboard', async () => {
         const [listId, item] = await createDriversListWithItem(owner.id);
 
-        await adminService.addAdmin('drivers', listId, participant.id, PERM.ACCESS_ADMIN);
+        await entityAdminController.addAdmin('drivers', listId, {profileId: participant.id, mask: PERM.ACCESS_ADMIN});
         expect((await driverService.getManagedListsForProfile(participant.id)).map((list) => list.id)).toContain(listId);
     });
 
     it('deletes a journey and its visible assignment', async () => {
         const [listId, item] = await createDriversListWithItem(owner.id);
 
-        await driverService.assignDriversItem(item.id, participant.id);
-        await driverService.deleteDriversItem(item.id);
+        await assignDriversItem(item.id, participant.id);
+        await driversController.deleteItem(item.id);
         expect(await driverService.getDriversItems(listId)).toEqual([]);
     });
 
     it('deletes a drivers list from the owner dashboard', async () => {
         const listId = await driverService.createDriversList(owner.id, 'Camp drivers', 'Shared rides');
 
-        await driverService.deleteDriversList(listId);
+        const list = await driverService.getDriversListById(listId);
+        await driversController.deleteEntity(list!, {} as never);
         expect((await driverService.getDriversListByProfileId(owner.id)).map((list) => list.id)).not.toContain(listId);
     });
 
@@ -665,29 +700,26 @@ describe('packing list user stories', () => {
         expect(item).toMatchObject({title: 'Group tent', assignedCount: 0});
     });
 
-    it('creates an empty list that can receive a later item', async () => {
-        const initialItems = [];
-        const listId = await packingService.createPackingListTx(owner.id, 'Camp packing list', 'Shared equipment', initialItems);
-
-        await packingService.createPackingItem(listId, createPackingItemEntity({title: 'Later item'}), owner.id);
-        expect(await packingService.getPackingItems(listId)).toMatchObject([{title: 'Later item'}]);
+    it('rejects a packing list without a participant-visible item', async () => {
+        expect(() => packingController.preprocessCreate({
+            title: 'Camp packing list', description: 'Shared equipment', items: '[]',
+        })).toThrow('items');
     });
 
     it('adds several organizer-authored items at once', async () => {
         const [listId] = await createPackingListWithItem(owner.id);
 
-        await packingService.addPackingItems(listId, [
-            createPackingItemEntity({title: 'Lantern', pos: 2}),
-            createPackingItemEntity({title: 'Stove', pos: 3}),
-        ], owner.id);
-        expect((await packingService.getPackingItems(listId)).map((entry) => entry.title)).toEqual(['Group tent', 'Lantern', 'Stove']);
+        const list = await packingService.getPackingListById(listId);
+        await packingController.quickAddItem(list!, {title: 'Lantern'}, {profile: owner} as never);
+        await packingController.quickAddItem(list!, {title: 'Stove'}, {profile: owner} as never);
+        expect((await packingService.getPackingItems(listId)).map((entry) => entry.title)).toEqual(expect.arrayContaining(['Group tent', 'Lantern', 'Stove']));
     });
 
     it('updates list title, description, and header image', async () => {
         const [listId] = await createPackingListWithItem(owner.id);
 
         await packingService.updatePackingListTitle(listId, 'Updated packing');
-        await packingService.updatePackingListDescription(listId, 'Updated equipment');
+        await packingController.updateDescription(listId, {description: 'Updated equipment'});
         await packingService.updateHeaderImage(listId, 'packing.jpg');
         expect(await packingService.getPackingListById(listId)).toMatchObject({title: 'Updated packing', description: 'Updated equipment', headerImg: 'packing.jpg'});
     });
@@ -695,7 +727,9 @@ describe('packing list user stories', () => {
     it('updates item details and capacity', async () => {
         const [, item] = await createPackingListWithItem(owner.id);
 
-        await packingService.updatePackingItem(item.id, {title: 'Updated item', description: 'Updated details', maxAssignees: 4});
+        await packingController.updateItemAttr(item.id, {field: 'title', value: 'Updated item'});
+        await packingController.updateItemDescription(item.id, {description: 'Updated details'});
+        await packingController.updateItemAttr(item.id, {field: 'maxAssignees', value: 4});
         expect(await packingService.getPackingItemById(item.id)).toMatchObject({title: 'Updated item', description: 'Updated details', maxAssignees: 4});
     });
 
@@ -703,75 +737,78 @@ describe('packing list user stories', () => {
         const [listId, item] = await createPackingListWithItem(owner.id);
 
         const second = createPackingItemEntity({title: 'First item', pos: 2});
-        await packingService.createPackingItem(listId, second, owner.id);
-        await packingService.reorderPackingItems(listId, [{itemId: item.id, position: 2}, {itemId: second.id, position: 1}]);
+        const list = await packingService.getPackingListById(listId);
+        await packingController.quickAddItem(list!, second, {profile: owner} as never);
+        const added = (await packingService.getPackingItems(listId)).find((entry) => entry.title === 'First item')!;
+        await packingController.reorderItems(listId, [{itemId: item.id, position: 2}, {itemId: added.id, position: 1}]);
         expect((await packingService.getPackingItems(listId)).map((entry) => entry.title)).toEqual(['First item', 'Group tent']);
     });
 
     it('assigns a participant idempotently', async () => {
         const [listId, item] = await createPackingListWithItem(owner.id);
 
-        await packingService.assignPackingItem(item.id, participant.id);
-        await packingService.assignPackingItem(item.id, participant.id);
+        await assignPackingItem(item.id, participant.id);
+        await assignPackingItem(item.id, participant.id);
         expect(await packingService.getPackingAssignments(listId, participant.id)).toEqual([item.id]);
     });
 
     it('shows assignment counts beside items', async () => {
         const [listId, item] = await createPackingListWithItem(owner.id);
 
-        await packingService.assignPackingItem(item.id, participant.id);
-        await packingService.assignPackingItem(item.id, secondParticipant.id);
+        await assignPackingItem(item.id, participant.id);
+        await assignPackingItem(item.id, secondParticipant.id);
         expect(await packingService.getPackingAssignmentCounts(listId)).toEqual({[item.id]: 2});
     });
 
     it('shows assignee names to organizers', async () => {
         const [listId, item] = await createPackingListWithItem(owner.id);
 
-        await packingService.assignPackingItem(item.id, participant.id);
+        await assignPackingItem(item.id, participant.id);
         expect(await packingService.getPackingItemAssignees(listId)).toEqual({[item.id]: [expect.objectContaining({name: participant.name})]});
     });
 
     it('removes a participant assignment', async () => {
         const [listId, item] = await createPackingListWithItem(owner.id);
 
-        await packingService.assignPackingItem(item.id, participant.id);
-        await packingService.unassignPackingItem(item.id, participant.id);
+        await assignPackingItem(item.id, participant.id);
+        await unassignPackingItem(item.id, participant.id);
         expect(await packingService.getPackingAssignments(listId, participant.id)).toEqual([]);
     });
 
     it('marks an item as required by everyone', async () => {
         const [, item] = await createPackingListWithItem(owner.id);
 
-        await packingService.togglePackingItemRequiredByAll(item.id, true);
+        await packingController.updateRequired(item.id, {flag: true});
         expect(Boolean((await packingService.getPackingItemById(item.id))?.requiredByAll)).toBe(true);
     });
 
     it('finds lists in which a participant volunteered', async () => {
         const [listId, item] = await createPackingListWithItem(owner.id);
 
-        await packingService.assignPackingItem(item.id, participant.id);
+        await assignPackingItem(item.id, participant.id);
         expect((await packingService.getPackingListByParticipant(participant.id)).map((list) => list.id)).toContain(listId);
     });
 
     it('includes a delegated list in the management dashboard', async () => {
         const [listId] = await createPackingListWithItem(owner.id);
 
-        await adminService.addAdmin('packing', listId, participant.id, PERM.ACCESS_ADMIN);
+        await entityAdminController.addAdmin('packing', listId, {profileId: participant.id, mask: PERM.ACCESS_ADMIN});
         expect((await packingService.getManagedLists(participant.id)).map((list) => list.id)).toContain(listId);
     });
 
     it('deletes an item and its visible assignment', async () => {
         const [listId, item] = await createPackingListWithItem(owner.id);
 
-        await packingService.assignPackingItem(item.id, participant.id);
-        await packingService.deletePackingItem(item.id);
+        await assignPackingItem(item.id, participant.id);
+        await packingController.deleteItem(item.id);
         expect(await packingService.getPackingItems(listId)).toEqual([]);
     });
 
     it('deletes a packing list from the owner dashboard', async () => {
         const [listId] = await createPackingListWithItem(owner.id);
 
-        await packingService.deletePackingList(listId);
+        const list = await packingService.getPackingListById(listId);
+        await packingController.deleteEntity(list!, {} as never);
         expect((await packingService.getPackingListByProfileId(owner.id)).map((list) => list.id)).not.toContain(listId);
     });
 
@@ -785,11 +822,10 @@ describe('survey user stories', () => {
         expect(combinations).toHaveLength(2);
     });
 
-    it('creates an empty survey and adds a later choice', async () => {
-        const surveyId = await surveyService.createSurveyTx(owner.id, 'Camp date survey', 'Choose dates', []);
-
-        const combinationId = await surveyService.addCombination(surveyId, 'WED', '3');
-        expect(await surveyService.getCombinationsBySurveyId(surveyId)).toMatchObject([{id: combinationId, weekday: 'WED', nthWeek: '3'}]);
+    it('rejects a survey without a participant-visible date choice', async () => {
+        expect(() => surveyController.preprocessCreate({
+            title: 'Camp date survey', description: 'Choose dates', combinations: [],
+        })).toThrow('combinations');
     });
 
     it('orders persisted choices predictably', async () => {
@@ -802,7 +838,7 @@ describe('survey user stories', () => {
         const [surveyId, combinations] = await createSurveyWithCombinations(owner.id);
 
         const answer = 'yes';
-        await surveyService.saveResponse(surveyId, participant.id, combinations[0].id, answer);
+        await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: answer});
         expect(await surveyService.getResponsesByProfileId(participant.id)).toContainEqual(expect.objectContaining({entityId: surveyId, answer}));
     });
 
@@ -810,29 +846,29 @@ describe('survey user stories', () => {
         const [surveyId, combinations] = await createSurveyWithCombinations(owner.id);
 
         const answer = 'maybe';
-        await surveyService.saveResponse(surveyId, participant.id, combinations[0].id, answer);
+        await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: answer});
         expect(await surveyService.getResponsesByProfileId(participant.id)).toContainEqual(expect.objectContaining({entityId: surveyId, answer}));
     });
 
     it('defaults an empty submitted answer to no', async () => {
         const [surveyId, combinations] = await createSurveyWithCombinations(owner.id);
 
-        await surveyService.saveResponse(surveyId, participant.id, combinations[0].id, '' as never);
+        await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: '' as never});
         expect(await surveyService.getResponsesByProfileId(participant.id)).toContainEqual(expect.objectContaining({entityId: surveyId, answer: 'no'}));
     });
 
     it('stores answers from multiple participants', async () => {
         const [surveyId, combinations] = await createSurveyWithCombinations(owner.id);
 
-        await surveyService.saveResponse(surveyId, participant.id, combinations[0].id, 'yes');
-        await surveyService.saveResponse(surveyId, secondParticipant.id, combinations[1].id, 'maybe');
+        await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: 'yes'});
+        await submitSurveyResponses(surveyId, secondParticipant, {[combinations[1].id]: 'maybe'});
         expect(Object.keys(await surveyService.getResponsesSorted(surveyId))).toEqual(expect.arrayContaining([participant.id, secondParticipant.id]));
     });
 
     it('groups results by participant with names and choices', async () => {
         const [surveyId, combinations] = await createSurveyWithCombinations(owner.id);
 
-        await surveyService.saveResponse(surveyId, participant.id, combinations[0].id, 'yes');
+        await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: 'yes'});
         expect(await surveyService.getResponsesSorted(surveyId)).toEqual({
             [participant.id]: [expect.objectContaining({name: participant.name, combinationId: combinations[0].id, answer: 'yes'})],
         });
@@ -841,24 +877,24 @@ describe('survey user stories', () => {
     it('lists surveys answered by a participant', async () => {
         const [surveyId, combinations] = await createSurveyWithCombinations(owner.id);
 
-        await surveyService.saveResponse(surveyId, participant.id, combinations[0].id, 'yes');
+        await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: 'yes'});
         expect((await surveyService.getSurveysByParticipant(participant.id)).map((survey) => survey.id)).toContain(surveyId);
     });
 
     it('replaces a submitted ballot without stale answers', async () => {
         const [surveyId, combinations] = await createSurveyWithCombinations(owner.id);
 
-        await surveyService.saveResponse(surveyId, participant.id, combinations[0].id, 'yes');
+        await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: 'yes'});
         await surveyService.deleteResponsesByProfileId(participant.id, surveyId);
-        await surveyService.saveResponse(surveyId, participant.id, combinations[1].id, 'maybe');
+        await submitSurveyResponses(surveyId, participant, {[combinations[1].id]: 'maybe'});
         expect((await surveyService.getResponsesSorted(surveyId))[participant.id]).toMatchObject([{combinationId: combinations[1].id, answer: 'maybe'}]);
     });
 
     it('keeps one participant ballot isolated from another', async () => {
         const [surveyId, combinations] = await createSurveyWithCombinations(owner.id);
 
-        await surveyService.saveResponse(surveyId, participant.id, combinations[0].id, 'yes');
-        await surveyService.saveResponse(surveyId, secondParticipant.id, combinations[1].id, 'no');
+        await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: 'yes'});
+        await submitSurveyResponses(surveyId, secondParticipant, {[combinations[1].id]: 'no'});
         await surveyService.deleteResponsesByProfileId(participant.id, surveyId);
         expect(await surveyService.getResponsesSorted(surveyId)).toEqual({
             [secondParticipant.id]: [expect.objectContaining({answer: 'no'})],
@@ -884,8 +920,8 @@ describe('survey user stories', () => {
     it('deletes all responses for one participant', async () => {
         const [surveyId, combinations] = await createSurveyWithCombinations(owner.id);
 
-        await surveyService.saveResponse(surveyId, participant.id, combinations[0].id, 'yes');
-        await surveyService.saveResponse(surveyId, participant.id, combinations[1].id, 'maybe');
+        await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: 'yes'});
+        await submitSurveyResponses(surveyId, participant, {[combinations[1].id]: 'maybe'});
         await surveyService.deleteResponsesByProfileId(participant.id, surveyId);
         expect(await surveyService.getResponsesSorted(surveyId)).toEqual({});
     });
@@ -893,7 +929,8 @@ describe('survey user stories', () => {
     it('deletes a survey from the owner dashboard', async () => {
         const [surveyId] = await createSurveyWithCombinations(owner.id);
 
-        await surveyService.deleteSurvey(surveyId);
+        const survey = await surveyService.getSurveyById(surveyId);
+        await surveyController.deleteEntity(survey!, {} as never);
         expect((await surveyService.getSurveysByProfileId(owner.id)).map((survey) => survey.id)).not.toContain(surveyId);
     });
 

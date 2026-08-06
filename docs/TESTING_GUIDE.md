@@ -2,7 +2,7 @@
 
 Surveyor uses a pragmatic two-runner strategy:
 
-- **Vitest** for isolated utility/frontend tests and database-backed TypeORM integration smoke tests.
+- **Vitest** for isolated utility/frontend tests and database-backed controller integration workflows.
 - **Playwright** for a small E2E suite that verifies critical workflows against the built application.
 
 The goal is useful regression signal with low maintenance overhead. Prefer tests that describe expected input/output transformations or user-visible outcomes. Avoid tests that assert private implementation details, fragile DOM structure, broad snapshots, or test-only helpers.
@@ -12,7 +12,7 @@ The goal is useful regression signal with low maintenance overhead. Prefer tests
 ```
 tests/
 ├── unit/                  # Isolated production utilities and transformations only
-├── integration/           # TypeORM services against the disposable MariaDB test schema
+├── integration/           # Controller workflows against the disposable MariaDB test schema
 ├── frontend/              # Fast Vitest frontend helper/component tests
 │   └── helpers/           # Client-side helper behavior
 ├── e2e/                   # Focused Playwright critical-flow tests
@@ -30,7 +30,7 @@ Choose the cheapest stable test that catches the regression:
 | Risk | Preferred test |
 | --- | --- |
 | Isolated date, permission, invoice, or request transformation is wrong | Vitest unit test |
-| A core service no longer persists or reloads the correct entity graph | Vitest MariaDB integration test |
+| A controller workflow no longer validates, orchestrates, or persists the expected entity graph | Vitest controller + MariaDB integration test |
 | Frontend helper/component behavior changes | Vitest frontend test |
 | Main user workflow is unusable | Playwright E2E test |
 
@@ -49,7 +49,7 @@ Do not add every layer for every feature. Add one high-value test at the layer t
 9. Do not create one spec file per assertion. Group related examples by stable production behavior or use case, then use parameterized cases inside that spec.
 10. Add a short comment to each grouped smoke assertion explaining the user-facing regression it protects.
 11. Keep test imports order-independent: production modules must be safe to import before test setup, so browser globals need guards such as `typeof window !== 'undefined'`.
-12. Do not mock TypeORM repositories or core services. Integration tests initialize the production DataSource against `TEST_DB_NAME`, which must contain `test`, and rebuild that disposable schema once per suite.
+12. Do not mock TypeORM repositories or core services. Integration tests enter through production controllers and initialize the production DataSource against `TEST_DB_NAME`, which must contain `test`. Service reads may verify the resulting state, but tests must not make database CRUD the behavior under test.
 
 ## Running Tests
 
@@ -59,7 +59,7 @@ npm run test:ci             # Fast Vitest suite with JUnit and LCOV coverage rep
 npm run test:quick          # Database-free utility + frontend checks
 npm run test:unit           # Isolated production utilities only
 npm run test:frontend       # Frontend Vitest tests
-npm run test:integration    # Database-backed TypeORM service smoke suite
+npm run test:integration    # Database-backed controller workflow suite
 npm run e2e                 # Playwright E2E tests
 npm run test:all            # Vitest + build + Playwright E2E
 ```

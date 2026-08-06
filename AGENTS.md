@@ -40,6 +40,7 @@ documentation. The project uses:
     - Add comments to grouped smoke assertions explaining the user-facing regression being protected
     - Keep imports order-independent; browser-facing production modules must guard global registration with `typeof window !== 'undefined'` so IDE import reordering cannot break tests
     - Write distinct user-story scenarios as distinct named tests. Never route test behavior through numeric case indexes, `switch` statements, or array order; table-driven tests are reserved for cases that genuinely share the same arrange/act/assert flow.
+    - Database-backed integration tests must enter through production controller workflows. Use services only for prerequisite setup or outcome verification; do not make service-level CRUD the behavior under test.
     - See [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for comprehensive patterns
 
 4. **Follow the conventions**:
