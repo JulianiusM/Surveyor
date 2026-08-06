@@ -85,90 +85,62 @@ The E2E database should be configured with:
 
 ## Running Tests
 
-The Surveyor test suite uses **data-driven** and **keyword-driven** testing approaches for maintainable, reusable, and comprehensive test coverage. 
+Surveyor uses a **two-runner test strategy** designed to keep useful regression coverage fast for daily work while keeping full browser checks focused on critical user journeys:
 
-### Quick Start - One-Click Test Execution
+- **Vitest** runs isolated utility/frontend checks and TypeORM service smoke tests against the MariaDB test database.
+- **Playwright** runs E2E browser/API checks against the built application.
 
-**Run all tests (recommended for CI/verification):**
+All test files use the `*.spec.ts` suffix. Prefer testing expected production input/output transformations and user-visible behavior instead of implementation details.
+
+### Quick Start
+
+```bash
+npm test
+```
+
+This runs the fast Vitest suite. Use it during normal development.
 
 ```bash
 npm run test:all
 ```
 
-This single command will:
-1. Install dependencies (if needed)
-2. Start MariaDB test container
-3. Configure test databases
-4. Build the application
-5. Run all Jest tests (unit, controller, middleware, database)
-6. Prepare and run E2E tests with Playwright
-7. Clean up resources
-
-**Options:**
-- `npm run test:all -- --skip-deps` - Skip npm install
-- `npm run test:all -- --skip-build` - Skip building (use existing build)
-- `npm run test:all -- --skip-e2e` - Skip E2E tests
-
-**Run only Jest tests (fast):**
-
-```bash
-npm run test:quick
-# or
-npm test
-```
+This runs Vitest, builds the app, initializes the E2E database, starts the built server, and runs the Playwright E2E suite. Use it before releases or in CI.
 
 ### Test Organization
 
-Tests are organized into:
-- **Unit tests** (`tests/unit/`) - Test individual functions in isolation
-- **Controller tests** (`tests/controller/`) - Test business logic with mocked services
-- **Middleware tests** (`tests/middleware/`) - Test request/response handling
-- **Database tests** (`tests/database/`) - Test database operations with real DB
-- **E2E tests** (`tests/e2e/`) - Test complete user workflows
+Tests are organized around regression value and runtime cost:
 
-Test data is separated into `tests/data/` and reusable test keywords are in `tests/keywords/`.
+- **Unit tests** (`tests/unit/`) - Strictly isolated production utilities and input/output transformations; no service or controller mocking.
+- **Integration tests** (`tests/integration/`) - Core TypeORM services running against the disposable MariaDB test schema.
+- **Frontend tests** (`tests/frontend/`) - Client-side helpers, DOM/component behavior, and future SPA behavior.
+- **E2E tests** (`tests/e2e/`) - A small set of critical workflows run with Playwright.
+- **Factories** (`tests/factories/`) - Reusable data builders for realistic production inputs, including shared entity factories before specialized builders.
+- **Keywords** (`tests/keywords/`) - Reusable smoke-test workflow/assertion keywords used only when they clarify intent and reduce repetition.
+- **Fixtures** (`tests/fixtures/`) - Shared fixture assets and seed data.
+- **Support** (`tests/support/`) - Runner setup, environment loading, and shared utilities.
+
+Keep E2E broad and shallow, prefer API/database setup over UI setup, and avoid brittle selectors or snapshots unless the markup itself is the contract.
 
 ### Individual Test Commands
 
-**Jest tests:**
-
 ```bash
-npm test                    # Run all Jest tests
-npm run test:watch          # Watch mode for development
-npm test -- --coverage      # Run with coverage report
-npm run test:debug          # Run with database logging
-```
-
-**E2E tests:**
-
-```bash
-npm run e2e                 # Run all E2E tests
-npm run e2e:headed          # Run with visible browser
-npm run e2e:ui              # Run with Playwright UI
+npm test                    # Fast Vitest suite
+npm run test:ci             # Fast Vitest suite with JUnit and LCOV coverage reports for CI/SonarQube
+npm run test:quick          # Database-free utility + frontend checks
+npm run test:unit           # Isolated production utilities only
+npm run test:integration    # Database-backed core service canaries
+npm run test:frontend       # Frontend Vitest tests
+npm run e2e                 # Playwright E2E with managed web server
 ```
 
 **Manual E2E setup (if needed):**
 
 ```bash
-npm run build               # Build application
-npm run e2e:prepare         # Initialize E2E database
-npx playwright install      # Install browsers (first time)
-npm run e2e                 # Run E2E tests
+npm run build
+npm run e2e:prepare
+npx playwright install chromium
+npm run e2e
 ```
-
-### E2E Test Structure
-
-The E2E tests are organized by feature area:
-
-- `auth.test.ts` - Authentication flows (login, registration, password reset, tokens)
-- `survey.test.ts` - Survey creation and management
-- `packing.test.ts` - Packing list management
-- `activity.test.ts` - Activity plan management
-- `drivers.test.ts` - Drivers list management
-- `navigation.test.ts` - UI navigation and accessibility
-- `error-handling.test.ts` - Frontend error handling and validation
-
-For detailed E2E test coverage and configuration information, see `tests/e2e/README.md`.
 
 ## CI Pipeline
 
@@ -177,7 +149,7 @@ The project includes a GitHub Actions CI pipeline that:
 1. Sets up a MariaDB 10.11 service container
 2. Creates and configures both test and E2E databases
 3. Installs dependencies and builds the application
-4. Runs all unit and integration tests
+4. Runs isolated utility tests and database-backed integration smoke tests
 5. Runs Playwright E2E tests
 6. Uploads test reports as artifacts
 
@@ -190,10 +162,10 @@ The CI pipeline runs on:
 
 The CI pipeline automatically:
 
-- Creates `surveyor_test` database for unit/integration tests
+- Creates the disposable `surveyor_test` database for TypeORM integration smoke tests
 - Creates `surveyor_e2e` database for E2E tests
 - Sets up required users and permissions
-- Initializes the test database schema using `npm run typeorm -- schema:sync`
+- Lets the integration suite rebuild only the guarded `surveyor_test` schema through the production TypeORM metadata
 - Creates `.env.test` and `.env.e2e` files with appropriate credentials
 
 ## Development Scripts
@@ -232,12 +204,13 @@ When adding or updating frontend code:
     - `public/` - Static assets
     - `views/` - View templates
 - `tests/` - Test files
-    - `unit/` - Unit tests
-    - `controller/` - Controller tests
-    - `middleware/` - Middleware tests
-    - `database/` - Database integration tests
-    - `e2e/` - End-to-end tests
-    - `util/` - Test utilities and mocks
+    - `backend/` - Fast Vitest backend transformations, permissions, and services
+    - `api/` - Fast Vitest API contract/input-shaping tests
+    - `frontend/` - Fast Vitest frontend helper/component tests
+    - `e2e/` - Focused Playwright critical-flow tests
+    - `factories/` - Reusable production-shaped data builders
+    - `fixtures/` - Shared fixture assets and seed data
+    - `support/` - Runner setup and shared utilities
 - `scripts/` - Utility scripts
 
 ## License

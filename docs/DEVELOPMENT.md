@@ -106,15 +106,13 @@ surveyor/
 │   ├── views/                  # Pug templates
 │   └── server.ts               # Application entry point
 ├── tests/                      # Test suite
-│   ├── client/                 # Frontend tests (Playwright Test + MSW)
-│   ├── controller/             # Controller tests
-│   ├── database/               # Database integration tests
-│   ├── e2e/                    # End-to-end tests (Playwright)
-│   ├── middleware/             # Middleware tests
-│   ├── unit/                   # Backend unit tests
-│   ├── data/                   # Test data (data-driven testing)
-│   ├── keywords/               # Test keywords (keyword-driven testing)
-│   └── util/                   # Test utilities
+│   ├── backend/                # Fast Vitest backend transformations, permissions, and services
+│   ├── api/                    # Fast Vitest API contract/input-shaping tests
+│   ├── frontend/               # Fast Vitest frontend helper/component tests
+│   ├── e2e/                    # Focused Playwright critical-flow tests
+│   ├── factories/              # Reusable production-shaped data builders
+│   ├── fixtures/               # Shared fixture assets and seed data
+│   └── support/                # Runner setup and shared utilities
 ├── scripts/                    # Build and utility scripts
 ├── docs/                       # Documentation
 └── dist/                       # Compiled output (generated)
@@ -137,14 +135,14 @@ surveyor/
    - Changes auto-reload with nodemon (backend) and esbuild (frontend)
 
 3. **Write tests:**
-   - Follow data-driven and keyword-driven patterns
+   - Use factory-backed tests that verify production behavior without brittle implementation details
    - See [TESTING_GUIDE.md](TESTING_GUIDE.md)
 
 4. **Run tests:**
    ```bash
-   npm run test:quick      # Fast Playwright-compatible tests
-   npm run test:watch    # Watch mode
-   npm run test:all      # Full suite (unit/integration + E2E)
+   npm run test:quick      # Fast backend + frontend Vitest tests
+   npm test              # Fast Vitest suite
+   npm run test:all      # Vitest + build + Playwright E2E
    ```
 
 5. **Commit your changes:**
@@ -314,79 +312,60 @@ See [TESTING_GUIDE.md](TESTING_GUIDE.md) for comprehensive testing documentation
 ### Quick Reference
 
 ```bash
-# Fast tests
-npm run test:quick        # Unit/integration tests
-npm run test:watch        # Watch mode
-npm run test:client       # Frontend tests only
-npm run test:debug        # With database logging
+# Vitest tests
+npm test                    # Unit, frontend, and MariaDB integration canaries
+npm run test:quick          # Database-free unit + frontend checks
+npm run test:unit           # Naturally isolated production utilities
+npm run test:frontend       # Frontend helper/component tests
+npm run test:integration    # Production TypeORM services against MariaDB
 
-# E2E tests (requires build)
+# E2E tests (requires build + E2E database configuration)
 npm run build
 npm run e2e:prepare
-npm run e2e               # Run E2E tests
-npm run e2e:headed        # With visible browser
-npm run e2e:ui            # With Playwright UI
+npm run e2e
 
 # Complete test suite
-npm run test:all          # One-command full test execution
+npm run test:all            # Vitest + build + focused Playwright E2E
 ```
 
 ### Writing New Tests
 
-Follow these patterns:
+Use the cheapest stable test that protects the use case:
 
-1. **Create test data file:**
+1. **Create or reuse a factory when the data shape is non-trivial:**
    ```typescript
-   // tests/data/controller/myFeatureData.ts
-   export const createFeatureData = [
-       {
-           description: 'creates feature with valid data',
-           input: { name: 'Test' },
-           expected: { id: 1, name: 'Test' },
-       },
-   ];
-   ```
-
-2. **Create or use keywords:**
-   ```typescript
-   // tests/keywords/common/controllerKeywords.ts
-   import {expect} from '@playwright/test';
-
-   export interface FakeAsyncFunction<TArgs extends unknown[] = unknown[], TResult = unknown> {
-       calls: TArgs[];
-       fn: (...args: TArgs) => Promise<TResult>;
-   }
-
-   export function createAsyncFake<TArgs extends unknown[], TResult>(returnValue: TResult): FakeAsyncFunction<TArgs, TResult> {
-       const calls: TArgs[] = [];
-       return {calls, fn: async (...args: TArgs) => { calls.push(args); return returnValue; }};
-   }
-
-   export function verifyResult(actual: unknown, expected: unknown): void {
-       expect(actual).toEqual(expected);
+   // tests/factories/eventFactory.ts
+   export function createEventInput(overrides: Partial<EventInput> = {}): EventInput {
+       return {
+           title: 'Summer Camp',
+           startDate: '2026-08-05',
+           endDate: '2026-08-07',
+           ...overrides,
+       };
    }
    ```
 
-3. **Write data-driven test:**
+2. **Write a Vitest test against production behavior:**
    ```typescript
-   // tests/controller/myFeature.test.ts
-   import { createFeatureData } from '../data/controller/myFeatureData';
-   import { test } from '@playwright/test';
-   import { createAsyncFake, verifyResult } from '../keywords/common/controllerKeywords';
-   
-   test.describe('create feature', () => {
-       for (const testCase of createFeatureData) {
-           test(testCase.description, async ({}, testInfo) => {
-               await test.step(`run ${testInfo.title}`, async () => {
-                   const createFake = createAsyncFake<[CreateFeatureInput], Feature>(testCase.expected);
-                   service.create = createFake.fn;
-                   const result = await controller.create(testCase.input);
-                   verifyResult(result, testCase.expected);
-               });
-           });
-       }
+   // tests/unit/application-utilities.spec.ts
+   import {describe, expect, it} from 'vitest';
+   import {buildDateTotals} from '../../src/modules/lib/util';
+   import {createDateTotalsCase} from '../factories/dateTotalsFactory';
+
+   const cases = [createDateTotalsCase()];
+
+   describe('date totals transformation', () => {
+       it.each(cases)('$description', (testCase) => {
+           expect(buildDateTotals(
+               testCase.eventStart,
+               testCase.eventEnd,
+               testCase.registrations,
+           )).toEqual(testCase.expectedTotals);
+       });
    });
    ```
+
+Keep Playwright E2E tests broad and shallow; use them for critical workflows rather than every validation branch.
 
 ---
 
@@ -416,7 +395,7 @@ Follow these patterns:
 
 ```bash
 # With database query logging
-npm run test:debug
+npm test
 
 # With Node.js inspector
 node --inspect dist/server.js
@@ -435,7 +414,7 @@ debugger; // Breakpoint in browser devtools
 
 ```bash
 # Run specific test with debugging
-npx playwright test tests/unit/myTest.test.ts --debug
+npx vitest run tests/unit/application-utilities.spec.ts --inspect
 
 # Debug with VS Code
 # Add to launch.json:
@@ -533,7 +512,7 @@ npm run typeorm migration:revert
 
 1. **Define route** in `src/routes/myFeature.ts`
 2. **Create controller** in `src/controller/myFeatureController.ts`
-3. **Add tests** in `tests/controller/myFeature.controller.test.ts`
+3. **Add an isolated utility test** in `tests/unit/`, or a MariaDB-backed route/service canary in `tests/integration/`
 4. **Register route** in `src/server.ts`
 
 ### Add a New Entity
@@ -541,13 +520,13 @@ npm run typeorm migration:revert
 1. **Create entity** in `src/modules/database/entities/MyEntity.ts`
 2. **Create service** in `src/modules/database/services/MyEntityService.ts`
 3. **Create migration** to add table
-4. **Add tests** in `tests/database/myEntity.service.test.ts`
+4. **Add a database-backed service canary** in a grouped integration suite such as `tests/integration/core-services.spec.ts`
 
 ### Add Frontend Module
 
 1. **Create module** in `src/public/js/modules/my-feature.ts`
 2. **Add initialization** to page script
-3. **Create tests** in `tests/client/unit/my-feature.test.ts`
+3. **Create tests** in `tests/frontend/ui-behaviors.spec.ts` or a future component-oriented suite
 4. **Update view** in `src/views/`
 
 ### Update Dependencies

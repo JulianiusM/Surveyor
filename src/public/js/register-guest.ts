@@ -113,5 +113,8 @@ export function init(): void {
     loadPerms();
 }
 
-if (!window.Surveyor) window.Surveyor = {};
-window.Surveyor.init = init;
+// Expose to global scope when running in a browser; keeping this guarded makes imports safe in tests.
+if (typeof window !== 'undefined') {
+    if (!window.Surveyor) window.Surveyor = {};
+    window.Surveyor.init = init;
+}

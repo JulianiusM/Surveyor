@@ -3,6 +3,7 @@ import * as dotenv from 'dotenv';
 import {DataSource} from 'typeorm';
 import bcrypt from "bcryptjs";
 import {User} from "../src/modules/database/entities/user/User";
+import {Profile} from "../src/modules/database/entities/user/Profile";
 
 dotenv.config({path: process.env.E2E_DOTENV_FILE ?? '.env.e2e'});
 
@@ -50,22 +51,37 @@ async function main() {
 
     console.log("Purged...")
 
-    // Recreate via synchronize, then run migrations (now idempotent)
+    // Recreate the disposable E2E schema from entities.
+    // Run migrations only when explicitly requested; the smoke E2E suite needs a stable
+    // production-shaped schema but should not fail on non-idempotent historical migrations.
     await E2EDataSource.synchronize(true)
     console.log("Synced...")
-    await E2EDataSource.runMigrations();
-    console.log("Migrated...")
+    if (process.env.E2E_RUN_MIGRATIONS === 'true') {
+        await E2EDataSource.runMigrations();
+        console.log("Migrated...")
+    } else {
+        console.log("Skipped migrations for synchronized E2E schema...")
+    }
 
     // ---- Seed minimal fixture data ----
     // Example: create a test admin user. Replace with your own seeder logic.
     const userRepo = E2EDataSource.getRepository(User);
     const passwordHash = await bcrypt.hash(process.env.E2E_ADMIN_PASSWORD!, 10);
-    await userRepo.save(userRepo.create({
+    const adminUser = await userRepo.save(userRepo.create({
         username: process.env.E2E_ADMIN_USERNAME!,
         name: process.env.E2E_ADMIN_USERNAME!,
         email: process.env.E2E_ADMIN_EMAIL!,
         password: passwordHash,
         isActive: true,
+    }));
+
+    // The local login controller stores the first profile on the session.
+    // Keep the seed realistic by creating the same user profile that normal registration creates.
+    const profileRepo = E2EDataSource.getRepository(Profile);
+    await profileRepo.save(profileRepo.create({
+        name: process.env.E2E_ADMIN_USERNAME!,
+        type: 'user',
+        user: adminUser,
     }));
     console.log("Users created...")
 

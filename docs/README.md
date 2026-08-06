@@ -23,7 +23,7 @@ AI agents working on the Surveyor application.
 
 #### Testing
 
-- **[TESTING_GUIDE.md](TESTING_GUIDE.md)** - Complete testing guide (data-driven & keyword-driven)
+- **[TESTING_GUIDE.md](TESTING_GUIDE.md)** - Complete testing guide (Vitest + focused Playwright E2E)
 - **[FRONTEND_TESTING.md](FRONTEND_TESTING.md)** - Frontend testing with MSW and Testing Library
 
 #### Maintenance

@@ -1,129 +1,51 @@
 # GitHub Copilot Instructions for Surveyor
 
-This is the main instruction file for GitHub Copilot. Additional detailed guidelines are organized in modular files:
+For comprehensive documentation, read:
 
-- [Project Overview](copilot/project-overview.md) - Project description and dependencies
-- [Code Style Guidelines](copilot/code-style.md) - TypeScript and file organization
-- [Database Guidelines](copilot/database-guidelines.md) - Entities, migrations, and database testing
-- [Testing Quick Reference](copilot/testing-quick-reference.md) - Testing patterns summary
-- [Building and Running](copilot/build-and-run.md) - Development, build, and CI information
-- [Common Tasks](copilot/common-tasks.md) - Frequent workflows and security notes
-
-For comprehensive documentation:
-- **[docs/README.md](../docs/README.md)** - Documentation index and navigation
-- **[docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)** - System architecture and design
-- **[docs/DEVELOPMENT.md](../docs/DEVELOPMENT.md)** - Development workflow
-- **[docs/TESTING_GUIDE.md](../docs/TESTING_GUIDE.md)** - Complete testing guide
-- **[docs/TEST_REVIEW.md](../docs/TEST_REVIEW.md)** - Test quality review (⭐⭐⭐⭐⭐)
-- **[AGENTS.md](../AGENTS.md)** - General AI agent guidance
+- [docs/README.md](../docs/README.md)
+- [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)
+- [docs/DEVELOPMENT.md](../docs/DEVELOPMENT.md)
+- [docs/TESTING_GUIDE.md](../docs/TESTING_GUIDE.md)
+- [AGENTS.md](../AGENTS.md)
 
 ## Quick Reference
 
 ### Project Structure
-- `src/modules/` - Application modules (database, user, etc.)
-- `src/migrations/` - Database migrations
-- `tests/` - All test files (unit, controller, middleware, database, e2e)
-- `tests/data/` - Test data files for data-driven testing
-- `tests/keywords/` - Test keywords for keyword-driven testing
+
+- `src/modules/` - Application modules, database services, and utilities.
+- `src/routes/` - Express routes.
+- `src/controller/` - Controller/business orchestration.
+- `src/public/js/` - Client-side TypeScript.
+- `tests/unit/` - Vitest tests strictly limited to naturally isolated production utilities.
+- `tests/integration/` - Vitest core-service smoke tests using the production TypeORM DataSource and MariaDB.
+- `tests/frontend/` - Fast Vitest frontend helper/component tests.
+- `tests/e2e/` - Focused Playwright critical-flow tests.
+- `tests/factories/` - Reusable production-shaped test data builders.
+- `tests/keywords/` - Reusable smoke-test workflow/assertion keywords when they clarify intent.
+- `tests/support/` - Test runner setup and shared utilities.
 
 ### Key Principles
-1. **TypeScript**: Use strict typing, interfaces over types, async/await
-2. **Database**: Always create migrations, never use synchronize in production
-3. **Testing**: Use data-driven and keyword-driven approaches (see TESTING.md)
-4. **Security**: Never commit secrets, validate all input, hash passwords
-5. **Following Directions**: Always follow user directions. If you are not sure, make reasonable assumptions. Interpret requirements conservatively.
-6. **Generic approach**: If the user asks you to fix all tests, fix all tests including database and e2e tests. Fix all issues including those that are not influenced or caused by your changes.
-7. **Pre-commit requirement**: **ALWAYS run all tests (including database and E2E) before committing. All tests must pass. Fix all test failures, including unrelated ones.**
 
-## Testing Approach
+1. Use TypeScript with strict typing, interfaces over object-shape type aliases, and async/await.
+2. Create migrations for database schema changes.
+3. Use Vitest for isolated utilities, frontend helpers, and MariaDB-backed integration smoke tests; use Playwright for focused E2E workflows.
+4. Test production behavior, not test-only helpers or private implementation details.
+5. Prefer realistic factories in `tests/factories/` over hard-coded inline data.
+6. Keep E2E broad and shallow; protect critical workflows rather than every branch.
+7. Avoid brittle selectors, broad snapshots, and assertions tied to Bootstrap classes unless the class string is the explicit production contract.
+8. Add comments to smoke assertions that explain which user-facing regression the case protects.
+9. Keep imports order-independent; production browser modules must guard global `window` registration so tests do not rely on import order.
+10. Never commit secrets or generated files ignored by `.gitignore`.
 
-The project uses **data-driven** and **keyword-driven** testing approaches. For complete details, see [TESTING.md](../TESTING.md).
+## Testing Rules
 
-### Quick Summary
+- All test files use `*.spec.ts`.
+- Place naturally isolated utility/input-output tests in `tests/unit/`; do not unit-test service orchestration with mocks.
+- Place core TypeORM service and entity-graph canaries in `tests/integration/` and use the disposable test database instead of repository mocks.
+- Place frontend helper/component tests in `tests/frontend/`.
+- Place Playwright E2E tests in `tests/e2e/`.
+- Place reusable data builders in `tests/factories/`.
+- Place reusable smoke-test keywords in `tests/keywords/` only when they reduce meaningful repetition.
+- Place runner setup and small shared helpers in `tests/support/`.
 
-**Test Structure:**
-- Test data in `tests/data/<type>/` - Separated from logic
-- Test keywords in `tests/keywords/<type>/` - Reusable actions
-- Test files in `tests/<type>/` - Focus on test flow
-
-**Writing Tests:**
-```typescript
-// Import data and keywords
-import { testData } from '../data/controller/featureData';
-import { test } from '@playwright/test';
-import { createAsyncFake, verifyResult } from '../keywords/common/controllerKeywords';
-
-// Data-driven test
-test.describe('feature controller', () => {
-    for (const testCase of testData) {
-        test(testCase.description, async ({}, testInfo) => {
-            await test.step(`run ${testInfo.title}`, async () => {
-                const methodFake = createAsyncFake<[FeatureInput], Feature>(testCase.expected);
-                service.method = methodFake.fn;
-                const result = await controller.method(testCase.input);
-                verifyResult(result, testCase.expected);
-            });
-        });
-    }
-});
-```
-
-**Test Types:**
-- **Unit tests** (`tests/unit/`) - Individual functions, mocked dependencies
-- **Controller tests** (`tests/controller/`) - Business logic, mocked services
-- **Middleware tests** (`tests/middleware/`) - Request/response handling
-- **Database tests** (`tests/database/`) - Real database operations
-- **E2E tests** (`tests/e2e/`) - Complete user workflows with Playwright
-
-See [Testing Quick Reference](copilot/testing-quick-reference.md) for more details.
-
-## E2E Testing Patterns
-
-E2E tests follow the same data-driven and keyword-driven patterns. Key points:
-
-- **Test data**: All constants (URLs, selectors, messages) in `tests/data/e2e/*.ts`
-- **Keywords**: Reusable actions in `tests/keywords/e2e/*.ts`
-  - `authKeywords.ts` - Authentication (login, register, verify)
-  - `entityKeywords.ts` - Entity management (create, navigate, verify)
-  - `navigationKeywords.ts` - Navigation (links, pages, titles)
-  - `validationKeywords.ts` - Validation (errors, fields, alerts)
-  - `dbKeywords.ts` - Database helpers (tokens, queries)
-- **For-loop pattern**: Use `for (const data of testData)` to iterate test cases
-- **Zero hardcoded strings**: All constants externalized to data files
-
-**Example:**
-```typescript
-// Import data and keywords
-import { surveyCreationData } from '../data/e2e/surveyData';
-import { loginUser } from '../keywords/e2e/authKeywords';
-import { createSurvey } from '../keywords/e2e/entityKeywords';
-
-// Data-driven test
-for (const data of surveyCreationData) {
-    test(data.description, async ({ page }) => {
-        await loginUser(page, testCredentials.username, testCredentials.password);
-        await page.goto(data.createUrl);
-        await createSurvey(page, data.title, data.description, data.submitButtonText);
-        await page.waitForURL((url) => data.expectedRedirectPattern.test(url.pathname));
-    });
-}
-```
-
-**E2E Test Organization:**
-- `auth.test.ts` - Authentication and session management
-- `survey.test.ts` / `packing.test.ts` / `activity.test.ts` / `drivers.test.ts` - Entity management
-- `navigation.test.ts` - UI navigation and accessibility
-- `error-handling.test.ts` - Frontend validation and error scenarios
-
-**Important E2E Guidelines:**
-- Use Playwright test framework
-- Mock OIDC for frontend testing (no real authentication)
-- Use `.env.e2e` configuration
-- Tests run against built application
-- Clear cookies/session in `test.beforeEach`
-- Use keywords for common operations
-- Test both positive and negative paths
-
-For detailed E2E testing patterns and examples, see [TESTING.md](../TESTING.md) and [tests/e2e/README.md](../tests/e2e/README.md).
-
-## Additional Resources
+Use the cheapest stable test that catches the regression. Do not add every layer for every feature.

@@ -108,7 +108,7 @@ function createRemoveButton(row: HTMLTableRowElement): HTMLButtonElement {
  * @param pref Prefilled item data (optional)
  * @param rowIdx Row index
  */
-function createRow(pref: Partial<PackingItem> = {}, rowIdx: number = 0): void {
+export function createPackingItemRow(pref: Partial<PackingItem> = {}, rowIdx: number = 0): void {
     const tableBody = document.getElementById('itemTable')!;
     const tr = document.createElement('tr');
     tr.dataset.idx = String(rowIdx);
@@ -145,20 +145,14 @@ function prefillRows(): void {
     const items = getPrefilledItems();
     if (!items) return;
 
-    items.forEach((it: Partial<PackingItem>, i: number) => createRow(it, i));
+    items.forEach((it: Partial<PackingItem>, i: number) => createPackingItemRow(it, i));
 }
 
 /**
  * Handle form submission - build JSON and submit
  * @param evt Submit event
  */
-function handleSubmit(evt: Event): void {
-    const form = document.getElementById('packingForm') as HTMLFormElement;
-    const hiddenFld = document.getElementById('itemsJson') as HTMLInputElement;
-    const tableBody = document.getElementById('itemTable');
-
-    evt.preventDefault();
-
+export function collectPackingItems(tableBody: Element | null): Partial<PackingItem>[] {
     const items: Partial<PackingItem>[] = [];
 
     tableBody?.querySelectorAll('tr').forEach(tr => {
@@ -178,7 +172,16 @@ function handleSubmit(evt: Event): void {
         });
     });
 
-    hiddenFld.value = JSON.stringify(items);
+    return items;
+}
+
+function handleSubmit(evt: Event): void {
+    const form = document.getElementById('packingForm') as HTMLFormElement;
+    const hiddenFld = document.getElementById('itemsJson') as HTMLInputElement;
+    const tableBody = document.getElementById('itemTable');
+
+    evt.preventDefault();
+    hiddenFld.value = JSON.stringify(collectPackingItems(tableBody));
     form.submit();
 }
 
@@ -192,7 +195,7 @@ function initListeners(): void {
     addBtn.addEventListener('click', () => {
         const tableBody = document.getElementById('itemTable')!;
         const rowCount = tableBody.querySelectorAll('tr').length;
-        createRow({}, rowCount);
+        createPackingItemRow({}, rowCount);
     });
 
     form.addEventListener('submit', handleSubmit);
@@ -210,10 +213,12 @@ export function init(): void {
     if (getPrefilledItems()) {
         prefillRows();
     } else {
-        createRow();
+        createPackingItemRow();
     }
 }
 
-// Expose to global scope
-if (!window.Surveyor) window.Surveyor = {};
-window.Surveyor.init = init;
+// Expose to global scope when running in a browser; keeping this guarded makes imports safe in tests.
+if (typeof window !== 'undefined') {
+    if (!window.Surveyor) window.Surveyor = {};
+    window.Surveyor.init = init;
+}
