@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "pretest": "npm run generate",
+    "pretest:integration": "npm run generate",
+    "pretest:ci": "npm run generate",
     "run": "node dist/server.js",
     "server:dev": "nodemon --watch src --ext ts,js --exec \"ts-node --project tsconfig.server.json src/server.ts\"",
     "server:client": "cross-env NODE_ENV=development node esbuild.client.js --watch",

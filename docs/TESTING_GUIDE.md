@@ -64,6 +64,8 @@ npm run e2e                 # Playwright E2E tests
 npm run test:all            # Vitest + build + Playwright E2E
 ```
 
+`npm test`, `npm run test:integration`, and `npm run test:ci` run the database-index generator through their npm lifecycle hooks before Vitest starts. This keeps the ignored `src/modules/database/__index__.ts` build artifact out of Git while ensuring clean CI checkouts can load the production DataSource.
+
 ## Example Patterns
 
 ### Factory-backed Vitest test
