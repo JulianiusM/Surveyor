@@ -87,7 +87,7 @@ The E2E database should be configured with:
 
 Surveyor uses a **two-runner test strategy** designed to keep useful regression coverage fast for daily work while keeping full browser checks focused on critical user journeys:
 
-- **Vitest** runs fast backend, API-contract, and frontend-helper tests against production TypeScript code.
+- **Vitest** runs isolated utility/frontend checks and TypeORM service smoke tests against the MariaDB test database.
 - **Playwright** runs E2E browser/API checks against the built application.
 
 All test files use the `*.spec.ts` suffix. Prefer testing expected production input/output transformations and user-visible behavior instead of implementation details.
@@ -110,8 +110,8 @@ This runs Vitest, builds the app, initializes the E2E database, starts the built
 
 Tests are organized around regression value and runtime cost:
 
-- **Backend tests** (`tests/backend/`) - Pure transformations, permissions, services, and backend behavior that can run without a browser.
-- **API contract tests** (`tests/api/`) - HTTP/API-facing input and response contracts.
+- **Unit tests** (`tests/unit/`) - Strictly isolated production utilities and input/output transformations; no service or controller mocking.
+- **Integration tests** (`tests/integration/`) - Core TypeORM services running against the disposable MariaDB test schema.
 - **Frontend tests** (`tests/frontend/`) - Client-side helpers, DOM/component behavior, and future SPA behavior.
 - **E2E tests** (`tests/e2e/`) - A small set of critical workflows run with Playwright.
 - **Factories** (`tests/factories/`) - Reusable data builders for realistic production inputs, including shared entity factories before specialized builders.
@@ -126,10 +126,9 @@ Keep E2E broad and shallow, prefer API/database setup over UI setup, and avoid b
 ```bash
 npm test                    # Fast Vitest suite
 npm run test:ci             # Fast Vitest suite with JUnit and LCOV coverage reports for CI/SonarQube
-npm run test:quick          # Fast backend + frontend examples
-npm run test:unit           # Backend-focused Vitest tests
-npm run test:api            # API contract Vitest tests
-npm run test:integration    # Fast non-E2E regression set
+npm run test:quick          # Database-free utility + frontend checks
+npm run test:unit           # Isolated production utilities only
+npm run test:integration    # Database-backed core service canaries
 npm run test:frontend       # Frontend Vitest tests
 npm run e2e                 # Playwright E2E with managed web server
 ```
@@ -150,7 +149,7 @@ The project includes a GitHub Actions CI pipeline that:
 1. Sets up a MariaDB 10.11 service container
 2. Creates and configures both test and E2E databases
 3. Installs dependencies and builds the application
-4. Runs all unit and integration tests
+4. Runs isolated utility tests and database-backed integration smoke tests
 5. Runs Playwright E2E tests
 6. Uploads test reports as artifacts
 
@@ -163,10 +162,10 @@ The CI pipeline runs on:
 
 The CI pipeline automatically:
 
-- Creates `surveyor_test` database for fast backend/API tests that need persistence
+- Creates the disposable `surveyor_test` database for TypeORM integration smoke tests
 - Creates `surveyor_e2e` database for E2E tests
 - Sets up required users and permissions
-- Initializes the test database schema using `npm run typeorm -- schema:sync`
+- Lets the integration suite rebuild only the guarded `surveyor_test` schema through the production TypeORM metadata
 - Creates `.env.test` and `.env.e2e` files with appropriate credentials
 
 ## Development Scripts

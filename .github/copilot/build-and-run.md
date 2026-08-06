@@ -38,6 +38,6 @@ The GitHub Actions CI pipeline:
 
 ### Environment Files
 
-- `tests/.env.test` - Configuration for fast backend/API tests that need persistence
+- `tests/.env.test` - Disposable MariaDB configuration for TypeORM integration smoke tests
 - `.env.e2e` - Configuration for E2E tests
 - Both files are created automatically in CI

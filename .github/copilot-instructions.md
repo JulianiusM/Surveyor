@@ -16,8 +16,8 @@ For comprehensive documentation, read:
 - `src/routes/` - Express routes.
 - `src/controller/` - Controller/business orchestration.
 - `src/public/js/` - Client-side TypeScript.
-- `tests/backend/` - Fast Vitest backend transformations, permissions, and services.
-- `tests/api/` - Fast Vitest API contract/input-shaping tests.
+- `tests/unit/` - Vitest tests strictly limited to naturally isolated production utilities.
+- `tests/integration/` - Vitest core-service smoke tests using the production TypeORM DataSource and MariaDB.
 - `tests/frontend/` - Fast Vitest frontend helper/component tests.
 - `tests/e2e/` - Focused Playwright critical-flow tests.
 - `tests/factories/` - Reusable production-shaped test data builders.
@@ -28,7 +28,7 @@ For comprehensive documentation, read:
 
 1. Use TypeScript with strict typing, interfaces over object-shape type aliases, and async/await.
 2. Create migrations for database schema changes.
-3. Use Vitest for fast backend/API/frontend tests and Playwright for focused E2E workflows.
+3. Use Vitest for isolated utilities, frontend helpers, and MariaDB-backed integration smoke tests; use Playwright for focused E2E workflows.
 4. Test production behavior, not test-only helpers or private implementation details.
 5. Prefer realistic factories in `tests/factories/` over hard-coded inline data.
 6. Keep E2E broad and shallow; protect critical workflows rather than every branch.
@@ -40,8 +40,8 @@ For comprehensive documentation, read:
 ## Testing Rules
 
 - All test files use `*.spec.ts`.
-- Place fast backend tests in `tests/backend/`.
-- Place API contract tests in `tests/api/`.
+- Place naturally isolated utility/input-output tests in `tests/unit/`; do not unit-test service orchestration with mocks.
+- Place core TypeORM service and entity-graph canaries in `tests/integration/` and use the disposable test database instead of repository mocks.
 - Place frontend helper/component tests in `tests/frontend/`.
 - Place Playwright E2E tests in `tests/e2e/`.
 - Place reusable data builders in `tests/factories/`.

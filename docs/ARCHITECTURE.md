@@ -430,10 +430,10 @@ if (perms.has('EDIT')) {
 
 ### Testing Patterns
 
-Surveyor uses a pragmatic test architecture: fast Vitest tests for backend/API/frontend behavior and a small Playwright suite for critical E2E workflows. Tests should protect production behavior and use cases, not private implementation details.
+Surveyor uses a pragmatic test architecture: Vitest covers naturally isolated utilities and frontend helpers plus database-backed service integration canaries, while a small Playwright suite protects critical E2E workflows. Core services use the production TypeORM DataSource against disposable MariaDB rather than repository mocks. Tests protect production behavior and entity relationships, not private implementation details.
 
 ```typescript
-// tests/backend/application-behaviors.spec.ts
+// tests/unit/application-utilities.spec.ts
 import {describe, expect, it} from 'vitest';
 import {buildDateTotals} from '../../src/modules/lib/util';
 import {createDateTotalsCase} from '../factories/dateTotalsFactory';

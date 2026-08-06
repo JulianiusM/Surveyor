@@ -3,8 +3,8 @@ import {defineConfig} from 'vitest/config';
 export default defineConfig({
     test: {
         include: [
-            'tests/backend/**/*.spec.ts',
-            'tests/api/**/*.spec.ts',
+            'tests/unit/**/*.spec.ts',
+            'tests/integration/**/*.spec.ts',
             'tests/frontend/**/*.spec.ts',
         ],
         globals: false,

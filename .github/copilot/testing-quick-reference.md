@@ -2,7 +2,7 @@
 
 ## Strategy
 
-Surveyor uses **Vitest** for fast backend/API/frontend regression tests and **Playwright** for focused E2E workflows.
+Surveyor uses **Vitest** for isolated utilities, frontend helpers, and MariaDB-backed service integration tests, plus **Playwright** for focused E2E workflows.
 
 Use the cheapest stable test that protects the use case. Do not add every layer for every feature.
 
@@ -10,19 +10,18 @@ Use the cheapest stable test that protects the use case. Do not add every layer 
 
 ```bash
 npm test                    # Fast Vitest suite
-npm run test:quick          # Fast backend + frontend examples
-npm run test:unit           # Backend-focused Vitest tests
-npm run test:api            # API contract Vitest tests
+npm run test:quick          # Database-free utility + frontend checks
+npm run test:unit           # Isolated utilities only
 npm run test:frontend       # Frontend Vitest tests
-npm run test:integration    # Fast non-E2E regression set
+npm run test:integration    # MariaDB-backed service canaries
 npm run e2e                 # Playwright E2E tests
 npm run test:all            # Vitest + build + Playwright E2E
 ```
 
 ## Structure
 
-- `tests/backend/` - Fast Vitest tests for backend transformations, permissions, and services.
-- `tests/api/` - Fast Vitest API contract/input-shaping tests.
+- `tests/unit/` - Naturally isolated production utilities and input/output transformations.
+- `tests/integration/` - Production TypeORM services exercised against the disposable MariaDB test schema.
 - `tests/frontend/` - Fast Vitest frontend helper/component tests.
 - `tests/e2e/` - Focused Playwright critical-flow tests.
 - `tests/factories/` - Reusable production-shaped test data builders.
@@ -39,3 +38,4 @@ All test files use `*.spec.ts`.
 - Use factories for realistic data with small overrides.
 - Avoid broad snapshots and implementation-detail selectors.
 - Use stable E2E selectors or role/name locators.
+- Do not mock TypeORM repositories or core services; use the integration database.

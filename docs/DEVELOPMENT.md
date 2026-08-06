@@ -312,13 +312,12 @@ See [TESTING_GUIDE.md](TESTING_GUIDE.md) for comprehensive testing documentation
 ### Quick Reference
 
 ```bash
-# Fast Vitest tests
-npm test                    # Backend, API, and frontend fast tests
-npm run test:quick          # Backend + frontend fast examples
-npm run test:unit           # Backend-focused tests
-npm run test:api            # API contract tests
+# Vitest tests
+npm test                    # Unit, frontend, and MariaDB integration canaries
+npm run test:quick          # Database-free unit + frontend checks
+npm run test:unit           # Naturally isolated production utilities
 npm run test:frontend       # Frontend helper/component tests
-npm run test:integration    # Fast non-E2E regression set
+npm run test:integration    # Production TypeORM services against MariaDB
 
 # E2E tests (requires build + E2E database configuration)
 npm run build
@@ -348,7 +347,7 @@ Use the cheapest stable test that protects the use case:
 
 2. **Write a Vitest test against production behavior:**
    ```typescript
-   // tests/backend/application-behaviors.spec.ts
+   // tests/unit/application-utilities.spec.ts
    import {describe, expect, it} from 'vitest';
    import {buildDateTotals} from '../../src/modules/lib/util';
    import {createDateTotalsCase} from '../factories/dateTotalsFactory';
@@ -415,7 +414,7 @@ debugger; // Breakpoint in browser devtools
 
 ```bash
 # Run specific test with debugging
-npx vitest run tests/backend/application-behaviors.spec.ts --inspect
+npx vitest run tests/unit/application-utilities.spec.ts --inspect
 
 # Debug with VS Code
 # Add to launch.json:
@@ -513,7 +512,7 @@ npm run typeorm migration:revert
 
 1. **Define route** in `src/routes/myFeature.ts`
 2. **Create controller** in `src/controller/myFeatureController.ts`
-3. **Add API contract tests** in `tests/api/contracts.spec.ts` or backend behavior suites in `tests/backend/`
+3. **Add an isolated utility test** in `tests/unit/`, or a MariaDB-backed route/service canary in `tests/integration/`
 4. **Register route** in `src/server.ts`
 
 ### Add a New Entity
@@ -521,7 +520,7 @@ npm run typeorm migration:revert
 1. **Create entity** in `src/modules/database/entities/MyEntity.ts`
 2. **Create service** in `src/modules/database/services/MyEntityService.ts`
 3. **Create migration** to add table
-4. **Add backend service tests** in a grouped backend suite such as `tests/backend/application-behaviors.spec.ts`
+4. **Add a database-backed service canary** in a grouped integration suite such as `tests/integration/core-services.spec.ts`
 
 ### Add Frontend Module
 

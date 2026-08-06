@@ -11,7 +11,7 @@ documentation. The project uses:
 
 - **Backend**: Express.js + TypeORM + MariaDB
 - **Frontend**: Pug templates + Bootstrap + Vanilla TypeScript
-- **Testing**: Vitest for fast backend/API/frontend tests and Playwright for focused E2E workflows
+- **Testing**: Vitest for isolated utilities/frontend helpers and MariaDB-backed service integration tests; Playwright for focused E2E workflows
 - **Language**: TypeScript with strict type checking
 - **Testing Approach**: Use-case-focused, factory-backed tests that avoid brittle implementation details
 
@@ -30,7 +30,7 @@ documentation. The project uses:
     - **AI-specific**: `.github/copilot-instructions.md` and this file
 
 3. **Understand the testing approach**:
-    - Vitest runs fast backend, API-contract, and frontend-helper tests
+    - Vitest runs isolated utility/frontend tests and production TypeORM service canaries against MariaDB
     - Playwright runs focused E2E workflows only
     - All test files use the `*.spec.ts` suffix
     - Reusable production-shaped factories live in `tests/factories/`; use common entity factories before specialized builders
@@ -209,8 +209,8 @@ it('adds two numbers', () => {
 Use the cheapest stable test that protects the use case:
 
 1. **Choose the test type**:
-    - Backend transformation/permission/service behavior → `tests/backend/` with Vitest
-    - API-facing input or response contract → `tests/api/` with Vitest
+    - Naturally isolated utility/input-output behavior → `tests/unit/` with Vitest
+    - Core service persistence and entity relationships → `tests/integration/` with Vitest and MariaDB
     - Frontend helper/component behavior → `tests/frontend/` with Vitest
     - Critical user workflow → `tests/e2e/` with Playwright
 
@@ -229,7 +229,7 @@ Use the cheapest stable test that protects the use case:
 
 3. **Write the test against production behavior**:
    ```typescript
-   // tests/backend/application-behaviors.spec.ts
+   // tests/unit/application-utilities.spec.ts
    import {describe, expect, it} from 'vitest';
    import {buildDateTotals} from '../../src/modules/lib/util';
    import {createDateTotalsCase} from '../factories/dateTotalsFactory';
@@ -261,19 +261,19 @@ Avoid broad snapshots, private implementation assertions, tests of convenience w
 
 ### Test Coverage
 
-- **Backend Vitest tests**: Important transformations, permissions, services, and business rules
-- **API Vitest tests**: HTTP/API-facing contracts, input shaping, and stable response behavior
+- **Unit Vitest tests**: Naturally isolated production utilities and input/output transformations only
+- **Integration Vitest tests**: Important TypeORM services, persisted permissions, and entity relationships against MariaDB
 - **Frontend Vitest tests**: Client-side helpers/components and future SPA behavior
 - **Playwright E2E tests**: Critical user workflows only
 
 ### Test Organization
 
-- Place fast tests under `tests/backend/`, `tests/api/`, or `tests/frontend/`; place only critical workflows under `tests/e2e/`; name all test files `*.spec.ts`
+- Place isolated tests under `tests/unit/`, database-backed service canaries under `tests/integration/`, frontend helpers under `tests/frontend/`, and only critical workflows under `tests/e2e/`; name all test files `*.spec.ts`
 - Group related examples by behavior/use case instead of creating one spec file per assertion
 - Create reusable production-shaped factories in `tests/factories/`, using common entity factories before specialized builders
 - Create reusable keywords in `tests/keywords/` only when they make smoke-test workflows/assertions clearer
 - Use small shared helpers in `tests/support/` or E2E screen/page helpers only when they reduce brittle selectors
-- Mock external dependencies where possible and reserve full database/browser setup for integration or E2E value
+- Mock only true external boundaries when unavoidable. Never mock TypeORM repositories or core application services; use the disposable MariaDB integration database.
 
 ### E2E Test Specifics
 

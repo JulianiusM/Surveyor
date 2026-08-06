@@ -113,7 +113,7 @@ jobs:
           EOF
           echo "Wrote .env.e2e"
 
-      - name: Run fast Vitest suite with JUnit report
+      - name: Run Vitest unit, frontend, and MariaDB integration suites with reports
         run: |
           mkdir -p artifacts
           npm run test:ci
