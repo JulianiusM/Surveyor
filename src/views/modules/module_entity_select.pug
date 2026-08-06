@@ -1,0 +1,81 @@
+//- eventPicker(name, entities, opts?)
+//- opts: { id, label, value, required, class, help, placeholderLabel }
+//-   name             -> form field name to submit (hidden input)
+//-   entities         -> array of { id, title, description?, dateIso?, ... }
+//-   value            -> preselected entity id (string|number)
+//-   placeholderLabel -> text shown on button before a selection (default: "Select entity")
+mixin entityPicker(name, entities, opts)
+    -
+        if (!opts) opts = {};
+        const id = (opts.id || name);
+        const placeholder = opts.placeholderLabel || 'Select entity';
+        const preselectedId = (opts.value ?? null);
+
+        let initialLabel = placeholder; // Resolve initial label if preselected
+        try {
+            if (preselectedId != null && Array.isArray(entities)) {
+                const match = entities.find(e => String(e.id) === String(preselectedId));
+                if (match && match.title) initialLabel = match.title;
+            }
+        } catch (e) {
+        }
+
+    .entity-picker(class=[opts.class])
+        if opts.label
+            label.form-label(for=id + '-btn')= opts.label
+
+        //- Hidden field that submits with the form
+        input(type='hidden', name=name, id=id, value=preselectedId, required=opts.required)
+
+        //- Compact trigger button shows current selection
+        .d-flex.gap-2
+            a.btn.btn-outline-light.flex-grow-1.text-start(id=id + '-btn' data-bs-toggle='modal', data-bs-target='#' + id + '-modal', role='button')
+                i.bi.bi-calendar-event.me-2(aria-hidden="true")
+                span(id=id + '-btn-label')= initialLabel
+
+        if opts.help
+            .form-text.mt-1= opts.help
+
+        //- Modal: searchable list of events
+        .modal.fade(id=id + '-modal' tabindex='-1' aria-labelledby=id + '-modal-label' aria-hidden='true')
+            .modal-dialog.modal-dialog-scrollable
+                .modal-content.text-bg-dark
+                    .modal-header.text-bg-dark
+                        h5.modal-title(id=id + '-modal-label') Choose an entity
+                        button.btn-close(type='button' data-bs-dismiss='modal' aria-label='Close')
+                    .modal-body
+                        //- Search box
+                        .input-group.mb-2
+                            span.input-group-text.text-bg-dark
+                                i.bi.bi-search(aria-hidden="true")
+                            input.form-control.text-bg-dark(
+                                id=id + '-search'
+                                type='search'
+                                placeholder='Search entities by name…'
+                                autocomplete='off'
+                                inputmode='search'
+                                aria-controls=id + '-list'
+                                aria-describedby=id + '-sr'
+                            )
+
+                        //- Results list
+                        ul.list-group.list-group-flush.text-bg-dark(
+                            id=id + '-list'
+                            role='listbox'
+                            aria-label='Entities'
+                        )
+                            // items injected by JS
+
+                        //- Assistive summary
+                        span.visually-hidden(id=id + '-sr' aria-live='polite')
+
+                        //- Empty state (hidden until needed)
+                        .text-secondary.small.mt-2.d-none(id=id + '-empty') No entities match your search.
+
+                    .modal-footer
+                        button.btn.btn-secondary(type='button' data-bs-dismiss='modal') Cancel
+
+    // Load the module
+    script(type="module").
+        import { initEntitySelect } from "/js/modules/entity-select.gen.js";
+        initEntitySelect("#{id}", !{JSON.stringify(entities || [])}, !{JSON.stringify(opts || {})});

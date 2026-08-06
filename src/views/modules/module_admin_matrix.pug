@@ -1,0 +1,141 @@
+//- views/mixins/admin-matrix.pug
+//- Admin Manager (entity-level per-user permissions)
+//- Params:
+//-   admins:   Array<{ userId:number, username:string, email?:string, avatarUrl?:string, perms:number }>
+//-   permMeta: Array<{ key:string, bit:number, label:string, desc?:string }>
+//-   presets:  Array<{ key:string, label:string, mask:number }>  (optional)
+//-   opts?: {
+//-     title?: string,
+//-     apiAdd: string,       // POST   /api/{entity}/{id}/admins
+//-     apiUpdate: string,    // PATCH  /api/{entity}/{id}/admins/{userId}
+//-     apiRemove: string,    // DELETE /api/{entity}/{id}/admins/{userId}
+//-     apiSearch?: string,   // GET    /api/users/search?q=...  (optional for typeahead)
+//-     openFirst?: boolean
+//-   }
+
+mixin adminMatrix(admins, permMeta, presets=[], opts)
+    - const title = opts?.title ?? 'Administrators'
+    - const accId = 'admin-acc-' + Math.random().toString(36).slice(2)
+    - const openFirst = opts?.openFirst ?? false
+
+    .admin-matrix.text-bg-dark.border.border-secondary.rounded-2.p-2#adminMatrix(
+        data-api-add=opts.apiAdd
+        data-api-update=opts.apiUpdate
+        data-api-remove=opts.apiRemove
+        data-api-search=opts.apiSearch || ''
+    )
+        //- Header row
+        .d-flex.align-items-center.justify-content-between.mb-2
+            .d-flex.align-items-center.gap-2
+                i.bi.bi-shield-lock
+                strong= title
+                span.badge.bg-secondary.ms-1= (admins && admins.length) ? admins.length : 0
+            button.btn.btn-sm.btn-primary.btn-admin-add(type="button" data-bs-toggle="modal" data-bs-target=`#${accId}-add-modal`)
+                i.bi.bi-person-plus.me-1
+                | Add
+
+        //- Accordion
+        .accordion.accordion-flush(id=accId)
+            if !admins || !admins.length
+                .text-secondary.small.ms-1.mb-2 No administrators yet.
+            else
+                each a, idx in admins
+                    - const headId = `${accId}-head-${a.userId}`
+                    - const colId  = `${accId}-col-${a.userId}`
+                    - const user = a.user
+                    .accordion-item.bg-dark.border-secondary.admin-card(data-user-id=a.userId)
+                        h2.accordion-header(id=headId)
+                            button.accordion-button.text-light.bg-dark(class=(openFirst && idx === 0) ? '' : 'collapsed'
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target=`#${colId}`
+                                aria-controls=colId
+                                aria-expanded=(openFirst && idx === 0 ? 'true' : 'false'))
+                                //- avatar (initials)
+                                - const initials = (user.name || user.username || '??').split(/\s+/).map(s=>s[0]).join('').slice(0,2).toUpperCase()
+                                .rounded-circle.bg-secondary.text-dark.d-inline-flex.justify-content-center.align-items-center.me-2(style="width:24px;height:24px;font-size:12px;")= initials
+                                span.me-2= user.name || user.username || ('#' + a.userId)
+                                if user.name
+                                    small.text-secondary= ` <${user.username}>`
+                                //- compact badge: number of enabled perms
+                                - const enabled = permMeta.reduce((n,p)=> n + (!!(a.perms & p.bit) ? 1 : 0), 0)
+                                span.badge.bg-secondary.ms-2= `${enabled}/${permMeta.length}`
+
+                        .accordion-collapse.collapse(id=colId data-bs-parent=`#${accId}` class=(openFirst && idx === 0) ? 'show' : '')
+                            .accordion-body.bg-dark.pt-2
+                                //- Presets + All/None toolbar
+                                .d-flex.flex-wrap.gap-2.justify-content-between.align-items-center.mb-2
+                                    if presets && presets.length
+                                        .btn-group.btn-group-sm(role="group" aria-label="Presets")
+                                            each pr in presets
+                                                button.btn.btn-outline-light.admin-perm-preset(
+                                                    type="button"
+                                                    data-user-id=a.userId
+                                                    data-mask=pr.mask
+                                                    title=`Apply preset: ${pr.label}`
+                                                )= pr.label
+                                    .btn-group.btn-group-sm
+                                        button.btn.btn-outline-light.admin-perm-select-all(type="button" data-user-id=a.userId title="Select all") All
+                                        button.btn.btn-outline-light.admin-perm-clear(type="button" data-user-id=a.userId title="Clear all") None
+
+                                //- Permission grid
+                                .row.row-cols-2.row-cols-md-3.row-cols-lg-4.g-2
+                                    each p in permMeta
+                                        - const checked = !!((a.perms ?? 0) & p.bit)
+                                        .col
+                                            .form-check
+                                                input.form-check-input.perm-box.bg-dark.border-secondary(
+                                                    type="checkbox"
+                                                    value=p.key
+                                                    id=`admin-${a.userId}-${p.key}`
+                                                    checked=checked
+                                                    data-bit=p.bit
+                                                )
+                                                label.form-check-label.text-light(for=`admin-${a.userId}-${p.key}`)= p.label
+                                                if p.desc
+                                                    small.text-secondary.d-block= p.desc
+
+                                //- Actions
+                                .d-flex.justify-content-between.mt-3
+                                    button.btn.btn-outline-danger.btn-sm.btn-admin-remove(type="button" data-user-id=a.userId)
+                                        i.bi.bi-trash.me-1
+                                        | Remove
+                                    button.btn.btn-primary.btn-sm.btn-admin-update(type="button" data-user-id=a.userId)
+                                        span.label Save
+                                        span.spinner-border.spinner-border-sm.ms-2.d-none(role="status" aria-hidden="true")
+
+        //- Add Admin Modal
+        .modal.admin-modal.fade(id=`${accId}-add-modal`, tabindex="-1", aria-labelledby=`${accId}-add-title`, aria-hidden="true")
+            .modal-dialog.modal-dialog-centered
+                .modal-content.bg-dark.text-light.border.border-secondary
+                    .modal-header
+                        h5.modal-title(id=`${accId}-add-title`) Add administrator
+                        button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
+                    .modal-body
+                        form(id=`${accId}-add-form`)
+                            .mb-3
+                                label.form-label(for=`${accId}-search`)
+                                    i.bi.bi-search.me-1
+                                    | User (name or email)
+                                input.form-control.text-bg-dark(id=`${accId}-search` type="text" placeholder="Search user..." list=`${accId}-datalist`)
+                                datalist(id=`${accId}-datalist`)
+                                input(type="hidden" id=`${accId}-userId`)
+                                small.text-secondary.d-block Use search results to select a user.
+                            if presets && presets.length
+                                .mb-2
+                                    label.form-label(for=`${accId}-preset`)
+                                        i.bi.bi-magic.me-1
+                                        | Initial preset
+                                    select.form-select.text-bg-dark(id=`${accId}-preset`)
+                                        option(value="") None
+                                        each pr in presets
+                                            option(value=pr.key)= pr.label
+                    .modal-footer
+                        button.btn.btn-outline-secondary(type="button" data-bs-dismiss="modal") Cancel
+                        button.btn.btn-primary.btn-admin-add-submit(type="button" data-modal=`#${accId}-add-modal`)
+                            span.label Add
+                            span.spinner-border.spinner-border-sm.ms-2.d-none(role="status" aria-hidden="true")
+
+    script(type="module").
+        import { initAdminMatrix } from "/js/modules/admin-matrix.gen.js";
+        initAdminMatrix();

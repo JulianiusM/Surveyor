@@ -1,0 +1,248 @@
+extends ../layout
+
+block meta
+    - const ev = data.event || data; // tolerate different controller shapes
+    title= `Dashboard — ${ev.title}`
+
+block title
+    h1.card-header.text-center
+        i.bi.bi-speedometer2.me-2
+        | Event Dashboard — #{ev.title}
+
+block content
+    -
+        const ownerId = ev.ownerId;
+        const startDate = ev.startDate;
+        const endDate = ev.endDate;
+        const location = ev.location || '';
+        const deadline = ev.bindingDeadline;
+        const participants = data.participants || [];
+
+    // ─── Event meta ───────────────────────────────────────────
+    .card.mb-3.bg-dark.text-white.border-secondary-subtle
+        .card-body
+            .row
+                .col-md-6
+                    dl.row.mb-0
+                        dt.col-sm-4 Dates
+                        dd.col-sm-8
+                            span#startSpan.me-1(data-start=startDate) #{startDate}
+                            | →
+                            span#endSpan.ms-1(data-end=endDate) #{endDate}
+                        if location
+                            dt.col-sm-4 Location
+                            dd.col-sm-8 #{location}
+                        if ev.maxParticipants
+                            dt.col-sm-4 Max. / registered participants
+                            dd.col-sm-8 #{ev.maxParticipants} / #{participants.length}
+                        if deadline
+                            dt.col-sm-4 Binding deadline
+                            dd.col-sm-8
+                                p Event timezone (#{ev.timezone || 'UTC'}):
+                                    span.ms-2#deadlineTZ(data-tz=ev.timezone) #{new Date(deadline).toLocaleString(undefined, {timeZone: ev.timezone || 'UTC'})}
+                                p Your timezone:
+                                    span.ms-2#deadlineText(data-date=new Date(deadline).toISOString()) #{new Date(deadline).toUTCString()}
+                                    span#deadlineCountdown.text-info.ms-2
+                .col-md-6
+                    if ev.description
+                        label.form-label Description
+                        p
+                            - const lines = ev.description.split('\n')
+                            each line, i in lines
+                                | #{line}
+                                if i < lines.length - 1
+                                    br
+
+            .row
+                .col-12.d-flex.justify-content-end.gap-2
+                    a.btn.btn-primary(href=`/event/${ev.id}`)
+                        i.bi.bi-calendar2-event.me-1
+                        | Event page
+
+    if permData.entity.any("EDIT_TITLE", "EDIT_DESC", "EDIT_CAPACITY", "EDIT_META")
+        .card.mb-2.bg-dark.text-white.border-secondary-subtle
+            .card-header.py-2
+                i.bi.bi-gear-fill.me-2
+                | Event settings
+            .card-body
+                form.row.g-3#eventUpdateForm
+                    if permData.entity.has("EDIT_TITLE")
+                        .col-md-6
+                            label.form-label(for="titleEdit")
+                                i.bi.bi-tag.me-1
+                                | Title
+                            input#titleEdit.form-control.text-bg-dark(type="text" name="title" maxlength="255" value=ev.title)
+                    if permData.entity.has("EDIT_META")
+                        .col-md-6
+                            label.form-label(for="locationEdit")
+                                i.bi.bi-geo-alt.me-1
+                                | Location
+                            input#locationEdit.form-control.text-bg-dark(type="text" name="location" maxlength="255" value=location)
+                        .col-md-4
+                            label.form-label(for="startEdit")
+                                i.bi.bi-calendar-event.me-1
+                                | Start date
+                            input#startEdit.form-control.text-bg-dark(type="date" name="startDate" value=startDate)
+                        .col-md-4
+                            label.form-label(for="endEdit")
+                                i.bi.bi-calendar2-event.me-1
+                                | End date
+                            input#endEdit.form-control.text-bg-dark(type="date" name="endDate" value=endDate)
+                    if permData.entity.has("EDIT_CAPACITY")
+                        .col-md-4
+                            label.form-label(for="maxParticipants")
+                                i.bi.bi-people.me-1
+                                | Max Participants
+                            input#maxParticipants.form-control.text-bg-dark(
+                                type="number"
+                                name="maxParticipants"
+                                placeholder=""
+                                value=(ev.maxParticipants || ''))
+                    if permData.entity.has("EDIT_DESC")
+                        .col-md-12
+                            label.form-label(for="descEdit")
+                                i.bi.bi-pencil-square.me-1
+                                | Description
+                            textarea#descEdit.form-control.text-bg-dark(name="description" rows="3") #{ev.description || ''}
+                    if permData.entity.has("EDIT_META")
+                        .col-md-4
+                            label.form-label(for="deadlineEdit")
+                                i.bi.bi-hourglass-split.me-1
+                                | Binding deadline
+                            input#deadlineEdit.form-control.text-bg-dark(type="datetime-local" name="bindingDeadline" step=1 value=(deadline ? new Date(deadline).toISOString().slice(0, 19) : ''))
+                        .col-md-4
+                            +timezonePicker('deadlineTz', {
+                                label: 'Time zone',
+                                required: true,
+                                value: ev.timezone,
+                                help: 'Times will be converted for each user.'
+                            })
+                    if permData.entity.has("MANAGE_REQUIREMENTS")
+                        .col-md-4.d-flex.align-items-end
+                            .form-check
+                                input#requireDietEdit.form-check-input(
+                                    type="checkbox"
+                                    name="requireDietaryInfo"
+                                    checked=!!ev.requireDietaryInfo)
+                                label.form-check-label(for="requireDietEdit")
+                                    i.bi.bi-egg-fried.me-1
+                                    | Require dietary info during registration
+                        .col-md-4.d-flex.align-items-end
+                            .form-check
+                                input#allowDietCommentEdit.form-check-input(
+                                    type="checkbox"
+                                    name="allowDietComment"
+                                    checked=!!ev.allowDietComment)
+                                label.form-check-label(for="allowDietCommentEdit")
+                                    i.bi.bi-chat-dots.me-1
+                                    | Allow diet comment during registration
+                    .col-12.d-flex.justify-content-end.gap-2
+                        button.btn.btn-primary(type="submit")
+                            i.bi.bi-save.me-1
+                            | Save settings
+
+    if permData.entity.has('MANAGE_PERMISSIONS')
+        +permissionManagement(admins, perms.permMeta, perms.defaultPerms, perms.presets, {
+            entityType: 'event',
+            entityId: ev.id,
+        })
+
+    if permData.entity.has('MANAGE_REGISTRATIONS')
+        +eventRegLinks({
+            eventId: ev.id,
+            apiList: `/api/event/${ev.id}/links`,
+            apiCreate: `/api/event/${ev.id}/links`,
+            apiRevoke: `/api/event/${ev.id}/links`
+        })
+
+    if permData.entity.has('ACCESS_PARTICIPANTS')
+        - const apiDelete = permData.entity.has('MANAGE_REGISTRATIONS') ? `/api/event/${ev.id}/registrations` : undefined
+        - const apiUpdate = permData.entity.has('MANAGE_REGISTRATIONS') ? `/api/event/${ev.id}/registrations` : undefined
+        +eventParticipants({
+            eventId: ev.id,
+            apiList: `/api/event/${ev.id}/participants`,
+            apiDelete: apiDelete,
+            apiUpdate: apiUpdate,
+            startDate: startDate,
+            endDate: endDate,
+        })
+
+    .row
+        .accordion.accordion-dark#entityLists
+            //-
+                +entityList(
+                    'sec-surveys',
+                    'Event surveys',
+                    'bi-clipboard-data',
+                    data.surveys,
+                    'survey',
+                    `/survey/create?eventId=${ev.id}`,
+                    'Create new survey',
+                    'bi-plus-circle',
+                    'No surveys in this event yet.',
+                    'bi-clipboard-check',
+                    true
+                )
+
+            +entityList(
+                'sec-pack',
+                'Event packing lists',
+                'bi-box-seam',
+                data.packingLists,
+                'packing',
+                `/packing/create?eventId=${ev.id}`,
+                'Create new packing list',
+                'bi-plus-circle',
+                'No packing lists in this event yet.',
+                'bi-bag-check',
+                true
+            )
+
+            +entityList(
+                'sec-activity',
+                'Event activity plans',
+                'bi-calendar',
+                data.activityPlans,
+                'activity',
+                `/activity/create?eventId=${ev.id}`,
+                'Create new activity plan',
+                'bi-calendar-plus',
+                'No activity plans in this event yet.',
+                'bi-calendar-check',
+                true
+            )
+
+            +entityList(
+                'sec-drivers',
+                'Event drivers lists',
+                'bi-car-front',
+                data.driverLists,
+                'drivers',
+                `/drivers/create?eventId=${ev.id}`,
+                'Create new drivers list',
+                'bi-plus-circle',
+                'No drivers lists in this event yet.',
+                'bi-car-front',
+                true
+            )
+
+    if permData.entity.has('MANAGE_ASSIGNMENTS')
+        +invoiceManagementTabs(ev, data)
+        +takeoverModal('takeoverModal')
+
+    if permData.entity.has("DATA_EXPORT")
+        hr
+        h2.fs-3.mb-3 Exports
+        if permData.entity.has("ACCESS_PARTICIPANTS")
+            a.btn.btn-sm.btn-outline-light(
+                href=`/event/${ev.id}/export/participants`
+                target="_blank" rel="noopener"
+            )
+                i.bi.bi-printer.me-1
+                | Participants (PDF)
+
+block scripts
+    script(type="module" src="/js/events.gen.js")
+    script.
+        window.Surveyor.eventId = "#{ev.id}";
+    script#participantsData(type="application/json")!= JSON.stringify(data.participants || []).replace(/<\/script>/g, '<\\/script>')

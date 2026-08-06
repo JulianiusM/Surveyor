@@ -1,0 +1,105 @@
+//- views/packing/packing-create.pug  – überarbeitetes „Create“-Formular
+extends ../layout
+
+block meta
+    title Create Packing List | PackMaster
+
+block title
+    h1.card-header.text-center
+        i.bi.bi-bag-plus.me-2
+        | Create packing list
+
+block content
+    -
+        let parsed = {}, parsedData = [], parsedEventData = {};
+        if (data) {
+            if (data.entity) {
+                parsed = data.entity;
+            } else {
+                parsed = data;
+            }
+            if (data.data) {
+                parsedData = data.data;
+            } else {
+                parsedData = data.items;
+            }
+            if (data.eventId) {
+                parsedEventData.id = data.eventId;
+            }
+            if (data.events) {
+                parsedEventData.events = data.events;
+            }
+        }
+        let eventIdQuery = '';
+        if (parsed.eventId) {
+            eventIdQuery = `?eventId=${parsed.eventId}`
+        }
+
+    form#packingForm(action=`/packing/create${eventIdQuery}` method="POST" enctype="multipart/form-data")
+        // Titel
+        .mb-3
+            label.form-label(for="title")
+                i.bi.bi-tag.me-1
+                | Title *
+            input#title.form-control.text-bg-dark(
+                type="text"
+                name="title"
+                required
+                value=(parsed.title || ''))
+
+        .row.mb-3
+            .col-md-12
+                label.form-label(for="desc")
+                    i.bi.bi-pencil-square.me-1
+                    | Description (optional)
+                textarea#desc.form-control.text-bg-dark(name="description")
+                    | #{parsed.description || ''}
+
+        .row.mb-3
+            .col-12
+                label.form-label(for="headerImg")
+                    i.bi.bi-card-image.me-1
+                    | Header image(optional)
+                input#headerImg.form-control.text-bg-dark(type="file" name="headerImg" accept="image/jpeg,image/png,image/gif")
+
+        .row.mb-3
+            .col-md-12
+                +entityPicker('event_id', parsedEventData.events, {
+                    label: 'Assign to event (optional)',
+                    value: parsedEventData.id
+                })
+
+        .row.mb-3
+            .col-md-12
+                +permMatrix(['participant', 'guest', 'authenticated', 'public'], perms.permMeta, perms.defaultPerms, perms.presets, 'defaultPerms')
+
+        // Item-Tabelle
+        .mb-3
+            label.form-label
+                i.bi.bi-list-ul.me-1
+                | Items to pack
+            .table-responsive
+                table.table.table-dark.table-striped.table-bordered.align-middle
+                    thead
+                        tr
+                            th.text-center.w-25 Item
+                            th.text-center.w-50 Description
+                            th.text-center.w-15 Max #
+                            th.text-center.w-10 Action
+                    tbody#itemTable
+
+        // Buttons
+        .d-flex.justify-content-between.align-items-center
+            button#addItemBtn.btn.btn-outline-info(type="button")
+                i.bi.bi-plus-circle.me-1
+                | Add row
+            button.btn.btn-success(type="submit")
+                i.bi.bi-check-lg.me-1
+                | Create list
+        input(type="hidden" name="items" id="itemsJson")
+
+block scripts
+    script(type="module", src="/js/packing-create.gen.js")
+    if data && data.isDuplicate
+        script.
+            window.Surveyor.prefilledItems = !{JSON.stringify(parsedData)};

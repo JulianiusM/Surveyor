@@ -1,0 +1,326 @@
+extends ../layout
+
+block meta
+    title #{data.plan.title} | Activity planner
+
+block title
+    +entityHeader(data.plan, "activity", "bi-calendar-check", permData)
+    +entityImageModal(data.plan, "activity")
+
+block content
+    //- helper in pug (this won’t be sent to the client)
+    -
+        function fmtISO(date) {
+            const y = date.getUTCFullYear();
+            const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+            const d = String(date.getUTCDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function toDate(val) {
+            const [y, m, d] = val.split('-').map(Number);
+            return new Date(Date.UTC(y, m - 1, d));
+        }
+        const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const start = toDate(data.plan.startDate);
+        const end = toDate(data.plan.endDate);
+
+        const weeks = [];
+        const monday = new Date(start);
+        monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+        while (monday <= end) {
+            weeks.push(new Date(monday));
+            monday.setDate(monday.getDate() + 7);
+        }
+
+    // ─── Description (editable) ──────────────────────────────
+    if permData.entity.has('EDIT_DESC')
+        // manager sees pointer
+        small.text-info.fst-italic.fw-light Double click to edit
+        p#planDesc.border.border-secondary.rounded.p-1(
+            style="cursor:pointer"
+            data-edit="planDescription"
+        )
+            if data.plan.description
+                - const lines = data.plan.description.split('\n')
+                each line, i in lines
+                    | #{line}
+                    if i < lines.length - 1
+                        br
+            else
+                em.text-secondary double-click to add description
+        hr.mb-1.mt-0
+    else if data.plan.description
+        p#planDesc.mb-0.mt-2
+            - const lines = data.plan.description.split('\n')
+            each line, i in lines
+                | #{line}
+                if i < lines.length - 1
+                    br
+        hr.mb-1.mt-0
+
+    // ─── Shared text fields ─────────────────────────────────────
+    .d-flex.justify-content-between.align-items-center.mt-3
+        h5.mb-3
+            i.bi.bi-journal-text.me-2
+            | Shared text fields
+        if permData.entity.has('MANAGE_REQUIREMENTS')
+            button#addTextFieldBtn.btn.btn-sm.btn-outline-primary(type="button")
+                i.bi.bi-plus-lg.me-1
+                | Add text field
+
+    if data.textFields && data.textFields.length
+        each field in data.textFields
+            .card.text-bg-dark.border.border-secondary-subtle.mb-3
+                .card-header.d-flex.justify-content-between.align-items-center
+                    strong.mb-0 #{field.title}
+                    .d-flex.gap-2
+                        if permData.entity.has('MANAGE_REQUIREMENTS')
+                            button.btn.btn-sm.btn-outline-danger.text-field-delete(
+                                type="button"
+                                data-text-field-id=field.id
+                            )
+                                i.bi.bi-trash
+                        if permData.entity.has('ACCESS_VIEW')
+                            button.btn.btn-sm.btn-outline-secondary.text-field-edit(
+                                type="button"
+                                data-text-field-id=field.id
+                                data-title=field.title
+                                data-content=field.text || ''
+                            )
+                                i.bi.bi-pencil
+                .card-body.pt-2.pb-3
+                    small.text-info.fst-italic.fw-light Double click to edit
+                    p.text-field-content.mb-0.border.border-secondary.rounded.p-2(
+                        data-edit="textField"
+                        data-id=field.id
+                        data-placeholder="double-click to add text"
+                        style="cursor: pointer"
+                    )
+                        if field.text
+                            - const textLines = field.text.split('\n')
+                            each line, i in textLines
+                                | #{line}
+                                if i < textLines.length - 1
+                                    br
+                        else
+                            em.text-secondary double-click to add text
+    else
+        p.text-secondary.small.mt-2.mb-3 No shared text fields yet.
+
+    // ─── Tabs & panes for schedule, participants, rules, settings ─────────────
+    -
+        const hasRulesTab =
+                (permData.entity.has('MANAGE_REQUIREMENTS') && data.plan.eventId)
+                || (permData.entity.has('MANAGE_ASSIGNMENTS') && data.plan.eventId);
+        const hasParticipantsTab = !!(data.participantList && data.participantList.length > 0);
+        const hasSettingsTab = permData.entity.has('MANAGE_PERMISSIONS');
+
+    // Nav tabs (Schedule is always present)
+    ul.nav.nav-tabs.mb-3(role="tablist")
+        li.nav-item
+            button.nav-link.active(
+                type="button"
+                data-bs-toggle="tab"
+                data-bs-target="#tab-schedule"
+                role="tab"
+                aria-selected="true")
+                i.bi.bi-calendar3.me-1
+                | Schedule
+        if hasParticipantsTab
+            li.nav-item
+                button.nav-link(
+                    type="button"
+                    data-bs-toggle="tab"
+                    data-bs-target="#tab-participants"
+                    role="tab"
+                    aria-selected="false")
+                    i.bi.bi-people-fill.me-1
+                    | Participants
+        if hasRulesTab
+            li.nav-item
+                button.nav-link(
+                    type="button"
+                    data-bs-toggle="tab"
+                    data-bs-target="#tab-rules"
+                    role="tab"
+                    aria-selected="false")
+                    i.bi.bi-sliders.me-1
+                    | Rules & auto-assign
+        if hasSettingsTab
+            li.nav-item
+                button.nav-link(
+                    type="button"
+                    data-bs-toggle="tab"
+                    data-bs-target="#tab-settings"
+                    role="tab"
+                    aria-selected="false")
+                    i.bi.bi-gear.me-1
+                    | Settings
+
+    .tab-content
+        // ─── Schedule tab ───────────────────────────────────────
+        .tab-pane.fade.show.active#tab-schedule(role="tabpanel")
+            include ./parts/schedule
+
+        // ─── Participants tab ───────────────────────────────────
+        if hasParticipantsTab
+            .tab-pane.fade#tab-participants(role="tabpanel")
+                include ./parts/participants
+
+        // ─── Rules & auto-assign tab ───────────────────────────
+        if hasRulesTab
+            .tab-pane.fade#tab-rules(role="tabpanel")
+                include ./parts/assignments
+
+        // ─── Settings tab ──────────────────────────────────────
+        if hasSettingsTab
+            .tab-pane.fade#tab-settings(role="tabpanel")
+                include ./parts/settings
+
+    // Admin: manage role assignments per slot
+    #slotRoleAdminModal.modal.fade(tabindex="-1" aria-labelledby="slotRoleAdminTitle" aria-hidden="true")
+        .modal-dialog.modal-lg
+            .modal-content.text-bg-dark
+                .modal-header
+                    h5#slotRoleAdminTitle.modal-title
+                        i.bi.bi-people-fill.me-2
+                        | Manage role assignments
+                    button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
+                .modal-body
+                    input#slotRoleAdminSlotId(type="hidden")
+                    p.text-secondary.small.mb-3
+                        | Assign each role in this slot to one of the currently assigned participants.
+                        |  Changes are only saved when you click “Save changes”.
+                    .table-responsive
+                        table.table.table-sm.table-dark.table-bordered.mb-0
+                            thead
+                                tr
+                                    th.w-25 Role
+                                    th Participant
+                            tbody#slotRoleAdminBody
+                                tr(data-empty-state)
+                                    td.colspan-2.text-center.text-secondary.pt-3 No roles for this slot.
+                    small#slotRoleAdminError.text-danger.d-block.mt-2.d-none
+                .modal-footer
+                    button.btn.btn-sm.btn-outline-secondary(type="button" data-bs-dismiss="modal") Cancel
+                    button#slotRoleAdminSave.btn.btn-sm.btn-primary(type="button")
+                        i.bi.bi-save.me-1
+                        | Save changes
+
+    // Assignment warnings modal
+    #assignmentWarningModal.modal.fade(tabindex="-1" aria-labelledby="assignmentWarningTitle" aria-hidden="true")
+        .modal-dialog
+            .modal-content.text-bg-dark
+                .modal-header
+                    h5#assignmentWarningTitle.modal-title
+                        i.bi.bi-exclamation-triangle.me-2
+                        | Assignment warnings
+                    button.btn-close(data-bs-dismiss="modal" aria-label="Close")
+                .modal-body
+                    p.small.text-secondary.mb-2 Potential issues were detected for this slot:
+                    strong#assignmentWarningSlot.d-block.mb-2
+                    ul#assignmentWarningList.list-group.list-group-flush
+                .modal-footer
+                    button#assignmentWarningCancel.btn.btn-outline-secondary(type="button" data-bs-dismiss="modal") Cancel
+                    button#assignmentWarningConfirm.btn.btn-warning(type="button")
+                        i.bi.bi-check2.me-1
+                        | Continue anyway
+
+    // Text field editor modal (create / edit)
+    #textFieldModal.modal.fade(tabindex="-1" aria-labelledby="textFieldModalTitle" aria-hidden="true")
+        .modal-dialog
+            .modal-content.text-bg-dark
+                .modal-header
+                    h5#textFieldModalTitle.modal-title
+                    button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
+                form#textFieldForm
+                    .modal-body
+                        input#textFieldId(type="hidden")
+                        .mb-3
+                            label.form-label(for="textFieldTitle") Title
+                            input#textFieldTitle.form-control.form-control-sm.text-bg-dark(type="text" name="title" maxlength="255" required)
+                        .mb-0
+                            label.form-label(for="textFieldText") Text
+                            textarea#textFieldText.form-control.text-bg-dark(name="text" rows="6" maxlength="5000")
+                    .modal-footer
+                        button.btn.btn-sm.btn-outline-secondary(type="button" data-bs-dismiss="modal") Cancel
+                        button.btn.btn-sm.btn-primary(type="submit")
+                            i.bi.bi-save.me-1
+                            | Save
+
+    // Slot editor modal (create / edit)
+    #slotEditorModal.modal.fade(tabindex="-1" aria-labelledby="slotEditorTitle" aria-hidden="true")
+        .modal-dialog
+            .modal-content.text-bg-dark
+                .modal-header
+                    h5#slotEditorTitle.modal-title
+                        i.bi.bi-pencil-square.me-2
+                        | Edit slot
+                    button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
+                .modal-body
+                    form#slotEditorForm
+                        // hidden fields for state
+                        input#slotEditorSlotId(type="hidden")
+                        input#slotEditorDate(type="hidden")
+
+                        .mb-3
+                            label.form-label(for="slotEditorTitleInput") Title
+                            input#slotEditorTitleInput.form-control.form-control-sm.text-bg-dark(
+                                type="text"
+                                required)
+
+                        .row.g-3
+                            .col-md-6
+                                label.form-label(for="slotEditorStartTime") Start time
+                                input#slotEditorStartTime.form-control.form-control-sm.text-bg-dark(
+                                    type="time")
+                            .col-md-6
+                                label.form-label(for="slotEditorEndTime") End time
+                                input#slotEditorEndTime.form-control.form-control-sm.text-bg-dark(
+                                    type="time")
+
+                        .mb-3
+                            label.form-label(for="slotEditorCapacity") Max participants
+                            input#slotEditorCapacity.form-control.form-control-sm.text-bg-dark(
+                                type="number"
+                                min="1")
+
+                        .mb-3
+                            label.form-label(for="slotEditorDescription") Description
+                            textarea#slotEditorDescription.form-control.form-control-sm.text-bg-dark(
+                                rows="3")
+
+                        // NEW: Role chips + dynamic search
+                        .mb-3
+                            label.form-label(for="slotEditorRoleInput") Roles for this slot
+                            #slotEditorRoleChips.border.rounded.p-2.minh-38
+                                span.text-secondary.small No roles assigned yet.
+
+                            .input-group.input-group-sm.mt-2
+                                span.input-group-text
+                                    i.bi.bi-search
+                                input#slotEditorRoleInput.form-control.form-control-sm.text-bg-dark(
+                                    type="text"
+                                    autocomplete="off"
+                                    placeholder="Type to search or create a role…")
+
+                            // Suggestions stay visible; JS only hides when there is nothing to show
+                            #slotEditorRoleSuggestions.list-group.mt-1
+                                // populated by JS
+
+                        .small.text-secondary
+                            span#slotEditorMeta
+
+                .modal-footer
+                    span#slotEditorError.text-danger.me-auto.small.d-none
+                    button.btn.btn-sm.btn-outline-secondary(type="button" data-bs-dismiss="modal") Cancel
+                    button#slotEditorSave.btn.btn-sm.btn-primary(type="submit" form="slotEditorForm") Save
+
+
+block scripts
+    script(type="module" src="/js/activity.gen.js")
+    script.
+        window.Surveyor.entityId = "#{data.plan.id}";
+        window.Surveyor.allRoles = !{JSON.stringify(data.roles.allRoles || []).replace(/</g, '\\u003c')};
+        window.Surveyor.slotRoles = !{JSON.stringify(data.roles.slotRoles || {}).replace(/</g, '\\u003c')};

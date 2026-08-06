@@ -1,0 +1,625 @@
+//- Common invoice pool fragments reused by admin and participant pages
+include mixins/helpers.pug
+//- Render the outstanding shares table with surcharge notes included for clarity.
+mixin invoiceShareTable(pool, participants, admin = false)
+    if pool.shares && pool.shares.length
+        .table-responsive.invoice-scroll
+            label.form-label.text-secondary.mb-1 Outstanding shares
+            table.table.table-striped.table-hover.table-bordered.table-dark.table-sm.mb-0
+                thead
+                    tr
+                        th Payer
+                        th Covers
+                        th Base
+                        th Extra
+                        th Invoice credit
+                        th Total
+                        th Notes
+                        th Paid
+                tbody
+                    each share in pool.shares
+                        -
+                            const payerName = (participants || []).find(pt => pt.id === share.registration?.id)?.name || `Participant #${share.registration?.id}`
+                            const covered = (pool.takeovers || [])
+                                    .filter(t => t.payerRegistrationId === share.registration?.id)
+                                    .map(t => (participants || []).find(pt => pt.id === t.beneficiaryRegistrationId)?.name || `Participant #${t.beneficiaryRegistrationId}`)
+                                    .join(', ');
+                            const notes = (share.note || '').split(' • ').filter(Boolean);
+                        tr
+                            td #{payerName}
+                            td #{covered || 'Self'}
+                            td #{share.baseShareAmount || '0.00'}
+                            td #{share.extraAmount || '0.00'}
+                            td #{share.invoiceCreditAmount || '0.00'}
+                            td #{share.shareAmount || '0.00'}
+                            td
+                                if notes.length
+                                    ul.list-unstyled.mb-0
+                                        each note in notes
+                                            li.text-secondary.small= note
+                                else
+                                    span.text-secondary.small No notes
+                            td
+                                .form-check.form-switch
+                                    input.form-check-input.share-paid(type="checkbox" data-pool=pool.id data-id=share.id checked=!!(share.isPaid) enabled=admin)
+
+//- Takeover summary with consistent layout and manage button
+mixin takeoverOverview(pool, participants, mode, options)
+    - const showHeading = !(options && options.showHeading === false);
+    if showHeading
+        h6.mb-2 Takeovers
+        p.text-secondary.small.mb-2 Assign which participant covers another's share. Covered participants cannot take over other shares.
+    if pool.takeovers && pool.takeovers.length
+        ul.list-group.list-group-flush.bg-dark.border.border-secondary-subtle.rounded-3
+            each t in pool.takeovers
+                - const payerName = (participants || []).find(pt => pt.id === t.payerRegistrationId)?.name || `Participant #${t.payerRegistrationId}`
+                - const coverName = (participants || []).find(pt => pt.id === t.beneficiaryRegistrationId)?.name || `Participant #${t.beneficiaryRegistrationId}`
+                li.list-group-item.bg-dark.text-white.d-flex.justify-content-between.align-items-center
+                    span #{payerName} → #{coverName}&nbsp;
+                    if mode === 'participant' && data && data.registration && t.payerRegistrationId === data.registration.id
+                        span.badge.bg-info.text-dark You cover this
+                    else if mode === 'participant' && data && data.registration && t.beneficiaryRegistrationId === data.registration.id
+                        span.badge.bg-warning.text-dark Your share is covered
+                    else
+                        span.badge.bg-secondary Covers
+    else
+        p.text-secondary.small.mb-2 No takeovers configured yet.
+    button.btn.btn-outline-light.btn-sm.manage-takeovers.align-self-end.mt-2(type="button" data-id=pool.id data-mode=mode)
+        i.bi.bi-person-check.me-1
+        | Manage takeovers
+
+//- Participant takeover chooser reused on the registration page
+mixin participantTakeoverList(pools, participants)
+    - const participantList = participants || [];
+    if pools && pools.length
+        h6.mt-4 Takeovers
+        p.text-secondary.small.mb-2 Choose whose share you will cover in each pool. Covered participants cannot take over other shares.
+        each pool in pools
+            - const assignments = pool.assignments || []
+            - const assignedIds = pool.assignAll ? participantList.map(p => p.id) : (pool.assignments || []).map(a => a.registration?.id)
+            - const takeoverData = (pool.takeovers || []).map(t => ({payerRegistrationId: t.payerRegistrationId, beneficiaryRegistrationId: t.beneficiaryRegistrationId}))
+            .border.border-secondary-subtle.rounded-3.p-3.mb-2(data-pool=pool.id data-assigned=JSON.stringify(assignedIds) data-takeovers=JSON.stringify(takeoverData))
+                .d-flex.justify-content-between.align-items-center.flex-wrap.gap-2
+                    .d-flex.flex-column
+                        strong #{pool.name}
+                        small.text-secondary Covers #{pool.assignAll ? 'all participants' : assignments.length}
+                    +takeoverOverview(pool, participantList, 'participant', {showHeading: false})
+
+//- Render a single proof link, keeping the markup consistent across admin/participant views
+mixin invoiceProofLink(inv, eventId, poolId)
+    if inv.proofPath
+        a.text-info(href=`/api/event/${eventId}/invoice-pools/${poolId}/invoices/${inv.id}/proof` target="_blank" rel="noopener noreferrer") View
+    else
+        span.text-secondary N/A
+
+//- Generic invoice table used for each admin inbox section
+mixin adminInvoiceSection(title, invoices, eventId, poolId, actions = [])
+    h6 #{title}
+    if invoices && invoices.length
+        .table-responsive.invoice-scroll
+            table.table.table-dark.table-sm.mb-0
+                thead
+                    tr
+                        th Invoice
+                        th Amount
+                        th Proof
+                        if actions.length > 0
+                            th Actions
+                tbody
+                    each inv in invoices
+                        tr
+                            td ##{inv.id}
+                            td #{inv.amount}
+                            td
+                                +invoiceProofLink(inv, eventId, poolId)
+                            if actions.length > 0
+                                td.d-flex.gap-1.flex-wrap
+                                    for action in actions
+                                        button.btn.btn-success.btn-sm.text-capitalize(type="button" class=`invoice-${action}` data-pool=poolId data-id=inv.id)= action
+    else
+        p.text-secondary.small.mb-0 No invoices in this section.
+
+//- Wrapper for the three admin inbox states so invoiceOverview stays small
+mixin adminInvoiceOverview(pool, eventId)
+    if pool.invoices && pool.invoices.length
+        .row.mt-3
+            .col-md-4
+                +adminInvoiceSection('Inbox', pool.invoices.filter(i => i.status === 'NEW'), eventId, pool.id, ['approve', 'decline'])
+            .col-md-4
+                +adminInvoiceSection('Open invoices', pool.invoices.filter(i => i.status === 'APPROVED'), eventId, pool.id, ['close'])
+            .col-md-4
+                +adminInvoiceSection('Closed invoices', pool.invoices.filter(i => i.status === 'CLOSED'), eventId, pool.id)
+    else
+        p.text-secondary.mb-0 No invoices yet.
+
+//- Participant-friendly list of submitted invoices
+mixin participantInvoiceOverview(invoices, pools, eventId)
+    if invoices && invoices.length
+        h6.mt-3 Your invoices
+        .table-responsive.invoice-scroll
+            table.table.table-dark.table-sm.mb-0
+                thead
+                    tr
+                        th Pool
+                        th Amount
+                        th Status
+                        th Proof
+                        th Actions
+                tbody
+                    each inv in invoices
+                        - const poolName = pools.find(p => p.id === inv.poolId)?.name || 'A closed pool'
+                        tr
+                            td #{poolName}
+                            td #{inv.amount}
+                            td #{inv.status}
+                            td
+                                +invoiceProofLink(inv, eventId, inv.poolId)
+                            td
+                                if inv.status === 'APPROVED'
+                                    button.btn.btn-sm.btn-outline-success.invoice-close-self(type="button" data-pool=inv.poolId data-id=inv.id)
+                                        i.bi.bi-check2-circle.me-1
+                                        | Close
+                                else if inv.status === 'CLOSED'
+                                    span.text-secondary.small Closed
+                                else
+                                    span.text-secondary.small Awaiting review
+    else
+        p.text-secondary.small.mb-0 You have not submitted any invoices yet.
+
+//- Invoice overview that adapts to admin and participant needs
+mixin invoiceOverview(mode, options)
+    - const pools = options?.pools || [];
+    - const eventId = options?.eventId;
+    - const invoices = options?.invoices;
+    if mode === 'admin' && options.pool
+        +adminInvoiceOverview(options.pool, eventId)
+    else if mode === 'participant'
+        +participantInvoiceOverview(invoices || [], pools, eventId)
+
+//- Collapsible invoice submission area for both admins (on behalf) and participants
+mixin invoiceSubmission(eventId, pools, mode, invoices, allPools = [])
+    - const hasPools = pools && pools.length;
+    - const overviewPools = hasPools ? pools : allPools;
+    .accordion.accordion-dark.mb-3#invoiceSubmission
+        .accordion-item.bg-dark.text-white.border-secondary-subtle
+            h2.accordion-header
+                button.accordion-button.collapsed.text-white(type="button" data-bs-toggle="collapse" data-bs-target="#invoicePoolCollapse" aria-expanded="false" aria-controls="invoicePoolCollapse")
+                    i.bi.bi-receipt.me-2
+                    | Submit an invoice & history
+            #invoicePoolCollapse.accordion-collapse.collapse
+                .accordion-body
+                    if hasPools
+                        form#invoiceSubmitForm(data-api=`/api/event/${eventId}/invoice-pools/${pools[0].id}/submit` enctype="multipart/form-data")
+                            .row.g-2
+                                .col-md-4
+                                    label.form-label(for="invoicePool") Choose pool
+                                    select#invoicePool.form-select.text-bg-dark(name="poolId")
+                                        each pool in pools
+                                            option(value=pool.id)= pool.name
+                                .col-md-4
+                                    label.form-label(for="invoiceAmount") Amount
+                                    input#invoiceAmount.form-control.text-bg-dark(type="number" name="amount" step="0.01" min="0.01" required)
+                                .col-md-4
+                                    label.form-label(for="invoiceDescription") Description
+                                    input#invoiceDescription.form-control.text-bg-dark(type="text" name="description")
+                                .col-12
+                                    label.form-label(for="invoiceProof") Proof (image or PDF)
+                                    input#invoiceProof.form-control.text-bg-dark(type="file" name="proof" accept="image/jpeg,image/png,image/gif,application/pdf" required)
+                            .d-flex.justify-content-end.mt-2
+                                button.btn.btn-primary(type="submit")
+                                    i.bi.bi-cloud-upload.me-1
+                                    | Submit invoice
+                    else
+                        .alert.alert-info
+                            i.bi.bi-info-circle.me-2
+                            | No open pools for submissions right now.
+                    +invoiceOverview('participant', {invoices: invoices || [], pools: overviewPools, eventId: eventId})
+
+//- Participant-friendly snapshot of what they owe in closed pools
+mixin participantShareSummary(registrationId, pools)
+    - const rows = [];
+    each pool in pools || []
+        if pool.shares && pool.shares.length
+            each share in pool.shares
+                if share.registrationId === registrationId
+                    - rows.push({pool, share});
+    if rows.length
+        h6.mt-3 Your pool shares
+        table.table.table-dark.table-sm
+            thead
+                tr
+                    th Pool
+                    th Base
+                    th Surcharges
+                    th Invoice credit
+                    th Total
+                    th Notes
+                    th Status
+            tbody
+                each row in rows
+                    - const notes = (row.share.note || '').split(' • ').filter(Boolean);
+                    tr
+                        td #{row.pool.name}
+                        td #{row.share.baseShareAmount}
+                        td #{row.share.extraAmount}
+                        td #{row.share.invoiceCreditAmount || '0.00'}
+                        td #{row.share.shareAmount}
+                        td
+                            if notes.length
+                                ul.list-unstyled.mb-0
+                                    each note in notes
+                                        li.text-secondary.small= note
+                            else
+                                span.text-secondary.small No notes
+                        td
+                            if row.share.isPaid
+                                span.badge.bg-success.text-dark Paid
+                            else
+                                span.badge.bg-warning.text-dark Outstanding
+
+//- Header area showing pool name, status, and quick actions
+mixin poolHeader(pool)
+    .d-flex.justify-content-between.align-items-center.flex-wrap.gap-2
+        .d-flex.flex-column
+            .d-flex.align-items-center.gap-2.mb-1
+                h5.mb-0 #{pool.name}
+                if pool.isDefault
+                    span.badge.bg-primary.text-dark Default
+            small.text-secondary #{pool.description || 'No description provided'}
+        span.badge.bg-info.text-dark #{pool.status}
+
+mixin poolHeaderSummary(pool)
+    .d-flex.align-items-center.w-100.justify-content-between.flex-wrap.gap-3
+        .d-flex.flex-column.flex-grow-1
+            .d-flex.align-items-center.gap-2
+                span.fw-semibold #{pool.name}
+                if pool.isDefault
+                    span.badge.bg-primary.text-dark Default
+            small.text-secondary.mb-0 #{pool.description || 'No description provided'}
+        .d-flex.flex-column.align-items-end.me-2
+            span.badge.bg-info.text-dark.mb-1 #{pool.status}
+            small.text-secondary.d-block.text-uppercase.fw-semibold.small Full total
+            span.fs-5.fw-bold #{fmtMoney(pool.totalAmount)}
+
+//- Static stats list to keep amounts readable and reusable
+mixin poolStats(pool)
+    - const assignments = pool.assignments || [];
+    .pool-totals.border.border-secondary-subtle.rounded-3.p-3.bg-black
+        .d-flex.justify-content-between.align-items-start.gap-3
+            .flex-grow-1
+                small.text-secondary.text-uppercase.fw-semibold.mb-1.d-block Full total
+                div.fs-2.fw-bold.text-white #{fmtMoney(pool.totalAmount)}
+                p.text-secondary.small.mb-0 A summary of everything owed in this pool.
+            .text-end
+                span.badge.bg-info.text-dark #{pool.status}
+        .row.g-2.mt-3
+            .col-sm-6
+                ul.list-unstyled.mb-0.small
+                    li.mb-1
+                        strong Total invoices:
+                        |  #{fmtMoney(pool.invoiceAmount)}
+                    li.mb-1
+                        strong Open invoices:
+                        |  #{fmtMoney(pool.openAmount)}
+                    li.mb-1
+                        strong Extra charges:
+                        |  #{fmtMoney(pool.additionalAmount)}
+                    li.mb-1
+                        strong Surcharges reducing pool:
+                        |  #{fmtMoney(pool.surchargeOffsetAmount)}
+                    li.mb-1
+                        strong Distribution mode:
+                        if pool.distributionMethod === "EQUAL"
+                            |  Equally among participants
+                        else if pool.distributionMethod === "TIME_BASED"
+                            |  Days attended
+                        else if pool.distributionMethod === "NIGHTS"
+                            |  Nights stayed
+            .col-sm-6
+                ul.list-unstyled.mb-0.small
+                    li.mb-1
+                        strong Distributable total:
+                        |  #{fmtMoney(pool.payableAmount)}
+                    li.mb-1
+                        strong Outstanding payments:
+                        |  #{fmtMoney(pool.outstandingAmount)}
+                    li.mb-1
+                        strong Credits owed to participants:
+                        |  #{fmtMoney(pool.creditAmount)}
+                    li.mb-1
+                        strong Deduct submitter invoices:
+                        |  #{pool.subtractPersonalInvoices ? 'Enabled' : 'Disabled'}
+                    li.mb-1
+                        strong Assigned to:
+                        |  #{pool.assignAll ? 'All participants' : assignments.length}
+
+//- Assignment form kept separate so both admin tabs and future reuse can pull it in
+mixin poolAssignmentsForm(ev, pool, participants)
+    form.pool-assignment(data-api=`/api/event/${ev.id}/invoice-pools/${pool.id}/assignments` data-pool-status=pool.status)
+        label.form-label.text-secondary.mb-1 Update assignment
+        .form-check
+            input.form-check-input.pool-toggle(type="checkbox" name="assignAll" id=`assign-${pool.id}` checked=!!(pool.assignAll))
+            label.form-check-label(for=`assign-${pool.id}`) Assign to all participants
+        .form-check
+            input.form-check-input.pool-toggle(type="checkbox" name="isDefault" id=`default-${pool.id}` checked=!!(pool.isDefault))
+            label.form-check-label(for=`default-${pool.id}`) Default for new participants
+        .form-check
+            input.form-check-input.pool-toggle(type="checkbox" name="subtractPersonalInvoices" id=`subtract-invoices-${pool.id}` checked=!!(pool.subtractPersonalInvoices))
+            label.form-check-label(for=`subtract-invoices-${pool.id}`) Deduct submitter invoices from their share
+        label.form-label.mt-2(for=`assign-search-${pool.id}`) Search participants
+        input.form-control.form-control-sm.assignment-search(id=`assign-search-${pool.id}` type="search" placeholder="Filter by name or email")
+        label.form-label.mt-2(for=`assign-list-${pool.id}`) Limit to participants (disabled when default or assign to all)
+        .assignments-list.border.border-secondary-subtle.rounded-3.p-2.bg-black.text-white.overflow-auto(style="max-height: 18rem;" id=`assign-list-${pool.id}`)
+            if participants && participants.length
+                each p in participants
+                    - const selected = pool.assignAll || (pool.assignments || []).some(a => (a.registrationId || a.registration?.id) === p.id)
+                    - const exempt = (pool.assignments || []).some(a => (a.registrationId || a.registration?.id) === p.id && a.isExempt)
+                    .d-flex.justify-content-between.align-items-center.gap-2.py-1.px-2.rounded-2(data-search-text=`${String(p.name || '').toLowerCase()} ${String(p.email || '').toLowerCase()}`)
+                        .form-check.mb-0
+                            input.form-check-input(type="checkbox" name="registrations" value=p.id id=`pool-${pool.id}-reg-${p.id}` checked=selected disabled=!!(pool.assignAll))
+                            label.form-check-label(for=`pool-${pool.id}-reg-${p.id}`)= `${p.name} (${p.email})`
+                        .form-check.form-switch.mb-0
+                            input.form-check-input(type="checkbox" name="exemptions" value=p.id id=`pool-${pool.id}-exempt-${p.id}` checked=exempt)
+                            label.form-check-label(for=`pool-${pool.id}-exempt-${p.id}`) Exempt
+            else
+                p.text-secondary.small.mb-0 No participants yet.
+        if pool.status === 'OPEN'
+            button.btn.btn-outline-light.btn-sm.mt-2(type="submit")
+                i.bi.bi-save.me-1
+                | Save assignments
+        else
+            p.text-warning.small.mt-2.mb-0
+                i.bi.bi-info-circle.me-1
+                | Changes will only be applied when you click "Recalculate pool" below
+
+//- Render surcharges grouped per participant so admins see what will be charged
+mixin poolSurchargeList(pool, participants)
+    if pool.surcharges && pool.surcharges.length
+        ul.list-group.list-group-flush.bg-dark.mb-2
+            each surcharge in pool.surcharges
+                - const participant = (participants || []).find((p) => p.id === surcharge.registrationId)
+                - const partName = participant?.name
+                li.list-group-item.bg-dark.text-white.d-flex.justify-content-between.align-items-start
+                    .flex-grow-1.me-2
+                        strong.me-2 #{partName || `Participant #${surcharge.registrationId}`}
+                        span.badge.bg-secondary #{surcharge.amount}
+                        if surcharge.subtractFromPool
+                            span.badge.bg-info.text-dark.ms-2 Offsets pool total
+                        else
+                            span.badge.bg-warning.text-dark.ms-2 Extra charge only
+                        p.mb-0.text-secondary.small #{surcharge.note}
+                    button.btn.btn-outline-danger.btn-sm.surcharge-remove(type="button" data-pool=pool.id data-id=surcharge.id)
+                        i.bi.bi-x-lg
+                        | Remove
+    else
+        p.text-secondary.small.mb-2 No surcharges added yet.
+
+//- Form to add a new surcharge before closing a pool
+mixin poolSurchargeForm(ev, pool, participants)
+    form.surcharge-form(data-api=`/api/event/${ev.id}/invoice-pools/${pool.id}/surcharges` data-pool-status=pool.status)
+        .row.g-2.align-items-end
+            .col-md-4
+                label.form-label.text-secondary(for=`surcharge-target-${pool.id}`) Participant
+                select.form-select.text-bg-dark(name="registrationId" required)
+                    option(value="") -- choose participant --
+                    each p in participants
+                        option(value=p.id)= p.name
+            .col-md-3
+                label.form-label.text-secondary(for=`surcharge-amount-${pool.id}`) Amount
+                input.form-control.text-bg-dark(type="number" name="amount" min="0.01" step="0.01" required)
+            .col-md-3
+                label.form-label.text-secondary(for=`surcharge-note-${pool.id}`) Note
+                input.form-control.text-bg-dark(type="text" name="note" required placeholder="Reason for surcharge")
+            .col-md-2
+                label.form-label.text-secondary(for=`surcharge-subtract-${pool.id}`) Offset total
+                .form-check.form-switch
+                    input.form-check-input(id=`surcharge-subtract-${pool.id}` type="checkbox" name="subtractFromPool" checked)
+                    label.form-check-label(for=`surcharge-subtract-${pool.id}`) Subtract from pool
+        .d-flex.justify-content-end.mt-2
+            if pool.status === 'OPEN'
+                button.btn.btn-outline-light.btn-sm(type="submit")
+                    i.bi.bi-plus-circle.me-1
+                    | Add surcharge
+            else
+                p.text-warning.small.mb-0
+                    i.bi.bi-info-circle.me-1
+                    | Changes will only be applied when you click "Recalculate pool" below
+
+//- Charges and takeovers configured before closing a pool
+mixin poolAdjustmentSection(ev, pool, participants)
+    .mt-3
+        h6.mb-2 Manual surcharge assignment
+        p.text-secondary.small.mb-2
+            |  Add surcharges with notes and choose whether they reduce the shared total or is an extra charge to the participant.
+            |  These amounts are paid only by the participant or their covering payer in addition to the automatically calculated share.
+        +poolSurchargeList(pool, participants)
+        +poolSurchargeForm(ev, pool, participants)
+        .mt-4
+            +takeoverOverview(pool, participants, 'admin')
+
+//- Shares and payment toggles grouped for clarity
+mixin poolShareSection(pool, participants)
+    if pool.shares && pool.shares.length
+        +invoiceShareTable(pool, participants)
+
+//- Single pool wrapper to keep invoicePoolManageTab tidy
+mixin poolManagementSection(ev, pool, participants)
+    - const assignedIds = pool.assignAll ? participants.map(p => p.id) : (pool.assignments || []).map(a => a.registration?.id)
+    - const takeoverData = (pool.takeovers || []).map(t => ({payerRegistrationId: t.payerRegistrationId, beneficiaryRegistrationId: t.beneficiaryRegistrationId}))
+    .accordion-item.bg-dark.text-white.border-secondary-subtle.invoice-pool(data-pool=pool.id data-assigned=JSON.stringify(assignedIds) data-takeovers=JSON.stringify(takeoverData))
+        h2.accordion-header
+            button.accordion-button.collapsed.text-white(type="button" data-bs-toggle="collapse" data-bs-target=`#pool-${pool.id}-body` aria-expanded="false" aria-controls=`pool-${pool.id}-body`)
+                +poolHeaderSummary(pool)
+        .accordion-collapse.collapse(id=`pool-${pool.id}-body`)
+            .accordion-body
+                .row.mt-2
+                    .col-md-4
+                        +poolStats(pool)
+                        .mt-3
+                            +poolBaseSettingsForm(ev, pool)
+                    .col-md-8
+                        +poolAssignmentsForm(ev, pool, participants)
+                        if pool.status === 'CLOSED'
+                            .mt-3
+                                +poolShareSection(pool, participants)
+                +poolAdjustmentSection(ev, pool, participants)
+                +invoiceOverview('admin', {pool: pool, participants: participants, eventId: ev.id})
+                .row.mt-2.border.border-danger.rounded-2.pt-2
+                    if pool.status === 'OPEN'
+                        h6.text-danger
+                            i.bi.bi-exclamation-triangle-fill.me-1
+                            |  Danger zone
+                        p.small.mb-2
+                            strong Be careful with the following options since they cannot be undone.
+                            |  Read the following warnings carefully before proceeding.
+                        p.text-secondary.small.mb-2
+                            strong  Closing a pool will automatically calculate each participants share of the total.
+                            |  All changes after that require explicit recalculation and will delete all previous shares.
+                        p.text-secondary.small.mb-2
+                            strong  Manually applied surcharges might reduce the open invoice amount to be distributed.
+                            |  Only surcharges marked to offset the pool total will reduce the shared cost; others are added on top of the payer's share.
+                        p.text-secondary.small.mb-2
+                            strong  Check and adjust the participant attendance periods before closing the pool when using the "Days Attended" or "Nights stayed" distribution mode.
+                            |  This way you ensure a fair distribution of the costs among all participants-
+                        .d-flex.justify-content-between.align-items-end.flex-wrap.gap-2.mb-3
+                            button.btn.btn-sm.btn-warning.pool-close(type="button" data-id=pool.id)
+                                i.bi.bi-x-circle.me-1
+                                | Close pool
+                    else if pool.status === 'CLOSED'
+                        h6.text-danger
+                            i.bi.bi-exclamation-triangle-fill.me-1
+                            |  Danger zone
+                        p.small.mb-2
+                            strong Recalculating a closed pool will delete all existing shares and recalculate them based on current pool settings.
+                            |  This action cannot be undone. Make sure all pool settings (assignments, surcharges, takeovers) are correct before proceeding.
+                        p.text-secondary.small.mb-2
+                            strong Warning: This will notify all participants again with updated share amounts.
+                            |  Only use this if you need to adjust pool settings after closure.
+                        .d-flex.justify-content-between.align-items-end.flex-wrap.gap-2.mb-3
+                            button.btn.btn-sm.btn-danger.pool-recalculate(type="button" data-id=pool.id)
+                                i.bi.bi-arrow-clockwise.me-1
+                                | Recalculate pool
+
+//- Management tab content for the admin dashboard
+mixin invoicePoolManageTab(ev, pools, participants)
+    if pools && pools.length
+        .accordion.accordion-dark#invoicePoolAccordion
+            each pool in pools
+                +poolManagementSection(ev, pool, participants)
+    else
+        p.text-secondary.mb-0 No invoice pools created yet.
+
+//- Shared distribution selector to keep create/edit forms in sync
+mixin poolDistributionSelect(name, selected, id = null)
+    select.form-select.text-bg-dark(name=name id=id required)
+        option(value="TIME_BASED" selected=selected === 'TIME_BASED') Distribute among days attended
+        option(value="NIGHTS" selected=selected === 'NIGHTS') Distribute among nights stayed
+        option(value="EQUAL" selected=selected === 'EQUAL') Distribute among participants
+
+//- Shared base settings fields used for pool creation and later edits
+mixin poolBaseSettingsFields(pool = {})
+    - const selectedDistribution = pool.distributionMethod || pool.distribution || 'TIME_BASED';
+    .row.g-3
+        .col-md-6
+            label.form-label(for=pool.id ? `poolDistribution-${pool.id}` : 'poolDistribution') Share distribution mode
+            +poolDistributionSelect('distribution', selectedDistribution, pool.id ? `poolDistribution-${pool.id}` : 'poolDistribution')
+        .col-md-6
+            label.form-label(for=pool.id ? `poolDescription-${pool.id}` : 'poolDescription') Description
+            input.form-control.text-bg-dark(
+                type="text"
+                name="description"
+                id=pool.id ? `poolDescription-${pool.id}` : 'poolDescription'
+                value=pool.description || ''
+            )
+
+//- Compact editable form for the base pool parameters
+mixin poolBaseSettingsForm(ev, pool)
+    form.pool-base-form(data-api=`/api/event/${ev.id}/invoice-pools/${pool.id}` data-pool-status=pool.status)
+        +poolBaseSettingsFields(pool)
+        .d-flex.justify-content-end.mt-2
+            button.btn.btn-outline-light.btn-sm(type="submit")
+                i.bi.bi-save.me-1
+                | Save base settings
+
+//- Pool creation tab content for the admin dashboard
+mixin invoicePoolCreateModal(ev, participants)
+    .modal.fade#poolCreateModal(tabindex="-1" aria-labelledby="poolCreateLabel" aria-hidden="true")
+        .modal-dialog.modal-lg
+            .modal-content.bg-dark.text-white
+                .modal-header
+                    h5.modal-title#poolCreateLabel Create a new pool
+                    button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
+                form#poolCreateForm(data-api=`/api/event/${ev.id}/invoice-pools`)
+                    .modal-body
+                        .row.g-3
+                            .col-md-12
+                                label.form-label(for="poolName") Pool name
+                                input#poolName.form-control.text-bg-dark(type="text" name="name" required maxlength="255")
+                        .row.g-3.mt-0
+                            .col-md-8
+                                +poolBaseSettingsFields({})
+                            .col-md-4
+                                label.form-label.text-secondary Allocation
+                                .form-check
+                                    input#assignAllPools.form-check-input.pool-toggle(type="checkbox" name="assignAll" checked)
+                                    label.form-check-label(for="assignAllPools") Assign to all participants
+                                .form-check
+                                    input#defaultPool.form-check-input.pool-toggle(type="checkbox" name="isDefault")
+                                    label.form-check-label(for="defaultPool") Make this the default pool
+                                small.text-secondary Default pools automatically include future participants without reopening assignments.
+                                .form-check.mt-2
+                                    input#subtractPersonalInvoicesCreate.form-check-input(type="checkbox" name="subtractPersonalInvoices" checked)
+                                    label.form-check-label(for="subtractPersonalInvoicesCreate") Deduct submitter invoices from their share
+                            .col-12
+                                label.form-label(for="poolRegistrations") Limit to participants (disabled when default or assign to all)
+                                .assignments-list.border.border-secondary-subtle.rounded-3.p-2.bg-black.text-white#poolRegistrations
+                                    if participants && participants.length
+                                        each p in participants
+                                            .form-check
+                                                input.form-check-input(type="checkbox" name="registrations" value=p.id id=`pool-create-reg-${p.id}` disabled checked)
+                                                label.form-check-label(for=`pool-create-reg-${p.id}`)= `${p.name} (${p.email})`
+                                    else
+                                        p.text-secondary.small.mb-0 No participants yet.
+                    .modal-footer
+                        button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Cancel
+                        button.btn.btn-primary(type="submit")
+                            i.bi.bi-plus-circle.me-1
+                            | Add pool
+
+//- Wrapper to tie together the manage and create tabs
+mixin invoiceManagementTabs(ev, data)
+    .card.mb-3.bg-dark.text-white.border-secondary-subtle
+        .card-header.py-2.d-flex.flex-wrap.align-items-center.justify-content-between.gap-2
+            .d-flex.align-items-center.gap-2
+                i.bi.bi-receipt
+                span Invoice pools
+            button.btn.btn-primary.btn-sm(type="button" data-bs-toggle="modal" data-bs-target="#poolCreateModal")
+                i.bi.bi-plus-circle.me-1
+                | Create pool
+        .card-body
+            +invoicePoolManageTab(ev, data.invoicePools, data.participants || [])
+    +invoicePoolCreateModal(ev, data.participants || [])
+
+//- Shared takeover modal for admins/participants with a search field
+mixin takeoverModal(id)
+    .modal.fade(id=id tabindex="-1" aria-hidden="true")
+        .modal-dialog.modal-lg
+            .modal-content.bg-dark.text-white
+                .modal-header
+                    h5.modal-title Manage takeovers
+                    button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
+                form#takeoverForm
+                    .modal-body
+                        .mb-3.admin-only
+                            label.form-label(for="takeoverPayer") Payer
+                            select#takeoverPayer.form-select.text-bg-dark(name="payerId")
+                        .mb-3
+                            label.form-label(for="takeoverSearch") Search participants
+                            input#takeoverSearch.form-control.text-bg-dark.takeover-search(type="search" placeholder="Type to filter")
+                        .takeover-beneficiaries.list-group.list-group-flush.bg-dark
+                            // populated by JS
+                    .modal-footer
+                        button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Close
+                        button.btn.btn-primary(type="submit")
+                            i.bi.bi-save.me-1
+                            | Save changes

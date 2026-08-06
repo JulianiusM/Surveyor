@@ -1,0 +1,175 @@
+extends ../layout
+
+block meta
+    title #{data.list.title} | Surveyor
+
+block title
+    +entityHeader(data.list, "drivers", "bi-car-front", permData)
+    +entityImageModal(data.list, "drivers")
+
+block content
+    // ─── Description (editable) ──────────────────────────────
+    if permData.entity.has('EDIT_DESC')
+        // manager sees pointer
+        small.text-info.fst-italic.fw-light Double click to edit
+        p#planDesc.border.border-secondary.rounded.p-1(
+            style="cursor:pointer"
+            data-edit="planDescription"
+        )
+            if data.list.description
+                - const lines = data.list.description.split('\n')
+                each line, i in lines
+                    | #{line}
+                    if i < lines.length - 1
+                        br
+            else
+                em.text-secondary double-click to add description
+        hr.mb-1.mt-0
+    else if data.list.description
+        p#planDesc.mb-0.mt-2
+            - const lines = data.list.description.split('\n')
+            each line, i in lines
+                | #{line}
+                if i < lines.length - 1
+                    br
+        hr.mb-1.mt-0
+
+    // Owner settings toggles
+    if permData.entity.has('MANAGE_PERMISSIONS')
+        +permissionManagement(admins, perms.permMeta, perms.defaultPerms, perms.presets, {
+            entityType: 'drivers',
+            entityId: data.list.id
+        })
+
+    //Erste Zeile: Metainfos / Badge
+    .d-flex.justify-content-between.align-items-center.mb-3
+        //- Titel / Hauptlabel links
+        span.fs-6.fw-semibold
+            i.bi.bi-people-fill.me-1
+            | Participants:
+            span.badge.bg-light.text-dark.ms-1 #{data.counters.participants}
+
+        //── Items + Offene / Leere
+        span.fs-6.fw-semibold
+            i.bi.bi-card-checklist.me-1
+            | Drivers:
+            span.badge.bg-light.text-dark.ms-1 #{data.items.length}
+            span.badge.bg-secondary-subtle.text-secondary-emphasis.ms-1
+                i.bi.bi-box-arrow-up-right.me-1
+                | #{data.counters.open} open
+            span.badge.bg-danger-subtle.text-danger-emphasis.ms-1
+                i.bi.bi-slash-circle.me-1
+                | #{data.counters.empty} empty
+
+    //Tabelle
+    .table-responsive
+        small.text-info.fst-italic.fw-light Double click to edit, drag to reorder
+        table.table.table-dark.table-hover.table-bordered.align-middle(data-assignable)
+            thead
+                tr
+                    th.text-center.w-20 Driver
+                    th.text-center.w-20 Description
+                    th.text-center.w-25 Assignees
+                    th.text-center.w-10 Assigned&nbsp;/&nbsp;Max
+                    th.text-center.w-25 Action
+            tbody(data-reorderable=permData.entity.has('ITEM_EDIT') ? true : null)
+                each item in data.items
+                    - const my     = data.assignments.includes(item.id)
+                    - const isFull = item.assignedCount >= item.maxAssignees
+                    tr.draggable(data-itemid=item.id data-pos=item.pos)
+                        // Title
+                        td= item.driverName
+
+                        // Description
+                        if permData.itemAllow(item.id, 'EDIT_DESC', ['ITEM_EDIT', 'ITEM_EDIT_DESC'])
+                            td(data-edit="description" data-id=item.id)= item.description
+                        else
+                            td= item.description
+
+                        // Assignees
+                        td.text-center
+                            ul.list-unstyled.mb-0
+                                each asg in data.assigneeLists[item.id] || []
+                                    li.d-flex.align-items-center.gap-1
+                                        i.bi.bi-person-fill
+                                        span.flex-grow-1= asg.name
+                                        if permData.itemAllow(item.id, 'MANAGE_ASSIGNMENTS', 'MANAGE_ASSIGNMENTS')
+                                            button.btn.btn-sm.btn-outline-danger(
+                                                data-assignid=asg.id
+                                                data-owner-remove
+                                                aria-label="Remove"
+                                            ) &times;
+
+                        // Assigned / Max
+                        if permData.itemAllow(item.id, "EDIT_META", "ITEM_EDIT")
+                            td.text-center(
+                                data-edit="maxAssignees"
+                                data-id=item.id
+                            )
+                                span(data-count)= item.assignedCount
+                                |  /&nbsp;
+                                span(data-max)= item.maxAssignees
+                        else
+                            td.text-center
+                                span(data-count)= item.assignedCount
+                                |  /&nbsp;
+                                span(data-max)= item.maxAssignees
+
+                        //  ── Action-Spalte + Markierung ─────────────────────────────
+                        td.text-center
+                            if my
+                                button.btn.btn-sm.btn-outline-danger(data-action="unassign") Remove
+                                if isFull
+                                    span.badge.bg-secondary.ms-1 Full
+                            else if !isFull && data.assignments !== undefined
+                                button.btn.btn-sm.btn-outline-success(data-action="assign") Take
+                            else
+                                span.badge.bg-secondary Full
+                            if permData.itemAllow(item.id, "ITEM_DELETE", "ITEM_DELETE")
+                                button.btn.btn-sm.btn-outline-danger.ms-1(
+                                    data-delete-item
+                                    data-itemid=item.id
+                                    aria-label="Delete item")
+                                    i.bi.bi-trash
+
+
+    // Sichtbar für Owner oder bei erlaubtem Gast-Add
+    if permData.entity.has('ITEM_ADD')
+        hr
+        .card.bg-dark.text-light.border-secondary.mb-3
+            .card-header.p-2.d-flex.align-items-center
+                i.bi.bi-plus-circle.me-2
+                span.flex-grow-1 Add new item
+                small.text-muted.fst-italic.ms-2 (fill all fields)
+
+            form#quickAddForm.card-body(class="row gy-2 gx-2 align-items-end"
+                action=`/drivers/${data.list.id}/items`
+                method="post")
+                //Titel
+                .col-md-4
+                    label.form-label.mb-1(for="title") Driver
+                    input#title.form-control.text-bg-dark.text-secondary(
+                        name="title" value=`${user ? user.name : guest ? guest.username : 'ERROR'}` readonly required)
+
+                //Beschreibung
+                .col-md-4
+                    label.form-label.mb-1(for="desc") Description
+                    input#desc.form-control.text-bg-dark(
+                        name="description" placeholder="optional")
+
+                //Max Assignees
+                .col-md-2
+                    label.form-label.mb-1(for="max") Max #
+                    input#max.form-control.text-bg-dark(
+                        type="number" min="1" value="1" name="maxAssignees")
+
+                //Add-Button
+                .col-md-2.d-grid
+                    button.btn.btn-success(type="submit")
+                        i.bi.bi-check-lg.me-1
+                        | Add
+
+block scripts
+    script(type="module" src="/js/drivers.gen.js")
+    script.
+        window.Surveyor.entityId = "#{data.list.id}";

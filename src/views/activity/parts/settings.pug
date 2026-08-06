@@ -1,0 +1,5 @@
+if permData.entity.has('MANAGE_PERMISSIONS')
+    +permissionManagement(admins, perms.permMeta, perms.defaultPerms, perms.presets, {
+        entityType: 'activity',
+        entityId: data.plan.id
+    })

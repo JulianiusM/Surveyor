@@ -1,0 +1,91 @@
+//- views/packing/packing-create.pug  – überarbeitetes „Create“-Formular
+extends ../layout
+
+block meta
+    title Create Drivers List | Surveyor
+
+block title
+    h1.card-header.text-center
+        i.bi.bi-car-front.me-2
+        | Create drivers list
+
+block content
+    -
+        let parsed = {}, parsedData = [];
+        let parsedEventData = {};
+        if (data) {
+            if (data.entity) {
+                parsed = data.entity;
+            } else {
+                parsed = data;
+            }
+            if (data.data) {
+                parsedData = data.data;
+            } else {
+                parsedData = data.items;
+            }
+            if (data.eventId) {
+                parsedEventData.id = data.eventId;
+            }
+            if (data.events) {
+                parsedEventData.events = data.events;
+            }
+        }
+
+        let eventIdQuery = '';
+        if (parsedEventData.id) {
+            eventIdQuery = `?eventId=${parsedEventData.id}`
+        }
+
+    form#packingForm(action=`/drivers/create${eventIdQuery}` method="POST" enctype="multipart/form-data")
+        // Titel
+        .mb-3
+            label.form-label(for="title")
+                i.bi.bi-tag.me-1
+                | Title *
+            input#title.form-control.text-bg-dark(
+                type="text"
+                name="title"
+                required
+                value=(parsed.title || ''))
+
+        .row.mb-3
+            .col-md-12
+                label.form-label(for="desc")
+                    i.bi.bi-pencil-square.me-1
+                    | Description (optional)
+                textarea#desc.form-control.text-bg-dark(name="description")
+                    | #{parsed.description || ''}
+
+        .row.mb-3
+            .col-12
+                label.form-label(for="headerImg")
+                    i.bi.bi-card-image.me-1
+                    | Header image (optional)
+                input#headerImg.form-control.text-bg-dark(type="file" name="headerImg" accept="image/jpeg,image/png,image/gif")
+
+        .row.mb-3
+            .col-md-12
+                +entityPicker('event_id', parsedEventData.events, {
+                    label: 'Assign to event (optional)',
+                    value: parsedEventData.id
+                })
+
+        .row.mb-3
+            .col-md-12
+                +permMatrix(['participant', 'guest', 'authenticated', 'public'], perms.permMeta, perms.defaultPerms, perms.presets, 'defaultPerms')
+
+        // Buttons
+        // Items table (managed by JavaScript)
+        .mb-3
+            table.table.table-dark
+                tbody#itemTable
+
+        .d-flex.justify-content-between.align-items-center
+            button.btn.btn-success(type="submit")
+                i.bi.bi-check-lg.me-1
+                | Create list
+        input(type="hidden" name="items" id="itemsJson")
+
+block scripts
+    script(type="module", src="/js/drivers-create.gen.js")
