@@ -14,6 +14,22 @@ import {
     ids,
 } from '../factories/coreFunctionalityFactory';
 import {expectApiFailure, expectExpectedFailure, expectValidationFailure} from '../keywords/coreFunctionalityKeywords';
+import * as userService from '../../src/modules/database/services/UserService';
+import mailer from '../../src/modules/email';
+import * as oidc from '../../src/modules/oidc';
+import * as surveyService from '../../src/modules/database/services/SurveyService';
+import * as eventService from '../../src/modules/database/services/EventService';
+import * as invoiceService from '../../src/modules/database/services/EventInvoiceService';
+import * as activityService from '../../src/modules/database/services/ActivityService';
+import * as driverService from '../../src/modules/database/services/DriverService';
+import * as packingService from '../../src/modules/database/services/PackingService';
+import * as permissionEngine from '../../src/modules/permissionEngine';
+import * as userController from '../../src/controller/userController';
+import surveyController from '../../src/controller/surveyController';
+import eventController from '../../src/controller/eventController';
+import activityController from '../../src/controller/activityController';
+import driversController from '../../src/controller/driversController';
+import packingController from '../../src/controller/packingController';
 
 vi.mock('../../src/modules/database/services/UserService', () => ({
     getUserByUsername: vi.fn(), registerUser: vi.fn(), generateActivationToken: vi.fn(), verifyPassword: vi.fn(),
@@ -53,22 +69,6 @@ vi.mock('../../src/modules/database/services/PackingService', () => ({
 }));
 vi.mock('../../src/modules/permissionEngine', () => ({saveDefaultPermsFromBody: vi.fn(), can: vi.fn().mockResolvedValue(false)}));
 
-import * as userService from '../../src/modules/database/services/UserService';
-import mailer from '../../src/modules/email';
-import * as oidc from '../../src/modules/oidc';
-import * as surveyService from '../../src/modules/database/services/SurveyService';
-import * as eventService from '../../src/modules/database/services/EventService';
-import * as invoiceService from '../../src/modules/database/services/EventInvoiceService';
-import * as activityService from '../../src/modules/database/services/ActivityService';
-import * as driverService from '../../src/modules/database/services/DriverService';
-import * as packingService from '../../src/modules/database/services/PackingService';
-import * as permissionEngine from '../../src/modules/permissionEngine';
-import * as userController from '../../src/controller/userController';
-import surveyController from '../../src/controller/surveyController';
-import eventController from '../../src/controller/eventController';
-import activityController from '../../src/controller/activityController';
-import driversController from '../../src/controller/driversController';
-import packingController from '../../src/controller/packingController';
 
 beforeEach(() => {
     vi.clearAllMocks();
