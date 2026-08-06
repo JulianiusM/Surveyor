@@ -9,6 +9,11 @@ export default defineConfig({
         ],
         globals: false,
         environment: 'node',
+        // Integration suites share the disposable MariaDB schema. Keeping files
+        // sequential prevents one production-shaped suite from rebuilding it
+        // while another suite is exercising a multi-service workflow.
+        fileParallelism: false,
+        hookTimeout: 30_000,
         setupFiles: ['tests/support/env.ts'],
         coverage: {
             provider: 'v8',
