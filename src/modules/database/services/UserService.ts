@@ -464,7 +464,7 @@ export async function searchUsersSecure(query: string, limit = 10): Promise<Arra
 
 /** Optional helpers you might find useful elsewhere */
 export async function getUserById(id: number): Promise<User | null> {
-    return await AppDataSource.getRepository(User).findOne({where: {id}});
+    return await AppDataSource.getRepository(User).findOne({where: {id}, relations: {profiles: true}});
 }
 
 export async function getProfileById(id: string) {
@@ -558,7 +558,7 @@ export async function updateProfileName(profileId: string, name: string) {
 
 export async function updateProfileDefault(profileId: string, isDefault: boolean) {
     await AppDataSource.transaction(async em => {
-        const repo = AppDataSource.getRepository(Profile);
+        const repo = em.getRepository(Profile);
         if (isDefault) {
             // Remove all other defaults for the owner of this profile if a new one is set
             const profile = await repo.findOneByOrFail({id: profileId});
