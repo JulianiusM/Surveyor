@@ -1,9 +1,25 @@
+/*
+ * Copyright 2026 Julian Malovanij
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import 'reflect-metadata';
+import bcrypt from "bcryptjs";
 import * as dotenv from 'dotenv';
 import {DataSource} from 'typeorm';
-import bcrypt from "bcryptjs";
-import {User} from "../src/modules/database/entities/user/User";
 import {Profile} from "../src/modules/database/entities/user/Profile";
+import {User} from "../src/modules/database/entities/user/User";
 
 dotenv.config({path: process.env.E2E_DOTENV_FILE ?? '.env.e2e'});
 
@@ -80,7 +96,6 @@ async function main() {
     const profileRepo = E2EDataSource.getRepository(Profile);
     await profileRepo.save(profileRepo.create({
         name: process.env.E2E_ADMIN_USERNAME!,
-        type: 'user',
         user: adminUser,
     }));
     console.log("Users created...")
