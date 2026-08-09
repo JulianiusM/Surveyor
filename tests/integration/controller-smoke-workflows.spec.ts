@@ -1,29 +1,22 @@
-import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {Request} from 'express';
+import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import activityController from '../../src/controller/activityController';
 import driversController from '../../src/controller/driversController';
 import * as entityAdminController from '../../src/controller/entityAdminController';
+import eventController from '../../src/controller/eventController';
 import eventPoolController from '../../src/controller/eventPoolController';
 import * as helpController from '../../src/controller/helpController';
-import eventController from '../../src/controller/eventController';
 import packingController from '../../src/controller/packingController';
 import surveyController from '../../src/controller/surveyController';
 import * as userController from '../../src/controller/userController';
 import {Profile} from '../../src/modules/database/entities/user/Profile';
-import {PERM} from '../../src/modules/lib/permissions';
 import * as activityService from '../../src/modules/database/services/ActivityService';
 import * as driverService from '../../src/modules/database/services/DriverService';
-import * as adminService from '../../src/modules/database/services/EntityAdminService';
-import * as eventService from '../../src/modules/database/services/EventService';
 import * as invoiceService from '../../src/modules/database/services/EventInvoiceService';
+import * as eventService from '../../src/modules/database/services/EventService';
 import * as packingService from '../../src/modules/database/services/PackingService';
 import * as surveyService from '../../src/modules/database/services/SurveyService';
 import * as userService from '../../src/modules/database/services/UserService';
-import {
-    createActivitySlotEntity,
-    createDriversItemEntity,
-    createPackingItemEntity,
-} from '../factories/integrationEntityFactory';
 import {
     assignActivitySlot,
     assignDriversItem,
@@ -37,8 +30,6 @@ import {
     registerEventAttendance,
     registerLocalAccount,
     submitSurveyResponses,
-    unassignDriversItem,
-    unassignPackingItem,
 } from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 
@@ -67,11 +58,11 @@ describe('remaining high-value controller workflows', () => {
 
         const dashboard = await userController.getDashboardEntities(owner);
 
-        expect(dashboard.owner.events.map((event) => event.id)).toContain(eventId);
-        expect(dashboard.owner.activityPlans.map((plan) => plan.id)).toContain(planId);
-        expect(dashboard.owner.driversLists.map((list) => list.id)).toContain(driversId);
-        expect(dashboard.owner.packingLists.map((list) => list.id)).toContain(packingId);
-        expect(dashboard.owner.surveys.map((survey) => survey.id)).toContain(surveyId);
+        expect(dashboard.owner?.events?.map((event) => event.id)).toContain(eventId);
+        expect(dashboard.owner?.activityPlans?.map((plan) => plan.id)).toContain(planId);
+        expect(dashboard.owner?.driversLists?.map((list) => list.id)).toContain(driversId);
+        expect(dashboard.owner?.packingLists?.map((list) => list.id)).toContain(packingId);
+        expect(dashboard.owner?.surveys?.map((survey) => survey.id)).toContain(surveyId);
     });
 
     it('builds a participant dashboard from controller-driven assignments', async () => {
@@ -91,11 +82,11 @@ describe('remaining high-value controller workflows', () => {
 
         const dashboard = await userController.getDashboardEntities(participant);
 
-        expect(dashboard.participant.events.map((event) => event.id)).toContain(eventId);
-        expect(dashboard.participant.activityPlans.map((plan) => plan.id)).toContain(planId);
-        expect(dashboard.participant.driversLists.map((list) => list.id)).toContain(driversId);
-        expect(dashboard.participant.packingLists.map((list) => list.id)).toContain(packingId);
-        expect(dashboard.participant.surveys.map((survey) => survey.id)).toContain(surveyId);
+        expect(dashboard.participant?.events?.map((event) => event.id)).toContain(eventId);
+        expect(dashboard.participant?.activityPlans?.map((plan) => plan.id)).toContain(planId);
+        expect(dashboard.participant?.driversLists?.map((list) => list.id)).toContain(driversId);
+        expect(dashboard.participant?.packingLists?.map((list) => list.id)).toContain(packingId);
+        expect(dashboard.participant?.surveys?.map((survey) => survey.id)).toContain(surveyId);
     });
 
     it('logs a guest into a persisted controller session', async () => {
@@ -187,7 +178,10 @@ describe('remaining high-value controller workflows', () => {
         const poolId = await eventPoolController.createInvoicePool(event!, {
             name: 'Food costs', description: 'Shared meals', distribution: 'EQUAL', registrations: [registration!.id],
         });
-        await eventPoolController.updatePoolSettings(event!, poolId, {description: 'All shared meals', distribution: 'NIGHTS'});
+        await eventPoolController.updatePoolSettings(event!, poolId, {
+            description: 'All shared meals',
+            distribution: 'NIGHTS'
+        });
 
         expect(await invoiceService.getPoolWithInvoices(poolId)).toMatchObject({
             id: poolId, name: 'Food costs', description: 'All shared meals', distributionMethod: 'NIGHTS',
@@ -196,10 +190,17 @@ describe('remaining high-value controller workflows', () => {
 
     it('finds users through the secure administrator search controller', async () => {
         const account = await registerLocalAccount('controller-search');
+        const profiles = account.profiles;
+        expect(profiles).toHaveLength(1);
+        const profile = profiles![0];
 
         const results = await entityAdminController.searchUsers(account.username, 5);
 
-        expect(results).toContainEqual(expect.objectContaining({id: account.id, username: account.username}));
+        expect(results).toContainEqual(expect.objectContaining({
+            id: profile.id,
+            name: profile.name,
+            username: account.username
+        }));
         expect(results[0].email).not.toBe(account.email);
     });
 

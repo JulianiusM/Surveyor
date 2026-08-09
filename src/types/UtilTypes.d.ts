@@ -21,6 +21,7 @@ export type Maybe<T> = T | null | undefined;
 export type PartialRecord<K extends PropertyKey, T> = { [P in K]?: T };
 export type UserKey = "user";
 export type GuestKey = "guest";
+export type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
 export type UserOrGuestKey = UserKey | GuestKey;
 
 export type RelationEntry<E, K extends keyof E & string> = {

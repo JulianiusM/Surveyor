@@ -1,9 +1,3 @@
-import {AppDataSource} from '../../src/modules/database/dataSource';
-import {Profile} from '../../src/modules/database/entities/user/Profile';
-import {User} from '../../src/modules/database/entities/user/User';
-import {DriversItem} from '../../src/modules/database/entities/drivers/DriversItem';
-import {PackingItem} from '../../src/modules/database/entities/packing/PackingItem';
-import {SurveyCombination} from '../../src/modules/database/entities/surveys/SurveyCombination';
 import {Request} from 'express';
 import {randomUUID} from 'node:crypto';
 import activityController from '../../src/controller/activityController';
@@ -11,11 +5,18 @@ import driversController from '../../src/controller/driversController';
 import eventController from '../../src/controller/eventController';
 import packingController from '../../src/controller/packingController';
 import surveyController from '../../src/controller/surveyController';
+import {AppDataSource} from '../../src/modules/database/dataSource';
+import {DriversItem} from '../../src/modules/database/entities/drivers/DriversItem';
+import {PackingItem} from '../../src/modules/database/entities/packing/PackingItem';
+import {SurveyCombination} from '../../src/modules/database/entities/surveys/SurveyCombination';
+import {Profile} from '../../src/modules/database/entities/user/Profile';
+import {User} from '../../src/modules/database/entities/user/User';
 import * as driverService from '../../src/modules/database/services/DriverService';
 import * as eventService from '../../src/modules/database/services/EventService';
 import * as packingService from '../../src/modules/database/services/PackingService';
 import * as surveyService from '../../src/modules/database/services/SurveyService';
 import * as userService from '../../src/modules/database/services/UserService';
+import {WithRequired} from "../../src/types/UtilTypes";
 import {
     createActivitySlotEntity,
     createDriversItemEntity,
@@ -48,12 +49,12 @@ export async function createIntegrationEvent(
     return await eventController.createEntity(ownerId, event);
 }
 
-export async function registerLocalAccount(label: string): Promise<Pick<User, 'id' | 'username' | 'email'>> {
+export async function registerLocalAccount(label: string): Promise<WithRequired<Partial<User>, "email" | "id" | "username">> {
     const user = createUserEntity();
     const username = `${label}-${user.username}`;
     const email = `${label}-${user.email}`;
     const id = await userService.registerUser(username, user.name, 'initial-secret', email);
-    return {email, id, username};
+    return await userService.getUserById(id) ?? {email, id, username};
 }
 
 export async function createActivityPlanWithSlot(ownerId: string): Promise<string> {

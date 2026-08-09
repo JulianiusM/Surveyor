@@ -1,45 +1,9 @@
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import {Request} from 'express';
-import activityController from '../../src/controller/activityController';
-import driversController from '../../src/controller/driversController';
-import * as entityAdminController from '../../src/controller/entityAdminController';
-import eventPoolController from '../../src/controller/eventPoolController';
-import * as helpController from '../../src/controller/helpController';
-import eventController from '../../src/controller/eventController';
-import packingController from '../../src/controller/packingController';
-import surveyController from '../../src/controller/surveyController';
 import * as userController from '../../src/controller/userController';
 import {Profile} from '../../src/modules/database/entities/user/Profile';
-import {PERM} from '../../src/modules/lib/permissions';
-import * as activityService from '../../src/modules/database/services/ActivityService';
-import * as driverService from '../../src/modules/database/services/DriverService';
-import * as adminService from '../../src/modules/database/services/EntityAdminService';
-import * as eventService from '../../src/modules/database/services/EventService';
-import * as invoiceService from '../../src/modules/database/services/EventInvoiceService';
-import * as packingService from '../../src/modules/database/services/PackingService';
-import * as surveyService from '../../src/modules/database/services/SurveyService';
 import * as userService from '../../src/modules/database/services/UserService';
-import {
-    createActivitySlotEntity,
-    createDriversItemEntity,
-    createPackingItemEntity,
-} from '../factories/integrationEntityFactory';
-import {
-    assignActivitySlot,
-    assignDriversItem,
-    assignPackingItem,
-    createActivityPlanWithSlot,
-    createDriversListWithItem,
-    createIntegrationEvent,
-    createPackingListWithItem,
-    createSurveyWithCombinations,
-    persistIntegrationProfile,
-    registerEventAttendance,
-    registerLocalAccount,
-    submitSurveyResponses,
-    unassignDriversItem,
-    unassignPackingItem,
-} from '../keywords/coreDomainKeywords';
+import email from "../../src/modules/email";
+import {persistIntegrationProfile, registerLocalAccount,} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 
 let owner: Profile;
@@ -102,7 +66,10 @@ describe('authentication user stories', () => {
 
         const token = await userService.generatePasswordResetToken(username);
         expect((await userService.verifyPasswordResetToken(token))?.id).toBe(userId);
-        await userController.resetPassword(token, {password: 'replacement-secret', confirmPassword: 'replacement-secret'});
+        await userController.resetPassword(token, {
+            password: 'replacement-secret',
+            confirmPassword: 'replacement-secret'
+        });
         await expect(userService.verifyPassword(userId, 'replacement-secret')).resolves.toBe(true);
     });
 
@@ -110,19 +77,25 @@ describe('authentication user stories', () => {
         const {username} = await registerLocalAccount('reset-consumption');
 
         const token = await userService.generatePasswordResetToken(username);
-        await userController.resetPassword(token, {password: 'replacement-secret', confirmPassword: 'replacement-secret'});
+        await userController.resetPassword(token, {
+            password: 'replacement-secret',
+            confirmPassword: 'replacement-secret'
+        });
         expect(await userService.verifyPasswordResetToken(token)).toBeNull();
     });
 
     it('creates a guest identity with a linked profile', async () => {
         const guest = await userService.createGuest('Camp Guest', 'camp-guest@example.com');
-        expect(guest.profile).toMatchObject({name: 'Camp Guest', type: 'guest'});
+        expect(guest.profile).toMatchObject({name: 'Camp Guest', guestId: guest.id});
     });
 
     it('restores a guest session using its private link token', async () => {
         const guest = await userService.createGuest('Returning Guest');
         const token = await userService.getGuestLinkToken(guest.id);
-        expect(await userService.getGuestByToken(token!, guest.id)).toMatchObject({id: guest.id, profile: {id: guest.profile.id}});
+        expect(await userService.getGuestByToken(token!, guest.id)).toMatchObject({
+            id: guest.id,
+            profile: {id: guest.profile.id}
+        });
     });
 
     it('matches guest email addresses after normalization', async () => {
@@ -149,7 +122,10 @@ describe('authentication user stories', () => {
 
     it('provisions an active OIDC account and profile just in time', async () => {
         const oidc = await userService.findOrCreateUserFromOidc('https://identity.example', {
-            sub: 'jit-provisioned-subject', email: 'jit-user@example.com', preferred_username: 'jit-user', name: 'JIT User',
+            sub: 'jit-provisioned-subject',
+            email: 'jit-user@example.com',
+            preferred_username: 'jit-user',
+            name: 'JIT User',
         });
         expect(oidc.oidcSub).toBe('jit-provisioned-subject');
         expect(Boolean(oidc.isActive)).toBe(true);
@@ -165,10 +141,13 @@ describe('authentication user stories', () => {
     });
 
     it('searches accounts without disclosing a raw email address', async () => {
-        const {email, id: userId, username} = await registerLocalAccount('secure-search');
+        const user = await registerLocalAccount('secure-search');
+        const profiles = user.profiles;
+        expect(profiles).toHaveLength(1);
+        const profile = profiles![0];
 
-        const [result] = await userService.searchUsersSecure(username, 5);
-        expect(result).toMatchObject({id: userId, username});
+        const [result] = await userService.searchUsersSecure(user.username, 5);
+        expect(result).toMatchObject({id: profile.id, name: profile.name, username: user.username});
         expect(result.email).not.toBe(email);
     });
 
