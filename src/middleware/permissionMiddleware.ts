@@ -1,4 +1,20 @@
 /*
+ * Copyright 2026 Julian Malovanij
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/*
  * lib/permissionMiddleware.ts
  */
 import {NextFunction, Request, Response} from "express";
@@ -138,7 +154,7 @@ export const requireEventParticipant = (getResource: GetResource = defaultGetRes
 /* -------------------- Unchanged auth redirect middleware -------------------- */
 export function isAuthenticated(req: Request, res: Response, next: NextFunction) {
     if (req.session.auth?.user && req.session.profile) return next();
-    req.flash("info", "You must be logged in to access this site.");
+    req.flash("info", "You must be logged in as user to access this site.");
     let nxt = "";
     if (typeof req.query.next === "string") {
         nxt = `?next=${req.query.next}`;
@@ -152,6 +168,18 @@ export function isGuest(req: Request, res: Response, next: NextFunction) {
     if (req.session.auth?.guest && req.session.profile) return next();
     req.flash("info", "You must be logged in as guest to access this site.");
     res.redirect("/guest/recovery");
+}
+
+export function isLoggedIn(req: Request, res: Response, next: NextFunction) {
+    if (req.session.auth && req.session.profile) return next();
+    req.flash("info", "You must be logged in to access this site.");
+    let nxt = "";
+    if (typeof req.query.next === "string") {
+        nxt = `?next=${req.query.next}`;
+    } else {
+        nxt = `?next=${req.baseUrl}${req.path}`;
+    }
+    res.redirect(`/users/login${nxt}`);
 }
 
 /* ---------- Entity Administration ---------- */

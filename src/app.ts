@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026 Julian Malovanij
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import {TypeormStore} from "connect-typeorm";
 import cookieParser from 'cookie-parser';
 import express, {NextFunction, Request, Response} from 'express';
@@ -6,14 +22,13 @@ import session from 'express-session';
 import createError from 'http-errors';
 import logger from 'morgan';
 import path from 'node:path';
-
-// Version aus package.json lesen
 import {version} from '../package.json';
+import {logoutUserOidc, validateSession} from "./controller/userController";
 import {handleGenericError} from './middleware/genericErrorHandler';
 import {AppDataSource} from "./modules/database/dataSource";
 import {Session} from "./modules/database/entities/session/Session";
+import {asyncHandler} from "./modules/lib/asyncHandler";
 import settings from './modules/settings';
-
 import indexRouter from './routes';
 import activityRouter from './routes/activity';
 import apiRouter from './routes/api';
@@ -64,6 +79,17 @@ app.use(
 );
 
 app.use(flash());
+
+// Validate session on each request
+app.use(asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+    if (!await validateSession(req.session)) {
+        // Session is not valid anymore --> force logout
+        req.flash("error", "Session has expired");
+        res.redirect(await logoutUserOidc(req.session));
+        return;
+    }
+    next();
+}));
 
 app.use(function (req: Request, res: Response, next: NextFunction) {
     res.locals.profile = req.session.profile;

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026 Julian Malovanij
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import {MigrationInterface, QueryRunner} from "typeorm";
 
 export class AddCheckSlotRoleTrigger1752829591073 implements MigrationInterface {
@@ -5,7 +21,7 @@ export class AddCheckSlotRoleTrigger1752829591073 implements MigrationInterface 
     public async up(queryRunner: QueryRunner): Promise<void> {
         // Drop trigger if exists to make migration idempotent
         await queryRunner.query(`DROP TRIGGER IF EXISTS trg_check_slot_role_limit`);
-        
+
         await queryRunner.query(`
       CREATE TRIGGER trg_check_slot_role_limit
       BEFORE INSERT ON activity_assignment_roles

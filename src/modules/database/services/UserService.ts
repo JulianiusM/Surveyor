@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026 Julian Malovanij
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import bcrypt from 'bcryptjs';
 import {EntityManager, MoreThan, Repository} from "typeorm";
 import type {OidcClaims, UserInfo} from "../../../types/UserTypes";
@@ -16,9 +32,8 @@ export async function registerUser(username: string, name: string, password: str
         const result = await repo.save(user);
 
         const profileRepo = em.getRepository(Profile);
-        const profile = profileRepo.create({name, type: 'user', user: result});
-        const profRes = await profileRepo.save(profile);
-
+        const profile = profileRepo.create({name, defaultForOwner: true, user: result});
+        await profileRepo.save(profile);
         return result.id;
     });
 }
@@ -152,7 +167,7 @@ export async function createGuest(username: string, email: string | null = null)
         const result = await repo.save(guest);
 
         const profileRepo = em.getRepository(Profile);
-        const profile = profileRepo.create({name: username, type: 'guest', guest: guest});
+        const profile = profileRepo.create({name: username, defaultForOwner: true, guest: guest});
         const profileRes = await profileRepo.save(profile);
 
         if (!result.profile) {
@@ -329,7 +344,11 @@ export async function findOrCreateUserFromOidc(
                 oidcIssuer,
                 oidcSub: sub,
             });
-            const newProfile = em.getRepository(Profile).create({name: newUsr.name, type: 'user', user: newUsr});
+            const newProfile = em.getRepository(Profile).create({
+                name: newUsr.name,
+                defaultForOwner: true,
+                user: newUsr
+            });
             const savedProfile = await em.getRepository(Profile).save(newProfile);
             user = await handleUserSaving(newUsr, sub, em.getRepository(User));
             if (!user.profiles || user.profiles.length === 0) {
@@ -407,7 +426,7 @@ export async function findUserByNameOrEmail(identifier: string | number): Promis
  * Returns { id, username, emailMasked } (no raw email by default).
  */
 export async function searchUsersSecure(query: string, limit = 10): Promise<Array<UserInfo>> {
-    const repo = AppDataSource.getRepository(User);
+    const repo = AppDataSource.getRepository(Profile);
     const q = (query || '').trim();
 
     if (!SQL_ALLOW_LIST.test(q)) return [];            // too short / invalid chars -> no results
@@ -416,16 +435,31 @@ export async function searchUsersSecure(query: string, limit = 10): Promise<Arra
     const likePrefix = `${q}%`;
 
     const rows = await repo
-        .createQueryBuilder('u')
-        .select(['u.id', 'u.username', 'u.email', 'u.name'])
-        .where('u.username LIKE :pfx', {pfx: likePrefix})
+        .createQueryBuilder('p')
+        .innerJoinAndSelect('p.user', 'u')
+        .where('p.name LIKE :pfx', {pfx: likePrefix})
         .orWhere('u.email LIKE :pfx', {pfx: likePrefix})
-        .orWhere('u.name LIKE :pfx', {pfx: likePrefix})
-        .orderBy('u.username', 'ASC')
+        .orWhere('u.username LIKE :pfx', {pfx: likePrefix})
+        .orderBy('p.name', 'ASC')
         .limit(lim)
         .getMany();
 
-    return rows.map(u => ({id: u.id, username: u.username, email: maskEmail(u.email), name: u.name}));
+    function doMailMask(p: Profile) {
+        let maskedMail = '-';
+        if (p.user?.email) {
+            maskedMail = maskEmail(p.user.email);
+        } else if (p.guest?.email) {
+            maskedMail = maskEmail(p.guest.email);
+        }
+        return maskedMail;
+    }
+
+    return rows.map(p => ({
+        id: p.id,
+        username: p.user?.username ?? p.guest?.username ?? '-',
+        email: doMailMask(p),
+        name: p.name
+    }));
 }
 
 /** Optional helpers you might find useful elsewhere */
@@ -435,4 +469,112 @@ export async function getUserById(id: number): Promise<User | null> {
 
 export async function getProfileById(id: string) {
     return await AppDataSource.getRepository(Profile).findOneBy({id});
+}
+
+export async function generateMigrationToken(profileId: string) {
+    const repo = AppDataSource.getRepository(Profile);
+    const token = generateUniqueToken();
+    const expiration = new Date(Date.now() + (3_600_000 * 24));
+    await repo.update({id: profileId}, {
+        migrationToken: token,
+        migrationTokenExpiration: expiration
+    });
+    return token;
+}
+
+export async function verifyMigrationToken(token: string) {
+    const repo = AppDataSource.getRepository(Profile);
+    return await repo.findOne({
+        where: {
+            migrationToken: token,
+            migrationTokenExpiration: MoreThan(new Date())
+        },
+        relations: {
+            user: true,
+            guest: true,
+        }
+    });
+}
+
+export async function addProfileToUser(profileId: string, userId: number, em?: EntityManager) {
+    const repo = em ? em.getRepository(Profile) : AppDataSource.getRepository(Profile);
+    await repo.update({id: profileId}, {
+        user: {id: userId},
+    })
+}
+
+export async function removeProfileFromOwner(profileId: string, em?: EntityManager) {
+    const repo = em ? em.getRepository(Profile) : AppDataSource.getRepository(Profile);
+    const profile = await repo.findOne({where: {id: profileId}, relations: {user: true, guest: true}});
+    let owner;
+    if (profile?.user) {
+        owner = profile.user;
+        await repo.update({id: profileId}, {user: null, defaultForOwner: false});
+    } else if (profile?.guest) {
+        owner = profile.guest;
+        await repo.update({id: profileId}, {guest: null, defaultForOwner: false});
+    }
+
+    return owner;
+}
+
+export async function removeMigrationToken(profileId: string, em?: EntityManager) {
+    const repo = em ? em.getRepository(Profile) : AppDataSource.getRepository(Profile);
+    await repo.update({id: profileId}, {migrationToken: null, migrationTokenExpiration: null});
+}
+
+export async function moveProfileToUserTx(profileId: string, userId: number) {
+    return await AppDataSource.transaction(async em => {
+        const owner = await removeProfileFromOwner(profileId, em);
+        await addProfileToUser(profileId, userId, em);
+        await removeMigrationToken(profileId, em);
+        return owner;
+    })
+}
+
+export async function deleteUser(userId: number) {
+    const repo = AppDataSource.getRepository(User);
+    const deleted = await repo.findOneBy({id: userId});
+    await repo.delete({id: userId});
+    return deleted;
+}
+
+export async function deleteGuest(guestId: string) {
+    const repo = AppDataSource.getRepository(Guest);
+    const deleted = await repo.findOneBy({id: guestId});
+    await repo.delete({id: guestId});
+    return deleted;
+}
+
+export async function getProfilesForUser(userId: number) {
+    const repo = AppDataSource.getRepository(Profile);
+    return await repo.findBy({user: {id: userId}});
+}
+
+export async function updateProfileName(profileId: string, name: string) {
+    const repo = AppDataSource.getRepository(Profile);
+    await repo.update({id: profileId}, {name: name});
+}
+
+export async function updateProfileDefault(profileId: string, isDefault: boolean) {
+    await AppDataSource.transaction(async em => {
+        const repo = AppDataSource.getRepository(Profile);
+        if (isDefault) {
+            // Remove all other defaults for the owner of this profile if a new one is set
+            const profile = await repo.findOneByOrFail({id: profileId});
+            if (profile.userId) {
+                await repo.update({user: {id: profile.userId}}, {defaultForOwner: false});
+            }
+            if (profile.guestId) {
+                await repo.update({guest: {id: profile.guestId}}, {defaultForOwner: false});
+            }
+        }
+        await repo.update({id: profileId}, {defaultForOwner: isDefault});
+    })
+}
+
+export async function createProfile(userId: number, name: string) {
+    const repo = AppDataSource.getRepository(Profile);
+    const profile = repo.create({user: {id: userId}, name: name});
+    return await repo.save(profile);
 }

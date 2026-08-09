@@ -1,6 +1,22 @@
+/*
+ * Copyright 2026 Julian Malovanij
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import {ActivitySlot} from "../database/entities/activity/ActivitySlot";
-import {parseTimeToMinutes, slotsOverlap, SlotTimeboxCandidate} from "./timebox";
 import {ParticipantAttendance} from "./requirements";
+import {parseTimeToMinutes, slotsOverlap, SlotTimeboxCandidate} from "./timebox";
 
 /**
  * Availability helpers for assignment warnings. These utilities normalize slot assignments
@@ -113,14 +129,14 @@ export function collectAssignmentWarnings(
     } else if (attendance.boundary === "arrival") {
         warnings.push({type: "arrival_day"});
         // Check explicit slot flag first, fall back to time-based heuristic
-        const isEvening = slot.isArrivalEvening != null ? slot.isArrivalEvening : isEveningSlot(slot);
+        const isEvening = slot.isArrivalEvening ?? isEveningSlot(slot);
         if (!attendancePolicy.allowArrivalDayEvening && isEvening) {
             warnings.push({type: "arrival_time_restricted"});
         }
     } else if (attendance.boundary === "departure") {
         warnings.push({type: "departure_day"});
         // Check explicit slot flag first, fall back to time-based heuristic
-        const isMorning = slot.isDepartureMorning != null ? slot.isDepartureMorning : isMorningSlot(slot);
+        const isMorning = slot.isDepartureMorning ?? isMorningSlot(slot);
         if (!attendancePolicy.allowDepartureDayMorning && isMorning) {
             warnings.push({type: "departure_time_restricted"});
         }

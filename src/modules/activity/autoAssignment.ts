@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026 Julian Malovanij
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import {ActivityAssignmentRecommendation} from "../database/entities/activity/ActivityAssignmentRecommendation";
 import {ActivityPlan} from "../database/entities/activity/ActivityPlan";
 import {ActivityPlanRequirement} from "../database/entities/activity/ActivityPlanRequirement";
@@ -153,8 +169,18 @@ function scoreParticipantWithAvailability(
     bEligibleSlots: number
 ): number {
     // Calculate ratios (lower is more underserved)
-    const ratioA = a.required > 0 ? a.assigned / a.required : (a.assigned > 0 ? Number.POSITIVE_INFINITY : 0);
-    const ratioB = b.required > 0 ? b.assigned / b.required : (b.assigned > 0 ? Number.POSITIVE_INFINITY : 0);
+    let ratioA = 0;
+    if (a.required > 0) {
+        ratioA = a.assigned / a.required;
+    } else if (a.assigned > 0) {
+        ratioA = Number.POSITIVE_INFINITY;
+    }
+    let ratioB = 0;
+    if (b.required > 0) {
+        ratioB = b.assigned / b.required;
+    } else if (b.assigned > 0) {
+        ratioB = Number.POSITIVE_INFINITY;
+    }
 
     // Priority 1: Lowest ratio (most underserved) - FAIRNESS FIRST
     if (Math.abs(ratioA - ratioB) > RATIO_COMPARISON_EPSILON) {
@@ -192,9 +218,12 @@ function scoreParticipantWeighted(
     availabilityWeight: number
 ): number {
     // Fairness score: ratio of assigned/required (lower is more underserved)
-    const fairnessScore = participant.required > 0
-        ? participant.assigned / participant.required
-        : (participant.assigned > 0 ? 1 : 0);
+    let fairnessScore = 0;
+    if (participant.required > 0) {
+        fairnessScore = participant.assigned / participant.required;
+    } else if (participant.assigned > 0) {
+        fairnessScore = 1;
+    }
 
     // Availability score: normalized by total slots (lower eligible = higher priority = higher score)
     const availabilityScore = totalSlots > 0

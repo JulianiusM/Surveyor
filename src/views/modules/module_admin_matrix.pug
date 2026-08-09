@@ -1,7 +1,7 @@
 //- views/mixins/admin-matrix.pug
 //- Admin Manager (entity-level per-user permissions)
 //- Params:
-//-   admins:   Array<{ userId:number, username:string, email?:string, avatarUrl?:string, perms:number }>
+//-   admins:   Array<{ profileId:string, profile:Profile, perms:number }>
 //-   permMeta: Array<{ key:string, bit:number, label:string, desc?:string }>
 //-   presets:  Array<{ key:string, label:string, mask:number }>  (optional)
 //-   opts?: {
@@ -40,10 +40,10 @@ mixin adminMatrix(admins, permMeta, presets=[], opts)
                 .text-secondary.small.ms-1.mb-2 No administrators yet.
             else
                 each a, idx in admins
-                    - const headId = `${accId}-head-${a.userId}`
-                    - const colId  = `${accId}-col-${a.userId}`
-                    - const user = a.user
-                    .accordion-item.bg-dark.border-secondary.admin-card(data-user-id=a.userId)
+                    - const headId = `${accId}-head-${a.profileId}`
+                    - const colId  = `${accId}-col-${a.profileId}`
+                    - const profile = a.profile
+                    .accordion-item.bg-dark.border-secondary.admin-card(data-user-id=a.profileId)
                         h2.accordion-header(id=headId)
                             button.accordion-button.text-light.bg-dark(class=(openFirst && idx === 0) ? '' : 'collapsed'
                                 type="button"
@@ -52,11 +52,11 @@ mixin adminMatrix(admins, permMeta, presets=[], opts)
                                 aria-controls=colId
                                 aria-expanded=(openFirst && idx === 0 ? 'true' : 'false'))
                                 //- avatar (initials)
-                                - const initials = (user.name || user.username || '??').split(/\s+/).map(s=>s[0]).join('').slice(0,2).toUpperCase()
+                                - const initials = (profile.name || '??').split(/\s+/).map(s=>s[0]).join('').slice(0,2).toUpperCase()
                                 .rounded-circle.bg-secondary.text-dark.d-inline-flex.justify-content-center.align-items-center.me-2(style="width:24px;height:24px;font-size:12px;")= initials
-                                span.me-2= user.name || user.username || ('#' + a.userId)
-                                if user.name
-                                    small.text-secondary= ` <${user.username}>`
+                                span.me-2= profile.name || ('#' + a.profileId)
+                                if profile.name
+                                    small.text-secondary= ` <${profile.name}>`
                                 //- compact badge: number of enabled perms
                                 - const enabled = permMeta.reduce((n,p)=> n + (!!(a.perms & p.bit) ? 1 : 0), 0)
                                 span.badge.bg-secondary.ms-2= `${enabled}/${permMeta.length}`
@@ -70,13 +70,13 @@ mixin adminMatrix(admins, permMeta, presets=[], opts)
                                             each pr in presets
                                                 button.btn.btn-outline-light.admin-perm-preset(
                                                     type="button"
-                                                    data-user-id=a.userId
+                                                    data-user-id=a.profileId
                                                     data-mask=pr.mask
                                                     title=`Apply preset: ${pr.label}`
                                                 )= pr.label
                                     .btn-group.btn-group-sm
-                                        button.btn.btn-outline-light.admin-perm-select-all(type="button" data-user-id=a.userId title="Select all") All
-                                        button.btn.btn-outline-light.admin-perm-clear(type="button" data-user-id=a.userId title="Clear all") None
+                                        button.btn.btn-outline-light.admin-perm-select-all(type="button" data-user-id=a.profileId title="Select all") All
+                                        button.btn.btn-outline-light.admin-perm-clear(type="button" data-user-id=a.profileId title="Clear all") None
 
                                 //- Permission grid
                                 .row.row-cols-2.row-cols-md-3.row-cols-lg-4.g-2
@@ -87,20 +87,20 @@ mixin adminMatrix(admins, permMeta, presets=[], opts)
                                                 input.form-check-input.perm-box.bg-dark.border-secondary(
                                                     type="checkbox"
                                                     value=p.key
-                                                    id=`admin-${a.userId}-${p.key}`
+                                                    id=`admin-${a.profileId}-${p.key}`
                                                     checked=checked
                                                     data-bit=p.bit
                                                 )
-                                                label.form-check-label.text-light(for=`admin-${a.userId}-${p.key}`)= p.label
+                                                label.form-check-label.text-light(for=`admin-${a.profileId}-${p.key}`)= p.label
                                                 if p.desc
                                                     small.text-secondary.d-block= p.desc
 
                                 //- Actions
                                 .d-flex.justify-content-between.mt-3
-                                    button.btn.btn-outline-danger.btn-sm.btn-admin-remove(type="button" data-user-id=a.userId)
+                                    button.btn.btn-outline-danger.btn-sm.btn-admin-remove(type="button" data-user-id=a.profileId)
                                         i.bi.bi-trash.me-1
                                         | Remove
-                                    button.btn.btn-primary.btn-sm.btn-admin-update(type="button" data-user-id=a.userId)
+                                    button.btn.btn-primary.btn-sm.btn-admin-update(type="button" data-user-id=a.profileId)
                                         span.label Save
                                         span.spinner-border.spinner-border-sm.ms-2.d-none(role="status" aria-hidden="true")
 

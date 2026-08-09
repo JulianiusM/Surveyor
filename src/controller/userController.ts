@@ -1,5 +1,23 @@
+/*
+ * Copyright 2026 Julian Malovanij
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import {Request} from "express";
+import {Guest} from "../modules/database/entities/user/Guest";
 import {Profile} from "../modules/database/entities/user/Profile";
+import {User} from "../modules/database/entities/user/User";
 import * as activityService from "../modules/database/services/ActivityService";
 import * as driverService from "../modules/database/services/DriverService";
 import * as eventService from "../modules/database/services/EventService";
@@ -77,7 +95,7 @@ export async function loginUser(body: any, session: Request["session"]) {
     }
 
     session.auth = {user};
-    session.profile = user.profiles[0];
+    session.profile = getDefaultProfile(user.profiles);
     await persistSession(session);
 }
 
@@ -242,4 +260,193 @@ export async function recoverGuestAccount(email: string) {
 export async function hasGuestAccountForEmail(email: string) {
     const guests = await userService.getGuestByEmail(email);
     return guests.length > 0;
+}
+
+export async function getMigrationToken(profileId: string) {
+    return await userService.generateMigrationToken(profileId);
+}
+
+export async function getProfileToMigrate(token: string) {
+    const profile = await userService.verifyMigrationToken(token);
+    if (!profile) {
+        throw new ExpectedError('Invalid or mismatched token', 'error', 401);
+    }
+    return profile;
+}
+
+export async function migrateProfile(userId: number, token: string) {
+    const profile = await getProfileToMigrate(token);
+    const previousOwner = await userService.moveProfileToUserTx(profile.id, userId);
+    if (previousOwner?.email) {
+        await mailer.sendMigrationEmail(previousOwner.email, profile, (await userService.getUserById(userId))!)
+    }
+    return `Migration successful. ${await handlePreviousProfileOwner(previousOwner)}`;
+}
+
+async function handlePreviousProfileOwner(previousOwner?: User | Guest) {
+    if (previousOwner instanceof User) {
+        const otherProfiles = await userService.getProfilesForUser(previousOwner.id);
+        if (otherProfiles.length === 0) {
+            await userService.deleteUser(previousOwner.id);
+            await mailer.sendDeletionEmail(previousOwner.email, previousOwner);
+            return "Previous user account permanently deleted!"
+        }
+    } else if (previousOwner instanceof Guest) {
+        await userService.deleteGuest(previousOwner.id);
+        if (previousOwner.email) {
+            await mailer.sendDeletionEmail(previousOwner.email, previousOwner);
+        }
+        return "Previous guest account permanently deleted!"
+    }
+    return '';
+}
+
+export async function deleteAccount(body: any, session: Request['session']) {
+    const {username} = body;
+    if (!username || (username !== session.auth?.guest?.username && username !== session.auth?.user?.username)) {
+        throw new ValidationError("/users/delete-accoutn", "Invalid account deletion verification", {username});
+    }
+    if (session.auth?.guest && session.auth.user) {
+        throw new ExpectedError("Ambiguous session. Log out and try again", "error", 500);
+    }
+    if (session.auth?.user) {
+        return deleteUser(session);
+    }
+    if (session.auth?.guest) {
+        return deleteGuest(session);
+    }
+    throw new ExpectedError("Invalid session. Log out and try again", "error", 500);
+}
+
+export async function deleteUser(session: Request['session']) {
+    if (!session.auth?.user) {
+        throw new ExpectedError("Not logged in as user!", "error", 401);
+    }
+    const deleted = await userService.deleteUser(session.auth.user.id);
+    if (deleted?.email) {
+        await mailer.sendDeletionEmail(deleted.email, deleted);
+    }
+    return await logoutUserOidc(session);
+}
+
+export async function deleteGuest(session: Request['session']) {
+    if (!session.auth?.guest) {
+        throw new ExpectedError("Not logged in as guest!", "error", 401);
+    }
+
+    const deleted = await userService.deleteGuest(session.auth.guest.id);
+    if (deleted?.email) {
+        await mailer.sendDeletionEmail(deleted.email, deleted);
+    }
+    return await logoutUserOidc(session);
+}
+
+export async function deactivateProfile(body: any, session: Request['session']) {
+    const {name} = body;
+    if (!name || name !== session.profile?.name) {
+        throw new ValidationError("/users/profile/delete", "Invalid profile deactivation verification", {name});
+    }
+
+    if (!session.profile) {
+        throw new ExpectedError("No active profile!", "error", 401);
+    }
+
+    const previousOwner = await userService.removeProfileFromOwner(session.profile.id);
+    const handleAnswer = await handlePreviousProfileOwner(previousOwner);
+    return `Profile successfully deactivated. ${handleAnswer}`;
+}
+
+export async function changeActiveProfile(session: Request['session'], profileId?: string) {
+    if (!session.auth?.user) {
+        throw new ExpectedError("Not logged in as user!", "error", 401);
+    }
+
+    let profile;
+    if (profileId) {
+        profile = await userService.getProfileById(profileId);
+        if (profile?.userId !== session.auth.user.id) {
+            throw new ExpectedError("Invalid profile id", "error", 400);
+        }
+    } else {
+        const profiles = await userService.getProfilesForUser(session.auth.user.id);
+        if (profiles.length > 0) {
+            profile = getDefaultProfile(profiles);
+        } else {
+            throw new ExpectedError("Invalid profile id", "error", 400);
+        }
+    }
+
+    session.profile = profile;
+    await persistSession(session);
+}
+
+export async function validateSession(session: Request['session']) {
+    let ok = true;
+    // Check profile validity
+    if (ok && session.profile) {
+        const profile = await userService.getProfileById(session.profile.id);
+        if (!profile || (profile.userId !== session.auth?.user?.id && profile.guestId !== session.auth?.guest?.id)) {
+            ok = false;
+        }
+    }
+
+    // Check user authentication
+    if (ok && session.auth?.user) {
+        const user = await userService.getUserById(session.auth.user.id);
+        if (!user) {
+            ok = false;
+        }
+    }
+
+    // Check guest authentication
+    if (ok && session.auth?.guest) {
+        const guest = await userService.getGuestInternal(session.auth.guest.id);
+        if (!guest) {
+            ok = false;
+        }
+    }
+
+    // Check for dangling profile without auth
+    if (ok && session.profile && !session.auth) {
+        ok = false;
+    }
+
+    return ok;
+}
+
+export async function updateProfile(body: any, session: Request['session']) {
+    const {name, isDefault} = body;
+    const profileId = session.profile!.id;
+    if (name?.trim()?.length === 0) {
+        throw new ValidationError("/users/profile/view", "Invalid profile name");
+    }
+    if (name) {
+        await userService.updateProfileName(profileId, name);
+    }
+    await userService.updateProfileDefault(profileId, !!isDefault);
+
+    session.profile = await userService.getProfileById(profileId);
+    await persistSession(session);
+    return "Updated profile";
+}
+
+export async function getProfilesForUser(userId: number) {
+    return await userService.getProfilesForUser(userId);
+}
+
+export async function createProfile(body: any, userId: number) {
+    const {name} = body;
+    if (name?.trim()?.length === 0) {
+        throw new ValidationError("/users/profile/create", "Invalid profile name", body);
+    }
+    return await userService.createProfile(userId, name);
+}
+
+export function getDefaultProfile(profiles: Profile[]) {
+    const sortedProfiles = profiles.toSorted((a, b) => a.track.createdAt.getTime() - b.track.createdAt.getTime())
+    let profile = sortedProfiles.find(p => p.defaultForOwner);
+    // No default profile --> use oldest instead.
+    profile ??= sortedProfiles[0];
+
+    return profile;
 }

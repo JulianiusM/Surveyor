@@ -118,9 +118,16 @@ function initTypeahead(modalRoot: HTMLElement) {
     let lastQ = '';
     input.addEventListener('input', async () => {
         const q = input.value.trim();
-        hiddenId.value = '';
+
+        let match = Array.from(datalist.options).find(o => o.value === q);
+        if (match?.dataset.userId) {
+            hiddenId.value = match.dataset.userId!;
+            return;
+        }
+
         if (!q || q === lastQ) return;
         lastQ = q;
+        hiddenId.value = '';
         try {
             const res = await get(`${apiSearch}?q=${encodeURIComponent(q)}`);
             // Expect: [{ id, username, email }]
@@ -133,16 +140,15 @@ function initTypeahead(modalRoot: HTMLElement) {
                     opt.dataset.userId = String(u.id);
                     datalist.appendChild(opt);
                 });
+
+                match = Array.from(datalist.options).find(o => o.value === q);
+                if (match?.dataset.userId) {
+                    hiddenId.value = match.dataset.userId!;
+                }
             }
         } catch {
             // ignore
         }
-    });
-
-    // When a datalist option is chosen, try to set hiddenId by label match
-    input.addEventListener('change', () => {
-        const match = Array.from(datalist.options).find(o => o.value === input.value);
-        if (match?.dataset.userId) hiddenId.value = match.dataset.userId!;
     });
 }
 
@@ -154,10 +160,9 @@ async function handleAdd(btn: HTMLButtonElement): Promise<void> {
     const modal = qs<HTMLElement>(modalSel)!;
     const matrix = matrixFor(btn)!;
 
-    const input = qs<HTMLInputElement>('input[type="text"]', modal)!;
     const hiddenId = qs<HTMLInputElement>('input[type="hidden"]', modal)!;
     const presetSel = qs<HTMLSelectElement>('select', modal);
-    const userId = hiddenId.value || input.value.trim();
+    const userId = hiddenId.value;
 
     if (!userId) {
         showInlineAlert('error', 'Please select a user');
@@ -165,8 +170,8 @@ async function handleAdd(btn: HTMLButtonElement): Promise<void> {
     }
 
     const api = matrix.dataset.apiAdd!;
-    const payload: any = {userId: /^\d+$/.test(userId) ? Number(userId) : userId};
-    if (presetSel && presetSel.value) payload.preset = presetSel.value;
+    const payload: any = {profileId: userId};
+    if (presetSel?.value) payload.preset = presetSel.value;
 
     showSpinner(btn);
     try {
@@ -237,7 +242,6 @@ export function initAdminMatrix() {
         if (btnAdd) {
             ev.preventDefault();
             handleAdd(btnAdd);
-            return;
         }
     });
 }

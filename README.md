@@ -85,12 +85,14 @@ The E2E database should be configured with:
 
 ## Running Tests
 
-Surveyor uses a **two-runner test strategy** designed to keep useful regression coverage fast for daily work while keeping full browser checks focused on critical user journeys:
+Surveyor uses a **two-runner test strategy** designed to keep useful regression coverage fast for daily work while
+keeping full browser checks focused on critical user journeys:
 
 - **Vitest** runs isolated utility/frontend checks and TypeORM service smoke tests against the MariaDB test database.
 - **Playwright** runs E2E browser/API checks against the built application.
 
-All test files use the `*.spec.ts` suffix. Prefer testing expected production input/output transformations and user-visible behavior instead of implementation details.
+All test files use the `*.spec.ts` suffix. Prefer testing expected production input/output transformations and
+user-visible behavior instead of implementation details.
 
 ### Quick Start
 
@@ -104,22 +106,28 @@ This runs the fast Vitest suite. Use it during normal development.
 npm run test:all
 ```
 
-This runs Vitest, builds the app, initializes the E2E database, starts the built server, and runs the Playwright E2E suite. Use it before releases or in CI.
+This runs Vitest, builds the app, initializes the E2E database, starts the built server, and runs the Playwright E2E
+suite. Use it before releases or in CI.
 
 ### Test Organization
 
 Tests are organized around regression value and runtime cost:
 
-- **Unit tests** (`tests/unit/`) - Strictly isolated production utilities and input/output transformations; no service or controller mocking.
-- **Integration tests** (`tests/integration/`) - Core TypeORM services running against the disposable MariaDB test schema.
+- **Unit tests** (`tests/unit/`) - Strictly isolated production utilities and input/output transformations; no service
+  or controller mocking.
+- **Integration tests** (`tests/integration/`) - Core TypeORM services running against the disposable MariaDB test
+  schema.
 - **Frontend tests** (`tests/frontend/`) - Client-side helpers, DOM/component behavior, and future SPA behavior.
 - **E2E tests** (`tests/e2e/`) - A small set of critical workflows run with Playwright.
-- **Factories** (`tests/factories/`) - Reusable data builders for realistic production inputs, including shared entity factories before specialized builders.
-- **Keywords** (`tests/keywords/`) - Reusable smoke-test workflow/assertion keywords used only when they clarify intent and reduce repetition.
+- **Factories** (`tests/factories/`) - Reusable data builders for realistic production inputs, including shared entity
+  factories before specialized builders.
+- **Keywords** (`tests/keywords/`) - Reusable smoke-test workflow/assertion keywords used only when they clarify intent
+  and reduce repetition.
 - **Fixtures** (`tests/fixtures/`) - Shared fixture assets and seed data.
 - **Support** (`tests/support/`) - Runner setup, environment loading, and shared utilities.
 
-Keep E2E broad and shallow, prefer API/database setup over UI setup, and avoid brittle selectors or snapshots unless the markup itself is the contract.
+Keep E2E broad and shallow, prefer API/database setup over UI setup, and avoid brittle selectors or snapshots unless the
+markup itself is the contract.
 
 ### Individual Test Commands
 
@@ -185,15 +193,20 @@ The CI pipeline automatically:
 The frontend uses modular TypeScript organized under `src/public/js/` with reusable building blocks:
 
 - **core/** – foundational utilities (HTTP client, navigation helpers, form utilities, formatting, permission loader).
-- **shared/** – UI behaviors shared across pages (alerts, drag-and-drop, assignment helpers, inline editing, list actions, UI helpers).
+- **shared/** – UI behaviors shared across pages (alerts, drag-and-drop, assignment helpers, inline editing, list
+  actions, UI helpers).
 - **modules/** – feature-specific widgets (e.g., timezone-select, entity-select) composed from core/shared pieces.
-- **feature files** – page-level scripts such as `activity.ts`, `packing.ts`, and `events.ts` that orchestrate DOM bindings using the shared helpers.
+- **feature files** – page-level scripts such as `activity.ts`, `packing.ts`, and `events.ts` that orchestrate DOM
+  bindings using the shared helpers.
 
 When adding or updating frontend code:
 
-- Reuse the core and shared helpers instead of re-implementing HTTP, drag-and-drop, inline editing, or permission checks.
-- Load permissions with `loadPerms()` and gate UI actions using `requireEntityPerm`/`requireItemPerm` before calling protected endpoints.
-- Keep new components documented with JSDoc comments and prefer type-safe DOM queries (`querySelector`/`closest` with element type casting) over `any`.
+- Reuse the core and shared helpers instead of re-implementing HTTP, drag-and-drop, inline editing, or permission
+  checks.
+- Load permissions with `loadPerms()` and gate UI actions using `requireEntityPerm`/`requireItemPerm` before calling
+  protected endpoints.
+- Keep new components documented with JSDoc comments and prefer type-safe DOM queries (`querySelector`/`closest` with
+  element type casting) over `any`.
 - Expose initialization via `window.Surveyor.init` for consistent page bootstrapping.
 
 ## Project Structure
@@ -215,4 +228,4 @@ When adding or updating frontend code:
 
 ## License
 
-Private - All rights reserved
+Apache-2.0

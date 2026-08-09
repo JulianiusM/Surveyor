@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026 Julian Malovanij
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import {MigrationInterface, QueryRunner} from "typeorm";
 import {
     addColumnIfNotExists,
@@ -98,13 +114,15 @@ export class AddProfiles1785610467095 implements MigrationInterface {
     private async ensureProfileTable(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`CREATE TABLE IF NOT EXISTS \`profiles\`
                                  (
-                                     \`id\`         varchar(36)            NOT NULL,
-                                     \`name\`       varchar(50)            NOT NULL,
-                                     \`type\`       enum ('user', 'guest') NOT NULL,
-                                     \`user_id\`    int                    NULL,
-                                     \`guest_id\`   varchar(36)            NULL,
-                                     \`created_at\` timestamp(6)           NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-                                     \`updated_at\` timestamp(6)           NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+                                     \`id\`                         varchar(36)  NOT NULL,
+                                     \`name\`                       varchar(50)  NOT NULL,
+                                     \`migration_token\`            varchar(255) NULL,
+                                     \`migration_token_expiration\` datetime     NULL,
+                                     \`default_for_owner\`          tinyint      NOT NULL DEFAULT 0,
+                                     \`user_id\`                    int          NULL,
+                                     \`guest_id\`                   varchar(36)  NULL,
+                                     \`created_at\`                 timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                                     \`updated_at\`                 timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
                                      PRIMARY KEY (\`id\`)
                                  ) ENGINE = InnoDB`);
 
@@ -603,11 +621,15 @@ export class AddProfiles1785610467095 implements MigrationInterface {
 
             await this.ensureProfileTable(queryRunner);
 
-            await queryRunner.query(`INSERT INTO \`profiles\` (\`id\`, \`name\`, \`type\`, \`user_id\`, \`guest_id\`,
+            await queryRunner.query(`INSERT INTO \`profiles\` (\`id\`, \`name\`, \`migration_token\`,
+                                                               \`migration_token_expiration\`,
+                                                               \`default_for_owner\`, \`user_id\`, \`guest_id\`,
                                                                \`created_at\`, \`updated_at\`)
                                      SELECT UUID(),
                                             LEFT(COALESCE(NULLIF(TRIM(u.name), ''), u.username), 50),
-                                            'user',
+                                            NULL,
+                                            NULL,
+                                            1,
                                             u.id,
                                             NULL,
                                             u.created_at,
@@ -616,11 +638,15 @@ export class AddProfiles1785610467095 implements MigrationInterface {
                                               LEFT JOIN \`profiles\` p ON p.user_id = u.id
                                      WHERE p.user_id IS NULL`);
 
-            await queryRunner.query(`INSERT INTO \`profiles\` (\`id\`, \`name\`, \`type\`, \`user_id\`, \`guest_id\`,
+            await queryRunner.query(`INSERT INTO \`profiles\` (\`id\`, \`name\`, \`migration_token\`,
+                                                               \`migration_token_expiration\`,
+                                                               \`default_for_owner\`, \`user_id\`, \`guest_id\`,
                                                                \`created_at\`, \`updated_at\`)
                                      SELECT UUID(),
                                             LEFT(g.username, 50),
-                                            'guest',
+                                            NULL,
+                                            NULL,
+                                            1,
                                             NULL,
                                             g.id,
                                             g.created_at,
