@@ -304,7 +304,7 @@ async function handlePreviousProfileOwner(previousOwner?: User | Guest) {
 export async function deleteAccount(body: any, session: Request['session']) {
     const {username} = body;
     if (!username || (username !== session.auth?.guest?.username && username !== session.auth?.user?.username)) {
-        throw new ValidationError("/users/delete-accoutn", "Invalid account deletion verification", {username});
+        throw new ValidationError("users/delete-account", "Invalid account deletion verification", {username});
     }
     if (session.auth?.guest && session.auth.user) {
         throw new ExpectedError("Ambiguous session. Log out and try again", "error", 500);
@@ -344,7 +344,7 @@ export async function deleteGuest(session: Request['session']) {
 export async function deactivateProfile(body: any, session: Request['session']) {
     const {name} = body;
     if (!name || name !== session.profile?.name) {
-        throw new ValidationError("/users/profile/delete", "Invalid profile deactivation verification", {name});
+        throw new ValidationError("users/profile/delete", "Invalid profile deactivation verification", {name});
     }
 
     if (!session.profile) {
@@ -418,7 +418,7 @@ export async function updateProfile(body: any, session: Request['session']) {
     const {name, isDefault} = body;
     const profileId = session.profile!.id;
     if (name?.trim()?.length === 0) {
-        throw new ValidationError("/users/profile/view", "Invalid profile name");
+        throw new ValidationError("users/profile/view", "Invalid profile name");
     }
     if (name) {
         await userService.updateProfileName(profileId, name);
@@ -437,7 +437,7 @@ export async function getProfilesForUser(userId: number) {
 export async function createProfile(body: any, userId: number) {
     const {name} = body;
     if (name?.trim()?.length === 0) {
-        throw new ValidationError("/users/profile/create", "Invalid profile name", body);
+        throw new ValidationError("users/profile/create", "Invalid profile name", body);
     }
     return await userService.createProfile(userId, name);
 }
