@@ -403,6 +403,9 @@ export class AddProfiles1785610467095 implements MigrationInterface {
                 name: 'combinations_single_entry',
                 columns: '`WEEKDAY`, `entity_id`, `nth_week`', unique: true
             },
+        ];
+
+        const prioNewIndexes: IndexDef[] = [
             {
                 table: 'drivers_assignments',
                 name: 'FK_b2fa5cb20b56122626e22bce5ee',
@@ -420,7 +423,7 @@ export class AddProfiles1785610467095 implements MigrationInterface {
                 columns: '`item_id`',
                 unique: false
             }
-        ];
+        ]
 
         const newForeignKeys: ForeignKeyDef[] = [
             {
@@ -615,6 +618,15 @@ export class AddProfiles1785610467095 implements MigrationInterface {
             for (const [table, fk] of oldForeignKeys) {
                 await dropFkConstraintIfExists(queryRunner, table, fk);
             }
+
+            for (const index of prioNewIndexes) {
+                if (index.unique) {
+                    await createUniqueIndexIfNotExists(queryRunner, index.table, index.name, index.columns);
+                } else {
+                    await createIndexIfNotExists(queryRunner, index.table, index.name, index.columns);
+                }
+            }
+
             for (const [table, index] of oldUniqueIndexes) {
                 await dropIndexIfExists(queryRunner, table, index);
             }
