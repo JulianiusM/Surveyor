@@ -51,6 +51,24 @@ export class Event extends BaseEntity {
     })
     allowDietComment!: boolean;
 
+    @Column("tinyint", {
+        name: "allow_reg_date_update",
+        default: 0
+    })
+    allowRegDateUpdatesAfterDeadline!: boolean;
+
+    @Column("tinyint", {
+        name: "allow_reg_cancel",
+        default: 0
+    })
+    allowRegCancelationAfterDeadline!: boolean;
+
+    @Column("tinyint", {
+        name: "allow_reg_diet_update",
+        default: 0
+    })
+    allowRegDietUpdateAfterDeadline!: boolean;
+
     @Column("int", {name: "max_participants", nullable: true})
     maxParticipants?: number | null;
 

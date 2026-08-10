@@ -117,6 +117,25 @@ block content
                                 value: ev.timezone,
                                 help: 'Times will be converted for each user.'
                             })
+                        .col-md-4
+                        .col-md-4.d-flex.align-items-end
+                            .form-check
+                                input#allowRegDateUpdatesAfterDeadline.form-check-input(
+                                    type="checkbox"
+                                    name="allowRegDateUpdatesAfterDeadline"
+                                    checked=!!ev.allowRegDateUpdatesAfterDeadline)
+                                label.form-check-label(for="allowRegDateUpdatesAfterDeadline")
+                                    i.bi.bi-calendar-range.me-1
+                                    | Allow registration date update after deadline expired
+                        .col-md-4.d-flex.align-items-end
+                            .form-check
+                                input#allowRegCancelationAfterDeadline.form-check-input(
+                                    type="checkbox"
+                                    name="allowRegCancelationAfterDeadline"
+                                    checked=!!ev.allowRegCancelationAfterDeadline)
+                                label.form-check-label(for="allowRegCancelationAfterDeadline")
+                                    i.bi.bi-calendar-x.me-1
+                                    | Allow cancelling registration after deadline expired
                     if permData.entity.has("MANAGE_REQUIREMENTS")
                         .col-md-4.d-flex.align-items-end
                             .form-check
@@ -136,6 +155,15 @@ block content
                                 label.form-check-label(for="allowDietCommentEdit")
                                     i.bi.bi-chat-dots.me-1
                                     | Allow diet comment during registration
+                        .col-md-4.d-flex.align-items-end
+                            .form-check
+                                input#allowRegDietUpdateAfterDeadline.form-check-input(
+                                    type="checkbox"
+                                    name="allowRegDietUpdateAfterDeadline"
+                                    checked=!!ev.allowRegDietUpdateAfterDeadline)
+                                label.form-check-label(for="allowRegDietUpdateAfterDeadline")
+                                    i.bi.bi-egg-fried.me-1
+                                    | Allow diet update after deadline expired
                     .col-12.d-flex.justify-content-end.gap-2
                         button.btn.btn-primary(type="submit")
                             i.bi.bi-save.me-1

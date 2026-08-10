@@ -20,6 +20,7 @@ import {Request} from "express";
 import Joi from 'joi';
 
 import {Event} from "../modules/database/entities/event/Event";
+import {EventRegistration} from "../modules/database/entities/event/EventRegistration";
 import {ALLOWED_DIETARY} from "../modules/database/entities/event/EventRegistrationDietary";
 import * as invoiceService from "../modules/database/services/EventInvoiceService";
 
@@ -40,6 +41,7 @@ import {can, saveDefaultPermsFromBody} from "../modules/permissionEngine";
 import type {DIETARY} from "../types/EventTypes";
 import type {PermBundle} from "../types/PermissionTypes";
 import type {EntityBase} from "../types/UserTypes";
+import {WithRequired} from "../types/UtilTypes";
 import {purgeExpiredProofs} from "./eventPoolController";
 
 // Template constant for create errors
@@ -57,8 +59,11 @@ function preprocessCreate(body: any): Partial<Event> {
         location: Joi.string().max(255).allow(''),
         // HTML datetime-local comes as 'YYYY-MM-DDTHH:mm' (no seconds or TZ) — let backend parse/normalize
         bindingDeadline: Joi.string().allow(''),
+        allowRegDateUpdatesAfterDeadline: Joi.string().allow('').allow('on'),
+        allowRegCancelationAfterDeadline: Joi.string().allow('').allow('on'),
         requireDietaryInfo: Joi.allow('').allow('on'),
         allowDietComment: Joi.allow('').allow('on'),
+        allowRegDietUpdateAfterDeadline: Joi.allow('').allow('on'),
         maxParticipants: Joi.number().positive().allow('').optional(),
         deadlineTz: Joi.string().allow(''),
     });
@@ -86,28 +91,19 @@ function preprocessCreate(body: any): Partial<Event> {
         endDate: value.endDate,
         location: value.location || null,
         bindingDeadline: timedDeadline || null,
+        allowRegDateUpdatesAfterDeadline: value.allowRegDateUpdatesAfterDeadline === 'on',
+        allowRegCancelationAfterDeadline: value.allowRegCancelationAfterDeadline === 'on',
         requireDietaryInfo: value.requireDietaryInfo === 'on',
         allowDietComment: value.allowDietComment === 'on',
+        allowRegDietUpdateAfterDeadline: value.allowRegDietUpdateAfterDeadline === 'on',
         maxParticipants: value.maxParticipants || null,
         timezone: value.deadlineTz || null,
     };
 }
 
 /*  ---- Transaction handled in service ---- */
-async function createEntity(ownerId: string, eventData: Partial<Event>) {
-    return await eventService.createEventTx(ownerId,
-        eventData.title!,
-        eventData.description!,
-        eventData.startDate!,
-        eventData.endDate!,
-        eventData.location!,
-        eventData.bindingDeadline!,
-        eventData.requireDietaryInfo!,
-        eventData.allowDietComment!,
-        eventData.maxParticipants!,
-        eventData.timezone!,
-        eventData.headerImg,
-    );
+async function createEntity(ownerId: string, eventData: WithRequired<Partial<Event>, "title" | "startDate" | "endDate">) {
+    return await eventService.createEventTx(ownerId, eventData);
 }
 
 // No-op — nothing else created alongside the event at this step
@@ -186,19 +182,9 @@ async function registerAttendance(event: Event, body: any, req: Request) {
     if (!session.profile) throw new APIError('Authentication required', body, 401);
 
     // Deny registration if not already registered (allow updates to registration)
-    if (await eventService.isEventFull(event.id) && !(await eventService.isRegisteredForEvent(session.profile.id, event.id))) {
+    const registration = await eventService.getRegistrationFor(session.profile.id, event.id);
+    if (!registration && await eventService.isEventFull(event.id)) {
         throw new APIError('Event is full', body, 403);
-    }
-
-    // Deny registration if past binding deadline
-    let bypass: { ok: boolean; linkId?: string } = {ok: false};
-    if (event.bindingDeadline && new Date(Date.parse(event.bindingDeadline)) < new Date()) {
-        bypass = await eventService.canBypassDeadlineWithToken(event.id, body.regToken ?? getResource(req, 'regToken') ?? null);
-        if (!bypass.ok) {
-            // owners/co-organizers may bypass via permission in your middleware;
-            // if you still reach here, reject:
-            throw new APIError('Registration deadline has passed', {}, 403);
-        }
     }
 
     const schema = Joi.object({
@@ -217,11 +203,33 @@ async function registerAttendance(event: Event, body: any, req: Request) {
         throw new APIError(msg, body, 400);
     }
 
+    const dietary: DIETARY[] = normalizeToArray(value.dietary);
+
+    // Deny registration if past binding deadline
+    let bypass: { ok: boolean; linkId?: string } = {ok: false};
+    if (event.bindingDeadline && new Date(Date.parse(event.bindingDeadline)) < new Date()) {
+        if (registration) {
+            // Are date updates allowed?
+            if (!event.allowRegDateUpdatesAfterDeadline && (registration.arrivalDate !== value.arrivalDate || registration.departureDate !== value.departureDate)) {
+                throw new APIError('Date updates not allowed after deadline has passed', {}, 403);
+            }
+            // Are diet updates allowed?
+            if (!event.allowRegDietUpdateAfterDeadline && !isDietaryEqual(registration, dietary, value.allergyNotes, value.dietComment)) {
+                throw new APIError('Diet updates not allowed after deadline has passed', {}, 403);
+            }
+        } else {
+            bypass = await eventService.canBypassDeadlineWithToken(event.id, body.regToken ?? getResource(req, 'regToken') ?? null);
+            if (!bypass.ok) {
+                // owners/co-organizers may bypass via permission in your middleware;
+                // if you still reach here, reject:
+                throw new APIError('Registration deadline has passed', {}, 403);
+            }
+        }
+    }
+
     if (!isWithinWindow(event.startDate, event.endDate, value.arrivalDate, value.departureDate)) {
         throw new APIError('Arrival/Departure must be within event dates', body, 400);
     }
-
-    const dietary: DIETARY[] = normalizeToArray(value.dietary);
 
     const allergyNotes: string = value.allergyNotes || '';
     const dietComment: string = value.dietComment || '';
@@ -230,6 +238,31 @@ async function registerAttendance(event: Event, body: any, req: Request) {
 
     await eventService.register(event.id, value.arrivalDate, value.departureDate, session.profile.id, dietary, allergyNotes?.trim() || null, dietComment?.trim() || null, bypass);
     return 'Registration saved';
+}
+
+function isDietaryEqual(reg: EventRegistration, dietary: DIETARY[], allergyNotes: string, dietComment: string) {
+    const localDiets: Set<DIETARY> = new Set();
+    let localAllergy;
+    let localComment;
+
+    for (const choice of reg.dietaryChoices) {
+        localDiets.add(choice.choice);
+        if (choice.choice === "ALLERGIES") {
+            localAllergy = choice.additionalInfo;
+        } else if (choice.choice === "COMMENT") {
+            localComment = choice.additionalInfo;
+        }
+    }
+
+    let ok = true;
+    for (const choice of dietary) {
+        if (!localDiets.delete(choice)) {
+            ok = false;
+            break;
+        }
+    }
+
+    return ok && localDiets.size === 0 && allergyNotes === localAllergy && dietComment === localComment;
 }
 
 function checkMeals(dietary: DIETARY[], allergyNotes: string, dietComment: string, body: any) {
@@ -262,6 +295,9 @@ function checkMeals(dietary: DIETARY[], allergyNotes: string, dietComment: strin
 }
 
 async function cancelRegistration(event: Event, session: Request['session']) {
+    if (event.bindingDeadline && new Date(Date.parse(event.bindingDeadline)) < new Date() && !event.allowRegCancelationAfterDeadline) {
+        throw new APIError('Cancellation is not allowed after registration deadline has passed', {}, 403);
+    }
     if (session.profile?.id) {
         await eventService.deleteRegistrationFor(event.id, session.profile.id);
     } else {
@@ -291,8 +327,11 @@ async function updateEventSettings(event: Event, body: any, permData?: PermBundl
         endDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow(''),
         location: Joi.string().max(255).allow(''),
         bindingDeadline: Joi.string().allow(''),
+        allowRegDateUpdatesAfterDeadline: Joi.string().allow('').allow('on'),
+        allowRegCancelationAfterDeadline: Joi.string().allow('').allow('on'),
         requireDietaryInfo: Joi.allow('').allow('on'),
         allowDietComment: Joi.allow('').allow('on'),
+        allowRegDietUpdateAfterDeadline: Joi.allow('').allow('on'),
         maxParticipants: Joi.number().positive().allow('').optional(),
         deadlineTz: Joi.string().allow(''),
     });
@@ -314,16 +353,22 @@ async function updateEventSettings(event: Event, body: any, permData?: PermBundl
     const update: {
         location?: string | null;
         bindingDeadline?: string | null;
+        allowRegDateUpdateAfterDeadline?: boolean;
+        allowRegCancelAfterDeadline?: boolean;
         requireDietaryInfo?: boolean;
         allowDietComment?: boolean;
+        allowDietUpdateAfterDeadline?: boolean;
         maxParticipants?: number;
         timezone?: string | null;
     } = {};
     if (value.location !== undefined) update.location = value.location || null;
     // Keep existing deadline unless the field was explicitly submitted.
     if (value.bindingDeadline !== undefined) update.bindingDeadline = timedDeadline || null;
+    if (value.allowRegDateUpdatesAfterDeadline !== undefined) update.allowRegDateUpdateAfterDeadline = value.allowRegDateUpdatesAfterDeadline === 'on';
+    if (value.allowRegCancelationAfterDeadline !== undefined) update.allowRegCancelAfterDeadline = value.allowRegCancelationAfterDeadline === 'on';
     if (value.requireDietaryInfo !== undefined) update.requireDietaryInfo = value.requireDietaryInfo === 'on';
     if (value.allowDietComment !== undefined) update.allowDietComment = value.allowDietComment === 'on';
+    if (value.allowRegDietUpdateAfterDeadline !== undefined) update.allowDietUpdateAfterDeadline = value.allowRegDietUpdateAfterDeadline === 'on';
     if (value.maxParticipants !== undefined) update.maxParticipants = value.maxParticipants || null;
     if (value.deadlineTz !== undefined) update.timezone = value.deadlineTz || null;
 
@@ -343,10 +388,14 @@ function checkUpdateSettingsPerms(normalizedBody: any, permData?: PermBundle) {
             || normalizedBody.startDate !== undefined
             || normalizedBody.endDate !== undefined
             || normalizedBody.bindingDeadline !== undefined
-            || normalizedBody.deadlineTz !== undefined) && !permData.entity.has("EDIT_META"))
+            || normalizedBody.deadlineTz !== undefined
+            || normalizedBody.allowRegDateUpdateAfterDeadline !== undefined
+            || normalizedBody.allowRegCancelAfterDeadline !== undefined) && !permData.entity.has("EDIT_META"))
         || (normalizedBody.title !== undefined && !permData.entity.has("EDIT_TITLE"))
         || (normalizedBody.description !== undefined && !permData.entity.has("EDIT_DESC"))
-        || (normalizedBody.requireDietaryInfo !== undefined && !permData.entity.has("MANAGE_REQUIREMENTS"))
+        || ((normalizedBody.requireDietaryInfo !== undefined
+            || normalizedBody.allowDietComment !== undefined
+            || normalizedBody.allowDietUpdateAfterDeadline !== undefined) && !permData.entity.has("MANAGE_REQUIREMENTS"))
         || (normalizedBody.maxParticipants !== undefined && !permData.entity.has("EDIT_CAPACITY"))
     ) {
         throw new APIError("Not allowed", normalizedBody, 403);

@@ -17,6 +17,7 @@
 // TypeORM-based implementation of the event module
 import {EntityManager, In, MoreThanOrEqual} from 'typeorm';
 import type {DIETARY, ParticipantRow} from "../../../types/EventTypes";
+import {WithRequired} from "../../../types/UtilTypes";
 import {ExpectedError} from "../../lib/errors";
 import {generateUniqueId, generateUniqueToken, now} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
@@ -36,17 +37,7 @@ import {registerForDefaultPools} from "./EventInvoiceService";
 
 export async function createEventTx(
     ownerId: string,
-    title: string,
-    desc: string | null,
-    startDate: string,       // 'YYYY-MM-DD'
-    endDate: string,         // 'YYYY-MM-DD'
-    location: string | null,
-    bindingDeadline: string | null, // ISO-like string from <input type="datetime-local">, may be null/empty
-    requireDietaryInfo: boolean,
-    allowDietComment: boolean,
-    maxParticipants: number | null,
-    timezone: string | null,
-    headerImg?: string | null,
+    eventData: WithRequired<Partial<Event>, "title" | "startDate" | "endDate">,
 ) {
     return await AppDataSource.transaction('READ COMMITTED', async (manager) => {
         const id = generateUniqueId();
@@ -55,17 +46,7 @@ export async function createEventTx(
         const ev = repo.create({
             id,
             owner: {id: ownerId},
-            title,
-            description: desc,
-            startDate,
-            endDate,
-            location,
-            timezone,
-            bindingDeadline: bindingDeadline,
-            requireDietaryInfo: requireDietaryInfo,
-            allowDietComment,
-            maxParticipants: maxParticipants,
-            headerImg,
+            ...eventData
         });
 
         await repo.save(ev);
@@ -96,8 +77,11 @@ export async function updateEventDescription(eventId: string, description: strin
 export async function updateEventMeta(eventId: string, fields: {
     location?: string | null;
     bindingDeadline?: string | null;
+    allowRegDateUpdateAfterDeadline?: boolean;
+    allowRegCancelAfterDeadline?: boolean;
     requireDietaryInfo?: boolean;
     allowDietComment?: boolean;
+    allowDietUpdateAfterDeadline?: boolean;
     maxParticipants?: number;
     timezone?: string | null;
 }) {
@@ -105,8 +89,11 @@ export async function updateEventMeta(eventId: string, fields: {
     if (fields.location !== undefined) patch.location = fields.location;
     if (fields.maxParticipants !== undefined) patch.maxParticipants = fields.maxParticipants;
     if (fields.bindingDeadline !== undefined) patch.bindingDeadline = fields.bindingDeadline;
+    if (fields.allowRegDateUpdateAfterDeadline !== undefined) patch.allowRegDateUpdatesAfterDeadline = fields.allowRegDateUpdateAfterDeadline;
+    if (fields.allowRegCancelAfterDeadline !== undefined) patch.allowRegCancelationAfterDeadline = fields.allowRegCancelAfterDeadline;
     if (fields.requireDietaryInfo !== undefined) patch.requireDietaryInfo = fields.requireDietaryInfo;
     if (fields.allowDietComment !== undefined) patch.allowDietComment = fields.allowDietComment;
+    if (fields.allowDietUpdateAfterDeadline !== undefined) patch.allowRegDietUpdateAfterDeadline = fields.allowDietUpdateAfterDeadline;
     if (fields.timezone !== undefined) patch.timezone = fields.timezone;
     if (Object.keys(patch).length === 0) return;
     await AppDataSource.getRepository(Event).update(eventId, patch);
@@ -204,7 +191,10 @@ export async function getEventParticipants(eventId: string): Promise<Participant
     const rows = await repo.find({
         where: {event: {id: eventId}},
         relations: {
-            profile: true,
+            profile: {
+                user: true,
+                guest: true,
+            },
             dietaryChoices: true
         },
         order: {id: 'ASC'},
