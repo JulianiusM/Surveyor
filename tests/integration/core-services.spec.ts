@@ -1,5 +1,20 @@
+/*
+ * Copyright 2026 Julian Malovanij
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import {PERM} from '../../src/modules/lib/permissions';
 import {AppDataSource} from '../../src/modules/database/dataSource';
 import {ActivitySlot} from '../../src/modules/database/entities/activity/ActivitySlot';
 import {DriversItem} from '../../src/modules/database/entities/drivers/DriversItem';
@@ -13,6 +28,7 @@ import * as eventService from '../../src/modules/database/services/EventService'
 import * as packingService from '../../src/modules/database/services/PackingService';
 import * as surveyService from '../../src/modules/database/services/SurveyService';
 import * as userService from '../../src/modules/database/services/UserService';
+import {PERM} from '../../src/modules/lib/permissions';
 import {
     createActivitySlotEntity,
     createDriversItemEntity,
@@ -87,7 +103,18 @@ describe('database-backed core service smoke suite', () => {
     describe('events and connected modules', () => {
         it('creates, loads, and updates an event owned by a real profile', async () => {
             // Canary: the central event lifecycle persists its user-visible fields and ownership.
-            const eventId = await eventService.createEventTx(owner.id, 'Summer Camp', 'Annual camp', '2026-08-06', '2026-08-09', 'Lake', null, true, true, 40, 'UTC');
+            const eventId = await eventService.createEventTx(owner.id, {
+                title: 'Summer Camp',
+                description: 'Annual camp',
+                startDate: '2026-08-06',
+                endDate: '2026-08-09',
+                location: 'Lake',
+                bindingDeadline: null,
+                requireDietaryInfo: true,
+                allowDietComment: true,
+                maxParticipants: 40,
+                timezone: 'UTC'
+            });
             await eventService.updateEventDescription(eventId, 'Updated annual camp');
 
             expect(await eventService.getEventById(eventId)).toMatchObject({
@@ -100,8 +127,16 @@ describe('database-backed core service smoke suite', () => {
 
         it('returns only events belonging to the requested owner', async () => {
             // Canary: dashboards must not mix another organizer's events into the owner list.
-            await eventService.createEventTx(owner.id, 'Owner Event', null, '2026-09-01', '2026-09-02', null, null, false, false, null, 'UTC');
-            await eventService.createEventTx(participant.id, 'Participant Event', null, '2026-09-03', '2026-09-04', null, null, false, false, null, 'UTC');
+            await eventService.createEventTx(owner.id, {
+                title: 'Owner Event',
+                startDate: '2026-09-01',
+                endDate: '2026-09-02'
+            });
+            await eventService.createEventTx(participant.id, {
+                title: 'Participant Event',
+                startDate: '2026-09-03',
+                endDate: '2026-09-04'
+            });
 
             const events = await eventService.getEventsByOwnerId(owner.id);
             expect(events.map((event) => event.title)).toContain('Owner Event');
@@ -124,7 +159,10 @@ describe('database-backed core service smoke suite', () => {
 
         it('stores and reloads a participant survey response', async () => {
             // Canary: voting must connect the survey, choice, participant, and answer in MariaDB.
-            const surveyId = await surveyService.createSurveyTx(owner.id, 'Meal Survey', 'Choose', [{weekday: 'TUE', week: '2'}]);
+            const surveyId = await surveyService.createSurveyTx(owner.id, 'Meal Survey', 'Choose', [{
+                weekday: 'TUE',
+                week: '2'
+            }]);
             const [combination] = await surveyService.getCombinationsBySurveyId(surveyId);
             await surveyService.saveResponse(surveyId, participant.id, combination.id, 'yes');
 
@@ -137,7 +175,10 @@ describe('database-backed core service smoke suite', () => {
 
         it('groups persisted survey results by participant for result views', async () => {
             // Canary: survey result pages need names and answers joined from the persisted entity graph.
-            const surveyId = await surveyService.createSurveyTx(owner.id, 'Travel Survey', 'Choose', [{weekday: 'THU', week: '4'}]);
+            const surveyId = await surveyService.createSurveyTx(owner.id, 'Travel Survey', 'Choose', [{
+                weekday: 'THU',
+                week: '4'
+            }]);
             const [combination] = await surveyService.getCombinationsBySurveyId(surveyId);
             await surveyService.saveResponse(surveyId, participant.id, combination.id, 'maybe');
 
@@ -153,7 +194,10 @@ describe('database-backed core service smoke suite', () => {
 
         it('replaces a participant survey submission cleanly', async () => {
             // Canary: resubmitting a ballot must remove stale choices before the new answers are stored.
-            const surveyId = await surveyService.createSurveyTx(owner.id, 'Replacement Survey', 'Choose', [{weekday: 'SAT', week: '2'}]);
+            const surveyId = await surveyService.createSurveyTx(owner.id, 'Replacement Survey', 'Choose', [{
+                weekday: 'SAT',
+                week: '2'
+            }]);
             const [combination] = await surveyService.getCombinationsBySurveyId(surveyId);
             await surveyService.saveResponse(surveyId, participant.id, combination.id, 'yes');
             await surveyService.deleteResponsesByProfileId(participant.id, surveyId);
@@ -167,7 +211,10 @@ describe('database-backed core service smoke suite', () => {
             const planId = await activityService.createActivityPlanTx(owner.id, 'Camp Duties', 'Shared work', '2026-08-06', '2026-08-09', [slot]);
             const slots = await AppDataSource.getRepository(ActivitySlot).findBy({entity: {id: planId}});
 
-            expect(await activityService.getActivityPlanById(planId)).toMatchObject({title: 'Camp Duties', ownerId: owner.id});
+            expect(await activityService.getActivityPlanById(planId)).toMatchObject({
+                title: 'Camp Duties',
+                ownerId: owner.id
+            });
             expect(slots).toHaveLength(1);
             expect(slots[0]).toMatchObject({title: slot.title, day: slot.day, maxAssignees: slot.maxAssignees});
         });
@@ -221,8 +268,14 @@ describe('database-backed core service smoke suite', () => {
             const item = createPackingItemEntity();
             const listId = await packingService.createPackingListTx(owner.id, 'Camp Packing', 'Shared equipment', [item]);
 
-            expect(await packingService.getPackingListById(listId)).toMatchObject({title: 'Camp Packing', ownerId: owner.id});
-            expect(await packingService.getPackingItems(listId)).toContainEqual(expect.objectContaining({title: item.title, assignedCount: 0}));
+            expect(await packingService.getPackingListById(listId)).toMatchObject({
+                title: 'Camp Packing',
+                ownerId: owner.id
+            });
+            expect(await packingService.getPackingItems(listId)).toContainEqual(expect.objectContaining({
+                title: item.title,
+                assignedCount: 0
+            }));
         });
 
         it('persists packing assignments and exposes their item ids', async () => {
@@ -249,7 +302,11 @@ describe('database-backed core service smoke suite', () => {
 
         it('creates a drivers list and reloads its event relationship', async () => {
             // Canary: event-linked driver coordination remains visible from both modules.
-            const eventId = await eventService.createEventTx(owner.id, 'Travel Event', null, '2026-10-01', '2026-10-02', null, null, false, false, null, 'UTC');
+            const eventId = await eventService.createEventTx(owner.id, {
+                title: 'Travel Event',
+                startDate: '2026-10-01',
+                endDate: '2026-10-02'
+            });
             const listId = await driverService.createDriversList(owner.id, 'Airport Drivers', 'Travel coordination', eventId);
 
             expect(await driverService.getDriversListById(listId)).toMatchObject({
@@ -286,8 +343,20 @@ describe('database-backed core service smoke suite', () => {
 
         it('updates event metadata and dates used by registration screens', async () => {
             // Canary: organizer edits to capacity, location, dates, and dietary settings survive together.
-            const eventId = await eventService.createEventTx(owner.id, 'Editable Event', null, '2026-12-01', '2026-12-02', null, null, false, false, null, 'UTC');
-            await eventService.updateEventMeta(eventId, {location: 'Mountain Lodge', maxParticipants: 24, requireDietaryInfo: true, allowDietComment: true});
+            const eventId = await eventService.createEventTx(owner.id, {
+                title: 'Editable Event',
+                startDate: '2026-12-01',
+                endDate: '2026-12-02'
+            });
+            await eventService.updateEventMeta(eventId, {
+                location: 'Mountain Lodge',
+                maxParticipants: 24,
+                requireDietaryInfo: true,
+                allowDietComment: true,
+                allowDietUpdateAfterDeadline: true,
+                allowRegCancelAfterDeadline: true,
+                allowRegDateUpdateAfterDeadline: true
+            });
             await eventService.updateEventDates(eventId, '2026-12-03', '2026-12-05');
 
             const event = await eventService.getEventById(eventId);
@@ -299,13 +368,20 @@ describe('database-backed core service smoke suite', () => {
             });
             expect(Boolean(event?.requireDietaryInfo)).toBe(true);
             expect(Boolean(event?.allowDietComment)).toBe(true);
+            expect(Boolean(event?.allowRegDietUpdateAfterDeadline)).toBe(true);
+            expect(Boolean(event?.allowRegCancelationAfterDeadline)).toBe(true);
+            expect(Boolean(event?.allowRegDateUpdatesAfterDeadline)).toBe(true);
         });
     });
 
     describe('persisted permissions', () => {
         it('saves and updates a delegated administrator permission mask', async () => {
             // Canary: delegated administration must be enforced from persisted ACL state, not mocks.
-            const eventId = await eventService.createEventTx(owner.id, 'Managed Event', null, '2026-11-01', '2026-11-02', null, null, false, false, null, 'UTC');
+            const eventId = await eventService.createEventTx(owner.id, {
+                title: 'Managed Event',
+                startDate: '2026-11-01',
+                endDate: '2026-11-02'
+            });
             await entityAdminService.addAdmin('event', eventId, participant.id, PERM.ACCESS_VIEW);
             await entityAdminService.updateAdminPerms('event', eventId, participant.id, PERM.ACCESS_ADMIN | PERM.ACCESS_VIEW);
 
@@ -315,7 +391,10 @@ describe('database-backed core service smoke suite', () => {
 
         it('persists default audience permissions for a shared entity', async () => {
             // Canary: public and participant access configured by organizers survives a database round trip.
-            const surveyId = await surveyService.createSurveyTx(owner.id, 'Shared Survey', 'Visibility', [{weekday: 'WED', week: '3'}]);
+            const surveyId = await surveyService.createSurveyTx(owner.id, 'Shared Survey', 'Visibility', [{
+                weekday: 'WED',
+                week: '3'
+            }]);
             await entityAdminService.updatePerms('survey', surveyId, {
                 public: PERM.ACCESS_VIEW,
                 authenticated: PERM.ACCESS_VIEW | PERM.ITEM_ADD,
@@ -329,7 +408,11 @@ describe('database-backed core service smoke suite', () => {
 
         it('lists and removes persisted delegated administration', async () => {
             // Canary: removing a delegated organizer must immediately remove the entity from managed lists.
-            const eventId = await eventService.createEventTx(owner.id, 'Delegated Event', null, '2027-01-01', '2027-01-02', null, null, false, false, null, 'UTC');
+            const eventId = await eventService.createEventTx(owner.id, {
+                title: 'Delegated Event',
+                startDate: '2027-01-01',
+                endDate: '2027-01-02'
+            });
             await entityAdminService.addAdmin('event', eventId, participant.id, PERM.ACCESS_ADMIN);
             expect(await entityAdminService.getIds('event', participant.id, PERM.ACCESS_ADMIN)).toContain(eventId);
 
