@@ -18,6 +18,7 @@ import {ActivityAssignmentRecommendation} from "../database/entities/activity/Ac
 import {ActivityPlan} from "../database/entities/activity/ActivityPlan";
 import {ActivityPlanRequirement} from "../database/entities/activity/ActivityPlanRequirement";
 import {ActivityPlanRequirementOverride} from "../database/entities/activity/ActivityPlanRequirementOverride";
+import {ActivityPlanStayRequirement} from "../database/entities/activity/ActivityPlanStayRequirement";
 import {ActivitySlot} from "../database/entities/activity/ActivitySlot";
 import * as recommendationService from "../database/services/ActivityRecommendationService";
 import {RecommendationInput} from "../database/services/ActivityRecommendationService";
@@ -61,6 +62,7 @@ export interface AutoAssignmentContext {
     participants: ParticipantAttendance[];
     roleRequirements: ActivityPlanRequirement[];
     overrides: ActivityPlanRequirementOverride[];
+    stayRequirements: ActivityPlanStayRequirement[];
     existingAssignments: Record<string, AssignmentCandidate[]>;
     existingRecommendations?: RecommendationInput[];
 }
@@ -103,6 +105,7 @@ function buildParticipantStates(
         ctx.participants,
         ctx.roleRequirements,
         ctx.overrides,
+        ctx.stayRequirements,
     );
 
     const states = new Map<string, ParticipantState>();
@@ -844,6 +847,7 @@ export async function generatePlanRecommendations(
         participants,
         roleRequirements: requirementConfig.roleRequirements,
         overrides: requirementConfig.overrides,
+        stayRequirements: requirementConfig.stayRequirements,
         existingAssignments,
         existingRecommendations: existingRecommendationsInput,
     };

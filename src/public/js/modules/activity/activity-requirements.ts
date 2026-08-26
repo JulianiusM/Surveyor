@@ -1,3 +1,19 @@
+/*
+ * Copyright 2026 Julian Malovanij
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 /**
  * Activity Requirements Panel Module
  * Handles the requirements configuration panel
@@ -6,8 +22,186 @@
 import {formatDateLabel, toDateTimeLocalValue, toISOStringOrNull} from "../../core/formatting";
 import {get, post} from '../../core/http';
 import {showInlineAlert} from '../../shared/alerts';
+import {renderParticipantStatus} from './activity-participants';
 import {getAllRoles} from "./activity-roles";
 import type {RequirementConfiguration, RequirementParticipantSummary} from './activity-types';
+
+export interface RequirementDraft {
+    assignmentMode: 'FREE' | 'REQUIRED';
+    generalRequiredShifts: number | null;
+    roundingMode: RequirementConfiguration['plan']['roundingMode'];
+    allowOverfillAfterFull: boolean;
+    roleRequirements: RequirementConfiguration['roleRequirements'];
+    stayRequirements: RequirementConfiguration['stayRequirements'];
+    overrides: RequirementConfiguration['overrides'];
+}
+
+export interface RequirementCoverageStatus {
+    state: 'inactive' | 'exact' | 'acceptable' | 'conflict';
+    variant: 'secondary' | 'success' | 'warning' | 'danger';
+    icon: string;
+    title: string;
+    detail: string;
+}
+
+const normalizeShiftCount = (value: number | null | undefined): number => {
+    if (value == null || !Number.isFinite(value)) return 0;
+    return Math.max(Math.trunc(value), 0);
+};
+
+const applyRequirementRounding = (
+    value: number,
+    mode?: RequirementConfiguration['plan']['roundingMode'],
+): number => {
+    if (mode === 'FLOOR') return Math.floor(value);
+    if (mode === 'ROUND') return Math.round(value);
+    return Math.ceil(value);
+};
+
+export function calculateLiveRequirementSummary(
+    config: RequirementConfiguration,
+    draft: RequirementDraft,
+): RequirementParticipantSummary[] {
+    const planDays = Math.max(countInclusivePlanDays(config.plan.startDate, config.plan.endDate), 1);
+
+    return (config.participants || []).map((participant) => {
+        const attendanceDays = Math.min(Math.max(participant.attendanceDays, 0), planDays);
+        const attendanceRatio = attendanceDays / planDays;
+        const roleIds = participant.roleIds || [];
+        const profileId = participant.participantKey.startsWith('profile:')
+            ? participant.participantKey.slice('profile:'.length)
+            : null;
+        const matchingOverrides = draft.overrides.filter((override) => {
+            if (!profileId || override.profileId !== profileId) return false;
+            return override.roleId == null || roleIds.includes(Number(override.roleId));
+        });
+        const override = matchingOverrides.find((entry) => entry.roleId != null) ?? matchingOverrides[0];
+
+        let requiredShifts = 0;
+        let source: RequirementParticipantSummary['source'] = 'none';
+
+        if (draft.assignmentMode === 'REQUIRED') {
+            const matchingRoleRequirements = draft.roleRequirements
+                .filter((requirement) => roleIds.includes(Number(requirement.roleId)))
+                .map((requirement) => applyRequirementRounding(
+                    normalizeShiftCount(requirement.requiredShifts) * attendanceRatio,
+                    draft.roundingMode,
+                ));
+            const roleRequirement = matchingRoleRequirements.length
+                ? Math.min(...matchingRoleRequirements)
+                : 0;
+            const stayRequirement = draft.stayRequirements.find(
+                (requirement) => Number(requirement.stayDays) === attendanceDays,
+            );
+            const generalRequirement = stayRequirement
+                ? normalizeShiftCount(stayRequirement.requiredShifts)
+                : applyRequirementRounding(
+                    normalizeShiftCount(draft.generalRequiredShifts) * attendanceRatio,
+                    draft.roundingMode,
+                );
+
+            if (override) {
+                requiredShifts = normalizeShiftCount(override.requiredShifts);
+                source = 'override';
+            } else if (roleRequirement > 0) {
+                requiredShifts = roleRequirement;
+                source = 'role';
+            } else if (generalRequirement > 0) {
+                requiredShifts = generalRequirement;
+                source = 'general';
+            }
+        } else if (override) {
+            requiredShifts = normalizeShiftCount(override.requiredShifts);
+            source = 'override';
+        }
+
+        return {
+            ...participant,
+            requiredShifts,
+            remainingShifts: Math.max(requiredShifts - participant.assignedShifts, 0),
+            source,
+        };
+    });
+}
+
+export function evaluateRequirementCoverage(
+    availableSlots: number,
+    requiredSlots: number,
+    allowOverfill: boolean,
+    assignmentMode: 'FREE' | 'REQUIRED',
+): RequirementCoverageStatus {
+    const slotTarget = normalizeShiftCount(availableSlots);
+    const requirementTotal = normalizeShiftCount(requiredSlots);
+    const deviation = requirementTotal - slotTarget;
+
+    if (assignmentMode !== 'REQUIRED') {
+        return {
+            state: 'inactive',
+            variant: 'secondary',
+            icon: 'bi-sliders',
+            title: 'Free assignment mode',
+            detail: 'No coverage constraint applies until Required mode is selected.',
+        };
+    }
+
+    if (deviation === 0) {
+        return {
+            state: 'exact',
+            variant: 'success',
+            icon: 'bi-check-circle-fill',
+            title: 'Exact coverage',
+            detail: 'Participant requirements match the slot target exactly.',
+        };
+    }
+
+    const amount = Math.abs(deviation);
+    const units = amount === 1 ? 'assignment' : 'assignments';
+
+    if (allowOverfill && deviation > 0) {
+        return {
+            state: 'acceptable',
+            variant: 'warning',
+            icon: 'bi-arrow-up-circle-fill',
+            title: `Above slot capacity by ${amount}`,
+            detail: `Overfill allows these ${units}; exact coverage remains the goal.`,
+        };
+    }
+
+    if (allowOverfill) {
+        return {
+            state: 'conflict',
+            variant: 'danger',
+            icon: 'bi-exclamation-octagon-fill',
+            title: `Short of slot capacity by ${amount}`,
+            detail: `Increase participant requirements by ${amount} ${units} to cover every slot.`,
+        };
+    }
+
+    if (deviation > 0) {
+        return {
+            state: 'conflict',
+            variant: 'danger',
+            icon: 'bi-exclamation-octagon-fill',
+            title: `Hard slot capacity exceeded by ${amount}`,
+            detail: `Reduce participant requirements by ${amount} ${units} to stay within capacity.`,
+        };
+    }
+
+    return {
+        state: 'acceptable',
+        variant: 'warning',
+        icon: 'bi-arrow-down-circle-fill',
+        title: `Below hard slot capacity by ${amount}`,
+        detail: `${amount} ${amount === 1 ? 'slot remains' : 'slots remain'} uncovered; exact coverage remains the goal.`,
+    };
+}
+
+function countInclusivePlanDays(startDate: string, endDate: string): number {
+    const start = Date.parse(`${startDate}T00:00:00Z`);
+    const end = Date.parse(`${endDate}T00:00:00Z`);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 0;
+    return Math.floor((end - start) / 86_400_000) + 1;
+}
 
 /**
  * Initialize the requirements panel
@@ -18,22 +212,27 @@ export function initRequirementPanel(planId: string): void {
     if (!panel) return;
 
     const roleList = panel.querySelector<HTMLElement>('#roleRequirementList');
+    const stayRequirementList = panel.querySelector<HTMLElement>('#stayRequirementList');
     const overrideList = panel.querySelector<HTMLElement>('#overrideList');
     const alertBox = panel.querySelector<HTMLElement>('[data-requirements-alert]');
     const addOverrideBtn = panel.querySelector<HTMLButtonElement>('[data-add-override]');
     const reloadBtn = panel.querySelector<HTMLButtonElement>('[data-requirements-refresh]');
-    const saveBtn = panel.querySelector<HTMLButtonElement>('[data-requirements-save]');
-    const summaryBody = document.querySelector<HTMLElement>('#requirementSummaryBody');
-    const summaryStats = document.querySelector<HTMLElement>('#requirementSummaryStats');
+    const saveButtons = Array.from(panel.querySelectorAll<HTMLButtonElement>('[data-requirements-save]'));
+    const participantStatus = document.querySelector<HTMLElement>('#requirement-participant-status');
+    const coverageStatus = panel.querySelector<HTMLElement>('#requirementCoverageStatus');
     const assignmentMode = panel.querySelector<HTMLSelectElement>('#assignmentMode');
     const generalRequired = panel.querySelector<HTMLInputElement>('#requiredShifts');
     const roundingMode = panel.querySelector<HTMLSelectElement>('#roundingMode');
     const bindingDeadline = panel.querySelector<HTMLInputElement>('#bindingDeadline');
     const allowOverfill = panel.querySelector<HTMLInputElement>('#allowOverfill');
+    const allowExternalAssignees = panel.querySelector<HTMLInputElement>('#allowExternalAssignees');
     const allowArrivalEvening = panel.querySelector<HTMLInputElement>('#allowArrivalEvening');
     const allowDepartureMorning = panel.querySelector<HTMLInputElement>('#allowDepartureMorning');
     const baselineCalcBtn = panel.querySelector<HTMLButtonElement>('[data-requirements-baseline-calc]');
     let overrideTargets: RequirementConfiguration['overrideTargets'] = [];
+    let loadedConfig: RequirementConfiguration | undefined;
+    let refreshLivePreview: () => void = () => undefined;
+    let requirementsDirty = false;
     type OverrideTarget = NonNullable<RequirementConfiguration['overrideTargets']>[number];
 
     const setAlert = (message?: string, variant: 'info' | 'danger' = 'info') => {
@@ -48,6 +247,20 @@ export function initRequirementPanel(planId: string): void {
         alertBox.classList.remove('d-none', 'alert-danger', 'alert-info');
         alertBox.classList.add(variant === 'danger' ? 'alert-danger' : 'alert-info');
         target.textContent = message;
+    };
+
+    const setRequirementsDirty = (dirty: boolean) => {
+        requirementsDirty = dirty;
+        saveButtons.forEach((button) => {
+            button.disabled = !dirty;
+            button.title = dirty ? 'Save requirement settings' : 'Requirement settings are saved';
+        });
+
+        const badge = panel.querySelector<HTMLElement>('[data-requirements-dirty]');
+        if (badge) {
+            badge.className = dirty ? 'badge bg-warning text-dark' : 'badge bg-light text-dark';
+            badge.textContent = dirty ? 'Unsaved changes' : 'Saved';
+        }
     };
 
     const participantValue = (target?: OverrideTarget) => {
@@ -75,6 +288,7 @@ export function initRequirementPanel(planId: string): void {
     const updateParticipantHint = (select?: HTMLSelectElement | null, hint?: HTMLElement | null) => {
         if (!select || !hint) return;
         const option = select.selectedOptions[0];
+        select.title = option?.textContent?.trim() ?? '';
         if (!select.value) {
             hint.classList.remove('text-warning');
             hint.classList.add('text-secondary');
@@ -104,104 +318,42 @@ export function initRequirementPanel(planId: string): void {
             : '';
     };
 
-    const updateRequirementSummaryStats = (summary: RequirementParticipantSummary[] = []) => {
-        if (!summaryStats) return;
-        summaryStats.innerHTML = '';
+    const renderCoverageStatus = (
+        capacity: NonNullable<RequirementConfiguration['capacitySummary']>,
+        draft: RequirementDraft,
+    ) => {
+        if (!coverageStatus) return;
+        const status = evaluateRequirementCoverage(
+            capacity.availableSlots,
+            capacity.requiredSlots,
+            draft.allowOverfillAfterFull,
+            draft.assignmentMode,
+        );
+        const title = coverageStatus.querySelector<HTMLElement>('[data-coverage-title]');
+        const detail = coverageStatus.querySelector<HTMLElement>('[data-coverage-detail]');
+        const icon = coverageStatus.querySelector<HTMLElement>('[data-coverage-icon]');
+        const counts = coverageStatus.querySelector<HTMLElement>('[data-coverage-counts]');
 
-        if (!summary.length) {
-            const span = document.createElement('span');
-            span.className = 'text-secondary';
-            span.textContent = 'No participants yet.';
-            summaryStats.append(span);
-            return;
+        coverageStatus.classList.remove('alert-secondary', 'alert-success', 'alert-warning', 'alert-danger');
+        coverageStatus.classList.add(`alert-${status.variant}`);
+        coverageStatus.dataset.coverageState = status.state;
+        if (title) title.textContent = status.title;
+        if (detail) detail.textContent = status.detail;
+        if (icon) icon.className = `bi ${status.icon} mt-1`;
+        if (counts) {
+            counts.innerHTML = '';
+            const previewBadge = document.createElement('span');
+            previewBadge.dataset.requirementsDirty = 'true';
+            previewBadge.className = requirementsDirty ? 'badge bg-warning text-dark' : 'badge bg-light text-dark';
+            previewBadge.textContent = requirementsDirty ? 'Unsaved changes' : 'Saved';
+            const slotBadge = document.createElement('span');
+            slotBadge.className = 'badge bg-dark text-white';
+            slotBadge.textContent = `Slot capacity: ${capacity.availableSlots}`;
+            const requirementBadge = document.createElement('span');
+            requirementBadge.className = 'badge bg-dark text-white';
+            requirementBadge.textContent = `Required shifts: ${capacity.requiredSlots}`;
+            counts.append(previewBadge, slotBadge, requirementBadge);
         }
-
-        let ok = 0;
-        let under = 0;
-        let over = 0;
-        summary.forEach((entry) => {
-            if (entry.remainingShifts > 0) {
-                under += 1;
-            } else if (entry.remainingShifts < 0) {
-                over += 1;
-            } else {
-                ok += 1;
-            }
-        });
-
-        const total = summary.length;
-
-        const pieces: { label: string; value: number; className: string }[] = [
-            {label: 'Total', value: total, className: 'badge bg-secondary text-white me-1'},
-            {label: 'Satisfied', value: ok, className: 'badge bg-success text-white me-1'},
-            {label: 'Under-assigned', value: under, className: 'badge bg-warning text-dark me-1'},
-            {label: 'Over-assigned', value: over, className: 'badge bg-danger text-white me-1'},
-        ];
-
-        pieces.forEach(({label, value, className}) => {
-            const span = document.createElement('span');
-            span.className = className;
-            span.textContent = `${label}: ${value}`;
-            summaryStats.append(span);
-        });
-    };
-
-    const renderRequirementSummary = (summary: RequirementParticipantSummary[] = []) => {
-        if (!summaryBody) return;
-        summaryBody.innerHTML = '';
-        updateRequirementSummaryStats(summary);
-
-        if (!summary.length) {
-            const row = document.createElement('tr');
-            const cell = document.createElement('td');
-            cell.colSpan = 5;
-            cell.className = 'text-center text-secondary pt-3';
-            cell.textContent = 'No participants yet.';
-            row.append(cell);
-            summaryBody.append(row);
-            return;
-        }
-
-        summary.forEach((entry) => {
-            const row = document.createElement('tr');
-
-            const nameCell = document.createElement('td');
-            nameCell.textContent = entry.name || entry.participantKey;
-
-            const requiredCell = document.createElement('td');
-            requiredCell.className = 'text-center';
-            const badge = document.createElement('span');
-            badge.className = 'badge bg-secondary text-white';
-            badge.textContent = `${entry.requiredShifts} required / ${entry.assignedShifts} assigned`;
-            requiredCell.append(badge);
-
-            const remainingCell = document.createElement('td');
-            remainingCell.className = 'text-center';
-            const remainingBadge = document.createElement('span');
-            remainingBadge.className = entry.remainingShifts > 0
-                ? 'badge bg-warning text-dark'
-                : 'badge bg-success text-white';
-            remainingBadge.textContent = `${entry.remainingShifts} remaining`;
-            remainingCell.append(remainingBadge);
-
-            const attendanceCell = document.createElement('td');
-            attendanceCell.className = 'text-center small';
-            const arrival = entry.attendance?.arrivalDate ? formatDateLabel(entry.attendance.arrivalDate) : '';
-            const departure = entry.attendance?.departureDate ? formatDateLabel(entry.attendance.departureDate) : '';
-            attendanceCell.textContent = arrival || departure
-                ? `${arrival || 'start'} – ${departure || 'end'}`
-                : '—';
-
-            const sourceCell = document.createElement('td');
-            sourceCell.className = 'text-center';
-            const sourceBadge = document.createElement('span');
-            sourceBadge.className = 'badge bg-info text-white text-uppercase';
-            sourceBadge.textContent = entry.source;
-            sourceCell.append(sourceBadge);
-
-            row.append(nameCell, requiredCell, remainingCell, attendanceCell, sourceCell);
-            summaryBody.append(row);
-        });
     };
 
     const buildRoleRequirementInputs = (config: RequirementConfiguration) => {
@@ -222,6 +374,7 @@ export function initRequirementPanel(planId: string): void {
             const input = document.createElement('input');
             input.type = 'number';
             input.min = '0';
+            input.step = '1';
             input.className = 'form-control form-control-sm text-bg-dark';
             input.placeholder = '0';
             input.dataset.roleId = String(role.id);
@@ -233,14 +386,73 @@ export function initRequirementPanel(planId: string): void {
         });
     };
 
+    const buildStayRequirementInputs = (
+        plan: RequirementConfiguration['plan'],
+        requirements: RequirementConfiguration['stayRequirements'],
+    ) => {
+        if (!stayRequirementList) return;
+        stayRequirementList.innerHTML = '';
+
+        const planDays = countInclusivePlanDays(plan.startDate, plan.endDate);
+        const configured = new Map(requirements.map((requirement) => [requirement.stayDays, requirement.requiredShifts]));
+
+        for (let stayDays = 1; stayDays <= planDays; stayDays += 1) {
+            const wrap = document.createElement('div');
+            wrap.className = 'stay-requirement-item d-grid gap-1';
+
+            const label = document.createElement('label');
+            label.className = 'form-label small mb-0 text-nowrap';
+            label.htmlFor = `stayRequirement-${stayDays}`;
+            label.textContent = `${stayDays} ${stayDays === 1 ? 'day' : 'days'}`;
+
+            const input = document.createElement('input');
+            input.id = `stayRequirement-${stayDays}`;
+            input.type = 'number';
+            input.min = '0';
+            input.step = '1';
+            input.className = 'form-control form-control-sm text-bg-dark';
+            input.dataset.stayDays = String(stayDays);
+            input.setAttribute('aria-label', `Required shifts for a ${stayDays}-day stay`);
+
+            const savedValue = configured.get(stayDays);
+            if (savedValue != null) {
+                input.value = String(savedValue);
+            } else if (plan.generalRequiredShifts != null && planDays > 0) {
+                input.value = String(applyRequirementRounding(
+                    plan.generalRequiredShifts * (stayDays / planDays),
+                    plan.roundingMode,
+                ));
+            }
+
+            wrap.append(label, input);
+            stayRequirementList.append(wrap);
+        }
+
+        if (planDays === 0) {
+            const empty = document.createElement('span');
+            empty.className = 'text-secondary small';
+            empty.textContent = 'No valid stay durations are available.';
+            stayRequirementList.append(empty);
+        }
+    };
+
+    const populateStayRequirementValues = (requirements: RequirementConfiguration['stayRequirements']) => {
+        if (!stayRequirementList) return;
+        const values = new Map(requirements.map((requirement) => [requirement.stayDays, requirement.requiredShifts]));
+        stayRequirementList.querySelectorAll<HTMLInputElement>('input[data-stay-days]').forEach((input) => {
+            const value = values.get(Number(input.dataset.stayDays));
+            input.value = value == null ? '' : String(value);
+        });
+    };
+
     const buildOverrideRow = (override?: RequirementConfiguration['overrides'][number]) => {
         if (!overrideList) return;
         const row = document.createElement('div');
-        row.className = 'row align-items-start override-row border border-secondary-subtle rounded p-2';
+        row.className = 'row g-2 align-items-end override-row border border-secondary-subtle rounded p-2 mx-0';
         if (override?.id) row.dataset.overrideId = String(override.id);
 
         const colTarget = document.createElement('div');
-        colTarget.className = 'col-md-5 d-grid gap-1 m-auto';
+        colTarget.className = 'col-12 col-lg-7 d-grid gap-1';
         const targetLabel = document.createElement('label');
         targetLabel.className = 'form-label small mb-0';
         targetLabel.textContent = 'Participant';
@@ -287,14 +499,14 @@ export function initRequirementPanel(planId: string): void {
         }
 
         const targetHint = document.createElement('div');
-        targetHint.className = 'form-text text-secondary small';
+        targetHint.className = 'form-text text-secondary small override-attendance-hint mt-1';
         updateParticipantHint(participantSelect, targetHint);
         participantSelect.addEventListener('change', () => updateParticipantHint(participantSelect, targetHint));
 
         colTarget.append(targetLabel, participantSelect, targetHint);
 
         const colRole = document.createElement('div');
-        colRole.className = 'col-md-3 d-grid gap-1 m-auto';
+        colRole.className = 'col-6 col-lg-2 d-grid gap-1';
         const roleLabel = document.createElement('label');
         roleLabel.className = 'form-label small mb-0';
         roleLabel.textContent = 'Role (optional)';
@@ -308,25 +520,30 @@ export function initRequirementPanel(planId: string): void {
         colRole.append(roleLabel, roleSelect);
 
         const colReq = document.createElement('div');
-        colReq.className = 'col-md-3 d-grid gap-1 m-auto';
+        colReq.className = 'col-5 col-lg-2 d-grid gap-1';
         const reqLabel = document.createElement('label');
         reqLabel.className = 'form-label small mb-0';
         reqLabel.textContent = 'Required shifts';
         const reqInput = document.createElement('input');
         reqInput.type = 'number';
         reqInput.min = '0';
+        reqInput.step = '1';
         reqInput.className = 'form-control form-control-sm text-bg-dark';
         reqInput.dataset.overrideTarget = 'required';
         reqInput.value = override?.requiredShifts != null ? String(override.requiredShifts) : '0';
         colReq.append(reqLabel, reqInput);
 
         const colRemove = document.createElement('div');
-        colRemove.className = 'col-md-1 d-flex align-items-end m-auto py-3';
+        colRemove.className = 'col-1 col-lg-1 d-grid';
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'btn btn-sm btn-outline-danger w-100';
         removeBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
-        removeBtn.addEventListener('click', () => row.remove());
+        removeBtn.addEventListener('click', () => {
+            row.remove();
+            setRequirementsDirty(true);
+            refreshLivePreview();
+        });
         colRemove.append(removeBtn);
 
         row.append(colTarget, colRole, colReq, colRemove);
@@ -361,6 +578,7 @@ export function initRequirementPanel(planId: string): void {
     };
 
     const populateForm = (config: RequirementConfiguration) => {
+        loadedConfig = config;
         if (assignmentMode) assignmentMode.value = config.plan.assignmentMode || 'FREE';
         if (generalRequired) {
             const value = config.plan.generalRequiredShifts;
@@ -369,6 +587,7 @@ export function initRequirementPanel(planId: string): void {
         if (roundingMode) roundingMode.value = config.plan.roundingMode || '';
         if (bindingDeadline) bindingDeadline.value = toDateTimeLocalValue(config.plan.bindingDeadline ?? null);
         if (allowOverfill) allowOverfill.checked = Boolean(config.plan.allowOverfillAfterFull);
+        if (allowExternalAssignees) allowExternalAssignees.checked = Boolean(config.plan.allowExternalAssignees);
         if (allowArrivalEvening) allowArrivalEvening.checked = Boolean(config.plan.allowArrivalDayEvening ?? true);
         if (allowDepartureMorning) allowDepartureMorning.checked = Boolean(config.plan.allowDepartureDayMorning ?? true);
 
@@ -376,8 +595,10 @@ export function initRequirementPanel(planId: string): void {
         setOverrideControlsState();
 
         buildRoleRequirementInputs(config);
+        buildStayRequirementInputs(config.plan, config.stayRequirements || []);
         renderOverrides(config);
-        renderRequirementSummary(config.participants || []);
+        setRequirementsDirty(false);
+        refreshLivePreview();
     };
 
     const loadRequirements = async () => {
@@ -403,7 +624,13 @@ export function initRequirementPanel(planId: string): void {
             }
 
             if (generalRequired) generalRequired.value = String(baseline);
-            setAlert(`Baseline requirement set to ${baseline}`);
+            const stayRequirements = Array.isArray(res.data?.stayRequirements)
+                ? res.data.stayRequirements as RequirementConfiguration['stayRequirements']
+                : [];
+            populateStayRequirementValues(stayRequirements);
+            setRequirementsDirty(true);
+            refreshLivePreview();
+            setAlert(`Baseline requirement set to ${baseline}; stay durations populated`);
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to calculate baseline requirement';
             setAlert(message, 'danger');
@@ -421,6 +648,19 @@ export function initRequirementPanel(planId: string): void {
                 return {roleId: Number(input.dataset.roleId), requiredShifts: num};
             })
             .filter((v): v is { roleId: number; requiredShifts: number } => Boolean(v));
+    };
+
+    const collectStayRequirements = (): RequirementConfiguration['stayRequirements'] => {
+        if (!stayRequirementList) return [];
+        return Array.from(stayRequirementList.querySelectorAll<HTMLInputElement>('input[data-stay-days]'))
+            .map((input) => {
+                if (input.value.trim() === '') return null;
+                return {
+                    stayDays: Number(input.dataset.stayDays),
+                    requiredShifts: Number(input.value),
+                };
+            })
+            .filter((requirement): requirement is RequirementConfiguration['stayRequirements'][number] => requirement != null);
     };
 
     const collectOverrides = (): { overrides: RequirementConfiguration['overrides']; hasInvalid: boolean } => {
@@ -463,11 +703,43 @@ export function initRequirementPanel(planId: string): void {
         return {overrides: entries, hasInvalid};
     };
 
+    const collectDraft = (): RequirementDraft => ({
+        assignmentMode: assignmentMode?.value === 'REQUIRED' ? 'REQUIRED' : 'FREE',
+        generalRequiredShifts: generalRequired?.value.trim()
+            ? Number(generalRequired.value)
+            : null,
+        roundingMode: (roundingMode?.value || null) as RequirementDraft['roundingMode'],
+        allowOverfillAfterFull: allowOverfill?.checked ?? false,
+        roleRequirements: collectRoleRequirements(),
+        stayRequirements: collectStayRequirements(),
+        overrides: collectOverrides().overrides,
+    });
+
+    refreshLivePreview = () => {
+        if (!loadedConfig) return;
+        const draft = collectDraft();
+        const summary = calculateLiveRequirementSummary(loadedConfig, draft);
+        const availableSlots = loadedConfig.capacitySummary?.availableSlots ?? 0;
+        const requiredSlots = summary.reduce((total, participant) => total + participant.requiredShifts, 0);
+        const capacity = {
+            availableSlots,
+            requiredSlots,
+            difference: availableSlots - requiredSlots,
+        };
+
+        renderCoverageStatus(capacity, draft);
+        if (participantStatus) {
+            renderParticipantStatus(participantStatus, summary, draft.assignmentMode);
+        }
+    };
+
     const saveRequirements = async () => {
         setAlert('Saving settings…');
+        saveButtons.forEach((button) => button.disabled = true);
         try {
             const {overrides, hasInvalid} = collectOverrides();
             if (hasInvalid) {
+                setRequirementsDirty(true);
                 setAlert('Update overrides to target registered participants only.', 'danger');
                 showInlineAlert('error', 'Update overrides to target registered participants only.');
                 return;
@@ -479,16 +751,20 @@ export function initRequirementPanel(planId: string): void {
                 roundingMode: roundingMode?.value || null,
                 bindingDeadline: toISOStringOrNull(bindingDeadline?.value || ''),
                 allowOverfillAfterFull: allowOverfill?.checked ?? false,
+                allowExternalAssignees: allowExternalAssignees?.checked ?? false,
                 allowArrivalDayEvening: allowArrivalEvening?.checked ?? true,
                 allowDepartureDayMorning: allowDepartureMorning?.checked ?? true,
                 roleRequirements: collectRoleRequirements(),
+                stayRequirements: collectStayRequirements(),
                 overrides,
             });
 
+            setRequirementsDirty(false);
             showInlineAlert('success', 'Requirement settings saved');
             await loadRequirements();
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to save requirements';
+            setRequirementsDirty(true);
             setAlert(message, 'danger');
             showInlineAlert('error', message);
         }
@@ -500,10 +776,28 @@ export function initRequirementPanel(planId: string): void {
             overrideList.innerHTML = '';
         }
         buildOverrideRow();
+        setRequirementsDirty(true);
+        refreshLivePreview();
     });
-    reloadBtn?.addEventListener('click', () => void loadRequirements());
-    saveBtn?.addEventListener('click', () => void saveRequirements());
+    const handleRequirementChange = () => {
+        setRequirementsDirty(true);
+        refreshLivePreview();
+    };
+    panel.addEventListener('input', handleRequirementChange);
+    panel.addEventListener('change', handleRequirementChange);
+    reloadBtn?.addEventListener('click', () => {
+        if (requirementsDirty && !window.confirm('Discard your unsaved requirement changes?')) return;
+        void loadRequirements();
+    });
+    saveButtons.forEach((button) => button.addEventListener('click', () => void saveRequirements()));
     baselineCalcBtn?.addEventListener('click', () => void calculateBaselineRequirement());
 
+    window.addEventListener('beforeunload', (event) => {
+        if (!requirementsDirty) return;
+        event.preventDefault();
+        event.returnValue = '';
+    });
+
+    setRequirementsDirty(false);
     void loadRequirements();
 }

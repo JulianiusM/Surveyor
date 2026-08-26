@@ -18,6 +18,7 @@ import {ParticipantRow} from "../../types/EventTypes";
 import {ActivityPlan} from "../database/entities/activity/ActivityPlan";
 import {ActivityPlanRequirement} from "../database/entities/activity/ActivityPlanRequirement";
 import {ActivityPlanRequirementOverride} from "../database/entities/activity/ActivityPlanRequirementOverride";
+import {ActivityPlanStayRequirement} from "../database/entities/activity/ActivityPlanStayRequirement";
 import {InternalError} from "../lib/errors";
 
 export type RoundingMode = NonNullable<ActivityPlan["roundingMode"]>;
@@ -42,6 +43,11 @@ export interface RoleRequirementInput {
     requiredShifts: number;
 }
 
+export interface StayRequirementInput {
+    stayDays: number;
+    requiredShifts: number;
+}
+
 export interface ParticipantRequirementResult {
     participantKey: string;
     requiredShifts: number;
@@ -50,6 +56,7 @@ export interface ParticipantRequirementResult {
         attendanceDays: number;
         planDays: number;
         proportionalRequirement: number;
+        stayDurationRequirement?: number;
         appliedRounding: RoundingMode;
         roleRequirement?: number;
         overrideRequirement?: number;
@@ -96,11 +103,28 @@ export interface ShiftRequirementComputationResult {
 export interface ParticipantRequirementSummary {
     participantKey: string;
     name?: string | null;
+    roleIds?: number[];
     requiredShifts: number;
     assignedShifts: number;
     remainingShifts: number;
     source: ParticipantRequirementResult["source"];
+    attendanceDays: number;
     attendance?: { arrivalDate?: string | null; departureDate?: string | null };
+}
+
+export interface RequirementCapacitySummary {
+    availableSlots: number;
+    requiredSlots: number;
+    difference: number;
+}
+
+export interface RequirementCapacitySlot {
+    id: string | number;
+    maxAssignees?: number | null;
+}
+
+export interface RequirementCapacityRole {
+    maxQty?: number | null;
 }
 
 interface DaysWindow {
@@ -115,7 +139,7 @@ function addDays(dateStr: string, days: number): string {
     return d.toISOString().slice(0, 10);
 }
 
-function countInclusiveDays(start: string, end: string): number {
+export function countInclusiveDays(start: string, end: string): number {
     if (start > end) return 0;
     let cursor = start;
     let days = 0;
@@ -221,6 +245,39 @@ export function normalizeRoleRequirementInput(input: RoleRequirementInput): Role
     return normalized;
 }
 
+export function normalizeStayRequirementInput(input: StayRequirementInput): StayRequirementInput {
+    const normalized: StayRequirementInput = {
+        stayDays: input.stayDays,
+        requiredShifts: input.requiredShifts,
+    };
+
+    if (!Number.isInteger(normalized.stayDays) || normalized.stayDays <= 0) {
+        throw new InternalError("Stay duration must be a positive integer");
+    }
+
+    if (!Number.isInteger(normalized.requiredShifts) || normalized.requiredShifts < 0) {
+        throw new InternalError("Stay duration required shifts must be a non-negative integer");
+    }
+
+    return normalized;
+}
+
+export function buildProportionalStayRequirements(
+    planDays: number,
+    fullStayRequirement: number,
+    roundingMode: RoundingMode,
+): StayRequirementInput[] {
+    if (!Number.isInteger(planDays) || planDays <= 0) return [];
+
+    return Array.from({length: planDays}, (_, index) => {
+        const stayDays = index + 1;
+        return {
+            stayDays,
+            requiredShifts: applyRounding(fullStayRequirement * (stayDays / planDays), roundingMode),
+        };
+    });
+}
+
 function normalizeFeasibleSlots(slotIds: Array<string | number> | undefined): Array<string | number> {
     if (!slotIds) return [];
 
@@ -316,7 +373,8 @@ export function calculateParticipantRequirement(
     plan: Pick<ActivityPlan, "assignmentMode" | "generalRequiredShifts" | "roundingMode" | "startDate" | "endDate">,
     participant: ParticipantAttendance,
     roleRequirements: ActivityPlanRequirement[],
-    overrides: ActivityPlanRequirementOverride[]
+    overrides: ActivityPlanRequirementOverride[],
+    stayRequirements: ActivityPlanStayRequirement[] = [],
 ): ParticipantRequirementResult {
     const roundingMode: RoundingMode = plan.roundingMode ?? "CEIL";
     const planDays = countInclusiveDays(plan.startDate, plan.endDate);
@@ -345,13 +403,18 @@ export function calculateParticipantRequirement(
     let source: ParticipantRequirementResult["source"] = "none";
     let roleRequirement = 0;
     let baseRequirement = 0;
+    const stayDurationRequirement = stayRequirements.find(
+        (requirement) => Number(requirement.stayDays) === attendance.days,
+    )?.requiredShifts;
 
     if (plan.assignmentMode === "REQUIRED") {
         // Calculate role requirement
         roleRequirement = resolveRoleRequirement(roleRequirements, participant.roleIds, ratio, roundingMode);
 
         // Calculate general requirement
-        if (plan.generalRequiredShifts != null) {
+        if (stayDurationRequirement != null) {
+            baseRequirement = stayDurationRequirement;
+        } else if (plan.generalRequiredShifts != null) {
             baseRequirement = applyRounding(plan.generalRequiredShifts * ratio, roundingMode);
         }
 
@@ -383,6 +446,7 @@ export function calculateParticipantRequirement(
             attendanceDays: attendance.days,
             planDays,
             proportionalRequirement: plan.generalRequiredShifts != null ? plan.generalRequiredShifts * ratio : 0,
+            stayDurationRequirement,
             appliedRounding: roundingMode,
             roleRequirement,
             overrideRequirement: requirementFromOverride ?? undefined,
@@ -396,11 +460,12 @@ export function calculateRequirementsForParticipants(
     plan: Pick<ActivityPlan, RequiredActivityFields>,
     participants: ParticipantAttendance[],
     roleRequirements: ActivityPlanRequirement[],
-    overrides: ActivityPlanRequirementOverride[]
+    overrides: ActivityPlanRequirementOverride[],
+    stayRequirements: ActivityPlanStayRequirement[] = [],
 ): Record<string, ParticipantRequirementResult> {
     const result: Record<string, ParticipantRequirementResult> = {};
     for (const participant of participants) {
-        const requirement = calculateParticipantRequirement(plan, participant, roleRequirements, overrides);
+        const requirement = calculateParticipantRequirement(plan, participant, roleRequirements, overrides, stayRequirements);
         result[requirement.participantKey] = requirement;
     }
     return result;
@@ -412,8 +477,9 @@ export function summarizeParticipantRequirements(
     roleRequirements: ActivityPlanRequirement[],
     overrides: ActivityPlanRequirementOverride[],
     assignments: Record<string, unknown[]>,
+    stayRequirements: ActivityPlanStayRequirement[] = [],
 ): ParticipantRequirementSummary[] {
-    const requirementMap = calculateRequirementsForParticipants(plan, participants, roleRequirements, overrides);
+    const requirementMap = calculateRequirementsForParticipants(plan, participants, roleRequirements, overrides, stayRequirements);
 
     return participants.map((participant) => {
         const participantKey = toParticipantKey(participant);
@@ -424,15 +490,58 @@ export function summarizeParticipantRequirements(
         return {
             participantKey,
             name: participant.name ?? null,
+            roleIds: participant.roleIds ?? [],
             requiredShifts,
             assignedShifts,
             remainingShifts: Math.max(requiredShifts - assignedShifts, 0),
             source: requirement?.source ?? "none",
+            attendanceDays: requirement?.breakdown.attendanceDays ?? 0,
             attendance: participant.arrivalDate || participant.departureDate
                 ? {arrivalDate: participant.arrivalDate, departureDate: participant.departureDate}
                 : undefined,
         };
     });
+}
+
+export function calculateRequirementCapacitySummary(
+    plan: Pick<ActivityPlan, RequiredActivityFields>,
+    participants: ParticipantAttendance[],
+    roleRequirements: ActivityPlanRequirement[],
+    overrides: ActivityPlanRequirementOverride[],
+    stayRequirements: ActivityPlanStayRequirement[],
+    slots: RequirementCapacitySlot[],
+    slotRoles: Record<string, RequirementCapacityRole[]>,
+): RequirementCapacitySummary {
+    const requirements = calculateRequirementsForParticipants(
+        plan,
+        participants,
+        roleRequirements,
+        overrides,
+        stayRequirements,
+    );
+
+    const requiredSlots = Object.values(requirements).reduce(
+        (total, requirement) => total + requirement.requiredShifts,
+        0,
+    );
+
+    const availableSlots = slots.reduce((total, slot) => {
+        const overallCapacity = ensureNonNegativeInteger(slot.maxAssignees);
+        const roles = slotRoles[String(slot.id)] ?? [];
+        if (!roles.length) return total + overallCapacity;
+
+        const roleCapacity = roles.reduce(
+            (roleTotal, role) => roleTotal + ensureNonNegativeInteger(role.maxQty),
+            0,
+        );
+        return total + Math.min(overallCapacity, roleCapacity);
+    }, 0);
+
+    return {
+        availableSlots,
+        requiredSlots,
+        difference: availableSlots - requiredSlots,
+    };
 }
 
 export function calculateShiftRequirementsForParticipants(

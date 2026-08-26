@@ -23,6 +23,10 @@ import {collectAssignmentWarnings, toAssignmentCandidate} from "../modules/activ
 import {buildRecommendationWarnings} from "../modules/activity/recommendations";
 import {
     calculateBaselineRequirementForPlan,
+    calculateParticipantRequirement,
+    calculateRequirementCapacitySummary,
+    buildProportionalStayRequirements,
+    countInclusiveDays,
     ParticipantAttendance,
     summarizeParticipantRequirements,
     toParticipantKey,
@@ -39,6 +43,7 @@ import {RecommendationInput} from "../modules/database/services/ActivityRecommen
 import * as requirementService from "../modules/database/services/ActivityRequirementService";
 import * as activityService from "../modules/database/services/ActivityService";
 import * as eventService from "../modules/database/services/EventService";
+import * as userService from "../modules/database/services/UserService";
 import {APIError, ValidationError} from '../modules/lib/errors';
 import {performImageSwap} from "../modules/lib/fileCommons";
 
@@ -143,6 +148,11 @@ function preprocessRequirementUpdate(body: any) {
         requiredShifts: Joi.number().integer().min(0).required(),
     });
 
+    const stayRequirementSchema = Joi.object({
+        stayDays: Joi.number().integer().positive().required(),
+        requiredShifts: Joi.number().integer().min(0).required(),
+    });
+
     const overrideSchema = Joi.object({
         id: Joi.number().integer().positive().optional(),
         roleId: Joi.number().integer().positive().allow(null),
@@ -164,9 +174,11 @@ function preprocessRequirementUpdate(body: any) {
                 return value;
             }),
         allowOverfillAfterFull: Joi.boolean().optional(),
+        allowExternalAssignees: Joi.boolean().optional(),
         allowArrivalDayEvening: Joi.boolean().optional(),
         allowDepartureDayMorning: Joi.boolean().optional(),
         roleRequirements: Joi.array().items(roleRequirementSchema).default([]),
+        stayRequirements: Joi.array().items(stayRequirementSchema).unique('stayDays').default([]),
         overrides: Joi.array().items(overrideSchema).default([]),
     });
 
@@ -182,9 +194,11 @@ function preprocessRequirementUpdate(body: any) {
         roundingMode?: 'CEIL' | 'ROUND' | 'FLOOR' | null;
         bindingDeadline?: string | Date | null;
         allowOverfillAfterFull?: boolean;
+        allowExternalAssignees?: boolean;
         allowArrivalDayEvening?: boolean;
         allowDepartureDayMorning?: boolean;
         roleRequirements: { roleId: number; requiredShifts: number }[];
+        stayRequirements: { stayDays: number; requiredShifts: number }[];
         overrides: any[];
     };
 }
@@ -253,12 +267,22 @@ async function fetchForView(plan: ActivityPlan, req: Request) {
 
     const slotList = Object.values(slotsByDate).flat();
 
-    const [assignments, assigneeLists, participantList, allRoles, slotRoles] = await Promise.all([
+    const [
+        assignments,
+        assigneeLists,
+        allRoles,
+        slotRoles,
+        requirementConfig,
+        eventParticipants,
+        participantRoles,
+    ] = await Promise.all([
         activityService.getActivitySlotAssignments(plan.id, session.profile!.id),
         activityService.getActivitySlotAssignees(plan.id),
-        activityService.getActivityPlanParticipants(plan.id),
         activityService.getAllRoles(plan.id),
-        activityService.getActivitySlotRoles(plan.id)
+        activityService.getActivitySlotRoles(plan.id),
+        requirementService.getRequirementConfiguration(plan.id),
+        plan.event?.id ? eventService.getEventParticipants(plan.event.id) : Promise.resolve([]),
+        activityService.getParticipantRolesForPlan(plan.id),
     ]);
     const textFields = await activityService.getActivityPlanTextFields(plan.id);
 
@@ -270,6 +294,139 @@ async function fetchForView(plan: ActivityPlan, req: Request) {
         if (slot.assignedCount < (slot.maxAssignees ?? 0)) open++;
     }
 
+    const currentProfileId = session.profile!.id;
+    const registration = eventParticipants.find((participant) => participant.profileId === currentProfileId);
+    const canSelfAssign = !plan.event?.id || Boolean(registration) || Boolean(plan.allowExternalAssignees);
+    const currentRoleIds = participantRoles.find(
+        (participant) => participant.participantKey === `profile:${currentProfileId}`,
+    )?.roleIds;
+    const shouldShowRequirementProgress = canSelfAssign && (
+        requirementConfig.plan.assignmentMode === "REQUIRED" || assignments.length > 0
+    );
+
+    const requirementProgress = shouldShowRequirementProgress
+        ? (() => {
+            const requirement = calculateParticipantRequirement(
+                requirementConfig.plan,
+                {
+                    profileId: currentProfileId,
+                    arrivalDate: registration?.arrivalDate ?? undefined,
+                    departureDate: registration?.departureDate ?? undefined,
+                    roleIds: currentRoleIds,
+                    name: registration?.name,
+                },
+                requirementConfig.roleRequirements,
+                requirementConfig.overrides,
+                requirementConfig.stayRequirements,
+            );
+            const assignedShifts = assignments.length;
+            const remainingShifts = Math.max(requirement.requiredShifts - assignedShifts, 0);
+            return {
+                assignedShifts,
+                requiredShifts: requirement.requiredShifts,
+                remainingShifts,
+                complete: remainingShifts === 0,
+            };
+        })()
+        : undefined;
+
+    interface ParticipantStatusAccumulator {
+        participantKey: string;
+        profileId?: string;
+        name: string;
+        arrivalDate?: string | null;
+        departureDate?: string | null;
+        assignedShifts: number;
+        roleIds: Set<number>;
+        roles: Set<string>;
+    }
+
+    const participantStatusMap = new Map<string, ParticipantStatusAccumulator>();
+    const ensureParticipantStatus = (
+        participantKey: string,
+        profileId: string | null | undefined,
+        name?: string | null,
+    ): ParticipantStatusAccumulator => {
+        const existing = participantStatusMap.get(participantKey);
+        if (existing) {
+            if (name) existing.name = name;
+            return existing;
+        }
+        const created: ParticipantStatusAccumulator = {
+            participantKey,
+            profileId: profileId ?? undefined,
+            name: name || 'Participant',
+            assignedShifts: 0,
+            roleIds: new Set<number>(),
+            roles: new Set<string>(),
+        };
+        participantStatusMap.set(participantKey, created);
+        return created;
+    };
+
+    eventParticipants.forEach((participant) => {
+        const participantKey = participant.profileId
+            ? `profile:${participant.profileId}`
+            : `registration:${participant.id}`;
+        const status = ensureParticipantStatus(participantKey, participant.profileId, participant.name);
+        status.arrivalDate = participant.arrivalDate;
+        status.departureDate = participant.departureDate;
+    });
+
+    Object.values(assigneeLists).flat().forEach((assignee) => {
+        const participantKey = `profile:${assignee.profileId}`;
+        const status = ensureParticipantStatus(participantKey, assignee.profileId, assignee.name);
+        status.assignedShifts += 1;
+        assignee.roles.forEach((role) => {
+            if (role !== 'default') status.roles.add(role);
+        });
+    });
+
+    const roleTitles = new Map(allRoles.map((role) => [Number(role.id), role.title]));
+    participantRoles.forEach(({participantKey, roleIds}) => {
+        const status = participantStatusMap.get(participantKey);
+        if (!status) return;
+        roleIds.forEach((roleId) => {
+            status.roleIds.add(roleId);
+            const title = roleTitles.get(roleId);
+            if (title && title !== 'default') status.roles.add(title);
+        });
+    });
+
+    const participantList = Array.from(participantStatusMap.values())
+        .map((status) => {
+            const requirement = calculateParticipantRequirement(
+                requirementConfig.plan,
+                {
+                    profileId: status.profileId,
+                    arrivalDate: status.arrivalDate,
+                    departureDate: status.departureDate,
+                    roleIds: [...status.roleIds],
+                    name: status.name,
+                },
+                requirementConfig.roleRequirements,
+                requirementConfig.overrides,
+                requirementConfig.stayRequirements,
+            );
+            return {
+                participantKey: status.participantKey,
+                name: status.name,
+                count: status.assignedShifts,
+                assignedShifts: status.assignedShifts,
+                roles: [...status.roles].sort((a, b) => a.localeCompare(b)),
+                roleIds: [...status.roleIds],
+                requiredShifts: requirement.requiredShifts,
+                remainingShifts: Math.max(requirement.requiredShifts - status.assignedShifts, 0),
+                source: requirement.source,
+                attendanceDays: requirement.breakdown.attendanceDays,
+                attendance: status.arrivalDate || status.departureDate
+                    ? {arrivalDate: status.arrivalDate, departureDate: status.departureDate}
+                    : undefined,
+                assignmentMode: requirementConfig.plan.assignmentMode,
+            };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+
     return {
         plan,
         slots: slotsByDate,
@@ -278,6 +435,8 @@ async function fetchForView(plan: ActivityPlan, req: Request) {
         participantList,
         roles: {allRoles, slotRoles},
         counters: {participants: participantList.length, open, empty},
+        requirementProgress,
+        canSelfAssign,
         textFields,
     };
 }
@@ -472,6 +631,7 @@ async function quickAddSlot(plan: ActivityPlan, body: any, session: SessionLike)
         throw new APIError('End time must be after start time', body, 400);
     }
 
+    const normalizedRoles = await validatePlanRoleIds(plan.id, roles, body);
     const last = Number(await activityService.getLastActivitySlotNumber(plan.id, date)) || 0;
     const slot: Partial<ActivitySlot> = {
         id: generateUniqueId(),
@@ -486,8 +646,8 @@ async function quickAddSlot(plan: ActivityPlan, body: any, session: SessionLike)
 
     await activityService.addActivitySlot(plan.id, slot, session.profile!.id);
 
-    if (roles.length > 0) {
-        await activityService.addActivitySlotRoles(slot.id!, roles);
+    if (normalizedRoles.length > 0) {
+        await activityService.addActivitySlotRoles(slot.id!, normalizedRoles);
     }
     return 'Slot added';
 }
@@ -513,6 +673,13 @@ async function updateSlotAttr(slotId: string, body: any, permData?: PermBundle) 
         throw new APIError("Not allowed", body, 403);
     }
 
+    let normalizedRoles: number[] | undefined;
+    if (body.roles !== undefined) {
+        const slot = await activityService.getActivitySlotById(slotId);
+        if (!slot) throw new APIError('Activity slot not found', {slotId}, 404);
+        normalizedRoles = await validatePlanRoleIds(slot.entityId, body.roles, body);
+    }
+
     const staged: Partial<ActivitySlot> = {};
     if (body.startTime !== undefined) staged.startTime = body.startTime || null;
     if (body.endTime !== undefined) staged.endTime = body.endTime || null;
@@ -524,8 +691,8 @@ async function updateSlotAttr(slotId: string, body: any, permData?: PermBundle) 
         throw new APIError('Unknown error while saving', body, 500);
     }
 
-    if (body.roles !== undefined) {
-        await activityService.updateActivitySlotRoles(slotId, body.roles);
+    if (normalizedRoles !== undefined) {
+        await activityService.updateActivitySlotRoles(slotId, normalizedRoles);
     }
 
     return 'Slot updated';
@@ -544,10 +711,13 @@ async function updateSettings(id: string, body: any) {
 }
 
 async function getRequirements(planId: string) {
-    const [plan, requirementConfig, assignments] = await Promise.all([
+    const [plan, requirementConfig, assignments, slots, slotRoles, allRoles] = await Promise.all([
         activityService.getActivityPlanById(planId),
         requirementService.getRequirementConfiguration(planId),
         activityService.getParticipantAssignmentsWithSlots(planId),
+        activityService.getActivitySlotsFlat(planId),
+        activityService.getActivitySlotRoles(planId),
+        activityService.getAllRoles(planId),
     ]);
 
     if (!plan) {
@@ -564,12 +734,30 @@ async function getRequirements(planId: string) {
         eventParticipants,
     );
 
+    const roleTitles = new Map(allRoles.map((role) => [Number(role.id), role.title]));
     const participants = summarizeParticipantRequirements(
         plan,
         Object.values(attendance),
         requirementConfig.roleRequirements,
         requirementConfig.overrides,
         assignments,
+        requirementConfig.stayRequirements,
+    ).map((participant) => ({
+        ...participant,
+        roles: (participant.roleIds || [])
+            .map((roleId) => roleTitles.get(roleId))
+            .filter((title): title is string => Boolean(title && title !== 'default')),
+        assignmentMode: requirementConfig.plan.assignmentMode,
+    }));
+
+    const capacitySummary = calculateRequirementCapacitySummary(
+        plan,
+        Object.values(attendance),
+        requirementConfig.roleRequirements,
+        requirementConfig.overrides,
+        requirementConfig.stayRequirements,
+        slots,
+        slotRoles,
     );
 
     const overrideTargets = eventParticipants.map((participant) => ({
@@ -580,7 +768,7 @@ async function getRequirements(planId: string) {
         departureDate: participant.departureDate ?? null,
     }));
 
-    return {...requirementConfig, participants, overrideTargets};
+    return {...requirementConfig, participants, capacitySummary, overrideTargets};
 }
 
 async function calculateBaselineRequirement(planId: string) {
@@ -604,17 +792,26 @@ async function calculateBaselineRequirement(planId: string) {
         eventParticipants,
     );
 
-    return calculateBaselineRequirementForPlan({
+    const baseline = calculateBaselineRequirementForPlan({
         plan,
         slots,
         participants: Object.values(attendance),
         roleRequirements: requirementConfig.roleRequirements,
         overrides: requirementConfig.overrides,
     });
+
+    return {
+        ...baseline,
+        stayRequirements: buildProportionalStayRequirements(
+            countInclusiveDays(plan.startDate, plan.endDate),
+            baseline.baseline,
+            plan.roundingMode ?? "CEIL",
+        ),
+    };
 }
 
 async function updateRequirements(planId: string, body: any) {
-    const {roleRequirements, overrides, ...planSettings} = preprocessRequirementUpdate(body);
+    const {roleRequirements, stayRequirements, overrides, ...planSettings} = preprocessRequirementUpdate(body);
     const plan = await activityService.getActivityPlanById(planId);
 
     if (!plan) {
@@ -636,12 +833,32 @@ async function updateRequirements(planId: string, body: any) {
         throw new APIError('Overrides must target participants registered for this event', invalidOverride, 400);
     }
 
+    const allowedRoleIds = new Set((await activityService.getAllRoles(planId)).map((role) => role.id));
+    const invalidRoleRequirement = roleRequirements.find((requirement) => !allowedRoleIds.has(requirement.roleId));
+    const invalidOverrideRole = overrides.find(
+        (override) => override.roleId != null && !allowedRoleIds.has(Number(override.roleId)),
+    );
+    if (invalidRoleRequirement || invalidOverrideRole) {
+        throw new APIError(
+            'Requirement roles must belong to this activity plan',
+            invalidRoleRequirement ?? invalidOverrideRole,
+            400,
+        );
+    }
+
+    const planDays = countInclusiveDays(plan.startDate, plan.endDate);
+    const invalidStayRequirement = stayRequirements.find((requirement) => requirement.stayDays > planDays);
+    if (invalidStayRequirement) {
+        throw new APIError('Stay duration cannot exceed the activity plan duration', invalidStayRequirement, 400);
+    }
+
     // Convert bindingDeadline string to Date if present
-    const normalizedSettings: Partial<Pick<ActivityPlan, "assignmentMode" | "generalRequiredShifts" | "roundingMode" | "bindingDeadline" | "allowOverfillAfterFull" | "allowArrivalDayEvening" | "allowDepartureDayMorning">> = {
+    const normalizedSettings: Partial<Pick<ActivityPlan, "assignmentMode" | "generalRequiredShifts" | "roundingMode" | "bindingDeadline" | "allowOverfillAfterFull" | "allowExternalAssignees" | "allowArrivalDayEvening" | "allowDepartureDayMorning">> = {
         assignmentMode: planSettings.assignmentMode,
         generalRequiredShifts: planSettings.generalRequiredShifts,
         roundingMode: planSettings.roundingMode,
         allowOverfillAfterFull: planSettings.allowOverfillAfterFull,
+        allowExternalAssignees: planSettings.allowExternalAssignees,
         allowArrivalDayEvening: planSettings.allowArrivalDayEvening,
         allowDepartureDayMorning: planSettings.allowDepartureDayMorning,
     };
@@ -656,7 +873,7 @@ async function updateRequirements(planId: string, body: any) {
         }
     }
 
-    await requirementService.replaceRequirements(planId, roleRequirements, overrides, normalizedSettings);
+    await requirementService.replaceRequirements(planId, roleRequirements, overrides, normalizedSettings, stayRequirements);
     return 'Requirements updated';
 }
 
@@ -665,6 +882,7 @@ async function collectRecommendationWarnings(planId: string, recommendations: {
     profileId?: string | null;
     status?: RecommendationStatus
 }[]) {
+    await validateRecommendationTargets(planId, recommendations);
     const [plan, slots, existingAssignments] = await Promise.all([
         activityService.getActivityPlanById(planId),
         activityService.getActivitySlotsFlat(planId),
@@ -698,6 +916,38 @@ async function collectRecommendationWarnings(planId: string, recommendations: {
             allowDepartureDayMorning: plan?.allowDepartureDayMorning,
         },
     });
+}
+
+async function validateRecommendationTargets(planId: string, recommendations: {
+    itemId: string;
+    profileId?: string | null;
+}[]) {
+    const [plan, slots] = await Promise.all([
+        activityService.getActivityPlanById(planId),
+        activityService.getActivitySlotsFlat(planId),
+    ]);
+    if (!plan) {
+        throw new APIError('Activity plan not found', {planId}, 404);
+    }
+
+    const allowedSlotIds = new Set(slots.map((slot) => slot.id));
+    const invalidSlot = recommendations.find((recommendation) => !allowedSlotIds.has(recommendation.itemId));
+    if (invalidSlot) {
+        throw new APIError('Recommendation slot does not belong to this activity plan', invalidSlot, 400);
+    }
+
+    if (!plan.event?.id) return;
+
+    const eventParticipants = await eventService.getEventParticipants(plan.event.id);
+    const allowedProfileIds = new Set(
+        eventParticipants.map((participant) => participant.profileId).filter((id): id is string => Boolean(id)),
+    );
+    const invalidProfile = recommendations.find(
+        (recommendation) => recommendation.profileId && !allowedProfileIds.has(recommendation.profileId),
+    );
+    if (invalidProfile) {
+        throw new APIError('Recommendations must target participants registered for this event', invalidProfile, 400);
+    }
 }
 
 async function buildParticipantAttendanceMap(
@@ -760,6 +1010,12 @@ async function buildParticipantAttendanceMap(
     for (const rec of recommendations) {
         upsert({profileId: rec.profileId ?? undefined});
     }
+
+    const unnamedProfileIds = Object.values(attendance)
+        .filter((participant) => participant.profileId && !participant.name)
+        .map((participant) => participant.profileId as string);
+    const profiles = await userService.getProfilesByIds(unnamedProfileIds);
+    profiles.forEach((profile) => upsert({profileId: profile.id, name: profile.name}));
 
     // Load roleIds from ActivityAssignmentRole for each participant
     const participantRoles = await activityService.getParticipantRolesForPlan(plan.id);
@@ -825,6 +1081,9 @@ async function getAssignmentWarnings(
     if (!plan || !slot) {
         throw new APIError("Activity plan or slot not found", {planId, slotId}, 404);
     }
+    if (slot.entityId !== planId) {
+        throw new APIError("Activity slot not found in this plan", {planId, slotId}, 404);
+    }
 
     const eventParticipants = plan.event ? await eventService.getEventParticipants(plan.event.id) : [];
     const attendance = await buildParticipantAttendanceMap(plan, requirementConfig.overrides, assignments, [], eventParticipants);
@@ -847,6 +1106,66 @@ async function getAssignmentWarnings(
     }
 
     return warnings;
+}
+
+async function authorizeSelfAssignment(
+    planId: string,
+    slotId: string,
+    profileId: string,
+    operation: 'assign' | 'unassign',
+    roleName?: string,
+) {
+    const [plan, slot] = await Promise.all([
+        activityService.getActivityPlanById(planId),
+        activityService.getActivitySlotById(slotId),
+    ]);
+
+    if (!plan || !slot || slot.entityId !== planId) {
+        throw new APIError('Activity slot not found in this plan', {planId, slotId}, 404);
+    }
+
+    let requestedRole: {name: string; maxQty: number} | undefined;
+    if (roleName !== undefined) {
+        if (typeof roleName !== 'string' || !roleName.trim()) {
+            throw new APIError('Activity role is required', {slotId, roleName}, 400);
+        }
+        const slotRoles = await activityService.getActivitySlotRoles(planId);
+        requestedRole = slotRoles[slotId]?.find((role) => role.name === roleName);
+        if (!requestedRole) {
+            throw new APIError('Activity role is not available for this slot', {slotId, roleName}, 400);
+        }
+    }
+
+    // A user must always be able to remove an existing commitment, even if registration
+    // or plan policy changed after it was created.
+    if (operation === 'unassign') return;
+
+    if (plan.event?.id && !plan.allowExternalAssignees) {
+        const registration = await eventService.getRegistrationFor(profileId, plan.event.id);
+        if (!registration) {
+            throw new APIError(
+                'Only registered event participants may take slots in this activity plan',
+                {planId, slotId},
+                403,
+            );
+        }
+    }
+
+    if (plan.allowOverfillAfterFull) return;
+
+    const assignees = (await activityService.getActivitySlotAssignees(planId))[slotId] ?? [];
+    const existingAssignee = assignees.find((assignee) => assignee.profileId === profileId);
+    if (!existingAssignee && typeof slot.maxAssignees === 'number' && assignees.length >= slot.maxAssignees) {
+        throw new APIError('This activity slot is already full', {planId, slotId}, 409);
+    }
+
+    if (requestedRole && requestedRole.maxQty > 0) {
+        const alreadyHasRole = existingAssignee?.roles.includes(requestedRole.name);
+        const roleCount = assignees.filter((assignee) => assignee.roles.includes(requestedRole!.name)).length;
+        if (!alreadyHasRole && roleCount >= requestedRole.maxQty) {
+            throw new APIError('This activity role is already full', {planId, slotId, roleName}, 409);
+        }
+    }
 }
 
 async function getRecommendations(planId: string) {
@@ -915,6 +1234,7 @@ async function getRecommendations(planId: string) {
 
 async function updateRecommendations(planId: string, body: any) {
     const {recommendations} = preprocessRecommendationUpdate(body);
+    await validateRecommendationTargets(planId, recommendations);
     await recommendationService.replaceRecommendations(planId, recommendations);
     const warnings = await collectRecommendationWarnings(planId, recommendations);
     return {message: 'Recommendations updated', warnings};
@@ -959,7 +1279,8 @@ async function applyRecommendations(planId: string, body?: any) {
 
     if (body?.recommendations && Array.isArray(body.recommendations)) {
         // New format: {recommendations: [{itemId, profileId, status}]}
-        const withStatus = body.recommendations;
+        const withStatus = preprocessRecommendationUpdate(body).recommendations;
+        await validateRecommendationTargets(planId, withStatus);
 
         // Group by status
         withStatus.forEach((r: any) => {
@@ -1000,6 +1321,7 @@ async function applyRecommendations(planId: string, body?: any) {
         profileId: rec.profileId ?? rec.profile?.id,
         status: rec.status ?? 'APPROVED',
     }));
+    await validateRecommendationTargets(planId, normalized);
 
     const eventParticipants = plan.event ? await eventService.getEventParticipants(plan.event.id) : [];
 
@@ -1086,8 +1408,25 @@ async function addSlotRole(slotId: string, body: any) {
         throw new APIError('Invalid roles', body, 400);
     }
 
-    await activityService.addActivitySlotRoles(slotId, roles);
+    const slot = await activityService.getActivitySlotById(slotId);
+    if (!slot) throw new APIError('Activity slot not found', {slotId}, 404);
+    const normalizedRoles = await validatePlanRoleIds(slot.entityId, roles, body);
+    await activityService.addActivitySlotRoles(slotId, normalizedRoles);
     return 'Roles added';
+}
+
+async function validatePlanRoleIds(planId: string, roles: unknown, body: unknown): Promise<number[]> {
+    if (!Array.isArray(roles)) throw new APIError('Invalid roles', {body}, 400);
+    const normalized = roles.map(Number);
+    if (normalized.some((roleId) => !Number.isInteger(roleId) || roleId <= 0)) {
+        throw new APIError('Invalid roles', {body}, 400);
+    }
+
+    const allowed = new Set((await activityService.getAllRoles(planId)).map((role) => role.id));
+    if (normalized.some((roleId) => !allowed.has(roleId))) {
+        throw new APIError('Roles must belong to this activity plan', {body}, 400);
+    }
+    return [...new Set(normalized)];
 }
 
 async function addActivityRole(plan: ActivityPlan, body: any) {
@@ -1099,6 +1438,14 @@ async function addActivityRole(plan: ActivityPlan, body: any) {
 async function updateRoleAssignments(slotId: string, body: any) {
     const {assignments} = body
     if (!Array.isArray(assignments)) throw new APIError('Not an array', body, 400);
+    const slot = await activityService.getActivitySlotById(slotId);
+    if (!slot) throw new APIError('Activity slot not found', {slotId}, 404);
+    const allowedRoles = new Set(
+        ((await activityService.getActivitySlotRoles(slot.entityId))[slotId] ?? []).map((role) => role.name),
+    );
+    if (assignments.some((assignment) => !assignment || !allowedRoles.has(assignment.role))) {
+        throw new APIError('Roles must be configured for this activity slot', body, 400);
+    }
     const parsed: { assignmentId: number | null, role: string }[] = assignments.map(v => {
         v.assignmentId = v.assignmentId !== null ? Number.parseInt(v.assignmentId) || null : null;
         return v
@@ -1167,6 +1514,7 @@ export default {
     deleteHeaderImg,
 
     getAssignmentWarnings,
+    authorizeSelfAssignment,
     getAssignmentAccessMapping,
     getRoleAccessMapping,
 };

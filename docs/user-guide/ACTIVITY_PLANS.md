@@ -36,6 +36,7 @@ The activity plan page has tabs:
 - View all activity slots (time blocks)
 - See assignments for each slot
 - Take or leave activity slots
+- See your current slot count and whether you have met your personal requirement
 - Shows role requirements
 
 ### Participants Tab (if event linked)
@@ -45,8 +46,33 @@ The activity plan page has tabs:
 
 ### Requirements Tab (if event linked & permitted)
 - Set participant requirements
+- Calculate proportional defaults for each possible stay duration, then adjust the exact shift count for any number of days
 - Manage role requirements
+- Compare role-capped slot capacity with the attendance-aware shifts participants require
 - Configure auto-assignment rules
+
+Saved stay-duration values are authoritative for the general participant requirement. Participant and role overrides
+still take precedence where configured. For long plans, the duration fields stay in a compact scrollable grid.
+Participant attendance also shows the total number of days within the plan. Participant overrides use a compact,
+scrollable editor so the add action and surrounding settings remain accessible when many overrides exist.
+While editing rules, a compact coverage status remains visible inside the settings card and updates immediately.
+Exact coverage is always the target. When overfill is enabled, the slot count is treated as a minimum; otherwise it
+is treated as a hard cap, and the status identifies whether a deviation is on the permitted side of that boundary.
+The coverage status also shows whether the live values are saved. Editing a field or calculating a new baseline marks
+the section as having unsaved changes, and both the header and the end of the section provide a save action. The browser
+warns before leaving the page with unsaved requirement changes.
+The Participants and coverage sections share the same responsive participant status view. It combines assignment
+counts, requirement progress and source, attendance, and roles; on small screens it becomes a card list, while long
+lists remain searchable, filterable, and contained in a scrollable area. In Free mode it continues to show assignment,
+attendance, and role coverage and labels the absent shift minimum explicitly.
+Requirement-state filters distinguish participants who have not started from those who have made partial progress,
+completed their requirement, or have no minimum. Assignment-only profiles are displayed by their profile name even
+when they are not registered for the linked event.
+
+Linked activity plans accept self-sign-ups from registered event participants by default. Organizers can explicitly
+enable **Allow non-participants to take slots** when external providers or administrators should be able to volunteer;
+those profiles must still have permission to view the plan. With overfill disabled, slot and role capacities are
+enforced as hard limits by the server.
 
 ### Settings Tab (owners only)
 - Permission management
@@ -125,7 +151,7 @@ What guests can do depends on the permissions set for the "guest" audience:
 
 **Typically guests can:**
 - ✅ View activity schedule (if VIEW permission granted)
-- ✅ Sign up for open roles (if MANAGE_ASSIGNMENTS permission granted)
+- ✅ Sign up for open roles when registered for the linked event, or when external sign-ups are explicitly enabled
 - ✅ Leave their own assignments
 - ✅ See all participants and assignments
 

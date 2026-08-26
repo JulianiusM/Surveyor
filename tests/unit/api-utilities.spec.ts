@@ -1,6 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import {APIError} from '../../src/modules/lib/errors';
-import {coerceLimit, performAPIAction, SQL_ALLOW_LIST} from '../../src/modules/lib/util';
+import {enforceAssignmentItemScope} from '../../src/middleware/assignFlowFactory';
+import {coerceLimit, enforceChildResourceScope, performAPIAction, SQL_ALLOW_LIST} from '../../src/modules/lib/util';
 import {createApiActionCase, createApiRequest, createRecordingAction} from '../factories/apiActionFactory';
 import {createQueryLimitCase} from '../factories/queryLimitFactory';
 
@@ -52,6 +53,49 @@ describe('API contract behavior suite', () => {
             await expect(performAPIAction(createApiRequest({profileId: '', body: {title: 'Empty profile'}}), createRecordingAction())).rejects.toMatchObject({
                 status: 401,
             });
+        });
+    });
+
+    describe('assignment resource boundary', () => {
+        it('accepts an assignment item only when it belongs to the resource in the route', async () => {
+            await expect(enforceAssignmentItemScope(
+                'plan-1',
+                'slot-1',
+                async () => 'plan-1',
+            )).resolves.toBeUndefined();
+        });
+
+        it('rejects an assignment item taken from a different resource', async () => {
+            await expect(enforceAssignmentItemScope(
+                'plan-1',
+                'slot-from-plan-2',
+                async () => 'plan-2',
+            )).rejects.toMatchObject({status: 404});
+        });
+
+        it('does not expose resolver failures for unknown assignment items', async () => {
+            await expect(enforceAssignmentItemScope(
+                'plan-1',
+                'missing-slot',
+                async () => {
+                    throw new Error('database details');
+                },
+            )).rejects.toMatchObject({
+                status: 404,
+                message: 'Assignment item not found in this resource',
+            });
+        });
+    });
+
+    describe('nested API resource boundary', () => {
+        it('accepts child resources only under their actual parent', () => {
+            expect(() => enforceChildResourceScope('list-1', 'list-1', 'item-1')).not.toThrow();
+        });
+
+        it('rejects a child ID combined with a different parent URL', () => {
+            expect(() => enforceChildResourceScope('list-1', 'list-2', 'item-2')).toThrowError(
+                expect.objectContaining({status: 404}),
+            );
         });
     });
 

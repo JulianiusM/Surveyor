@@ -125,6 +125,14 @@ describe('drivers list user stories', () => {
         expect(await driverService.getDriversAssignmentCounts(listId)).toEqual({[item.id]: 2});
     });
 
+    it('rejects volunteers beyond the journey capacity', async () => {
+        const [, item] = await createDriversListWithItem(owner.id);
+        await driverService.updateDriversItem(item.id, {maxAssignees: 1});
+
+        await assignDriversItem(item.id, participant.id);
+        await expect(assignDriversItem(item.id, secondParticipant.id)).rejects.toMatchObject({status: 409});
+    });
+
     it('shows volunteer names to coordinators', async () => {
         const [listId, item] = await createDriversListWithItem(owner.id);
 

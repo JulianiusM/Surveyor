@@ -17,7 +17,7 @@
 /*
  * lib/assignRoutes.js
  */
-import {Request, Response, Router} from "express";
+import {Request, RequestHandler, Response, Router} from "express";
 import * as activityService from "../modules/database/services/ActivityService";
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {APIError} from "../modules/lib/errors";
@@ -25,35 +25,94 @@ import {performAPIAction} from '../modules/lib/util';
 import renderer from '../modules/renderer';
 import type {PermBundle} from "../types/PermissionTypes";
 
-export function attachAssignRoutes(router: Router, opts: {
+interface AssignmentAccessMapping {
     assign: (body: any, profileId: string) => Promise<void>,
     unassign: (body: any, profileId: string) => Promise<void>
-}) {
-    attachGenericAssignRoutes(router, '/:id/assign', '/:id/unassign', opts);
 }
 
-export function attachAssignRoleRoutes(router: Router, opts: {
-    assign: (body: any, guestId: string) => Promise<void>;
-    unassign: (body: any, guestId: string) => Promise<void>;
-}) {
-    attachGenericAssignRoutes(router, '/:id/take-role', '/:id/leave-role', opts);
+export type AssignmentOperation = 'assign' | 'unassign';
+
+interface AssignmentRouteSecurity {
+    middleware: RequestHandler[];
+    resolveItemEntityId: (itemId: string) => Promise<string | undefined>;
+    authorize?: (req: Request, profileId: string, operation: AssignmentOperation) => Promise<void>;
+    enforceActivityBindingDeadline?: boolean;
 }
 
-export function attachGenericAssignRoutes(router: Router, assignRoute: string, unassignRoute: string, opts: {
-    assign: (body: any, profileId: string) => Promise<void>,
-    unassign: (body: any, profileId: string) => Promise<void>
-}) {
-    router.post(assignRoute, asyncHandler(async (req: Request, res: Response) => {
-        await enforcePlanBindingDeadline(req, res.locals.permData as PermBundle | undefined);
-        await performAPIAction(req, opts.assign);
+export function attachAssignRoutes(
+    router: Router,
+    opts: AssignmentAccessMapping,
+    security: AssignmentRouteSecurity,
+) {
+    attachGenericAssignRoutes(router, '/:id/assign', '/:id/unassign', opts, security);
+}
+
+export function attachAssignRoleRoutes(
+    router: Router,
+    opts: AssignmentAccessMapping,
+    security: AssignmentRouteSecurity,
+) {
+    attachGenericAssignRoutes(router, '/:id/take-role', '/:id/leave-role', opts, security);
+}
+
+export function attachGenericAssignRoutes(
+    router: Router,
+    assignRoute: string,
+    unassignRoute: string,
+    opts: AssignmentAccessMapping,
+    security: AssignmentRouteSecurity,
+) {
+    router.post(assignRoute, ...security.middleware, asyncHandler(async (req: Request, res: Response) => {
+        if (security.enforceActivityBindingDeadline) {
+            await enforcePlanBindingDeadline(req, res.locals.permData as PermBundle | undefined);
+        }
+        await performSecuredAssignmentAction(req, opts.assign, security, 'assign');
         renderer.respondWithSuccessJson(res, 'Assigned');
     }));
 
-    router.post(unassignRoute, asyncHandler(async (req: Request, res: Response) => {
-        await enforcePlanBindingDeadline(req, res.locals.permData as PermBundle | undefined);
-        await performAPIAction(req, opts.unassign);
+    router.post(unassignRoute, ...security.middleware, asyncHandler(async (req: Request, res: Response) => {
+        if (security.enforceActivityBindingDeadline) {
+            await enforcePlanBindingDeadline(req, res.locals.permData as PermBundle | undefined);
+        }
+        await performSecuredAssignmentAction(req, opts.unassign, security, 'unassign');
         renderer.respondWithSuccessJson(res, 'Unassigned');
     }));
+}
+
+async function performSecuredAssignmentAction(
+    req: Request,
+    action: AssignmentAccessMapping['assign'],
+    security: AssignmentRouteSecurity,
+    operation: AssignmentOperation,
+) {
+    await performAPIAction(req, async (body, profileId) => {
+        const itemId = typeof body?.itemId === 'string' ? body.itemId : '';
+        if (!itemId) {
+            throw new APIError('Assignment item is required', body, 400);
+        }
+
+        await enforceAssignmentItemScope(req.params.id as string, itemId, security.resolveItemEntityId);
+
+        await security.authorize?.(req, profileId, operation);
+        await action(body, profileId);
+    });
+}
+
+export async function enforceAssignmentItemScope(
+    routeEntityId: string,
+    itemId: string,
+    resolveItemEntityId: (itemId: string) => Promise<string | undefined>,
+) {
+    let itemEntityId: string | undefined;
+    try {
+        itemEntityId = await resolveItemEntityId(itemId);
+    } catch {
+        throw new APIError('Assignment item not found in this resource', {itemId}, 404);
+    }
+
+    if (!itemEntityId || itemEntityId !== routeEntityId) {
+        throw new APIError('Assignment item not found in this resource', {itemId}, 404);
+    }
 }
 
 export async function enforcePlanBindingDeadline(req: Request, permData?: PermBundle) {

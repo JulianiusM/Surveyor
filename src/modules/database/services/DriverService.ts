@@ -17,6 +17,7 @@
 // src/modules/database/driversService.ts
 import {DeepPartial, EntityNotFoundError, In} from "typeorm";
 import type {DriversItemAssignee, EnrichedDriversItem} from "../../../types/DriversTypes";
+import {APIError} from '../../lib/errors';
 import {generateUniqueId} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {DriversAssignment} from '../entities/drivers/DriversAssignment';
@@ -216,26 +217,29 @@ export async function assignDriversItem(
     itemId: string,
     profileId: string
 ): Promise<void> {
-    const repo = AppDataSource.getRepository(DriversAssignment);
+    await AppDataSource.transaction(async (manager) => {
+        const item = await manager.getRepository(DriversItem).findOne({
+            where: {id: itemId},
+            lock: {mode: 'pessimistic_write'},
+        });
+        if (!item) throw new APIError('Drivers item not found', {itemId}, 404);
 
-    const {entityId: listId} = await getDriversItemById(itemId);
+        const repo = manager.getRepository(DriversAssignment);
+        const existing = await repo.findOneBy({item: {id: itemId}, profile: {id: profileId}});
+        if (existing) return;
 
-    // construct the assignment entity
-    const assignment = repo.create({
-        item: {id: itemId},
-        profile: {id: profileId},
-        entity: {id: listId},
-    });
+        if (typeof item.maxAssignees === 'number') {
+            const assignedCount = await repo.countBy({item: {id: itemId}});
+            if (assignedCount >= item.maxAssignees) {
+                throw new APIError('This driver offer is already full', {itemId}, 409);
+            }
+        }
 
-    const existing = await repo.findOneBy({item: {id: itemId}, profile: {id: profileId}});
-    if (existing) {
-        assignment.id = existing.id;
-    }
-
-    // if you want to ignore duplicates, use upsert with conflict paths
-    await repo.upsert(assignment, {
-        conflictPaths: ["item", "profile", "entity"], // adjust to your unique constraint
-        skipUpdateIfNoValuesChanged: true,
+        await repo.save(repo.create({
+            item: {id: itemId},
+            profile: {id: profileId},
+            entity: {id: item.entityId},
+        }));
     });
 }
 

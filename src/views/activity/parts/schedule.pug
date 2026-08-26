@@ -1,12 +1,33 @@
-// Participant summary (only if the current user has assignments)
-if data.assignments && data.assignments.length
-    .alert.alert-info.d-flex.justify-content-between.align-items-center.mb-3#my-assignment-summary
+// Participant-facing requirement progress, placed before the filters used to choose more slots.
+if data.requirementProgress
+    - const progress = data.requirementProgress
+    .alert.d-flex.flex-wrap.justify-content-between.align-items-center.gap-2.mb-3#my-requirement-progress(
+        class=progress.requiredShifts === 0 ? 'alert-info' : progress.complete ? 'alert-success' : 'alert-warning'
+        data-assigned-shifts=progress.assignedShifts
+        data-required-shifts=progress.requiredShifts
+    )
         span
-            i.bi.bi-person-check.me-2
-            | You are assigned to
-            span.fw-semibold.ms-1 #{data.assignments.length}
-            |  slot(s) in this plan.
-        small.text-secondary.ms-3.d-none.d-md-inline Use the filter buttons to focus on your own or open slots.
+            if progress.requiredShifts === 0
+                i.bi.bi-info-circle.me-2
+                | You currently participate in
+                strong.mx-1 #{progress.assignedShifts}
+                | #{progress.assignedShifts === 1 ? 'slot' : 'slots'}. No minimum is required.
+            else if progress.complete
+                i.bi.bi-check-circle-fill.me-2
+                strong You're done:
+                |  #{progress.assignedShifts} of #{progress.requiredShifts} required slots covered.
+            else
+                i.bi.bi-exclamation-circle-fill.me-2
+                | You participate in
+                strong.mx-1 #{progress.assignedShifts} of #{progress.requiredShifts}
+                | required slots.
+                strong.ms-1 Take #{progress.remainingShifts} more.
+        small.d-none.d-md-inline Use “My slots” or “Open slots” below to focus the schedule.
+
+if data.canSelfAssign === false
+    .alert.alert-info.py-2.px-3.mb-3
+        i.bi.bi-info-circle.me-2
+        | This plan is linked to an event. Register for the event before taking slots, unless an organizer enables external sign-ups.
 
 // Filter toolbar
 .d-flex.flex-wrap.justify-content-between.align-items-center.mb-3#schedule-filter-bar
@@ -81,6 +102,7 @@ each week in weeks
                                     - const startTime = slot.startTime ? slot.startTime.slice(0, 5) : null
                                     - const endTime = slot.endTime ? slot.endTime.slice(0, 5) : null
                                     - const slotRoles = (data.roles.slotRoles ? data.roles.slotRoles[slot.id] || [] : [])
+                                    - const canJoinSlot = data.canSelfAssign !== false && (data.plan.allowOverfillAfterFull || slot.assignedCount < slot.maxAssignees)
                                     - const roleIdsStr = slotRoles.length ? slotRoles.map(r => r.id).join(',') : ''
                                     .slot.border.rounded.p-2.mb-2.d-grid.gap-1.draggable(
                                         data-slotid=slot.id
@@ -90,7 +112,7 @@ each week in weeks
                                         data-end=slot.endTime
                                         data-role-ids=roleIdsStr
                                         data-my=my ? '1' : null
-                                        data-open=(slot.assignedCount < slot.maxAssignees ? '1' : null)
+                                        data-open=(data.plan.allowOverfillAfterFull || slot.assignedCount < slot.maxAssignees ? '1' : null)
                                         draggable=permData.entity.has('ITEM_EDIT') ? 'true' : null)
 
                                         // ── Header: title + time + admin controls
@@ -147,7 +169,8 @@ each week in weeks
                                                         slotRole.name,
                                                         slotRole.description || slotRole.name,
                                                         data.assigneeLists[slot.id],
-                                                        profile)
+                                                        profile,
+                                                        data.canSelfAssign !== false && (my || data.plan.allowOverfillAfterFull || slot.assignedCount < slot.maxAssignees))
 
                                                 // single admin button per slot – opens modal
                                                 if permData.itemAllow(slot.id, 'MANAGE_ASSIGNMENTS', 'MANAGE_ASSIGNMENTS')
@@ -185,9 +208,11 @@ each week in weeks
                                             if my
                                                 button.btn.btn-sm.btn-outline-danger.flex-grow-1(
                                                     data-action="unassign") Leave
-                                            else if slot.assignedCount < slot.maxAssignees
+                                            else if canJoinSlot
                                                 button.btn.btn-sm.btn-outline-success.flex-grow-1(
                                                     data-action="assign") Join
+                                            else if data.canSelfAssign === false
+                                                span.badge.bg-secondary.flex-grow-1.text-center Registration required
                                             else
                                                 span.badge.bg-secondary.flex-grow-1.text-center Full
                             else

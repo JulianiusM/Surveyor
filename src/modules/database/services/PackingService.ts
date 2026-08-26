@@ -16,6 +16,7 @@
 
 // TypeORM-based implementation of the packing list module
 import {In} from "typeorm";
+import {APIError} from '../../lib/errors';
 import {generateUniqueId} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {PackingAssignment} from '../entities/packing/PackingAssignment';
@@ -220,18 +221,30 @@ export async function getLastPackingItemNumber(listId: string): Promise<number> 
 
 // Assignments
 export async function assignPackingItem(itemId: string, profileId: string) {
-    const itemRepo = AppDataSource.getRepository(PackingItem);
-    const item = await itemRepo.findOneBy({id: itemId});
-    if (!item) return;
-    const repo = AppDataSource.getRepository(PackingAssignment);
-    const exists = await repo.findOneBy({item: {id: itemId}, profile: {id: profileId}});
-    if (!exists) {
+    await AppDataSource.transaction(async (manager) => {
+        const item = await manager.getRepository(PackingItem).findOne({
+            where: {id: itemId},
+            lock: {mode: 'pessimistic_write'},
+        });
+        if (!item) throw new APIError('Packing item not found', {itemId}, 404);
+
+        const repo = manager.getRepository(PackingAssignment);
+        const exists = await repo.findOneBy({item: {id: itemId}, profile: {id: profileId}});
+        if (exists) return;
+
+        if (typeof item.maxAssignees === 'number') {
+            const assignedCount = await repo.countBy({item: {id: itemId}});
+            if (assignedCount >= item.maxAssignees) {
+                throw new APIError('This packing item is already fully assigned', {itemId}, 409);
+            }
+        }
+
         await repo.save(repo.create({
             item: {id: itemId},
             profile: {id: profileId},
             entity: {id: item.entityId}
         }));
-    }
+    });
 }
 
 export async function unassignPackingItem(itemId: string, profileId: string) {

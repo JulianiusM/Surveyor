@@ -17,13 +17,16 @@
 import {
     normalizeOverrideInput,
     normalizeRoleRequirementInput,
+    normalizeStayRequirementInput,
     RequirementOverrideInput,
     RoleRequirementInput,
+    StayRequirementInput,
 } from "../../activity/requirements";
 import {AppDataSource} from "../dataSource";
 import {ActivityPlan} from "../entities/activity/ActivityPlan";
 import {ActivityPlanRequirement} from "../entities/activity/ActivityPlanRequirement";
 import {ActivityPlanRequirementOverride} from "../entities/activity/ActivityPlanRequirementOverride";
+import {ActivityPlanStayRequirement} from "../entities/activity/ActivityPlanStayRequirement";
 
 /**
  * Persistence layer for requirement settings. This service centralizes transactional updates
@@ -39,6 +42,7 @@ export type PlanRequirementSettings = Partial<Pick<
     | "roundingMode"
     | "bindingDeadline"
     | "allowOverfillAfterFull"
+    | "allowExternalAssignees"
     | "allowArrivalDayEvening"
     | "allowDepartureDayMorning"
 >>;
@@ -54,11 +58,13 @@ export interface RequirementConfiguration {
         | "endDate"
         | "bindingDeadline"
         | "allowOverfillAfterFull"
+        | "allowExternalAssignees"
         | "allowArrivalDayEvening"
         | "allowDepartureDayMorning"
     >;
     roleRequirements: ActivityPlanRequirement[];
     overrides: ActivityPlanRequirementOverride[];
+    stayRequirements: ActivityPlanStayRequirement[];
 }
 
 export async function getRequirementConfiguration(planId: string): Promise<RequirementConfiguration> {
@@ -74,12 +80,14 @@ export async function getRequirementConfiguration(planId: string): Promise<Requi
             endDate: true,
             bindingDeadline: true,
             allowOverfillAfterFull: true,
+            allowExternalAssignees: true,
             allowArrivalDayEvening: true,
             allowDepartureDayMorning: true
         },
         relations: {
             activityPlanRequirements: {role: true},
             activityPlanRequirementOverrides: {role: true, profile: true},
+            activityPlanStayRequirements: true,
         },
     });
 
@@ -91,6 +99,7 @@ export async function getRequirementConfiguration(planId: string): Promise<Requi
         plan,
         roleRequirements: plan.activityPlanRequirements,
         overrides: plan.activityPlanRequirementOverrides,
+        stayRequirements: [...(plan.activityPlanStayRequirements ?? [])].sort((a, b) => a.stayDays - b.stayDays),
     };
 }
 
@@ -140,13 +149,20 @@ export async function replaceRequirements(
     roleRequirements: RoleRequirementInput[],
     overrides: RequirementOverrideInput[],
     planSettings?: PlanRequirementSettings,
+    stayRequirements: StayRequirementInput[] = [],
 ): Promise<void> {
     await AppDataSource.transaction(async (manager) => {
         const roleRepo = manager.getRepository(ActivityPlanRequirement);
         const overrideRepo = manager.getRepository(ActivityPlanRequirementOverride);
+        const stayRepo = manager.getRepository(ActivityPlanStayRequirement);
         const planRepo = manager.getRepository(ActivityPlan);
         const normalizedRoles = roleRequirements.map(normalizeRoleRequirementInput);
         const normalizedOverrides = overrides.map(normalizeOverrideInput);
+        const normalizedStayRequirements = stayRequirements.map(normalizeStayRequirementInput);
+
+        if (new Set(normalizedStayRequirements.map((requirement) => requirement.stayDays)).size !== normalizedStayRequirements.length) {
+            throw new Error("Stay durations must be unique");
+        }
 
         const planPatch: PlanRequirementSettings = {};
 
@@ -165,6 +181,9 @@ export async function replaceRequirements(
         if (planSettings?.allowOverfillAfterFull !== undefined) {
             planPatch.allowOverfillAfterFull = planSettings.allowOverfillAfterFull;
         }
+        if (planSettings?.allowExternalAssignees !== undefined) {
+            planPatch.allowExternalAssignees = planSettings.allowExternalAssignees;
+        }
         if (planSettings?.allowArrivalDayEvening !== undefined) {
             planPatch.allowArrivalDayEvening = planSettings.allowArrivalDayEvening;
         }
@@ -175,6 +194,7 @@ export async function replaceRequirements(
         // Delete old requirements and overrides sequentially
         await roleRepo.delete({entity: {id: planId}});
         await overrideRepo.delete({entity: {id: planId}});
+        await stayRepo.delete({entity: {id: planId}});
 
         if (Object.keys(planPatch).length) {
             await planRepo.update({id: planId}, planPatch);
@@ -202,6 +222,17 @@ export async function replaceRequirements(
                 })
             );
             await overrideRepo.save(overrideRows);
+        }
+
+        if (normalizedStayRequirements.length) {
+            const stayRows = normalizedStayRequirements.map((requirement) =>
+                stayRepo.create({
+                    entity: {id: planId},
+                    stayDays: requirement.stayDays,
+                    requiredShifts: requirement.requiredShifts,
+                })
+            );
+            await stayRepo.save(stayRows);
         }
     });
 }

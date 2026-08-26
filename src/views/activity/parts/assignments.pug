@@ -28,6 +28,18 @@ if permData.entity.has('MANAGE_REQUIREMENTS') && data.plan.eventId
                 | Define required shifts, rounding, and optional overrides for participants.
                 |  Leave counts empty to skip enforcement; rules are optional.
 
+            .alert.alert-secondary.requirement-coverage-status.py-2.px-3.mb-3#requirementCoverageStatus(
+                role="status"
+                aria-live="polite"
+            )
+                .d-flex.flex-wrap.align-items-center.justify-content-between.gap-2
+                    .d-flex.align-items-start.gap-2
+                        i.bi.bi-bar-chart-fill.mt-1(data-coverage-icon)
+                        div
+                            strong.d-block(data-coverage-title) Loading coverage…
+                            small(data-coverage-detail) Comparing required assignments with the slot target.
+                    .d-flex.flex-wrap.gap-1(data-coverage-counts)
+
             form#requirementForm
                 .row.g-3
                     .col-md-3
@@ -53,9 +65,26 @@ if permData.entity.has('MANAGE_REQUIREMENTS') && data.plan.eventId
                         label.form-label(for="bindingDeadline") Binding deadline
                         input#bindingDeadline.form-control.form-control-sm.text-bg-dark(type="datetime-local" placeholder="optional")
 
+                hr
+                h6.d-flex.justify-content-between.align-items-center
+                    span Stay duration requirements
+                    small.text-secondary Exact shifts by days present
+                p.text-secondary.small.mb-2
+                    | Calculate a baseline to fill these values proportionally, then adjust any stay length as needed.
+                    |  Saved values take precedence over the rounded proportional share.
+                .stay-requirement-scroll.border.border-secondary-subtle.rounded.p-2
+                    .stay-requirement-grid#stayRequirementList
+                        span.text-secondary.small Loading stay durations…
+
                 .form-check.form-switch.my-3
                     input#allowOverfill.form-check-input(type="checkbox" role="switch")
                     label.form-check-label(for="allowOverfill") Allow assignments beyond slot capacity
+
+                .form-check.form-switch.mb-3
+                    input#allowExternalAssignees.form-check-input(type="checkbox" role="switch")
+                    label.form-check-label(for="allowExternalAssignees") Allow non-participants to take slots
+                    .form-text.text-secondary
+                        | Off by default. When enabled, profiles with access to this plan may sign up without an event registration.
 
                 .row.g-3
                     .col-md-6
@@ -74,7 +103,7 @@ if permData.entity.has('MANAGE_REQUIREMENTS') && data.plan.eventId
                 .row.g-2#roleRequirementList
 
                 hr
-                h6.d-flex.justify-content-between.align-items-center
+                h6.d-flex.justify-content-between.align-items-center.mb-2
                     span Participant overrides
                     button.btn.btn-sm.btn-outline-info(type="button" data-add-override)
                         i.bi.bi-plus-lg.me-1
@@ -82,32 +111,27 @@ if permData.entity.has('MANAGE_REQUIREMENTS') && data.plan.eventId
                 p.text-secondary.small.mb-2
                     | Specify event participant-specific required shifts and optional roles to override the general rule.
                     |  Only registered participants are eligible for overrides.
-                .d-grid.gap-2#overrideList
+                .override-list-scroll#overrideList
+
+                .d-flex.flex-wrap.justify-content-end.align-items-center.gap-2.border-top.border-secondary-subtle.mt-3.pt-3
+                    small.text-secondary.me-auto Changes are only applied after saving.
+                    button.btn.btn-success(type="button" data-requirements-save)
+                        i.bi.bi-save.me-1
+                        | Save requirement settings
 
     hr
     h6.d-flex.justify-content-between.align-items-center.mt-3
         span
             span.badge.bg-light.text-dark.me-2 Step 2
             | Check coverage
-        small.text-secondary Remaining vs assigned per attendee
+        small.text-secondary Assignment, attendance, role, and requirement status
 
-    .d-flex.justify-content-between.align-items-center.mb-2
-        small.text-secondary Overall coverage:
-        small#requirementSummaryStats.text-secondary
-            | No participants yet.
-
-    .table-responsive
-        table.table.table-dark.table-bordered.mb-0
-            thead
-                tr
-                    th Participant
-                    th.text-center Required / Assigned
-                    th.text-center Remaining
-                    th.text-center Attendance
-                    th.text-center Source
-            tbody#requirementSummaryBody
-                tr(data-empty-state)
-                    td(colspan="5").text-center.text-secondary.pt-3 No participants yet.
+    +participantStatus({
+        id: 'requirement-participant-status',
+        items: [],
+        assignmentMode: data.plan.assignmentMode || 'FREE',
+        controls: true
+    })
 
 // Step 3: Recommendations
 if permData.entity.has('MANAGE_ASSIGNMENTS') && data.plan.eventId

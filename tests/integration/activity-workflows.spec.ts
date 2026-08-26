@@ -10,6 +10,9 @@ import packingController from '../../src/controller/packingController';
 import surveyController from '../../src/controller/surveyController';
 import * as userController from '../../src/controller/userController';
 import {Profile} from '../../src/modules/database/entities/user/Profile';
+import {AddActivityPlanStayRequirements1787688000000} from '../../src/migrations/1787688000000-AddActivityPlanStayRequirements';
+import {AddActivityPlanExternalAssignees1787688100000} from '../../src/migrations/1787688100000-AddActivityPlanExternalAssignees';
+import {AppDataSource} from '../../src/modules/database/dataSource';
 import {PERM} from '../../src/modules/lib/permissions';
 import * as activityService from '../../src/modules/database/services/ActivityService';
 import * as driverService from '../../src/modules/database/services/DriverService';
@@ -177,6 +180,7 @@ describe('activity plan user stories', () => {
         await assignActivitySlot(slot.id, participant.id);
         const plan = await activityService.getActivityPlanById(planId);
         const [role] = await activityController.addActivityRole(plan!, {name: 'Coordinator'});
+        await activityController.addSlotRole(slot.id, {roles: [role.id]});
         await activityController.getRoleAccessMapping().assign({itemId: slot.id, role: 'Coordinator'}, participant.id);
         const [participantRoles] = await activityService.getParticipantRolesForPlan(planId);
         expect(participantRoles.participantKey).toBe(`profile:${participant.id}`);
@@ -202,6 +206,135 @@ describe('activity plan user stories', () => {
 });
 
 describe('automatic activity assignment user stories', () => {
+    it('uses the profile name for an assignee who is not registered for the linked event', async () => {
+        const eventId = await createIntegrationEvent(owner.id, 'External provider activity event');
+        const planId = await createEventActivityPlan(owner.id, eventId);
+        const [slot] = await activityService.getActivitySlotsFlat(planId);
+        await assignActivitySlot(slot.id, owner.id);
+
+        const requirements = await activityController.getRequirements(planId);
+
+        expect(requirements.participants).toEqual([
+            expect.objectContaining({
+                participantKey: `profile:${owner.id}`,
+                name: owner.name,
+                assignedShifts: 1,
+            }),
+        ]);
+    });
+
+    it('blocks self-assignment by profiles who are not registered for the linked event', async () => {
+        const eventId = await createIntegrationEvent(owner.id, 'Participant-only activity event');
+        const planId = await createEventActivityPlan(owner.id, eventId);
+        const [slot] = await activityService.getActivitySlotsFlat(planId);
+
+        await expect(activityController.authorizeSelfAssignment(
+            planId,
+            slot.id,
+            owner.id,
+            'assign',
+        )).rejects.toMatchObject({status: 403});
+    });
+
+    it('allows explicitly enabled external profiles to take linked-plan slots', async () => {
+        const eventId = await createIntegrationEvent(owner.id, 'External provider opt-in event');
+        const planId = await createEventActivityPlan(owner.id, eventId);
+        const [slot] = await activityService.getActivitySlotsFlat(planId);
+        await activityController.updateRequirements(planId, {
+            allowExternalAssignees: true,
+            roleRequirements: [],
+            stayRequirements: [],
+            overrides: [],
+        });
+
+        await expect(activityController.authorizeSelfAssignment(
+            planId,
+            slot.id,
+            owner.id,
+            'assign',
+        )).resolves.toBeUndefined();
+        expect(Boolean((await activityController.getRequirements(planId)).plan.allowExternalAssignees)).toBe(true);
+    });
+
+    it('rejects slots from another activity plan and unconfigured role names', async () => {
+        const firstPlanId = await createActivityPlanWithSlot(owner.id);
+        const secondPlanId = await createActivityPlanWithSlot(owner.id);
+        const [firstSlot] = await activityService.getActivitySlotsFlat(firstPlanId);
+        const [secondSlot] = await activityService.getActivitySlotsFlat(secondPlanId);
+
+        await expect(activityController.authorizeSelfAssignment(
+            firstPlanId,
+            secondSlot.id,
+            participant.id,
+            'assign',
+        )).rejects.toMatchObject({status: 404});
+        await expect(activityController.authorizeSelfAssignment(
+            firstPlanId,
+            firstSlot.id,
+            participant.id,
+            'assign',
+            'Injected role',
+        )).rejects.toMatchObject({status: 400});
+    });
+
+    it('rejects tampered recommendations that target another plan or a non-participant', async () => {
+        const eventId = await createIntegrationEvent(owner.id, 'Scoped recommendation event');
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        const planId = await createEventActivityPlan(owner.id, eventId);
+        const otherPlanId = await createActivityPlanWithSlot(owner.id);
+        const [slot] = await activityService.getActivitySlotsFlat(planId);
+        const [otherSlot] = await activityService.getActivitySlotsFlat(otherPlanId);
+
+        await expect(activityController.updateRecommendations(planId, {recommendations: [{
+            itemId: otherSlot.id,
+            profileId: participant.id,
+        }]})).rejects.toMatchObject({status: 400});
+        await expect(activityController.updateRecommendations(planId, {recommendations: [{
+            itemId: slot.id,
+            profileId: owner.id,
+        }]})).rejects.toMatchObject({status: 400});
+    });
+
+    it('enforces a full activity slot as a hard cap when overfill is disabled', async () => {
+        const planId = await createActivityPlanWithSlot(owner.id);
+        const [slot] = await activityService.getActivitySlotsFlat(planId);
+        await activityService.updateActivitySlot(slot.id, {maxAssignees: 1});
+        await assignActivitySlot(slot.id, participant.id);
+
+        await expect(activityController.authorizeSelfAssignment(
+            planId,
+            slot.id,
+            secondParticipant.id,
+            'assign',
+        )).rejects.toMatchObject({status: 409});
+        await expect(assignActivitySlot(slot.id, secondParticipant.id)).rejects.toMatchObject({status: 409});
+    });
+
+    it('shows required progress before a participant takes their first slot', async () => {
+        const eventId = await createIntegrationEvent(owner.id, 'Required progress event');
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        const planId = await createEventActivityPlan(owner.id, eventId);
+        await activityController.updateRequirements(planId, {
+            assignmentMode: 'REQUIRED',
+            generalRequiredShifts: 2,
+            roleRequirements: [],
+            overrides: [],
+        });
+
+        const plan = await activityService.getActivityPlanById(planId);
+        const participantView = await activityController.fetchForView(
+            plan!,
+            {session: {profile: participant}} as Request,
+        );
+
+        expect(participantView.requirementProgress).toEqual({
+            assignedShifts: 0,
+            requiredShifts: 2,
+            remainingShifts: 2,
+            complete: false,
+        });
+    });
+
     it('calculates a realistic baseline requirement for registered participants', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Automatic duties event');
         await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
@@ -216,6 +349,81 @@ describe('automatic activity assignment user stories', () => {
 
         expect(baseline).toMatchObject({feasible: true, totalRequiredShifts: 4, remainingShifts: 4});
         expect(baseline.participants).toHaveLength(2);
+        expect(baseline.stayRequirements).toEqual([
+            {stayDays: 1, requiredShifts: 1},
+            {stayDays: 2, requiredShifts: 2},
+            {stayDays: 3, requiredShifts: 2},
+        ]);
+    });
+
+    it('persists an adjusted stay-duration requirement and uses it for recommendations', async () => {
+        const eventId = await createIntegrationEvent(owner.id, 'Adjusted duties event');
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-02'});
+        const planId = await createEventActivityPlan(owner.id, eventId);
+
+        await activityController.updateRequirements(planId, {
+            assignmentMode: 'REQUIRED', generalRequiredShifts: 6, roundingMode: 'CEIL',
+            stayRequirements: [
+                {stayDays: 1, requiredShifts: 1},
+                {stayDays: 2, requiredShifts: 1},
+                {stayDays: 3, requiredShifts: 6},
+            ],
+            roleRequirements: [], overrides: [],
+        });
+
+        const requirements = await activityController.getRequirements(planId);
+        expect(requirements.stayRequirements.map(({stayDays, requiredShifts}) => ({stayDays, requiredShifts}))).toEqual([
+            {stayDays: 1, requiredShifts: 1},
+            {stayDays: 2, requiredShifts: 1},
+            {stayDays: 3, requiredShifts: 6},
+        ]);
+        expect(requirements.participants[0].requiredShifts).toBe(1);
+        expect(requirements.participants[0].attendanceDays).toBe(2);
+        expect(requirements.capacitySummary).toEqual({availableSlots: 4, requiredSlots: 1, difference: 3});
+
+        const plan = await activityService.getActivityPlanById(planId);
+        const participantView = await activityController.fetchForView(
+            plan!,
+            {session: {profile: participant}} as Request,
+        );
+        expect(participantView.requirementProgress).toEqual({
+            assignedShifts: 0,
+            requiredShifts: 1,
+            remainingShifts: 1,
+            complete: false,
+        });
+        expect(participantView.participantList).toEqual([
+            expect.objectContaining({
+                name: participant.name,
+                assignedShifts: 0,
+                requiredShifts: 1,
+                remainingShifts: 1,
+                attendanceDays: 2,
+                roles: [],
+                assignmentMode: 'REQUIRED',
+            }),
+        ]);
+
+        await activityController.autoGenerateRecommendations(planId);
+        expect((await activityController.getRecommendations(planId)).recommendations).toHaveLength(1);
+
+        const [slot] = await activityService.getActivitySlotsFlat(planId);
+        await assignActivitySlot(slot.id, participant.id);
+        const completedView = await activityController.fetchForView(
+            plan!,
+            {session: {profile: participant}} as Request,
+        );
+        expect(completedView.requirementProgress).toEqual({
+            assignedShifts: 1,
+            requiredShifts: 1,
+            remainingShifts: 0,
+            complete: true,
+        });
+        expect(completedView.participantList[0]).toMatchObject({
+            assignedShifts: 1,
+            requiredShifts: 1,
+            remainingShifts: 0,
+        });
     });
 
     it('automatically recommends available participants for open activity slots', async () => {
@@ -279,5 +487,45 @@ describe('automatic activity assignment user stories', () => {
         }]});
 
         expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([]);
+    });
+});
+
+describe('activity stay requirement migration', () => {
+    it('can run up and down repeatedly while restoring the entity table', async () => {
+        const migration = new AddActivityPlanStayRequirements1787688000000();
+        const queryRunner = AppDataSource.createQueryRunner();
+        await queryRunner.connect();
+
+        try {
+            await migration.up(queryRunner);
+            await migration.up(queryRunner);
+            await migration.down(queryRunner);
+            await migration.down(queryRunner);
+            await migration.up(queryRunner);
+
+            expect(await queryRunner.hasTable('activity_plan_stay_requirements')).toBe(true);
+        } finally {
+            await queryRunner.release();
+        }
+    });
+});
+
+describe('activity external assignee migration', () => {
+    it('can run up and down repeatedly while restoring the policy column', async () => {
+        const migration = new AddActivityPlanExternalAssignees1787688100000();
+        const queryRunner = AppDataSource.createQueryRunner();
+        await queryRunner.connect();
+
+        try {
+            await migration.up(queryRunner);
+            await migration.up(queryRunner);
+            await migration.down(queryRunner);
+            await migration.down(queryRunner);
+            await migration.up(queryRunner);
+
+            expect(await queryRunner.hasColumn('activity_plans', 'allow_external_assignees')).toBe(true);
+        } finally {
+            await queryRunner.release();
+        }
     });
 });

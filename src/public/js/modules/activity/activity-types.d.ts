@@ -46,7 +46,14 @@ export interface WarningModal {
 export type SlotEditorMode = 'create' | 'edit';
 
 // Participant types
-export type ParticipantFilter = 'all' | 'assigned' | 'unassigned';
+export type ParticipantFilter =
+    | 'all'
+    | 'assigned'
+    | 'unassigned'
+    | 'unstarted'
+    | 'needs-more'
+    | 'complete'
+    | 'no-requirement';
 
 // Recommendation types
 export interface RecommendationRow {
@@ -74,10 +81,14 @@ export interface RecommendationWarning {
 export interface RequirementParticipantSummary {
     participantKey: string;
     name?: string | null;
+    roleIds?: number[];
+    roles?: string[];
+    assignmentMode?: 'FREE' | 'REQUIRED';
     requiredShifts: number;
     assignedShifts: number;
     remainingShifts: number;
     source: 'none' | 'general' | 'role' | 'override';
+    attendanceDays: number;
     attendance?: {
         arrivalDate?: string | null;
         departureDate?: string | null;
@@ -97,12 +108,21 @@ export interface RequirementConfiguration {
         assignmentMode?: 'FREE' | 'REQUIRED';
         generalRequiredShifts?: number | null;
         roundingMode?: 'CEIL' | 'ROUND' | 'FLOOR' | null;
+        startDate: string;
+        endDate: string;
         bindingDeadline?: string | Date | null;
         allowOverfillAfterFull?: boolean;
+        allowExternalAssignees?: boolean;
         allowArrivalDayEvening?: boolean;
         allowDepartureDayMorning?: boolean;
     };
     roleRequirements: { roleId: number; requiredShifts: number }[];
+    stayRequirements: { stayDays: number; requiredShifts: number }[];
+    capacitySummary?: {
+        availableSlots: number;
+        requiredSlots: number;
+        difference: number;
+    };
     overrideTargets?: RequirementOverrideTarget[];
     overrides: {
         id?: number;

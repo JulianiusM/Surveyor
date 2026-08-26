@@ -1,0 +1,126 @@
+mixin participantStatusRow(participant, assignmentMode)
+    -
+        const assignedShifts = Number(participant.assignedShifts != null ? participant.assignedShifts : participant.count || 0);
+        const requiredShifts = Number(participant.requiredShifts || 0);
+        const remainingShifts = Number(participant.remainingShifts || 0);
+        const mode = participant.assignmentMode || assignmentMode || 'FREE';
+        const attendance = participant.attendance || {};
+        const arrival = attendance.arrivalDate || '';
+        const departure = attendance.departureDate || '';
+        const attendanceLabel = arrival || departure ? `${arrival || 'start'} – ${departure || 'end'}` : 'Full plan';
+        const roles = (participant.roles || []).filter(role => role !== 'default');
+        const source = participant.source || 'none';
+        const requirementState = requiredShifts <= 0
+            ? 'no-requirement'
+            : remainingShifts <= 0
+                ? 'complete'
+                : assignedShifts <= 0 ? 'unstarted' : 'needs-more';
+    .participant-status-row(
+        data-participant-row
+        data-participant-name=participant.name
+        data-participant-key=participant.participantKey
+        data-participant-assigned=(assignedShifts > 0 ? '1' : '0')
+        data-participant-state=requirementState
+    )
+        .participant-status-cell.participant-status-person
+            span.participant-status-label Participant
+            strong= participant.name || participant.participantKey
+        .participant-status-cell
+            span.participant-status-label Assignments
+            .d-flex.flex-wrap.align-items-center.gap-1
+                span.badge(class=assignedShifts > 0 ? 'bg-success text-white' : requirementState === 'unstarted' ? 'bg-danger text-white' : 'bg-secondary text-white border border-light-subtle')
+                    | #{assignedShifts} #{assignedShifts === 1 ? 'slot' : 'slots'}
+                small(class=requirementState === 'unstarted' ? 'text-danger' : 'text-secondary')
+                    = assignedShifts > 0 ? 'Assigned' : requirementState === 'unstarted' ? 'Not started' : 'Not assigned'
+        .participant-status-cell
+            span.participant-status-label Requirement
+            if mode === 'REQUIRED' || requiredShifts > 0
+                .d-flex.flex-wrap.align-items-center.gap-1
+                    span.badge.bg-light.text-dark #{requiredShifts} required
+                    if remainingShifts > 0
+                        span.badge(class=requirementState === 'unstarted' ? 'bg-danger text-white' : 'bg-warning text-dark') #{remainingShifts} remaining
+                    else
+                        span.badge.bg-success.text-white Complete
+                    if source !== 'none'
+                        span.badge.bg-info.text-white.text-uppercase= source
+            else
+                .d-flex.flex-wrap.align-items-center.gap-1
+                    span.badge.bg-secondary.text-white No minimum
+                    small.text-secondary Free mode
+        .participant-status-cell
+            span.participant-status-label Attendance
+            span.small.d-block= attendanceLabel
+            small.text-secondary
+                | #{participant.attendanceDays || 0} #{participant.attendanceDays === 1 ? 'day' : 'days'}
+        .participant-status-cell
+            span.participant-status-label Roles
+            if roles.length
+                each role in roles
+                    span.badge.bg-info.text-white.me-1.mb-1= role
+            else
+                span.text-secondary.small No roles
+
+mixin participantStatus(config)
+    -
+        const items = config.items || [];
+        const assignedCount = items.filter(item => Number(item.assignedShifts != null ? item.assignedShifts : item.count || 0) > 0).length;
+        const mode = config.assignmentMode || 'FREE';
+        const unstartedCount = items.filter(item => Number(item.requiredShifts || 0) > 0 && Number(item.assignedShifts != null ? item.assignedShifts : item.count || 0) === 0).length;
+        const needsMoreCount = items.filter(item => Number(item.remainingShifts || 0) > 0 && Number(item.assignedShifts != null ? item.assignedShifts : item.count || 0) > 0).length;
+        const completeCount = items.filter(item => Number(item.requiredShifts || 0) > 0 && Number(item.remainingShifts || 0) === 0).length;
+        const noRequirementCount = items.filter(item => Number(item.requiredShifts || 0) === 0).length;
+    .participant-status-component(
+        id=config.id
+        data-participant-status
+        data-assignment-mode=mode
+    )
+        if config.heading
+            h4.mb-2= config.heading
+        if config.description
+            p.small.text-secondary.mb-3= config.description
+        .d-flex.flex-wrap.justify-content-between.align-items-start.gap-2.mb-2.participant-status-toolbar
+            if config.controls !== false
+                .d-flex.flex-wrap.gap-2.align-items-center.participant-status-controls
+                    .input-group.input-group-sm.participant-status-search
+                        span.input-group-text
+                            i.bi.bi-search
+                        input.form-control.form-control-sm.text-bg-dark(
+                            type="search"
+                            placeholder="Search participant…"
+                            autocomplete="off"
+                            data-participant-search
+                        )
+                    .d-flex.flex-wrap.gap-1.participant-status-filters(role="group" aria-label="Participant filters")
+                        button.btn.btn-outline-light.active(type="button" data-participant-filter="all") All
+                        button.btn.btn-outline-light(type="button" data-participant-filter="assigned") Assigned
+                        button.btn.btn-outline-light(type="button" data-participant-filter="unassigned") Unassigned
+                        button.btn.btn-outline-danger(type="button" data-participant-filter="unstarted") Not started
+                        button.btn.btn-outline-warning(type="button" data-participant-filter="needs-more") Needs slots
+                        button.btn.btn-outline-success(type="button" data-participant-filter="complete") Complete
+                        button.btn.btn-outline-info(type="button" data-participant-filter="no-requirement") No minimum
+            .d-flex.flex-wrap.gap-1.participant-status-stats(data-participant-summary-stats)
+                span.badge.bg-light.text-dark Total: #{items.length}
+                if mode === 'REQUIRED'
+                    span.badge.bg-danger.text-white Not started: #{unstartedCount}
+                    span.badge.bg-warning.text-dark Needs slots: #{needsMoreCount}
+                    span.badge.bg-success.text-white Complete: #{completeCount}
+                    if noRequirementCount
+                        span.badge.bg-secondary.text-white.border.border-light-subtle No minimum: #{noRequirementCount}
+                else
+                    span.badge.bg-success.text-white Assigned: #{assignedCount}
+                    span.badge.bg-secondary.text-white.border.border-light-subtle Unassigned: #{items.length - assignedCount}
+                    span.badge.bg-info.text-white Free mode: no minimum
+        .participant-status-list.border.border-secondary-subtle.rounded
+            .participant-status-header
+                span Participant
+                span Assignments
+                span Requirement
+                span Attendance
+                span Roles
+            .participant-status-body(data-participant-status-body)
+                if items.length
+                    each participant in items
+                        +participantStatusRow(participant, mode)
+                else
+                    .participant-status-empty.text-center.text-secondary.p-3(data-empty-state)
+                        | No participants yet. Assignment and attendance coverage will appear here.

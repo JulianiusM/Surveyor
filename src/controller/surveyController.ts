@@ -133,6 +133,17 @@ async function submitResponses(survey: Survey, session: Request['session'], body
     const answers: { [p: string]: SurveyAnswer } = body;
     if (session.profile) {
         const gid = session.profile.id;
+        const combinations = await surveyService.getCombinationsBySurveyId(survey.id);
+        const allowedCombinationIds = new Set(combinations.map((combination) => combination.id));
+        const invalidEntry = Object.entries(answers).find(([combId, answer]) => {
+            const parsedId = Number(combId);
+            return !Number.isInteger(parsedId)
+                || !allowedCombinationIds.has(parsedId)
+                || !['yes', 'maybe', 'no', ''].includes(answer ?? '');
+        });
+        if (invalidEntry) {
+            throw new ExpectedError('Invalid survey response', 'error', 400);
+        }
         await surveyService.deleteResponsesByProfileId(gid, survey.id);
         for (const [combId, ans] of Object.entries(answers)) {
             await surveyService.saveResponse(survey.id, gid, Number(combId), ans);

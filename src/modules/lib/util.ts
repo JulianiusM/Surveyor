@@ -286,6 +286,7 @@ export function getPermFctItems(resFct: GetResource, resFctItems: GetAdditional,
         const param: any = req.params.itemId || req.params.slotId;
         const resource = resFctItems(req).find(r => r?.id === param);
         const parent = resFct(req);
+        enforceChildResourceScope(parent?.id, resource?.entityId, param);
         const result: ItemSubject = {
             item: {
                 entityType: additionalName,
@@ -311,6 +312,7 @@ export function getPermFctAssign(resFct: GetResource, resFctItems: GetAdditional
         const assign = resFctItems(req).find(r => r?.id === param);
         const resource = assign?.item || assign?.slot;
         const parent = resFct(req);
+        enforceChildResourceScope(parent?.id, assign?.entityId ?? resource?.entityId, param);
         const result: ItemSubject = {
             item: {
                 entityType: additionalName,
@@ -328,6 +330,16 @@ export function getPermFctAssign(resFct: GetResource, resFctItems: GetAdditional
         return result;
     }
     return permFctItems;
+}
+
+export function enforceChildResourceScope(
+    routeEntityId: string | undefined,
+    childEntityId: string | undefined,
+    childId: string | number,
+) {
+    if (!routeEntityId || !childEntityId || childEntityId !== routeEntityId) {
+        throw new APIError('Item not found in this resource', {childId}, 404);
+    }
 }
 
 export function getItemFromEntityPermFct(getItems: (id: string) => Promise<any[]>, resFct: GetResource, entityItemType?: EntityItemType): ItemGetter {

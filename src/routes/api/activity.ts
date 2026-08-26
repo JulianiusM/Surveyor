@@ -106,6 +106,7 @@ app.post('/:id/roles', requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS), a
 
 app.post(
     '/:id/slot/:slotId/warnings',
+    requirePermissionApi(permFct, PERM.ACCESS_VIEW),
     asyncHandler(async (req: Request, res: Response) => {
         const warnings = await controller.getAssignmentWarnings(
             resFct(req).id,
@@ -188,8 +189,31 @@ app.post(
 /* Assign / Unassign identical to packing routes … */
 /* ───────────────── ASSIGN / UNASSIGN (JSON) ───────────────── */
 
-attachAssignRoutes(app, controller.getAssignmentAccessMapping());
-attachAssignRoleRoutes(app, controller.getRoleAccessMapping());
+const assignmentRouteSecurity = {
+    middleware: [requirePermissionApi(permFct, PERM.ACCESS_VIEW)],
+    resolveItemEntityId: async (itemId: string) => (await activityService.getActivitySlotById(itemId))?.entityId,
+    enforceActivityBindingDeadline: true,
+};
+
+attachAssignRoutes(app, controller.getAssignmentAccessMapping(), {
+    ...assignmentRouteSecurity,
+    authorize: async (req, profileId, operation) => controller.authorizeSelfAssignment(
+        resFct(req).id,
+        req.body.itemId,
+        profileId,
+        operation,
+    ),
+});
+attachAssignRoleRoutes(app, controller.getRoleAccessMapping(), {
+    ...assignmentRouteSecurity,
+    authorize: async (req, profileId, operation) => controller.authorizeSelfAssignment(
+        resFct(req).id,
+        req.body.itemId,
+        profileId,
+        operation,
+        req.body.role,
+    ),
+});
 
 /* ───────────────── REORDER (Owner) ────────────────────────── */
 

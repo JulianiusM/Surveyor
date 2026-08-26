@@ -18,6 +18,7 @@ import {EntityManager, In, Not} from "typeorm";
 import type {PlanParticipant, PlanParticipantRow, SlotAssignmentMap} from "../../../types/ActivityTypes";
 import {AssignmentCandidate} from "../../activity/availability";
 import {toParticipantKey} from "../../activity/requirements";
+import {APIError} from "../../lib/errors";
 import {generateUniqueId} from "../../lib/util";
 import {AppDataSource} from "../dataSource";
 import {ActivityAssignment} from "../entities/activity/ActivityAssignment";
@@ -28,6 +29,7 @@ import {ActivityRole} from "../entities/activity/ActivityRole";
 import {ActivitySlot} from "../entities/activity/ActivitySlot";
 import {ActivitySlotRole} from "../entities/activity/ActivitySlotRole";
 import * as entityAdminService from "./EntityAdminService";
+import * as eventService from "./EventService";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Role & Assignment helpers
@@ -482,8 +484,86 @@ export async function assignActivityAssignmentRole(
     profileId: string,
     roleName = "default"
 ) {
-    const assignmentId = await ensureAssignment(itemId, profileId);
-    await assignRole(assignmentId, roleName);
+    await AppDataSource.transaction(async (manager) => {
+        const slot = await manager.getRepository(ActivitySlot).findOne({
+            where: {id: itemId},
+            lock: {mode: 'pessimistic_write'},
+        });
+        if (!slot) throw new APIError('Activity slot not found', {itemId}, 404);
+
+        const plan = await manager.getRepository(ActivityPlan).findOne({
+            where: {id: slot.entityId},
+            lock: {mode: 'pessimistic_write'},
+        });
+        if (!plan) throw new APIError('Activity plan not found', {itemId}, 404);
+
+        const assignmentRepo = manager.getRepository(ActivityAssignment);
+        let assignment = await assignmentRepo.findOneBy({
+            item: {id: itemId},
+            profile: {id: profileId},
+        });
+
+        if (!assignment) {
+            if (!plan.allowOverfillAfterFull && typeof slot.maxAssignees === 'number') {
+                const assignedCount = await assignmentRepo.countBy({item: {id: itemId}});
+                if (assignedCount >= slot.maxAssignees) {
+                    throw new APIError('This activity slot is already full', {itemId}, 409);
+                }
+            }
+            assignment = await assignmentRepo.save(assignmentRepo.create({
+                item: {id: itemId},
+                entity: {id: plan.id},
+                profile: {id: profileId},
+            }));
+        }
+
+        const roleRepo = manager.getRepository(ActivityRole);
+        let role = await roleRepo.findOneBy({title: roleName, entity: {id: plan.id}});
+        if (!role) {
+            if (roleName !== 'default') {
+                throw new APIError('Activity role is not available for this plan', {itemId, roleName}, 400);
+            }
+            role = await roleRepo.save(roleRepo.create({
+                title: 'default',
+                isDefault: true,
+                entity: {id: plan.id},
+            }));
+        }
+
+        const assignmentRoleRepo = manager.getRepository(ActivityAssignmentRole);
+        const existingRole = await assignmentRoleRepo.findOneBy({
+            assignment: {id: assignment.id},
+            role: {id: role.id},
+        });
+        if (existingRole) return;
+
+        if (roleName !== 'default') {
+            const slotRole = await manager.getRepository(ActivitySlotRole).findOne({
+                where: {item: {id: itemId}, role: {id: role.id}},
+                lock: {mode: 'pessimistic_write'},
+            });
+            if (!slotRole) {
+                throw new APIError('Activity role is not available for this slot', {itemId, roleName}, 400);
+            }
+
+            if (!plan.allowOverfillAfterFull && typeof slotRole.maxQty === 'number') {
+                const roleCount = await assignmentRoleRepo
+                    .createQueryBuilder('assignmentRole')
+                    .innerJoin('assignmentRole.assignment', 'assignment')
+                    .where('assignment.item_id = :itemId', {itemId})
+                    .andWhere('assignmentRole.role_id = :roleId', {roleId: role.id})
+                    .getCount();
+                if (roleCount >= slotRole.maxQty) {
+                    throw new APIError('This activity role is already full', {itemId, roleName}, 409);
+                }
+            }
+        }
+
+        await assignmentRoleRepo.save(assignmentRoleRepo.create({
+            assignment: {id: assignment.id},
+            role: {id: role.id},
+        }));
+    });
 }
 
 export async function unassignActivityAssignmentRole(
@@ -642,7 +722,6 @@ export async function getActivityPlanParticipants(planId: string): Promise<PlanP
 
     // If plan is associated with an event, also include all event participants
     if (plan?.event?.id) {
-        const eventService = await require("./EventService");
         const eventParticipants = await eventService.getEventParticipants(plan.event.id);
 
         for (const ep of eventParticipants) {
@@ -721,11 +800,11 @@ export async function getActivitySlotRoles(planId: string) {
 
     const slotRoles = await qb.getMany();
 
-    const map: Record<string, { id: number; name: string }[]> = {};
+    const map: Record<string, { id: number; name: string; maxQty: number }[]> = {};
     for (const sr of slotRoles) {
         const slotId = sr.item.id;
         if (!map[slotId]) map[slotId] = [];
-        map[slotId].push({id: sr.role.id, name: sr.role.title});
+        map[slotId].push({id: sr.role.id, name: sr.role.title, maxQty: sr.maxQty ?? 0});
     }
     return map;
 }

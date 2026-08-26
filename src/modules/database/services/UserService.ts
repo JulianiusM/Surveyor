@@ -15,7 +15,7 @@
  */
 
 import bcrypt from 'bcryptjs';
-import {EntityManager, MoreThan, Repository} from "typeorm";
+import {EntityManager, In, MoreThan, Repository} from "typeorm";
 import type {OidcClaims, UserInfo} from "../../../types/UserTypes";
 import {coerceLimit, generateUniqueToken, maskEmail, SQL_ALLOW_LIST} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
@@ -469,6 +469,15 @@ export async function getUserById(id: number): Promise<User | null> {
 
 export async function getProfileById(id: string) {
     return await AppDataSource.getRepository(Profile).findOneBy({id});
+}
+
+export async function getProfilesByIds(ids: string[]): Promise<Pick<Profile, 'id' | 'name'>[]> {
+    const uniqueIds = [...new Set(ids.filter(Boolean))];
+    if (!uniqueIds.length) return [];
+    return await AppDataSource.getRepository(Profile).find({
+        where: {id: In(uniqueIds)},
+        select: {id: true, name: true},
+    });
 }
 
 export async function generateMigrationToken(profileId: string) {

@@ -1,4 +1,4 @@
-mixin roleAssignmentAddon(dataId, roleName, roleDisplayName, assignees, profile)
+mixin roleAssignmentAddon(dataId, roleName, roleDisplayName, assignees, profile, canTake = true)
     -
         let assignee = (assignees || []).find(a => Array.isArray(a.roles) && a.roles.includes(roleName));
         let my = assignee ? (profile ? assignee.profileId === profile.id : false) : false;
@@ -18,7 +18,8 @@ mixin roleAssignmentAddon(dataId, roleName, roleDisplayName, assignees, profile)
                     data-id=dataId) Leave
         else
             span.flex-grow-1.fw-5 No #{roleDisplayName} assigned
-            button.btn.btn-sm.btn-outline-primary(
-                data-action="take-role"
-                data-role=roleName
-                data-id=dataId) Take
+            if canTake
+                button.btn.btn-sm.btn-outline-primary(
+                    data-action="take-role"
+                    data-role=roleName
+                    data-id=dataId) Take

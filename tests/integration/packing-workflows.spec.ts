@@ -119,10 +119,18 @@ describe('packing list user stories', () => {
 
     it('shows assignment counts beside items', async () => {
         const [listId, item] = await createPackingListWithItem(owner.id);
+        await packingService.updatePackingItem(item.id, {maxAssignees: 2});
 
         await assignPackingItem(item.id, participant.id);
         await assignPackingItem(item.id, secondParticipant.id);
         expect(await packingService.getPackingAssignmentCounts(listId)).toEqual({[item.id]: 2});
+    });
+
+    it('rejects assignments beyond the packing item capacity', async () => {
+        const [, item] = await createPackingListWithItem(owner.id);
+
+        await assignPackingItem(item.id, participant.id);
+        await expect(assignPackingItem(item.id, secondParticipant.id)).rejects.toMatchObject({status: 409});
     });
 
     it('shows assignee names to organizers', async () => {

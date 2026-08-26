@@ -93,6 +93,19 @@ describe('survey user stories', () => {
         expect(await surveyService.getResponsesByProfileId(participant.id)).toContainEqual(expect.objectContaining({entityId: surveyId, answer}));
     });
 
+    it('rejects a date choice taken from another survey', async () => {
+        const [surveyId] = await createSurveyWithCombinations(owner.id);
+        const [, otherCombinations] = await createSurveyWithCombinations(owner.id);
+        const survey = await surveyService.getSurveyById(surveyId);
+
+        await expect(surveyController.submitResponses(
+            survey!,
+            {profile: participant} as Request['session'],
+            {[otherCombinations[0].id]: 'yes'},
+        )).rejects.toMatchObject({status: 400});
+        expect(await surveyService.getResponsesSorted(surveyId)).toEqual({});
+    });
+
     it('defaults an empty submitted answer to no', async () => {
         const [surveyId, combinations] = await createSurveyWithCombinations(owner.id);
 

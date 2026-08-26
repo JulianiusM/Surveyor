@@ -21,6 +21,7 @@ import {ActivityAssignment} from "./ActivityAssignment";
 import {ActivityAssignmentRecommendation} from "./ActivityAssignmentRecommendation";
 import {ActivityPlanRequirement} from "./ActivityPlanRequirement";
 import {ActivityPlanRequirementOverride} from "./ActivityPlanRequirementOverride";
+import {ActivityPlanStayRequirement} from "./ActivityPlanStayRequirement";
 import {ActivityPlanTextField} from "./ActivityPlanTextField";
 import {ActivityRole} from "./ActivityRole";
 import {ActivitySlot} from "./ActivitySlot";
@@ -44,6 +45,12 @@ export class ActivityPlan extends DefaultEntity {
         default: () => 0
     })
     allowOverfillAfterFull!: boolean;
+
+    @Column("tinyint", {
+        name: "allow_external_assignees",
+        default: () => 0
+    })
+    allowExternalAssignees!: boolean;
 
     @Column('simple-enum', {name: 'rounding_mode', enum: ['CEIL', 'ROUND', 'FLOOR'], nullable: true})
     roundingMode?: 'CEIL' | 'ROUND' | 'FLOOR' | null;
@@ -93,6 +100,12 @@ export class ActivityPlan extends DefaultEntity {
         (activityPlanRequirementOverrides) => activityPlanRequirementOverrides.entity
     )
     activityPlanRequirementOverrides: ActivityPlanRequirementOverride[];
+
+    @OneToMany(
+        () => ActivityPlanStayRequirement,
+        (stayRequirement) => stayRequirement.entity
+    )
+    activityPlanStayRequirements: ActivityPlanStayRequirement[];
 
     @OneToMany(
         () => ActivityAssignmentRecommendation,

@@ -68,7 +68,10 @@ app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), asyn
 /* Assign / Unassign identical to packing routes … */
 /* ───────────────── ASSIGN / UNASSIGN (JSON) ───────────────── */
 
-attachAssignRoutes(app, controller.getAssignmentAccessMapping());
+attachAssignRoutes(app, controller.getAssignmentAccessMapping(), {
+    middleware: [requirePermissionApi(permFct, PERM.ACCESS_VIEW)],
+    resolveItemEntityId: async (itemId) => (await driverService.getDriversItemById(itemId))?.entityId,
+});
 createEntityHeaderUpdateRouter(app, permFct, resFct, controller.updateHeaderImg, controller.deleteHeaderImg);
 
 /* ───────────────── REORDER (Owner) ────────────────────────── */
