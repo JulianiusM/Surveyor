@@ -25,7 +25,7 @@ import {
 const TABLE = "activity_plan_stay_requirements";
 const PLAN_TABLE = "activity_plans";
 
-interface TextColumnMetadata {
+interface IdColumnMetadata {
     columnType: string;
     characterSet: string | null;
     collation: string | null;
@@ -38,7 +38,7 @@ function assertSafeSqlName(value: string, label: string): void {
 }
 
 async function alignEntityIdWithActivityPlan(queryRunner: QueryRunner): Promise<void> {
-    const columns: TextColumnMetadata[] = await queryRunner.query(`
+    const columns: IdColumnMetadata[] = await queryRunner.query(`
         SELECT COLUMN_TYPE AS columnType,
                CHARACTER_SET_NAME AS characterSet,
                COLLATION_NAME AS collation
@@ -49,19 +49,31 @@ async function alignEntityIdWithActivityPlan(queryRunner: QueryRunner): Promise<
     `, [PLAN_TABLE]);
     const planId = columns[0];
 
-    if (!planId?.characterSet || !planId.collation) {
-        return;
+    if (!planId) {
+        throw new Error("Activity plan ID metadata is missing");
     }
-    if (!/^(?:var)?char\([1-9][0-9]*\)$/i.test(planId.columnType)) {
+
+    const isTextId = /^(?:var)?char\([1-9][0-9]*\)$/i.test(planId.columnType);
+    const isBinaryId = /^(?:var)?binary\([1-9][0-9]*\)$/i.test(planId.columnType);
+    const isNativeUuid = /^uuid$/i.test(planId.columnType);
+    if (!isTextId && !isBinaryId && !isNativeUuid) {
         throw new Error("Unexpected column type in activity plan ID metadata");
     }
-    assertSafeSqlName(planId.characterSet, "character set");
-    assertSafeSqlName(planId.collation, "collation");
 
-    // String foreign keys must use the referenced column's exact character set and collation.
+    let characterDefinition = "";
+    if (isTextId) {
+        if (!planId.characterSet || !planId.collation) {
+            throw new Error("Activity plan text ID character metadata is missing");
+        }
+        assertSafeSqlName(planId.characterSet, "character set");
+        assertSafeSqlName(planId.collation, "collation");
+        characterDefinition = ` CHARACTER SET ${planId.characterSet} COLLATE ${planId.collation}`;
+    }
+
+    // MariaDB 10.7+ uses native UUID columns while older MariaDB/MySQL versions use text UUIDs.
+    // Foreign keys require the child to match the referenced column's exact storage definition.
     await queryRunner.query(`ALTER TABLE \`${TABLE}\`
-        MODIFY \`entity_id\` ${planId.columnType} CHARACTER SET ${planId.characterSet}
-        COLLATE ${planId.collation} NOT NULL`);
+        MODIFY \`entity_id\` ${planId.columnType}${characterDefinition} NOT NULL`);
 }
 
 export class AddActivityPlanStayRequirements1787688000000 implements MigrationInterface {
