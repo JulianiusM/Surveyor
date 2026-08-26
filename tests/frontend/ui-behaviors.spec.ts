@@ -1,4 +1,5 @@
 import {afterEach, describe, expect, it} from 'vitest';
+import {init as initDefaultPage} from '../../src/public/js/stub';
 import {
     createBadge,
     createChip,
@@ -12,6 +13,7 @@ import {
 import {createBadgeCase, createDurationCase} from '../factories/uiHelperFactory';
 
 const originalDocument = globalThis.document;
+const originalWindow = globalThis.window;
 
 function installDocument(elements: Record<string, {textContent: string | null}>): void {
     Object.defineProperty(globalThis, 'document', {
@@ -24,9 +26,38 @@ function installDocument(elements: Record<string, {textContent: string | null}>)
 
 afterEach(() => {
     Object.defineProperty(globalThis, 'document', {configurable: true, value: originalDocument});
+    Object.defineProperty(globalThis, 'window', {configurable: true, value: originalWindow});
 });
 
 describe('frontend UI behavior suite', () => {
+    describe('default page initialization', () => {
+        // Canary: survey pages using the default bundle must activate their shared header-image controls.
+        it('registers the survey header image upload action', () => {
+            let uploadHandler: EventListenerOrEventListenerObject | undefined;
+            const uploadButton = {
+                addEventListener: (eventName: string, handler: EventListenerOrEventListenerObject) => {
+                    if (eventName === 'click') uploadHandler = handler;
+                },
+            } as unknown as HTMLButtonElement;
+
+            Object.defineProperty(globalThis, 'window', {
+                configurable: true,
+                value: {location: {pathname: '/survey/survey-1'}, Surveyor: {}},
+            });
+            Object.defineProperty(globalThis, 'document', {
+                configurable: true,
+                value: {
+                    getElementById: (id: string) => id === 'uploadEntityImage' ? uploadButton : null,
+                    querySelector: () => null,
+                },
+            });
+
+            initDefaultPage();
+
+            expect(uploadHandler).toBeDefined();
+        });
+    });
+
     describe('status and label markup', () => {
         // Canary: protects a high-value production behavior while avoiding private implementation details.
         it('renders active statuses as success badges', () => {

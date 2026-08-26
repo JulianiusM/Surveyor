@@ -5,6 +5,7 @@
 
 import {setCurrentNavLocation} from "./core/navigation";
 import {loadPerms} from './core/permissions';
+import {initEntityHeader} from "./modules/entity-header";
 
 /**
  * Initialize stub module
@@ -12,6 +13,7 @@ import {loadPerms} from './core/permissions';
 export function init(): void {
     setCurrentNavLocation();
     loadPerms();
+    initEntityHeader();
 }
 
 // Expose to global scope when running in a browser; keeping this guarded makes imports safe in tests.
