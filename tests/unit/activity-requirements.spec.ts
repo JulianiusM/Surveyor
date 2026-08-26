@@ -7,9 +7,10 @@ import {
 } from '../../src/modules/activity/requirements';
 import {
     createParticipantAttendance,
+    createParticipantRequirementOverride,
     createRequirementCapacitySlots,
     createRequirementPlan,
-    createRequirementSlotRoles,
+    createRoleRequirement,
     createStayRequirement,
 } from '../factories/activityRequirementFactory';
 
@@ -50,26 +51,57 @@ describe('activity plan stay-duration requirements', () => {
         expect(result.requiredShifts).toBe(2);
     });
 
-    it('compares role-limited slot capacity with attendance-aware participant demand', () => {
-        // Protects the coverage headline from counting unusable role positions or full-stay demand for short stays.
+    it('honors a zero-shift role override instead of falling back to the stay requirement', () => {
+        // Protects an explicit role exemption as a real requirement value rather than a missing rule.
+        const result = calculateParticipantRequirement(
+            createRequirementPlan(),
+            createParticipantAttendance({roleIds: [7]}),
+            [createRoleRequirement(7, 0)],
+            [],
+            [createStayRequirement(3, 4)],
+        );
+
+        expect(result).toMatchObject({requiredShifts: 0, source: 'role'});
+    });
+
+    it('compares whole slot capacity with attendance, role-scoped, and participant-specific demand', () => {
+        // Protects the total from omitting stay-duration, single-role, role-scoped, or participant override requirements.
         const plan = createRequirementPlan();
+        const overriddenProfileId = '00000000-0000-4000-8000-000000000003';
+        const roleOverrideProfileId = '00000000-0000-4000-8000-000000000004';
         const summary = calculateRequirementCapacitySummary(
             plan,
             [
                 createParticipantAttendance(),
                 createParticipantAttendance({
                     profileId: '00000000-0000-4000-8000-000000000002',
+                    departureDate: '2027-06-05',
+                    roleIds: [7],
+                }),
+                createParticipantAttendance({
+                    profileId: overriddenProfileId,
                     departureDate: '2027-06-10',
                 }),
+                createParticipantAttendance({
+                    profileId: roleOverrideProfileId,
+                    departureDate: '2027-06-10',
+                    roleIds: [8],
+                }),
             ],
-            [],
-            [],
-            [createStayRequirement(3, 4), createStayRequirement(10, 5)],
+            [createRoleRequirement(7, 6)],
+            [
+                createParticipantRequirementOverride(overriddenProfileId, 2),
+                createParticipantRequirementOverride(roleOverrideProfileId, 1, 8),
+            ],
+            [
+                createStayRequirement(3, 4),
+                createStayRequirement(5, 7),
+                createStayRequirement(10, 5),
+            ],
             createRequirementCapacitySlots(),
-            createRequirementSlotRoles(),
         );
 
-        expect(summary).toEqual({availableSlots: 5, requiredSlots: 9, difference: -4});
+        expect(summary).toEqual({availableSlots: 8, requiredSlots: 10, difference: -2});
     });
 
     it('includes the clamped stay length in each participant summary', () => {

@@ -123,10 +123,6 @@ export interface RequirementCapacitySlot {
     maxAssignees?: number | null;
 }
 
-export interface RequirementCapacityRole {
-    maxQty?: number | null;
-}
-
 interface DaysWindow {
     start: string;
     end: string;
@@ -351,8 +347,8 @@ function resolveRoleFixedRequirement(roleRequirements: ActivityPlanRequirement[]
     return hasMatch ? minRequirement : null;
 }
 
-function resolveRoleRequirement(roleRequirements: ActivityPlanRequirement[], roleIds: number[] | undefined, ratio: number, roundingMode: RoundingMode): number {
-    if (!roleIds || roleIds.length === 0) return 0;
+function resolveRoleRequirement(roleRequirements: ActivityPlanRequirement[], roleIds: number[] | undefined, ratio: number, roundingMode: RoundingMode): number | null {
+    if (!roleIds || roleIds.length === 0) return null;
 
     let minRequirement = Number.POSITIVE_INFINITY;
     let hasMatch = false;
@@ -366,7 +362,7 @@ function resolveRoleRequirement(roleRequirements: ActivityPlanRequirement[], rol
         hasMatch = true;
     }
 
-    return hasMatch ? minRequirement : 0;
+    return hasMatch ? minRequirement : null;
 }
 
 export function calculateParticipantRequirement(
@@ -401,7 +397,7 @@ export function calculateParticipantRequirement(
 
     let requiredShifts = 0;
     let source: ParticipantRequirementResult["source"] = "none";
-    let roleRequirement = 0;
+    let roleRequirement: number | null = null;
     let baseRequirement = 0;
     const stayDurationRequirement = stayRequirements.find(
         (requirement) => Number(requirement.stayDays) === attendance.days,
@@ -423,7 +419,7 @@ export function calculateParticipantRequirement(
             // Override takes absolute priority
             requiredShifts = requirementFromOverride;
             source = "override";
-        } else if (roleRequirement > 0) {
+        } else if (roleRequirement != null) {
             // Role requirement is used if present
             requiredShifts = roleRequirement;
             source = "role";
@@ -448,7 +444,7 @@ export function calculateParticipantRequirement(
             proportionalRequirement: plan.generalRequiredShifts != null ? plan.generalRequiredShifts * ratio : 0,
             stayDurationRequirement,
             appliedRounding: roundingMode,
-            roleRequirement,
+            roleRequirement: roleRequirement ?? undefined,
             overrideRequirement: requirementFromOverride ?? undefined,
         },
     };
@@ -510,7 +506,6 @@ export function calculateRequirementCapacitySummary(
     overrides: ActivityPlanRequirementOverride[],
     stayRequirements: ActivityPlanStayRequirement[],
     slots: RequirementCapacitySlot[],
-    slotRoles: Record<string, RequirementCapacityRole[]>,
 ): RequirementCapacitySummary {
     const requirements = calculateRequirementsForParticipants(
         plan,
@@ -525,17 +520,10 @@ export function calculateRequirementCapacitySummary(
         0,
     );
 
-    const availableSlots = slots.reduce((total, slot) => {
-        const overallCapacity = ensureNonNegativeInteger(slot.maxAssignees);
-        const roles = slotRoles[String(slot.id)] ?? [];
-        if (!roles.length) return total + overallCapacity;
-
-        const roleCapacity = roles.reduce(
-            (roleTotal, role) => roleTotal + ensureNonNegativeInteger(role.maxQty),
-            0,
-        );
-        return total + Math.min(overallCapacity, roleCapacity);
-    }, 0);
+    const availableSlots = slots.reduce(
+        (total, slot) => total + ensureNonNegativeInteger(slot.maxAssignees),
+        0,
+    );
 
     return {
         availableSlots,

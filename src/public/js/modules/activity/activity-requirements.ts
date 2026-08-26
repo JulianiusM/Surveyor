@@ -89,7 +89,7 @@ export function calculateLiveRequirementSummary(
                 ));
             const roleRequirement = matchingRoleRequirements.length
                 ? Math.min(...matchingRoleRequirements)
-                : 0;
+                : null;
             const stayRequirement = draft.stayRequirements.find(
                 (requirement) => Number(requirement.stayDays) === attendanceDays,
             );
@@ -103,7 +103,7 @@ export function calculateLiveRequirementSummary(
             if (override) {
                 requiredShifts = normalizeShiftCount(override.requiredShifts);
                 source = 'override';
-            } else if (roleRequirement > 0) {
+            } else if (roleRequirement != null) {
                 requiredShifts = roleRequirement;
                 source = 'role';
             } else if (generalRequirement > 0) {

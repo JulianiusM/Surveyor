@@ -69,6 +69,15 @@ describe('activity requirement live coverage', () => {
         expect(overrideResult).toMatchObject({requiredShifts: 1, source: 'override'});
     });
 
+    it('keeps a zero-shift role override in the live coverage total', () => {
+        const [result] = calculateLiveRequirementSummary(
+            createRequirementConfiguration(),
+            createRequirementDraft({roleRequirements: [{roleId: 7, requiredShifts: 0}]}),
+        );
+
+        expect(result).toMatchObject({requiredShifts: 0, source: 'role'});
+    });
+
     it('keeps assignment coverage useful when free mode has no shift requirements', () => {
         const config = createRequirementConfiguration();
         const participants = calculateLiveRequirementSummary(

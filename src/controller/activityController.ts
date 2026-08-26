@@ -711,12 +711,11 @@ async function updateSettings(id: string, body: any) {
 }
 
 async function getRequirements(planId: string) {
-    const [plan, requirementConfig, assignments, slots, slotRoles, allRoles] = await Promise.all([
+    const [plan, requirementConfig, assignments, slots, allRoles] = await Promise.all([
         activityService.getActivityPlanById(planId),
         requirementService.getRequirementConfiguration(planId),
         activityService.getParticipantAssignmentsWithSlots(planId),
         activityService.getActivitySlotsFlat(planId),
-        activityService.getActivitySlotRoles(planId),
         activityService.getAllRoles(planId),
     ]);
 
@@ -757,7 +756,6 @@ async function getRequirements(planId: string) {
         requirementConfig.overrides,
         requirementConfig.stayRequirements,
         slots,
-        slotRoles,
     );
 
     const overrideTargets = eventParticipants.map((participant) => ({

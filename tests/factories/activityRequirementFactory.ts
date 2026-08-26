@@ -1,4 +1,6 @@
 import {ActivityPlan} from '../../src/modules/database/entities/activity/ActivityPlan';
+import {ActivityPlanRequirement} from '../../src/modules/database/entities/activity/ActivityPlanRequirement';
+import {ActivityPlanRequirementOverride} from '../../src/modules/database/entities/activity/ActivityPlanRequirementOverride';
 import {ActivityPlanStayRequirement} from '../../src/modules/database/entities/activity/ActivityPlanStayRequirement';
 import {ParticipantAttendance} from '../../src/modules/activity/requirements';
 
@@ -29,17 +31,30 @@ export function createStayRequirement(
     return Object.assign(new ActivityPlanStayRequirement(), {stayDays, requiredShifts});
 }
 
+export function createRoleRequirement(
+    roleId: number,
+    requiredShifts: number,
+): ActivityPlanRequirement {
+    return Object.assign(new ActivityPlanRequirement(), {roleId: String(roleId), requiredShifts});
+}
+
+export function createParticipantRequirementOverride(
+    profileId: string,
+    requiredShifts: number,
+    roleId: number | null = null,
+): ActivityPlanRequirementOverride {
+    return Object.assign(new ActivityPlanRequirementOverride(), {
+        profileId,
+        profile: {id: profileId},
+        roleId,
+        requiredShifts,
+    });
+}
+
 export function createRequirementCapacitySlots() {
     return [
         {id: 'slot-with-two-roles', maxAssignees: 3},
         {id: 'slot-with-one-role', maxAssignees: 3},
         {id: 'slot-without-roles', maxAssignees: 2},
     ];
-}
-
-export function createRequirementSlotRoles() {
-    return {
-        'slot-with-two-roles': [{maxQty: 1}, {maxQty: 1}],
-        'slot-with-one-role': [{maxQty: 1}],
-    };
 }
