@@ -6,6 +6,7 @@ import {
     formatAmount,
     maskEmail,
     resolveActorLabel,
+    resolveInvoiceAmount,
     sanitizeForEmail,
     toAmount,
 } from '../../src/modules/lib/util';
@@ -43,6 +44,12 @@ describe('backend application behavior suite', () => {
         // Canary: protects invoice summaries where discounts or refunds must stay visibly negative.
         it('keeps negative adjustments intact for refund-style invoice rows', () => {
             expect(formatAmount(toAmount('-4.5'))).toBe('-4.50');
+        });
+
+        // Canary: organizer corrections must drive pool math without erasing the participant's submitted amount.
+        it('uses an organizer-corrected amount when one was recorded', () => {
+            expect(resolveInvoiceAmount('25.00', '21.50')).toBe(21.5);
+            expect(resolveInvoiceAmount('25.00', null)).toBe(25);
         });
     });
 

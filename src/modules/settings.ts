@@ -52,6 +52,7 @@ export type Settings = {
     oidcClientSecret: string;
     oidcRedirectUrl: string;
     invoiceDir: string;
+    invoiceRetentionMonths: number;
     headerImgDir: string;
     imprintUrl: string;
     privacyPolicyUrl: string;
@@ -96,6 +97,7 @@ const defaults: Settings = {
     file: "./settings.csv",
 
     invoiceDir: "uploads/invoices/",
+    invoiceRetentionMonths: 6,
     headerImgDir: "uploads/headerImgs/",
 
     imprintUrl: "http://example.com/imprint",
@@ -132,6 +134,7 @@ const keyMap: Record<string, keyof Settings> = {
     SESSION_SECRET: "sessionSecret",
     APP_PORT: "appPort",
     INVOICE_DIR: "invoiceDir",
+    INVOICE_RETENTION_MONTHS: "invoiceRetentionMonths",
     HEADER_IMG_DIR: "headerImgDir",
     IMPRINT_URL: "imprintUrl",
     PRIVACY_POLICY_URL: "privacyPolicyUrl",
@@ -152,6 +155,7 @@ const coerce: Partial<Record<keyof Settings, (v: string) => any>> = {
     activityAvailabilityWeight: Number,
     activitySwapOptimizationIterations: Number,
     activityArrivalDeparturePenalty: Number,
+    invoiceRetentionMonths: Number,
 };
 
 // Apply environment variable overrides AFTER reading CSV.

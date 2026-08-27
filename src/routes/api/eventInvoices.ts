@@ -107,8 +107,14 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/invoices/:invoiceId/approve',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {
-            await eventPoolController.approveInvoice(resFct(req), req.params.poolId as string, req.params.invoiceId as string, req.session);
-            renderer.respondWithSuccessJson(res, "approved");
+            await eventPoolController.approveInvoice(
+                resFct(req),
+                req.params.poolId as string,
+                req.params.invoiceId as string,
+                req.body,
+                req.session,
+            );
+            renderer.respondWithSuccessJson(res, "accepted");
         })
     );
 
@@ -134,8 +140,14 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         '/:poolId/invoices/:invoiceId/decline',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {
-            await eventPoolController.declineInvoice(resFct(req), req.params.poolId as string, req.params.invoiceId as string, req.session);
-            renderer.respondWithSuccessJson(res, "declined");
+            await eventPoolController.declineInvoice(
+                resFct(req),
+                req.params.poolId as string,
+                req.params.invoiceId as string,
+                req.body,
+                req.session,
+            );
+            renderer.respondWithSuccessJson(res, "rejected");
         })
     );
 

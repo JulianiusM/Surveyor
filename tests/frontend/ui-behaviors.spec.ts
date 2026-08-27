@@ -1,4 +1,5 @@
 import {afterEach, describe, expect, it} from 'vitest';
+import {initInvoiceLedgers} from '../../src/public/js/events';
 import {init as initDefaultPage} from '../../src/public/js/stub';
 import {
     createBadge,
@@ -11,6 +12,7 @@ import {
     updateToLocalString,
 } from '../../src/public/js/shared/ui-helpers';
 import {createBadgeCase, createDurationCase} from '../factories/uiHelperFactory';
+import {createInvoiceLedger} from '../keywords/frontendDynamicKeywords';
 
 const originalDocument = globalThis.document;
 const originalWindow = globalThis.window;
@@ -170,6 +172,34 @@ describe('frontend UI behavior suite', () => {
             hideSpinner(button);
 
             expect(button.disabled).toBe(false);
+        });
+    });
+
+    describe('large invoice history controls', () => {
+        it('pages, filters, and searches a production-sized invoice ledger', () => {
+            const fixture = createInvoiceLedger(125);
+            Object.defineProperty(globalThis, 'document', {
+                configurable: true,
+                value: {querySelectorAll: () => [fixture.ledger]},
+            });
+
+            initInvoiceLedgers();
+
+            // Canary: only one manageable page should render even when a pool has hundreds of invoices.
+            expect(fixture.rows.filter((row) => !row.hidden)).toHaveLength(25);
+            expect(fixture.summary.textContent).toBe('1–25 of 125 invoices');
+            fixture.next.trigger('click');
+            expect(fixture.summary.textContent).toBe('26–50 of 125 invoices');
+
+            fixture.status.value = 'REJECTED';
+            fixture.status.trigger('change');
+            expect(fixture.summary.textContent).toBe('1–25 of 25 invoices');
+
+            fixture.status.value = '';
+            fixture.search.value = 'invoice 125';
+            fixture.search.trigger('input');
+            expect(fixture.rows.filter((row) => !row.hidden)).toHaveLength(1);
+            expect(fixture.summary.textContent).toBe('1–1 of 1 invoices');
         });
     });
 });

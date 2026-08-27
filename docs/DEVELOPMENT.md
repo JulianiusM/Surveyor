@@ -560,6 +560,7 @@ DB_PASS=surveyor
 DB_NAME=surveyor
 SESSION_SECRET=your-secret-key
 OIDC_ISSUER=https://your-oidc-provider
+INVOICE_RETENTION_MONTHS=6
 ```
 
 ### Testing
@@ -574,6 +575,7 @@ Set environment variables in deployment platform:
 - Session secret
 - OIDC configuration
 - Email configuration
+- `INVOICE_RETENTION_MONTHS` (non-negative whole months; defaults to `6`)
 
 ---
 

@@ -88,6 +88,140 @@
   max-height: 260px
   overflow-y: auto
 
+.invoice-ledger
+  min-width: 0
+
+.invoice-ledger-toolbar
+  position: sticky
+  left: 0
+
+.invoice-ledger-controls
+  flex: 1 1 34rem
+  justify-content: flex-end
+
+  .form-control,
+  .form-select
+    width: auto
+
+.invoice-ledger-search
+  flex: 1 1 14rem
+  max-width: 22rem
+
+.invoice-ledger-table
+  max-height: 38rem
+  overflow: auto
+  scrollbar-gutter: stable
+
+  table
+    min-width: 82rem
+
+  thead
+    position: sticky
+    top: 0
+    z-index: 2
+
+  th
+    background: #212529
+    white-space: nowrap
+
+  td
+    max-width: 22rem
+    overflow-wrap: anywhere
+
+.invoice-review-fields
+  min-width: 15rem
+
+.invoice-description
+  white-space: pre-wrap
+
+.invoice-ledger-footer
+  min-height: 2rem
+
+@media (max-width: 991.98px)
+  .invoice-ledger-controls,
+  .invoice-ledger-search
+    width: 100%
+    max-width: none
+
+  .invoice-ledger-controls
+    justify-content: flex-start
+
+    .form-control
+      flex: 1 1 100%
+
+    .form-select
+      flex: 1 1 10rem
+
+  .invoice-ledger-table
+    max-height: 42rem
+
+    table,
+    tbody
+      display: block
+      min-width: 0
+
+    thead
+      display: none
+
+    tr
+      display: grid
+      grid-template-columns: repeat(2, minmax(0, 1fr))
+      gap: .75rem
+      margin-bottom: .75rem
+      padding: .875rem
+      border: 1px solid rgba(255, 255, 255, .14)
+      border-radius: .5rem
+      background: rgba(255, 255, 255, .035)
+
+      &[hidden]
+        display: none
+
+    td
+      display: block
+      max-width: none
+      padding: 0
+      border: 0
+
+      &::before
+        display: block
+        margin-bottom: .25rem
+        content: attr(data-label)
+        color: rgba(255, 255, 255, .6)
+        font-size: .72rem
+        font-weight: 600
+        letter-spacing: .03em
+        text-transform: uppercase
+
+    .invoice-cell-wide,
+    .invoice-cell-actions
+      grid-column: 1 / -1
+
+  .invoice-review-fields
+    min-width: 0
+
+@media (max-width: 575.98px)
+  .invoice-ledger
+    padding: .75rem !important
+
+  .invoice-ledger-controls .form-select
+    flex-basis: 100%
+
+  .invoice-ledger-table tr
+    grid-template-columns: minmax(0, 1fr)
+
+  .invoice-ledger-table .invoice-cell-wide,
+  .invoice-ledger-table .invoice-cell-actions
+    grid-column: auto
+
+  .invoice-ledger-footer
+    align-items: stretch !important
+
+    .btn-group
+      width: 100%
+
+      .btn
+        flex: 1 1 50%
+
 .assignments-list
   max-height: 240px
   overflow-y: auto

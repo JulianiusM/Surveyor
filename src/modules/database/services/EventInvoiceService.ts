@@ -16,9 +16,11 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import {format, subMonths} from "date-fns";
 import {EntityManager} from "typeorm";
 import type {InvoicePoolDistribution, InvoicePoolStatus} from "../../../types/InvoicePoolTypes";
-import {formatAmount, toAmount} from "../../lib/util";
+import {formatAmount, resolveInvoiceAmount, toAmount} from "../../lib/util";
+import settings from "../../settings";
 import {AppDataSource} from "../dataSource";
 import {Event} from "../entities/event/Event";
 import {EventInvoice, InvoiceStatus} from "../entities/event/EventInvoice";
@@ -45,27 +47,48 @@ async function loadPool(poolId: string) {
     return pool;
 }
 
-// Best-effort cleanup to avoid orphaned uploads when invoices are declined or pools removed
-function deleteProofFile(proofPath?: string | null) {
+export interface InvoiceCorrections {
+    correctedAmount?: number | null;
+    correctedDescription?: string | null;
+}
+
+// Best-effort cleanup to avoid orphaned uploads when retained invoice records expire.
+async function deleteProofFile(proofPath?: string | null): Promise<void> {
     if (!proofPath) return;
-    const normalized = path.isAbsolute(proofPath) ? proofPath : path.join(process.cwd(), proofPath);
-    void fs.promises.unlink(normalized).catch(() => undefined);
+    const invoiceRoot = path.resolve(process.cwd(), settings.value.invoiceDir);
+    const normalized = path.resolve(process.cwd(), proofPath);
+    const relativePath = path.relative(invoiceRoot, normalized);
+    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+        console.warn(`[invoice-retention] Skipped proof outside configured invoice directory: ${proofPath}`);
+        return;
+    }
+    await fs.promises.unlink(normalized).catch(() => undefined);
 }
 
 /**
- * Remove persisted proof metadata and delete associated files. The caller owns the
- * business rule for when this should happen (e.g., expiry windows or declines).
+ * Permanently remove invoices after their event's configured retention window.
+ * This query is event-wide so cleanup does not depend on somebody opening a pool.
  */
-export async function clearInvoiceProofs(invoices: EventInvoice[]) {
-    if (!invoices.length) return;
+export async function purgeExpiredInvoices(retentionMonths: number, now: Date = new Date()): Promise<number> {
+    if (!Number.isInteger(retentionMonths) || retentionMonths < 0) {
+        throw new Error('Invoice retention months must be a non-negative integer');
+    }
+
+    const cutoffDate = format(subMonths(now, retentionMonths), 'yyyy-MM-dd');
     const repo = AppDataSource.getRepository(EventInvoice);
-    invoices.forEach((inv) => {
-        deleteProofFile(inv.proofPath);
-        inv.proofPath = null;
-        inv.proofOriginalName = null;
-        inv.proofMimeType = null;
-    });
-    await repo.save(invoices);
+    const expiredInvoices = await repo.createQueryBuilder('invoice')
+        .innerJoinAndSelect('invoice.pool', 'pool')
+        .innerJoinAndSelect('pool.event', 'event')
+        .where('event.endDate <= :cutoffDate', {cutoffDate})
+        .getMany();
+
+    if (!expiredInvoices.length) return 0;
+
+    const poolIds = Array.from(new Set(expiredInvoices.map((invoice) => invoice.pool.id)));
+    await Promise.all(expiredInvoices.map((invoice) => deleteProofFile(invoice.proofPath)));
+    await repo.delete(expiredInvoices.map((invoice) => invoice.id));
+    await Promise.all(poolIds.map((poolId) => recalcPoolTotals(poolId)));
+    return expiredInvoices.length;
 }
 
 export async function listPools(eventId: string) {
@@ -243,6 +266,9 @@ export async function submitInvoice(
         amount: formatAmount(amount),
         description: description || null,
         status: "NEW" as InvoiceStatus,
+        correctedAmount: null,
+        correctedDescription: null,
+        rejectionReason: null,
         proofPath: proof?.path || null,
         proofOriginalName: proof?.originalName || null,
         proofMimeType: proof?.mimeType || null,
@@ -252,14 +278,20 @@ export async function submitInvoice(
     return invoice.id;
 }
 
-export async function approveInvoice(poolId: string, invoiceId: number) {
+export async function approveInvoice(poolId: string, invoiceId: number, corrections: InvoiceCorrections = {}) {
     const repo = AppDataSource.getRepository(EventInvoice);
     const invoice = await repo.findOne({where: {id: invoiceId, pool: {id: poolId}}});
     if (!invoice) throw new Error("Invoice not found");
-    if (invoice.status !== "NEW") return;
+    if (invoice.status !== "NEW") return false;
     invoice.status = "APPROVED";
+    invoice.correctedAmount = corrections.correctedAmount === null || corrections.correctedAmount === undefined
+        ? null
+        : formatAmount(corrections.correctedAmount);
+    invoice.correctedDescription = corrections.correctedDescription || null;
+    invoice.rejectionReason = null;
     await repo.save(invoice);
     await recalcPoolTotals(poolId);
+    return true;
 }
 
 export async function closeInvoice(poolId: string, invoiceId: number) {
@@ -272,18 +304,18 @@ export async function closeInvoice(poolId: string, invoiceId: number) {
     await recalcPoolTotals(poolId);
 }
 
-export async function declineInvoice(poolId: string, invoiceId: number) {
+export async function declineInvoice(poolId: string, invoiceId: number, rejectionReason: string) {
     const repo = AppDataSource.getRepository(EventInvoice);
-    const invoice = await repo.findOne({
-        where: {id: invoiceId, pool: {id: poolId}},
-        relations: {registration: {profile: true}},
-    });
+    const invoice = await repo.findOne({where: {id: invoiceId, pool: {id: poolId}}});
     if (!invoice) throw new Error("Invoice not found");
-    const email = invoice.registration.profile?.user?.email || invoice.registration.profile.guest?.email;
-    deleteProofFile(invoice.proofPath);
-    await repo.remove(invoice);
+    if (invoice.status !== "NEW") return false;
+    invoice.status = "REJECTED";
+    invoice.rejectionReason = rejectionReason;
+    invoice.correctedAmount = null;
+    invoice.correctedDescription = null;
+    await repo.save(invoice);
     await recalcPoolTotals(poolId);
-    return email;
+    return true;
 }
 
 // Controller provides selected invoices and calculated shares; service keeps the transaction atomic
@@ -453,11 +485,11 @@ export async function recalcPoolTotals(poolId: string) {
     ]);
     if (!pool) return;
 
-    const invoiceTotal = invoices.filter(inv => inv.status !== "NEW")
-        .reduce((sum, inv) => sum + toAmount(inv.amount), 0);
+    const invoiceTotal = invoices.filter(inv => inv.status === "APPROVED" || inv.status === "CLOSED")
+        .reduce((sum, inv) => sum + resolveInvoiceAmount(inv.amount, inv.correctedAmount), 0);
     const openAmount = invoices
         .filter((inv) => inv.status === "APPROVED")
-        .reduce((sum, inv) => sum + toAmount(inv.amount), 0);
+        .reduce((sum, inv) => sum + resolveInvoiceAmount(inv.amount, inv.correctedAmount), 0);
     const extraAmount = surcharges
         .filter(s => !s.subtractFromPool)
         .reduce((sum, s) => sum + toAmount(s.amount), 0);
@@ -499,14 +531,14 @@ export async function getApprovedInvoices(poolId: string) {
 export async function getInvoiceWithRegistration(poolId: string, invoiceId: number) {
     return AppDataSource.getRepository(EventInvoice).findOne({
         where: {id: invoiceId, pool: {id: poolId}},
-        relations: {registration: {profile: true}},
+        relations: {registration: {profile: {user: true, guest: true}}},
     });
 }
 
 export async function getShareWithRegistration(poolId: string, shareId: number) {
     return AppDataSource.getRepository(EventInvoiceShare).findOne({
         where: {id: shareId, pool: {id: poolId}},
-        relations: {registration: {profile: true}},
+        relations: {registration: {profile: {user: true, guest: true}}},
     });
 }
 

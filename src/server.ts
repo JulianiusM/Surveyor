@@ -16,6 +16,7 @@
 
 import http from 'node:http';
 import {initDataSource} from "./modules/database/dataSource";
+import {startInvoiceRetentionJob} from './modules/invoiceRetention';
 import settings from './modules/settings';
 
 async function bootstrap() {
@@ -23,6 +24,7 @@ async function bootstrap() {
         console.log('🔧 Initializing database connection...');
         await settings.read();
         await initDataSource();
+        await startInvoiceRetentionJob();
 
         const {default: app} = await require('./app');
         const server = http.createServer(app);

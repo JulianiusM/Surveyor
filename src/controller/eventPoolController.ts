@@ -30,24 +30,17 @@ import * as eventService from '../modules/database/services/EventService';
 
 import mailer from '../modules/email';
 import {APIError} from '../modules/lib/errors';
-import {formatAmount, normalizeToArray, resolveActorLabel, sanitizeForEmail, toAmount} from '../modules/lib/util';
+import {
+    formatAmount,
+    normalizeToArray,
+    resolveActorLabel,
+    resolveInvoiceAmount,
+    sanitizeForEmail,
+    toAmount,
+} from '../modules/lib/util';
 import type {ParticipantRow} from "../types/EventTypes";
 import type {InvoicePoolDistribution} from "../types/InvoicePoolTypes";
 import type {PermBundle} from '../types/PermissionTypes';
-
-// Remove stored invoice proofs once the event has been finished for more than six months.
-export async function purgeExpiredProofs(pool: Awaited<ReturnType<typeof invoiceService.getPoolWithInvoices>> | null) {
-    if (!pool?.event?.endDate || !pool.invoices?.length) return;
-    // Parse endDate and add 6 months for expiry check
-    const endDate = new Date(pool.event.endDate);
-    if (Number.isNaN(endDate.getTime())) return; // Invalid date format, skip expiry logic
-    const expiry = new Date(endDate);
-    expiry.setMonth(expiry.getMonth() + 6);
-    if (new Date() < expiry) return;
-    const expiredInvoices = pool.invoices.filter((inv) => !!inv.proofPath);
-    if (!expiredInvoices.length) return;
-    await invoiceService.clearInvoiceProofs(expiredInvoices);
-}
 
 // Resolve the registration ID for the current actor so validation stays localized.
 async function getActorRegistrationId(event: Event, session: Request['session']) {
@@ -57,13 +50,12 @@ async function getActorRegistrationId(event: Event, session: Request['session'])
     return registration?.id;
 }
 
-// Pull the pool and ensure it belongs to the current event, purging expired proofs on access.
+// Pull the pool and ensure it belongs to the current event.
 async function ensurePool(event: Event, poolId: string) {
     const pool = await invoiceService.getPoolWithInvoices(poolId);
     if (pool?.event.id !== event.id) {
         throw new APIError('Pool not found', {}, 404);
     }
-    await purgeExpiredProofs(pool);
     return pool;
 }
 
@@ -301,26 +293,61 @@ async function submitInvoice(event: Event, poolId: string, body: any, session: R
         throw new APIError('Unsupported proof type', body, 400);
     }
     const proofPath = path.relative(process.cwd(), file.path);
-    await invoiceService.submitInvoice(poolId, regId, value.amount, value.description || null, {
+    const invoiceId = await invoiceService.submitInvoice(poolId, regId, value.amount, value.description || null, {
         path: proofPath,
         originalName: file.originalname,
         mimeType: file.mimetype,
     });
+    const invoice = await invoiceService.getInvoiceWithRegistration(poolId, invoiceId);
+    const email = invoice?.registration.profile.user?.email || invoice?.registration.profile.guest?.email;
+    if (email) {
+        const description = value.description
+            ? `\nDescription: ${sanitizeForEmail(value.description)}`
+            : '';
+        await mailer.sendEmail(
+            email,
+            'Invoice submitted',
+            `We received invoice #${invoiceId} for pool "${sanitizeForEmail(pool.name)}" ` +
+            `for ${formatAmount(Number(value.amount))}. It is awaiting organizer review.${description}`,
+        );
+    }
 }
 
-// Approve an invoice and notify the submitter with actor context.
-async function approveInvoice(event: Event, poolId: string, invoiceId: string, session: Request['session']) {
+// Accept an invoice, preserve optional organizer corrections, and notify the submitter.
+async function approveInvoice(
+    event: Event,
+    poolId: string,
+    invoiceId: string,
+    body: any,
+    session: Request['session'],
+) {
     const pool = await ensurePool(event, poolId);
     const invoice = await invoiceService.getInvoiceWithRegistration(poolId, Number(invoiceId));
     if (!invoice) throw new APIError('Invoice not found', {}, 404);
-    await invoiceService.approveInvoice(poolId, Number(invoiceId));
+    if (invoice.status !== 'NEW') throw new APIError('Only new invoices can be accepted', body, 409);
+    const schema = Joi.object({
+        correctedAmount: Joi.number().positive().allow(null, '').optional(),
+        correctedDescription: Joi.string().max(4000).allow('').optional(),
+    });
+    const {error, value} = schema.validate(body || {}, {abortEarly: false, allowUnknown: true});
+    if (error) throw new APIError(error.message, body, 400);
+    const correctedAmount = value.correctedAmount === '' || value.correctedAmount === null || value.correctedAmount === undefined
+        ? null
+        : value.correctedAmount;
+    const correctedDescription = value.correctedDescription?.trim() || null;
+    await invoiceService.approveInvoice(poolId, Number(invoiceId), {correctedAmount, correctedDescription});
     const email = invoice.registration.profile.user?.email || invoice.registration.profile.guest?.email;
     if (email) {
         const actor = resolveActorLabel(session);
-        void mailer.sendEmail(
+        const acceptedAmount = formatAmount(resolveInvoiceAmount(invoice.amount, correctedAmount));
+        const correctionText = correctedAmount !== null || correctedDescription
+            ? `\nOrganizer correction: ${correctedDescription ? sanitizeForEmail(correctedDescription) : 'amount adjusted'}.`
+            : '';
+        await mailer.sendEmail(
             email,
-            'Invoice approved',
-            `Your invoice for pool "${sanitizeForEmail(pool.name)}" has been approved by ${actor}.`,
+            'Invoice accepted',
+            `Your invoice #${invoice.id} for pool "${sanitizeForEmail(pool.name)}" has been accepted by ${actor}. ` +
+            `Accepted amount: ${acceptedAmount}.${correctionText}`,
         );
     }
 }
@@ -337,21 +364,21 @@ async function closeInvoice(
     const pool = await ensurePool(event, poolId);
     const invoice = await invoiceService.getInvoiceWithRegistration(poolId, Number(invoiceId));
     if (!invoice) throw new APIError('Invoice not found', {}, 404);
+    if (invoice.status === 'CLOSED') return;
+    if (invoice.status !== 'APPROVED') {
+        throw new APIError('Invoices must be accepted before closing', {}, 400);
+    }
     const actorRegId = await getActorRegistrationId(event, session);
     const canManage = allowManageOverride && (permData?.entity?.has('MANAGE_ASSIGNMENTS') ?? false);
     const isSubmitter = actorRegId === invoice.registration.id;
     if (!canManage && !isSubmitter) {
         throw new APIError('You can only close your own approved invoices, unless you are an administrator.', {}, 403);
     }
-    if (!canManage && invoice.status !== 'APPROVED') {
-        throw new APIError('Invoices must be approved before closing', {}, 400);
-    }
-
     await invoiceService.closeInvoice(poolId, Number(invoiceId));
     const email = invoice.registration.profile.user?.email || invoice.registration.profile.guest?.email;
     if (email) {
         const actor = resolveActorLabel(session);
-        void mailer.sendEmail(
+        await mailer.sendEmail(
             email,
             'Invoice closed',
             `Your invoice for pool "${sanitizeForEmail(pool.name)}" has been marked as closed by ${actor}.`,
@@ -359,17 +386,32 @@ async function closeInvoice(
     }
 }
 
-// Decline an invoice and include actor attribution in the notification.
-async function declineInvoice(event: Event, poolId: string, invoiceId: string, session: Request['session']) {
-    await ensurePool(event, poolId);
-    // Delete and then notify from the controller to keep business rules centralized
-    const email = await invoiceService.declineInvoice(poolId, Number(invoiceId));
+// Reject an invoice without deleting its audit history or proof.
+async function declineInvoice(
+    event: Event,
+    poolId: string,
+    invoiceId: string,
+    body: any,
+    session: Request['session'],
+) {
+    const pool = await ensurePool(event, poolId);
+    const invoice = await invoiceService.getInvoiceWithRegistration(poolId, Number(invoiceId));
+    if (!invoice) throw new APIError('Invoice not found', {}, 404);
+    if (invoice.status !== 'NEW') throw new APIError('Only new invoices can be rejected', body, 409);
+    const schema = Joi.object({
+        rejectionReason: Joi.string().trim().min(1).max(4000).required(),
+    });
+    const {error, value} = schema.validate(body || {}, {abortEarly: false, allowUnknown: true});
+    if (error) throw new APIError(error.message, body, 400);
+    await invoiceService.declineInvoice(poolId, Number(invoiceId), value.rejectionReason);
+    const email = invoice.registration.profile.user?.email || invoice.registration.profile.guest?.email;
     if (email) {
         const actor = resolveActorLabel(session);
-        void mailer.sendEmail(
+        await mailer.sendEmail(
             email,
-            'Invoice declined',
-            `Your invoice submission was declined by ${actor}.`,
+            'Invoice rejected',
+            `Your invoice #${invoice.id} for pool "${sanitizeForEmail(pool.name)}" was rejected by ${actor}.\n` +
+            `Reason: ${sanitizeForEmail(value.rejectionReason)}`,
         );
     }
 }
@@ -390,9 +432,9 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
     const pool = await ensurePool(event, poolId);
     if (pool.status === 'CLOSED') return;
 
-    // Include all invoices whose status is not 'NEW' (APPROVED, CLOSED, etc.)
-    // This is required for pool closing logic, as all non-NEW invoices must be processed.
-    const approvedInvoices = (pool.invoices || []).filter((inv) => inv.status !== 'NEW');
+    const approvedInvoices = (pool.invoices || []).filter(
+        (invoice) => invoice.status === 'APPROVED' || invoice.status === 'CLOSED',
+    );
 
     // Pull full participant list once so we can reuse it for lookups and notifications
     const participants = await eventService.getEventParticipants(event.id);
@@ -486,7 +528,10 @@ function bucketInvoiceCredit(approvedInvoices: EventInvoice[], targetIds: Set<nu
     for (const invoice of approvedInvoices) {
         if (!targetIds.has(invoice.registrationId)) continue;
         const running = invoiceCreditMap.get(invoice.registrationId) || 0;
-        invoiceCreditMap.set(invoice.registrationId, running + toAmount(invoice.amount));
+        invoiceCreditMap.set(
+            invoice.registrationId,
+            running + resolveInvoiceAmount(invoice.amount, invoice.correctedAmount),
+        );
     }
     return invoiceCreditMap;
 }
@@ -678,7 +723,6 @@ async function recalculatePool(event: Event, poolId: string, body: any = {}, ses
 }
 
 export default {
-    purgeExpiredProofs,
     createInvoicePool,
     updatePoolSettings,
     updatePoolAssignments,

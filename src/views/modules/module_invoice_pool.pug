@@ -88,81 +88,195 @@ mixin participantTakeoverList(pools, participants)
 //- Render a single proof link, keeping the markup consistent across admin/participant views
 mixin invoiceProofLink(inv, eventId, poolId)
     if inv.proofPath
-        a.text-info(href=`/api/event/${eventId}/invoice-pools/${poolId}/invoices/${inv.id}/proof` target="_blank" rel="noopener noreferrer") View
+        a.text-info(href=`/api/event/${eventId}/invoice-pools/${poolId}/invoices/${inv.id}/proof` target="_blank" rel="noopener noreferrer" title=inv.proofOriginalName || 'Invoice proof')
+            i.bi.bi-file-earmark-text.me-1
+            | View proof
     else
-        span.text-secondary N/A
+        span.text-secondary Proof expired
 
-//- Generic invoice table used for each admin inbox section
-mixin adminInvoiceSection(title, invoices, eventId, poolId, actions = [])
-    h6 #{title}
-    if invoices && invoices.length
-        .table-responsive.invoice-scroll
-            table.table.table-dark.table-sm.mb-0
-                thead
-                    tr
-                        th Invoice
-                        th Amount
-                        th Proof
-                        if actions.length > 0
+//- Human-readable status badge shared by administration and participant history.
+mixin invoiceStatusBadge(status)
+    if status === 'NEW'
+        span.badge.bg-warning.text-dark Awaiting review
+    else if status === 'APPROVED'
+        span.badge.bg-success Accepted
+    else if status === 'REJECTED'
+        span.badge.bg-danger Rejected
+    else
+        span.badge.bg-secondary Closed
+
+//- Search, status filter, and paging controls shared by ledgers with hundreds of rows.
+mixin invoiceLedgerToolbar(title, invoices)
+    - const newCount = invoices.filter(invoice => invoice.status === 'NEW').length
+    - const acceptedCount = invoices.filter(invoice => invoice.status === 'APPROVED').length
+    - const rejectedCount = invoices.filter(invoice => invoice.status === 'REJECTED').length
+    - const closedCount = invoices.filter(invoice => invoice.status === 'CLOSED').length
+    .invoice-ledger-toolbar.d-flex.flex-wrap.align-items-center.justify-content-between.gap-2.mb-2
+        .d-flex.flex-wrap.align-items-center.gap-2
+            h6.mb-0= title
+            span.badge.bg-secondary #{invoices.length} total
+            if newCount
+                span.badge.bg-warning.text-dark #{newCount} new
+            if acceptedCount
+                span.badge.bg-success #{acceptedCount} accepted
+            if rejectedCount
+                span.badge.bg-danger #{rejectedCount} rejected
+            if closedCount
+                span.badge.bg-secondary #{closedCount} closed
+        .invoice-ledger-controls.d-flex.flex-wrap.gap-2
+            input.form-control.form-control-sm.text-bg-dark.invoice-ledger-search(type="search" data-invoice-search-input placeholder="Search invoices" aria-label="Search invoices")
+            select.form-select.form-select-sm.text-bg-dark(data-invoice-status-filter aria-label="Filter invoice status")
+                option(value="") All statuses
+                option(value="NEW") Awaiting review
+                option(value="APPROVED") Accepted
+                option(value="REJECTED") Rejected
+                option(value="CLOSED") Closed
+            select.form-select.form-select-sm.text-bg-dark(data-invoice-page-size aria-label="Invoices per page")
+                option(value="25") 25 per page
+                option(value="50") 50 per page
+                option(value="100") 100 per page
+
+mixin invoiceLedgerFooter
+    .invoice-ledger-footer.d-flex.flex-wrap.align-items-center.justify-content-between.gap-2.mt-2
+        small.text-secondary(data-invoice-page-summary)
+        .btn-group.btn-group-sm(role="group" aria-label="Invoice pages")
+            button.btn.btn-outline-light(type="button" data-invoice-page-previous)
+                i.bi.bi-chevron-left.me-1
+                | Previous
+            button.btn.btn-outline-light(type="button" data-invoice-page-next)
+                | Next
+                i.bi.bi-chevron-right.ms-1
+
+//- Organizer ledger keeps original data, corrections, rejection history, and actions together.
+mixin adminInvoiceOverview(pool, eventId, participants)
+    - const invoices = [...(pool.invoices || [])].sort((left, right) => new Date((right.track && right.track.createdAt) || 0).getTime() - new Date((left.track && left.track.createdAt) || 0).getTime())
+    if invoices.length
+        .invoice-ledger.border.border-secondary-subtle.rounded-3.bg-black.p-3.mt-3(data-invoice-ledger)
+            +invoiceLedgerToolbar('Invoice administration', invoices)
+            .table-responsive.invoice-ledger-table
+                table.table.table-dark.table-hover.align-middle.mb-0
+                    thead
+                        tr
+                            th Invoice
+                            th Participant
+                            th Submitted details
+                            th Organizer review
+                            th Status
+                            th Proof
                             th Actions
-                tbody
-                    each inv in invoices
-                        tr
-                            td ##{inv.id}
-                            td #{inv.amount}
-                            td
-                                +invoiceProofLink(inv, eventId, poolId)
-                            if actions.length > 0
-                                td.d-flex.gap-1.flex-wrap
-                                    for action in actions
-                                        button.btn.btn-success.btn-sm.text-capitalize(type="button" class=`invoice-${action}` data-pool=poolId data-id=inv.id)= action
+                    tbody
+                        each inv in invoices
+                            - const participant = (participants || []).find(row => row.id === inv.registrationId)
+                            - const participantName = (participant && participant.name) || `Participant #${inv.registrationId}`
+                            - const participantEmail = (participant && participant.email) || ''
+                            - const searchText = `${inv.id} ${participantName} ${participantEmail} ${inv.amount} ${inv.description || ''} ${inv.correctedAmount || ''} ${inv.correctedDescription || ''} ${inv.rejectionReason || ''}`.toLowerCase()
+                            - const createdAt = inv.track && inv.track.createdAt
+                            tr(data-invoice-row data-invoice-status=inv.status data-invoice-search=searchText)
+                                td(data-label="Invoice")
+                                    strong ##{inv.id}
+                                    small.text-secondary.d-block= `Submitted ${fmtInvoiceDate(createdAt)}`
+                                td(data-label="Participant")
+                                    strong.d-block= participantName
+                                    if participantEmail && participantEmail !== '—'
+                                        small.text-secondary= participantEmail
+                                td.invoice-cell-wide(data-label="Submitted details")
+                                    strong.d-block #{fmtMoney(inv.amount)}
+                                    small.text-secondary.invoice-description= inv.description || 'No description'
+                                td.invoice-cell-wide(data-label="Organizer review")
+                                    if inv.status === 'NEW'
+                                        .invoice-review-fields
+                                            label.form-label.small.mb-1 Corrected amount
+                                            input.form-control.form-control-sm.text-bg-dark.invoice-corrected-amount(type="number" min="0.01" step="0.01" placeholder=`Keep ${fmtMoney(inv.amount)}` aria-label=`Corrected amount for invoice ${inv.id}`)
+                                            label.form-label.small.mt-2.mb-1 Corrected description
+                                            textarea.form-control.form-control-sm.text-bg-dark.invoice-corrected-description(rows="2" maxlength="4000" placeholder="Leave blank to keep submitted description" aria-label=`Corrected description for invoice ${inv.id}`)
+                                            label.form-label.small.mt-2.mb-1 Rejection reason
+                                            textarea.form-control.form-control-sm.text-bg-dark.invoice-rejection-reason(rows="2" maxlength="4000" placeholder="Required when rejecting" aria-label=`Rejection reason for invoice ${inv.id}`)
+                                    else if inv.correctedAmount || inv.correctedDescription
+                                        if inv.correctedAmount
+                                            strong.d-block #{fmtMoney(inv.correctedAmount)}
+                                            small.text-secondary.d-block Original: #{fmtMoney(inv.amount)}
+                                        if inv.correctedDescription
+                                            small.d-block.mt-1= inv.correctedDescription
+                                    else
+                                        span.text-secondary.small No corrections
+                                td(data-label="Status")
+                                    +invoiceStatusBadge(inv.status)
+                                    if inv.rejectionReason
+                                        small.text-danger-emphasis.d-block.mt-2= inv.rejectionReason
+                                td(data-label="Proof")
+                                    +invoiceProofLink(inv, eventId, pool.id)
+                                td.invoice-cell-actions(data-label="Actions")
+                                    .d-flex.flex-wrap.gap-1
+                                        if inv.status === 'NEW'
+                                            button.btn.btn-success.btn-sm.invoice-approve(type="button" data-pool=pool.id data-id=inv.id)
+                                                i.bi.bi-check2.me-1
+                                                | Accept
+                                            button.btn.btn-outline-danger.btn-sm.invoice-decline(type="button" data-pool=pool.id data-id=inv.id)
+                                                i.bi.bi-x-lg.me-1
+                                                | Reject
+                                        else if inv.status === 'APPROVED'
+                                            button.btn.btn-outline-light.btn-sm.invoice-close(type="button" data-pool=pool.id data-id=inv.id)
+                                                i.bi.bi-check2-circle.me-1
+                                                | Close
+                                        else
+                                            span.text-secondary.small No actions
+            .invoice-ledger-empty.text-secondary.small.py-3.text-center(hidden data-invoice-empty) No invoices match these filters.
+            +invoiceLedgerFooter
     else
-        p.text-secondary.small.mb-0 No invoices in this section.
+        p.text-secondary.mb-0.mt-3 No invoices yet.
 
-//- Wrapper for the three admin inbox states so invoiceOverview stays small
-mixin adminInvoiceOverview(pool, eventId)
-    if pool.invoices && pool.invoices.length
-        .row.mt-3
-            .col-md-4
-                +adminInvoiceSection('Inbox', pool.invoices.filter(i => i.status === 'NEW'), eventId, pool.id, ['approve', 'decline'])
-            .col-md-4
-                +adminInvoiceSection('Open invoices', pool.invoices.filter(i => i.status === 'APPROVED'), eventId, pool.id, ['close'])
-            .col-md-4
-                +adminInvoiceSection('Closed invoices', pool.invoices.filter(i => i.status === 'CLOSED'), eventId, pool.id)
-    else
-        p.text-secondary.mb-0 No invoices yet.
-
-//- Participant-friendly list of submitted invoices
+//- Participant history exposes the full audit trail, including accepted corrections and rejection reasons.
 mixin participantInvoiceOverview(invoices, pools, eventId)
-    if invoices && invoices.length
-        h6.mt-3 Your invoices
-        .table-responsive.invoice-scroll
-            table.table.table-dark.table-sm.mb-0
-                thead
-                    tr
-                        th Pool
-                        th Amount
-                        th Status
-                        th Proof
-                        th Actions
-                tbody
-                    each inv in invoices
-                        - const poolName = pools.find(p => p.id === inv.poolId)?.name || 'A closed pool'
+    - const orderedInvoices = [...(invoices || [])].sort((left, right) => new Date((right.track && right.track.createdAt) || 0).getTime() - new Date((left.track && left.track.createdAt) || 0).getTime())
+    if orderedInvoices.length
+        .invoice-ledger.border.border-secondary-subtle.rounded-3.bg-black.p-3.mt-3(data-invoice-ledger)
+            +invoiceLedgerToolbar('Your invoice history', orderedInvoices)
+            .table-responsive.invoice-ledger-table
+                table.table.table-dark.table-hover.align-middle.mb-0
+                    thead
                         tr
-                            td #{poolName}
-                            td #{inv.amount}
-                            td #{inv.status}
-                            td
-                                +invoiceProofLink(inv, eventId, inv.poolId)
-                            td
-                                if inv.status === 'APPROVED'
-                                    button.btn.btn-sm.btn-outline-success.invoice-close-self(type="button" data-pool=inv.poolId data-id=inv.id)
-                                        i.bi.bi-check2-circle.me-1
-                                        | Close
-                                else if inv.status === 'CLOSED'
-                                    span.text-secondary.small Closed
-                                else
-                                    span.text-secondary.small Awaiting review
+                            th Invoice
+                            th Pool
+                            th Amount
+                            th Description
+                            th Status
+                            th Proof
+                            th Actions
+                    tbody
+                        each inv in orderedInvoices
+                            - const poolName = pools.find(pool => pool.id === inv.poolId)?.name || 'Archived pool'
+                            - const searchText = `${inv.id} ${poolName} ${inv.amount} ${inv.description || ''} ${inv.correctedAmount || ''} ${inv.correctedDescription || ''} ${inv.rejectionReason || ''}`.toLowerCase()
+                            - const createdAt = inv.track && inv.track.createdAt
+                            tr(data-invoice-row data-invoice-status=inv.status data-invoice-search=searchText)
+                                td(data-label="Invoice")
+                                    strong ##{inv.id}
+                                    small.text-secondary.d-block= fmtInvoiceDate(createdAt)
+                                td(data-label="Pool")= poolName
+                                td(data-label="Amount")
+                                    strong.d-block #{fmtMoney(inv.correctedAmount || inv.amount)}
+                                    if inv.correctedAmount
+                                        small.text-secondary Original: #{fmtMoney(inv.amount)}
+                                td.invoice-cell-wide(data-label="Description")
+                                    span.d-block= inv.correctedDescription || inv.description || 'No description'
+                                    if inv.correctedDescription && inv.description
+                                        small.text-secondary.d-block Original: #{inv.description}
+                                td(data-label="Status")
+                                    +invoiceStatusBadge(inv.status)
+                                    if inv.rejectionReason
+                                        small.text-danger-emphasis.d-block.mt-2
+                                            strong Reason:
+                                            |  #{inv.rejectionReason}
+                                td(data-label="Proof")
+                                    +invoiceProofLink(inv, eventId, inv.poolId)
+                                td.invoice-cell-actions(data-label="Actions")
+                                    if inv.status === 'APPROVED'
+                                        button.btn.btn-sm.btn-outline-success.invoice-close-self(type="button" data-pool=inv.poolId data-id=inv.id)
+                                            i.bi.bi-check2-circle.me-1
+                                            | Close
+                                    else
+                                        span.text-secondary.small No actions
+            .invoice-ledger-empty.text-secondary.small.py-3.text-center(hidden data-invoice-empty) No invoices match these filters.
+            +invoiceLedgerFooter
     else
         p.text-secondary.small.mb-0 You have not submitted any invoices yet.
 
@@ -172,7 +286,7 @@ mixin invoiceOverview(mode, options)
     - const eventId = options?.eventId;
     - const invoices = options?.invoices;
     if mode === 'admin' && options.pool
-        +adminInvoiceOverview(options.pool, eventId)
+        +adminInvoiceOverview(options.pool, eventId, options.participants || [])
     else if mode === 'participant'
         +participantInvoiceOverview(invoices || [], pools, eventId)
 

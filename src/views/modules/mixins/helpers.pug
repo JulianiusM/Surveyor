@@ -5,3 +5,6 @@
 //- @param {number|string} val - The value to format
 //- @return {string} - Formatted currency string (e.g., "123.45")
 - const fmtMoney = (val) => Number(val ?? 0).toFixed(2)
+
+//- Format invoice audit timestamps without failing on legacy rows.
+- const fmtInvoiceDate = (val) => val ? new Date(val).toLocaleDateString(undefined, {year: 'numeric', month: 'short', day: 'numeric'}) : '—'

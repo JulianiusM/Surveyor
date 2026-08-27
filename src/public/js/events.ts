@@ -375,18 +375,31 @@ export function initInvoiceAdmin(): void {
 
     // Invoice action handlers
     document.addEventListener('click', async (e: Event) => {
-        const target = e.target as HTMLElement;
+        const target = (e.target as HTMLElement).closest<HTMLButtonElement>('button');
+        if (!target) return;
         try {
             if (target.classList.contains('invoice-approve')) {
                 requireManageAssignments('approve invoices');
-                await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/approve`);
-                showInlineAlert('success', 'Invoice approved');
+                const row = target.closest<HTMLElement>('[data-invoice-row]');
+                const correctedAmount = row?.querySelector<HTMLInputElement>('.invoice-corrected-amount')?.value.trim() || '';
+                const correctedDescription = row?.querySelector<HTMLTextAreaElement>('.invoice-corrected-description')?.value.trim() || '';
+                await post(
+                    `/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/approve`,
+                    {correctedAmount, correctedDescription},
+                );
+                showInlineAlert('success', 'Invoice accepted');
                 return reloadAfterDelay(RELOAD_DELAY_MS);
             }
             if (target.classList.contains('invoice-decline')) {
-                requireManageAssignments('decline invoices');
-                await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/decline`);
-                showInlineAlert('info', 'Invoice declined');
+                requireManageAssignments('reject invoices');
+                const row = target.closest<HTMLElement>('[data-invoice-row]');
+                const rejectionReason = row?.querySelector<HTMLTextAreaElement>('.invoice-rejection-reason')?.value.trim() || '';
+                if (!rejectionReason) throw new Error('Enter a rejection reason before rejecting this invoice.');
+                await post(
+                    `/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/decline`,
+                    {rejectionReason},
+                );
+                showInlineAlert('info', 'Invoice rejected');
                 return reloadAfterDelay(RELOAD_DELAY_MS);
             }
             if (target.classList.contains('invoice-close')) {
@@ -510,6 +523,72 @@ export function initInvoiceAdmin(): void {
                 showInlineAlert('error', message);
             }
         }
+    });
+}
+
+/**
+ * Keep large invoice histories usable by filtering and paging rows in-place.
+ */
+export function initInvoiceLedgers(): void {
+    document.querySelectorAll<HTMLElement>('[data-invoice-ledger]').forEach((ledger) => {
+        const rows = Array.from(ledger.querySelectorAll<HTMLTableRowElement>('[data-invoice-row]'));
+        const search = ledger.querySelector<HTMLInputElement>('[data-invoice-search-input]');
+        const status = ledger.querySelector<HTMLSelectElement>('[data-invoice-status-filter]');
+        const pageSize = ledger.querySelector<HTMLSelectElement>('[data-invoice-page-size]');
+        const previous = ledger.querySelector<HTMLButtonElement>('[data-invoice-page-previous]');
+        const next = ledger.querySelector<HTMLButtonElement>('[data-invoice-page-next]');
+        const summary = ledger.querySelector<HTMLElement>('[data-invoice-page-summary]');
+        const empty = ledger.querySelector<HTMLElement>('[data-invoice-empty]');
+        let currentPage = 1;
+
+        const render = (): void => {
+            const query = search?.value.trim().toLowerCase() || '';
+            const selectedStatus = status?.value || '';
+            const size = Math.max(Number(pageSize?.value) || 25, 1);
+            const matchingRows = rows.filter((row) => {
+                const matchesSearch = !query || (row.dataset.invoiceSearch || '').includes(query);
+                const matchesStatus = !selectedStatus || row.dataset.invoiceStatus === selectedStatus;
+                return matchesSearch && matchesStatus;
+            });
+            const pageCount = Math.max(Math.ceil(matchingRows.length / size), 1);
+            currentPage = Math.min(Math.max(currentPage, 1), pageCount);
+            const start = (currentPage - 1) * size;
+            const pageRows = new Set(matchingRows.slice(start, start + size));
+            rows.forEach((row) => {
+                row.hidden = !pageRows.has(row);
+            });
+
+            if (empty) empty.hidden = matchingRows.length > 0;
+            if (summary) {
+                const first = matchingRows.length ? start + 1 : 0;
+                const last = Math.min(start + size, matchingRows.length);
+                summary.textContent = `${first}–${last} of ${matchingRows.length} invoices`;
+            }
+            if (previous) previous.disabled = currentPage <= 1;
+            if (next) next.disabled = currentPage >= pageCount;
+        };
+
+        search?.addEventListener('input', () => {
+            currentPage = 1;
+            render();
+        });
+        status?.addEventListener('change', () => {
+            currentPage = 1;
+            render();
+        });
+        pageSize?.addEventListener('change', () => {
+            currentPage = 1;
+            render();
+        });
+        previous?.addEventListener('click', () => {
+            currentPage -= 1;
+            render();
+        });
+        next?.addEventListener('click', () => {
+            currentPage += 1;
+            render();
+        });
+        render();
     });
 }
 
@@ -734,6 +813,7 @@ export function init(): void {
 
     initTakeoverModal();
     initInvoiceAdmin();
+    initInvoiceLedgers();
     initInvoiceSubmission();
 
     if (getEventId()) {

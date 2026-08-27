@@ -44,6 +44,13 @@ export function formatAmount(amount: number): string {
     return amount.toFixed(2);
 }
 
+// Preserve the participant's submitted amount while allowing an organizer-reviewed value to drive calculations.
+export function resolveInvoiceAmount(amount: string | number, correctedAmount?: string | number | null): number {
+    return toAmount(correctedAmount === null || correctedAmount === undefined || correctedAmount === ''
+        ? amount
+        : correctedAmount);
+}
+
 // Resolve a human-friendly label for the current actor, falling back to usernames where names are missing.
 // This keeps email/audit messages readable without duplicating lookup logic across controllers.
 export function resolveActorLabel(session: Request['session'] | undefined | null): string {

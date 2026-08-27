@@ -19,7 +19,7 @@ import {NumericBase} from "../abstract/TrackedBase";
 import {EventInvoicePool} from "./EventInvoicePool";
 import {EventRegistration} from "./EventRegistration";
 
-export type InvoiceStatus = 'NEW' | 'APPROVED' | 'CLOSED';
+export type InvoiceStatus = 'NEW' | 'APPROVED' | 'REJECTED' | 'CLOSED';
 
 @Entity("event_invoices", {schema: "surveyor"})
 export class EventInvoice extends NumericBase {
@@ -53,6 +53,16 @@ export class EventInvoice extends NumericBase {
     @Column("text", {name: "description", nullable: true})
     description?: string | null;
 
-    @Column("enum", {name: "status", enum: ["NEW", "APPROVED", "CLOSED"], default: "NEW"})
+    // Organizers can correct submitted details without overwriting the participant's original entry.
+    @Column("decimal", {name: "corrected_amount", precision: 10, scale: 2, nullable: true})
+    correctedAmount?: string | null;
+
+    @Column("text", {name: "corrected_description", nullable: true})
+    correctedDescription?: string | null;
+
+    @Column("text", {name: "rejection_reason", nullable: true})
+    rejectionReason?: string | null;
+
+    @Column("enum", {name: "status", enum: ["NEW", "APPROVED", "REJECTED", "CLOSED"], default: "NEW"})
     status!: InvoiceStatus;
 }

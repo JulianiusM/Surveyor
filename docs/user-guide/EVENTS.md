@@ -207,11 +207,17 @@ For events with shared costs, invoice pools provide cost management:
 - Manage pool credits
 
 **Features:**
-- Create invoices with multiple line items
+- Submit invoices with a proof image or PDF and receive an email confirmation
+- Review accepted, rejected, and closed invoices in a searchable history
+- See organizer corrections and rejection reasons without losing the original submission
 - Assign costs to participants
 - Track who has paid
 - Generate payment records
 - View pool balance and participant balances
+
+Organizers can correct the accepted amount or description while reviewing a new invoice. Rejections require a reason
+and remain visible in both the participant history and organizer ledger. Invoice records and proof files are removed
+automatically after the configured retention period following the event end date (six months by default).
 
 **Note:** This is an advanced feature. Check your event settings to see if invoice pools are enabled.
 

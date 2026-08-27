@@ -42,7 +42,6 @@ import type {DIETARY} from "../types/EventTypes";
 import type {PermBundle} from "../types/PermissionTypes";
 import type {EntityBase} from "../types/UserTypes";
 import {WithRequired} from "../types/UtilTypes";
-import {purgeExpiredProofs} from "./eventPoolController";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'event/event-create';
@@ -136,7 +135,6 @@ async function fetchForView(event: Event, req: Request) {
         eventService.getDriverListsForEvent(event.id),
     ]) : [[], [], []];
     const invoicePools = shouldShowScoped ? await invoiceService.listPools(event.id) : [];
-    await Promise.all(invoicePools.map(purgeExpiredProofs));
     const participantPools = registration ? await invoiceService.getParticipantPools(event.id, registration.id) : [];
     const participantInvoices = registration
         ? invoicePools.flatMap((p) => (p.invoices || []).filter((inv) => inv.registrationId === registration.id))
