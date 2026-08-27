@@ -560,6 +560,8 @@ DB_PASS=surveyor
 DB_NAME=surveyor
 SESSION_SECRET=your-secret-key
 OIDC_ISSUER=https://your-oidc-provider
+APP_NAME=Surveyor
+EMAIL_ACCENT_COLOR="#6d5dfc"
 INVOICE_RETENTION_MONTHS=6
 ```
 
@@ -575,6 +577,7 @@ Set environment variables in deployment platform:
 - Session secret
 - OIDC configuration
 - Email configuration
+- `APP_NAME` and `EMAIL_ACCENT_COLOR` for transactional email branding (`EMAIL_ACCENT_COLOR` must be a six-digit hex color)
 - `INVOICE_RETENTION_MONTHS` (non-negative whole months; defaults to `6`)
 
 ---

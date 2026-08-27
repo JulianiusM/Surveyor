@@ -90,7 +90,13 @@ describe('invoice review and retention workflows', () => {
         expect(sendEmail).toHaveBeenCalledWith(
             participant.user!.email,
             'Invoice submitted',
-            expect.stringContaining(`invoice #${invoiceId}`),
+            expect.objectContaining({
+                heading: 'Your invoice was submitted',
+                details: expect.arrayContaining([
+                    {label: 'Invoice', value: `#${invoiceId}`},
+                    {label: 'Amount', value: '48.75'},
+                ]),
+            }),
         );
     });
 
@@ -120,7 +126,13 @@ describe('invoice review and retention workflows', () => {
         expect(sendEmail).toHaveBeenCalledWith(
             participant.user!.email,
             'Invoice accepted',
-            expect.stringContaining('Accepted amount: 44.25'),
+            expect.objectContaining({
+                heading: 'Your invoice was accepted',
+                details: expect.arrayContaining([
+                    {label: 'Accepted amount', value: '44.25'},
+                    {label: 'Organizer correction', value: 'Personal item removed'},
+                ]),
+            }),
         );
     });
 
@@ -148,7 +160,12 @@ describe('invoice review and retention workflows', () => {
         expect(sendEmail).toHaveBeenCalledWith(
             participant.user!.email,
             'Invoice rejected',
-            expect.stringContaining('Reason: The proof does not show a payment total.'),
+            expect.objectContaining({
+                heading: 'Your invoice needs attention',
+                details: expect.arrayContaining([
+                    {label: 'Rejection reason', value: 'The proof does not show a payment total.'},
+                ]),
+            }),
         );
     });
 

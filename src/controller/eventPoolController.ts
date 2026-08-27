@@ -35,9 +35,9 @@ import {
     normalizeToArray,
     resolveActorLabel,
     resolveInvoiceAmount,
-    sanitizeForEmail,
     toAmount,
 } from '../modules/lib/util';
+import settings from '../modules/settings';
 import type {ParticipantRow} from "../types/EventTypes";
 import type {InvoicePoolDistribution} from "../types/InvoicePoolTypes";
 import type {PermBundle} from '../types/PermissionTypes';
@@ -57,6 +57,10 @@ async function ensurePool(event: Event, poolId: string) {
         throw new APIError('Pool not found', {}, 404);
     }
     return pool;
+}
+
+function eventPageUrl(event: Event): string {
+    return `${settings.value.rootUrl.replace(/\/$/, '')}/event/${encodeURIComponent(event.id)}`;
 }
 
 // Verify a registration is currently allowed in the pool so surcharge updates cannot target removed participants.
@@ -189,11 +193,11 @@ async function notifyTakeoverChanges(
         const payerName = payer?.name || `Participant #${add.payerId}`;
         enqueue(
             payer?.email,
-            `You are now covering ${beneficiaryName} in pool "${pool.name}" (set by ${actorLabel}).`,
+            `You are now covering ${beneficiaryName}.`,
         );
         enqueue(
             beneficiary?.email,
-            `${payerName} will now pay your share in pool "${pool.name}" (set by ${actorLabel}).`,
+            `${payerName} will now pay your share.`,
         );
     }
 
@@ -204,16 +208,28 @@ async function notifyTakeoverChanges(
         const payerName = payer?.name || `Participant #${remove.payerId}`;
         enqueue(
             payer?.email,
-            `You are no longer covering ${beneficiaryName} in pool "${pool.name}" (updated by ${actorLabel}).`,
+            `You are no longer covering ${beneficiaryName}.`,
         );
         enqueue(
             beneficiary?.email,
-            `${payerName} will no longer pay your share in pool "${pool.name}" (updated by ${actorLabel}).`,
+            `${payerName} will no longer pay your share.`,
         );
     }
 
     queue.forEach((messages, email) => {
-        void mailer.sendEmail(email, 'Invoice takeovers updated', messages.join('\n'));
+        void mailer.sendEmail(email, 'Invoice takeovers updated', {
+            eyebrow: 'Invoice pool',
+            heading: 'Payment coverage was updated',
+            preheader: `Payment coverage changed for ${pool.name}.`,
+            paragraphs: ['The payment responsibilities in an invoice pool have changed.'],
+            details: [
+                {label: 'Event', value: event.title},
+                {label: 'Pool', value: pool.name},
+                {label: 'Updated by', value: actorLabel},
+            ],
+            sections: [{title: 'What changed', items: messages}],
+            action: {label: 'View invoice pool', url: eventPageUrl(event)},
+        });
     });
 }
 
@@ -301,14 +317,25 @@ async function submitInvoice(event: Event, poolId: string, body: any, session: R
     const invoice = await invoiceService.getInvoiceWithRegistration(poolId, invoiceId);
     const email = invoice?.registration.profile.user?.email || invoice?.registration.profile.guest?.email;
     if (email) {
-        const description = value.description
-            ? `\nDescription: ${sanitizeForEmail(value.description)}`
-            : '';
         await mailer.sendEmail(
             email,
             'Invoice submitted',
-            `We received invoice #${invoiceId} for pool "${sanitizeForEmail(pool.name)}" ` +
-            `for ${formatAmount(Number(value.amount))}. It is awaiting organizer review.${description}`,
+            {
+                eyebrow: 'Invoice received',
+                heading: 'Your invoice was submitted',
+                preheader: `Invoice #${invoiceId} is awaiting organizer review.`,
+                paragraphs: ['We received your invoice successfully. An organizer will review it before it is included in the pool.'],
+                details: [
+                    {label: 'Invoice', value: `#${invoiceId}`},
+                    {label: 'Event', value: event.title},
+                    {label: 'Pool', value: pool.name},
+                    {label: 'Amount', value: formatAmount(Number(value.amount))},
+                    {label: 'Status', value: 'Awaiting review'},
+                    ...(value.description ? [{label: 'Description', value: String(value.description)}] : []),
+                ],
+                action: {label: 'View invoice history', url: eventPageUrl(event)},
+                notice: 'You will receive another email when an organizer accepts or rejects this invoice.',
+            },
         );
     }
 }
@@ -340,14 +367,32 @@ async function approveInvoice(
     if (email) {
         const actor = resolveActorLabel(session);
         const acceptedAmount = formatAmount(resolveInvoiceAmount(invoice.amount, correctedAmount));
-        const correctionText = correctedAmount !== null || correctedDescription
-            ? `\nOrganizer correction: ${correctedDescription ? sanitizeForEmail(correctedDescription) : 'amount adjusted'}.`
-            : '';
+        const correctionDetails = [
+            ...(correctedAmount !== null
+                ? [{label: 'Submitted amount', value: formatAmount(Number(invoice.amount))}]
+                : []),
+            ...(correctedDescription
+                ? [{label: 'Organizer correction', value: correctedDescription}]
+                : []),
+        ];
         await mailer.sendEmail(
             email,
             'Invoice accepted',
-            `Your invoice #${invoice.id} for pool "${sanitizeForEmail(pool.name)}" has been accepted by ${actor}. ` +
-            `Accepted amount: ${acceptedAmount}.${correctionText}`,
+            {
+                eyebrow: 'Invoice accepted',
+                heading: 'Your invoice was accepted',
+                preheader: `Invoice #${invoice.id} was accepted for ${acceptedAmount}.`,
+                paragraphs: ['An organizer reviewed and accepted your invoice. It will now be included in the invoice pool.'],
+                details: [
+                    {label: 'Invoice', value: `#${invoice.id}`},
+                    {label: 'Event', value: event.title},
+                    {label: 'Pool', value: pool.name},
+                    {label: 'Accepted amount', value: acceptedAmount},
+                    {label: 'Reviewed by', value: actor},
+                    ...correctionDetails,
+                ],
+                action: {label: 'View invoice history', url: eventPageUrl(event)},
+            },
         );
     }
 }
@@ -381,7 +426,19 @@ async function closeInvoice(
         await mailer.sendEmail(
             email,
             'Invoice closed',
-            `Your invoice for pool "${sanitizeForEmail(pool.name)}" has been marked as closed by ${actor}.`,
+            {
+                eyebrow: 'Invoice update',
+                heading: 'Your invoice was closed',
+                preheader: `Invoice #${invoice.id} was marked as closed.`,
+                paragraphs: ['Your accepted invoice has been marked as closed. It remains available in your invoice history.'],
+                details: [
+                    {label: 'Invoice', value: `#${invoice.id}`},
+                    {label: 'Event', value: event.title},
+                    {label: 'Pool', value: pool.name},
+                    {label: 'Updated by', value: actor},
+                ],
+                action: {label: 'View invoice history', url: eventPageUrl(event)},
+            },
         );
     }
 }
@@ -410,8 +467,21 @@ async function declineInvoice(
         await mailer.sendEmail(
             email,
             'Invoice rejected',
-            `Your invoice #${invoice.id} for pool "${sanitizeForEmail(pool.name)}" was rejected by ${actor}.\n` +
-            `Reason: ${sanitizeForEmail(value.rejectionReason)}`,
+            {
+                eyebrow: 'Invoice rejected',
+                heading: 'Your invoice needs attention',
+                preheader: `Invoice #${invoice.id} was rejected by an organizer.`,
+                paragraphs: ['An organizer could not accept this invoice. The invoice and proof remain visible in your history for reference.'],
+                details: [
+                    {label: 'Invoice', value: `#${invoice.id}`},
+                    {label: 'Event', value: event.title},
+                    {label: 'Pool', value: pool.name},
+                    {label: 'Reviewed by', value: actor},
+                    {label: 'Rejection reason', value: value.rejectionReason},
+                ],
+                action: {label: 'View invoice history', url: eventPageUrl(event)},
+                notice: 'If you need clarification, contact an event organizer before submitting a replacement invoice.',
+            },
         );
     }
 }
@@ -498,16 +568,29 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
         const coverageNames = data.beneficiaries
             .map((id) => participantMap.get(id)?.name || `Participant #${id}`)
             .join(', ');
-        const detailLines = data.detailNotes.map((n) => `- ${n}`).join('\n');
-        const noteText = data.detailNotes.length ? `\nBreakdown:\n${detailLines}` : '';
         const totalDue = data.base + data.surcharges - data.invoiceCredits;
         const verb = totalDue < 0 ? 'are owed' : 'owe';
         const formattedTotal = formatAmount(Math.abs(totalDue));
-        const coverageStr = coverageNames ? ` (covering ${coverageNames})` : '';
         void mailer.sendEmail(
             email,
             'Invoice pool closed',
-            `You ${verb} ${formattedTotal} for pool "${sanitizeForEmail(pool.name)}"${coverageStr}.\nActioned by ${actor}.${noteText}`
+            {
+                eyebrow: 'Final invoice share',
+                heading: `You ${verb} ${formattedTotal}`,
+                preheader: `Your final share for ${pool.name} is ready.`,
+                paragraphs: ['The invoice pool has been closed and your final share has been calculated.'],
+                details: [
+                    {label: 'Event', value: event.title},
+                    {label: 'Pool', value: pool.name},
+                    {label: totalDue < 0 ? 'Amount owed to you' : 'Amount due', value: formattedTotal},
+                    ...(coverageNames ? [{label: 'Covering', value: coverageNames}] : []),
+                    {label: 'Closed by', value: actor},
+                ],
+                sections: data.detailNotes.length
+                    ? [{title: 'Calculation breakdown', items: data.detailNotes}]
+                    : undefined,
+                action: {label: 'View invoice pool', url: eventPageUrl(event)},
+            },
         );
     }
 }
@@ -654,7 +737,19 @@ async function markSharePaid(event: Event, poolId: string, shareId: string, isPa
         void mailer.sendEmail(
             email,
             'Share status changed',
-            `Your share for pool ${sanitizeForEmail(pool.name)} was ${statusText} by ${actor}.`,
+            {
+                eyebrow: 'Payment status',
+                heading: `Your share was ${statusText}`,
+                preheader: `The payment status for ${pool.name} changed.`,
+                paragraphs: ['The payment status of your invoice-pool share has been updated.'],
+                details: [
+                    {label: 'Event', value: event.title},
+                    {label: 'Pool', value: pool.name},
+                    {label: 'Status', value: isPaid ? 'Paid' : 'Unpaid'},
+                    {label: 'Updated by', value: actor},
+                ],
+                action: {label: 'View invoice pool', url: eventPageUrl(event)},
+            },
         );
     }
 }

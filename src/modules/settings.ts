@@ -27,6 +27,7 @@ const envPath =
 dotenv.config({path: envPath});
 
 export type Settings = {
+    appName: string;
     appPort: number;
     file: string;
     dbType: "mariadb" | "mysql";
@@ -44,6 +45,7 @@ export type Settings = {
     smtpPort: number;
     smtpSecure: boolean;
     smtpUser: string;
+    emailAccentColor: string;
     localLoginEnabled: boolean;
     oidcEnabled: boolean;
     oidcName: string;
@@ -64,6 +66,7 @@ export type Settings = {
 
 const defaults: Settings = {
     initialized: false,
+    appName: "Surveyor",
     rootUrl: "http://localhost:3000",
 
     dbType: "mariadb",
@@ -80,6 +83,7 @@ const defaults: Settings = {
     smtpEmail: "test@example.com",
     smtpUser: "username",
     smtpPassword: "password",
+    emailAccentColor: "#6d5dfc",
 
     oidcEnabled: false,
     oidcName: "OIDC Provider",
@@ -110,6 +114,7 @@ const defaults: Settings = {
 
 // CSV_KEY -> settings key
 const keyMap: Record<string, keyof Settings> = {
+    APP_NAME: "appName",
     ROOT_URL: "rootUrl",
     DB_TYPE: "dbType",
     DB_HOST: "dbHost",
@@ -124,6 +129,7 @@ const keyMap: Record<string, keyof Settings> = {
     SMTP_EMAIL: "smtpEmail",
     SMTP_USER: "smtpUser",
     SMTP_PASSWORD: "smtpPassword",
+    EMAIL_ACCENT_COLOR: "emailAccentColor",
     OIDC_ENABLED: "oidcEnabled",
     OIDC_NAME: "oidcName",
     OIDC_CLIENT_ID: "oidcClientId",
