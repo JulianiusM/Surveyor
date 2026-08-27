@@ -9,6 +9,7 @@
  */
 
 import {get, post} from '../../core/http';
+import {generateRecommendationsAndWait} from './activity-recommendation-jobs';
 import {reloadAfterDelay} from '../../shared/ui-helpers';
 import {RecommendationsLogic} from './activity-recommendations-logic';
 import {ActivityRecommendationsState} from './activity-recommendations-state';
@@ -100,7 +101,9 @@ export async function initRecommendationScheduleView(planId: string, describeSlo
     const generateRecommendations = async () => {
         try {
             ui!.setAlert('Generating recommendations...', 'info');
-            await post(`/api/activity/${planId}/recommendations/auto`, {});
+            await generateRecommendationsAndWait(planId, (status) => {
+                if (status === 'RUNNING') ui!.setAlert('Calculating recommendations...', 'info');
+            });
             ui!.setAlert('Recommendations generated successfully.', 'info');
             await loadRecommendations();
         } catch (err) {

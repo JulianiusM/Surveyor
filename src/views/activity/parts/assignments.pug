@@ -25,8 +25,8 @@ if permData.entity.has('MANAGE_REQUIREMENTS') && data.plan.eventId
                 i.bi.bi-exclamation-circle.me-2
                 span
             p.text-secondary.small.mb-3
-                | Define required shifts, rounding, and optional overrides for participants.
-                |  Leave counts empty to skip enforcement; rules are optional.
+                | Define exact required shifts and optional participant overrides.
+                |  Required mode needs one saved value for every possible stay duration.
 
             .alert.alert-secondary.requirement-coverage-status.py-2.px-3.mb-3#requirementCoverageStatus(
                 role="status"
@@ -79,6 +79,8 @@ if permData.entity.has('MANAGE_REQUIREMENTS') && data.plan.eventId
                 .form-check.form-switch.my-3
                     input#allowOverfill.form-check-input(type="checkbox" role="switch")
                     label.form-check-label(for="allowOverfill") Allow assignments beyond slot capacity
+                    .form-text.text-secondary
+                        | Recommendations use overfill only after normal capacity and bounded repair cannot place remaining requirements.
 
                 .form-check.form-switch.mb-3
                     input#allowExternalAssignees.form-check-input(type="checkbox" role="switch")
@@ -109,7 +111,7 @@ if permData.entity.has('MANAGE_REQUIREMENTS') && data.plan.eventId
                         i.bi.bi-plus-lg.me-1
                         | Add override
                 p.text-secondary.small.mb-2
-                    | Specify event participant-specific required shifts and optional roles to override the general rule.
+                    | Specify event participant-specific required shifts and optional role-scoped overrides.
                     |  Only registered participants are eligible for overrides.
                 .override-list-scroll#overrideList
 
@@ -149,13 +151,20 @@ if permData.entity.has('MANAGE_ASSIGNMENTS') && data.plan.eventId
                 button.btn.btn-sm.btn-outline-secondary(type="button" data-recommendations-refresh)
                     i.bi.bi-arrow-clockwise.me-1
                     | Reload
-                button.btn.btn-sm.btn-outline-primary(type="button" data-recommendations-auto)
+                button.btn.btn-sm.btn-outline-primary(
+                    type="button"
+                    data-recommendations-auto
+                    disabled=data.plan.assignmentMode === 'FREE'
+                    title=data.plan.assignmentMode === 'FREE' ? 'Automatic recommendations are disabled in free assignment mode' : ''
+                )
                     i.bi.bi-stars.me-1
                     | Auto-generate
                 button.btn.btn-sm.btn-primary(type="button" data-recommendations-apply)
                     i.bi.bi-save.me-1
                     | Save changes
         .card-body
+            p.text-secondary.small
+                | Recommendations fill participant capacity only. Named roles remain manual and are modeled hypothetically in requirement coverage.
             .d-flex.justify-content-between.align-items-center.mb-2
                 p.text-secondary.small.mb-0
                     | Review recommendations visually in the schedule below.

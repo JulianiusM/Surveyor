@@ -37,6 +37,17 @@ export function createRequirementConfiguration(
         overrides: [],
         participants: [createRequirementParticipantSummary()],
         capacitySummary: {availableSlots: 4, requiredSlots: 2, difference: 2},
+        calculationContext: {
+            participants: [{
+                profileId: '00000000-0000-4000-8000-000000000001',
+                arrivalDate: '2027-06-01',
+                departureDate: '2027-06-03',
+                roleIds: [7],
+                name: 'Alex Participant',
+            }],
+            assignedShiftCounts: {'profile:00000000-0000-4000-8000-000000000001': 0},
+            slots: [{id: 'slot-a', day: '2027-06-01', maxAssignees: 4, roles: []}],
+        },
         ...overrides,
     };
 }

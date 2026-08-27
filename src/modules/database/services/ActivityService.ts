@@ -151,6 +151,24 @@ export async function updateRoleAssignments(slotId: string, assign: {
     await AppDataSource.transaction(async (manager) => {
         const repo = manager.getRepository(ActivityAssignmentRole);
         const assRepo = manager.getRepository(ActivityAssignment);
+        const configuredRoles = await manager.getRepository(ActivitySlotRole).find({
+            where: {item: {id: slotId}},
+            relations: {role: true},
+        });
+        const roleLimits = new Map(configuredRoles.map((slotRole) => [slotRole.role.title, slotRole.maxQty ?? 0]));
+        const requestedCounts = new Map<string, number>();
+        for (const entry of assign) {
+            if (!entry.assignmentId || entry.role === "default") continue;
+            const maxQty = roleLimits.get(entry.role);
+            if (maxQty == null) {
+                throw new APIError('Activity role is not available for this slot', {slotId, role: entry.role}, 400);
+            }
+            const requestedCount = (requestedCounts.get(entry.role) ?? 0) + 1;
+            if (requestedCount > maxQty) {
+                throw new APIError('This activity role is already full', {slotId, role: entry.role}, 409);
+            }
+            requestedCounts.set(entry.role, requestedCount);
+        }
 
         // 1. Get all assignments for this slot
         const assignments = await assRepo.find({
@@ -546,7 +564,9 @@ export async function assignActivityAssignmentRole(
                 throw new APIError('Activity role is not available for this slot', {itemId, roleName}, 400);
             }
 
-            if (!plan.allowOverfillAfterFull && typeof slotRole.maxQty === 'number') {
+            // Overfill applies to the slot's participant capacity only. Named role
+            // quotas remain hard constraints because roles are assigned manually.
+            if (typeof slotRole.maxQty === 'number') {
                 const roleCount = await assignmentRoleRepo
                     .createQueryBuilder('assignmentRole')
                     .innerJoin('assignmentRole.assignment', 'assignment')
@@ -772,7 +792,7 @@ export async function getParticipantRolesForPlan(planId: string): Promise<{
         }
 
         for (const assignmentRole of assignment.activityAssignmentRoles || []) {
-            if (assignmentRole.role?.id) {
+            if (assignmentRole.role?.id && !assignmentRole.role.isDefault) {
                 roleMap.get(participantKey)!.add(Number(assignmentRole.role.id));
             }
         }
@@ -800,11 +820,34 @@ export async function getActivitySlotRoles(planId: string) {
 
     const slotRoles = await qb.getMany();
 
-    const map: Record<string, { id: number; name: string; maxQty: number }[]> = {};
+    const assignedRows: Array<{slotId: string; roleId: string; assignedQty: string}> = await AppDataSource
+        .getRepository(ActivityAssignmentRole)
+        .createQueryBuilder('assignmentRole')
+        .innerJoin('assignmentRole.assignment', 'assignment')
+        .innerJoin('assignment.item', 'slot')
+        .innerJoin('assignmentRole.role', 'assignedRole')
+        .where('assignment.entity_id = :planId', {planId})
+        .andWhere('assignedRole.is_default = :isDefault', {isDefault: false})
+        .select('slot.id', 'slotId')
+        .addSelect('assignedRole.id', 'roleId')
+        .addSelect('COUNT(DISTINCT assignment.id)', 'assignedQty')
+        .groupBy('slot.id')
+        .addGroupBy('assignedRole.id')
+        .getRawMany();
+    const assignedBySlotRole = new Map(
+        assignedRows.map((row) => [`${row.slotId}:${row.roleId}`, Number(row.assignedQty)]),
+    );
+
+    const map: Record<string, { id: number; name: string; maxQty: number; assignedQty: number }[]> = {};
     for (const sr of slotRoles) {
         const slotId = sr.item.id;
         if (!map[slotId]) map[slotId] = [];
-        map[slotId].push({id: sr.role.id, name: sr.role.title, maxQty: sr.maxQty ?? 0});
+        map[slotId].push({
+            id: sr.role.id,
+            name: sr.role.title,
+            maxQty: sr.maxQty ?? 0,
+            assignedQty: assignedBySlotRole.get(`${slotId}:${sr.role.id}`) ?? 0,
+        });
     }
     return map;
 }

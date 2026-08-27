@@ -98,16 +98,20 @@ function renderParticipantRow(
     const requirementContent = document.createElement('div');
     requirementContent.className = 'd-flex flex-wrap align-items-center gap-1';
     if (mode === 'REQUIRED' || requiredShifts > 0) {
-        appendBadge(requirementContent, `${requiredShifts} required`, 'bg-light text-dark');
-        appendBadge(
-            requirementContent,
-            remainingShifts > 0 ? `${remainingShifts} remaining` : 'Complete',
-            remainingShifts > 0
-                ? requirementState === 'unstarted' ? 'bg-danger text-white' : 'bg-warning text-dark'
-                : 'bg-success text-white',
-        );
-        if (participant.source !== 'none') {
-            appendBadge(requirementContent, participant.source.toUpperCase(), 'bg-info text-white text-uppercase');
+        if (participant.source === 'unconfigured') {
+            appendBadge(requirementContent, 'Missing duration rule', 'bg-danger text-white');
+        } else {
+            appendBadge(requirementContent, `${requiredShifts} required`, 'bg-light text-dark');
+            appendBadge(
+                requirementContent,
+                remainingShifts > 0 ? `${remainingShifts} remaining` : 'Complete',
+                remainingShifts > 0
+                    ? requirementState === 'unstarted' ? 'bg-danger text-white' : 'bg-warning text-dark'
+                    : 'bg-success text-white',
+            );
+            if (participant.source !== 'none') {
+                appendBadge(requirementContent, participant.source.toUpperCase(), 'bg-info text-white text-uppercase');
+            }
         }
     } else {
         appendBadge(requirementContent, 'No minimum', 'bg-secondary text-white');

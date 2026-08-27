@@ -25,6 +25,15 @@ import {showInlineAlert} from '../../shared/alerts';
 import {renderParticipantStatus} from './activity-participants';
 import {getAllRoles} from "./activity-roles";
 import type {RequirementConfiguration, RequirementParticipantSummary} from './activity-types';
+import {
+    applyRounding,
+    calculateBaselineRequirementForPlan,
+    calculateRequirementAnalysis,
+    countInclusiveDays,
+    hasValidRequirementValues,
+    type ParticipantAttendance,
+    type RequirementAnalysisResult,
+} from '../../../../modules/activity/requirements.js';
 
 export interface RequirementDraft {
     assignmentMode: 'FREE' | 'REQUIRED';
@@ -49,79 +58,56 @@ const normalizeShiftCount = (value: number | null | undefined): number => {
     return Math.max(Math.trunc(value), 0);
 };
 
-const applyRequirementRounding = (
-    value: number,
-    mode?: RequirementConfiguration['plan']['roundingMode'],
-): number => {
-    if (mode === 'FLOOR') return Math.floor(value);
-    if (mode === 'ROUND') return Math.round(value);
-    return Math.ceil(value);
-};
+function participantInputs(config: RequirementConfiguration): ParticipantAttendance[] {
+    if (config.calculationContext) return config.calculationContext.participants;
+    return (config.participants ?? []).map((participant) => ({
+        profileId: participant.participantKey.startsWith('profile:')
+            ? participant.participantKey.slice('profile:'.length)
+            : null,
+        arrivalDate: participant.attendance?.arrivalDate,
+        departureDate: participant.attendance?.departureDate,
+        roleIds: participant.roleIds ?? [],
+        name: participant.name,
+    }));
+}
+
+export function calculateLiveRequirementAnalysis(
+    config: RequirementConfiguration,
+    draft: RequirementDraft,
+): RequirementAnalysisResult {
+    const assignedShiftCounts = config.calculationContext?.assignedShiftCounts
+        ?? Object.fromEntries((config.participants ?? []).map((participant) => [participant.participantKey, participant.assignedShifts]));
+    const analysis = calculateRequirementAnalysis({
+        plan: {
+            assignmentMode: draft.assignmentMode,
+            generalRequiredShifts: draft.generalRequiredShifts,
+            roundingMode: draft.roundingMode,
+            startDate: config.plan.startDate,
+            endDate: config.plan.endDate,
+        },
+        participants: participantInputs(config),
+        roleRequirements: draft.roleRequirements,
+        overrides: draft.overrides,
+        stayRequirements: draft.stayRequirements,
+        slots: config.calculationContext?.slots ?? [],
+        assignedShiftCounts,
+    });
+    const savedParticipants = new Map((config.participants ?? []).map((participant) => [participant.participantKey, participant]));
+    return {
+        ...analysis,
+        participants: analysis.participants.map((participant) => ({
+            ...participant,
+            roles: savedParticipants.get(participant.participantKey)?.roles ?? [],
+            assignmentMode: draft.assignmentMode,
+        })),
+    };
+}
 
 export function calculateLiveRequirementSummary(
     config: RequirementConfiguration,
     draft: RequirementDraft,
 ): RequirementParticipantSummary[] {
-    const planDays = Math.max(countInclusivePlanDays(config.plan.startDate, config.plan.endDate), 1);
-
-    return (config.participants || []).map((participant) => {
-        const attendanceDays = Math.min(Math.max(participant.attendanceDays, 0), planDays);
-        const attendanceRatio = attendanceDays / planDays;
-        const roleIds = participant.roleIds || [];
-        const profileId = participant.participantKey.startsWith('profile:')
-            ? participant.participantKey.slice('profile:'.length)
-            : null;
-        const matchingOverrides = draft.overrides.filter((override) => {
-            if (!profileId || override.profileId !== profileId) return false;
-            return override.roleId == null || roleIds.includes(Number(override.roleId));
-        });
-        const override = matchingOverrides.find((entry) => entry.roleId != null) ?? matchingOverrides[0];
-
-        let requiredShifts = 0;
-        let source: RequirementParticipantSummary['source'] = 'none';
-
-        if (draft.assignmentMode === 'REQUIRED') {
-            const matchingRoleRequirements = draft.roleRequirements
-                .filter((requirement) => roleIds.includes(Number(requirement.roleId)))
-                .map((requirement) => applyRequirementRounding(
-                    normalizeShiftCount(requirement.requiredShifts) * attendanceRatio,
-                    draft.roundingMode,
-                ));
-            const roleRequirement = matchingRoleRequirements.length
-                ? Math.min(...matchingRoleRequirements)
-                : null;
-            const stayRequirement = draft.stayRequirements.find(
-                (requirement) => Number(requirement.stayDays) === attendanceDays,
-            );
-            const generalRequirement = stayRequirement
-                ? normalizeShiftCount(stayRequirement.requiredShifts)
-                : applyRequirementRounding(
-                    normalizeShiftCount(draft.generalRequiredShifts) * attendanceRatio,
-                    draft.roundingMode,
-                );
-
-            if (override) {
-                requiredShifts = normalizeShiftCount(override.requiredShifts);
-                source = 'override';
-            } else if (roleRequirement != null) {
-                requiredShifts = roleRequirement;
-                source = 'role';
-            } else if (generalRequirement > 0) {
-                requiredShifts = generalRequirement;
-                source = 'general';
-            }
-        } else if (override) {
-            requiredShifts = normalizeShiftCount(override.requiredShifts);
-            source = 'override';
-        }
-
-        return {
-            ...participant,
-            requiredShifts,
-            remainingShifts: Math.max(requiredShifts - participant.assignedShifts, 0),
-            source,
-        };
-    });
+    return calculateLiveRequirementAnalysis(config, draft).participants;
 }
 
 export function evaluateRequirementCoverage(
@@ -197,10 +183,7 @@ export function evaluateRequirementCoverage(
 }
 
 function countInclusivePlanDays(startDate: string, endDate: string): number {
-    const start = Date.parse(`${startDate}T00:00:00Z`);
-    const end = Date.parse(`${endDate}T00:00:00Z`);
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 0;
-    return Math.floor((end - start) / 86_400_000) + 1;
+    return countInclusiveDays(startDate, endDate);
 }
 
 /**
@@ -235,7 +218,7 @@ export function initRequirementPanel(planId: string): void {
     let requirementsDirty = false;
     type OverrideTarget = NonNullable<RequirementConfiguration['overrideTargets']>[number];
 
-    const setAlert = (message?: string, variant: 'info' | 'danger' = 'info') => {
+    const setAlert = (message?: string, variant: 'info' | 'warning' | 'danger' = 'info') => {
         if (!alertBox) return;
         const target = alertBox.querySelector('span') || alertBox;
         if (!message) {
@@ -329,6 +312,20 @@ export function initRequirementPanel(planId: string): void {
             draft.allowOverfillAfterFull,
             draft.assignmentMode,
         );
+        if (draft.assignmentMode === 'REQUIRED' && capacity.configurationComplete === false) {
+            status.state = 'conflict';
+            status.variant = 'danger';
+            status.icon = 'bi-exclamation-octagon-fill';
+            status.title = 'Invalid or incomplete requirements';
+            status.detail = 'Enter one non-negative integer requirement for every stay duration and correct invalid role or override values.';
+        }
+        if ((capacity.hypotheticalRoleCoverage?.roleCapacityConflicts.length ?? 0) > 0) {
+            status.state = 'conflict';
+            status.variant = 'danger';
+            status.icon = 'bi-exclamation-octagon-fill';
+            status.title = 'Role quotas exceed slot capacity';
+            status.detail = 'Reduce the configured role quantities or increase the affected slot capacity.';
+        }
         const title = coverageStatus.querySelector<HTMLElement>('[data-coverage-title]');
         const detail = coverageStatus.querySelector<HTMLElement>('[data-coverage-detail]');
         const icon = coverageStatus.querySelector<HTMLElement>('[data-coverage-icon]');
@@ -353,6 +350,17 @@ export function initRequirementPanel(planId: string): void {
             requirementBadge.className = 'badge bg-dark text-white';
             requirementBadge.textContent = `Required shifts: ${capacity.requiredSlots}`;
             counts.append(previewBadge, slotBadge, requirementBadge);
+            const roleCoverage = capacity.hypotheticalRoleCoverage;
+            if (roleCoverage && roleCoverage.openRoleCount > 0) {
+                const roleBadge = document.createElement('span');
+                roleBadge.className = roleCoverage.unfilledRoleCount > 0
+                    ? 'badge bg-danger text-white'
+                    : 'badge bg-info text-dark';
+                roleBadge.textContent = roleCoverage.unfilledRoleCount > 0
+                    ? `Open roles unfillable: ${roleCoverage.unfilledRoleCount}`
+                    : `Open roles modeled: ${roleCoverage.filledRoleCount}`;
+                counts.append(roleBadge);
+            }
         }
     };
 
@@ -418,9 +426,9 @@ export function initRequirementPanel(planId: string): void {
             if (savedValue != null) {
                 input.value = String(savedValue);
             } else if (plan.generalRequiredShifts != null && planDays > 0) {
-                input.value = String(applyRequirementRounding(
+                input.value = String(applyRounding(
                     plan.generalRequiredShifts * (stayDays / planDays),
-                    plan.roundingMode,
+                    plan.roundingMode ?? 'CEIL',
                 ));
             }
 
@@ -616,21 +624,41 @@ export function initRequirementPanel(planId: string): void {
     const calculateBaselineRequirement = async () => {
         setAlert('Calculating baseline requirement…');
         try {
-            const res = await get(`/api/activity/${planId}/requirements/baseline`);
-            const baseline = Number(res.data?.baseline ?? NaN);
-
-            if (!Number.isFinite(baseline)) {
-                throw new Error('Unable to calculate baseline requirement');
+            if (!loadedConfig?.calculationContext) throw new Error('Requirement calculation context is unavailable');
+            const draft = collectDraft();
+            if (!hasValidRequirementValues(draft.roleRequirements, draft.overrides, [])) {
+                throw new Error('Correct invalid role or participant override values before calculating the baseline');
             }
+            const result = calculateBaselineRequirementForPlan({
+                plan: {
+                    startDate: loadedConfig.plan.startDate,
+                    endDate: loadedConfig.plan.endDate,
+                    roundingMode: draft.roundingMode,
+                },
+                slots: loadedConfig.calculationContext.slots,
+                participants: loadedConfig.calculationContext.participants,
+                roleRequirements: draft.roleRequirements,
+                overrides: draft.overrides,
+            });
+            const baseline = result.baseline;
 
             if (generalRequired) generalRequired.value = String(baseline);
-            const stayRequirements = Array.isArray(res.data?.stayRequirements)
-                ? res.data.stayRequirements as RequirementConfiguration['stayRequirements']
-                : [];
-            populateStayRequirementValues(stayRequirements);
+            populateStayRequirementValues(result.stayRequirements);
             setRequirementsDirty(true);
             refreshLivePreview();
-            setAlert(`Baseline requirement set to ${baseline}; stay durations populated`);
+            const difference = result.projectedDifference;
+            const projection = difference === 0
+                ? 'The rounded duration table reaches exact capacity.'
+                : `The closest integer baseline differs from capacity by ${Math.abs(difference)} shift${Math.abs(difference) === 1 ? '' : 's'}.`;
+            const diagnostic = result.diagnostics.reason === 'fixed-requirements-fill-capacity'
+                ? ' Fixed role and personal requirements already consume the available capacity.'
+                : result.diagnostics.reason === 'no-stay-based-participants'
+                    ? ' No participant remains whose requirement can be changed by the stay-duration baseline.'
+                    : '';
+            setAlert(
+                `Baseline requirement set to ${baseline}; stay durations populated. ${projection}${diagnostic}`,
+                result.diagnostics.exact && !result.diagnostics.reason ? 'info' : 'warning',
+            );
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to calculate baseline requirement';
             setAlert(message, 'danger');
@@ -718,14 +746,15 @@ export function initRequirementPanel(planId: string): void {
     refreshLivePreview = () => {
         if (!loadedConfig) return;
         const draft = collectDraft();
-        const summary = calculateLiveRequirementSummary(loadedConfig, draft);
-        const availableSlots = loadedConfig.capacitySummary?.availableSlots ?? 0;
-        const requiredSlots = summary.reduce((total, participant) => total + participant.requiredShifts, 0);
-        const capacity = {
-            availableSlots,
-            requiredSlots,
-            difference: availableSlots - requiredSlots,
-        };
+        document.querySelectorAll<HTMLButtonElement>('[data-recommendations-auto]').forEach((button) => {
+            button.disabled = draft.assignmentMode === 'FREE';
+            button.title = button.disabled
+                ? 'Automatic recommendations are disabled in free assignment mode'
+                : '';
+        });
+        const analysis = calculateLiveRequirementAnalysis(loadedConfig, draft);
+        const summary = analysis.participants;
+        const capacity = analysis.capacitySummary;
 
         renderCoverageStatus(capacity, draft);
         if (participantStatus) {

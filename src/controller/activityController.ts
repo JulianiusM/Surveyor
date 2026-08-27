@@ -22,13 +22,16 @@ import {generatePlanRecommendations} from "../modules/activity/autoAssignment";
 import {collectAssignmentWarnings, toAssignmentCandidate} from "../modules/activity/availability";
 import {buildRecommendationWarnings} from "../modules/activity/recommendations";
 import {
+    recommendationJobCoordinator,
+    RecommendationQueueFullError,
+} from "../modules/activity/recommendationJobs";
+import {
     calculateBaselineRequirementForPlan,
     calculateParticipantRequirement,
-    calculateRequirementCapacitySummary,
-    buildProportionalStayRequirements,
+    calculateRequirementAnalysis,
     countInclusiveDays,
+    hasCompleteStayRequirements,
     ParticipantAttendance,
-    summarizeParticipantRequirements,
     toParticipantKey,
     toParticipantName
 } from "../modules/activity/requirements";
@@ -711,12 +714,13 @@ async function updateSettings(id: string, body: any) {
 }
 
 async function getRequirements(planId: string) {
-    const [plan, requirementConfig, assignments, slots, allRoles] = await Promise.all([
+    const [plan, requirementConfig, assignments, slots, allRoles, slotRoles] = await Promise.all([
         activityService.getActivityPlanById(planId),
         requirementService.getRequirementConfiguration(planId),
         activityService.getParticipantAssignmentsWithSlots(planId),
         activityService.getActivitySlotsFlat(planId),
         activityService.getAllRoles(planId),
+        activityService.getActivitySlotRoles(planId),
     ]);
 
     if (!plan) {
@@ -733,30 +737,38 @@ async function getRequirements(planId: string) {
         eventParticipants,
     );
 
-    const roleTitles = new Map(allRoles.map((role) => [Number(role.id), role.title]));
-    const participants = summarizeParticipantRequirements(
+    const slotsWithRoles = slots.map((slot) => ({
+        id: slot.id,
+        day: slot.day,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        maxAssignees: slot.maxAssignees,
+        roles: (slotRoles[slot.id] ?? []).map((role) => ({
+            roleId: Number(role.id),
+            maxQty: role.maxQty,
+            assignedQty: role.assignedQty,
+        })),
+    }));
+    const assignedShiftCounts = Object.fromEntries(
+        Object.entries(assignments).map(([participantKey, participantAssignments]) => [participantKey, participantAssignments.length]),
+    );
+    const analysis = calculateRequirementAnalysis({
         plan,
-        Object.values(attendance),
-        requirementConfig.roleRequirements,
-        requirementConfig.overrides,
-        assignments,
-        requirementConfig.stayRequirements,
-    ).map((participant) => ({
+        participants: Object.values(attendance),
+        roleRequirements: requirementConfig.roleRequirements,
+        overrides: requirementConfig.overrides,
+        stayRequirements: requirementConfig.stayRequirements,
+        slots: slotsWithRoles,
+        assignedShiftCounts,
+    });
+    const roleTitles = new Map(allRoles.map((role) => [Number(role.id), role.title]));
+    const participants = analysis.participants.map((participant) => ({
         ...participant,
         roles: (participant.roleIds || [])
             .map((roleId) => roleTitles.get(roleId))
             .filter((title): title is string => Boolean(title && title !== 'default')),
         assignmentMode: requirementConfig.plan.assignmentMode,
     }));
-
-    const capacitySummary = calculateRequirementCapacitySummary(
-        plan,
-        Object.values(attendance),
-        requirementConfig.roleRequirements,
-        requirementConfig.overrides,
-        requirementConfig.stayRequirements,
-        slots,
-    );
 
     const overrideTargets = eventParticipants.map((participant) => ({
         key: toParticipantKey(participant),
@@ -766,15 +778,26 @@ async function getRequirements(planId: string) {
         departureDate: participant.departureDate ?? null,
     }));
 
-    return {...requirementConfig, participants, capacitySummary, overrideTargets};
+    return {
+        ...requirementConfig,
+        participants,
+        capacitySummary: analysis.capacitySummary,
+        calculationContext: {
+            participants: Object.values(attendance),
+            assignedShiftCounts,
+            slots: slotsWithRoles,
+        },
+        overrideTargets,
+    };
 }
 
 async function calculateBaselineRequirement(planId: string) {
-    const [plan, requirementConfig, slots, assignments] = await Promise.all([
+    const [plan, requirementConfig, slots, assignments, slotRoles] = await Promise.all([
         activityService.getActivityPlanById(planId),
         requirementService.getRequirementConfiguration(planId),
         activityService.getActivitySlotsFlat(planId),
         activityService.getParticipantAssignmentsWithSlots(planId),
+        activityService.getActivitySlotRoles(planId),
     ]);
 
     if (!plan) {
@@ -790,22 +813,27 @@ async function calculateBaselineRequirement(planId: string) {
         eventParticipants,
     );
 
+    const slotsWithRoles = slots.map((slot) => ({
+        id: slot.id,
+        day: slot.day,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        maxAssignees: slot.maxAssignees,
+        roles: (slotRoles[slot.id] ?? []).map((role) => ({
+            roleId: Number(role.id),
+            maxQty: role.maxQty,
+            assignedQty: role.assignedQty,
+        })),
+    }));
     const baseline = calculateBaselineRequirementForPlan({
         plan,
-        slots,
+        slots: slotsWithRoles,
         participants: Object.values(attendance),
         roleRequirements: requirementConfig.roleRequirements,
         overrides: requirementConfig.overrides,
     });
 
-    return {
-        ...baseline,
-        stayRequirements: buildProportionalStayRequirements(
-            countInclusiveDays(plan.startDate, plan.endDate),
-            baseline.baseline,
-            plan.roundingMode ?? "CEIL",
-        ),
-    };
+    return baseline;
 }
 
 async function updateRequirements(planId: string, body: any) {
@@ -849,6 +877,19 @@ async function updateRequirements(planId: string, body: any) {
     if (invalidStayRequirement) {
         throw new APIError('Stay duration cannot exceed the activity plan duration', invalidStayRequirement, 400);
     }
+    const targetAssignmentMode = planSettings.assignmentMode ?? plan.assignmentMode;
+    const savedStayDays = new Set(stayRequirements.map((requirement) => requirement.stayDays));
+    if (
+        targetAssignmentMode === "REQUIRED"
+        && (stayRequirements.length !== planDays
+            || Array.from({length: planDays}, (_, index) => index + 1).some((day) => !savedStayDays.has(day)))
+    ) {
+        throw new APIError(
+            `Required mode needs exactly one saved requirement for every stay duration from 1 to ${planDays} days`,
+            {stayRequirements, planDays},
+            400,
+        );
+    }
 
     // Convert bindingDeadline string to Date if present
     const normalizedSettings: Partial<Pick<ActivityPlan, "assignmentMode" | "generalRequiredShifts" | "roundingMode" | "bindingDeadline" | "allowOverfillAfterFull" | "allowExternalAssignees" | "allowArrivalDayEvening" | "allowDepartureDayMorning">> = {
@@ -881,6 +922,11 @@ async function collectRecommendationWarnings(planId: string, recommendations: {
     status?: RecommendationStatus
 }[]) {
     await validateRecommendationTargets(planId, recommendations);
+    const activeRecommendations = recommendations.filter(
+        (recommendation) => recommendation.status == null
+            || recommendation.status === "PENDING"
+            || recommendation.status === "APPROVED",
+    );
     const [plan, slots, existingAssignments] = await Promise.all([
         activityService.getActivityPlanById(planId),
         activityService.getActivitySlotsFlat(planId),
@@ -905,7 +951,7 @@ async function collectRecommendationWarnings(planId: string, recommendations: {
 
     return buildRecommendationWarnings({
         slots,
-        recommendations,
+        recommendations: activeRecommendations,
         existingAssignments,
         slotCapacities,
         allowOverfill: Boolean(plan?.allowOverfillAfterFull),
@@ -993,7 +1039,6 @@ async function buildParticipantAttendanceMap(
     for (const override of overrides) {
         upsert({
             profileId: override.profile.id ?? undefined,
-            roleIds: override.roleId ? [override.roleId] : undefined,
             name: override.profile.name ?? undefined,
         });
     }
@@ -1045,7 +1090,7 @@ function resolveWarningTarget(
 }
 
 function shouldAutoGenerateRecommendations(plan: ActivityPlan, recommendations: unknown[]): boolean {
-    if (!plan.bindingDeadline || recommendations.length > 0) {
+    if (plan.assignmentMode === "FREE" || !plan.bindingDeadline || recommendations.length > 0) {
         return false;
     }
 
@@ -1149,11 +1194,14 @@ async function authorizeSelfAssignment(
         }
     }
 
-    if (plan.allowOverfillAfterFull) return;
-
     const assignees = (await activityService.getActivitySlotAssignees(planId))[slotId] ?? [];
     const existingAssignee = assignees.find((assignee) => assignee.profileId === profileId);
-    if (!existingAssignee && typeof slot.maxAssignees === 'number' && assignees.length >= slot.maxAssignees) {
+    if (
+        !plan.allowOverfillAfterFull
+        && !existingAssignee
+        && typeof slot.maxAssignees === 'number'
+        && assignees.length >= slot.maxAssignees
+    ) {
         throw new APIError('This activity slot is already full', {planId, slotId}, 409);
     }
 
@@ -1179,14 +1227,13 @@ async function getRecommendations(planId: string) {
         throw new APIError('Activity plan not found', {planId}, 404);
     }
 
-    let recommendations = initialRecommendations;
-    let autoGenerated = false;
+    const recommendations = initialRecommendations;
+    let autoGenerationJob;
 
     // If the binding deadline passed and no recommendations exist, seed them automatically
     if (shouldAutoGenerateRecommendations(plan, recommendations)) {
-        await autoGenerateRecommendations(planId);
-        recommendations = await recommendationService.getRecommendations(planId);
-        autoGenerated = true;
+        const queued = await queueAutoGenerateRecommendations(planId);
+        autoGenerationJob = queued.job;
     }
 
     const normalized = recommendations.map((rec) => ({
@@ -1226,7 +1273,7 @@ async function getRecommendations(planId: string) {
         warnings,
         participantOptions: participants, // Frontend expects participantOptions
         slots: slotOptions,
-        autoGenerated
+        autoGenerationJob,
     };
 }
 
@@ -1239,6 +1286,23 @@ async function updateRecommendations(planId: string, body: any) {
 }
 
 async function autoGenerateRecommendations(planId: string) {
+    const plan = await activityService.getActivityPlanById(planId);
+    if (!plan) {
+        throw new APIError('Activity plan not found', {planId}, 404);
+    }
+    if (plan.assignmentMode === "FREE") {
+        throw new APIError('Automatic recommendations are disabled in free assignment mode', {planId}, 409);
+    }
+    const requirementConfig = await requirementService.getRequirementConfiguration(planId);
+    const planDays = countInclusiveDays(plan.startDate, plan.endDate);
+    if (!hasCompleteStayRequirements(planDays, requirementConfig.stayRequirements)) {
+        throw new APIError(
+            `Automatic recommendations need saved stay-duration requirements for days 1 through ${planDays}`,
+            {planId},
+            409,
+        );
+    }
+
     // IMPORTANT: Load existing recommendations BEFORE generating
     // This preserves rejection memory for the algorithm
     const existingRecommendations = await recommendationService.getRecommendations(planId);
@@ -1247,7 +1311,7 @@ async function autoGenerateRecommendations(planId: string) {
     const recommendations = await generatePlanRecommendations(planId, existingRecommendations);
 
     // Now replace with new recommendations that respect rejection memory
-    await recommendationService.replaceRecommendations(planId, recommendations);
+    await recommendationService.replacePendingRecommendations(planId, recommendations);
 
     const warnings = await collectRecommendationWarnings(planId, recommendations);
     return {message: 'Recommendations generated', warnings};
@@ -1298,10 +1362,10 @@ async function applyRecommendations(planId: string, body?: any) {
         // Replace all recommendations with updated statuses
         await recommendationService.replaceRecommendations(planId, updatedRecommendations);
 
-        // Get approved ones for processing
+        const persistedRecommendations = await recommendationService.getRecommendations(planId);
+        // Get approved ones for processing with the identifiers created by the status save.
         approved = statusUpdates.approved.map((r) => {
-            // Find full recommendation data from database
-            const dbRec = recommendations.find(rec =>
+            const dbRec = persistedRecommendations.find(rec =>
                 rec.item.id === r.itemId &&
                 rec.profile.id === r.profileId
             );
@@ -1375,7 +1439,12 @@ async function applyRecommendations(planId: string, body?: any) {
         }
     }
 
-    // Mark recommendations as applied (changes status to APPLIED)
+    await recommendationService.markRecommendationsApplied(
+        planId,
+        applicable.map((recommendation) => recommendation.id).filter((id): id is string => Boolean(id)),
+    );
+
+    // Recalculate only replaceable pending work after committed assignments change.
     if (applicable.length > 0) {
         // Load existing recommendations to preserve rejection memory
         const existingForRejectionMemory = await recommendationService.getRecommendations(planId);
@@ -1383,8 +1452,8 @@ async function applyRecommendations(planId: string, body?: any) {
         // Generate fresh recommendations with rejection memory
         const freshRecommendations = await generatePlanRecommendations(planId, existingForRejectionMemory);
 
-        // Replace all recommendations with fresh ones
-        await recommendationService.replaceRecommendations(planId, freshRecommendations);
+        // Replace only obsolete pending recommendations with fresh ones.
+        await recommendationService.replacePendingRecommendations(planId, freshRecommendations);
     }
 
     return {
@@ -1411,6 +1480,45 @@ async function addSlotRole(slotId: string, body: any) {
     const normalizedRoles = await validatePlanRoleIds(slot.entityId, roles, body);
     await activityService.addActivitySlotRoles(slotId, normalizedRoles);
     return 'Roles added';
+}
+
+async function queueAutoGenerateRecommendations(planId: string) {
+    const plan = await activityService.getActivityPlanById(planId);
+    if (!plan) throw new APIError('Activity plan not found', {planId}, 404);
+    if (plan.assignmentMode === "FREE") {
+        throw new APIError('Automatic recommendations are disabled in free assignment mode', {planId}, 409);
+    }
+    const requirementConfig = await requirementService.getRequirementConfiguration(planId);
+    const planDays = countInclusiveDays(plan.startDate, plan.endDate);
+    if (!hasCompleteStayRequirements(planDays, requirementConfig.stayRequirements)) {
+        throw new APIError(
+            `Automatic recommendations need saved stay-duration requirements for days 1 through ${planDays}`,
+            {planId},
+            409,
+        );
+    }
+
+    try {
+        const queued = recommendationJobCoordinator.enqueue(planId);
+        return {
+            message: queued.coalesced ? 'Recommendation job already queued' : 'Recommendation job queued',
+            job: queued.job,
+            coalesced: queued.coalesced,
+        };
+    } catch (error) {
+        if (error instanceof RecommendationQueueFullError) {
+            throw new APIError(error.message, {retryAfter: 5}, 503, {cause: error});
+        }
+        throw error;
+    }
+}
+
+async function getAutoRecommendationJob(planId: string, jobId: string) {
+    const job = recommendationJobCoordinator.get(jobId);
+    if (!job || job.planId !== planId) {
+        throw new APIError('Recommendation job not found', {planId, jobId}, 404);
+    }
+    return {job};
 }
 
 async function validatePlanRoleIds(planId: string, roles: unknown, body: unknown): Promise<number[]> {
@@ -1502,6 +1610,8 @@ export default {
     getRecommendations,
     updateRecommendations,
     autoGenerateRecommendations,
+    queueAutoGenerateRecommendations,
+    getAutoRecommendationJob,
     applyRecommendations,
     deleteSlot,
     addSlotRole,

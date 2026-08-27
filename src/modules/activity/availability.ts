@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import {ActivitySlot} from "../database/entities/activity/ActivitySlot";
-import {ParticipantAttendance} from "./requirements";
+import type {ActivitySlot} from "../database/entities/activity/ActivitySlot";
+import type {ParticipantAttendance} from "./requirements";
 import {parseTimeToMinutes, slotsOverlap, SlotTimeboxCandidate} from "./timebox";
 
 /**

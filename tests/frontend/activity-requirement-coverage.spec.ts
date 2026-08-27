@@ -1,5 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {
+    calculateLiveRequirementAnalysis,
     calculateLiveRequirementSummary,
     evaluateRequirementCoverage,
 } from '../../src/public/js/modules/activity/activity-requirements';
@@ -76,6 +77,44 @@ describe('activity requirement live coverage', () => {
         );
 
         expect(result).toMatchObject({requiredShifts: 0, source: 'role'});
+    });
+
+    it('recomputes hypothetical open-role coverage from the unsaved draft', () => {
+        // Protects the browser preview from subtracting stale role coverage returned for the saved plan.
+        const profileId = '00000000-0000-4000-8000-000000000001';
+        const config = createRequirementConfiguration({
+            participants: [createRequirementParticipantSummary({roleIds: []})],
+            calculationContext: {
+                participants: [{
+                    profileId,
+                    arrivalDate: '2027-06-01',
+                    departureDate: '2027-06-03',
+                    roleIds: [],
+                    name: 'Alex Participant',
+                }],
+                assignedShiftCounts: {[`profile:${profileId}`]: 0},
+                slots: [{
+                    id: 'role-slot',
+                    day: '2027-06-01',
+                    maxAssignees: 2,
+                    roles: [{roleId: 7, maxQty: 1, assignedQty: 0}],
+                }],
+            },
+        });
+        const analysis = calculateLiveRequirementAnalysis(config, createRequirementDraft({
+            roleRequirements: [{roleId: 7, requiredShifts: 1}],
+            stayRequirements: [{stayDays: 1, requiredShifts: 2}, {stayDays: 2, requiredShifts: 3}, {stayDays: 3, requiredShifts: 4}],
+        }));
+
+        expect(analysis).toMatchObject({
+            participants: [expect.objectContaining({requiredShifts: 4, source: 'general'})],
+            capacitySummary: {
+                availableSlots: 2,
+                requiredSlots: 1,
+                difference: 1,
+                hypotheticalRoleCoverage: {filledRoleCount: 1, removedRequiredShifts: 3},
+            },
+        });
     });
 
     it('keeps assignment coverage useful when free mode has no shift requirements', () => {

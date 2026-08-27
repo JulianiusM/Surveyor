@@ -1,82 +1,53 @@
 # Activity shift requirement algorithm
 
-This document describes how Surveyor derives required shift counts for each participant based on slot demand, attendance, and configured rules. The logic is implemented in `src/modules/activity/requirements.ts` and reused by the requirements UI, baseline calculator, and recommendation engine.
+Surveyor uses the same calculation module for saved backend results, the live requirements preview, baseline suggestions, and recommendation targets. This keeps unsaved frontend input and persisted plans semantically identical.
 
-## Goals
+## Participant requirements
 
-- Cover all shift slots while respecting capacity
-- Honor explicit per-participant overrides exactly
-- Apply role-based requirements scaled by attendance
-- Share remaining demand fairly across baseline participants, weighted by availability
-- Produce deterministic, explainable results
+Required mode resolves each participant in this strict order:
 
-## Inputs
+1. A matching participant-specific override is used verbatim.
+2. Otherwise, the minimum configured requirement among the participant's assigned roles is used verbatim.
+3. Otherwise, the saved requirement for the participant's clamped attendance duration is used verbatim.
 
-- **Slots**: `{slotId, capacity}` entries representing demand.
-- **Participants**: attendance windows (arrival/departure), feasible slot sets, optional `explicitFixedShifts`, optional `roleFixedRequirement` (if fully present), and identifiers.
-- **Role requirements** and **overrides**: loaded from plan settings.
-- **Rounding mode**: `CEIL` (default), `ROUND`, or `FLOOR`.
+Free mode has no requirements and bypasses automatic recommendation work.
 
-## Attendance factor
+Rounding occurs only when a proportional stay-duration table is initially generated. Resolving a participant never rounds an override, role requirement, or saved stay-duration value.
 
-For each participant we derive a normalized attendance factor `a_j` in `[0, 1]` based on feasible slots compared to the most available participant:
+## Capacity and hypothetical open roles
 
-```
-a_j = feasibleSlotCount_j / maxFeasibleSlots
-```
+Demand is the sum of every slot's full `maxAssignees` capacity. Named role quantities are positions within that capacity, not additional capacity.
 
-Participants with no attendance get `a_j = 0`; someone who can attend every slot gets `a_j = 1`.
+The preview assumes that fillable open named roles will eventually be held by participants. Since the exact role distribution is unpredictable, it computes a worst-case matching with these rules:
 
-## Participant groups
+- only participants who currently have no role and no personal override may take a hypothetical role;
+- one participant may fill at most one role position in at most one slot;
+- attendance must include the role's slot day;
+- maximum fillable role cardinality is chosen first;
+- among equally complete matchings, the one that removes the most required shifts is chosen.
 
-Participants are classified into exclusive groups:
+This matching affects requirement totals only. Automatic recommendations still assign default positions; skill-dependent named roles remain a manual decision.
 
-- **Explicit**: `explicitFixedShifts` is set; these counts are enforced exactly.
-- **Role-fixed**: no explicit override, but `roleFixedRequirement` exists; requirements are scaled by attendance.
-- **Baseline**: no explicit or role-fixed amounts; they share the remaining demand.
+## Baseline calculation
 
-If both explicit and role-fixed apply, the explicit override wins.
+The baseline is an integer full-stay requirement. For each candidate baseline, Surveyor:
 
-## Fixed contributions
+1. builds the proportional stay-duration table using the selected rounding mode;
+2. evaluates every participant using the normal precedence rules;
+3. applies the hypothetical open-role matching;
+4. compares the resulting total with full slot capacity.
 
-For each participant we compute a fixed contribution `H_j`:
+The total is monotonic, so a bounded binary search finds the first candidate that reaches capacity. That candidate and its predecessor are compared, with the lower value winning a tie. Diagnostics distinguish exact coverage, a discrete rounding gap, fixed requirements already covering capacity, and plans with no stay-based participant left.
 
-- **Explicit**: `H_j = explicitFixedShifts`
-- **Role-fixed**: `H_j = roundUp(a_j * roleFixedRequirement)` using the selected rounding mode
-- **Baseline**: `H_j = 0`
+## Recommendation behavior
 
-`T_fixed = Σ H_j` is subtracted from total slot demand `T` to get remaining demand `T_rem = max(T - T_fixed, 0)`.
+Required-mode recommendations target the resolved per-participant counts while respecting attendance, overlap, boundary, rejection, and approved-assignment constraints. Fairness is prioritized by fulfillment ratio and deficit. A participant's target positions are spread across their attendance window using evenly spaced temporal anchors.
 
-## Baseline sharing
-
-Baseline-only participants split `T_rem` by attendance weight:
-
-1. `A_base = Σ a_j` across baseline participants
-2. If `T_rem > 0` and `A_base = 0`, the result is infeasible (no available attendance to cover demand)
-3. Otherwise `baseline = roundUp(T_rem / A_base)`
-
-Each baseline participant receives `ceil(a_j * baseline)` shifts.
-
-## Balancing pass
-
-After initial rounding we may overshoot or undershoot slot demand:
-
-- **Overshoot**: decrement baseline participants with the most slack without violating their attendance-weighted targets
-- **Deficit**: increment baseline participants with highest attendance until the deficit closes
-
-This keeps coverage while minimizing imbalance.
-
-## Outputs
-
-The computation returns per-participant results with:
-
-- `requiredShifts`
-- `group` (`explicit`, `role-fixed`, `baseline`)
-- `attendanceFactor`, `fixedContribution`, and `baselineContribution`
-
-It also reports totals (`totalRequiredShifts`, `totalFixedShifts`, `remainingShifts`, `baseline`, `sumRequiredShifts`) and `feasible`/`deficit`/`overshoot` flags for diagnostics.
+Normal-capacity assignments and bounded repair run first. When `allowOverfillAfterFull` is enabled, over-capacity recommendations are added only as a last resort for remaining participant deficits. Recommendation computation runs in Node.js worker threads behind a bounded, coalescing queue; no external process or operating-system solver is required.
 
 ## Key references
 
-- Core implementation: `calculateShiftRequirementsForParticipants` and `calculateBaselineRequirementForPlan` in `src/modules/activity/requirements.ts`.
-- Baseline UI trigger and API: requirements panel uses these computations to suggest baseline values and to feed recommendation logic.
+- Requirement and baseline calculations: `src/modules/activity/requirements.ts`
+- Fair recommendation algorithm: `src/modules/activity/fairAssignment.ts`
+- Node worker queue: `src/modules/activity/recommendationJobs.ts`
+- Browser preview: `src/public/js/modules/activity/activity-requirements.ts`

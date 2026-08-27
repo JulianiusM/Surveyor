@@ -27,6 +27,7 @@ import {
     createDriversItemEntity,
     createPackingItemEntity,
 } from '../factories/integrationEntityFactory';
+import {createStayRequirementSchedule} from '../factories/activityRequirementFactory';
 import {
     assignActivitySlot,
     assignDriversItem,
@@ -317,6 +318,7 @@ describe('automatic activity assignment user stories', () => {
         await activityController.updateRequirements(planId, {
             assignmentMode: 'REQUIRED',
             generalRequiredShifts: 2,
+            stayRequirements: createStayRequirementSchedule(3, 2),
             roleRequirements: [],
             overrides: [],
         });
@@ -335,6 +337,27 @@ describe('automatic activity assignment user stories', () => {
         });
     });
 
+    it('rejects incomplete stay-duration tables in required mode', async () => {
+        // Protects runtime calculations from silently rounding a missing attendance duration.
+        const eventId = await createIntegrationEvent(owner.id, 'Incomplete duties event');
+        const planId = await createEventActivityPlan(owner.id, eventId);
+
+        await expect(activityController.updateRequirements(planId, {
+            assignmentMode: 'REQUIRED',
+            stayRequirements: [{stayDays: 3, requiredShifts: 2}],
+            roleRequirements: [],
+            overrides: [],
+        })).rejects.toMatchObject({status: 400});
+    });
+
+    it('rejects automatic recommendations in free mode', async () => {
+        // Protects FREE mode as a no-optimization path in controller workflows.
+        const eventId = await createIntegrationEvent(owner.id, 'Free duties event');
+        const planId = await createEventActivityPlan(owner.id, eventId);
+
+        await expect(activityController.autoGenerateRecommendations(planId)).rejects.toMatchObject({status: 409});
+    });
+
     it('calculates a realistic baseline requirement for registered participants', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Automatic duties event');
         await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
@@ -342,6 +365,7 @@ describe('automatic activity assignment user stories', () => {
         const planId = await createEventActivityPlan(owner.id, eventId);
         await activityController.updateRequirements(planId, {
             assignmentMode: 'REQUIRED', generalRequiredShifts: 1, roundingMode: 'CEIL',
+            stayRequirements: createStayRequirementSchedule(3, 1),
             roleRequirements: [], overrides: [],
         });
 
@@ -379,7 +403,12 @@ describe('automatic activity assignment user stories', () => {
         ]);
         expect(requirements.participants[0].requiredShifts).toBe(1);
         expect(requirements.participants[0].attendanceDays).toBe(2);
-        expect(requirements.capacitySummary).toEqual({availableSlots: 4, requiredSlots: 1, difference: 3});
+        expect(requirements.capacitySummary).toMatchObject({
+            availableSlots: 4,
+            requiredSlots: 1,
+            difference: 3,
+            configurationComplete: true,
+        });
 
         const plan = await activityService.getActivityPlanById(planId);
         const participantView = await activityController.fetchForView(
@@ -433,6 +462,7 @@ describe('automatic activity assignment user stories', () => {
         const planId = await createEventActivityPlan(owner.id, eventId);
         await activityController.updateRequirements(planId, {
             assignmentMode: 'REQUIRED', generalRequiredShifts: 1,
+            stayRequirements: createStayRequirementSchedule(3, 1),
             roleRequirements: [], overrides: [],
         });
 
@@ -452,6 +482,7 @@ describe('automatic activity assignment user stories', () => {
         const planId = await createEventActivityPlan(owner.id, eventId);
         await activityController.updateRequirements(planId, {
             assignmentMode: 'REQUIRED', generalRequiredShifts: 1,
+            stayRequirements: createStayRequirementSchedule(3, 1),
             roleRequirements: [], overrides: [],
         });
         await activityController.autoGenerateRecommendations(planId);
@@ -474,6 +505,7 @@ describe('automatic activity assignment user stories', () => {
         const planId = await createEventActivityPlan(owner.id, eventId);
         await activityController.updateRequirements(planId, {
             assignmentMode: 'REQUIRED', generalRequiredShifts: 1,
+            stayRequirements: createStayRequirementSchedule(3, 1),
             roleRequirements: [], overrides: [],
         });
         await activityController.autoGenerateRecommendations(planId);

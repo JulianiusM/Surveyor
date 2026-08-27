@@ -23,6 +23,9 @@ export function handleGenericError(err: Error, req: Request, res: Response, next
     const status: number = (err as any).status || 500;
     if (status >= 500) console.error(err);
     res.status(status);
+    if (status === 503 && err instanceof APIError && "retryAfter" in err.data) {
+        res.setHeader("Retry-After", String((err.data as {retryAfter: number}).retryAfter));
+    }
 
     if (err instanceof ExpectedError) {
         return renderer.renderMessageData(

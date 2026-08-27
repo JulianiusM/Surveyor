@@ -247,6 +247,19 @@ EntityPermissions ─── EntityAdminAssignment
 - Participant requirements
 - Auto-assignment recommendations
 
+The same pure activity requirement engine drives saved backend results and unsaved browser previews. It resolves saved
+integer values without runtime rounding and finds the closest full-stay baseline by searching the rounded duration
+table's projected capacity. Open named-role capacity is analyzed with a dependency-free
+maximum-cardinality/maximum-weight bipartite matching, but named roles remain manual recommendation decisions.
+Default-role recommendations use a deterministic fairness-first allocator with calendar-time anchors across each
+participant's attendance window and bounded displacement repair; optional overfill runs only after normal capacity
+cannot be improved further.
+
+Recommendation generation is queued in-process and executed in a Node.js worker thread so CPU work does not block the
+Express event loop. The queue coalesces work per plan, caps backlog, caches input fingerprints, and checks the plan
+fingerprint again before replacing pending rows. Reviewed and applied recommendation history is never replaced by an
+automatic run. No external solver, process, or operating-system service is required.
+
 #### Drivers Lists
 - Driver coordination
 - Seat management

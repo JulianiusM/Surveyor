@@ -90,3 +90,31 @@ export async function replaceRecommendations(planId: string, recommendations: Re
         await repo.save(rows);
     });
 }
+
+/**
+ * Atomically reconciles generated work without erasing review history. Only pending
+ * rows are replaceable; approved, rejected, and applied decisions remain auditable.
+ */
+export async function replacePendingRecommendations(planId: string, recommendations: RecommendationInput[]): Promise<void> {
+    await AppDataSource.transaction(async (manager) => {
+        const repo = manager.getRepository(ActivityAssignmentRecommendation);
+        const normalized = recommendations.map(normalizeRecommendationInput);
+        await repo.delete({entity: {id: planId}, status: "PENDING"});
+
+        if (!normalized.length) return;
+        const preserved = await repo.find({
+            where: {entity: {id: planId}},
+            relations: {item: true, profile: true},
+        });
+        const preservedKeys = new Set(preserved.map((row) => `${row.item.id}:${row.profile.id}`));
+        const rows = normalized
+            .filter((recommendation) => !preservedKeys.has(`${recommendation.itemId}:${recommendation.profileId}`))
+            .map((recommendation) => repo.create({
+                entity: {id: planId},
+                item: {id: recommendation.itemId},
+                profile: {id: recommendation.profileId ?? ""},
+                status: "PENDING",
+            }));
+        if (rows.length > 0) await repo.save(rows);
+    });
+}

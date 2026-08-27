@@ -168,8 +168,18 @@ app.post(
     '/:id/recommendations/auto',
     requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
     asyncHandler(async (req: Request, res: Response) => {
-        const data = await controller.autoGenerateRecommendations(resFct(req).id);
-        renderer.respondWithSuccessDataJson(res, data.message, {warnings: data.warnings});
+        const data = await controller.queueAutoGenerateRecommendations(resFct(req).id);
+        res.status(202);
+        renderer.respondWithSuccessDataJson(res, data.message, {job: data.job, coalesced: data.coalesced});
+    })
+);
+
+app.get(
+    '/:id/recommendations/auto/:jobId',
+    requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
+    asyncHandler(async (req: Request, res: Response) => {
+        const data = await controller.getAutoRecommendationJob(resFct(req).id, req.params.jobId as string);
+        renderer.respondWithSuccessDataJson(res, undefined, data);
     })
 );
 

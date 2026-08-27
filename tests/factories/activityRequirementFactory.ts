@@ -31,6 +31,16 @@ export function createStayRequirement(
     return Object.assign(new ActivityPlanStayRequirement(), {stayDays, requiredShifts});
 }
 
+export function createStayRequirementSchedule(
+    planDays: number,
+    fullStayRequirement: number,
+): ActivityPlanStayRequirement[] {
+    return Array.from({length: planDays}, (_, index) => createStayRequirement(
+        index + 1,
+        Math.ceil(fullStayRequirement * ((index + 1) / planDays)),
+    ));
+}
+
 export function createRoleRequirement(
     roleId: number,
     requiredShifts: number,

@@ -87,7 +87,7 @@ export interface RequirementParticipantSummary {
     requiredShifts: number;
     assignedShifts: number;
     remainingShifts: number;
-    source: 'none' | 'general' | 'role' | 'override';
+    source: 'none' | 'general' | 'role' | 'override' | 'unconfigured';
     attendanceDays: number;
     attendance?: {
         arrivalDate?: string | null;
@@ -122,6 +122,44 @@ export interface RequirementConfiguration {
         availableSlots: number;
         requiredSlots: number;
         difference: number;
+        configurationComplete?: boolean;
+        hypotheticalRoleCoverage?: {
+            matches?: Array<{
+                participantKey: string;
+                slotId: string;
+                roleId: number;
+                requirementBefore: number;
+                requirementAfter: number;
+                removedRequirement: number;
+            }>;
+            openRoleCount: number;
+            filledRoleCount: number;
+            unfilledRoleCount: number;
+            removedRequiredShifts: number;
+            roleCapacityConflicts: Array<{
+                slotId: string;
+                roleCapacity: number;
+                slotCapacity: number;
+            }>;
+        };
+    };
+    calculationContext?: {
+        participants: Array<{
+            profileId?: string | null;
+            arrivalDate?: string | null;
+            departureDate?: string | null;
+            roleIds?: number[];
+            name?: string | null;
+        }>;
+        assignedShiftCounts: Record<string, number>;
+        slots: Array<{
+            id: string;
+            day: string;
+            startTime?: string | null;
+            endTime?: string | null;
+            maxAssignees?: number | null;
+            roles?: Array<{roleId: number; maxQty: number; assignedQty?: number}>;
+        }>;
     };
     overrideTargets?: RequirementOverrideTarget[];
     overrides: {

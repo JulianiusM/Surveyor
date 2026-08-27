@@ -51,12 +51,21 @@ The activity plan page has tabs:
 - Compare role-capped slot capacity with the attendance-aware shifts participants require
 - Configure auto-assignment rules
 
-Saved stay-duration values are authoritative for the general participant requirement. Participant and role overrides
-still take precedence where configured. For long plans, the duration fields stay in a compact scrollable grid.
+Required mode must save one value for every possible stay duration. These values are authoritative and are never
+rounded again at runtime. A matching participant-and-role override takes precedence, followed by a participant-wide
+override, the minimum configured requirement of the participant's assigned roles, and finally the saved stay-duration
+value. Rounding is used only when the baseline calculator initially populates the duration table. For long plans, the
+duration fields stay in a compact scrollable grid.
 Participant attendance also shows the total number of days within the plan. Participant overrides use a compact,
 scrollable editor so the add action and surrounding settings remain accessible when many overrides exist.
-While editing rules, a compact coverage status remains visible inside the settings card and updates immediately.
-Exact coverage is always the target. When overfill is enabled, the slot count is treated as a minimum; otherwise it
+While editing rules, a compact coverage status remains visible inside the settings card and updates immediately using
+the same calculation as the server, including unsaved open-role, override, and stay-duration changes. The baseline
+calculator uses the current draft and explains when zero is correct because fixed requirements consume the capacity or
+no stay-based participant remains.
+Exact coverage uses the sum of every slot's participant capacity, not merely the number of slots. Open named roles are
+modeled as a hypothetical maximum-cardinality assignment in which each participant can cover at most one named role;
+the coverage display warns when roles cannot be filled or their quotas exceed slot capacity. When overfill is enabled,
+the slot count is treated as a minimum; otherwise it
 is treated as a hard cap, and the status identifies whether a deviation is on the permitted side of that boundary.
 The coverage status also shows whether the live values are saved. Editing a field or calculating a new baseline marks
 the section as having unsaved changes, and both the header and the end of the section provide a save action. The browser
@@ -196,11 +205,17 @@ If configured and you have permissions:
 
 ### How It Works
 
-The system suggests assignments based on:
+The system suggests default-role slot assignments based on:
 - Participant availability
-- Role requirements
+- Exact participant requirements after current manual roles and overrides are applied
 - Fair distribution
+- Even calendar-time spacing across each participant's attendance window
 - Existing assignments
+
+Named roles are not recommended automatically because skills and organizer judgment are case-specific. Assign those
+roles manually, then generate recommendations again. The allocator fills ordinary capacity first, attempts bounded
+rearrangements of pending suggestions, and uses allowed overfill only for remaining participant deficits. Free mode
+has no requirements and therefore disables automatic recommendations entirely.
 
 ### Using Recommendations
 
