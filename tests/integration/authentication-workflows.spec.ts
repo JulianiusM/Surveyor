@@ -1,3 +1,4 @@
+import type {Request} from 'express';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import * as userController from '../../src/controller/userController';
 import {Profile} from '../../src/modules/database/entities/user/Profile';
@@ -42,6 +43,30 @@ describe('authentication user stories', () => {
 
         await expect(userService.verifyPassword(userId, 'initial-secret')).resolves.toBe(true);
         await expect(userService.verifyPassword(userId, 'wrong-secret')).resolves.toBe(false);
+    });
+
+    it('logs in an active local account with its username', async () => {
+        const {id: userId, username} = await registerLocalAccount('username-login');
+        await userService.activateUser(userId);
+        const session = {} as Request['session'];
+
+        await userController.loginUser({username, password: 'initial-secret'}, session);
+
+        // Canary: the existing username credential must continue to establish the user and default-profile session.
+        expect(session.auth?.user?.id).toBe(userId);
+        expect(session.profile?.id).toBe(session.auth?.user?.profiles[0].id);
+    });
+
+    it('logs in an active local account with its email address', async () => {
+        const {email, id: userId} = await registerLocalAccount('email-login');
+        await userService.activateUser(userId);
+        const session = {} as Request['session'];
+
+        await userController.loginUser({username: email, password: 'initial-secret'}, session);
+
+        // Regression: local users who enter their email must receive the same authenticated session as username users.
+        expect(session.auth?.user?.id).toBe(userId);
+        expect(session.profile?.id).toBe(session.auth?.user?.profiles[0].id);
     });
 
     it('activates an account with its persisted activation token', async () => {

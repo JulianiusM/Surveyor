@@ -68,17 +68,17 @@ export async function loginUser(body: any, session: Request["session"]) {
     const returnInfo = {username};
 
     if (!username || !password) {
-        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username or password', returnInfo);
+        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo);
     }
 
-    const user = await userService.getUserByUsername(username);
+    const user = (await userService.getUserByUsername(username)) ?? (await userService.getUserByEmail(username));
     if (!user) {
-        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username or password', returnInfo);
+        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo);
     }
 
     const isValidPassword = await userService.verifyPassword(user.id, password);
     if (!isValidPassword) {
-        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username or password', returnInfo);
+        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo);
     }
 
     if (!user.isActive) {

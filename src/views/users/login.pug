@@ -19,13 +19,14 @@ block content
             .col-md-6
                 label.form-label.mb-1(for="username")
                     i.bi.bi-person-circle.me-1
-                    | Username&nbsp;*
+                    | Username or email&nbsp;*
                 input#username.form-control.text-bg-dark(
                     type="text"
                     name="username"
                     maxlength="100"
                     value= (data && data.username) ? data.username : ''
-                    placeholder="your login name"
+                    placeholder="your username or email"
+                    autocomplete="username"
                     required)
 
             //── Passwort ────────────────────────────────────────
