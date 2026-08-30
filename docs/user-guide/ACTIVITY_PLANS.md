@@ -81,7 +81,9 @@ when they are not registered for the linked event.
 Linked activity plans accept self-sign-ups from registered event participants by default. Organizers can explicitly
 enable **Allow non-participants to take slots** when external providers or administrators should be able to volunteer;
 those profiles must still have permission to view the plan. With overfill disabled, slot and role capacities are
-enforced as hard limits by the server.
+enforced as hard limits by the server. With overfill enabled, a full slot remains available through a clearly marked
+**Full — join anyway** action, and the participant must confirm a capacity warning before the assignment is created.
+The **Open slots** filter continues to show only slots that still have capacity.
 
 ### Settings Tab (owners only)
 - Permission management
@@ -122,6 +124,7 @@ To remove yourself:
 
 - **Open roles** - Show "Take" button
 - **Full roles** - Show "Full" badge
+- **Full slots with overfill enabled** - Show a warning-styled "Full — join anyway" button and require confirmation
 - **Your assignments** - Show "Leave" button
 
 ---

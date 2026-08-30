@@ -311,6 +311,36 @@ describe('automatic activity assignment user stories', () => {
         await expect(assignActivitySlot(slot.id, secondParticipant.id)).rejects.toMatchObject({status: 409});
     });
 
+    it('warns before allowing a participant to overfill an activity slot', async () => {
+        const eventId = await createIntegrationEvent(owner.id, 'Overfill warning event');
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        await registerEventAttendance(eventId, secondParticipant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        const planId = await createEventActivityPlan(owner.id, eventId);
+        const [slot] = await activityService.getActivitySlotsFlat(planId);
+        await activityService.updateActivitySlot(slot.id, {maxAssignees: 1});
+        await assignActivitySlot(slot.id, participant.id);
+        await activityController.updateRequirements(planId, {
+            allowOverfillAfterFull: true,
+            roleRequirements: [],
+            stayRequirements: [],
+            overrides: [],
+        });
+
+        const session = ({session: {profile: secondParticipant}} as Request).session;
+        const warnings = await activityController.getAssignmentWarnings(planId, slot.id, session);
+
+        // Canary: the override keeps joining possible, but only after the participant sees the capacity risk.
+        expect(warnings).toContainEqual({type: 'over_capacity'});
+        await expect(activityController.authorizeSelfAssignment(
+            planId,
+            slot.id,
+            secondParticipant.id,
+            'assign',
+        )).resolves.toBeUndefined();
+        await assignActivitySlot(slot.id, secondParticipant.id);
+        expect((await activityService.getActivitySlotAssignees(planId))[slot.id]).toHaveLength(2);
+    });
+
     it('shows required progress before a participant takes their first slot', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Required progress event');
         await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});

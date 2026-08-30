@@ -102,7 +102,8 @@ each week in weeks
                                     - const startTime = slot.startTime ? slot.startTime.slice(0, 5) : null
                                     - const endTime = slot.endTime ? slot.endTime.slice(0, 5) : null
                                     - const slotRoles = (data.roles.slotRoles ? data.roles.slotRoles[slot.id] || [] : [])
-                                    - const canJoinSlot = data.canSelfAssign !== false && (data.plan.allowOverfillAfterFull || slot.assignedCount < slot.maxAssignees)
+                                    - const slotIsFull = slot.assignedCount >= slot.maxAssignees
+                                    - const canJoinSlot = data.canSelfAssign !== false && (data.plan.allowOverfillAfterFull || !slotIsFull)
                                     - const roleIdsStr = slotRoles.length ? slotRoles.map(r => r.id).join(',') : ''
                                     .slot.border.rounded.p-2.mb-2.d-grid.gap-1.draggable(
                                         data-slotid=slot.id
@@ -112,7 +113,7 @@ each week in weeks
                                         data-end=slot.endTime
                                         data-role-ids=roleIdsStr
                                         data-my=my ? '1' : null
-                                        data-open=(data.plan.allowOverfillAfterFull || slot.assignedCount < slot.maxAssignees ? '1' : null)
+                                        data-open=(!slotIsFull ? '1' : null)
                                         draggable=permData.entity.has('ITEM_EDIT') ? 'true' : null)
 
                                         // ── Header: title + time + admin controls
@@ -209,8 +210,15 @@ each week in weeks
                                                 button.btn.btn-sm.btn-outline-danger.flex-grow-1(
                                                     data-action="unassign") Leave
                                             else if canJoinSlot
-                                                button.btn.btn-sm.btn-outline-success.flex-grow-1(
-                                                    data-action="assign") Join
+                                                button.btn.btn-sm.flex-grow-1(
+                                                    class=slotIsFull ? 'btn-outline-warning' : 'btn-outline-success'
+                                                    data-action="assign"
+                                                    title=slotIsFull ? 'This slot is full. Joining will exceed its capacity.' : null)
+                                                    if slotIsFull
+                                                        i.bi.bi-exclamation-triangle.me-1
+                                                        | Full — join anyway
+                                                    else
+                                                        | Join
                                             else if data.canSelfAssign === false
                                                 span.badge.bg-secondary.flex-grow-1.text-center Registration required
                                             else

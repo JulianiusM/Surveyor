@@ -1141,7 +1141,7 @@ async function getAssignmentWarnings(
         },
     );
 
-    if (!plan.allowOverfillAfterFull && typeof slot.maxAssignees === "number") {
+    if (typeof slot.maxAssignees === "number") {
         const currentCount = assignees[slot.id]?.length ?? 0;
         if (currentCount >= slot.maxAssignees) {
             warnings.push({type: "over_capacity"});

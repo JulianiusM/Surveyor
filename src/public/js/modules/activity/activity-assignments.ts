@@ -26,7 +26,7 @@ export function describeWarning(warning: AssignmentWarning, describeSlot: (slotI
         case "departure_time_restricted":
             return "Morning departure-day assignments are disabled for this plan.";
         case "over_capacity":
-            return "This slot is already full.";
+            return "This slot is already full. Joining will exceed its capacity.";
         case "overlap": {
             const conflicts = (warning.conflicts || []).map(describeSlot);
             const detail = conflicts.length ? `: ${conflicts.join(', ')}` : '';

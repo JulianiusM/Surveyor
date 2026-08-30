@@ -1,5 +1,6 @@
 import {afterEach, describe, expect, it} from 'vitest';
 import {initInvoiceLedgers} from '../../src/public/js/events';
+import {describeWarning} from '../../src/public/js/modules/activity/activity-assignments';
 import {init as initDefaultPage} from '../../src/public/js/stub';
 import {
     createBadge,
@@ -32,6 +33,14 @@ afterEach(() => {
 });
 
 describe('frontend UI behavior suite', () => {
+    describe('activity assignment warnings', () => {
+        // Canary: participants must understand that continuing will deliberately overfill a slot.
+        it('explains the consequence of joining a full slot', () => {
+            expect(describeWarning({type: 'over_capacity'}, () => 'Morning activity'))
+                .toBe('This slot is already full. Joining will exceed its capacity.');
+        });
+    });
+
     describe('default page initialization', () => {
         // Canary: survey pages using the default bundle must activate their shared header-image controls.
         it('registers the survey header image upload action', () => {
