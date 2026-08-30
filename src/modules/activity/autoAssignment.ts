@@ -103,6 +103,8 @@ export async function buildPlanRecommendationContext(
         itemId: recommendation.item.id,
         profileId: recommendation.profile.id,
         status: recommendation.status,
+        operation: recommendation.operation,
+        sourceItemId: recommendation.sourceItem?.id ?? null,
     }));
     const eventParticipants = plan.event
         ? await eventService.getEventParticipants(plan.event.id)

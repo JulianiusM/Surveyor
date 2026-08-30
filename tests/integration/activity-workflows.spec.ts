@@ -12,9 +12,12 @@ import * as userController from '../../src/controller/userController';
 import {Profile} from '../../src/modules/database/entities/user/Profile';
 import {AddActivityPlanStayRequirements1787688000000} from '../../src/migrations/1787688000000-AddActivityPlanStayRequirements';
 import {AddActivityPlanExternalAssignees1787688100000} from '../../src/migrations/1787688100000-AddActivityPlanExternalAssignees';
+import {AddActivityRecommendationOperations1788134500000} from '../../src/migrations/1788134500000-AddActivityRecommendationOperations';
+import {AddActivityRecommendationReviewState1788134600000} from '../../src/migrations/1788134600000-AddActivityRecommendationReviewState';
 import {AppDataSource} from '../../src/modules/database/dataSource';
 import {PERM} from '../../src/modules/lib/permissions';
 import * as activityService from '../../src/modules/database/services/ActivityService';
+import * as recommendationService from '../../src/modules/database/services/ActivityRecommendationService';
 import * as driverService from '../../src/modules/database/services/DriverService';
 import * as adminService from '../../src/modules/database/services/EntityAdminService';
 import * as eventService from '../../src/modules/database/services/EventService';
@@ -543,12 +546,230 @@ describe('automatic activity assignment user stories', () => {
         const recommendation = generated.recommendations[0];
 
         await activityController.applyRecommendations(planId, {recommendations: [{
+            id: recommendation.id,
             itemId: recommendation.item.id,
             profileId: recommendation.profileId,
             status: 'REJECTED',
         }]});
 
         expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([]);
+        expect((await activityController.getRecommendations(planId)).recommendations).toEqual([]);
+        expect(await recommendationService.getRecommendations(planId)).toEqual([
+            expect.objectContaining({status: 'REJECTED', hidden: true, manual: false}),
+        ]);
+
+        // Simulates an in-flight generation result that was calculated before the rejection was saved.
+        await recommendationService.replacePendingRecommendations(planId, [{
+            itemId: recommendation.item.id,
+            profileId: recommendation.profileId,
+            status: 'PENDING',
+            operation: 'ASSIGN',
+        }]);
+        expect((await activityController.getRecommendations(planId)).recommendations).toEqual([
+            expect.objectContaining({status: 'REJECTED', hidden: false, manual: false}),
+        ]);
+    });
+
+    it('discards a persisted manual operation when it is submitted as rejected', async () => {
+        // Protects manual work from becoming automatic rejection memory when an organizer declines it.
+        const eventId = await createIntegrationEvent(owner.id, 'Rejected manual recommendation event');
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        const planId = await createEventActivityPlan(owner.id, eventId);
+        const dinner = (await activityService.getActivitySlotsFlat(planId))
+            .find((slot) => slot.title === 'Dinner cleanup')!;
+        await activityController.updateRecommendations(planId, {recommendations: [{
+            itemId: dinner.id,
+            profileId: participant.id,
+            status: 'PENDING',
+            operation: 'ASSIGN',
+            manual: true,
+        }]});
+        const [manualRecommendation] = (await activityController.getRecommendations(planId)).recommendations;
+        expect(manualRecommendation).toMatchObject({manual: true, status: 'PENDING'});
+
+        await activityController.applyRecommendations(planId, {recommendations: [{
+            id: manualRecommendation.id,
+            itemId: dinner.id,
+            profileId: participant.id,
+            status: 'REJECTED',
+            operation: 'ASSIGN',
+            manual: false,
+        }]});
+
+        expect(await recommendationService.getRecommendations(planId)).toEqual([]);
+        expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([]);
+    });
+
+    it('discards both manual swap legs when either leg is submitted as rejected', async () => {
+        // Protects the server from applying a half-swap submitted by a stale or tampered client.
+        const eventId = await createIntegrationEvent(owner.id, 'Rejected manual swap event');
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        await registerEventAttendance(eventId, secondParticipant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        const planId = await createEventActivityPlan(owner.id, eventId);
+        const plan = await activityService.getActivityPlanById(planId);
+        await activityController.quickAddSlot(plan!, {
+            date: '2027-06-02', title: 'Lunch cleanup', startTime: '12:00', endTime: '13:00', maxAssignees: 1,
+        }, {profile: owner} as never);
+        const slots = await activityService.getActivitySlotsFlat(planId);
+        const dinner = slots.find((slot) => slot.title === 'Dinner cleanup')!;
+        const lunch = slots.find((slot) => slot.title === 'Lunch cleanup')!;
+        await activityService.updateActivitySlot(dinner.id, {maxAssignees: 1});
+        await assignActivitySlot(dinner.id, participant.id);
+        await assignActivitySlot(lunch.id, secondParticipant.id);
+        await activityController.updateRecommendations(planId, {recommendations: [
+            {
+                itemId: lunch.id,
+                sourceItemId: dinner.id,
+                profileId: participant.id,
+                status: 'PENDING',
+                operation: 'REASSIGN',
+                manual: true,
+            },
+            {
+                itemId: dinner.id,
+                sourceItemId: lunch.id,
+                profileId: secondParticipant.id,
+                status: 'PENDING',
+                operation: 'REASSIGN',
+                manual: true,
+            },
+        ]});
+        const staged = (await activityController.getRecommendations(planId)).recommendations;
+
+        await activityController.applyRecommendations(planId, {recommendations: staged.map((recommendation, index) => ({
+            id: recommendation.id,
+            itemId: recommendation.item.id,
+            sourceItemId: recommendation.sourceItem?.id,
+            profileId: recommendation.profile.id,
+            status: index === 0 ? 'REJECTED' : 'APPROVED',
+            operation: 'REASSIGN',
+            manual: false,
+        }))});
+
+        expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([dinner.id]);
+        expect(await activityService.getActivitySlotAssignments(planId, secondParticipant.id)).toEqual([lunch.id]);
+        expect(await recommendationService.getRecommendations(planId)).toEqual([]);
+    });
+
+    it('does not regenerate after a manual approval before the binding deadline', async () => {
+        // Protects organizers from receiving surprise automatic work while manual review is still open.
+        const eventId = await createIntegrationEvent(owner.id, 'Future recommendation deadline event');
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        const planId = await createEventActivityPlan(owner.id, eventId);
+        const plan = await activityService.getActivityPlanById(planId);
+        await activityController.quickAddSlot(plan!, {
+            date: '2027-06-02', title: 'Lunch cleanup', startTime: '12:00', endTime: '13:00',
+        }, {profile: owner} as never);
+        await activityController.updateRequirements(planId, {
+            assignmentMode: 'REQUIRED', generalRequiredShifts: 2,
+            bindingDeadline: '2099-06-01T00:00:00.000Z',
+            stayRequirements: createStayRequirementSchedule(3, 2),
+            roleRequirements: [], overrides: [],
+        });
+        const dinner = (await activityService.getActivitySlotsFlat(planId))
+            .find((slot) => slot.title === 'Dinner cleanup')!;
+
+        await activityController.applyRecommendations(planId, {recommendations: [{
+            itemId: dinner.id,
+            profileId: participant.id,
+            status: 'APPROVED',
+            operation: 'ASSIGN',
+        }]});
+
+        const recommendations = (await activityController.getRecommendations(planId)).recommendations;
+        expect(recommendations).toEqual([]);
+        expect(await recommendationService.getRecommendations(planId)).toEqual([
+            expect.objectContaining({status: 'APPLIED', operation: 'ASSIGN'}),
+        ]);
+    });
+
+    it('persists cancellation of a staged unassignment without removing the assignment', async () => {
+        // Protects the review GUI's remove-then-save workflow for manual unassignments.
+        const eventId = await createIntegrationEvent(owner.id, 'Canceled unassignment event');
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        const planId = await createEventActivityPlan(owner.id, eventId);
+        const dinner = (await activityService.getActivitySlotsFlat(planId))
+            .find((slot) => slot.title === 'Dinner cleanup')!;
+        await assignActivitySlot(dinner.id, participant.id);
+        await activityController.updateRecommendations(planId, {recommendations: [{
+            itemId: dinner.id,
+            profileId: participant.id,
+            status: 'APPROVED',
+            operation: 'UNASSIGN',
+        }]});
+
+        expect((await activityController.getRecommendations(planId)).recommendations).toHaveLength(1);
+
+        await activityController.applyRecommendations(planId, {recommendations: []});
+
+        expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([dinner.id]);
+        expect((await activityController.getRecommendations(planId)).recommendations).toEqual([]);
+        expect(await recommendationService.getRecommendations(planId)).toEqual([]);
+    });
+
+    it('applies staged swaps and unassignments atomically', async () => {
+        // Protects recommendation-GUI operations from capacity ordering failures or partial participant moves.
+        const eventId = await createIntegrationEvent(owner.id, 'Recommendation operation event');
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        await registerEventAttendance(eventId, secondParticipant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        const planId = await createEventActivityPlan(owner.id, eventId);
+        const plan = await activityService.getActivityPlanById(planId);
+        await activityController.quickAddSlot(plan!, {
+            date: '2027-06-02', title: 'Lunch cleanup', startTime: '12:00', endTime: '13:00', maxAssignees: 1,
+        }, {profile: owner} as never);
+        const slots = await activityService.getActivitySlotsFlat(planId);
+        const dinner = slots.find((slot) => slot.title === 'Dinner cleanup')!;
+        const lunch = slots.find((slot) => slot.title === 'Lunch cleanup')!;
+        await activityService.updateActivitySlot(dinner.id, {maxAssignees: 1});
+        await assignActivitySlot(dinner.id, participant.id);
+        await assignActivitySlot(lunch.id, secondParticipant.id);
+
+        await activityController.applyRecommendations(planId, {recommendations: [
+            {
+                itemId: lunch.id,
+                sourceItemId: dinner.id,
+                profileId: participant.id,
+                status: 'APPROVED',
+                operation: 'REASSIGN',
+            },
+            {
+                itemId: dinner.id,
+                sourceItemId: lunch.id,
+                profileId: secondParticipant.id,
+                status: 'APPROVED',
+                operation: 'REASSIGN',
+            },
+        ]});
+
+        expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([lunch.id]);
+        expect(await activityService.getActivitySlotAssignments(planId, secondParticipant.id)).toEqual([dinner.id]);
+
+        await activityController.applyRecommendations(planId, {recommendations: [{
+            itemId: lunch.id,
+            profileId: participant.id,
+            status: 'APPROVED',
+            operation: 'UNASSIGN',
+        }]});
+
+        expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toEqual([]);
+        expect(await activityService.getActivitySlotAssignments(planId, secondParticipant.id)).toEqual([dinner.id]);
+    });
+
+    it('rejects an assignment recommendation for an already assigned slot', async () => {
+        // Protects both manual and stale automatic payloads from duplicating an existing assignment.
+        const eventId = await createIntegrationEvent(owner.id, 'Duplicate recommendation event');
+        await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        const planId = await createEventActivityPlan(owner.id, eventId);
+        const dinner = (await activityService.getActivitySlotsFlat(planId))
+            .find((slot) => slot.title === 'Dinner cleanup')!;
+        await assignActivitySlot(dinner.id, participant.id);
+
+        await expect(activityController.updateRecommendations(planId, {recommendations: [{
+            itemId: dinner.id,
+            profileId: participant.id,
+            status: 'PENDING',
+            operation: 'ASSIGN',
+        }]})).rejects.toMatchObject({status: 409});
     });
 });
 
@@ -590,4 +811,46 @@ describe('activity external assignee migration', () => {
             await queryRunner.release();
         }
     });
+});
+
+describe('activity recommendation operation migration', () => {
+    it('can run up and down repeatedly while restoring operation metadata', async () => {
+        const migration = new AddActivityRecommendationOperations1788134500000();
+        const queryRunner = AppDataSource.createQueryRunner();
+        await queryRunner.connect();
+
+        try {
+            await migration.up(queryRunner);
+            await migration.up(queryRunner);
+            await migration.down(queryRunner);
+            await migration.down(queryRunner);
+            await migration.up(queryRunner);
+
+            expect(await queryRunner.hasColumn('activity_assignment_recommendations', 'operation')).toBe(true);
+            expect(await queryRunner.hasColumn('activity_assignment_recommendations', 'source_item_id')).toBe(true);
+        } finally {
+            await queryRunner.release();
+        }
+    }, 30_000);
+});
+
+describe('activity recommendation review-state migration', () => {
+    it('can run up and down repeatedly while restoring review metadata', async () => {
+        const migration = new AddActivityRecommendationReviewState1788134600000();
+        const queryRunner = AppDataSource.createQueryRunner();
+        await queryRunner.connect();
+
+        try {
+            await migration.up(queryRunner);
+            await migration.up(queryRunner);
+            await migration.down(queryRunner);
+            await migration.down(queryRunner);
+            await migration.up(queryRunner);
+
+            expect(await queryRunner.hasColumn('activity_assignment_recommendations', 'is_manual')).toBe(true);
+            expect(await queryRunner.hasColumn('activity_assignment_recommendations', 'is_hidden')).toBe(true);
+        } finally {
+            await queryRunner.release();
+        }
+    }, 30_000);
 });

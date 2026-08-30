@@ -9,6 +9,14 @@ import type {BootstrapGlobal, RecommendationRow} from './activity-types';
 
 declare const bootstrap: BootstrapGlobal;
 
+export interface RecommendationModalRequest {
+    targetSlotId: string;
+    operation: 'ASSIGN' | 'REASSIGN' | 'SWAP';
+    profileId: string;
+    sourceItemId?: string;
+    swapProfileId?: string;
+}
+
 /**
  * UI class for recommendations
  * Handles all DOM operations and user interactions
@@ -19,7 +27,12 @@ export class RecommendationsUI {
     private readonly summaryStats: HTMLElement | null;
     private readonly addModal: HTMLElement | null;
     private readonly addSlotIdInput: HTMLInputElement | null;
+    private readonly addOperationSelect: HTMLSelectElement | null;
     private readonly addParticipantSelect: HTMLSelectElement | null;
+    private readonly addSourceSelect: HTMLSelectElement | null;
+    private readonly addSwapParticipantSelect: HTMLSelectElement | null;
+    private readonly sourceAssignmentGroup: HTMLElement | null;
+    private readonly swapAssignmentGroup: HTMLElement | null;
     private readonly addConfirmBtn: HTMLButtonElement | null;
     private readonly addWarningBox: HTMLElement | null;
 
@@ -35,7 +48,12 @@ export class RecommendationsUI {
         // Modal elements
         this.addModal = document.getElementById('addRecommendationModal');
         this.addSlotIdInput = this.addModal?.querySelector<HTMLInputElement>('#addRecommendationSlotId') || null;
+        this.addOperationSelect = this.addModal?.querySelector<HTMLSelectElement>('#addRecommendationOperation') || null;
         this.addParticipantSelect = this.addModal?.querySelector<HTMLSelectElement>('#addRecommendationParticipant') || null;
+        this.addSourceSelect = this.addModal?.querySelector<HTMLSelectElement>('#addRecommendationSource') || null;
+        this.addSwapParticipantSelect = this.addModal?.querySelector<HTMLSelectElement>('#addRecommendationSwapParticipant') || null;
+        this.sourceAssignmentGroup = this.addModal?.querySelector<HTMLElement>('[data-source-assignment-group]') || null;
+        this.swapAssignmentGroup = this.addModal?.querySelector<HTMLElement>('[data-swap-assignment-group]') || null;
         this.addConfirmBtn = this.addModal?.querySelector<HTMLButtonElement>('#addRecommendationConfirm') || null;
         this.addWarningBox = this.addModal?.querySelector<HTMLElement>('[data-add-warning]') || null;
 
@@ -103,13 +121,22 @@ export class RecommendationsUI {
         container: HTMLElement,
         onApprove: () => void,
         onReject: () => void,
-        onRevert: () => void
+        onRevert: () => void,
+        onRemove: () => void,
     ): void {
         const recDiv = document.createElement('div');
         recDiv.className = 'd-flex align-items-center gap-2 mb-1 p-1 border rounded';
         recDiv.dataset.recId = rec.id || '';
         recDiv.dataset.slotId = rec.item.id;
         if (rec.profile?.id) recDiv.dataset.profileId = rec.profile.id;
+
+        const operation = rec.operation ?? 'ASSIGN';
+        const isSwap = operation === 'REASSIGN' && Boolean(rec.sourceItem && this.state.getRecommendations().some(
+            (candidate) => candidate !== rec
+                && candidate.operation === 'REASSIGN'
+                && candidate.item.id === rec.sourceItem!.id
+                && candidate.sourceItem?.id === rec.item.id,
+        ));
 
         // Status-based styling
         if (rec.status === 'APPROVED') {
@@ -123,8 +150,17 @@ export class RecommendationsUI {
         // Icon
         const icon = document.createElement('i');
         icon.className = 'bi bi-clock-fill text-warning';
+        if (operation === 'REASSIGN') {
+            icon.className = 'bi bi-arrow-left-right text-info';
+        } else if (operation === 'UNASSIGN') {
+            icon.className = 'bi bi-person-dash-fill text-danger';
+        }
         if (rec.status === 'APPROVED') {
-            icon.className = 'bi bi-check-circle-fill text-success'
+            icon.className = operation === 'REASSIGN'
+                ? 'bi bi-arrow-left-right text-info'
+                : operation === 'UNASSIGN'
+                    ? 'bi bi-person-dash-fill text-danger'
+                    : 'bi bi-check-circle-fill text-success';
         } else if (rec.status === 'REJECTED') {
             icon.className = 'bi bi-x-circle-fill text-danger';
         }
@@ -133,8 +169,24 @@ export class RecommendationsUI {
         // Participant name
         const nameSpan = document.createElement('span');
         nameSpan.className = 'flex-grow-1 small';
-        nameSpan.textContent = rec.profile?.name || 'Unknown';
+        const participantName = rec.profile?.name || 'Unknown';
+        nameSpan.textContent = operation === 'REASSIGN'
+            ? `${participantName} — ${isSwap ? 'swap' : 'move'} from ${rec.sourceItem?.title || 'another slot'}`
+            : operation === 'UNASSIGN'
+                ? `${participantName} — remove from this slot`
+                : participantName;
         recDiv.append(nameSpan);
+
+        if (operation !== 'ASSIGN') {
+            const operationBadge = document.createElement('span');
+            operationBadge.className = operation === 'REASSIGN'
+                ? 'badge bg-info text-dark small'
+                : 'badge bg-danger text-white small';
+            operationBadge.textContent = operation === 'REASSIGN'
+                ? isSwap ? 'SWAP' : 'REASSIGNMENT'
+                : 'UNASSIGNMENT';
+            recDiv.append(operationBadge);
+        }
 
         // Status badge
         const badge = document.createElement('span');
@@ -164,6 +216,17 @@ export class RecommendationsUI {
             const revertBtn = this.createButton('btn btn-xs btn-outline-secondary', 'Revert to Pending', '<i class="bi bi-arrow-counterclockwise"></i>', onRevert);
             recDiv.append(approveBtn, revertBtn);
         }
+        if (rec.manual) {
+            const title = operation === 'UNASSIGN' ? 'Cancel unassignment' : 'Remove manual operation';
+            const removeBtn = this.createButton(
+                'btn btn-xs btn-outline-danger',
+                title,
+                '<i class="bi bi-trash"></i>',
+                onRemove,
+            );
+            removeBtn.setAttribute('aria-label', `${title} for ${participantName}`);
+            recDiv.append(removeBtn);
+        }
 
         container.append(recDiv);
     }
@@ -191,7 +254,8 @@ export class RecommendationsUI {
     renderAllRecommendations(
         onApprove: (rec: RecommendationRow) => void,
         onReject: (rec: RecommendationRow) => void,
-        onRevert: (rec: RecommendationRow) => void
+        onRevert: (rec: RecommendationRow) => void,
+        onRemove: (rec: RecommendationRow) => void,
     ): void {
         if (!this.scheduleView) return;
 
@@ -213,7 +277,8 @@ export class RecommendationsUI {
                     container,
                     () => onApprove(rec),
                     () => onReject(rec),
-                    () => onRevert(rec)
+                    () => onRevert(rec),
+                    () => onRemove(rec),
                 ));
             }
         });
@@ -225,12 +290,18 @@ export class RecommendationsUI {
      * Setup add recommendation modal
      */
     setupAddModal(
-        onConfirm: (slotId: string, participantValue: string) => void
+        onConfirm: (request: RecommendationModalRequest) => void,
+        onUnassign: (slotId: string, profileId: string) => void,
     ): void {
         if (!this.scheduleView) return;
 
         const scheduleViewClickHandler = (e: Event) => {
             const target = e.target as HTMLElement;
+            const unassignButton = target.closest('[data-unassign-recommendation]') as HTMLButtonElement | null;
+            if (unassignButton?.dataset.slotId && unassignButton.dataset.profileId) {
+                onUnassign(unassignButton.dataset.slotId, unassignButton.dataset.profileId);
+                return;
+            }
             const btn = target.closest('[data-add-recommendation]') as HTMLButtonElement;
             if (!btn) return;
 
@@ -246,25 +317,9 @@ export class RecommendationsUI {
 
             // Populate modal
             if (this.addSlotIdInput) this.addSlotIdInput.value = slotId;
-            if (this.addParticipantSelect) {
-                this.addParticipantSelect.innerHTML = '<option value="">Choose a participant...</option>';
-
-                // Filter participants based on attendance window
-                const availableParticipants = this.logic.getAvailableParticipants(slotDay);
-                availableParticipants.forEach((opt) => {
-                    const option = document.createElement('option');
-                    option.value = this.logic.getParticipantValue(opt);
-                    option.textContent = this.logic.formatParticipantLabel(opt);
-                    this.addParticipantSelect!.append(option);
-                });
-
-                // Add change handler to show warning when participant selected
-                // Note: This listener uses {once: true} so it self-removes and doesn't need tracking
-                this.addParticipantSelect.addEventListener('change', () => {
-                    this.showOverlapWarning(slotId);
-                }, {once: true});
-            }
+            if (this.addOperationSelect) this.addOperationSelect.value = 'ASSIGN';
             if (this.addWarningBox) this.addWarningBox.classList.add('d-none');
+            this.populateOperationFields(slotId, slotDay);
 
             modalInstance.show();
         };
@@ -272,17 +327,110 @@ export class RecommendationsUI {
         this.scheduleView.addEventListener('click', scheduleViewClickHandler);
         this.state.trackListener(this.scheduleView, 'click', scheduleViewClickHandler);
 
+        if (this.addOperationSelect) {
+            const operationHandler = () => this.populateOperationFields(
+                this.addSlotIdInput?.value || '',
+                this.state.getSlots().find((slot) => slot.id === this.addSlotIdInput?.value)?.day,
+            );
+            this.addOperationSelect.addEventListener('change', operationHandler);
+            this.state.trackListener(this.addOperationSelect, 'change', operationHandler);
+        }
+        if (this.addParticipantSelect) {
+            const participantHandler = () => {
+                this.populateSourceAssignments();
+                this.showOverlapWarning(this.addSlotIdInput?.value || '');
+            };
+            this.addParticipantSelect.addEventListener('change', participantHandler);
+            this.state.trackListener(this.addParticipantSelect, 'change', participantHandler);
+        }
+
         if (this.addConfirmBtn) {
             const addConfirmClickHandler = async () => {
                 const slotId = this.addSlotIdInput?.value;
                 const participantValue = this.addParticipantSelect?.value;
                 if (slotId && participantValue) {
-                    onConfirm(slotId, participantValue);
+                    const {type, id} = this.logic.parseParticipantValue(participantValue);
+                    if (type !== 'profile') return;
+                    const operation = (this.addOperationSelect?.value || 'ASSIGN') as RecommendationModalRequest['operation'];
+                    const request: RecommendationModalRequest = {
+                        targetSlotId: slotId,
+                        operation,
+                        profileId: id as string,
+                    };
+                    if (operation !== 'ASSIGN') request.sourceItemId = this.addSourceSelect?.value;
+                    if (operation === 'SWAP') request.swapProfileId = this.addSwapParticipantSelect?.value;
+                    if ((operation !== 'ASSIGN' && !request.sourceItemId) || (operation === 'SWAP' && !request.swapProfileId)) {
+                        this.showAddWarning('Select every assignment required for this operation.');
+                        return;
+                    }
+                    onConfirm(request);
                 }
             };
             this.addConfirmBtn.addEventListener('click', addConfirmClickHandler);
             this.state.trackListener(this.addConfirmBtn, 'click', addConfirmClickHandler);
         }
+    }
+
+    private showAddWarning(message: string): void {
+        if (!this.addWarningBox) return;
+        this.addWarningBox.classList.remove('d-none');
+        const span = this.addWarningBox.querySelector('span');
+        if (span) span.textContent = message;
+    }
+
+    private populateOperationFields(slotId: string, slotDay?: string): void {
+        const operation = this.addOperationSelect?.value || 'ASSIGN';
+        this.addWarningBox?.classList.add('d-none');
+        this.sourceAssignmentGroup?.classList.toggle('d-none', operation === 'ASSIGN');
+        this.swapAssignmentGroup?.classList.toggle('d-none', operation !== 'SWAP');
+        if (!this.addParticipantSelect) return;
+
+        this.addParticipantSelect.innerHTML = '<option value="">Choose a participant...</option>';
+        const targetHasRolelessAssignment = this.logic.getRolelessAssignments()
+            .some((assignment) => assignment.item.id === slotId);
+        if (operation === 'SWAP' && !targetHasRolelessAssignment) {
+            this.showAddWarning('A swap needs an assignment without named roles in this slot.');
+        }
+        const availableParticipants = this.logic.getAvailableParticipants(slotDay).filter((participant) => {
+            if (!participant.profileId || this.logic.isAlreadyAssigned(slotId, participant.profileId)) return false;
+            if (operation === 'ASSIGN') return true;
+            return this.logic.getRolelessAssignments(participant.profileId)
+                .some((assignment) => assignment.item.id !== slotId);
+        });
+        availableParticipants.forEach((participant) => {
+            const option = document.createElement('option');
+            option.value = this.logic.getParticipantValue(participant);
+            option.textContent = this.logic.formatParticipantLabel(participant);
+            this.addParticipantSelect!.append(option);
+        });
+        this.populateSourceAssignments();
+        this.populateSwapAssignments(slotId);
+    }
+
+    private populateSourceAssignments(): void {
+        if (!this.addSourceSelect || !this.addParticipantSelect) return;
+        const {type, id} = this.logic.parseParticipantValue(this.addParticipantSelect.value || ':');
+        const profileId = type === 'profile' ? id as string : null;
+        this.addSourceSelect.innerHTML = '<option value="">Choose the source assignment...</option>';
+        this.logic.getRolelessAssignments(profileId).forEach((assignment) => {
+            if (assignment.item.id === this.addSlotIdInput?.value) return;
+            const option = document.createElement('option');
+            option.value = assignment.item.id;
+            option.textContent = assignment.item.title;
+            this.addSourceSelect!.append(option);
+        });
+    }
+
+    private populateSwapAssignments(slotId: string): void {
+        if (!this.addSwapParticipantSelect) return;
+        this.addSwapParticipantSelect.innerHTML = '<option value="">Choose the participant to swap...</option>';
+        this.logic.getRolelessAssignments().forEach((assignment) => {
+            if (assignment.item.id !== slotId) return;
+            const option = document.createElement('option');
+            option.value = assignment.profile.id;
+            option.textContent = assignment.profile.name;
+            this.addSwapParticipantSelect!.append(option);
+        });
     }
 
     /**
@@ -304,11 +452,7 @@ export class RecommendationsUI {
         const hasOverlap = this.logic.hasOverlappingAssignment(profileId, slotId);
 
         if (hasOverlap) {
-            this.addWarningBox.classList.remove('d-none');
-            const span = this.addWarningBox.querySelector('span');
-            if (span) {
-                span.textContent = '⚠️ Warning: This participant has an overlapping assignment or recommendation on the same day';
-            }
+            this.showAddWarning('This participant has an overlapping assignment on the same day. A reassignment may resolve it.');
         }
     }
 

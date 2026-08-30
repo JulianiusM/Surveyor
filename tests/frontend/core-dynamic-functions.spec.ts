@@ -204,6 +204,91 @@ describe("frontend core dynamic functions smoke suite", () => {
       );
       expect(logic.getSummaryStats().PENDING).toBe(1);
     });
+
+    it('distinguishes roleless reassignment sources from named-role commitments', () => {
+      // Canary: the recommendation GUI may stage moves and swaps only from assignments that do not carry named roles.
+      const state = new ActivityRecommendationsState();
+      const participant = {
+        key: 'profile:00000000-0000-4000-8000-000000000001',
+        profileId: '00000000-0000-4000-8000-000000000001',
+        label: 'Alex Participant',
+      };
+      const source = {id: 'source-slot', title: 'Source', day: '2027-06-01'};
+      const namedRoleSource = {id: 'named-slot', title: 'Named role', day: '2027-06-02'};
+      const target = {id: 'target-slot', title: 'Target', day: '2027-06-03'};
+      state.setParticipantOptions([participant]);
+      state.setSlots([source, namedRoleSource, target]);
+      state.setExistingAssignments([
+        {item: source, profile: {id: participant.profileId, name: participant.label}, roles: ['default']},
+        {item: namedRoleSource, profile: {id: participant.profileId, name: participant.label}, roles: ['Coordinator']},
+      ]);
+      const logic = new RecommendationsLogic(state);
+
+      expect(logic.getRolelessAssignments(participant.profileId).map(({item}) => item.id)).toEqual(['source-slot']);
+      expect(logic.isAlreadyAssigned(source.id, participant.profileId)).toBe(true);
+      expect(logic.createRecommendation(target, participant, participant.profileId, 'REASSIGN', source)).toMatchObject({
+        operation: 'REASSIGN',
+        sourceItem: source,
+        status: 'APPROVED',
+        manual: true,
+      });
+    });
+
+    it('filters applied history and removes a canceled staged unassignment', () => {
+      // Canary: completed work must not clutter the review, while manual removals remain reversible until saved.
+      const participant = {id: '00000000-0000-4000-8000-000000000001', name: 'Alex Participant'};
+      const source = {id: 'source-slot', title: 'Source', day: '2027-06-01'};
+      const unassignment = {
+        item: source,
+        profile: participant,
+        status: 'APPROVED' as const,
+        operation: 'UNASSIGN' as const,
+        manual: true,
+      };
+      const state = new ActivityRecommendationsState();
+      state.setRecommendations([
+        unassignment,
+        {...unassignment, id: 'applied-history', status: 'APPLIED'},
+      ]);
+      const logic = new RecommendationsLogic(state);
+
+      expect(state.getRecommendations()).toEqual([unassignment]);
+      expect(logic.getSummaryStats()).not.toHaveProperty('APPLIED');
+      expect(logic.removeRecommendation(unassignment)).toBe(true);
+      expect(state.getRecommendations()).toEqual([]);
+    });
+
+    it('removes both legs when either side of a manual swap is removed', () => {
+      // Canary: a manually staged swap must never degrade into a one-way reassignment.
+      const state = new ActivityRecommendationsState();
+      const logic = new RecommendationsLogic(state);
+      const first = {id: 'first-slot', title: 'First', day: '2027-06-01'};
+      const second = {id: 'second-slot', title: 'Second', day: '2027-06-02'};
+      const firstParticipant = {
+        key: 'profile:00000000-0000-4000-8000-000000000001',
+        profileId: '00000000-0000-4000-8000-000000000001',
+        label: 'Alex Participant',
+      };
+      const secondParticipant = {
+        key: 'profile:00000000-0000-4000-8000-000000000002',
+        profileId: '00000000-0000-4000-8000-000000000002',
+        label: 'Blair Participant',
+      };
+      const firstLeg = logic.createRecommendation(
+        second, firstParticipant, firstParticipant.profileId, 'REASSIGN', first,
+      );
+      const secondLeg = logic.createRecommendation(
+        first, secondParticipant, secondParticipant.profileId, 'REASSIGN', second,
+      );
+      state.setRecommendations([firstLeg, secondLeg]);
+
+      expect(logic.rejectRecommendation(firstLeg)).toBe(true);
+      expect(state.getRecommendations().map(({status}) => status)).toEqual(['REJECTED', 'REJECTED']);
+      expect(logic.revertToPending(secondLeg)).toBe(true);
+      expect(state.getRecommendations().map(({status}) => status)).toEqual(['PENDING', 'PENDING']);
+      expect(logic.removeRecommendation(firstLeg)).toBe(true);
+      expect(state.getRecommendations()).toEqual([]);
+    });
   });
 
   describe("packing list row collection dynamics", () => {

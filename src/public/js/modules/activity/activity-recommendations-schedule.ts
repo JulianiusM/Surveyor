@@ -14,6 +14,7 @@ import {reloadAfterDelay} from '../../shared/ui-helpers';
 import {RecommendationsLogic} from './activity-recommendations-logic';
 import {ActivityRecommendationsState} from './activity-recommendations-state';
 import {RecommendationsUI} from './activity-recommendations-ui';
+import type {RecommendationModalRequest} from './activity-recommendations-ui';
 import type {RecommendationRow} from './activity-types';
 
 // Module-level instances
@@ -72,9 +73,15 @@ export async function initRecommendationScheduleView(planId: string, describeSlo
         renderAll();
     };
 
+    const handleRemove = (rec: RecommendationRow) => {
+        if (!logic!.removeRecommendation(rec)) return;
+        renderAll();
+        ui!.setAlert('Manual operation removed. Select Save changes to persist this review.', 'info');
+    };
+
     // Define renderAll after handlers
     renderAll = () => {
-        ui!.renderAllRecommendations(handleApprove, handleReject, handleRevert);
+        ui!.renderAllRecommendations(handleApprove, handleReject, handleRevert, handleRemove);
     };
 
     // API functions
@@ -88,7 +95,7 @@ export async function initRecommendationScheduleView(planId: string, describeSlo
             state!.setWarnings(data.warnings || []);
             state!.setParticipantOptions(data.participantOptions || []);
             state!.setSlots(data.slots || []);
-            state!.setExistingAssignments([]);
+            state!.setExistingAssignments(data.existingAssignments || []);
 
             renderAll();
             ui!.setAlert();
@@ -114,10 +121,16 @@ export async function initRecommendationScheduleView(planId: string, describeSlo
 
     const applyRecommendations = async () => {
         const recommendations = state!.getRecommendations();
-        const payload = recommendations.map(r => ({
+        const payload = recommendations
+            .filter((recommendation) => !(recommendation.manual && recommendation.status === 'REJECTED'))
+            .map(r => ({
+            id: r.id,
             itemId: r.item.id,
             profileId: r.profile?.id || null,
-            status: r.status
+            status: r.status,
+            operation: r.operation || 'ASSIGN',
+            sourceItemId: r.sourceItem?.id || null,
+            manual: Boolean(r.manual),
         }));
 
         try {
@@ -137,35 +150,80 @@ export async function initRecommendationScheduleView(planId: string, describeSlo
         }
     };
 
-    const handleAddConfirm = (slotId: string, participantValue: string) => {
-        const {type, id} = logic!.parseParticipantValue(participantValue);
-        const profileId = type === 'profile' ? id as string : null;
-
-        const participant = logic!.findParticipant(profileId);
+    const slotFor = (slotId: string) => state!.getSlots().find((slot) => slot.id === slotId);
+    const handleAddConfirm = (request: RecommendationModalRequest) => {
+        const participant = logic!.findParticipant(request.profileId);
         if (!participant) return;
-
-        if (logic!.isDuplicate(slotId, profileId)) {
+        if (logic!.isDuplicate(request.targetSlotId, request.profileId)
+            || logic!.isAlreadyAssigned(request.targetSlotId, request.profileId)) {
             alert('This recommendation already exists.');
             return;
         }
 
-        const recommendations = state!.getRecommendations();
-        let slot = recommendations.find((r) => r.item.id === slotId)?.item;
-        if (!slot) {
-            const scheduleView = panel.querySelector<HTMLElement>('#recommendationScheduleView');
-            const slotElement = scheduleView?.querySelector(`[data-slot-id="${slotId}"]`);
-            const slotTitle = slotElement?.querySelector('.fw-bold')?.textContent?.trim() || 'Unknown slot';
-            slot = {id: slotId, title: slotTitle};
-        }
+        const targetSlot = slotFor(request.targetSlotId);
+        if (!targetSlot) return;
+        if (request.operation === 'ASSIGN') {
+            logic!.addRecommendation(logic!.createRecommendation(
+                targetSlot,
+                participant,
+                request.profileId,
+            ));
+        } else {
+            const sourceSlot = request.sourceItemId ? slotFor(request.sourceItemId) : undefined;
+            if (!sourceSlot) return;
+            const staged = [logic!.createRecommendation(
+                targetSlot,
+                participant,
+                request.profileId,
+                'REASSIGN',
+                sourceSlot,
+            )];
 
-        const newRec = logic!.createRecommendation(slot, participant, profileId);
-        logic!.addRecommendation(newRec);
+            if (request.operation === 'SWAP' && request.swapProfileId) {
+                const outgoingAssignment = state!.getExistingAssignments().find((assignment) =>
+                    assignment.item.id === targetSlot.id
+                    && assignment.profile.id === request.swapProfileId);
+                const outgoingParticipant = logic!.findParticipant(request.swapProfileId);
+                if (!outgoingAssignment || !outgoingParticipant) return;
+                if (logic!.isDuplicate(sourceSlot.id, request.swapProfileId)
+                    || logic!.isAlreadyAssigned(sourceSlot.id, request.swapProfileId)) {
+                    alert('The selected participant cannot be moved into the other side of this swap.');
+                    return;
+                }
+                staged.push(logic!.createRecommendation(
+                    sourceSlot,
+                    outgoingParticipant,
+                    request.swapProfileId,
+                    'REASSIGN',
+                    targetSlot,
+                ));
+            }
+            staged.forEach((recommendation) => logic!.addRecommendation(recommendation));
+        }
         renderAll();
         ui!.hideModal();
     };
 
+    const handleUnassign = (slotId: string, profileId: string) => {
+        if (logic!.isDuplicate(slotId, profileId)) {
+            alert('A recommendation for this participant and slot already exists.');
+            return;
+        }
+        const assignment = state!.getExistingAssignments().find((existing) =>
+            existing.item.id === slotId && existing.profile.id === profileId);
+        if (!assignment) return;
+        logic!.addRecommendation({
+            item: assignment.item,
+            profile: assignment.profile,
+            status: 'APPROVED',
+            operation: 'UNASSIGN',
+            manual: true,
+        });
+        renderAll();
+    };
+
     ui!.setupButtons(loadRecommendations, generateRecommendations, applyRecommendations);
-    ui!.setupAddModal(handleAddConfirm);
+    ui!.setupAddModal(handleAddConfirm, handleUnassign);
     await loadRecommendations();
 
     return state;

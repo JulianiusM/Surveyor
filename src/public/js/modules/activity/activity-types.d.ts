@@ -56,6 +56,8 @@ export type ParticipantFilter =
     | 'no-requirement';
 
 // Recommendation types
+export type RecommendationOperation = 'ASSIGN' | 'REASSIGN' | 'UNASSIGN';
+
 export interface RecommendationRow {
     id?: string;
     item: {
@@ -65,8 +67,18 @@ export interface RecommendationRow {
         startTime?: string | null;
         endTime?: string | null;
     };
+    sourceItem?: {
+        id: string;
+        title: string;
+        day?: string;
+        startTime?: string | null;
+        endTime?: string | null;
+    } | null;
     profile?: { id: string; name: string } | null;
     status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'APPLIED';
+    operation?: RecommendationOperation;
+    manual?: boolean;
+    hidden?: boolean;
 }
 
 export interface RecommendationWarning {
@@ -192,4 +204,10 @@ export interface RecommendationParticipantOption {
     profileId?: string;
     arrivalDate?: string | null;
     departureDate?: string | null;
+}
+
+export interface ExistingActivityAssignment {
+    item: RecommendationRow['item'];
+    profile: {id: string; name: string};
+    roles: string[];
 }

@@ -27,8 +27,6 @@ export function createAutoAssignmentParticipant(
 ): ParticipantAttendance {
     return {
         profileId: `00000000-0000-4000-8000-${suffix.padStart(12, '0')}`,
-        arrivalDate: '2027-06-01',
-        departureDate: '2027-06-02',
         ...overrides,
     };
 }

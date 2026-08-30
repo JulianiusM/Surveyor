@@ -23,6 +23,7 @@ import {generateUniqueId} from "../../lib/util";
 import {AppDataSource} from "../dataSource";
 import {ActivityAssignment} from "../entities/activity/ActivityAssignment";
 import {ActivityAssignmentRole} from "../entities/activity/ActivityAssignmentRole";
+import type {RecommendationOperation} from "../entities/activity/ActivityAssignmentRecommendation";
 import {ActivityPlan} from "../entities/activity/ActivityPlan";
 import {ActivityPlanTextField} from "../entities/activity/ActivityPlanTextField";
 import {ActivityRole} from "../entities/activity/ActivityRole";
@@ -586,6 +587,143 @@ export async function assignActivityAssignmentRole(
     });
 }
 
+export interface ActivityRecommendationOperationInput {
+    itemId: string;
+    profileId: string;
+    operation: RecommendationOperation;
+    sourceItemId?: string | null;
+}
+
+/**
+ * Applies a reviewed recommendation batch atomically. Reassignments release all
+ * source slots before capacity is checked for their targets, which also makes a
+ * two-row swap safe regardless of row order.
+ */
+export async function applyActivityRecommendationOperations(
+    planId: string,
+    operations: ActivityRecommendationOperationInput[],
+): Promise<void> {
+    if (operations.length === 0) return;
+
+    await AppDataSource.transaction(async (manager) => {
+        const plan = await manager.getRepository(ActivityPlan).findOne({
+            where: {id: planId},
+            lock: {mode: "pessimistic_write"},
+        });
+        if (!plan) throw new APIError("Activity plan not found", {planId}, 404);
+
+        const referencedSlotIds = [...new Set(operations.flatMap((operation) => [
+            operation.itemId,
+            ...(operation.sourceItemId ? [operation.sourceItemId] : []),
+        ]))];
+        const slots = await manager.getRepository(ActivitySlot).find({
+            where: {id: In(referencedSlotIds)},
+            lock: {mode: "pessimistic_write"},
+        });
+        if (slots.length !== referencedSlotIds.length || slots.some((slot) => slot.entityId !== planId)) {
+            throw new APIError("Recommendation slot does not belong to this activity plan", {planId}, 400);
+        }
+        const slotById = new Map(slots.map((slot) => [slot.id, slot]));
+
+        const assignmentRepo = manager.getRepository(ActivityAssignment);
+        const assignments = await assignmentRepo.find({
+            where: {entity: {id: planId}},
+            relations: {item: true, profile: true, activityAssignmentRoles: {role: true}},
+            lock: {mode: "pessimistic_write"},
+        });
+        const pairKey = (itemId: string, profileId: string): string => `${itemId}:${profileId}`;
+        const assignmentByPair = new Map(
+            assignments.map((assignment) => [pairKey(assignment.item.id, assignment.profile.id), assignment]),
+        );
+        const removals = new Map<number, ActivityAssignment>();
+        const additions: ActivityRecommendationOperationInput[] = [];
+        const additionPairs = new Set<string>();
+
+        for (const operation of operations) {
+            const targetPair = pairKey(operation.itemId, operation.profileId);
+            if (operation.operation === "ASSIGN") {
+                if (assignmentByPair.has(targetPair) || additionPairs.has(targetPair)) {
+                    throw new APIError("Participant is already assigned to the recommendation slot", operation, 409);
+                }
+                additionPairs.add(targetPair);
+                additions.push(operation);
+                continue;
+            }
+
+            const sourceItemId = operation.operation === "REASSIGN"
+                ? operation.sourceItemId
+                : operation.itemId;
+            if (!sourceItemId) {
+                throw new APIError("Reassignment requires a source slot", operation, 400);
+            }
+            const source = assignmentByPair.get(pairKey(sourceItemId, operation.profileId));
+            if (!source) {
+                throw new APIError("Recommendation source assignment no longer exists", operation, 409);
+            }
+            if (removals.has(source.id)) {
+                throw new APIError("An assignment can only be changed once per recommendation batch", operation, 409);
+            }
+
+            if (operation.operation === "REASSIGN") {
+                if (sourceItemId === operation.itemId) {
+                    throw new APIError("Reassignment target must differ from its source", operation, 400);
+                }
+                if (source.activityAssignmentRoles.some(({role}) => !role.isDefault)) {
+                    throw new APIError("Assignments with named roles cannot be automatically reassigned", operation, 409);
+                }
+                if (assignmentByPair.has(targetPair) || additionPairs.has(targetPair)) {
+                    throw new APIError("Participant is already assigned to the recommendation slot", operation, 409);
+                }
+                additionPairs.add(targetPair);
+                additions.push(operation);
+            }
+            removals.set(source.id, source);
+        }
+
+        const projectedCounts = new Map<string, number>();
+        for (const assignment of assignments) {
+            if (!removals.has(assignment.id)) {
+                projectedCounts.set(assignment.item.id, (projectedCounts.get(assignment.item.id) ?? 0) + 1);
+            }
+        }
+        for (const addition of additions) {
+            const target = slotById.get(addition.itemId)!;
+            const count = projectedCounts.get(target.id) ?? 0;
+            if (!plan.allowOverfillAfterFull && target.maxAssignees != null && count >= target.maxAssignees) {
+                throw new APIError("This activity slot is already full", addition, 409);
+            }
+            projectedCounts.set(target.id, count + 1);
+        }
+
+        if (removals.size > 0) {
+            await assignmentRepo.delete([...removals.keys()]);
+        }
+        if (additions.length === 0) return;
+
+        const roleRepo = manager.getRepository(ActivityRole);
+        let defaultRole = await roleRepo.findOneBy({title: "default", entity: {id: planId}});
+        if (!defaultRole) {
+            defaultRole = await roleRepo.save(roleRepo.create({
+                title: "default",
+                isDefault: true,
+                entity: {id: planId},
+            }));
+        }
+        const assignmentRoleRepo = manager.getRepository(ActivityAssignmentRole);
+        for (const addition of additions) {
+            const assignment = await assignmentRepo.save(assignmentRepo.create({
+                item: {id: addition.itemId},
+                entity: {id: planId},
+                profile: {id: addition.profileId},
+            }));
+            await assignmentRoleRepo.save(assignmentRoleRepo.create({
+                assignment: {id: assignment.id},
+                role: {id: defaultRole.id},
+            }));
+        }
+    });
+}
+
 export async function unassignActivityAssignmentRole(
     itemId: string,
     profileId: string,
@@ -622,20 +760,7 @@ export async function getParticipantAssignmentsWithSlots(planId: string): Promis
     const repo = AppDataSource.getRepository(ActivityAssignment);
     const assignments = await repo.find({
         where: {entity: {id: planId}},
-        relations: {item: true, profile: true},
-        select: {
-            id: true,
-            item: {
-                id: true,
-                day: true,
-                startTime: true,
-                endTime: true,
-                pos: true,
-                isArrivalEvening: true,
-                isDepartureMorning: true
-            },
-            profile: true,
-        },
+        relations: {item: true, profile: true, activityAssignmentRoles: {role: true}},
     });
 
     const map: Record<string, AssignmentCandidate[]> = {};
@@ -650,6 +775,7 @@ export async function getParticipantAssignmentsWithSlots(planId: string): Promis
             pos: assignment.item.pos,
             isArrivalEvening: assignment.item.isArrivalEvening,
             isDepartureMorning: assignment.item.isDepartureMorning,
+            hasNamedRole: assignment.activityAssignmentRoles.some(({role}) => !role.isDefault),
         });
     }
 

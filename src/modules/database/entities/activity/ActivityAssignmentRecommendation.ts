@@ -21,11 +21,26 @@ import {ActivitySlot} from "./ActivitySlot";
 
 export type RecommendationStatus = "PENDING" | "APPROVED" | "APPLIED" | "REJECTED";
 export const RECOMMENDATION_STATUS: RecommendationStatus[] = ["PENDING", "APPROVED", "APPLIED", "REJECTED"];
+export type RecommendationOperation = "ASSIGN" | "REASSIGN" | "UNASSIGN";
+export const RECOMMENDATION_OPERATION: RecommendationOperation[] = ["ASSIGN", "REASSIGN", "UNASSIGN"];
 
 @Entity("activity_assignment_recommendations", {schema: "surveyor"})
 export class ActivityAssignmentRecommendation extends DefaultUuidEntityItemAssignment {
     @Column("simple-enum", {name: "status", enum: RECOMMENDATION_STATUS, default: "PENDING"})
     status!: RecommendationStatus;
+
+    @Column("simple-enum", {
+        name: "operation",
+        enum: RECOMMENDATION_OPERATION,
+        default: "ASSIGN",
+    })
+    operation!: RecommendationOperation;
+
+    @Column({name: "is_manual", type: "boolean", default: false})
+    manual!: boolean;
+
+    @Column({name: "is_hidden", type: "boolean", default: false})
+    hidden!: boolean;
 
     @RelationId((a: ActivityAssignmentRecommendation) => a.item)
     itemId!: string;
@@ -36,6 +51,16 @@ export class ActivityAssignmentRecommendation extends DefaultUuidEntityItemAssig
     )
     @JoinColumn([{name: "item_id", referencedColumnName: "id"}])
     item!: ActivitySlot;
+
+    @RelationId((a: ActivityAssignmentRecommendation) => a.sourceItem)
+    sourceItemId?: string | null;
+
+    @ManyToOne(
+        () => ActivitySlot,
+        {nullable: true, onDelete: "CASCADE", onUpdate: "CASCADE"}
+    )
+    @JoinColumn([{name: "source_item_id", referencedColumnName: "id"}])
+    sourceItem?: ActivitySlot | null;
 
     @RelationId((a: ActivityAssignmentRecommendation) => a.entity)
     entityId!: string;

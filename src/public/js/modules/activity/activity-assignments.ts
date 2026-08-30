@@ -20,11 +20,11 @@ export function describeWarning(warning: AssignmentWarning, describeSlot: (slotI
         case "arrival_day":
             return "This slot is on your arrival day.";
         case "arrival_time_restricted":
-            return "Evening arrival-day assignments are disabled for this plan.";
+            return "This arrival-day time is not eligible under the plan's arrival policy.";
         case "departure_day":
             return "This slot is on your departure day.";
         case "departure_time_restricted":
-            return "Morning departure-day assignments are disabled for this plan.";
+            return "This departure-day time is not eligible under the plan's departure policy.";
         case "over_capacity":
             return "This slot is already full. Joining will exceed its capacity.";
         case "overlap": {

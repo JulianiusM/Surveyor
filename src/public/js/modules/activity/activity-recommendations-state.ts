@@ -5,8 +5,10 @@
 
 import type {
     BootstrapModal,
+    ExistingActivityAssignment,
     RecommendationParticipantOption,
     RecommendationRow,
+    RecommendationSlotOption,
     RecommendationWarning
 } from './activity-types';
 
@@ -24,8 +26,8 @@ export class ActivityRecommendationsState {
     private recommendations: RecommendationRow[] = [];
     private warnings: RecommendationWarning[] = [];
     private participantOptions: RecommendationParticipantOption[] = [];
-    private slots: any[] = [];
-    private existingAssignments: any[] = [];
+    private slots: RecommendationSlotOption[] = [];
+    private existingAssignments: ExistingActivityAssignment[] = [];
     private eventListeners: EventListenerTracking[] = [];
     private addModalInstance: BootstrapModal | null = null;
 
@@ -42,11 +44,11 @@ export class ActivityRecommendationsState {
         return [...this.participantOptions];
     }
 
-    getSlots(): any[] {
+    getSlots(): RecommendationSlotOption[] {
         return [...this.slots];
     }
 
-    getExistingAssignments(): any[] {
+    getExistingAssignments(): ExistingActivityAssignment[] {
         return [...this.existingAssignments];
     }
 
@@ -60,7 +62,9 @@ export class ActivityRecommendationsState {
 
     // Setters
     setRecommendations(recommendations: RecommendationRow[]): void {
-        this.recommendations = recommendations;
+        // Applied recommendations are audit history, not actionable review items.
+        this.recommendations = recommendations.filter((recommendation) =>
+            !recommendation.hidden && recommendation.status !== 'APPLIED');
     }
 
     setWarnings(warnings: RecommendationWarning[]): void {
@@ -71,11 +75,11 @@ export class ActivityRecommendationsState {
         this.participantOptions = options;
     }
 
-    setSlots(slots: any[]): void {
+    setSlots(slots: RecommendationSlotOption[]): void {
         this.slots = slots;
     }
 
-    setExistingAssignments(assignments: any[]): void {
+    setExistingAssignments(assignments: ExistingActivityAssignment[]): void {
         this.existingAssignments = assignments;
     }
 
@@ -89,21 +93,46 @@ export class ActivityRecommendationsState {
     }
 
     // Update methods
-    updateRecommendationStatus(slotId: string, profileId: string | null, status: string): boolean {
-        const idx = this.recommendations.findIndex((r) =>
-            r.item.id === slotId &&
-            (r.profile?.id ?? null) === profileId
-        );
+    updateRecommendationStatus(
+        recommendation: RecommendationRow,
+        status: RecommendationRow['status'],
+    ): boolean {
+        const current = this.recommendations.find((candidate) =>
+            candidate === recommendation
+            || Boolean(recommendation.id && candidate.id === recommendation.id));
+        if (!current) return false;
 
-        if (idx !== -1) {
-            this.recommendations[idx].status = status as any;
-            return true;
-        }
-        return false;
+        current.status = status;
+        const reciprocalSwap = this.findReciprocalManualSwap(current);
+        if (reciprocalSwap) reciprocalSwap.status = status;
+        return true;
     }
 
     addRecommendation(recommendation: RecommendationRow): void {
         this.recommendations.push(recommendation);
+    }
+
+    removeRecommendation(recommendation: RecommendationRow): boolean {
+        const matches = (candidate: RecommendationRow): boolean =>
+            candidate === recommendation
+            || Boolean(recommendation.id && candidate.id === recommendation.id);
+        const reciprocalSwap = this.findReciprocalManualSwap(recommendation);
+        const previousLength = this.recommendations.length;
+        this.recommendations = this.recommendations.filter((candidate) =>
+            !matches(candidate) && candidate !== reciprocalSwap);
+        return this.recommendations.length < previousLength;
+    }
+
+    private findReciprocalManualSwap(recommendation: RecommendationRow): RecommendationRow | undefined {
+        if (!recommendation.manual || recommendation.operation !== 'REASSIGN' || !recommendation.sourceItem) {
+            return undefined;
+        }
+        return this.recommendations.find((candidate) =>
+            candidate !== recommendation
+            && candidate.manual
+            && candidate.operation === 'REASSIGN'
+            && candidate.item.id === recommendation.sourceItem!.id
+            && candidate.sourceItem?.id === recommendation.item.id);
     }
 
     // Check for duplicates

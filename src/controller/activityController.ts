@@ -37,6 +37,7 @@ import {
 } from "../modules/activity/requirements";
 import {
     ActivityAssignmentRecommendation,
+    RecommendationOperation,
     RecommendationStatus
 } from "../modules/database/entities/activity/ActivityAssignmentRecommendation";
 import {ActivityPlan} from "../modules/database/entities/activity/ActivityPlan";
@@ -211,9 +212,23 @@ function preprocessRecommendationUpdate(body: any) {
         recommendations: Joi.array()
             .items(
                 Joi.object({
+                    id: Joi.string().uuid().optional(),
                     itemId: Joi.string().uuid().required(),
                     profileId: Joi.string().uuid().required(),
                     status: Joi.string().valid("PENDING", "APPROVED", "APPLIED", "REJECTED").optional(),
+                    operation: Joi.string().valid("ASSIGN", "REASSIGN", "UNASSIGN").default("ASSIGN"),
+                    sourceItemId: Joi.string().uuid().allow(null).optional(),
+                    manual: Joi.boolean().optional(),
+                }).custom((recommendation, helpers) => {
+                    if (
+                        recommendation.operation === "REASSIGN"
+                        && (!recommendation.sourceItemId || recommendation.sourceItemId === recommendation.itemId)
+                    ) {
+                        return helpers.error("any.custom", {
+                            message: "Reassignment requires a different source slot",
+                        });
+                    }
+                    return recommendation;
                 })
             )
             .default([]),
@@ -227,9 +242,13 @@ function preprocessRecommendationUpdate(body: any) {
 
     return value as {
         recommendations: {
+            id?: string;
             itemId: string;
             profileId: string;
-            status?: RecommendationStatus
+            status?: RecommendationStatus;
+            operation: RecommendationOperation;
+            sourceItemId?: string | null;
+            manual?: boolean;
         }[]
     };
 }
@@ -919,7 +938,9 @@ async function updateRequirements(planId: string, body: any) {
 async function collectRecommendationWarnings(planId: string, recommendations: {
     itemId: string;
     profileId?: string | null;
-    status?: RecommendationStatus
+    status?: RecommendationStatus;
+    operation?: RecommendationOperation;
+    sourceItemId?: string | null;
 }[]) {
     await validateRecommendationTargets(planId, recommendations);
     const activeRecommendations = recommendations.filter(
@@ -927,8 +948,9 @@ async function collectRecommendationWarnings(planId: string, recommendations: {
             || recommendation.status === "PENDING"
             || recommendation.status === "APPROVED",
     );
-    const [plan, slots, existingAssignments] = await Promise.all([
+    const [plan, requirementConfig, slots, existingAssignments] = await Promise.all([
         activityService.getActivityPlanById(planId),
+        requirementService.getRequirementConfiguration(planId),
         activityService.getActivitySlotsFlat(planId),
         activityService.getParticipantAssignmentsWithSlots(planId),
     ]);
@@ -949,10 +971,25 @@ async function collectRecommendationWarnings(planId: string, recommendations: {
         });
     }
 
+    const eventParticipants = plan?.event ? await eventService.getEventParticipants(plan.event.id) : [];
+    const participantAttendance = plan
+        ? await buildParticipantAttendanceMap(
+            plan,
+            requirementConfig.overrides,
+            existingAssignments,
+            activeRecommendations.map((recommendation) => ({
+                itemId: recommendation.itemId,
+                profileId: recommendation.profileId!,
+            })),
+            eventParticipants,
+        )
+        : {};
+
     return buildRecommendationWarnings({
         slots,
         recommendations: activeRecommendations,
         existingAssignments,
+        participantAttendance,
         slotCapacities,
         allowOverfill: Boolean(plan?.allowOverfillAfterFull),
         attendancePolicy: {
@@ -965,10 +1002,14 @@ async function collectRecommendationWarnings(planId: string, recommendations: {
 async function validateRecommendationTargets(planId: string, recommendations: {
     itemId: string;
     profileId?: string | null;
-}[]) {
-    const [plan, slots] = await Promise.all([
+    status?: RecommendationStatus;
+    operation?: RecommendationOperation;
+    sourceItemId?: string | null;
+}[], validateAssignmentState = false) {
+    const [plan, slots, assignees] = await Promise.all([
         activityService.getActivityPlanById(planId),
         activityService.getActivitySlotsFlat(planId),
+        activityService.getActivitySlotAssignees(planId),
     ]);
     if (!plan) {
         throw new APIError('Activity plan not found', {planId}, 404);
@@ -979,6 +1020,66 @@ async function validateRecommendationTargets(planId: string, recommendations: {
     if (invalidSlot) {
         throw new APIError('Recommendation slot does not belong to this activity plan', invalidSlot, 400);
     }
+    const invalidSourceSlot = recommendations.find(
+        (recommendation) => recommendation.sourceItemId && !allowedSlotIds.has(recommendation.sourceItemId),
+    );
+    if (invalidSourceSlot) {
+        throw new APIError('Recommendation source slot does not belong to this activity plan', invalidSourceSlot, 400);
+    }
+
+    if (validateAssignmentState) {
+        const targetPairs = new Set<string>();
+        const sourcePairs = new Set<string>();
+        for (const recommendation of recommendations) {
+            if (["APPLIED", "REJECTED"].includes(recommendation.status ?? "PENDING")) continue;
+            const operation = recommendation.operation ?? "ASSIGN";
+            const targetPair = `${recommendation.itemId}:${recommendation.profileId}`;
+            if (operation !== "UNASSIGN") {
+                if (targetPairs.has(targetPair)) {
+                    throw new APIError('Duplicate recommendation target', recommendation, 409);
+                }
+                targetPairs.add(targetPair);
+            }
+            const targetAssignees = assignees[recommendation.itemId] ?? [];
+            const targetAssignment = targetAssignees.find(
+                (assignee) => assignee.profileId === recommendation.profileId,
+            );
+            if (operation === "ASSIGN" && targetAssignment) {
+                throw new APIError('Participant is already assigned to the recommendation slot', recommendation, 409);
+            }
+            const sourceItemId = operation === "REASSIGN"
+                ? recommendation.sourceItemId
+                : operation === "UNASSIGN"
+                    ? recommendation.itemId
+                    : null;
+            if (sourceItemId) {
+                const sourcePair = `${sourceItemId}:${recommendation.profileId}`;
+                if (sourcePairs.has(sourcePair)) {
+                    throw new APIError('An assignment can only be changed once per recommendation batch', recommendation, 409);
+                }
+                sourcePairs.add(sourcePair);
+                const sourceAssignment = (assignees[sourceItemId] ?? []).find(
+                    (assignee) => assignee.profileId === recommendation.profileId,
+                );
+                if (!sourceAssignment) {
+                    throw new APIError('Recommendation source assignment no longer exists', recommendation, 409);
+                }
+                if (
+                    operation === "REASSIGN"
+                    && sourceAssignment.roles.some((role) => role !== "default")
+                ) {
+                    throw new APIError(
+                        'Assignments with named roles cannot be automatically reassigned',
+                        recommendation,
+                        409,
+                    );
+                }
+            }
+            if (operation === "REASSIGN" && targetAssignment) {
+                throw new APIError('Participant is already assigned to the recommendation slot', recommendation, 409);
+            }
+        }
+    }
 
     if (!plan.event?.id) return;
 
@@ -986,6 +1087,9 @@ async function validateRecommendationTargets(planId: string, recommendations: {
     const allowedProfileIds = new Set(
         eventParticipants.map((participant) => participant.profileId).filter((id): id is string => Boolean(id)),
     );
+    if (plan.allowExternalAssignees) {
+        Object.values(assignees).flat().forEach((assignee) => allowedProfileIds.add(assignee.profileId));
+    }
     const invalidProfile = recommendations.find(
         (recommendation) => recommendation.profileId && !allowedProfileIds.has(recommendation.profileId),
     );
@@ -1151,6 +1255,91 @@ async function getAssignmentWarnings(
     return warnings;
 }
 
+function recommendationInputKey(recommendation: RecommendationInput): string {
+    return `${recommendation.operation ?? "ASSIGN"}:${recommendation.sourceItemId ?? ""}:${recommendation.itemId}:${recommendation.profileId}`;
+}
+
+function toRecommendationInput(recommendation: ActivityAssignmentRecommendation): RecommendationInput {
+    return {
+        id: recommendation.id,
+        itemId: recommendation.item.id,
+        profileId: recommendation.profile.id,
+        status: recommendation.status,
+        operation: recommendation.operation,
+        sourceItemId: recommendation.sourceItem?.id ?? null,
+        manual: recommendation.manual,
+        hidden: recommendation.hidden,
+    };
+}
+
+/**
+ * Applied rows and automatic rejection restrictions are intentionally absent from the review
+ * GUI. A subsequent save must merge that history back instead of treating omission as deletion.
+ */
+function preserveRecommendationHistory(
+    existing: ActivityAssignmentRecommendation[],
+    submitted: RecommendationInput[],
+): RecommendationInput[] {
+    const submittedIds = new Set(submitted.map((recommendation) => recommendation.id).filter(Boolean));
+    const submittedKeys = new Set(submitted.map(recommendationInputKey));
+    const hiddenHistory = existing
+        .filter((recommendation) =>
+            recommendation.status === "APPLIED"
+            || (recommendation.status === "REJECTED" && !recommendation.manual))
+        .filter((recommendation) => !submittedIds.has(recommendation.id))
+        .map(toRecommendationInput)
+        .filter((recommendation) => !submittedKeys.has(recommendationInputKey(recommendation)));
+    return [...submitted, ...hiddenHistory];
+}
+
+/**
+ * Existing provenance wins over client input. Rejected manual work is equivalent to deleting it;
+ * rejected generated work remains as hidden allocation memory.
+ */
+function reconcileSubmittedRecommendations(
+    existing: ActivityAssignmentRecommendation[],
+    submitted: RecommendationInput[],
+): RecommendationInput[] {
+    const byId = new Map(existing.map((recommendation) => [recommendation.id, recommendation]));
+    const byKey = new Map(existing.map((recommendation) => [
+        recommendationInputKey(toRecommendationInput(recommendation)),
+        recommendation,
+    ]));
+
+    const resolved = submitted.map((recommendation): RecommendationInput => {
+        const persisted = recommendation.id
+            ? byId.get(recommendation.id)
+            : byKey.get(recommendationInputKey(recommendation));
+        const manual = persisted?.manual ?? Boolean(recommendation.manual);
+        return {
+            ...recommendation,
+            id: persisted?.id ?? recommendation.id,
+            manual,
+            hidden: recommendation.status === "REJECTED" || recommendation.status === "APPLIED",
+        };
+    });
+
+    return resolved.filter((recommendation) => {
+        if (recommendation.manual && recommendation.status === "REJECTED") return false;
+        if (!recommendation.manual || recommendation.operation !== "REASSIGN" || !recommendation.sourceItemId) {
+            return true;
+        }
+        const rejectedReciprocal = resolved.some((candidate) =>
+            candidate.manual
+            && candidate.status === "REJECTED"
+            && candidate.operation === "REASSIGN"
+            && candidate.itemId === recommendation.sourceItemId
+            && candidate.sourceItemId === recommendation.itemId);
+        return !rejectedReciprocal;
+    });
+}
+
+function shouldRegenerateRecommendationsAfterApply(plan: ActivityPlan): boolean {
+    if (plan.assignmentMode === "FREE" || !plan.bindingDeadline) return false;
+    const deadline = new Date(plan.bindingDeadline);
+    return !Number.isNaN(deadline.getTime()) && deadline.getTime() <= Date.now();
+}
+
 async function authorizeSelfAssignment(
     planId: string,
     slotId: string,
@@ -1215,19 +1404,60 @@ async function authorizeSelfAssignment(
 }
 
 async function getRecommendations(planId: string) {
-    const [plan, requirementConfig, initialRecommendations, slots, assignments] = await Promise.all([
+    const [plan, requirementConfig, initialRecommendations, slots, assignments, assignees] = await Promise.all([
         activityService.getActivityPlanById(planId),
         requirementService.getRequirementConfiguration(planId),
         recommendationService.getRecommendations(planId),
         activityService.getActivitySlotsFlat(planId),
         activityService.getParticipantAssignmentsWithSlots(planId),
+        activityService.getActivitySlotAssignees(planId),
     ]);
 
     if (!plan) {
         throw new APIError('Activity plan not found', {planId}, 404);
     }
 
-    const recommendations = initialRecommendations;
+    const fulfilledIds: string[] = [];
+    const obsoletePendingIds: string[] = [];
+    const obsoleteApprovedIds: string[] = [];
+    for (const recommendation of initialRecommendations) {
+        if (!["PENDING", "APPROVED"].includes(recommendation.status)) continue;
+        const operation = recommendation.operation ?? "ASSIGN";
+        const hasTarget = (assignees[recommendation.item.id] ?? [])
+            .some((assignee) => assignee.profileId === recommendation.profile.id);
+        const sourceSlotId = operation === "REASSIGN"
+            ? recommendation.sourceItem?.id
+            : operation === "UNASSIGN"
+                ? recommendation.item.id
+                : undefined;
+        const hasSource = sourceSlotId
+            ? (assignees[sourceSlotId] ?? []).some((assignee) => assignee.profileId === recommendation.profile.id)
+            : false;
+        const fulfilled = (operation === "ASSIGN" && hasTarget)
+            || (operation === "REASSIGN" && hasTarget && !hasSource)
+            || (operation === "UNASSIGN" && !hasSource);
+        if (fulfilled) {
+            fulfilledIds.push(recommendation.id);
+            recommendation.status = "APPLIED";
+        } else if (operation === "REASSIGN" && (!hasSource || hasTarget)) {
+            if (recommendation.status === "PENDING") obsoletePendingIds.push(recommendation.id);
+            else {
+                obsoleteApprovedIds.push(recommendation.id);
+                recommendation.status = "REJECTED";
+            }
+        }
+    }
+    await Promise.all([
+        recommendationService.markRecommendationsApplied(planId, fulfilledIds),
+        recommendationService.deleteRecommendations(planId, obsoletePendingIds),
+        recommendationService.markRecommendationsRejected(planId, obsoleteApprovedIds),
+    ]);
+    const recommendations = initialRecommendations.filter(
+        (recommendation) => !obsoletePendingIds.includes(recommendation.id),
+    );
+    const visibleRecommendations = recommendations.filter(
+        (recommendation) => !recommendation.hidden && recommendation.status !== "APPLIED",
+    );
     let autoGenerationJob;
 
     // If the binding deadline passed and no recommendations exist, seed them automatically
@@ -1236,10 +1466,12 @@ async function getRecommendations(planId: string) {
         autoGenerationJob = queued.job;
     }
 
-    const normalized = recommendations.map((rec) => ({
+    const normalized = visibleRecommendations.map((rec) => ({
         itemId: rec.item.id,
         profileId: rec.profileId ?? null,
         status: rec.status,
+        operation: rec.operation,
+        sourceItemId: rec.sourceItem?.id ?? null,
     }));
 
     const warnings = await collectRecommendationWarnings(planId, normalized);
@@ -1267,20 +1499,36 @@ async function getRecommendations(planId: string) {
         startTime: slot.startTime,
         endTime: slot.endTime,
     }));
+    const slotById = new Map(slotOptions.map((slot) => [slot.id, slot]));
+    const existingAssignmentOptions = Object.entries(assignees).flatMap(([slotId, slotAssignees]) => {
+        const item = slotById.get(slotId);
+        if (!item) return [];
+        return slotAssignees.map((assignee) => ({
+            item,
+            profile: {id: assignee.profileId, name: assignee.name},
+            roles: assignee.roles,
+        }));
+    });
 
     return {
-        recommendations,
+        recommendations: visibleRecommendations,
         warnings,
         participantOptions: participants, // Frontend expects participantOptions
         slots: slotOptions,
+        existingAssignments: existingAssignmentOptions,
         autoGenerationJob,
     };
 }
 
 async function updateRecommendations(planId: string, body: any) {
-    const {recommendations} = preprocessRecommendationUpdate(body);
-    await validateRecommendationTargets(planId, recommendations);
-    await recommendationService.replaceRecommendations(planId, recommendations);
+    const submitted = preprocessRecommendationUpdate(body).recommendations;
+    const existingRecommendations = await recommendationService.getRecommendations(planId);
+    const recommendations = reconcileSubmittedRecommendations(existingRecommendations, submitted);
+    await validateRecommendationTargets(planId, recommendations, true);
+    await recommendationService.replaceRecommendations(
+        planId,
+        preserveRecommendationHistory(existingRecommendations, recommendations),
+    );
     const warnings = await collectRecommendationWarnings(planId, recommendations);
     return {message: 'Recommendations updated', warnings};
 }
@@ -1341,8 +1589,9 @@ async function applyRecommendations(planId: string, body?: any) {
 
     if (body?.recommendations && Array.isArray(body.recommendations)) {
         // New format: {recommendations: [{itemId, profileId, status}]}
-        const withStatus = preprocessRecommendationUpdate(body).recommendations;
-        await validateRecommendationTargets(planId, withStatus);
+        const submitted = preprocessRecommendationUpdate(body).recommendations;
+        const withStatus = reconcileSubmittedRecommendations(recommendations, submitted);
+        await validateRecommendationTargets(planId, withStatus, true);
 
         // Group by status
         withStatus.forEach((r: any) => {
@@ -1357,18 +1606,30 @@ async function applyRecommendations(planId: string, body?: any) {
             itemId: r.itemId,
             profileId: r.profileId || null,
             status: r.status as RecommendationStatus,
+            operation: r.operation,
+            sourceItemId: r.sourceItemId ?? null,
+            id: r.id,
+            manual: r.manual,
+            hidden: r.hidden,
         }));
 
-        // Replace all recommendations with updated statuses
-        await recommendationService.replaceRecommendations(planId, updatedRecommendations);
+        // Applied history is hidden from the review payload, but remains available for audit and rejection memory.
+        await recommendationService.replaceRecommendations(
+            planId,
+            preserveRecommendationHistory(recommendations, updatedRecommendations),
+        );
 
         const persistedRecommendations = await recommendationService.getRecommendations(planId);
         // Get approved ones for processing with the identifiers created by the status save.
         approved = statusUpdates.approved.map((r) => {
-            const dbRec = persistedRecommendations.find(rec =>
-                rec.item.id === r.itemId &&
-                rec.profile.id === r.profileId
-            );
+            const dbRec = persistedRecommendations.find((rec) =>
+                (r.id && rec.id === r.id)
+                || (
+                    rec.item.id === r.itemId
+                    && rec.profile.id === r.profileId
+                    && rec.operation === (r.operation ?? "ASSIGN")
+                    && (rec.sourceItem?.id ?? null) === (r.sourceItemId ?? null)
+                ));
             return dbRec || r; // Fallback to body data if not in DB
         });
     } else {
@@ -1382,8 +1643,10 @@ async function applyRecommendations(planId: string, body?: any) {
         itemId: rec.itemId ?? rec.item?.id,
         profileId: rec.profileId ?? rec.profile?.id,
         status: rec.status ?? 'APPROVED',
+        operation: rec.operation ?? 'ASSIGN',
+        sourceItemId: rec.sourceItemId ?? rec.sourceItem?.id ?? null,
     }));
-    await validateRecommendationTargets(planId, normalized);
+    await validateRecommendationTargets(planId, normalized, true);
 
     const eventParticipants = plan.event ? await eventService.getEventParticipants(plan.event.id) : [];
 
@@ -1419,25 +1682,51 @@ async function applyRecommendations(planId: string, body?: any) {
         participantAttendance,
         slotCapacities: slotCapacity,
         allowOverfill: Boolean(plan.allowOverfillAfterFull),
+        attendancePolicy: {
+            allowArrivalDayEvening: plan.allowArrivalDayEvening,
+            allowDepartureDayMorning: plan.allowDepartureDayMorning,
+        },
     });
 
-    const blockedIds = new Set(
+    const blockedKeys = new Set(
         warnings
             .filter((warning) =>
                 warning.warnings.some(
-                    (w) => w.type === "outside_attendance" || w.type === "overlap" || w.type === "over_capacity",
+                    (w) => [
+                        "outside_attendance",
+                        "arrival_time_restricted",
+                        "departure_time_restricted",
+                        "overlap",
+                        "over_capacity",
+                    ].includes(w.type),
                 ),
             )
-            .map((warning) => warning.recommendation.id)
-            .filter(Boolean) as string[],
+            .map((warning) => recommendationInputKey(warning.recommendation)),
     );
-
-    const applicable = normalized.filter((rec) => !rec.id || !blockedIds.has(rec.id));
-    for (const rec of applicable) {
-        if (rec.profileId) {
-            await activityService.assignActivityAssignmentRole(rec.itemId, rec.profileId);
+    for (const recommendation of normalized) {
+        if (recommendation.operation !== "REASSIGN" || !recommendation.sourceItemId) continue;
+        const reciprocal = normalized.find((candidate) =>
+            candidate !== recommendation
+            && candidate.operation === "REASSIGN"
+            && candidate.itemId === recommendation.sourceItemId
+            && candidate.sourceItemId === recommendation.itemId);
+        if (!reciprocal) continue;
+        if (blockedKeys.has(recommendationInputKey(recommendation)) || blockedKeys.has(recommendationInputKey(reciprocal))) {
+            blockedKeys.add(recommendationInputKey(recommendation));
+            blockedKeys.add(recommendationInputKey(reciprocal));
         }
     }
+
+    const applicable = normalized.filter((rec) => !blockedKeys.has(recommendationInputKey(rec)));
+    await activityService.applyActivityRecommendationOperations(
+        planId,
+        applicable.map((recommendation) => ({
+            itemId: recommendation.itemId,
+            profileId: recommendation.profileId!,
+            operation: recommendation.operation ?? "ASSIGN",
+            sourceItemId: recommendation.sourceItemId ?? null,
+        })),
+    );
 
     await recommendationService.markRecommendationsApplied(
         planId,
@@ -1445,7 +1734,7 @@ async function applyRecommendations(planId: string, body?: any) {
     );
 
     // Recalculate only replaceable pending work after committed assignments change.
-    if (applicable.length > 0) {
+    if (applicable.length > 0 && shouldRegenerateRecommendationsAfterApply(plan)) {
         // Load existing recommendations to preserve rejection memory
         const existingForRejectionMemory = await recommendationService.getRecommendations(planId);
 
@@ -1459,7 +1748,7 @@ async function applyRecommendations(planId: string, body?: any) {
     return {
         message: `Applied ${applicable.length} recommendation${applicable.length === 1 ? '' : 's'}`,
         applied: applicable.length,
-        skipped: blockedIds.size,
+        skipped: blockedKeys.size,
         warnings,
     };
 }

@@ -18,6 +18,7 @@ import {In} from "typeorm";
 import {AppDataSource} from "../dataSource";
 import {
     ActivityAssignmentRecommendation,
+    RecommendationOperation,
     RecommendationStatus
 } from "../entities/activity/ActivityAssignmentRecommendation";
 
@@ -32,6 +33,10 @@ export interface RecommendationInput {
     itemId: string;
     profileId?: string | null;
     status?: RecommendationStatus;
+    operation?: RecommendationOperation;
+    sourceItemId?: string | null;
+    manual?: boolean;
+    hidden?: boolean;
 }
 
 export function normalizeRecommendationInput(input: RecommendationInput): RecommendationInput {
@@ -45,18 +50,28 @@ export function normalizeRecommendationInput(input: RecommendationInput): Recomm
         throw new Error("Recommendation requires a profileId");
     }
 
+    const operation = input.operation ?? "ASSIGN";
+    const sourceItemId = input.sourceItemId == null ? null : String(input.sourceItemId);
+    if (operation === "REASSIGN" && (!sourceItemId || sourceItemId === input.itemId)) {
+        throw new Error("Reassignment requires a different source slot");
+    }
+
     return {
         id: input.id,
         itemId: input.itemId,
         profileId: String(input.profileId),
         status: input.status ?? "PENDING",
+        operation,
+        sourceItemId: operation === "REASSIGN" ? sourceItemId : null,
+        manual: Boolean(input.manual),
+        hidden: Boolean(input.hidden),
     };
 }
 
 export async function getRecommendations(planId: string) {
     return await AppDataSource.getRepository(ActivityAssignmentRecommendation).find({
         where: {entity: {id: planId}},
-        relations: {item: true, profile: true},
+        relations: {item: true, sourceItem: true, profile: true},
     });
 }
 
@@ -65,7 +80,7 @@ export async function markRecommendationsApplied(planId: string, ids: string[]):
 
     await AppDataSource.getRepository(ActivityAssignmentRecommendation).update(
         {id: In(ids), entity: {id: planId}},
-        {status: "APPLIED"},
+        {status: "APPLIED", hidden: true},
     );
 }
 
@@ -80,10 +95,15 @@ export async function replaceRecommendations(planId: string, recommendations: Re
 
         const rows = normalized.map((rec) =>
             repo.create({
+                id: rec.id,
                 entity: {id: planId},
                 item: {id: rec.itemId},
                 profile: {id: rec.profileId ?? ''},
                 status: rec.status ?? "PENDING",
+                operation: rec.operation ?? "ASSIGN",
+                sourceItem: rec.sourceItemId ? {id: rec.sourceItemId} : null,
+                manual: Boolean(rec.manual),
+                hidden: Boolean(rec.hidden),
             })
         );
 
@@ -91,9 +111,26 @@ export async function replaceRecommendations(planId: string, recommendations: Re
     });
 }
 
+export async function deleteRecommendations(planId: string, ids: string[]): Promise<void> {
+    if (!ids.length) return;
+    await AppDataSource.getRepository(ActivityAssignmentRecommendation).delete({
+        id: In(ids),
+        entity: {id: planId},
+    });
+}
+
+export async function markRecommendationsRejected(planId: string, ids: string[]): Promise<void> {
+    if (!ids.length) return;
+    await AppDataSource.getRepository(ActivityAssignmentRecommendation).update(
+        {id: In(ids), entity: {id: planId}},
+        {status: "REJECTED"},
+    );
+}
+
 /**
  * Atomically reconciles generated work without erasing review history. Only pending
- * rows are replaceable; approved, rejected, and applied decisions remain auditable.
+ * rows are replaceable. A generated participant/slot pair matching rejection memory is
+ * re-exposed as rejected instead of being inserted as a new pending recommendation.
  */
 export async function replacePendingRecommendations(planId: string, recommendations: RecommendationInput[]): Promise<void> {
     await AppDataSource.transaction(async (manager) => {
@@ -104,17 +141,43 @@ export async function replacePendingRecommendations(planId: string, recommendati
         if (!normalized.length) return;
         const preserved = await repo.find({
             where: {entity: {id: planId}},
-            relations: {item: true, profile: true},
+            relations: {item: true, sourceItem: true, profile: true},
         });
-        const preservedKeys = new Set(preserved.map((row) => `${row.item.id}:${row.profile.id}`));
-        const rows = normalized
-            .filter((recommendation) => !preservedKeys.has(`${recommendation.itemId}:${recommendation.profileId}`))
-            .map((recommendation) => repo.create({
+        const preservedKeys = new Set(preserved
+            .filter((row) => row.status !== "REJECTED")
+            .map((row) => `${row.operation}:${row.sourceItem?.id ?? ""}:${row.item.id}:${row.profile.id}`));
+        const rejectedByTarget = new Map(preserved
+            .filter((row) => row.status === "REJECTED")
+            .map((row) => [`${row.item.id}:${row.profile.id}`, row]));
+        const rows: ActivityAssignmentRecommendation[] = [];
+        const reemittedRejected: ActivityAssignmentRecommendation[] = [];
+        for (const recommendation of normalized) {
+            const rejectedMemory = rejectedByTarget.get(`${recommendation.itemId}:${recommendation.profileId}`);
+            if (rejectedMemory) {
+                repo.merge(rejectedMemory, {
+                    operation: recommendation.operation ?? "ASSIGN",
+                    sourceItem: recommendation.sourceItemId ? {id: recommendation.sourceItemId} : null,
+                    manual: false,
+                    hidden: false,
+                });
+                reemittedRejected.push(rejectedMemory);
+                continue;
+            }
+            if (preservedKeys.has(
+                `${recommendation.operation}:${recommendation.sourceItemId ?? ""}:${recommendation.itemId}:${recommendation.profileId}`,
+            )) continue;
+            rows.push(repo.create({
                 entity: {id: planId},
                 item: {id: recommendation.itemId},
                 profile: {id: recommendation.profileId ?? ""},
                 status: "PENDING",
+                operation: recommendation.operation ?? "ASSIGN",
+                sourceItem: recommendation.sourceItemId ? {id: recommendation.sourceItemId} : null,
+                manual: false,
+                hidden: false,
             }));
+        }
+        if (reemittedRejected.length > 0) await repo.save(reemittedRejected);
         if (rows.length > 0) await repo.save(rows);
     });
 }

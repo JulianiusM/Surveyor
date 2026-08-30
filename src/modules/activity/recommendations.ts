@@ -57,8 +57,21 @@ export function buildRecommendationWarnings({
     const participantQueue = new Map<string, AssignmentCandidate[]>();
     const slotUsage = new Map<string, number>();
     const results: RecommendationWarningResult[] = [];
+    const normalizedRecommendations = recommendations.map(normalizeRecommendationInput);
+    const releasedCapacity = new Map<string, number>();
 
-    for (const rec of recommendations.map(normalizeRecommendationInput)) {
+    for (const recommendation of normalizedRecommendations) {
+        const releasedSlotId = recommendation.operation === "REASSIGN"
+            ? recommendation.sourceItemId
+            : recommendation.operation === "UNASSIGN"
+                ? recommendation.itemId
+                : null;
+        if (releasedSlotId) {
+            releasedCapacity.set(releasedSlotId, (releasedCapacity.get(releasedSlotId) ?? 0) + 1);
+        }
+    }
+
+    for (const rec of normalizedRecommendations) {
         const slot = slotMap.get(rec.itemId);
         if (!slot) {
             throw new Error(`Slot ${rec.itemId} not found for recommendation warnings`);
@@ -67,16 +80,30 @@ export function buildRecommendationWarnings({
         const participantKey = toParticipantKey({profileId: rec.profileId});
         const attendance = participantAttendance[participantKey] ?? {profileId: rec.profileId};
         const existing = existingAssignments[participantKey] ?? [];
-        const prior = participantQueue.get(participantKey) ?? [];
+        const prior = participantQueue.get(participantKey) ?? existing;
+
+        if (rec.operation === "UNASSIGN") {
+            results.push({recommendation: rec, warnings: []});
+            participantQueue.set(
+                participantKey,
+                prior.filter((assignment) => assignment.id !== rec.itemId),
+            );
+            continue;
+        }
+
+        const projected = rec.operation === "REASSIGN"
+            ? prior.filter((assignment) => assignment.id !== rec.sourceItemId)
+            : prior;
 
         const candidate = toAssignmentCandidate(slot);
-        const warnings = collectAssignmentWarnings(candidate, attendance, [...existing, ...prior], attendancePolicy);
+        const warnings = collectAssignmentWarnings(candidate, attendance, projected, attendancePolicy);
 
         if (!allowOverfill) {
             const capacity = slotCapacities[slot.id];
             if (capacity !== undefined) {
                 const used = slotUsage.get(slot.id) ?? 0;
-                if (used >= capacity) {
+                const available = capacity + (releasedCapacity.get(slot.id) ?? 0);
+                if (used >= available) {
                     warnings.push({type: "over_capacity"});
                 }
                 slotUsage.set(slot.id, used + 1);
@@ -85,7 +112,7 @@ export function buildRecommendationWarnings({
 
         results.push({recommendation: rec, warnings});
 
-        participantQueue.set(participantKey, [...prior, candidate]);
+        participantQueue.set(participantKey, [...projected, candidate]);
     }
 
     return results;

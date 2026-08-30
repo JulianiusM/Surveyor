@@ -47,6 +47,7 @@ export interface AssignmentCandidate extends SlotTimeboxCandidate {
     id: string;
     isArrivalEvening?: boolean | null;
     isDepartureMorning?: boolean | null;
+    hasNamedRole?: boolean;
 }
 
 function isBefore(a: string, b: string): boolean {
@@ -126,19 +127,28 @@ export function collectAssignmentWarnings(
     const attendance = checkAttendanceForDay(slot.day, participant.arrivalDate ?? null, participant.departureDate ?? null);
     if (!attendance.allowed) {
         warnings.push({type: "outside_attendance"});
-    } else if (attendance.boundary === "arrival") {
-        warnings.push({type: "arrival_day"});
-        // Check explicit slot flag first, fall back to time-based heuristic
-        const isEvening = slot.isArrivalEvening ?? isEveningSlot(slot);
-        if (!attendancePolicy.allowArrivalDayEvening && isEvening) {
-            warnings.push({type: "arrival_time_restricted"});
+    } else {
+        if (participant.arrivalDate && slot.day === participant.arrivalDate) {
+            warnings.push({type: "arrival_day"});
+            // Arrival mornings are never eligible. Later arrival-day slots require
+            // the corresponding plan setting.
+            const isEvening = parseTimeToMinutes(slot.startTime) == null
+                ? slot.isArrivalEvening === true
+                : isEveningSlot(slot);
+            if (!isEvening || !attendancePolicy.allowArrivalDayEvening) {
+                warnings.push({type: "arrival_time_restricted"});
+            }
         }
-    } else if (attendance.boundary === "departure") {
-        warnings.push({type: "departure_day"});
-        // Check explicit slot flag first, fall back to time-based heuristic
-        const isMorning = slot.isDepartureMorning ?? isMorningSlot(slot);
-        if (!attendancePolicy.allowDepartureDayMorning && isMorning) {
-            warnings.push({type: "departure_time_restricted"});
+        if (participant.departureDate && slot.day === participant.departureDate) {
+            warnings.push({type: "departure_day"});
+            // Departure afternoons/evenings are never eligible. Morning slots
+            // require the corresponding plan setting.
+            const isMorning = parseTimeToMinutes(slot.startTime) == null
+                ? slot.isDepartureMorning === true
+                : isMorningSlot(slot);
+            if (!isMorning || !attendancePolicy.allowDepartureDayMorning) {
+                warnings.push({type: "departure_time_restricted"});
+            }
         }
     }
 

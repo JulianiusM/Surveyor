@@ -62,6 +62,7 @@ interface PendingAssignment {
     slotId: string;
     participantKey: string;
     retained: boolean;
+    sourceSlotId?: string;
 }
 
 const MAX_REPAIR_DEPTH = 4;
@@ -181,7 +182,11 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
     );
     const lockedRecommendations: Record<string, AssignmentCandidate[]> = {};
     for (const recommendation of context.existingRecommendations ?? []) {
-        if (recommendation.status !== "APPROVED" || !recommendation.profileId) continue;
+        if (
+            recommendation.status !== "APPROVED"
+            || (recommendation.operation ?? "ASSIGN") !== "ASSIGN"
+            || !recommendation.profileId
+        ) continue;
         const slot = slotById.get(recommendation.itemId);
         if (!slot) continue;
         const key = `profile:${recommendation.profileId}`;
@@ -273,6 +278,12 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
         slotAssignments.add(assignment);
         pendingBySlot.set(assignment.slotId, slotAssignments);
     };
+    const removePending = (assignment: PendingAssignment): void => {
+        const index = pending.indexOf(assignment);
+        if (index >= 0) pending.splice(index, 1);
+        pendingByParticipant.get(assignment.participantKey)?.delete(assignment);
+        pendingBySlot.get(assignment.slotId)?.delete(assignment);
+    };
     const movePendingSlot = (assignment: PendingAssignment, slotId: string): void => {
         pendingBySlot.get(assignment.slotId)?.delete(assignment);
         assignment.slotId = slotId;
@@ -292,21 +303,30 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
         [...(pendingByParticipant.get(participantKey) ?? [])];
     const participantCount = (participantKey: string): number => {
         const state = participantByKey.get(participantKey);
-        return (state?.actualCount ?? 0) + (pendingByParticipant.get(participantKey)?.size ?? 0);
+        const addedAssignments = pendingForParticipant(participantKey)
+            .filter((assignment) => !assignment.sourceSlotId)
+            .length;
+        return (state?.actualCount ?? 0) + addedAssignments;
     };
     const slotCount = (slotId: string): number =>
-        (actualSlotCount.get(slotId) ?? 0) + (pendingBySlot.get(slotId)?.size ?? 0);
+        (actualSlotCount.get(slotId) ?? 0)
+        + (pendingBySlot.get(slotId)?.size ?? 0)
+        - pending.filter((assignment) => assignment.sourceSlotId === slotId).length;
     const slotCapacity = (slotId: string): number => {
         const capacity = slotById.get(slotId)?.maxAssignees;
         return capacity == null ? Number.POSITIVE_INFINITY : Math.max(0, capacity);
     };
     const assignmentsForParticipant = (participantKey: string, excluded?: PendingAssignment): AssignmentCandidate[] => {
+        const relevantPending = pendingForParticipant(participantKey)
+            .filter((assignment) => assignment !== excluded);
+        const movedSourceSlots = new Set(
+            relevantPending.map((assignment) => assignment.sourceSlotId).filter(Boolean) as string[],
+        );
         const actual = [
             ...(context.existingAssignments[participantKey] ?? []),
             ...(lockedRecommendations[participantKey] ?? []),
-        ];
-        const proposed = pendingForParticipant(participantKey)
-            .filter((assignment) => assignment !== excluded)
+        ].filter((assignment) => !movedSourceSlots.has(assignment.id));
+        const proposed = relevantPending
             .map((assignment) => slotById.get(assignment.slotId))
             .filter((slot): slot is FairAssignmentSlot => Boolean(slot))
             .map((slot) => toCandidate(slot));
@@ -337,6 +357,25 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
             toCandidate(slot),
             state.participant,
             currentAssignments,
+            policy,
+        );
+        return !warnings.some((warning) => isBlockingWarning(warning.type));
+    };
+    const canReassign = (
+        state: ParticipantState,
+        slot: FairAssignmentSlot,
+        source: AssignmentCandidate,
+    ): boolean => {
+        if (source.id === slot.id || source.hasNamedRole) return false;
+        if (pending.some((assignment) => assignment.sourceSlotId === source.id)) return false;
+        if (rejected.has(`${slot.id}:${state.participant.profileId}`)) return false;
+        const projected = assignmentsForParticipant(state.key)
+            .filter((assignment) => assignment.id !== source.id);
+        if (projected.some((assignment) => assignment.id === slot.id)) return false;
+        const warnings = collectAssignmentWarnings(
+            toCandidate(slot),
+            state.participant,
+            projected,
             policy,
         );
         return !warnings.some((warning) => isBlockingWarning(warning.type));
@@ -410,6 +449,34 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
                 if (repairHole(oldSlot, depth + 1, visitedSlots)) return true;
                 visitedSlots.delete(oldSlot.id);
                 movePendingSlot(assignment, previousSlotId);
+            }
+        }
+
+        // If pending work alone cannot repair the hole, allow a participant's
+        // committed default-role assignment to move. The vacated source must be
+        // repaired as part of the same bounded augmenting path.
+        for (const state of movable) {
+            const sources = [...(context.existingAssignments[state.key] ?? [])]
+                .sort((a, b) => a.id.localeCompare(b.id));
+            for (const source of sources) {
+                const oldSlot = slotById.get(source.id);
+                if (!oldSlot || visitedSlots.has(oldSlot.id) || !canReassign(state, slot, source)) continue;
+                const reassignment: PendingAssignment = {
+                    slotId: slot.id,
+                    participantKey: state.key,
+                    retained: false,
+                    sourceSlotId: source.id,
+                };
+                addPending(reassignment);
+                const sourceCapacity = slotCapacity(oldSlot.id);
+                if (
+                    !Number.isFinite(sourceCapacity)
+                    || slotCount(oldSlot.id) >= sourceCapacity
+                    || repairHole(oldSlot, depth + 1, new Set([...visitedSlots, oldSlot.id]))
+                ) {
+                    return true;
+                }
+                removePending(reassignment);
             }
         }
         return false;
@@ -499,6 +566,7 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
     while (fairnessImproved && fairnessMoves < MAX_FAIRNESS_MOVES) {
         fairnessImproved = false;
         for (const assignment of pending) {
+            if (assignment.sourceSlotId) continue;
             const slot = slotById.get(assignment.slotId);
             const current = participantByKey.get(assignment.participantKey);
             if (!slot || !current) continue;
@@ -564,6 +632,8 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
             itemId: assignment.slotId,
             profileId: participantByKey.get(assignment.participantKey)?.participant.profileId ?? null,
             status: "PENDING",
+            operation: assignment.sourceSlotId ? "REASSIGN" : "ASSIGN",
+            sourceItemId: assignment.sourceSlotId ?? null,
         }))
         .sort((a, b) => `${a.itemId}:${a.profileId}`.localeCompare(`${b.itemId}:${b.profileId}`));
 }

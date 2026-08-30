@@ -41,9 +41,13 @@ The total is monotonic, so a bounded binary search finds the first candidate tha
 
 ## Recommendation behavior
 
-Required-mode recommendations target the resolved per-participant counts while respecting attendance, overlap, boundary, rejection, and approved-assignment constraints. Fairness is prioritized by fulfillment ratio and deficit. A participant's target positions are spread across their attendance window using evenly spaced temporal anchors.
+Required-mode recommendations target the resolved per-participant counts while respecting attendance, overlap, boundary, rejection, and approved-assignment constraints. Arrival-day morning slots and departure-day afternoon/evening slots are never eligible. Later arrival-day slots and departure-day morning slots are eligible only when their corresponding plan setting is enabled. Fairness is prioritized by fulfillment ratio and deficit. A participant's target positions are spread across their attendance window using evenly spaced temporal anchors.
 
-Normal-capacity assignments and bounded repair run first. When `allowOverfillAfterFull` is enabled, over-capacity recommendations are added only as a last resort for remaining participant deficits. Recommendation computation runs in Node.js worker threads behind a bounded, coalescing queue; no external process or operating-system solver is required.
+Normal-capacity assignments and bounded repair run first. Repair may move an existing assignment only when it has no named role and the vacated slot can be repaired in the same bounded augmenting path. These rows are persisted and displayed as explicit reassignments rather than ordinary assignments. When `allowOverfillAfterFull` is enabled, over-capacity recommendations are added only as a last resort for remaining participant deficits. Recommendation computation runs in Node.js worker threads behind a bounded, coalescing queue; no external process or operating-system solver is required.
+
+Submitted automatic rejections are retained as hidden participant/slot restrictions and disappear from the review UI.
+If an already-running calculation emits a restricted pair, persistence exposes that row as rejected rather than pending.
+Rejected manual operations are discarded and never become allocator restrictions.
 
 ## Key references
 

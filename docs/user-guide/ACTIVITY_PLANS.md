@@ -217,15 +217,25 @@ The system suggests default-role slot assignments based on:
 
 Named roles are not recommended automatically because skills and organizer judgment are case-specific. Assign those
 roles manually, then generate recommendations again. The allocator fills ordinary capacity first, attempts bounded
-rearrangements of pending suggestions, and uses allowed overfill only for remaining participant deficits. Free mode
+rearrangements of pending suggestions, and may explicitly recommend moving an existing assignment that has no named
+role when doing so unlocks an otherwise unfillable slot. Arrival mornings and departure afternoons/evenings are never
+recommended. Arrival-day later slots and departure-day morning slots also require their matching plan setting. The
+allocator uses allowed overfill only for remaining participant deficits. Free mode
 has no requirements and therefore disables automatic recommendations entirely.
 
 ### Using Recommendations
 
-1. Go to **Schedule** or **Recommendations** view
-2. Review suggested assignments
-3. Accept or modify as needed
-4. System fills in optimal assignments
+1. Open **Rules & auto-assign** and review the recommendation schedule.
+2. Approve or reject suggestions. Reassignments have a prominent label and identify their source slot.
+3. Use **Add recommendation** to stage a new assignment, a roleless reassignment, or a two-person swap. Use the remove action beside a confirmed participant to stage an unassignment. Every manually staged operation has a remove button; removing either side of a swap removes the complete swap.
+4. Select **Save changes** to apply every approved operation. Swaps and reassignments release their source assignments and create their targets together.
+
+Applying a manually added recommendation before the binding deadline does not generate replacement suggestions. Once
+the deadline has passed, applying changes recalculates the remaining replaceable work automatically.
+Completed recommendations disappear from the review schedule after they have been applied.
+Rejected recommendations also disappear after saving, but automatic rejections remain allocation restrictions. If a
+concurrent generation run emits the same participant/slot suggestion, it reappears already marked **Rejected**. A
+manually staged operation saved as rejected is discarded instead and does not become rejection memory.
 
 ---
 

@@ -5,7 +5,12 @@
 
 import {formatDateLabel} from "../../core/formatting";
 import {ActivityRecommendationsState} from './activity-recommendations-state';
-import type {RecommendationParticipantOption, RecommendationRow} from './activity-types';
+import type {
+    ExistingActivityAssignment,
+    RecommendationOperation,
+    RecommendationParticipantOption,
+    RecommendationRow,
+} from './activity-types';
 
 /**
  * Business logic class for recommendations
@@ -19,33 +24,21 @@ export class RecommendationsLogic {
      * Approve a recommendation
      */
     approveRecommendation(rec: RecommendationRow): boolean {
-        return this.state.updateRecommendationStatus(
-            rec.item.id,
-            rec.profile?.id ?? null,
-            'APPROVED'
-        );
+        return this.state.updateRecommendationStatus(rec, 'APPROVED');
     }
 
     /**
      * Reject a recommendation
      */
     rejectRecommendation(rec: RecommendationRow): boolean {
-        return this.state.updateRecommendationStatus(
-            rec.item.id,
-            rec.profile?.id ?? null,
-            'REJECTED'
-        );
+        return this.state.updateRecommendationStatus(rec, 'REJECTED');
     }
 
     /**
      * Revert recommendation to pending
      */
     revertToPending(rec: RecommendationRow): boolean {
-        return this.state.updateRecommendationStatus(
-            rec.item.id,
-            rec.profile?.id ?? null,
-            'PENDING'
-        );
+        return this.state.updateRecommendationStatus(rec, 'PENDING');
     }
 
     /**
@@ -130,6 +123,17 @@ export class RecommendationsLogic {
         return this.state.hasDuplicateRecommendation(slotId, profileId);
     }
 
+    isAlreadyAssigned(slotId: string, profileId: string | null): boolean {
+        return Boolean(profileId && this.state.getExistingAssignments().some((assignment) =>
+            assignment.item.id === slotId && assignment.profile.id === profileId));
+    }
+
+    getRolelessAssignments(profileId?: string | null): ExistingActivityAssignment[] {
+        return this.state.getExistingAssignments().filter((assignment) =>
+            (!profileId || assignment.profile.id === profileId)
+            && assignment.roles.every((role) => role === 'default'));
+    }
+
     /**
      * Check for overlapping assignments on same day
      */
@@ -139,25 +143,25 @@ export class RecommendationsLogic {
     ): boolean {
         const slots = this.state.getSlots();
         const slot = slots.find((s: any) => s.id === slotId);
-        if (!slot) return false;
+        if (!slot?.day) return false;
 
         const slotDate = new Date(slot.day);
         const existingAssignments = this.state.getExistingAssignments();
 
-        return existingAssignments.some((assignment: any) => {
+        return existingAssignments.some((assignment) => {
             const matchesParticipant =
                 (profileId && assignment.profile?.id === profileId);
 
             if (!matchesParticipant) return false;
 
-            const assignmentDate = new Date(assignment.slot.day);
+            const assignmentDate = new Date(assignment.item.day || '');
             if (assignmentDate.toDateString() !== slotDate.toDateString()) return false;
 
             // Check time overlap
             const slotStart = new Date(`${slot.day}T${slot.startTime}`);
             const slotEnd = new Date(`${slot.day}T${slot.endTime}`);
-            const assignmentStart = new Date(`${assignment.slot.day}T${assignment.slot.startTime}`);
-            const assignmentEnd = new Date(`${assignment.slot.day}T${assignment.slot.endTime}`);
+            const assignmentStart = new Date(`${assignment.item.day}T${assignment.item.startTime}`);
+            const assignmentEnd = new Date(`${assignment.item.day}T${assignment.item.endTime}`);
 
             return slotStart < assignmentEnd && slotEnd > assignmentStart;
         });
@@ -205,14 +209,19 @@ export class RecommendationsLogic {
      * Create new recommendation
      */
     createRecommendation(
-        slot: any,
+        slot: RecommendationRow['item'],
         participant: RecommendationParticipantOption,
-        profileId: string | null
+        profileId: string | null,
+        operation: RecommendationOperation = 'ASSIGN',
+        sourceItem?: RecommendationRow['item'] | null,
     ): RecommendationRow {
         return {
             item: slot,
+            sourceItem: sourceItem ?? null,
             profile: profileId ? {id: profileId, name: participant.label} : null,
             status: 'APPROVED',
+            operation,
+            manual: true,
         };
     }
 
@@ -221,5 +230,9 @@ export class RecommendationsLogic {
      */
     addRecommendation(recommendation: RecommendationRow): void {
         this.state.addRecommendation(recommendation);
+    }
+
+    removeRecommendation(recommendation: RecommendationRow): boolean {
+        return this.state.removeRecommendation(recommendation);
     }
 }

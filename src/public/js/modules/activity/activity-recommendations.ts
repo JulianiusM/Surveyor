@@ -147,7 +147,6 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
             PENDING: 0,
             APPROVED: 0,
             REJECTED: 0,
-            APPLIED: 0,
         };
 
         data.forEach((rec) => {
@@ -160,7 +159,6 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
             {label: 'Pending', key: 'PENDING', className: 'badge bg-secondary text-white me-1'},
             {label: 'Approved', key: 'APPROVED', className: 'badge bg-success text-white me-1'},
             {label: 'Rejected', key: 'REJECTED', className: 'badge bg-warning text-dark me-1'},
-            {label: 'Applied', key: 'APPLIED', className: 'badge bg-info text-white me-1'},
         ];
 
         pieces.forEach(({label, key, className}) => {
@@ -173,11 +171,13 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
     };
 
     const renderRecommendations = (data: RecommendationRow[]) => {
+        const visibleRecommendations = data.filter((recommendation) =>
+            !recommendation.hidden && recommendation.status !== 'APPLIED');
         rows.innerHTML = '';
-        updateRecommendationSummaryStats(data);
+        updateRecommendationSummaryStats(visibleRecommendations);
         const warningMap = buildWarningMap();
 
-        if (!data.length) {
+        if (!visibleRecommendations.length) {
             const empty = document.createElement('tr');
             empty.dataset.emptyState = 'true';
             const cell = document.createElement('td');
@@ -189,7 +189,7 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
             return;
         }
 
-        data.forEach((rec) => {
+        visibleRecommendations.forEach((rec) => {
             const row = document.createElement('tr');
             row.dataset.slotId = rec.item.id;
             if (rec.profile?.id) row.dataset.profileId = String(rec.profile.id);
@@ -259,14 +259,13 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
             const statusSelect = document.createElement('select');
             statusSelect.className = 'form-select form-select-sm text-bg-dark';
             statusSelect.dataset.recStatus = 'true';
-            ['PENDING', 'APPROVED', 'REJECTED', 'APPLIED'].forEach((status) => {
+            ['PENDING', 'APPROVED', 'REJECTED'].forEach((status) => {
                 const opt = document.createElement('option');
                 opt.value = status;
                 opt.textContent = status;
                 statusSelect.append(opt);
             });
             statusSelect.value = rec.status;
-            if (rec.status === 'APPLIED') statusSelect.disabled = true;
             statusSelect.addEventListener('change', () => markDirty(row));
             statusCell.append(statusSelect);
 

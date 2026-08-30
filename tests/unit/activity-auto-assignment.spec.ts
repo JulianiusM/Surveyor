@@ -36,9 +36,12 @@ describe('activity recommendation allocation', () => {
         const flexible = createAutoAssignmentParticipant('1');
         const dayTwoOnly = createAutoAssignmentParticipant('2', {
             arrivalDate: '2027-06-02',
-            departureDate: '2027-06-02',
         });
         const context = createAutoAssignmentContext({
+            slots: [
+                createAutoAssignmentSlot('slot-a', '2027-06-01'),
+                createAutoAssignmentSlot('slot-b', '2027-06-02', {startTime: '13:00:00', endTime: '14:00:00'}),
+            ],
             participants: [flexible, dayTwoOnly],
             existingRecommendations: [{
                 itemId: 'slot-b',
@@ -174,5 +177,115 @@ describe('activity recommendation allocation', () => {
         expect(recommendations).toEqual([
             expect.objectContaining({itemId: 'day-4', profileId: participant.profileId}),
         ]);
+    });
+
+    it('never recommends a participant for a slot they already hold', () => {
+        // Protects regeneration after manual assignment changes from duplicating an existing commitment.
+        const participant = createAutoAssignmentParticipant('1');
+        const recommendations = generateFairRecommendations(createAutoAssignmentContext({
+            participants: [participant],
+            stayRequirements: [createStayRequirement(1, 1), createStayRequirement(2, 2)],
+            existingAssignments: {
+                [`profile:${participant.profileId}`]: [{
+                    id: 'slot-a',
+                    day: '2027-06-01',
+                    startTime: '09:00:00',
+                    endTime: '10:00:00',
+                }],
+            },
+        }));
+
+        expect(recommendations).toEqual([
+            expect.objectContaining({itemId: 'slot-b', profileId: participant.profileId}),
+        ]);
+    });
+
+    it('uses only allowed arrival and departure boundary slots', () => {
+        // Protects hard arrival-morning/departure-evening exclusions and both opt-in boundary settings.
+        const participant = createAutoAssignmentParticipant('1', {
+            arrivalDate: '2027-06-01',
+            departureDate: '2027-06-03',
+        });
+        const slots = [
+            createAutoAssignmentSlot('arrival-morning', '2027-06-01', {startTime: '09:00:00'}),
+            createAutoAssignmentSlot('arrival-evening', '2027-06-01', {startTime: '13:00:00', endTime: '14:00:00'}),
+            createAutoAssignmentSlot('middle', '2027-06-02', {startTime: '09:00:00'}),
+            createAutoAssignmentSlot('departure-morning', '2027-06-03', {startTime: '09:00:00'}),
+            createAutoAssignmentSlot('departure-evening', '2027-06-03', {startTime: '13:00:00', endTime: '14:00:00'}),
+        ];
+        const base = createAutoAssignmentContext({
+            plan: {...createAutoAssignmentContext().plan, endDate: '2027-06-03'},
+            participants: [participant],
+            slots,
+            stayRequirements: [1, 2, 3].map((stayDays) => createStayRequirement(stayDays, 5)),
+        });
+
+        const enabled = generateFairRecommendations(base);
+        const disabled = generateFairRecommendations({
+            ...base,
+            plan: {
+                ...base.plan,
+                allowArrivalDayEvening: false,
+                allowDepartureDayMorning: false,
+            },
+        });
+
+        expect(new Set(enabled.map(({itemId}) => itemId))).toEqual(new Set([
+            'arrival-evening',
+            'middle',
+            'departure-morning',
+        ]));
+        expect(disabled.map(({itemId}) => itemId)).toEqual(['middle']);
+    });
+
+    it('reassigns a roleless committed participant to unlock a constrained slot', () => {
+        // Protects augmenting repair that clearly moves an existing default-role assignment before filling its source.
+        const flexible = createAutoAssignmentParticipant('1');
+        const lateArrival = createAutoAssignmentParticipant('2', {arrivalDate: '2027-06-02'});
+        const target = createAutoAssignmentSlot('constrained', '2027-06-01');
+        const source = createAutoAssignmentSlot('source', '2027-06-02', {
+            startTime: '13:00:00',
+            endTime: '14:00:00',
+        });
+        const recommendations = generateFairRecommendations(createAutoAssignmentContext({
+            slots: [target, source],
+            participants: [flexible, lateArrival],
+            existingAssignments: {
+                [`profile:${flexible.profileId}`]: [{...source, hasNamedRole: false}],
+            },
+        }));
+
+        expect(recommendations).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                itemId: target.id,
+                profileId: flexible.profileId,
+                operation: 'REASSIGN',
+                sourceItemId: source.id,
+            }),
+            expect.objectContaining({
+                itemId: source.id,
+                profileId: lateArrival.profileId,
+                operation: 'ASSIGN',
+            }),
+        ]));
+    });
+
+    it('does not reassign a committed participant who holds a named role', () => {
+        // Protects named-role commitments from being silently destroyed by automatic repair.
+        const flexible = createAutoAssignmentParticipant('1');
+        const lateArrival = createAutoAssignmentParticipant('2', {arrivalDate: '2027-06-02'});
+        const target = createAutoAssignmentSlot('constrained', '2027-06-01');
+        const source = createAutoAssignmentSlot('source', '2027-06-02', {
+            startTime: '13:00:00',
+            endTime: '14:00:00',
+        });
+
+        expect(generateFairRecommendations(createAutoAssignmentContext({
+            slots: [target, source],
+            participants: [flexible, lateArrival],
+            existingAssignments: {
+                [`profile:${flexible.profileId}`]: [{...source, hasNamedRole: true}],
+            },
+        }))).toEqual([]);
     });
 });

@@ -102,6 +102,7 @@ export function fingerprintRecommendationContext(context: AutoAssignmentContext)
                         startTime: assignment.startTime,
                         endTime: assignment.endTime,
                         pos: assignment.pos,
+                        hasNamedRole: assignment.hasNamedRole,
                     })).sort((a, b) => a.id.localeCompare(b.id)),
                 ]),
         ),
@@ -109,7 +110,11 @@ export function fingerprintRecommendationContext(context: AutoAssignmentContext)
         // remain part of the revision and rejection memory.
         existingRecommendations: (context.existingRecommendations ?? [])
             .filter((recommendation) => recommendation.status !== "PENDING")
-            .sort((a, b) => `${a.itemId}:${a.profileId}:${a.status}`.localeCompare(`${b.itemId}:${b.profileId}:${b.status}`)),
+            .sort((a, b) =>
+                `${a.operation ?? "ASSIGN"}:${a.sourceItemId ?? ""}:${a.itemId}:${a.profileId}:${a.status}`
+                    .localeCompare(
+                        `${b.operation ?? "ASSIGN"}:${b.sourceItemId ?? ""}:${b.itemId}:${b.profileId}:${b.status}`,
+                    )),
     };
     return crypto
         .createHash("sha256")

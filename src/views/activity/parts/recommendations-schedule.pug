@@ -5,8 +5,8 @@ h5.mb-3
     i.bi.bi-calendar-plus.me-2
     | Review recommendations in schedule
 p.small.text-secondary.mb-3
-    | This view shows the schedule with current assignments (locked) and new recommendations.
-    |  Approve or remove recommendations, or manually add new ones using the
+    | This view shows the schedule with current assignments and proposed changes.
+    |  Approve or reject suggestions, stage unassignments, or manually add assignments, reassignments, and swaps using the
     |  #[span.badge.bg-info + Add] buttons.
 
 // Legend
@@ -20,6 +20,9 @@ p.small.text-secondary.mb-3
     .d-flex.align-items-center.gap-2
         .badge.bg-danger Rejected
         span.small.text-secondary Declined recommendations
+    .d-flex.align-items-center.gap-2
+        .badge.bg-info.text-dark Reassignment
+        span.small.text-secondary Moves an existing roleless assignment
 
 // Weekly schedule similar to schedule.pug but with recommendations
 each week in weeks
@@ -71,7 +74,7 @@ each week in weeks
 
                                         hr.m-0
 
-                                        // ── Existing assignments (locked, cannot be removed)
+                                        // ── Existing assignments
                                         if permData.entity.has("ACCESS_PARTICIPANTS")
                                             div(data-slot-existing=slot.id)
                                                 each asg in data.assigneeLists[slot.id] || []
@@ -79,6 +82,14 @@ each week in weeks
                                                         i.bi.bi-person-check-fill.text-success
                                                         span.flex-grow-1.small= asg.name || asg.username
                                                         span.badge.bg-success.text-white.small Confirmed
+                                                        button.btn.btn-xs.btn-outline-danger(
+                                                            type="button"
+                                                            title="Stage unassignment"
+                                                            aria-label=`Stage unassignment for ${asg.name || asg.username}`
+                                                            data-unassign-recommendation
+                                                            data-slot-id=slot.id
+                                                            data-profile-id=asg.profileId)
+                                                            i.bi.bi-person-dash
 
                                         // ── Recommendations will be inserted here by JS
                                         div(data-slot-recommendations=slot.id)
@@ -110,10 +121,22 @@ each week in weeks
             .modal-body
                 input#addRecommendationSlotId(type="hidden")
                 .mb-3
+                    label.form-label(for="addRecommendationOperation") Operation
+                    select#addRecommendationOperation.form-select.form-select-sm.text-bg-dark
+                        option(value="ASSIGN") New assignment
+                        option(value="REASSIGN") Reassign from another slot
+                        option(value="SWAP") Swap two assignments
+                .mb-3
                     label.form-label(for="addRecommendationParticipant") Select participant
                     select#addRecommendationParticipant.form-select.form-select-sm.text-bg-dark(required)
                         option(value="") Choose a participant...
                         //- Options populated by JS
+                .mb-3.d-none(data-source-assignment-group)
+                    label.form-label(for="addRecommendationSource") Move from
+                    select#addRecommendationSource.form-select.form-select-sm.text-bg-dark
+                .mb-3.d-none(data-swap-assignment-group)
+                    label.form-label(for="addRecommendationSwapParticipant") Swap with participant in this slot
+                    select#addRecommendationSwapParticipant.form-select.form-select-sm.text-bg-dark
                 .alert.alert-warning.py-2.px-3.d-none(role="alert" data-add-warning)
                     i.bi.bi-exclamation-triangle.me-2
                     span
@@ -121,4 +144,4 @@ each week in weeks
                 button.btn.btn-sm.btn-outline-secondary(type="button" data-bs-dismiss="modal") Cancel
                 button#addRecommendationConfirm.btn.btn-sm.btn-primary(type="button")
                     i.bi.bi-check2.me-1
-                    | Add as approved
+                    | Stage as approved
