@@ -417,9 +417,12 @@ describe('automatic activity assignment user stories', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Adjusted duties event');
         await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-02'});
         const planId = await createEventActivityPlan(owner.id, eventId);
+        const [arrivalSlot] = await activityService.getActivitySlotsFlat(planId);
+        await activityService.updateActivitySlot(arrivalSlot.id, {startTime: '12:00', endTime: '13:00'});
 
         await activityController.updateRequirements(planId, {
             assignmentMode: 'REQUIRED', generalRequiredShifts: 6, roundingMode: 'CEIL',
+            allowArrivalDayEvening: true,
             stayRequirements: [
                 {stayDays: 1, requiredShifts: 1},
                 {stayDays: 2, requiredShifts: 1},
@@ -662,7 +665,7 @@ describe('automatic activity assignment user stories', () => {
         }, {profile: owner} as never);
         await activityController.updateRequirements(planId, {
             assignmentMode: 'REQUIRED', generalRequiredShifts: 2,
-            bindingDeadline: '2099-06-01T00:00:00.000Z',
+            bindingDeadline: '2037-06-01T00:00:00.000Z',
             stayRequirements: createStayRequirementSchedule(3, 2),
             roleRequirements: [], overrides: [],
         });
