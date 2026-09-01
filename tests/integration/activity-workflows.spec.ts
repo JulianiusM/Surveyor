@@ -16,6 +16,7 @@ import {AddActivityRecommendationOperations1788134500000} from '../../src/migrat
 import {AddActivityRecommendationReviewState1788134600000} from '../../src/migrations/1788134600000-AddActivityRecommendationReviewState';
 import {AppDataSource} from '../../src/modules/database/dataSource';
 import {PERM} from '../../src/modules/lib/permissions';
+import {buildPermBundle} from '../../src/modules/permissionEngine';
 import * as activityService from '../../src/modules/database/services/ActivityService';
 import * as recommendationService from '../../src/modules/database/services/ActivityRecommendationService';
 import * as driverService from '../../src/modules/database/services/DriverService';
@@ -114,6 +115,36 @@ describe('activity plan user stories', () => {
         await activityController.updateSlotAttr(slot.id, {field: 'title', value: 'Updated activity'}, permissions);
         await activityController.updateSlotAttr(slot.id, {field: 'maxAssignees', value: 8}, permissions);
         expect(await activityService.getActivitySlotById(slot.id)).toMatchObject({title: 'Updated activity', maxAssignees: 8});
+    });
+
+    it('updates slot times with delegated item metadata permission', async () => {
+        // Protects schedule editors who may change times without receiving broad item-edit access.
+        const planId = await createActivityPlanWithSlot(owner.id);
+        const plan = await activityService.getActivityPlanById(planId);
+        const [slot] = await activityService.getActivitySlotsFlat(planId);
+        await entityAdminController.addAdmin('activity', planId, {
+            profileId: participant.id,
+            mask: PERM.ITEM_EDIT_META,
+        });
+        const permissions = await buildPermBundle({
+            entityType: 'activity',
+            entityId: planId,
+            ownerId: plan!.ownerId,
+        }, [{
+            entityType: 'activitySlot',
+            entityId: slot.id,
+            ownerId: slot.profileId,
+        }], {profile: participant});
+
+        await activityController.updateSlotAttr(slot.id, {
+            startTime: '10:00',
+            endTime: '11:00',
+        }, permissions);
+
+        expect(await activityService.getActivitySlotById(slot.id)).toMatchObject({
+            startTime: '10:00:00',
+            endTime: '11:00:00',
+        });
     });
 
     it('reorders slots without recreating assignments', async () => {

@@ -12,6 +12,14 @@ import type {BootstrapGlobal, RoleSummary, SlotEditorMode} from './activity-type
 
 declare const bootstrap: BootstrapGlobal;
 
+interface SlotEditCapabilities {
+    allowTitle: boolean;
+    allowTimes: boolean;
+    allowCapacity: boolean;
+    allowDesc: boolean;
+    allowRoles: boolean;
+}
+
 /**
  * Initialize the slot editor modal (used for both create and edit)
  */
@@ -65,10 +73,13 @@ export function initSlotEditorModal(planId: string): void {
 
     const getEditCapabilities = (slotId: string) => {
         const perms = getPerms();
-        const allowMeta = perms?.itemAllow(slotId, 'EDIT_META', 'ITEM_EDIT') ?? false;
+        const allowTitle = perms?.itemAllow(slotId, 'EDIT_TITLE', 'ITEM_EDIT') ?? false;
+        const allowTimes = perms?.itemAllow(slotId, 'EDIT_META', ['ITEM_EDIT', 'ITEM_EDIT_META']) ?? false;
+        const allowCapacity = perms?.itemAllow(slotId, 'EDIT_CAPACITY', 'ITEM_EDIT') ?? false;
         const allowDesc = perms?.itemAllow(slotId, 'EDIT_DESC', ['ITEM_EDIT', 'ITEM_EDIT_DESC']) ?? false;
+        const allowRoles = perms?.itemAllow(slotId, 'MANAGE_ASSIGNMENTS', 'MANAGE_ASSIGNMENTS') ?? false;
 
-        return {allowMeta, allowDesc};
+        return {allowTitle, allowTimes, allowCapacity, allowDesc, allowRoles};
     };
 
     const toTimeInputValue = (dbTime?: string | null): string => {
@@ -100,30 +111,29 @@ export function initSlotEditorModal(planId: string): void {
         updateRoleSuggestions();
     };
 
-    const applyEditMode = (allowMeta: boolean, allowDesc: boolean) => {
-        const descOnly = allowDesc && !allowMeta;
-
+    const applyEditMode = (capabilities: SlotEditCapabilities) => {
         const toggleHidden = (el: HTMLElement | undefined, hidden: boolean) => {
             if (!el) return;
             el.classList.toggle('d-none', hidden);
         };
 
         if (titleInput) {
-            titleInput.required = allowMeta;
-            titleInput.readOnly = !allowMeta;
+            titleInput.required = capabilities.allowTitle;
+            titleInput.readOnly = !capabilities.allowTitle;
         }
-        [startInput, endInput, capacityInput, roleInput].forEach((el) => {
-            if (el) el.disabled = !allowMeta;
-        });
+        startInput.disabled = !capabilities.allowTimes;
+        endInput.disabled = !capabilities.allowTimes;
+        capacityInput.disabled = !capabilities.allowCapacity;
+        if (roleInput) roleInput.disabled = !capabilities.allowRoles;
         if (descInput) {
-            descInput.readOnly = !(allowDesc || allowMeta);
+            descInput.readOnly = !capabilities.allowDesc;
         }
 
-        toggleHidden(titleGroup, descOnly);
-        toggleHidden(timeRow, descOnly);
-        toggleHidden(capacityGroup, descOnly);
-        toggleHidden(roleGroup, descOnly);
-        toggleHidden(descGroup, !(allowDesc || allowMeta));
+        toggleHidden(titleGroup, !capabilities.allowTitle);
+        toggleHidden(timeRow, !capabilities.allowTimes);
+        toggleHidden(capacityGroup, !capabilities.allowCapacity);
+        toggleHidden(roleGroup, !capabilities.allowRoles);
+        toggleHidden(descGroup, !capabilities.allowDesc);
     };
 
     const renderRoleChips = () => {
@@ -262,7 +272,13 @@ export function initSlotEditorModal(planId: string): void {
         clearRoleInput();
         hideRoleSuggestions();
 
-        applyEditMode(true, true);
+        applyEditMode({
+            allowTitle: true,
+            allowTimes: true,
+            allowCapacity: true,
+            allowDesc: true,
+            allowRoles: true,
+        });
 
         modal.show();
         titleInput.focus();
@@ -278,8 +294,8 @@ export function initSlotEditorModal(planId: string): void {
         slotIdInput.value = slotId;
         dateInput.value = date;
 
-        const {allowMeta, allowDesc} = getEditCapabilities(slotId);
-        if (!allowMeta && !allowDesc) {
+        const capabilities = getEditCapabilities(slotId);
+        if (!Object.values(capabilities).some(Boolean)) {
             showInlineAlert('error', 'You are not allowed to edit this slot.');
             return;
         }
@@ -315,10 +331,19 @@ export function initSlotEditorModal(planId: string): void {
         clearRoleInput();
         hideRoleSuggestions();
 
-        applyEditMode(allowMeta, allowDesc);
+        applyEditMode(capabilities);
 
         modal.show();
-        (allowMeta ? titleInput : descInput)?.focus();
+        const focusTarget = capabilities.allowTitle
+            ? titleInput
+            : capabilities.allowTimes
+                ? startInput
+                : capabilities.allowCapacity
+                    ? capacityInput
+                    : capabilities.allowDesc
+                        ? descInput
+                        : roleInput;
+        focusTarget?.focus();
     };
 
     const createRoleOnServer = async (name: string): Promise<RoleSummary> => {
@@ -352,8 +377,9 @@ export function initSlotEditorModal(planId: string): void {
         ev.preventDefault();
         setError();
 
+        const editCapabilities = mode === 'edit' ? getEditCapabilities(slotIdInput.value) : undefined;
         const titleValue = titleInput.value.trim();
-        if (!titleValue) {
+        if ((mode === 'create' || editCapabilities?.allowTitle) && !titleValue) {
             setError('Title is required.');
             titleInput.focus();
             return;
@@ -378,19 +404,34 @@ export function initSlotEditorModal(planId: string): void {
                 showInlineAlert('success', 'Slot created');
             } else {
                 const slotId = slotIdInput.value;
-                const {allowMeta, allowDesc} = getEditCapabilities(slotId);
+                const capabilities = editCapabilities!;
+                const payload: Record<string, string | null | number[]> = {};
 
-                if (allowMeta) {
-                    requireItemPerm(slotId, 'EDIT_META', 'edit slots', 'ITEM_EDIT');
-                    await post(`/api/activity/${planId}/slot/${slotId}/attr`, {
-                        title: titleValue,
-                        description: descInput?.value?.trim() || '',
-                        startTime: startVal,
-                        endTime: endVal,
-                        maxAssignees: capacityInput.value,
-                        roles: roleIds,
-                    });
-                } else if (allowDesc) {
+                if (capabilities.allowTitle) {
+                    requireItemPerm(slotId, 'EDIT_TITLE', 'edit slot titles', 'ITEM_EDIT');
+                    payload.title = titleValue;
+                }
+                if (capabilities.allowTimes) {
+                    requireItemPerm(slotId, 'EDIT_META', 'edit slot times', ['ITEM_EDIT', 'ITEM_EDIT_META']);
+                    payload.startTime = startVal;
+                    payload.endTime = endVal;
+                }
+                if (capabilities.allowCapacity) {
+                    requireItemPerm(slotId, 'EDIT_CAPACITY', 'edit slot capacity', 'ITEM_EDIT');
+                    payload.maxAssignees = capacityInput.value;
+                }
+                if (capabilities.allowDesc) {
+                    requireItemPerm(slotId, 'EDIT_DESC', 'edit slot descriptions', ['ITEM_EDIT', 'ITEM_EDIT_DESC']);
+                    payload.description = descInput?.value?.trim() || '';
+                }
+                if (capabilities.allowRoles) {
+                    requireItemPerm(slotId, 'MANAGE_ASSIGNMENTS', 'edit slot roles', 'MANAGE_ASSIGNMENTS');
+                    payload.roles = roleIds;
+                }
+
+                if (Object.keys(payload).some((key) => key !== 'description')) {
+                    await post(`/api/activity/${planId}/slot/${slotId}/attr`, payload);
+                } else if (capabilities.allowDesc) {
                     requireItemPerm(slotId, 'EDIT_DESC', 'edit slot descriptions', ['ITEM_EDIT', 'ITEM_EDIT_DESC']);
                     await post(`/api/activity/${planId}/slot/${slotId}/description`, {
                         description: descInput?.value?.trim() || '',

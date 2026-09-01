@@ -75,6 +75,17 @@ describe('permission user stories', () => {
         expect(await adminService.getProfilePerms('event', eventId, participant.id)).toBe(viewAdmin | PERM.ACCESS_ADMIN);
     });
 
+    it('accepts an unchanged delegated administrator permission mask', async () => {
+        // Protects administrators from a persistence error when Save is clicked without changing any checkbox.
+        const eventId = await createIntegrationEvent(owner.id, 'Unchanged administrator permission event');
+        const viewAdmin = PERM.ACCESS_VIEW;
+        await entityAdminController.addAdmin('event', eventId, {profileId: participant.id, mask: viewAdmin});
+
+        await entityAdminController.updateAdmin('event', eventId, participant.id, {mask: viewAdmin});
+
+        expect(await adminService.getProfilePerms('event', eventId, participant.id)).toBe(viewAdmin);
+    });
+
     it('lists delegated administrators with their profile', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Permission workflow event');
         const viewAdmin = PERM.ACCESS_VIEW;
@@ -107,6 +118,17 @@ describe('permission user stories', () => {
 
         await eventController.updateSettings(eventId, {defaultPerms: {public: ['ACCESS_VIEW']}});
         expect(await adminService.getDefaultPerms('event', eventId)).toMatchObject({public: viewAdmin});
+    });
+
+    it('accepts unchanged entity audience permissions', async () => {
+        // Protects the group-permission form when Save is clicked without changing any checkbox.
+        const eventId = await createIntegrationEvent(owner.id, 'Unchanged audience permission event');
+        const body = {defaultPerms: {public: ['ACCESS_VIEW']}};
+        await eventController.updateSettings(eventId, body);
+
+        await eventController.updateSettings(eventId, body);
+
+        expect(await adminService.getDefaultPerms('event', eventId)).toMatchObject({public: PERM.ACCESS_VIEW});
     });
 
     it('persists authenticated audience access', async () => {

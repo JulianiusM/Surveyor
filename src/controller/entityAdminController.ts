@@ -77,7 +77,7 @@ export async function updateAdmin(entityType: CombEntityType, entityId: string, 
     else if (Array.isArray(value.perms)) mask = toMask(value.perms);
     else throw new Error('Either mask or perms must be provided');
 
-    await entityAdminService.upsertAdmin(entityType, entityId, profileId, mask);
+    await entityAdminService.updateAdminPerms(entityType, entityId, profileId, mask);
     return 'Permissions updated';
 }
 

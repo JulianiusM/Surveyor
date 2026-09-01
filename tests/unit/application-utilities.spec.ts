@@ -161,6 +161,11 @@ describe('backend application behavior suite', () => {
             expect(hasPerm(DEFAULT_PERM.ADMIN, PERM.ACCESS_VIEW)).toBe(true);
         });
 
+        // Canary: protects delegated activity time editing when the full-item preset is assigned.
+        it('includes item metadata editing in the full-item permission preset', () => {
+            expect(hasPerm(DEFAULT_PERM.FULL_ITEM, PERM.ITEM_EDIT_META)).toBe(true);
+        });
+
         // Canary: protects permission editor posts where a single selected checkbox is submitted as one value.
         it('converts a single posted permission key into a saved mask', () => {
             expect(toMaskFromBodyValue('ACCESS_ADMIN', PERM)).toBe(PERM.ACCESS_ADMIN);

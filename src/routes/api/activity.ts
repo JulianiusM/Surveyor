@@ -246,7 +246,7 @@ app.post('/:id/slot/:slotId/description', requireItemPermissionApi(permFctItems,
 }));
 
 /* ---------- PATCH einzelnes Attribut -------------------------------- */
-app.post('/:id/slot/:slotId/attr', requireItemPermissionApi(permFctItems, PERM.EDIT_META, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/slot/:slotId/attr', requireItemPermissionApi(permFctItems, PERM.EDIT_META, [PERM.ITEM_EDIT, PERM.ITEM_EDIT_META]), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.updateSlotAttr(req.params.slotId as string, req.body, res.locals.permData);
     renderer.respondWithSuccessJson(res, msg);
 }));

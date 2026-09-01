@@ -110,7 +110,11 @@ export async function updatePerms(
 
     if (!rows.length) return;
 
-    await repo.upsert(rows, {
+    const current = await getDefaultPerms(entityType, entityId);
+    const changedRows = rows.filter((row) => current[row.audience] !== row.perms);
+    if (!changedRows.length) return;
+
+    await repo.upsert(changedRows, {
         // matches UNIQUE(entity_type, entity_id, audience)
         conflictPaths: ['entityType', 'entityId', 'audience'],
         skipUpdateIfNoValuesChanged: true,

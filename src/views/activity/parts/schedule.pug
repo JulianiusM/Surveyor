@@ -118,7 +118,7 @@ each week in weeks
 
                                         // ── Header: title + time + admin controls
                                         .d-flex.justify-content-between.align-items-start.mb-0
-                                            - const canEditSlot = permData.itemAllow(slot.id, 'EDIT_META', 'ITEM_EDIT') || permData.itemAllow(slot.id, 'EDIT_DESC', ['ITEM_EDIT', 'ITEM_EDIT_DESC'])
+                                            - const canEditSlot = permData.itemAllow(slot.id, 'EDIT_META', ['ITEM_EDIT', 'ITEM_EDIT_META']) || permData.itemAllow(slot.id, 'EDIT_DESC', ['ITEM_EDIT', 'ITEM_EDIT_DESC'])
                                             if permData.itemAllow(slot.id, 'ITEM_EDIT', 'ITEM_EDIT')
                                                 i.bi.bi-grip-vertical.text-bg-dark.me-2(
                                                     title="Drag to reorder")
