@@ -6,7 +6,7 @@ owner: developer-experience maintainers
 status: current
 last-verified: 2026-09-06
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D12 clean-clone setup, current scripts, settings and schema bootstrap, generated files, observed repository patterns, route registration, test selection, CI branches, and troubleshooting; D14 focused in-app help validation workflow
+verification-scope: non-blocking documentation policy and optional report/test routing; D12 clean-clone setup, current scripts, settings and schema bootstrap, generated files, observed repository patterns, route registration, test selection, CI branches, and troubleshooting; D14 focused in-app help validation workflow
 source-anchors: package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
 next-review: development-workflow-or-help-tooling-change
 -->
@@ -312,11 +312,13 @@ ts-migration
 Before requesting review, run the checks appropriate to the change. A broad application change normally warrants:
 
 ```bash
-npm run docs:check
 npm test
 npm run build
 npm run e2e
 ```
+
+Documentation reports are optional, not review or delivery prerequisites. Use `npm run docs:check` for maintainer
+feedback; findings, metadata, baseline changes, or unavailable documentation tools must not block application work.
 
 The manual release workflow invokes full CI, updates the requested semantic version, commits the version files, tags the selected ref, builds, and publishes the production archive. Do not manually alter generated release contents as a substitute for changing source and rebuilding.
 
@@ -352,14 +354,18 @@ Surveyor logs SMTP send failures and does not provide a built-in mailbox. Verify
 
 This is a safety feature. Vitest integration setup requires `TEST_DB_NAME` to contain `test`; the E2E initializer requires `E2E_DB_NAME` to contain `e2e`. Create dedicated schemas rather than weakening the guard.
 
-### Validate in-app help changes
+### Review in-app help changes
 
-In-app guides are application content, not a detached handbook. After changing a visible label, critical workflow, help renderer, contextual mapping, or guide visual, run:
+In-app guides are application content, but their maintenance is not a delivery prerequisite. Optional reports can
+help identify wording, link, asset, and workflow drift:
 
 ```bash
 npm run docs:check
 npm run docs:check:strict
-npm exec -- vitest run tests/unit/help-documentation.spec.ts
+npm run docs:test:content
 ```
 
-Run the focused Playwright help suite when routing, rendering, search, or contextual links change. The authoring gate and visual ownership rules are described in [Documentation Policy](DOCUMENTATION_POLICY.md) and [In-App Help Visuals](HELP_VISUALS.md).
+For an actual help-renderer or routing code change, run the relevant application fixture tests. To review the maintained
+help pages in a browser, use the optional browser report after preparing its disposable environment. Neither corpus
+checks nor documentation findings block CI or release. Reporting and visual-inspection practices are described in
+[Documentation Policy](DOCUMENTATION_POLICY.md), [Testing Guide](TESTING_GUIDE.md), and [In-App Help Visuals](HELP_VISUALS.md).

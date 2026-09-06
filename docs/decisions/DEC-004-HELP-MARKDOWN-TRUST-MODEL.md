@@ -7,7 +7,7 @@ owner: application maintainers and documentation maintainers
 status: current
 last-verified: 2026-09-06
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: static-trust-boundary-and-release-flow; D14 implementation of rejection guards, local visual assets, contextual navigation, semantic tests, and release verification
+verification-scope: non-blocking documentation policy and optional report/test routing; static-trust-boundary-and-release-flow; D14 implementation of rejection guards, local visual assets, contextual navigation, semantic tests, and release verification
 source-anchors: src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; .github/workflows/release.yml; tests/integration/controller-smoke-workflows.spec.ts; tests/e2e/public-availability.spec.ts; docs/DOCUMENTATION_POLICY.md; docs/documentation-remediation.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
 next-review: help-source-or-trust-boundary-change
 -->
@@ -104,8 +104,10 @@ source is enabled. Documentation alone cannot authorize that change.
 D14 implements this decision at four boundaries:
 
 1. `src/controller/helpController.ts` resolves Markdown and assets only from the fixed release-controlled `docs/user-guide/` tree, validates authored Markdown, strips the documentation metadata comment, rejects active HTML and unsafe destinations, and rewrites maintained guide and asset links.
-2. `scripts/check-help-documentation.mjs` applies the same authoring contract to every guide and rejects unsupported, missing, unreferenced, or inaccessible visual assets before merge.
-3. `tests/unit/help-documentation.spec.ts` protects the source boundary, content rules, task ordering, search, contextual mapping, generated tables of contents, and critical rendered workflow semantics. Playwright covers the public search, visual, table-of-contents, and contextual-link experience.
-4. `.github/workflows/release.yml` compares the complete packaged user-guide tree with the repository source after copying it into the release.
+2. `scripts/check-help-documentation.mjs` applies the same authoring contract to every guide and reports unsupported, missing, unreferenced, or inaccessible visual assets for non-blocking maintainer review.
+3. `tests/unit/help-documentation.spec.ts` protects renderer behavior and security with synthetic fixtures; `tests/e2e/help-experience.spec.ts` protects the contextual application link. Checks of actual guide content, search examples, visuals, and workflow wording are retained separately in `tests/documentation/` and run only as advisory reports.
+4. `.github/workflows/release.yml` attempts to copy and compare the complete user-guide tree in a separate advisory step; missing files and copy failures never block release.
 
 This implementation does not change the decision’s central assumption: the Markdown remains trusted reviewed application content. It does not authorize untrusted Markdown merely because malformed content is rejected.
+
+Documentation quality and packaging reports are never delivery gates. This does not relax the fixed help source or the runtime rejection of unsafe HTML and URI schemes. The [documentation policy](../DOCUMENTATION_POLICY.md) governs advisory reporting and supersedes earlier before-merge gate language.

@@ -6,7 +6,7 @@ owner: project maintainers
 status: current
 last-verified: 2026-09-06
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D13 repository-wide agent contract, source precedence, change boundaries, test selection, database safety, documentation rules, and canonical-reference routing; D14 implemented fixed-source in-app help validation and maintained visual-asset rules
+verification-scope: non-blocking documentation policy and optional report/test routing; D13 repository-wide agent contract, source precedence, change boundaries, test selection, database safety, documentation rules, and canonical-reference routing; D14 implemented fixed-source in-app help validation and maintained visual-asset rules
 source-anchors: docs/DOCUMENTATION_POLICY.md; README.md; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; docs/PERMISSIONS_REFERENCE.md; docs/DOCUMENTATION_MIGRATION_STATUS.md; package.json; repository-tree; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
 next-review: AI-instruction-or-help-trust-boundary-change
 -->
@@ -115,8 +115,8 @@ and credentials with no privileges beyond those schemas.
 
 ## Documentation rules
 
-- A behavior change must identify affected end-user, maintainer, operator, and AI documentation and update the
-  authoritative documents in the same change when applicable.
+- Identify affected end-user, maintainer, operator, and AI documentation. Update it when appropriate or record a
+  follow-up; documentation work must never block application review, CI, merge, release, or deployment.
 - In-app help is task-first: use exact visible labels, give novices a successful shortest path, then include recovery,
   privacy, role, and advanced details without forcing them into the first-use procedure.
 - Verify labels and available actions against rendered Pug output and browser code rather than copying old prose.
@@ -127,8 +127,10 @@ and credentials with no privileges beyond those schemas.
   features share middleware, entities, or UI components.
 - Every maintained Markdown file requires the metadata defined by the documentation policy.
 
-Run `npm run docs:check` for documentation changes and `npm run docs:check:strict` when closing a migration package or
-validating the zero-debt state.
+Documentation reports are optional and advisory, including strict mode. Never add them as required CI checks,
+application-test assertions against maintained prose, lifecycle hooks, or release prerequisites. Use the reporting
+commands in the documentation policy to retain findings; an advisory exit zero does not mean that every check passed.
+Help security tests must use synthetic fixtures and remain application tests.
 
 ## Verification and reporting
 

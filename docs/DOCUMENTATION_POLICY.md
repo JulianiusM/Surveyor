@@ -6,15 +6,31 @@ audience: maintainers; documentation contributors; AI agents
 owner: documentation maintainers
 status: current
 last-verified: 2026-09-06
-verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: structural-process-and-help-trust-boundary; D14 enforced in-app help authoring, visual, semantic, fixed-source, and release-packaging gates
-source-anchors: repository-tree; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; .github/workflows/release.yml; docs/decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md; docs/documentation-check.json; docs/documentation-remediation.yml; scripts/check-documentation.mjs; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts
+verification-baseline: docs-baseline-2026-09-06-ci-repair
+verification-scope: non-blocking documentation policy, optional report exits, application/content-test separation, and advisory release packaging; runtime trust boundary retained
+source-anchors: scripts/check-documentation.mjs; scripts/tests/documentation-check.test.mjs; repository-tree; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; .github/workflows/release.yml; docs/decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md; docs/documentation-check.json; docs/documentation-remediation.yml; scripts/check-documentation.mjs; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts
 next-review: documentation-pipeline-or-help-trust-boundary-change
 -->
 
 This policy defines where Surveyor documentation lives, how the intended current working implementation is
 established without erasing deliberate feature differences, how transient implementation defects are isolated, how
-documents record their verification state, and which checks must pass during the documentation migration.
+documents record their verification state, and how optional review reports support maintenance without gating application delivery.
+
+## Documentation is never a delivery gate
+
+Documentation must not block CI, builds, merges, releases, or deployment. This includes completeness, wording,
+metadata, links, images, baseline fingerprints, semantic documentation tests, and operator-documentation rehearsals.
+Do not require a documentation status check, make an application job depend on a documentation job, or add a
+documentation prerequisite to an install, build, test, release, or Git hook. Do not make documentation completion a
+condition for approving or delivering an otherwise acceptable application change.
+
+Documentation standards remain useful maintainer guidance. Record discrepancies and follow-up work; do not suppress
+findings or call an unexecuted check successful. Historical migration references to a documentation "gate" now mean
+advisory review evidence only; they do not override this policy.
+
+Application correctness is separate: authentication, authorization, database safety, and help-renderer security tests
+continue to protect executable behavior. Help-runtime tests use synthetic fixtures, not maintained guide text or images.
+The runtime rejection of unsafe help content is unchanged by the advisory reporting policy.
 
 ## Canonical locations
 
@@ -25,7 +41,7 @@ documents record their verification state, and which checks must pass during the
 | AI-agent summaries | [`AGENTS.md`](../AGENTS.md) and [`.github/copilot/`](../.github/copilot/) | These are summaries, not an independent source of behavioral truth. |
 | Migration state | [Documentation migration status](DOCUMENTATION_MIGRATION_STATUS.md) | Human-readable continuation point and run evidence. |
 | Machine-readable backlog and defect register | [`documentation-remediation.yml`](documentation-remediation.yml) | Findings, dependencies, decisions, implementation defects, acceptance criteria, and run records. |
-| Structural gate configuration | [`documentation-check.json`](documentation-check.json) | Baselines, metadata rules, and explicitly deferred stale-term debt. |
+| Advisory report configuration | [`documentation-check.json`](documentation-check.json) | Baselines, metadata rules, and explicitly deferred stale-term debt. |
 
 Do not introduce an alias directory for end-user help. Code, links, release packaging, and contributor instructions must
 all use `docs/user-guide/`.
@@ -127,8 +143,14 @@ Free-standing “Last updated” dates and document version numbers are not veri
 ## Source fingerprints and baselines
 
 `npm run docs:fingerprint` creates a deterministic SHA-256 fingerprint over implementation, test, build, and workflow
-files. Documentation and generated build output are excluded so that documentation-only edits do not change the
-source snapshot being reviewed.
+files. Documentation, generated build output, explicitly listed local settings, uploads, logs, and IDE metadata are
+excluded. File selection is defined in the checker configuration, not by the presence of developer-generated files.
+Package files, application source, documentation-checker source, tests, and workflows remain fingerprinted.
+
+The current fingerprint format converts CRLF to LF only in valid UTF-8 text without NUL bytes. Binary inputs remain
+byte-sensitive. This makes Windows and Linux text checkouts comparable without hiding changes to code or binary assets.
+The normalization mode is recorded with the baseline; older raw-byte baselines remain historical evidence and are not
+silently overwritten.
 
 A baseline entry in `documentation-check.json` records:
 
@@ -137,45 +159,52 @@ A baseline entry in `documentation-check.json` records:
 - audit/archive provenance when available; and
 - the verification scope.
 
-A document references the baseline identifier rather than copying a hash. This keeps headers concise while retaining a
-machine-checkable link to the reviewed source snapshot. A fingerprint mismatch means the implementation has changed
-since the selected current baseline, so the migration gate fails until a new baseline is registered. This is not
-automatically proof that every document is stale: unaffected documents may retain their earlier verification baseline,
-while affected documents must inspect their source anchors and reference the new baseline when their review completes.
+A document references the baseline identifier rather than copying a hash. A mismatch is a review hint that the
+implementation has changed since that snapshot, not proof that documentation is wrong and not a reason to stop delivery.
+Retain historical baselines and review affected source anchors when useful. Do not require a new baseline on each commit,
+automatically rebaseline CI, or replace a hash merely to obtain a clean report.
 
-## Structural gates
+## Optional documentation reports
 
-Run the migration gate for every documentation package:
+Run these on demand; none is a prerequisite for application tests or delivery:
 
 ```bash
 npm run docs:check
+npm run docs:check:strict
+npm run docs:check:help
 ```
 
-It fails on:
+The compatibility name **strict** requests reporting of all configured stale concepts, including any deferred items.
+It does not enable enforcement. All three commands exit zero even when findings exist or a diagnostic subprocess cannot
+run. They execute through `scripts/report-documentation.mjs`, which preserves child exit statuses, logs, and findings in
+`artifacts/documentation/`. An advisory exit is not a claim that the documentation is correct. Inspect the JSON and
+readable summaries: `clean`, `findings`, `failed`, and `tool-error` distinguish the outcomes.
 
-- a current implementation fingerprint that is not registered by the selected verification baseline;
-- broken relative Markdown links;
-- references to undefined `npm run` scripts;
-- missing or invalid document metadata;
-- missing metadata source anchors;
-- path-like repository references that do not exist, unless an exact generated or illustrative path is allowlisted;
-- an ambiguous or mismatched in-app user-guide directory;
-- release packaging that omits the in-app guides;
-- untracked forbidden stale terms; and
-- changes in the occurrence count of explicitly deferred migration debt.
+The reports cover baselines, links, referenced commands and paths, metadata, source anchors, stale concepts, the fixed
+help source, image authoring, and packaging. A failed structural diagnostic does not prevent the independent help report
+from running. A syntax error, missing dependency, missing configuration, unavailable runner, or inability to write a
+report is surfaced without becoming an application failure.
 
-Known stale terms assigned to later work packages are recorded with exact file and occurrence counts in
-`documentation-check.json`. They are reported but do not fail migration mode. This is a temporary divide-and-conquer
-mechanism: a package must remove its entries when it fixes the underlying content.
+Exact generated/local-path exceptions retain their reasons and authored-reference counts regardless of whether the
+optional file is present. Real missing paths and altered counts are still reported. Never commit generated files,
+credentials, or private environment files just to remove a documentation finding.
 
-Run the final-state gate with:
+Additional optional reports are:
 
 ```bash
-npm run docs:check:strict
+npm run docs:test:tooling
+npm run docs:test:content
+npm run docs:test:browser
 ```
 
-Strict mode fails on every forbidden stale term, including tracked debt. It becomes the default release expectation only
-after all packages that own those terms are complete.
+Tooling tests need only Node.js. Content tests need the installed development dependencies. Browser checks reuse the
+built application and guarded disposable E2E database; see the [Testing Guide](TESTING_GUIDE.md) before running them.
+Tests that read actual guides live in `tests/documentation/`, outside the default application test discovery paths.
+No documentation report or documentation-tool regression suite is run by the required CI workflow.
+
+The release workflow still attempts to copy the documentation, but copying and byte-comparison diagnostics are in a
+separate advisory step with `continue-on-error`. Missing documentation or a packaging mismatch is visible in the log and
+does not suppress archive creation. Build and other application failures remain failures.
 
 ## Per-package workflow
 
@@ -185,14 +214,14 @@ after all packages that own those terms are complete.
 4. Classify each difference as intentional behavior, a transient defect, or unresolved; do not infer uniformity from peer features alone.
 5. Record transient defects in the central backlog without copying them into product documentation.
 6. Change the smallest coherent documentation set; edit source only for an explicitly authorized in-app help integration change.
-7. Run the global structural gate and the package-specific semantic checks.
+7. Use optional structural and semantic reports as review evidence; log anything not run.
 8. Update document metadata, the machine-readable backlog, and the migration-status run record.
-9. Mark the package done only when every acceptance criterion has evidence.
+9. Record completed work and remaining review items truthfully, without making the package a delivery prerequisite.
 
 Newly discovered problems are recorded in the backlog with a package assignment. They do not expand the active package
 unless they block truthful completion of that package.
 
-## In-app help authoring gate
+## In-app help authoring reports and runtime protection
 
 The application renders only the reviewed Markdown files under `docs/user-guide/`. D14 enforces the trusted-content model recorded in [DEC-004](decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md):
 
@@ -200,9 +229,9 @@ The application renders only the reviewed Markdown files under `docs/user-guide/
 - Active raw HTML, protocol-relative URLs, control characters, and URI schemes other than HTTP, HTTPS, mailto, and tel are rejected.
 - Markdown links to another guide must target a maintained Markdown file directly inside `docs/user-guide/`.
 - Images must use non-empty alt text and a reviewed raster file under `docs/user-guide/assets/`; remote images, data URIs, SVG, and nested asset sources are not accepted.
-- Unreferenced or unsupported help assets fail the authoring gate.
-- `npm run docs:check:help` exercises these rules without requiring a database or application server. The normal and strict documentation gates invoke it automatically.
-- The release workflow copies all documentation and compares `docs/user-guide/` with the packaged copy byte-for-byte.
+- Unreferenced or unsupported help assets are reported for maintainer review.
+- `npm run docs:check:help` reports these rules without a database or application server. The normal and strict reports also include this advisory check.
+- The release workflow attempts the copy and byte comparison in a separate non-blocking step.
 
 These checks reject content outside the repository’s authoring contract; they are not a general-purpose sanitizer for arbitrary Markdown. Adding an editor, upload, database, tenant, plugin, or remote help source requires reopening DEC-004 and defining sanitization, URI allowlisting, provenance, and review before that source is enabled.
 

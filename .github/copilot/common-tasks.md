@@ -6,7 +6,7 @@ owner: project maintainers
 status: current
 last-verified: 2026-09-06
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: D13 minimal feature, defect, database, and documentation workflows using canonical references
+verification-scope: non-blocking documentation policy and optional report/test routing; D13 minimal feature, defect, database, and documentation workflows using canonical references
 source-anchors: AGENTS.md; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; docs/DOCUMENTATION_POLICY.md; package.json; src/; tests/
 next-review: D14
 -->
@@ -38,7 +38,7 @@ next-review: D14
 3. Use exact visible labels and novice-first task order in `docs/user-guide/`.
 4. Keep implementation-defect details in migration controls and product documentation on the coherent working
    contract.
-5. Run `npm run docs:check`; run `npm run docs:check:strict` when completing a migration package.
+5. Optionally collect `npm run docs:check` or `npm run docs:check:strict` reports. Findings are follow-up work, never CI, merge, release, or deployment prerequisites.
 
 The [repository-wide agent guide](../../AGENTS.md) and [documentation policy](../../docs/DOCUMENTATION_POLICY.md) define
 the complete authority, scope, and in-app help trust rules.

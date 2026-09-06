@@ -6,7 +6,7 @@ owner: architecture maintainers
 status: current
 last-verified: 2026-09-06
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D12 runtime, layer, authentication, authorization, persistence, frontend, background-job, build, release, and testing architecture plus D08 advanced activity requirement, allocation, job, review, and persistence boundaries; help integration remains assigned to D14; D14 fixed-source help search, contextual routing, Markdown validation, local visual assets, and release boundary
+verification-scope: non-blocking documentation policy and optional report/test routing; D12 runtime, layer, authentication, authorization, persistence, frontend, background-job, build, release, and testing architecture plus D08 advanced activity requirement, allocation, job, review, and persistence boundaries; help integration remains assigned to D14; D14 fixed-source help search, contextual routing, Markdown validation, local visual assets, and release boundary
 source-anchors: package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoiceRetention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
 next-review: architecture-or-help-delivery-change
 -->
@@ -325,6 +325,16 @@ The in-app help subsystem is intentionally separate from mutable application dat
 3. Markdown is checked against the DEC-004 authoring contract, converted with Marked, given stable heading IDs, and returned with a level-two/level-three table of contents.
 4. Internal guide links become `/help/<guide>` routes, and maintained images become `/help/assets/<file>` routes. Path-containment and filename checks prevent request-controlled traversal.
 5. Application requests receive a contextual `helpUrl`; the navbar therefore opens the guide for the current feature while retaining `/help` as the fallback.
-6. The release workflow copies and then compares the entire user-guide tree, including images, so runtime help matches the release’s application behavior.
+6. The release workflow attempts to copy and compare the entire user-guide tree, including images, in a separate advisory step. A mismatch or missing documentation is reported without blocking release.
 
 The renderer inserts validated, release-shipped HTML into the Pug view. This is a trusted-content boundary rather than a generic sanitization service. Changing the source model requires reopening DEC-004.
+
+### Documentation reporting is outside application delivery
+
+The required CI workflow runs application checks only. `scripts/report-documentation.mjs` is an optional maintainer
+entry point: structural and help-authoring diagnostics, actual-guide content tests, and tooling regressions are
+advisory, with real findings and subprocess exits preserved in reports. The corpus-dependent suites are isolated in
+`tests/documentation/`; the required help tests use synthetic renderer fixtures and application-only route assertions.
+The release copies and compares documentation in a separate non-blocking step. A missing guide, stale fingerprint,
+wording mismatch, or unavailable documentation checker cannot stop CI, builds, merges, or release. Runtime content
+rejection remains active; see [Documentation Policy](DOCUMENTATION_POLICY.md).

@@ -1,4 +1,20 @@
 schema_version: 1
+documentation_delivery_policy:
+  authority: Explicit maintainer instruction that documentation must never be a blocking gate, especially for CI.
+  mode: advisory-only
+  applies_to: [CI, builds, merges, releases, deployment, review]
+  no_required_status_check: true
+  no_application_job_dependency: true
+  no_lifecycle_or_git_hook_prerequisite: true
+  public_report_exit_status: 0
+  strict_mode: Broader diagnostic reporting, not enforcement.
+  findings: Retain real errors, child exits, incomplete runs, and review hints in logs and JSON.
+  fingerprints: Historical review snapshots; mismatches do not require rebaselining to proceed.
+  application_tests: Keep security and executable behavior tests; use synthetic help fixtures rather than maintained prose or images.
+  corpus_tests: Optional tests/documentation suites, outside required runner discovery.
+  release_packaging: Attempt documentation copy and comparison in a separate non-blocking step.
+  historical_gate_language: Superseded; old package gate records describe historical review evidence only.
+  unrelated_application_defects: Unchanged and not authorized for repair by this policy correction.
 audit:
   date: '2026-09-05'
   source_archive: src(1).zip
@@ -2905,8 +2921,8 @@ migration_tracking:
   policy_document: docs/DOCUMENTATION_POLICY.md
   checker: scripts/check-documentation.mjs
   checker_config: docs/documentation-check.json
-  current_baseline: docs-baseline-2026-09-05-d00
-  next_continuation: 'Execute D14 only: improve in-app help navigation and contextual integration, add semantic rendered-help and trust-boundary checks, and assign visual update ownership. Keep runtime feature changes, implementation-defect repair, and D04V outside that run except for the explicitly authorized targeted help integration in D14.'
+  current_baseline: docs-baseline-2026-09-06-ci-repair
+  next_continuation: Execute D04V / OPSV-001 independently; documentation CI repair is complete. Runtime-feature repairs require separate authorization.
 run_records:
 - package_id: D00
   status: done
@@ -3895,18 +3911,96 @@ d14_visual_correction:
     failures below were reproduced before and after this image-only correction.
   follow_up_validation_defects:
   - id: D14-VAL-001
-    status: open
+    status: closed
+    resolved_by: D14-CI-01
+    resolved_on: '2026-09-06'
     scope: documentation baseline and generated/local path validation
     observed: Structural checker reports an unregistered source fingerprint and seven missing-path occurrences in the supplied
       archive.
     acceptance: Reconcile the archive and registered fingerprint against verified source history; handle generated and ignored
       local files without inventing evidence or silently blessing an unknown baseline; rerun both structural modes.
   - id: D14-VAL-002
-    status: open
+    status: closed
+    resolved_by: D14-CI-01
+    resolution: Syntax repair already present in commit 2781589502ed82f134e277d7c7093751ee4efe87; preserved and regression-tested.
+    resolved_on: '2026-09-06'
     scope: help authoring checker
     observed: The Markdown link regular expression in scripts/check-help-documentation.mjs contains an unescaped closing bracket
       under the Unicode flag and fails at parse time.
     acceptance: In a separately scoped help-checker change, correct the expression, exercise valid and invalid Markdown fixtures,
       and run the dedicated help and combined documentation gates.
   next_work: Do not mix visual corrections with runtime-feature repairs. D04V / OPSV-001 remains independently runnable; the
-    two inherited validation failures require their own bounded follow-up.
+    inherited validation failures have now been closed by D14-CI-01; see d14_ci_repair.
+
+
+d14_ci_repair:
+  id: D14-CI-01
+  status: done
+  completed_on: '2026-09-06'
+  source_commit: 2781589502ed82f134e277d7c7093751ee4efe87
+  attached_docs: docs(4).zip
+  baseline: docs-baseline-2026-09-06-ci-repair
+  verified_source_fingerprint: sha256:15e6d345eeab9467859d259573158f4a3e44b29a05258f14302f978ee58f42e5
+  ci_reported_legacy_fingerprint: sha256:fbe591113b6bfcfedb7fa2d4b245c7f4f01b383290afb6605002de46c8c46e56
+  verification_scope: Dependency-free documentation tooling only; no runtime feature repair or full application-suite claim.
+  changed_files:
+  - .github/workflows/ci.yml
+  - docs/DOCUMENTATION_MIGRATION_STATUS.md
+  - docs/DOCUMENTATION_POLICY.md
+  - docs/documentation-check.json
+  - docs/documentation-remediation.yml
+  - scripts/check-documentation.mjs
+  - scripts/check-help-documentation.mjs
+  - scripts/tests/documentation-check.test.mjs
+  closed_validation_defects:
+  - D14-VAL-001
+  - D14-VAL-002
+  preserved_upstream_fixes:
+  - Help-authoring and help-controller regular-expression fixes from the failing commit.
+  changes:
+  - Exact generated-index and optional-test-override exceptions.
+  - Count every authored optional-path reference, regardless of file presence.
+  - Normalize CRLF only for valid UTF-8 text and retain binary-byte sensitivity.
+  - Exclude explicit developer-local settings, uploads, logs and IDE metadata from implementation fingerprints.
+  - Retain fatal baseline drift, source-anchor, missing-path, broken-link, script, metadata and stale-term checks.
+  - Fail closed when the canonical help directory is absent.
+  - Run 31 Node built-in regression tests and both documentation modes in the existing pre-install CI step.
+  verification:
+    node: v22.16.0
+    dependency_installation_required: false
+    normal_documentation_gate: passed
+    strict_documentation_gate: passed
+    help_authoring_gate: passed
+    regression_tests:
+      passed: 31
+      failed: 0
+    application_test_matrix_run: false
+    hosted_ci_rerun: false
+  remaining_work:
+  - D04V / OPSV-001 is independently runnable.
+  - Application-feature defects require separately authorized source changes.
+
+documentation_advisory_correction:
+  status: complete
+  date: '2026-09-06'
+  supersedes: Mandatory documentation CI gates introduced by D14 and its previous CI repair.
+  runtime_source_changes: none
+  guide_content_and_image_changes: none
+  dependency_changes: none
+  changes:
+    - Removed documentation commands and tooling regressions from required CI.
+    - Retained optional documentation commands with non-blocking reporting of findings and tool failures.
+    - Isolated actual-guide semantic and browser tests from default application test discovery.
+    - Preserved synthetic help-renderer security tests and application-only contextual navigation checks.
+    - Made documentation copying and comparison an advisory release step.
+    - Updated maintainer and AI instructions to prohibit documentation delivery prerequisites.
+  verification:
+    tooling_regressions: 41 passed, zero failed or skipped.
+    advisory_failure_matrix: 24 npm report invocations across eight corpus/tooling states, all exited zero with findings retained.
+    release_packaging: Present, missing, and failed-copy scenarios all reached the following archive stage.
+    runner_separation: Statically verified against unchanged default Vitest and Playwright configuration.
+    typescript: Syntax transpilation only; no module-resolution or full type-check claim.
+    runtime_suites: Not executed; dependencies could not be installed because registry name resolution failed.
+    hosted_ci: Not run; no remote changes pushed and no branch-protection settings modified.
+  baseline_policy: Retained the historical baseline; the observed mismatch remains an advisory finding instead of triggering rebaselining.
+  continuation: D04V / OPSV-001 remains optional and independent of application delivery.

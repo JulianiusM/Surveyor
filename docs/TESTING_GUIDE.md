@@ -6,7 +6,7 @@ owner: test maintainers
 status: current
 last-verified: 2026-09-06
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D12 Vitest and Playwright discovery, layer contracts, environment loading, MariaDB guardrails, E2E lifecycle, current factories/keywords/support paths, commands, coverage, and CI behavior; D14 help authoring, rendered semantic, contextual navigation, and release packaging coverage
+verification-scope: non-blocking documentation policy and optional report/test routing; D12 Vitest and Playwright discovery, layer contracts, environment loading, MariaDB guardrails, E2E lifecycle, current factories/keywords/support paths, commands, coverage, and CI behavior; D14 help authoring, rendered semantic, contextual navigation, and release packaging coverage
 source-anchors: package.json; package-lock.json; vitest.config.mts; playwright.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs
 next-review: test-layout-command-or-help-validation-change
 -->
@@ -281,7 +281,7 @@ Do not create a new helper path in documentation before it exists in the reposit
 | Service transaction or relationship | Integration | middleware/route admission is part of the risk |
 | Controller using production services | Integration | full request parsing, cookies, redirect, or view rendering matters |
 | Authentication, guest, route, or critical creation flow | E2E | keep lower-layer edge cases too |
-| Documentation label/path contract | Documentation gate or D14 semantic check | a real interactive journey is also critical |
+| Documentation label/path contract | Optional advisory documentation report | Keep application-behavior tests separate from maintained wording and images. |
 
 A change may need several layers, but more layers are not automatically better. Protect each distinct failure mode at the cheapest stable seam.
 
@@ -313,16 +313,18 @@ A change may need several layers, but more layers are not automatically better. 
 
 `.github/workflows/ci.yml` uses Node.js 24.15.0 and MariaDB 10.11. It:
 
-1. Runs `npm run docs:check` before dependency installation.
-2. Installs the lockfile with `npm ci`.
-3. Creates and grants dedicated `surveyor_test` and `surveyor_e2e` schemas.
-4. Writes `tests/.env.test` and `.env.e2e`.
-5. Runs `npm run test:ci` with Vitest coverage and JUnit output.
-6. Builds the application.
-7. Installs or restores Chromium.
-8. Runs `npm run e2e` with Playwright JUnit and HTML reports.
-9. Uploads reports and coverage artifacts.
-10. Runs the configured SonarQube scan.
+1. Installs the lockfile with `npm ci`.
+2. Creates and grants dedicated `surveyor_test` and `surveyor_e2e` schemas.
+3. Writes `tests/.env.test` and `.env.e2e`.
+4. Runs `npm run test:ci` with application Vitest coverage and JUnit output.
+5. Builds the application.
+6. Installs or restores Chromium.
+7. Runs `npm run e2e` with application Playwright reports.
+8. Uploads reports and coverage artifacts.
+9. Runs the configured SonarQube scan.
+
+Documentation checks and tooling regressions are absent from this required sequence. Tests of maintained prose,
+images, guide search examples, or documentation completeness live outside application test discovery.
 
 Locally, run the layer relevant to the change while iterating. Before release-sensitive or cross-boundary work, reproduce the full sequence as closely as practical.
 
@@ -352,16 +354,37 @@ Prefer importing the production module actually under test without crossing the 
 
 Compare Node.js, MariaDB, environment files, process-level variables, generated output, Chromium version, and whether an old server is being reused. The workflow files and lockfile are the reproducibility baseline.
 
-## In-app help validation
+## Help runtime tests and optional documentation reports
 
-Use all three layers when changing the help system or a critical user workflow:
+The normal unit suite in `tests/unit/help-documentation.spec.ts` now tests the executable renderer against synthetic
+fixtures: fixed source paths, traversal rejection, metadata stripping, heading generation, URI/HTML rejection, and
+contextual route mapping. It must work even when the maintained documentation directory is absent. The normal
+Playwright test in `tests/e2e/help-experience.spec.ts` checks the application navbar's contextual link, not a guide's
+contents. Neither requires real guide text, images, wording, or a reviewed source fingerprint.
+
+Checks of the actual guides are retained under `tests/documentation/`, not silently deleted or marked passing.
+The optional configurations there are separate from the application Vitest and Playwright discovery paths.
 
 ```bash
+npm run docs:check
+npm run docs:check:strict
 npm run docs:check:help
-npm exec -- vitest run tests/unit/help-documentation.spec.ts
-npm exec -- playwright test tests/e2e/help-experience.spec.ts
+npm run docs:test:tooling
+npm run docs:test:content
+npm run docs:test:browser
 ```
 
-The authoring checker validates every maintained guide without starting Surveyor. The unit suite renders the guides through the production help controller and protects task ordering, search, contextual mapping, table-of-contents generation, URI and HTML rejection, local assets, and critical workflow statements against current UI labels. The focused Playwright suite verifies the public search, document navigation, visual aid, and contextual navbar link in the built application.
+All of these report commands are advisory and exit zero on findings and tool failures. Their logs and JSON under
+`artifacts/documentation/` preserve the actual child exits and distinguish findings from incomplete execution.
+The strict command broadens the reported concepts; it is not an enforcement switch.
 
-Feature changes that rename a control or change a documented state must update the guide and the relevant semantic assertion in the same change. A visual change must also follow [In-App Help Visuals](HELP_VISUALS.md).
+The first four commands need no dependency installation or database. Content reports use installed Vitest and marked.
+Browser reports require the existing build, installed Chromium, controlled environment, and disposable E2E database
+specified above. They reuse the normal managed-server configuration, including its destructive E2E initialization.
+They are not invoked by application CI, application test scripts, or the release prerequisite chain.
+
+An offline help-authoring finding does not disable the runtime security guard. Unsafe Markdown continues to be rejected
+by the running help renderer. Application-security regressions remain real failures; documentation quality does not.
+
+Use findings to improve guides or record follow-up work without delaying application delivery. Visual changes still
+require the individual inspection practice in [In-App Help Visuals](HELP_VISUALS.md), not an automated delivery gate.

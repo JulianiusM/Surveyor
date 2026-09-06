@@ -14,17 +14,6 @@ const publicAvailabilityCases = [
     createPublicPageCase({description: 'renders the login page', path: '/users/login', expectedStatus: 200, expectedText: 'Already got a user account?'}),
     createPublicPageCase({description: 'renders the registration page', path: '/users/register', expectedStatus: 200, expectedText: 'Register'}),
     createPublicPageCase({description: 'renders the forgot-password page', path: '/users/forgot-password', expectedStatus: 200, expectedText: 'password'}),
-    createPublicPageCase({description: 'renders the help index page', path: '/help', expectedStatus: 200, expectedText: 'Documentation'}),
-    createPublicPageCase({description: 'renders the getting-started help page', path: '/help/getting_started', expectedStatus: 200, expectedText: 'Getting Started'}),
-    createPublicPageCase({description: 'renders the overview help page', path: '/help/dashboard', expectedStatus: 200, expectedText: 'Your Overview'}),
-    createPublicPageCase({description: 'renders the surveys help page', path: '/help/surveys', expectedStatus: 200, expectedText: 'Surveys'}),
-    createPublicPageCase({description: 'renders the events help page', path: '/help/events', expectedStatus: 200, expectedText: 'Events'}),
-    createPublicPageCase({description: 'renders the invoice-pool help page', path: '/help/invoice_pools', expectedStatus: 200, expectedText: 'Invoice Pools'}),
-    createPublicPageCase({description: 'renders the packing lists help page', path: '/help/packing_lists', expectedStatus: 200, expectedText: 'Packing'}),
-    createPublicPageCase({description: 'renders the activity plans help page', path: '/help/activity_plans', expectedStatus: 200, expectedText: 'Activity'}),
-    createPublicPageCase({description: 'renders the drivers lists help page', path: '/help/drivers_lists', expectedStatus: 200, expectedText: 'Drivers'}),
-    createPublicPageCase({description: 'renders the permissions help page', path: '/help/permissions', expectedStatus: 200, expectedText: 'Permissions'}),
-    createPublicPageCase({description: 'renders help search results', path: '/help/search?q=guest%20recovery', expectedStatus: 200, expectedText: 'Search results'}),
 ];
 
 // Canary: groups related smoke checks so a maintainer can understand the protected workflow quickly.

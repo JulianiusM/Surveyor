@@ -6,7 +6,7 @@ owner: project maintainers
 status: current
 last-verified: 2026-09-06
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: D13 minimal Copilot entry point delegating repository facts to AGENTS.md and canonical maintained documentation
+verification-scope: non-blocking documentation policy and optional report/test routing; D13 minimal Copilot entry point delegating repository facts to AGENTS.md and canonical maintained documentation
 source-anchors: AGENTS.md; docs/DOCUMENTATION_POLICY.md; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; package.json; repository-tree
 next-review: D14
 -->
@@ -42,3 +42,5 @@ database procedures.
 
 Use the topic files under [`.github/copilot/`](copilot/) only as navigation aids. If any AI instruction conflicts with a
 canonical source, correct or remove the AI summary rather than changing the implementation to match it.
+
+Documentation is never a blocking gate. Apply the advisory-report policy in `AGENTS.md`; do not reintroduce required documentation checks or make application delivery depend on prose, images, metadata, or fingerprints.

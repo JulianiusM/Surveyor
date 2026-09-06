@@ -7,7 +7,7 @@ owner: documentation maintainers
 status: current
 last-verified: 2026-09-06
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D00 foundation plus D01-D13 reviewed user, operator, permission, activity-algorithm, maintainer, repository-entry, and AI-agent documentation; D14 completed in-app help UX, semantic validation, visual ownership, and trust-boundary enforcement
+verification-scope: non-blocking documentation policy and optional report/test routing; D00 foundation plus D01-D13 reviewed user, operator, permission, activity-algorithm, maintainer, repository-entry, and AI-agent documentation; D14 completed in-app help UX, semantic validation, visual ownership, and trust-boundary enforcement
 source-anchors: repository-tree; package.json; README.md; AGENTS.md; .github/copilot-instructions.md; .github/copilot/; docs/documentation-check.json; docs/documentation-remediation.yml; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; docs/user-guide/; src/server.ts; src/app.ts; src/modules/settings.ts; vitest.config.mts; playwright.config.ts; .github/workflows/ci.yml; .github/workflows/release.yml; docs/HELP_VISUALS.md; scripts/check-help-documentation.mjs; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: documentation-inventory-or-status-change
 -->
@@ -17,7 +17,7 @@ through the phased [documentation migration](DOCUMENTATION_MIGRATION_STATUS.md).
 may be useful context, but its behavior-sensitive instructions are not yet authoritative.
 
 Read the [documentation policy](DOCUMENTATION_POLICY.md) for source precedence, metadata rules, the canonical in-app
-help path, intentional feature exceptions, defect isolation, and structural gates. Product documentation describes
+help path, intentional feature exceptions, defect isolation, and advisory structural reports. Product documentation describes
 the intended current working implementation: deliberate differences are documented, while transient defects remain in
 migration-control records instead of being repeated across user, operator, maintainer, and AI documentation.
 
@@ -27,7 +27,7 @@ The canonical in-app help source is [`docs/user-guide/`](user-guide/). The appli
 
 | Guide | Current review state |
 |---|---|
-| [User guide home](user-guide/README.md) | D01-D03 and D05-D13 feature guidance is current, including basic and advanced activity plans; help UX and rendered semantic integration remain pending D14 |
+| [User guide home](user-guide/README.md) | D01-D03 and D05-D13 feature guidance is current, including basic and advanced activity plans; D14 help navigation and visuals are delivered, with optional rendered-content reports |
 | [Getting started](user-guide/GETTING_STARTED.md) | Current: D01 identity, guest recovery, profiles, migration, and account lifecycle verified |
 | [Your overview](user-guide/DASHBOARD.md) | Current: D02 navigation, profile-scoped collections, search/filtering, cards, and owner actions verified |
 | [Permissions and sharing](user-guide/PERMISSIONS.md) | Current: D03 cumulative grants, audiences, recipes, labels, presets, item fallback, and survey exclusion verified |
@@ -45,7 +45,7 @@ The canonical in-app help source is [`docs/user-guide/`](user-guide/). The appli
 | [Project README](../README.md) | Product entry point, clean-clone development start, commands, CI, and release summary | Current: D12 |
 | [Architecture](ARCHITECTURE.md) | Runtime, layers, identity, authorization, persistence, frontend, build, release, and testing boundaries | Current: D12 architecture plus D08 advanced activity allocation; D14 owns help-integration follow-up |
 | [Development guide](DEVELOPMENT.md) | Clean-clone setup, generated files, current code patterns, change recipes, and troubleshooting | Current: D12 |
-| [Testing guide](TESTING_GUIDE.md) | Vitest/Playwright layer contracts, database safeguards, environments, commands, and CI | Current: D12; D14 owns future help-document semantic checks |
+| [Testing guide](TESTING_GUIDE.md) | Vitest/Playwright layer contracts, database safeguards, environments, commands, and CI | Current: D12/D14; content reports are separate from application tests |
 | [Activity requirement algorithm](ACTIVITY_REQUIREMENTS_ALGORITHM.md) | Detailed requirement and coverage algorithm | Current: D08 canonical requirement, coverage, allocation, job, review-state, application, and limitation reference |
 | [Permission system reference](PERMISSIONS_REFERENCE.md) | Generated bit/preset/default tables and maintainer authorization semantics | Current: D03 |
 
@@ -89,13 +89,13 @@ D13 consolidated the AI layer. `AGENTS.md` is the repository-wide contract; the 
 - [Structural checker configuration](documentation-check.json)
 - [Structural checker implementation](../scripts/check-documentation.mjs)
 
-Run the active migration gate with:
+Optionally collect a non-blocking documentation report with:
 
 ```bash
 npm run docs:check
 ```
 
-Use `npm run docs:check:strict` for the zero-debt structural gate. D12 removed the final registered stale-term allowances, so normal and strict modes now both pass.
+Use `npm run docs:check:strict` to include all configured stale concepts in the advisory report. Neither mode blocks CI, builds, merges, releases, or deployment. Findings and execution errors remain visible in report logs and JSON; see the [documentation policy](DOCUMENTATION_POLICY.md).
 
 ## Quick task routing
 

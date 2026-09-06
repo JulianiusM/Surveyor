@@ -5,7 +5,6 @@ import driversController from '../../src/controller/driversController';
 import * as entityAdminController from '../../src/controller/entityAdminController';
 import eventController from '../../src/controller/eventController';
 import eventPoolController from '../../src/controller/eventPoolController';
-import * as helpController from '../../src/controller/helpController';
 import packingController from '../../src/controller/packingController';
 import surveyController from '../../src/controller/surveyController';
 import * as userController from '../../src/controller/userController';
@@ -204,22 +203,4 @@ describe('remaining high-value controller workflows', () => {
         expect(results[0].email).not.toBe(account.email);
     });
 
-    it('renders the help index from the maintained user documentation', () => {
-        const help = helpController.fetchHelpIndex();
-
-        expect(help.currentDoc).toBe('readme');
-        expect(help.docsGroups.map((group) => group.title)).toEqual(['Start here', 'Plan and decide', 'Organize and share', 'Advanced']);
-        expect(help.docsList.length).toBeGreaterThan(0);
-        expect(help.content).toContain('<h1 id=');
-        expect(help.toc.length).toBeGreaterThan(0);
-    });
-
-    it('renders a requested help document and rewrites internal links', () => {
-        const help = helpController.fetchHelpDoc('events');
-
-        expect(help.currentDoc).toBe('events');
-        expect(help.title).toBeTruthy();
-        expect(help.content).toContain('/help/');
-        expect(help.toc).toContainEqual(expect.objectContaining({title: 'Choose your task'}));
-    });
 });

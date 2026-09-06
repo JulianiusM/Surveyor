@@ -5,9 +5,9 @@ audience: documentation maintainers; feature maintainers; operators; AI agents
 owner: documentation maintainers
 status: current
 last-verified: 2026-09-06
-verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D00-D14 documentation migration complete; D04V retained as a non-blocking controlled operator-runbook verification backlog; D14 visual correction, per-asset inspection and actual inherited gate outcomes
-source-anchors: docs/documentation-remediation.yml; docs/DOCUMENTATION_POLICY.md; docs/ACTIVITY_REQUIREMENTS_ALGORITHM.md; docs/user-guide/ACTIVITY_PLANS.md; docs/user-guide/README.md; docs/ARCHITECTURE.md; src/modules/activity/requirements.ts; src/modules/activity/availability.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/autoAssignment.ts; src/modules/activity/recommendations.ts; src/modules/activity/recommendationJobs.ts; src/modules/database/services/ActivityRequirementService.ts; src/modules/database/services/ActivityRecommendationService.ts; src/controller/activityController.ts; src/public/js/modules/activity/; src/views/activity/parts/assignments.pug; src/views/activity/parts/recommendations-schedule.pug; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; .github/workflows/release.yml
+verification-baseline: docs-baseline-2026-09-06-ci-repair
+verification-scope: advisory reporting and separation from application CI/release prerequisites; historical D14 CI repair; D04V retained as a non-blocking controlled operator-runbook verification backlog; D14 visual correction, per-asset inspection and actual inherited gate outcomes
+source-anchors: scripts/check-documentation.mjs; scripts/check-help-documentation.mjs; scripts/tests/documentation-check.test.mjs; .github/workflows/ci.yml; docs/documentation-remediation.yml; docs/DOCUMENTATION_POLICY.md; docs/ACTIVITY_REQUIREMENTS_ALGORITHM.md; docs/user-guide/ACTIVITY_PLANS.md; docs/user-guide/README.md; docs/ARCHITECTURE.md; src/modules/activity/requirements.ts; src/modules/activity/availability.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/autoAssignment.ts; src/modules/activity/recommendations.ts; src/modules/activity/recommendationJobs.ts; src/modules/database/services/ActivityRequirementService.ts; src/modules/database/services/ActivityRecommendationService.ts; src/controller/activityController.ts; src/public/js/modules/activity/; src/views/activity/parts/assignments.pug; src/views/activity/parts/recommendations-schedule.pug; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; .github/workflows/release.yml
 next-review: D04V-or-implementation-defect-remediation
 -->
 
@@ -16,6 +16,59 @@ dependencies, implementation-defect register, acceptance criteria, and run histo
 [`docs/documentation-remediation.yml`](documentation-remediation.yml).
 
 ## Current state
+
+**Documentation reporting is advisory everywhere.** The previous blocking-CI policy is withdrawn by the maintainer's
+explicit instruction. This applies to structure, metadata, links, images, source fingerprints, content tests, and
+operator-documentation verification. Application CI no longer runs documentation commands or tooling regressions.
+Corpus-dependent tests are optional under `tests/documentation/`; renderer-security tests use synthetic fixtures and
+remain application checks. Release documentation copying and comparison are non-blocking.
+
+The public documentation-report commands retain real findings and tool failures but always exit zero. Strict mode means
+more complete reporting, not enforcement. No source baseline is auto-updated or required to permit delivery. Historical
+baseline entries remain review snapshots. Earlier references to documentation gates in this file or the backlog are
+historical evidence, not current delivery conditions.
+
+The report mechanism, missing/broken-tool cases, test discovery separation, and release-step isolation are covered by
+focused repair evidence supplied with this change. No hosted CI run, full application-test matrix, or D04V rehearsal is
+claimed. Application feature source, in-app guide content, visual assets, and dependency versions are unchanged.
+
+The independent continuation remains **D04V / OPSV-001**, or a separately authorized feature-defect repair. Neither is
+made mandatory by documentation tooling. See the [policy](DOCUMENTATION_POLICY.md) and the `documentation_delivery_policy`
+record in the [backlog](documentation-remediation.yml).
+
+## Historical CI-repair record — blocking policy superseded
+
+**D14 CI validation repair is complete.** The normal, strict, and help-authoring documentation gates pass, along with
+31 dependency-free regression tests. The implementation-feature backlog and D04V operator rehearsal are unchanged.
+
+Baseline: `docs-baseline-2026-09-06-ci-repair`.
+
+```text
+sha256:15e6d345eeab9467859d259573158f4a3e44b29a05258f14302f978ee58f42e5
+```
+
+The supplied docs tree matches commit `2781589502ed82f134e277d7c7093751ee4efe87` exactly. The implementation and tooling
+inputs were reconciled against that commit's Git tree hashes before registering the new baseline. The old archive uses
+mixed line endings and omits tracked IDE metadata, and the commit already contains the help regular-expression repairs.
+Those existing repairs were preserved, not overwritten with older archive files.
+
+The corrected gate treats the generated database index and optional test override as exact documented-path exceptions.
+It counts all references rather than only references whose targets are missing, so a developer checkout also passes
+once generated/local files exist. Source fingerprints normalize CRLF text and exclude explicit non-source local state;
+real source changes continue to fail in both modes. A missing help root now reports an error and exits unsuccessfully.
+
+`D14-VAL-001` is closed by the path/fingerprint repair and regression evidence. `D14-VAL-002` is closed by verification of
+the syntax fix already present in the failing commit, plus executable valid/invalid help-content regression tests.
+The tests run in CI before dependency installation, followed by both documentation modes.
+
+Verification was executed with Node.js v22.16.0, without dependencies, generated sources, database credentials, or a
+MariaDB service. This records successful documentation-tool execution, not a rerun of the hosted Node.js 24.15.0 job,
+the full application test matrix, or the D04V deployment rehearsal. No files under `src/`, application tests, user-guide
+content, images, package files, or lockfiles changed in this repair.
+
+The next independent package remains **D04V / OPSV-001**, or a separately authorized feature-defect repair.
+
+## Historical visual-correction record
 
 **D14 visual correction is complete.** The four existing illustrations have been replaced and individually inspected at full resolution and at 720-pixel and 360-pixel preview widths. The navigation illustration now embeds a source-rendered capture of the actual header, with fictional profile data, instead of a hand-drawn substitute. Measured text blocks have no overlaps or overflow. The narrow previews have adjacent full-size image links for inspection of fine detail.
 

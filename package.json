@@ -19,9 +19,9 @@
     "generate:db-index": "ts-node --project tsconfig.server.json scripts/genTypeormIdx.ts",
     "generate": "npm run generate:db-index",
     "docs:fingerprint": "node scripts/check-documentation.mjs --fingerprint",
-    "docs:check:help": "node scripts/check-help-documentation.mjs",
-    "docs:check": "node scripts/check-documentation.mjs && npm run docs:check:help",
-    "docs:check:strict": "node scripts/check-documentation.mjs --strict && npm run docs:check:help",
+    "docs:check:help": "node scripts/report-documentation.mjs --help-only",
+    "docs:check": "node scripts/report-documentation.mjs",
+    "docs:check:strict": "node scripts/report-documentation.mjs --strict",
     "copy:assets": "cpx \"src/public/{img,style}/**/*\" dist/public",
     "copy:views": "cpx \"src/views/**/*\" dist/views",
     "copy": "npm run copy:assets && npm run copy:views",
@@ -38,7 +38,10 @@
     "e2e:init": "npm run e2e:prepare && npm run run",
     "e2e": "playwright test",
     "test:all": "npm test && npm run build && npm run e2e",
-    "test:ci": "vitest run --coverage --reporter=default --reporter=junit --outputFile.junit=artifacts/junit-vitest.xml"
+    "test:ci": "vitest run --coverage --reporter=default --reporter=junit --outputFile.junit=artifacts/junit-vitest.xml",
+    "docs:test:tooling": "node scripts/report-documentation.mjs --tool-tests",
+    "docs:test:content": "node scripts/report-documentation.mjs --content",
+    "docs:test:browser": "node scripts/report-documentation.mjs --browser"
   },
   "overrides": {
     "connect-typeorm": {

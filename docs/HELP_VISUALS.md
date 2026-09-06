@@ -7,7 +7,7 @@ owner: product documentation maintainers
 status: current
 last-verified: 2026-09-06
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D14 ownership, accessibility, source mapping, release packaging, and update rules for annotated in-app help visuals; D14 visual correction: actual-header provenance, mandatory per-revision individual inspection and final-asset hash evidence
+verification-scope: non-blocking documentation policy and optional report/test routing; D14 ownership, accessibility, source mapping, release packaging, and update rules for annotated in-app help visuals; D14 visual correction: actual-header provenance, mandatory per-revision individual inspection and final-asset hash evidence
 source-anchors: docs/user-guide/assets/; docs/user-guide/README.md; docs/user-guide/SURVEYS.md; docs/user-guide/PACKING_LISTS.md; src/views/layout.pug; src/views/surveyor/survey-vote.pug; src/views/packing/packing-view.pug; .github/workflows/release.yml; tests/unit/help-documentation.spec.ts
 next-review: help-visual-or-visible-UI-change
 -->
@@ -20,7 +20,7 @@ All four assets retain their existing filenames. Each adjacent caption includes 
 
 ## Ownership
 
-The product documentation maintainers own the asset set. The maintainer of a feature whose visible labels or control relationships change must update the affected visual and its surrounding guide in the same change.
+The product documentation maintainers own the asset set. A feature maintainer identifies affected visuals and guides when labels or control relationships change, then updates them or records follow-up work without blocking feature delivery. Every visual that is actually changed still requires individual inspection after each revision.
 
 | Asset | Used by | Implementation sources to compare |
 |---|---|---|
@@ -52,7 +52,7 @@ Use measured text widths and explicit padded content boxes when annotating. Pref
 2. Update only the affected visual, retaining its filename when its purpose is unchanged. Keep annotations away from screenshot controls and clearly distinguish diagrams from screenshots.
 3. Open and inspect that individual exported image at full resolution and representative reduced sizes. Any subsequent change invalidates its prior acceptance: regenerate and inspect it again. Repeat until there are no visual defects in the final export.
 4. Recheck alt text, captions and the full-size link. On narrow screens, confirm that the image fits the page and readers can open it at full resolution. Keep the procedure understandable without the image.
-5. Run `npm run docs:check`, `npm run docs:check:strict`, and the focused help tests described in the [Testing Guide](TESTING_GUIDE.md). Record actual results; a pre-existing failing gate must not be relabelled as passing.
+5. Optionally collect the documentation reports and content checks in the [Testing Guide](TESTING_GUIDE.md). Record actual findings and execution limits; an advisory exit zero is not proof of visual correctness. These checks never block application delivery. Individual visual inspection remains the authoring practice after every image change.
 6. Confirm that the release bundle contains every referenced asset. Record the final image hash, dimensions, inspection sizes, findings and acceptance result. Inspect the packaged PNG again if packaging changes its bytes.
 
 Removing a visual requires removing its Markdown reference and either deleting the unreferenced asset or documenting why it remains. Any proposal to load visuals from an untrusted or remotely managed source must reopen [DEC-004](decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md) before implementation.

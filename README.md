@@ -6,7 +6,7 @@ owner: project maintainers
 status: current
 last-verified: 2026-09-06
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D12 product summary, clean-clone development start, current scripts, test layers, CI branches, release entry points, and repository map; operator execution remains tracked in D04V; D14 help validation and focused command surface
+verification-scope: non-blocking documentation policy and optional report/test routing; D12 product summary, clean-clone development start, current scripts, test layers, CI branches, release entry points, and repository map; operator execution remains tracked in D04V; D14 help validation and focused command surface
 source-anchors: package.json; package-lock.json; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/oidc.ts; migrationDataSource.ts; scripts/runMigration.ts; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts
 next-review: repository-command-or-help-tooling-change
 -->
@@ -144,7 +144,7 @@ With local login enabled, register an account, open the activation message deliv
 | `npm run run` | Start the compiled application from `dist/server.js`. |
 | `npm run generate` | Regenerate `src/modules/database/__index__.ts`. |
 | `npm run typeorm:migrate` | Run pending migrations through Surveyor's settings-aware wrapper. |
-| `npm run docs:check` | Validate documentation metadata, links, commands, paths, and registered concepts. |
+| `npm run docs:check` | Produce an optional advisory report on documentation; never fail application delivery. |
 | `npm run test:quick` | Run database-free unit and frontend Vitest suites. |
 | `npm test` | Run all Vitest suites, including MariaDB integration tests. |
 | `npm run test:all` | Run Vitest, build the application, and run the Playwright suite. |
@@ -178,9 +178,14 @@ docs/                                  maintainer and operator documentation
 
 Vitest runs the unit, frontend, and integration suites configured in `vitest.config.mts`. Playwright runs the focused browser/API flows configured in `playwright.config.ts` and manages the built server through `npm run e2e:init`.
 
-The CI workflow currently runs for manual dispatch, reusable workflow calls, and pushes or pull requests on `master`, `dev`, and `ts-migration`. It uses Node.js 24.15.0 and MariaDB 10.11, checks documentation before installing dependencies, runs Vitest with coverage, builds the application, and then runs Chromium Playwright checks.
+The CI workflow currently runs for manual dispatch, reusable workflow calls, and pushes or pull requests on `master`, `dev`, and `ts-migration`. It uses Node.js 24.15.0 and MariaDB 10.11, installs dependencies, runs application Vitest tests with coverage, builds the application, and then runs Chromium Playwright checks.
 
 The manual release workflow invokes that CI workflow first. After a successful run, it updates the requested version, tags the selected ref, builds the application, and publishes a production archive containing `dist/`, `docs/`, `fonts/`, `package-lock.json`, and a production-only package manifest. Database migrations are deliberately not executed by the release archive.
+
+Documentation reporting is deliberately outside required CI. Use `npm run docs:check` or
+`npm run docs:check:strict` on demand; both retain findings and exit zero. Actual-guide content tests use the optional
+commands in the [Testing Guide](docs/TESTING_GUIDE.md), not the required application suites. The release attempts to
+include documentation in a separate non-blocking step; missing help or a copy mismatch is reported without blocking the release.
 
 ## License
 

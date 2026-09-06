@@ -220,6 +220,8 @@ function validateSourceBoundary() {
 
 if (!fs.existsSync(helpRoot) || !fs.statSync(helpRoot).isDirectory()) {
     errors.push({file: 'docs/user-guide', message: 'Canonical in-app help directory is missing'});
+    process.stdout.write(`${JSON.stringify({advisory: true, ok: false, errors}, null, 2)}\n`);
+    process.exitCode = 0;
 } else {
     const helpFiles = fs.readdirSync(helpRoot, {withFileTypes: true})
         .filter(entry => entry.isFile() && entry.name.toLowerCase().endsWith('.md'))
@@ -232,6 +234,7 @@ if (!fs.existsSync(helpRoot) || !fs.statSync(helpRoot).isDirectory()) {
     validateSourceBoundary();
 
     const report = {
+        advisory: true,
         ok: errors.length === 0,
         helpRoot: relative(helpRoot),
         markdownFiles: helpFiles.length,
@@ -244,5 +247,6 @@ if (!fs.existsSync(helpRoot) || !fs.statSync(helpRoot).isDirectory()) {
         errors,
     };
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-    process.exitCode = report.ok ? 0 : 1;
+    // Runtime help validation is unchanged; this offline report is advisory.
+    process.exitCode = 0;
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Surveyor documentation structural gate.
+ * Surveyor advisory documentation diagnostics.
  *
  * This checker intentionally validates structural integrity and migration
  * bookkeeping. Behavioral truth is verified by the work-package-specific
@@ -9,6 +9,7 @@
  */
 
 import crypto from 'node:crypto';
+import {isUtf8} from 'node:buffer';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -72,7 +73,7 @@ function parseArguments(argv) {
 function printHelp() {
     console.log(`Usage: node scripts/check-documentation.mjs [options]\n\n` +
         `Options:\n` +
-        `  --strict            Fail on all known stale terms, including tracked migration debt\n` +
+        `  --strict            Report all known stale terms, including tracked migration debt (advisory)\n` +
         `  --fingerprint       Print the current documentation source fingerprint and exit\n` +
         `  --json <path>       Write the full result as JSON\n` +
         `  --config <path>     Use a different configuration file\n` +
@@ -149,11 +150,20 @@ function computeSourceFingerprint(root, config) {
         return !excludedExtensions.some(extension => relativePath.endsWith(extension));
     });
 
+    const normalization = config.fingerprint?.textNormalization ?? 'none';
+    if (!['none', 'crlf-to-lf'].includes(normalization)) {
+        throw new Error(`Unsupported fingerprint text normalization: ${normalization}`);
+    }
     const hash = crypto.createHash('sha256');
     for (const relativePath of files) {
         hash.update(relativePath, 'utf8');
         hash.update('\0');
-        hash.update(fs.readFileSync(path.join(root, relativePath)));
+        const bytes = fs.readFileSync(path.join(root, relativePath));
+        // Normalize only UTF-8 text. Binary assets remain byte-sensitive.
+        const content = normalization === 'crlf-to-lf' && !bytes.includes(0) && isUtf8(bytes)
+            ? Buffer.from(bytes.toString('utf8').replace(/\r\n/gu, '\n'), 'utf8')
+            : bytes;
+        hash.update(content);
         hash.update('\0');
     }
 
@@ -297,7 +307,9 @@ function collectRepositoryPathErrors(root, config, markdownFiles) {
     }
 
     for (const entry of allowlist) {
-        const actualCount = allowlisted.filter(occurrence => occurrence.repositoryPath === entry.path).length;
+        // Count authored references, not missing files: generated/local files may
+        // exist in a developer checkout but are absent in CI before setup.
+        const actualCount = references.filter(occurrence => occurrence.repositoryPath === entry.path).length;
         if (actualCount !== entry.expectedOccurrences) {
             errors.push({
                 type: 'documented-path-allowlist-count-mismatch',
@@ -305,7 +317,7 @@ function collectRepositoryPathErrors(root, config, markdownFiles) {
                 expected: entry.expectedOccurrences,
                 actual: actualCount,
                 package: entry.package,
-                message: `${entry.path} has ${actualCount} allowlisted reference(s); configuration expects ${entry.expectedOccurrences}`,
+                message: `${entry.path} has ${actualCount} documented reference(s); configuration expects ${entry.expectedOccurrences}`,
             });
         }
     }
@@ -629,11 +641,13 @@ function buildReport(root, config, strict) {
 
     return {
         schemaVersion: 1,
+        advisory: true,
         mode: strict ? 'strict' : 'migration',
         repository: root,
         currentBaseline: config.currentBaseline,
         sourceFingerprint: `sha256:${fingerprint.value}`,
         sourceFingerprintFileCount: fingerprint.files.length,
+        sourceFingerprintTextNormalization: config.fingerprint?.textNormalization ?? 'none',
         baselineMatchesCurrent: baseline.matches,
         summary: {
             markdownFiles: markdownFiles.length,
@@ -662,7 +676,7 @@ function buildReport(root, config, strict) {
 
 function printReport(report) {
     const summary = report.summary;
-    console.log(`Surveyor documentation check (${report.mode} mode)`);
+    console.log(`Surveyor documentation report (${report.mode} mode; advisory)`);
     console.log(`Repository: ${report.repository}`);
     console.log(`Source fingerprint: ${report.sourceFingerprint}`);
     console.log(`Current baseline matches source: ${report.baselineMatchesCurrent ? 'yes' : 'no'}`);
@@ -677,7 +691,7 @@ function printReport(report) {
     );
 
     if (report.errors.length > 0) {
-        console.log('\nErrors:');
+        console.log('\nFindings (non-blocking):');
         for (const error of report.errors) {
             console.log(`  - ${error.message}`);
         }
@@ -688,7 +702,7 @@ function printReport(report) {
         for (const occurrence of report.deferredMigrationDebt) {
             byPackage.set(occurrence.package, (byPackage.get(occurrence.package) ?? 0) + 1);
         }
-        console.log('\nTracked migration debt (non-failing in migration mode):');
+        console.log('\nTracked migration debt (advisory in every mode):');
         for (const [packageId, count] of [...byPackage.entries()].sort()) {
             console.log(`  - ${packageId}: ${count} occurrence(s)`);
         }
@@ -737,9 +751,8 @@ function main() {
         console.log(`\nJSON written to ${options.jsonPath}`);
     }
 
-    if (report.summary.totalErrors > 0) {
-        process.exitCode = 1;
-    }
+    // Findings are diagnostic data, not a prerequisite for application delivery.
+    process.exitCode = 0;
 }
 
 main();
