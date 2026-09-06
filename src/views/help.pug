@@ -1,38 +1,94 @@
 extends layout
 
 block title
-    .card-header.d-flex.justify-content-between.align-items-center
+    .card-header.d-flex.justify-content-between.align-items-center.gap-2
         h1.card-title.mb-0
             i.bi.bi-question-circle.me-2
             | #{title}
-        a.btn.btn-sm.btn-outline-light(href="/")
+        a.btn.btn-sm.btn-outline-light(href="/help")
             i.bi.bi-house.me-1
-            | Home
+            | Help home
 
 block content
-    .row
-        //- Sidebar navigation for documentation
-        .col-md-3.mb-3
-            .card.bg-dark.text-white
+    .row.g-3
+        aside.col-lg-3
+            .card.bg-dark.text-white.mb-3
                 .card-header
-                    h5.mb-0
-                        i.bi.bi-list-ul.me-2
-                        | Documentation
-                .list-group.list-group-flush
-                    each doc in docsList
-                        - const isActive = currentDoc === doc.path.toLowerCase() || (currentDoc === 'readme' && doc.path === 'readme')
-                        - const docUrl = doc.path === 'readme' || doc.path === 'README' ? '/help' : `/help/${doc.path.toLowerCase()}`
-                        a.list-group-item.list-group-item-action(
-                            href=docUrl,
-                            class=isActive ? 'active bg-primary' : 'bg-dark text-white border-secondary'
-                        )= doc.title
+                    h2.h5.mb-0
+                        i.bi.bi-search.me-2
+                        | Search help
+                .card-body
+                    form(action="/help/search" method="get" role="search")
+                        label.form-label.visually-hidden(for="helpSearch") Search the user guides
+                        .input-group
+                            input#helpSearch.form-control.text-bg-dark(
+                                type="search"
+                                name="q"
+                                value=(typeof searchQuery !== 'undefined' ? searchQuery : '')
+                                placeholder="What do you need to do?"
+                                maxlength="100"
+                                required
+                            )
+                            button.btn.btn-primary(type="submit" aria-label="Search help")
+                                i.bi.bi-search
 
-        //- Main content area
-        .col-md-9
-            .card.bg-dark.text-white
-                .card-body.help-content
-                    //- Render the markdown content as HTML
-                    != content
+            nav.card.bg-dark.text-white(aria-label="Help topics")
+                .card-header
+                    h2.h5.mb-0
+                        i.bi.bi-list-check.me-2
+                        | Help topics
+                .card-body.p-0
+                    each group in docsGroups
+                        .help-nav-group
+                            h3.help-nav-heading= group.title
+                            .list-group.list-group-flush
+                                each doc in group.docs
+                                    - const isActive = currentDoc === doc.path
+                                    a.list-group-item.list-group-item-action(
+                                        href=doc.url
+                                        class=isActive ? 'active bg-primary' : 'bg-dark text-white border-secondary'
+                                        aria-current=isActive ? 'page' : null
+                                    )= doc.title
+
+        main.col-lg-9
+            if typeof searchResults !== 'undefined'
+                .card.bg-dark.text-white
+                    .card-body.help-search-results
+                        h2 Search results
+                        if !searchQuery
+                            p.mb-0 Enter a task, control label, or feature name to search the user guides.
+                        else if searchResults.length === 0
+                            .alert.alert-info.mb-0(role="status")
+                                | No help topics matched “#{searchQuery}”. Try a shorter task or a visible button label.
+                        else
+                            p.text-secondary(role="status") #{searchResults.length} topic#{searchResults.length === 1 ? '' : 's'} found for “#{searchQuery}”.
+                            .list-group
+                                each result in searchResults
+                                    a.list-group-item.list-group-item-action.bg-dark.text-white.border-secondary(href=result.url)
+                                        .d-flex.justify-content-between.align-items-start.gap-2
+                                            h3.h5.mb-1= result.title
+                                            i.bi.bi-chevron-right
+                                        if result.sectionTitle
+                                            p.small.text-info.mb-1 In “#{result.sectionTitle}”
+                                        p.mb-0= result.excerpt
+            else
+                .row.g-3
+                    article(class=toc && toc.length ? 'col-xl-9' : 'col-12')
+                        .card.bg-dark.text-white
+                            .card-body.help-content
+                                //- Trusted, release-shipped Markdown validated by helpController before rendering.
+                                != content
+                    if toc && toc.length
+                        aside.col-xl-3
+                            nav.card.bg-dark.text-white.help-toc(aria-label="On this page")
+                                .card-header
+                                    h2.h6.mb-0 On this page
+                                .list-group.list-group-flush
+                                    each entry in toc
+                                        a.list-group-item.list-group-item-action.bg-dark.text-white.border-secondary(
+                                            href=`#${entry.id}`
+                                            class=entry.level === 3 ? 'help-toc-level-3' : ''
+                                        )= entry.title
 
 block link
     link(rel="stylesheet" href="/style/help.css")

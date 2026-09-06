@@ -1,454 +1,140 @@
 # AI Agent Guide for Surveyor
-
-This document provides guidance for AI coding agents working on the Surveyor project. Whether you're using GitHub
-Copilot, Cursor, Claude, or another AI assistant, this guide will help you understand the project structure and
-conventions.
-
-## Project Overview
-
-Surveyor is a TypeScript-based event and collaboration management application with comprehensive testing and
-documentation. The project uses:
-
-- **Backend**: Express.js + TypeORM + MariaDB
-- **Frontend**: Pug templates + Bootstrap + Vanilla TypeScript
-- **Testing**: Vitest for isolated utilities/frontend helpers and MariaDB-backed service integration tests; Playwright for focused E2E workflows
-- **Language**: TypeScript with strict type checking
-- **Testing Approach**: Use-case-focused, factory-backed tests that avoid brittle implementation details
-
-## Quick Start for AI Agents
-
-1. **Read the documentation first**:
-    - [README.md](README.md) - Project setup and quick start
-    - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture and design
-    - [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) - Development workflow and guidelines
-    - [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) - Comprehensive testing guide
-    - [.github/copilot-instructions.md](.github/copilot-instructions.md) - GitHub Copilot-specific instructions
-
-2. **Understand the documentation structure**:
-    - **Developer docs**: `docs/` directory - architecture, development, testing
-    - **User guides**: `docs/user-guide/` - end-user documentation
-    - **AI-specific**: `.github/copilot-instructions.md` and this file
-
-3. **Understand the testing approach**:
-    - Vitest runs isolated utility/frontend tests and production TypeORM service canaries against MariaDB
-    - Playwright runs focused E2E workflows only
-    - All test files use the `*.spec.ts` suffix
-    - Reusable production-shaped factories live in `tests/factories/`; use common entity factories before specialized builders
-    - Reusable workflow/assertion keywords live in `tests/keywords/` when they clarify smoke-test intent
-    - Shared runner setup and small helpers live in `tests/support/`
-    - Prefer stable use-case coverage over implementation-detail assertions
-    - Add comments to grouped smoke assertions explaining the user-facing regression being protected
-    - Keep imports order-independent; browser-facing production modules must guard global registration with `typeof window !== 'undefined'` so IDE import reordering cannot break tests
-    - Write distinct user-story scenarios as distinct named tests. Never route test behavior through numeric case indexes, `switch` statements, or array order; table-driven tests are reserved for cases that genuinely share the same arrange/act/assert flow.
-    - Database-backed integration tests must enter through production controller workflows. Use services only for prerequisite setup or outcome verification; do not make service-level CRUD the behavior under test.
-    - See [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for comprehensive patterns
-
-4. **Follow the conventions**:
-    - TypeScript for all code
-    - Async/await over promises
-    - Interfaces over types
-    - Always create migrations for database changes
-    - Factory-backed data for realistic production scenarios
-    - NEVER commit anything included in .gitignore, especially not generated files (like __index__.ts, *.ge.js, ...)
-
-## Key Directories
-
-```
-surveyor/
-├── docs/                # Documentation
-│   ├── README.md            # Documentation index
-│   ├── ARCHITECTURE.md      # System architecture
-│   ├── DEVELOPMENT.md       # Development guide
-│   ├── TESTING_GUIDE.md     # Testing documentation
-│   ├── TEST_REVIEW.md       # Test quality review
-│   ├── FRONTEND_TESTING.md  # Frontend testing guide
-│   ├── user-guide/          # End-user documentation
-│   └── archive/             # Historical documents
-├── src/
-│   ├── controller/      # Business logic controllers
-│   ├── middleware/      # Express middleware
-│   ├── migrations/      # TypeORM database migrations
-│   ├── modules/         # Application modules
-│   │   ├── activity/    # Activity plan logic
-│   │   ├── database/    # Database entities and services
-│   │   └── lib/         # Utility libraries
-│   ├── public/          # Static assets
-│   │   ├── js/          # Client-side TypeScript
-│   │   │   ├── core/    # Core utilities
-│   │   │   ├── shared/  # Shared UI behaviors
-│   │   │   └── modules/ # Feature widgets
-│   │   └── style/       # SASS stylesheets
-│   ├── routes/          # Express routes
-│   ├── views/           # Pug templates
-│   └── server.ts        # Application entry point
-├── tests/
-│   ├── backend/         # Fast Vitest backend transformations, permissions, and services
-│   ├── api/             # Fast Vitest API contract/input-shaping tests
-│   ├── frontend/        # Fast Vitest frontend helper/component tests
-│   ├── e2e/             # Focused Playwright critical-flow tests
-│   ├── factories/       # Reusable production-shaped test data builders
-│   ├── keywords/        # Reusable smoke-test workflow/assertion keywords
-│   ├── fixtures/        # Shared fixture assets and seed data
-│   └── support/         # Runner setup and shared test utilities
-└── scripts/             # Build and utility scripts
-```
-
-## Coding Conventions
-
-### TypeScript
-
-```typescript
-// ✅ Good: Async/await
-async function getUser(id: number): Promise<User> {
-    return await userRepository.findOne({where: {id}});
-}
-
-// ❌ Bad: Promises
-function getUser(id: number): Promise<User> {
-    return userRepository.findOne({where: {id}}).then(user => user);
-}
-
-// ✅ Good: Interface
-interface CreateUserDto {
-    username: string;
-    email: string;
-    password: string;
-}
-
-// ❌ Bad: Type (for object shapes)
-type CreateUserDto = {
-    username: string;
-    email: string;
-    password: string;
-};
-```
-
-### Database
-
-```typescript
-// ✅ Good: Always create migrations
-// 1. Create migration file in src/migrations/
-// 2. Define up() and down() operations
-// 3. Test both directions
-
-// ❌ Bad: Never use synchronize in production
-{
-    synchronize: true  // DON'T DO THIS
-}
-
-// ✅ Good: Timezone-aware dates
-@CreateDateColumn({type: 'datetime', precision: 0, default: () => 'CURRENT_TIMESTAMP'})
-createdAt
-:
-Date;
-```
-
-### Testing
-
-```typescript
-// ✅ Good: factory-backed Vitest test against production code
-import {describe, expect, it} from 'vitest';
-import {buildDateTotals} from '../../src/modules/lib/util';
-import {createDateTotalsCase} from '../factories/dateTotalsFactory';
-
-const cases = [createDateTotalsCase()];
-
-describe('date totals transformation', () => {
-    it.each(cases)('$description', (testCase) => {
-        expect(buildDateTotals(
-            testCase.eventStart,
-            testCase.eventEnd,
-            testCase.registrations,
-        )).toEqual(testCase.expectedTotals);
-    });
-});
-
-// ❌ Bad: testing a test-only helper or an implementation detail
-it('adds two numbers', () => {
-    expect(addNumbers(2, 3)).toBe(5);
-});
-```
-
-## Common Tasks
-
-### Adding a New Feature
-
-1. **Plan the feature**:
-    - Identify required database changes
-    - Design the API/controller interface
-    - Plan test coverage
-
-2. **Database changes** (if needed):
-   ```bash
-   # Create migration
-   npm run typeorm migration:create src/migrations/AddFeatureName
-   
-   # Edit migration file
-   # Test migration
-   npm run typeorm migration:run
-   npm run typeorm migration:revert
-   ```
-
-3. **Implement the feature**:
-    - Create/update entities in `src/modules/database/entities/`
-    - Create service layer in module
-    - Create controller endpoints
-    - Add validation and error handling
-
-4. **Write tests** (in order):
-    - Unit tests for business logic
-    - Controller tests for orchestration
-    - Database tests for data operations
-    - E2E tests for user workflows
-
-5. **Update documentation**:
-    - Update README.md if user-facing
-    - Update TESTING.md if new patterns introduced
-    - Add comments for complex logic
-
-### Writing Tests
-
-Use the cheapest stable test that protects the use case:
-
-1. **Choose the test type**:
-    - Naturally isolated utility/input-output behavior → `tests/unit/` with Vitest
-    - Core service persistence and entity relationships → `tests/integration/` with Vitest and MariaDB
-    - Frontend helper/component behavior → `tests/frontend/` with Vitest
-    - Critical user workflow → `tests/e2e/` with Playwright
-
-2. **Create reusable factory data when useful**:
-   ```typescript
-   // tests/factories/eventFactory.ts
-   export function createEventInput(overrides: Partial<EventInput> = {}): EventInput {
-       return {
-           title: 'Summer Camp',
-           startDate: '2026-08-05',
-           endDate: '2026-08-07',
-           ...overrides,
-       };
-   }
-   ```
-
-3. **Write the test against production behavior**:
-   ```typescript
-   // tests/unit/application-utilities.spec.ts
-   import {describe, expect, it} from 'vitest';
-   import {buildDateTotals} from '../../src/modules/lib/util';
-   import {createDateTotalsCase} from '../factories/dateTotalsFactory';
-
-   const cases = [createDateTotalsCase()];
-
-   describe('date totals transformation', () => {
-       it.each(cases)('$description', (testCase) => {
-           expect(buildDateTotals(
-               testCase.eventStart,
-               testCase.eventEnd,
-               testCase.registrations,
-           )).toEqual(testCase.expectedTotals);
-       });
-   });
-   ```
-
-Avoid broad snapshots, private implementation assertions, tests of convenience wrappers that mostly delegate to third-party code, and E2E tests that duplicate every validation branch.
-
-### Fixing a Bug
-
-1. **Write a failing test** that reproduces the bug
-2. **Fix the bug** with minimal changes
-3. **Verify the test passes**
-4. **Run full test suite** to ensure no regressions
-5. **Update documentation** if the bug revealed unclear behavior
-
-## Testing Requirements
-
-### Test Coverage
-
-- **Unit Vitest tests**: Naturally isolated production utilities and input/output transformations only
-- **Integration Vitest tests**: Important TypeORM services, persisted permissions, and entity relationships against MariaDB
-- **Frontend Vitest tests**: Client-side helpers/components and future SPA behavior
-- **Playwright E2E tests**: Critical user workflows only
-
-### Test Organization
-
-- Place isolated tests under `tests/unit/`, database-backed service canaries under `tests/integration/`, frontend helpers under `tests/frontend/`, and only critical workflows under `tests/e2e/`; name all test files `*.spec.ts`
-- Group related examples by behavior/use case instead of creating one spec file per assertion
-- Create reusable production-shaped factories in `tests/factories/`, using common entity factories before specialized builders
-- Create reusable keywords in `tests/keywords/` only when they make smoke-test workflows/assertions clearer
-- Use small shared helpers in `tests/support/` or E2E screen/page helpers only when they reduce brittle selectors
-- Mock only true external boundaries when unavoidable. Never mock TypeORM repositories or core application services; use the disposable MariaDB integration database.
-
-### E2E Test Specifics
-
-- Keep E2E broad and shallow: protect login, event creation, registration, survey voting, packing, activity, drivers, and dashboard visibility workflows first.
-- Prefer API/database setup over long UI setup paths.
-- Use accessibility selectors or stable `data-testid` anchors; avoid DOM-depth and styling selectors.
-- Put reusable E2E screen/page helpers near `tests/e2e/` only when they reduce selector brittleness.
-- Keep constants and realistic data in factories or fixtures instead of hard-coded inline values.
-
-## Environment Setup
-
-### Development
-
-```bash
-npm install
-npm run build
-npm run server  # Runs server + client watch
-```
-
-### Testing
-
-**Quick start - run all tests:**
-
-```bash
-npm run test:all
-```
-
-This one command sets up everything and runs all tests (Vitest + E2E). Perfect for CI or comprehensive testing.
-
-**Individual test commands:**
-
-```bash
-# Vitest tests only (fast)
-npm test
-npm run test:quick
-
-# E2E tests only (requires build + database)
-npm run build
-npm run e2e:prepare
-npm run e2e
-```
-
-### Database
-
-Tests use two databases:
-
-- `surveyor_test` - Unit and integration tests
-- `surveyor_e2e` - E2E tests (name must contain 'e2e')
-
-Configuration:
-
-- `tests/.env.test` - Unit/integration test config
-- `.env.e2e` - E2E test config
-
-The `test:all` script automatically sets up and configures both databases.
-
-## CI/CD
-
-The project uses GitHub Actions for CI:
-
-- Runs on push/PR to main branches
-- Sets up MariaDB 10.11
-- Runs Vitest and focused Playwright E2E tests
-- Uploads coverage and test reports
-
-See `.github/workflows/ci.yml` for details.
-
-## Security Considerations
-
-- **Never commit secrets**: Use environment variables
-- **Hash passwords**: Use bcryptjs
-- **Validate input**: Use express-validator
-- **Sanitize output**: Escape user content in views
-- **Update dependencies**: Keep packages current
-- **Review changes**: Run security scans before committing
-
-## Best Practices for AI Agents
-
-1. **Understand before coding**: Read existing code to understand patterns
-2. **Maintain consistency**: Follow existing conventions and styles
-3. **Test thoroughly**: Write tests for all changes
-4. **Document clearly**: Update docs when adding features or patterns
-5. **Ask when unclear**: If requirements are ambiguous, ask for clarification
-6. **Minimize changes**: Make the smallest change that solves the problem
-7. **Verify correctness**: Run linters, tests, and build before committing
-
-## Common Pitfalls
-
-❌ **Don't**:
-
-- Use `synchronize: true` in database config
-- Hard-code test data in test files
-- Duplicate brittle selectors or long UI setup in multiple E2E tests
-- Skip writing tests
-- Ignore TypeScript errors
-- Commit environment files (`.env`, `.env.e2e`)
-- Mix inline styles/scripts in Pug templates
-- Use `any` type excessively
-
-✅ **Do**:
-
-- Create migrations for schema changes
-- Externalize test data to data files
-- Use small shared helpers or E2E screen/page helpers when they reduce brittle repetition
-- Write tests for all code changes
-- Fix TypeScript errors
-- Use environment variables for config
-- Keep presentation logic in templates, business logic in controllers
-- Use proper TypeScript types
-
-## Getting Help
-
-- **Documentation**: Check README.md, TESTING.md, and this file first
-- **Examples**: Look at existing code for patterns
-- **Tests**: Existing tests show correct usage patterns
-- **Comments**: Code comments explain complex logic
-
-## Agent-Specific Notes
-
-### GitHub Copilot
-
-See [.github/copilot-instructions.md](.github/copilot-instructions.md) for Copilot-specific instructions and patterns.
-
-### Other AI Agents
-
-This file serves as the primary guide. Read it along with:
-
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system design
-- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for development workflow
-- [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) for testing patterns
-- Existing code for implementation examples
-
-## Documentation Structure
-
-Surveyor has comprehensive, well-organized documentation:
-
-### For Developers
-
-- **[docs/README.md](docs/README.md)** - Documentation navigation
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture
-- **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** - Development workflow
-- **[docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md)** - Testing documentation
-- **[docs/TEST_REVIEW.md](docs/TEST_REVIEW.md)** - Test quality review (⭐⭐⭐⭐⭐)
-- **[docs/FRONTEND_TESTING.md](docs/FRONTEND_TESTING.md)** - Frontend testing
-
-### For End Users
-
-- **[docs/user-guide/](docs/user-guide/)** - Complete user documentation
-    - Getting started, dashboard, surveys, events, packing, activities, drivers
-
-### For AI Agents
-
-- **This file** - General AI agent guidance
-- **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - Copilot-specific
-- **[.github/copilot/](..github/copilot/)** - Modular Copilot guidelines
-
-## Contributing Guidelines
-
-When making changes:
-
-1. **Analyze**: Understand the problem and existing code
-2. **Plan**: Outline your approach
-3. **Implement**: Make minimal, focused changes
-4. **Test**: Write/update tests, verify all tests pass
-5. **Document**: Update documentation if needed
-6. **Review**: Check code quality, security, and best practices
-
-## Version Information
-
-- **Node.js**: >= 24
-- **TypeScript**: Latest stable
-- **MariaDB**: >= 10.4
-- **Vitest**: Latest stable
-- **Playwright**: Latest stable
-
-For license information, see [README.md](README.md).
+<!--
+documentation-metadata
+audience: AI coding agents; maintainers
+owner: project maintainers
+status: current
+last-verified: 2026-09-06
+verification-baseline: docs-baseline-2026-09-06-d14
+verification-scope: D13 repository-wide agent contract, source precedence, change boundaries, test selection, database safety, documentation rules, and canonical-reference routing; D14 implemented fixed-source in-app help validation and maintained visual-asset rules
+source-anchors: docs/DOCUMENTATION_POLICY.md; README.md; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; docs/PERMISSIONS_REFERENCE.md; docs/DOCUMENTATION_MIGRATION_STATUS.md; package.json; repository-tree; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
+next-review: AI-instruction-or-help-trust-boundary-change
+-->
+
+This is the repository-wide entry point for coding agents. It intentionally contains only durable rules. Current
+commands, versions, paths, architecture, and operating procedures belong in the canonical documents linked below and
+in executable repository configuration, not in duplicated AI summaries.
+
+## Authority and evidence
+
+For repository facts, follow the order defined in the [documentation policy](docs/DOCUMENTATION_POLICY.md):
+
+1. Feature-specific executable behavior and tests, including routes, controllers, services, entities, views, browser
+   code, package scripts, and workflows.
+2. Explicit maintainer or product decisions.
+3. References generated directly from implementation sources.
+4. Canonical maintained user, maintainer, and operator documentation.
+5. AI instruction files, including this one.
+
+The user-requested scope still governs the task. Do not use an AI summary to override current code, tests, an explicit
+decision, or a canonical document. When sources disagree, inspect the affected implementation and record the conflict
+rather than silently choosing the most convenient statement.
+
+Deliberate feature differences are part of the product contract. A transient implementation defect is not. During
+this documentation migration, record such defects once in
+[`docs/documentation-remediation.yml`](docs/documentation-remediation.yml), keep the details in migration-control
+material, and write product documentation for the coherent working contract. Do not spread temporary warnings or
+workarounds through user, operator, maintainer, or AI documentation.
+
+## Start every task by narrowing the scope
+
+1. Read the request and the relevant canonical document from the routing table below.
+2. Inspect the current implementation and tests for the exact feature or boundary being changed.
+3. Check the working tree and preserve unrelated user changes.
+4. Identify affected boundaries: database, authorization, files, UI labels, tests, user help, maintainer guidance,
+   operator procedures, and AI summaries.
+5. Make the smallest coherent change. Do not refactor unrelated code or invent a new architecture while solving a
+   localized task.
+
+A documentation-only task may inspect source and tests but must not alter runtime behavior. The only exception is a
+separately authorized, explicitly targeted change to the in-app help integration itself.
+
+## Canonical routing
+
+| Task | Canonical starting point |
+|---|---|
+| Understand or start the repository | [Project README](README.md) |
+| Understand runtime and module boundaries | [Architecture](docs/ARCHITECTURE.md) |
+| Follow development patterns or add a feature | [Development Guide](docs/DEVELOPMENT.md) |
+| Select, configure, or run tests | [Testing Guide](docs/TESTING_GUIDE.md) |
+| Change settings or authentication configuration | [Configuration Reference](docs/CONFIGURATION.md) |
+| Change entities, migrations, or database operations | [Database and Migrations](docs/DATABASE.md) |
+| Change permissions or administration behavior | [Permission System Reference](docs/PERMISSIONS_REFERENCE.md) |
+| Change production deployment, storage, backup, or recovery | [Production Operations](docs/OPERATIONS.md) and [Upgrading and Rolling Back](docs/UPGRADING.md) |
+| Change end-user behavior or visible labels | [In-app user guides](docs/user-guide/) plus the relevant Pug and browser code |
+| Change documentation structure or trust assumptions | [Documentation Policy](docs/DOCUMENTATION_POLICY.md) |
+| Continue the documentation migration | [Migration Status](docs/DOCUMENTATION_MIGRATION_STATUS.md) and [remediation backlog](docs/documentation-remediation.yml) |
+
+Use `package.json`, runner configuration, workflows, and the repository tree as the authority for current script and
+path inventories. Do not copy dependency versions, test counts, branch lists, or command matrices into AI files.
+
+## Implementation rules
+
+- Follow the neighboring implementation before introducing a new pattern. Surveyor uses practical route, controller,
+  functional database-service, entity, middleware, Pug, and browser-module boundaries described in the architecture
+  guide.
+- Preserve strict TypeScript behavior and existing local style. Choose an interface or type alias according to the
+  existing contract; do not apply blanket style slogans that conflict with nearby code.
+- Keep visible labels, form field names, routes, controller parsing, and user documentation aligned.
+- Enforce authentication, authorization, validation, and ownership on the server. UI visibility is not an authorization
+  boundary.
+- Do not hand-edit or commit generated or ignored outputs. Regenerate them through the repository scripts when a
+  verification step requires them.
+- Never commit credentials, local environment files, uploaded data, reports, or other ignored runtime state.
+
+## One test-selection rule
+
+**Use the cheapest stable test layer that protects the observable behavior; add another layer only when the risk crosses
+that layer's boundary.** Do not require unit, integration, frontend, and E2E coverage for every change.
+
+| Layer | Use it when the behavior requires this boundary |
+|---|---|
+| `tests/unit/` | Isolated production logic with no database, HTTP application, external service, or real browser. |
+| `tests/frontend/` | Browser helpers or DOM behavior that can run with explicit, restored globals under Vitest. |
+| `tests/integration/` | TypeORM persistence, entity relationships, transactions, or selected controller orchestration against the guarded disposable MariaDB schema. |
+| `tests/e2e/` | A critical built-application workflow whose route, middleware, session, rendering, and database integration matter together. |
+
+`npm run test:quick` is the database-free unit-plus-frontend check. `npm test` includes the database-backed integration
+suite. Read the testing guide before running integration or E2E commands because both suites rebuild their selected
+schemas.
+
+Test production behavior rather than test-only helpers or private implementation details. When persistence is the
+behavior under test, use the real TypeORM metadata and disposable integration database instead of repository or core
+service mocks. A narrow replacement at a true external side-effect boundary is acceptable when it keeps the production
+workflow intact.
+
+## One database and migration rule
+
+**A persistent schema change requires the matching entity change and a reviewed migration for existing installations.**
+Use Surveyor's settings-aware package wrappers and the procedures in the database guide. Verify the effective database
+target before every schema-changing command.
+
+Never use schema synchronization, schema drop, or test reset procedures against production, staging, shared
+development data, or any database that is not explicitly disposable. Database-backed tests must use dedicated schemas
+and credentials with no privileges beyond those schemas.
+
+## Documentation rules
+
+- A behavior change must identify affected end-user, maintainer, operator, and AI documentation and update the
+  authoritative documents in the same change when applicable.
+- In-app help is task-first: use exact visible labels, give novices a successful shortest path, then include recovery,
+  privacy, role, and advanced details without forcing them into the first-use procedure.
+- Verify labels and available actions against rendered Pug output and browser code rather than copying old prose.
+- The files under `docs/user-guide/` are trusted, release-shipped application content. Use Markdown, keep the required
+  metadata comment, and do not introduce active raw HTML, executable attributes, unsafe URI schemes, or unreviewed
+  imported or generated content.
+- Preserve intentional feature exceptions. Do not infer that a feature implements a capability merely because peer
+  features share middleware, entities, or UI components.
+- Every maintained Markdown file requires the metadata defined by the documentation policy.
+
+Run `npm run docs:check` for documentation changes and `npm run docs:check:strict` when closing a migration package or
+validating the zero-debt state.
+
+## Verification and reporting
+
+Run the smallest focused checks first, followed by the broader checks justified by the affected boundaries. Use exact
+scripts from `package.json`; do not infer that a command prepares databases, builds assets, or supplies credentials
+unless its implementation or canonical documentation says so.
+
+Report what was changed, what was verified, and what could not be executed because a prerequisite was unavailable.
+Never describe an unrun build, migration, restore, or test suite as passed.

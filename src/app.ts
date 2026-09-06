@@ -25,6 +25,7 @@ import path from 'node:path';
 import {version} from '../package.json';
 import {logoutUserOidc, validateSession} from "./controller/userController";
 import {handleGenericError} from './middleware/genericErrorHandler';
+import {resolveContextualHelpUrl} from './controller/helpController';
 import {AppDataSource} from "./modules/database/dataSource";
 import {Session} from "./modules/database/entities/session/Session";
 import {asyncHandler} from "./modules/lib/asyncHandler";
@@ -103,7 +104,10 @@ app.use(function (req: Request, res: Response, next: NextFunction) {
         imprintUrl: settings.value.imprintUrl,
         privacyPolicyUrl: settings.value.privacyPolicyUrl,
     };
-    res.locals.nxtUrl = req.query.next ?? req.baseUrl + req.path;
+    const currentPath = req.baseUrl + req.path;
+    res.locals.currentPath = currentPath;
+    res.locals.helpUrl = resolveContextualHelpUrl(currentPath);
+    res.locals.nxtUrl = req.query.next ?? currentPath;
     next();
 });
 

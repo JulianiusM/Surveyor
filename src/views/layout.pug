@@ -119,7 +119,7 @@ html(lang="en" data-bs-theme="dark")
 
                             // Help link
                             li.nav-item
-                                a.nav-link(href="/help")
+                                a.nav-link(href=(typeof helpUrl !== 'undefined' ? helpUrl : "/help") aria-label="Help for this page" title="Open help for this page")
                                     i.bi.bi-question-circle.me-1
                                     | Help
 

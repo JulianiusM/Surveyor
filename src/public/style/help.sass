@@ -7,6 +7,7 @@
     margin-top: 1.5rem
     margin-bottom: 1rem
     font-weight: 600
+    scroll-margin-top: 5rem
 
   h1
     font-size: 2rem
@@ -91,17 +92,54 @@
     margin: 2rem 0
 
   img
+    display: block
     max-width: 100%
     height: auto
     border-radius: 0.5rem
-    margin: 1rem 0
+    border: 1px solid #495057
+    margin: 1rem auto 0.5rem
 
-/* Sidebar styling */
+  p > em:only-child
+    display: block
+    color: #adb5bd
+    text-align: center
+    font-size: 0.9rem
+
+.help-nav-group + .help-nav-group
+  border-top: 1px solid #495057
+
+.help-nav-heading
+  margin: 0
+  padding: 0.65rem 1rem 0.35rem
+  color: #adb5bd
+  font-size: 0.75rem
+  font-weight: 700
+  letter-spacing: 0.06em
+  text-transform: uppercase
+
+.help-toc
+  position: sticky
+  top: 1rem
+  max-height: calc(100vh - 2rem)
+  overflow-y: auto
+
+.help-toc-level-3
+  padding-left: 1.75rem
+  font-size: 0.9rem
+
+.help-search-results .list-group-item p
+  line-height: 1.45
+
 .list-group-item
   border: 1px solid #495057
 
   &:hover
     background-color: #343a40 !important
 
-  .active
+  &.active
     border-color: #0d6efd
+
+@media (max-width: 1199.98px)
+  .help-toc
+    position: static
+    max-height: none

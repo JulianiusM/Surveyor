@@ -1,22 +1,26 @@
 # Database Guidelines
+<!--
+documentation-metadata
+audience: GitHub Copilot; database contributors
+owner: project maintainers
+status: current
+last-verified: 2026-09-06
+verification-baseline: docs-baseline-2026-09-05-d00
+verification-scope: D13 single schema/migration rule, target safety, persistence-test boundary, and canonical procedure delegation
+source-anchors: docs/DATABASE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; migrationDataSource.ts; scripts/runMigration.ts; src/migrations/; src/modules/database/; tests/integration/
+next-review: none
+-->
 
-## Entities
+**A persistent schema change requires the matching entity change and a reviewed migration for existing installations.**
 
-- All entities should be in `src/modules/database/entities/`
-- Use TypeORM decorators for entity definitions
-- Include proper relationships between entities
-- Use timezone 'Z' for consistent UTC handling
+Follow [Database and Migrations](../../docs/DATABASE.md) and the database section of the
+[Development Guide](../../docs/DEVELOPMENT.md). Use the settings-aware package wrappers, generate the TypeORM index when
+required, and prove the effective database target before a schema-changing command.
 
-## Migrations
+Never run schema synchronization, schema drop, migration experiments, or test resets against production, staging,
+shared development data, or any database that is not explicitly disposable. Test and E2E credentials must be confined
+to their dedicated schemas.
 
-- Always create migrations for schema changes
-- Never use `synchronize: true` in production
-- Test migrations with both up and down operations
-- Place migrations in `src/migrations/`
-
-## Testing with Database
-
-- Unit/integration tests use `surveyor_test` database
-- E2E tests use `surveyor_e2e` database (name must contain 'e2e')
-- Use the provided datasource mocks in tests
-- Database tests run serially to avoid conflicts
+When persistence is under test, use the real TypeORM metadata and guarded MariaDB integration database rather than
+datasource, repository, or core-service mocks. The [Testing Guide](../../docs/TESTING_GUIDE.md) defines the permitted
+external-boundary replacements and destructive-test safeguards.

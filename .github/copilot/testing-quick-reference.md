@@ -1,41 +1,33 @@
 # Testing Quick Reference
+<!--
+documentation-metadata
+audience: GitHub Copilot; test contributors
+owner: project maintainers
+status: current
+last-verified: 2026-09-06
+verification-baseline: docs-baseline-2026-09-05-d00
+verification-scope: D13 single test-selection rule, current layer boundaries, database warning, and canonical command delegation
+source-anchors: docs/TESTING_GUIDE.md; package.json; vitest.config.mts; playwright.config.ts; tests/; repository-tree
+next-review: none
+-->
 
-## Strategy
+**Use the cheapest stable test layer that protects the observable behavior; add another layer only when the risk crosses
+that boundary.** Do not add every layer for every feature.
 
-Surveyor uses **Vitest** for isolated utilities, frontend helpers, and MariaDB-backed service integration tests, plus **Playwright** for focused E2E workflows.
+| Layer | Appropriate boundary |
+|---|---|
+| `tests/unit/` | Isolated production logic without a database, HTTP application, external service, or real browser. |
+| `tests/frontend/` | Browser helpers or DOM behavior under Vitest with explicit, restored globals. |
+| `tests/integration/` | TypeORM persistence, relationships, transactions, or selected controller orchestration against a guarded disposable MariaDB schema. |
+| `tests/e2e/` | Critical behavior through the built application, routes, middleware, sessions, rendering, and database together. |
 
-Use the cheapest stable test that protects the use case. Do not add every layer for every feature.
+Read the [Testing Guide](../../docs/TESTING_GUIDE.md) for environment setup, reset safeguards, factories, helpers,
+selectors, coverage, and the current command matrix. `package.json` is the command inventory.
 
-## Commands
+`npm run test:quick` is database-free. `npm test` includes integration tests and therefore requires the disposable
+integration database. Integration and E2E setup rebuild their selected schemas; never point them at shared or valuable
+data.
 
-```bash
-npm test                    # Fast Vitest suite
-npm run test:quick          # Database-free utility + frontend checks
-npm run test:unit           # Isolated utilities only
-npm run test:frontend       # Frontend Vitest tests
-npm run test:integration    # MariaDB-backed service canaries
-npm run e2e                 # Playwright E2E tests
-npm run test:all            # Vitest + build + Playwright E2E
-```
-
-## Structure
-
-- `tests/unit/` - Naturally isolated production utilities and input/output transformations.
-- `tests/integration/` - Production TypeORM services exercised against the disposable MariaDB test schema.
-- `tests/frontend/` - Fast Vitest frontend helper/component tests.
-- `tests/e2e/` - Focused Playwright critical-flow tests.
-- `tests/factories/` - Reusable production-shaped test data builders.
-- `tests/fixtures/` - Shared fixture assets and seed data.
-- `tests/support/` - Runner setup and shared utilities.
-
-All test files use `*.spec.ts`.
-
-## Anti-Brittleness Rules
-
-- Test production behavior, not test-only helpers.
-- Prefer user-visible outcomes and input/output contracts.
-- Keep E2E broad and shallow.
-- Use factories for realistic data with small overrides.
-- Avoid broad snapshots and implementation-detail selectors.
-- Use stable E2E selectors or role/name locators.
-- Do not mock TypeORM repositories or core services; use the integration database.
+Test production behavior rather than test-only helpers. Do not replace TypeORM repositories or core services when
+persistence is the subject of the test. Narrow replacements are appropriate only at true external side-effect
+boundaries when they preserve the production workflow being exercised.

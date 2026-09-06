@@ -1,0 +1,209 @@
+# Documentation Policy
+
+<!--
+documentation-metadata
+audience: maintainers; documentation contributors; AI agents
+owner: documentation maintainers
+status: current
+last-verified: 2026-09-06
+verification-baseline: docs-baseline-2026-09-06-d14
+verification-scope: structural-process-and-help-trust-boundary; D14 enforced in-app help authoring, visual, semantic, fixed-source, and release-packaging gates
+source-anchors: repository-tree; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; .github/workflows/release.yml; docs/decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md; docs/documentation-check.json; docs/documentation-remediation.yml; scripts/check-documentation.mjs; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts
+next-review: documentation-pipeline-or-help-trust-boundary-change
+-->
+
+This policy defines where Surveyor documentation lives, how the intended current working implementation is
+established without erasing deliberate feature differences, how transient implementation defects are isolated, how
+documents record their verification state, and which checks must pass during the documentation migration.
+
+## Canonical locations
+
+| Material | Canonical location | Notes |
+|---|---|---|
+| In-app end-user help | [`docs/user-guide/`](user-guide/) | This is the only supported user-help source directory. `helpController.ts` reads it directly, and releases copy it with `docs/`. |
+| Maintainer and operator documentation | [`docs/`](./) | The [documentation index](README.md) lists only files that currently exist. |
+| AI-agent summaries | [`AGENTS.md`](../AGENTS.md) and [`.github/copilot/`](../.github/copilot/) | These are summaries, not an independent source of behavioral truth. |
+| Migration state | [Documentation migration status](DOCUMENTATION_MIGRATION_STATUS.md) | Human-readable continuation point and run evidence. |
+| Machine-readable backlog and defect register | [`documentation-remediation.yml`](documentation-remediation.yml) | Findings, dependencies, decisions, implementation defects, acceptance criteria, and run records. |
+| Structural gate configuration | [`documentation-check.json`](documentation-check.json) | Baselines, metadata rules, and explicitly deferred stale-term debt. |
+
+Do not introduce an alias directory for end-user help. Code, links, release packaging, and contributor instructions must
+all use `docs/user-guide/`.
+
+## In-app help trust boundary
+
+The in-app guides are trusted, application-shipped content. The help controller reads the fixed `docs/user-guide/`
+directory, and the release workflow packages those files with the application. Surveyor does not treat this directory as
+a user-editable knowledge base, upload destination, tenant content store, or remote feed.
+
+Because converted Markdown is inserted into the help view as HTML, changes to the user guides are security-sensitive and
+must receive the same review as source changes. Only reviewed content shipped with the matching release may be placed in
+that directory. Operators must not overlay it with storage writable by ordinary users, guests, organizers, tenants, or
+an untrusted service.
+
+Authors should use Markdown. The required `documentation-metadata` HTML comment is allowed; active raw HTML, scripts,
+event-handler attributes, embedded documents, executable forms, active styling, and unsafe URI schemes are not part of
+the authoring contract. Generated or AI-assisted content still requires maintainer review before release.
+
+Runtime sanitization is not the controlling boundary while the source remains trusted application content. Any proposal
+to load help from uploads, a database, an administrator editor, a tenant-managed directory, a network source, or a plugin
+must first reopen [DEC-004](decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md) and implement an appropriate sanitization and
+URI-allowlist strategy before enabling that source.
+
+## Evidence and documentation contract
+
+Use evidence in this order:
+
+1. **Feature-specific executable behavior and tests:** routes, controllers, services, entities, views, browser code, package scripts, and workflows for the feature being documented.
+2. **Explicit maintainer or product decisions:** records that distinguish intended behavior, deliberate exceptions, and transient defects when code alone does not establish intent.
+3. **Generated references:** tables or inventories produced directly from implementation sources.
+4. **Canonical maintained documentation:** user guides, operator runbooks, architecture, development, and testing guides.
+5. **AI instruction summaries:** `AGENTS.md`, Copilot instructions, and similar files.
+
+Executable behavior is the primary evidence for what the application does. Intent still matters when deciding whether
+a difference is a stable feature boundary or a defect. Shared middleware, a common entity registry, or repeated peer
+behavior does not by itself prove that every feature must consume the same capability. Verify the feature-specific
+view, controller, routes, persistence, tests, and an explicit maintainer decision before classifying an omission.
+
+Deliberate feature differences are part of the current working implementation and must be documented. Transient
+defects are tracked separately and product documentation assumes they have been corrected. A lower-ranked source must
+link to the higher-ranked source rather than duplicate volatile details.
+
+## Change boundary for this migration
+
+The documentation migration is documentation-only by default. A documentation package may inspect application source,
+tests, examples, and workflows as evidence, but it must not alter runtime behavior to make the documentation easier to
+write.
+
+When implementation evidence contains a transient defect, the active run must:
+
+1. verify the intended working contract from feature-specific behavior, tests, and, when needed, an explicit maintainer or product decision;
+2. record the defect once in the `implementation_defects` register in `docs/documentation-remediation.yml`;
+3. keep defect details in migration-control material only, such as the backlog, decision records, and migration status;
+4. write end-user, operator, maintainer, and AI documentation for the corrected working contract without copying the transient defect, warning, or workaround into those documents; and
+5. leave application remediation for a separately authorized change set.
+
+Before creating a defect, check whether the difference is intentional. A confirmed exception must be documented as
+stable behavior and must not remain in the defect register. If neither intent nor a coherent working contract can be
+established, keep the behavior decision open and do not make the affected product documentation authoritative.
+
+The only source exception is an explicitly scoped change to the in-app help integration itself. Such a change must be
+named in the active package before source files are edited; a general documentation package does not imply permission
+to modify application source, runtime tests, environment examples, configuration defaults, package files, builds, or
+workflows.
+
+## Required document metadata
+
+Every maintained Markdown document except `LICENSE.md` starts immediately after its title with an invisible
+`documentation-metadata` comment. The structural checker requires these fields:
+
+```markdown
+<!--
+documentation-metadata
+audience: intended readers
+owner: role responsible for updates
+status: current | migration-pending | historical
+last-verified: YYYY-MM-DD
+verification-baseline: registered baseline identifier
+verification-scope: structural | behavioral | structural-and-process
+source-anchors: path; path; repository-tree
+next-review: work-package or behavior-decision identifier, or none
+-->
+```
+
+The fields mean:
+
+- **audience:** who should be able to act on the document.
+- **owner:** a role, not a person, that is responsible for keeping it current.
+- **status:** whether the content is authoritative, awaiting its assigned migration package, or intentionally historical.
+- **last-verified:** the date on which the stated verification scope was completed.
+- **verification-baseline:** an identifier registered in `documentation-check.json`; each baseline is tied to a source fingerprint.
+- **verification-scope:** what was actually checked. `structural` never implies that behavioral instructions are correct.
+- **source-anchors:** existing repository paths used for verification. Separate multiple anchors with semicolons.
+- **next-review:** the work package or behavior decision that owns the next review, or `none`.
+
+Free-standing “Last updated” dates and document version numbers are not verification evidence and must not be used.
+
+## Source fingerprints and baselines
+
+`npm run docs:fingerprint` creates a deterministic SHA-256 fingerprint over implementation, test, build, and workflow
+files. Documentation and generated build output are excluded so that documentation-only edits do not change the
+source snapshot being reviewed.
+
+A baseline entry in `documentation-check.json` records:
+
+- its identifier and date;
+- the source fingerprint;
+- audit/archive provenance when available; and
+- the verification scope.
+
+A document references the baseline identifier rather than copying a hash. This keeps headers concise while retaining a
+machine-checkable link to the reviewed source snapshot. A fingerprint mismatch means the implementation has changed
+since the selected current baseline, so the migration gate fails until a new baseline is registered. This is not
+automatically proof that every document is stale: unaffected documents may retain their earlier verification baseline,
+while affected documents must inspect their source anchors and reference the new baseline when their review completes.
+
+## Structural gates
+
+Run the migration gate for every documentation package:
+
+```bash
+npm run docs:check
+```
+
+It fails on:
+
+- a current implementation fingerprint that is not registered by the selected verification baseline;
+- broken relative Markdown links;
+- references to undefined `npm run` scripts;
+- missing or invalid document metadata;
+- missing metadata source anchors;
+- path-like repository references that do not exist, unless an exact generated or illustrative path is allowlisted;
+- an ambiguous or mismatched in-app user-guide directory;
+- release packaging that omits the in-app guides;
+- untracked forbidden stale terms; and
+- changes in the occurrence count of explicitly deferred migration debt.
+
+Known stale terms assigned to later work packages are recorded with exact file and occurrence counts in
+`documentation-check.json`. They are reported but do not fail migration mode. This is a temporary divide-and-conquer
+mechanism: a package must remove its entries when it fixes the underlying content.
+
+Run the final-state gate with:
+
+```bash
+npm run docs:check:strict
+```
+
+Strict mode fails on every forbidden stale term, including tracked debt. It becomes the default release expectation only
+after all packages that own those terms are complete.
+
+## Per-package workflow
+
+1. Select one ready package or the recorded next behavior decision from the [migration status](DOCUMENTATION_MIGRATION_STATUS.md).
+2. Reproduce only its findings against the current source anchors.
+3. Establish the feature-specific working contract from implementation evidence and any explicit maintainer decision, or keep the decision open.
+4. Classify each difference as intentional behavior, a transient defect, or unresolved; do not infer uniformity from peer features alone.
+5. Record transient defects in the central backlog without copying them into product documentation.
+6. Change the smallest coherent documentation set; edit source only for an explicitly authorized in-app help integration change.
+7. Run the global structural gate and the package-specific semantic checks.
+8. Update document metadata, the machine-readable backlog, and the migration-status run record.
+9. Mark the package done only when every acceptance criterion has evidence.
+
+Newly discovered problems are recorded in the backlog with a package assignment. They do not expand the active package
+unless they block truthful completion of that package.
+
+## In-app help authoring gate
+
+The application renders only the reviewed Markdown files under `docs/user-guide/`. D14 enforces the trusted-content model recorded in [DEC-004](decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md):
+
+- The documentation metadata comment is the only raw HTML permitted in an in-app guide, and the renderer removes it before producing HTML.
+- Active raw HTML, protocol-relative URLs, control characters, and URI schemes other than HTTP, HTTPS, mailto, and tel are rejected.
+- Markdown links to another guide must target a maintained Markdown file directly inside `docs/user-guide/`.
+- Images must use non-empty alt text and a reviewed raster file under `docs/user-guide/assets/`; remote images, data URIs, SVG, and nested asset sources are not accepted.
+- Unreferenced or unsupported help assets fail the authoring gate.
+- `npm run docs:check:help` exercises these rules without requiring a database or application server. The normal and strict documentation gates invoke it automatically.
+- The release workflow copies all documentation and compares `docs/user-guide/` with the packaged copy byte-for-byte.
+
+These checks reject content outside the repository’s authoring contract; they are not a general-purpose sanitizer for arbitrary Markdown. Adding an editor, upload, database, tenant, plugin, or remote help source requires reopening DEC-004 and defining sanitization, URI allowlisting, provenance, and review before that source is enabled.
+
+Maintained interface maps follow the ownership and accessibility rules in [In-App Help Visuals](HELP_VISUALS.md).

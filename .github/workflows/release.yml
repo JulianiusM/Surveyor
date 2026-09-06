@@ -137,6 +137,10 @@ jobs:
           cp -R fonts release/fonts
           cp package-lock.json release/package-lock.json
 
+          # The in-app help source and its visual assets must be shipped byte-for-byte.
+          test -d release/docs/user-guide
+          diff -qr docs/user-guide release/docs/user-guide
+
           # Create a production-safe package.json for the release artifact:
           # - remove devDependencies
           # - remove install-time scripts that commonly pull dev tooling / break installs

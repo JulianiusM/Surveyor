@@ -1,33 +1,32 @@
 # Modular Copilot Instructions
+<!--
+documentation-metadata
+audience: GitHub Copilot; maintainers
+owner: project maintainers
+status: current
+last-verified: 2026-09-06
+verification-baseline: docs-baseline-2026-09-05-d00
+verification-scope: D13 topic-index role, canonical delegation, and duplication-prevention contract
+source-anchors: AGENTS.md; .github/copilot-instructions.md; docs/README.md; docs/DOCUMENTATION_POLICY.md; repository-tree
+next-review: D14
+-->
 
-This directory contains modular GitHub Copilot instruction files. The main instruction file ([copilot-instructions.md](../copilot-instructions.md)) references these modules to keep the documentation organized and maintainable.
+These files are focused navigation aids for GitHub Copilot. The governing AI contract is
+[`AGENTS.md`](../../AGENTS.md), with the Copilot entry point in
+[`copilot-instructions.md`](../copilot-instructions.md). Neither this directory nor the entry point is an independent
+source of implementation truth.
 
-## Files
+| Topic file | Use it to find |
+|---|---|
+| [Project overview](project-overview.md) | Canonical product and architecture references. |
+| [Code style](code-style.md) | Stable editing rules and the current development guide. |
+| [Database guidelines](database-guidelines.md) | The single schema/migration safety rule and database references. |
+| [Testing quick reference](testing-quick-reference.md) | The single test-selection rule and layer boundaries. |
+| [Build and run](build-and-run.md) | Authoritative setup, command, CI, release, and operations references. |
+| [Common tasks](common-tasks.md) | A minimal feature, bug-fix, and documentation workflow. |
 
-- **[project-overview.md](project-overview.md)** - Project description, technology stack, and key dependencies
-- **[code-style.md](code-style.md)** - TypeScript conventions and file organization patterns
-- **[database-guidelines.md](database-guidelines.md)** - Entity definitions, migrations, and database testing
-- **[testing-quick-reference.md](testing-quick-reference.md)** - Summary of testing patterns and organization
-- **[build-and-run.md](build-and-run.md)** - Development, build, and CI/CD information
-- **[common-tasks.md](common-tasks.md)** - Common workflows, security considerations, and helpful notes
+## Maintenance rule
 
-## Purpose
-
-Breaking down the instructions into modular files provides several benefits:
-
-1. **Easier Maintenance**: Update specific sections without affecting others
-2. **Better Organization**: Related guidelines grouped together
-3. **Reduced Duplication**: Reference comprehensive docs (TESTING.md, AGENTS.md) instead of duplicating
-4. **Focused Guidance**: Each file covers a specific aspect of development
-5. **Scalability**: Easy to add new instruction modules as the project grows
-
-## Usage
-
-These files are referenced by the main [copilot-instructions.md](../copilot-instructions.md) file. Copilot will read the main file and can navigate to these modules for detailed information.
-
-## Related Documentation
-
-For more detailed information, see:
-- [TESTING.md](../../TESTING.md) - Comprehensive testing guide
-- [AGENTS.md](../../AGENTS.md) - General AI agent guidance
-- [README.md](../../README.md) - Project overview and setup
+Keep these files short. Do not duplicate dependency versions, command matrices, test counts, branch lists, database
+names, route inventories, or deployment examples here. Update the executable configuration or canonical maintained
+document first, then change an AI file only when its durable routing or safety guidance is affected.

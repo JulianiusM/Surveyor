@@ -1,0 +1,223 @@
+{
+  "schemaVersion": 1,
+  "canonicalUserGuideDirectory": "docs/user-guide",
+  "helpController": "src/controller/helpController.ts",
+  "releaseWorkflow": ".github/workflows/release.yml",
+  "excludedDirectories": [
+    ".git",
+    "node_modules",
+    "dist",
+    "coverage",
+    "playwright-report",
+    "test-results",
+    "artifacts",
+    "release"
+  ],
+  "metadataExemptions": [
+    "LICENSE.md"
+  ],
+  "requiredMetadataFields": [
+    "audience",
+    "owner",
+    "status",
+    "last-verified",
+    "verification-baseline",
+    "verification-scope",
+    "source-anchors",
+    "next-review"
+  ],
+  "allowedDocumentStatuses": [
+    "current",
+    "migration-pending",
+    "historical"
+  ],
+  "currentBaseline": "docs-baseline-2026-09-06-d14",
+  "baselines": [
+    {
+      "id": "docs-baseline-2026-09-05-d00",
+      "date": "2026-09-05",
+      "sourceFingerprint": "sha256:7198da359ba0e4fd2203462dcdd40c43926e68556afeb558bae0b5a33696213c",
+      "archiveSha256": "e5e07dd694d2af5520767d638934368c8566ed02c02f78ac2863b33db9f174b0",
+      "auditExtractedSourceFingerprint": "334a506602e67e869b4021567408890bb44a6ad91ede85d2e10db01b72b95cf6",
+      "scope": "D00 structural documentation foundation"
+    },
+    {
+      "id": "docs-baseline-2026-09-06-d14",
+      "date": "2026-09-05",
+      "sourceFingerprint": "sha256:e4b39f0aa6e98e3645db4e02ee703b6be5c68aaa251dbf51107677b4dae28e95",
+      "archiveSha256": "e5e07dd694d2af5520767d638934368c8566ed02c02f78ac2863b33db9f174b0",
+      "auditExtractedSourceFingerprint": "sha256:e4b39f0aa6e98e3645db4e02ee703b6be5c68aaa251dbf51107677b4dae28e95",
+      "scope": "D00 structural documentation foundation"
+    }
+  ],
+  "fingerprint": {
+    "excludedPaths": [
+      "docs/",
+      ".github/copilot/",
+      ".github/copilot-instructions.md",
+      "README.md",
+      "AGENTS.md",
+      "LICENSE.md",
+      "playwright.config.js",
+      "scripts/e2e.db.init.js",
+      "src/modules/database/__index__.ts"
+    ],
+    "excludedExtensions": [
+      ".md",
+      ".gen.js",
+      ".gen.js.map",
+      ".css",
+      ".css.map"
+    ]
+  },
+  "forbiddenTerms": [
+    {
+      "id": "ranked-choice",
+      "pattern": "\\branked[- ]choice\\b",
+      "flags": "i"
+    },
+    {
+      "id": "tests-backend",
+      "pattern": "\\btests/backend(?:/|\\b)",
+      "flags": "i"
+    },
+    {
+      "id": "tests-api",
+      "pattern": "\\btests/api(?:/|\\b)",
+      "flags": "i"
+    },
+    {
+      "id": "require-login",
+      "pattern": "\\brequireLogin\\b",
+      "flags": ""
+    },
+    {
+      "id": "require-perm",
+      "pattern": "\\brequirePerm\\b",
+      "flags": ""
+    },
+    {
+      "id": "msw",
+      "pattern": "\\bMSW\\b",
+      "flags": ""
+    },
+    {
+      "id": "testing-library",
+      "pattern": "\\bTesting Library\\b",
+      "flags": "i"
+    },
+    {
+      "id": "guest-unrecoverable",
+      "pattern": "(?:guest links?|guest access)[^\\n]{0,140}(?:cannot|can['\u2019]?t|not)[^\\n]{0,40}(?:recover|recovered)",
+      "flags": "i"
+    },
+    {
+      "id": "dashboard-create",
+      "pattern": "(?:dashboard[^\\n]{0,140}(?:\\+\\s*create|create\\s+(?:survey|event|packing|activity|drivers?|list|plan))|go\\s+to\\s+dashboard[^\\n]*\\n[^\\n]{0,100}\\+\\s*create|each\\s+section[^\\n]{0,120}\\+\\s*create|\\bA\\s+[\"\\']?\\+\\s*Create\\b)",
+      "flags": "i"
+    },
+    {
+      "id": "registration-auto-login",
+      "pattern": "You(?:'|\u2019)?ll be logged in automatically",
+      "flags": "i"
+    },
+    {
+      "id": "guest-no-overview",
+      "pattern": "Guests?\\s*(?:\\*\\*)?cannot(?:\\*\\*)?[^\\n]{0,100}(?:dashboard|overview)",
+      "flags": "i"
+    },
+    {
+      "id": "permission-override",
+      "pattern": "(?:Individual permissions override audience permissions|take precedence over (?:your )?audience permissions)",
+      "flags": "i"
+    },
+    {
+      "id": "permission-scope-includes-surveys",
+      "pattern": "controls access to entities\\s*\\(surveys,\\s*events",
+      "flags": "i"
+    },
+    {
+      "id": "activity-skills-field",
+      "pattern": "\\bSkills or qualifications\\b",
+      "flags": "i"
+    },
+    {
+      "id": "activity-requirements-tab",
+      "pattern": "\\bRequirements Tab\\b",
+      "flags": "i"
+    },
+    {
+      "id": "driver-name-inline-edit",
+      "pattern": "\\bDouble-click Driver name\\b",
+      "flags": "i"
+    },
+    {
+      "id": "driver-participants-sum",
+      "pattern": "Total people involved\\s*\\(drivers\\s*\\+\\s*passengers\\)",
+      "flags": "i"
+    },
+    {
+      "id": "driver-contact-in-description",
+      "pattern": "\\bInclude contact info in description\\b",
+      "flags": "i"
+    },
+    {
+      "id": "ai-playwright-all-test-layers",
+      "pattern": "Playwright(?: Test)?[^\\n]{0,80}(?:unit|integration)[^\\n]{0,80}end-to-end",
+      "flags": "i"
+    },
+    {
+      "id": "ai-datasource-mocks",
+      "pattern": "\\bprovided datasource mocks\\b",
+      "flags": "i"
+    },
+    {
+      "id": "ai-test-all-auto-database",
+      "pattern": "\\btest:all\\b[^\\n]{0,120}(?:automatically|sets up)[^\\n]{0,120}(?:database|everything)",
+      "flags": "i"
+    },
+    {
+      "id": "ai-bare-typeorm-apply",
+      "pattern": "\\bRun\\s+`?npm run typeorm`?\\s+to apply migrations\\b",
+      "flags": "i"
+    },
+    {
+      "id": "ai-finished-package-pending",
+      "pattern": "(?:migration-pending until D13|behavioral review pending D12|content review pending D12)",
+      "flags": "i"
+    }
+  ],
+  "deferredStaleTerms": [],
+  "documentedPathPrefixes": [
+    "src/",
+    "tests/",
+    "docs/",
+    ".github/",
+    "scripts/"
+  ],
+  "documentedRootPaths": [
+    "package.json",
+    "package-lock.json",
+    "tsconfig.json",
+    "tsconfig.server.json",
+    "tsconfig.test.json",
+    "vitest.config.mts",
+    "playwright.config.ts",
+    "migrationDataSource.ts",
+    ".env.e2e"
+  ],
+  "documentedPathAllowlist": [
+    {
+      "path": "tests/.env.test",
+      "expectedOccurrences": 3,
+      "reason": "Local test configuration generated from the committed example and intentionally ignored",
+      "package": "D13"
+    },
+    {
+      "path": ".env.e2e",
+      "expectedOccurrences": 3,
+      "reason": "Local E2E configuration generated from the committed example and intentionally ignored",
+      "package": "D13"
+    }
+  ]
+}

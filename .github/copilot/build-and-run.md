@@ -1,43 +1,31 @@
 # Building and Running
+<!--
+documentation-metadata
+audience: GitHub Copilot; developers
+owner: project maintainers
+status: current
+last-verified: 2026-09-06
+verification-baseline: docs-baseline-2026-09-05-d00
+verification-scope: D13 command-authority and task-routing guidance without duplicated script, version, branch, or deployment inventories
+source-anchors: README.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; package.json; .github/workflows/ci.yml; .github/workflows/release.yml
+next-review: none
+-->
 
-## Development
+Use `package.json` as the current command inventory. Do not infer that a script builds assets, creates databases,
+loads credentials, or prepares another test layer unless its implementation or canonical documentation says so.
 
-```bash
-npm run server          # Run server with client watch mode
-npm run server:dev      # Run server only
-npm run server:client   # Build client assets in watch mode
-```
+| Goal | Authoritative procedure |
+|---|---|
+| Clean-clone setup and local start | [Project README](../../README.md) |
+| Development builds, generated files, and troubleshooting | [Development Guide](../../docs/DEVELOPMENT.md) |
+| Test prerequisites and commands | [Testing Guide](../../docs/TESTING_GUIDE.md) |
+| Database initialization and migrations | [Database and Migrations](../../docs/DATABASE.md) |
+| Production installation and service operation | [Production Operations](../../docs/OPERATIONS.md) |
+| Release activation, upgrade, and rollback | [Upgrading and Rolling Back](../../docs/UPGRADING.md) |
 
-## Production Build
+Important boundaries:
 
-```bash
-npm run build           # Build everything
-npm run build:server    # Build server only
-npm run build:client    # Build client only
-```
-
-## Testing
-
-```bash
-npm test                # Run fast Vitest tests
-npm run test:quick      # Run backend + frontend Vitest examples
-npm run e2e             # Run focused Playwright E2E tests
-```
-
-## CI Pipeline
-
-The GitHub Actions CI pipeline:
-
-- Runs on push to `master` or `dev` branches
-- Runs on pull requests to `master` or `dev`
-- Sets up MariaDB 10.11 service container
-- Sets up Node.js 24
-- Creates test and E2E databases with proper users
-- Runs fast Vitest tests and focused Playwright E2E tests
-- Uploads test reports as artifacts
-
-### Environment Files
-
-- `tests/.env.test` - Disposable MariaDB configuration for TypeORM integration smoke tests
-- `.env.e2e` - Configuration for E2E tests
-- Both files are created automatically in CI
+- `npm test` includes the MariaDB-backed integration layer; it is not the database-free shortcut.
+- Playwright runs against the built application, so follow the build and E2E preparation sequence in the testing guide.
+- CI and release branch, version, service, and artifact details belong in their workflow files and canonical documents,
+  not in this summary.

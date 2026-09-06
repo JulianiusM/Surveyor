@@ -1,231 +1,191 @@
 # Surveyor
+<!--
+documentation-metadata
+audience: users; developers; operators
+owner: project maintainers
+status: current
+last-verified: 2026-09-06
+verification-baseline: docs-baseline-2026-09-06-d14
+verification-scope: D12 product summary, clean-clone development start, current scripts, test layers, CI branches, release entry points, and repository map; operator execution remains tracked in D04V; D14 help validation and focused command surface
+source-anchors: package.json; package-lock.json; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/oidc.ts; migrationDataSource.ts; scripts/runMigration.ts; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts
+next-review: repository-command-or-help-tooling-change
+-->
 
-A comprehensive event and collaboration management application built with TypeScript, Express, and TypeORM.
+Surveyor is a server-rendered collaboration application for recurring-date surveys, events, activity schedules, packing lists, rides, and event cost sharing. It is written in TypeScript and runs as an Express application backed by MariaDB.
 
 ## Features
 
-- 📊 **Surveys** - Create surveys with ranked-choice voting
-- 🎉 **Events** - Manage events with registration and participant tracking
-- 📦 **Packing Lists** - Collaborate on shared packing coordination
-- 📅 **Activity Plans** - Schedule activities with role-based assignments
-- 🚗 **Drivers Lists** - Coordinate transportation and carpooling
+- **Surveys** — organize recurring monthly dates with Yes/Maybe/No votes on weekday and week-of-month patterns.
+- **Events** — manage registrations, attendance dates, dietary information, participant administration, and invoice pools.
+- **Activity plans** — schedule time slots and roles, collect availability, and support assisted assignment planning.
+- **Packing lists** — coordinate shared responsibilities while keeping each browser's personal **Packed?** checklist local.
+- **Drivers lists** — offer rides, manage passenger capacity, and coordinate event-linked transport.
+- **Profiles and guests** — let one account act through several participant profiles and allow invitation-based guest participation.
 
-## Documentation
+## Choose the right documentation
 
-Comprehensive documentation is available in the [`docs/`](docs/) directory:
+| Goal | Start here |
+|---|---|
+| Use Surveyor | [In-app user guides](docs/user-guide/README.md) |
+| Develop or review the application | [Development Guide](docs/DEVELOPMENT.md) |
+| Understand the design | [Architecture](docs/ARCHITECTURE.md) |
+| Run tests | [Testing Guide](docs/TESTING_GUIDE.md) |
+| Configure a deployment | [Configuration Reference](docs/CONFIGURATION.md) |
+| Prepare or migrate the database | [Database and Migrations](docs/DATABASE.md) |
+| Operate a production instance | [Production Operations](docs/OPERATIONS.md) |
+| Upgrade or roll back | [Upgrading and Rolling Back](docs/UPGRADING.md) |
+| Continue the documentation migration | [Documentation Migration Status](docs/DOCUMENTATION_MIGRATION_STATUS.md) |
 
-- **[Getting Started Guide](docs/user-guide/GETTING_STARTED.md)** - New user onboarding
-- **[Architecture](docs/ARCHITECTURE.md)** - System design and patterns
-- **[Development Guide](docs/DEVELOPMENT.md)** - Development workflow
-- **[Testing Guide](docs/TESTING_GUIDE.md)** - Testing patterns and best practices
-- **[User Guides](docs/user-guide/)** - Feature-specific documentation
-- **[AI Agent Guide](AGENTS.md)** - For AI coding assistants
+The complete inventory and review state are in [`docs/README.md`](docs/README.md).
 
-## Quick Start
+## Development quick start
+
+This path creates a disposable local development instance from a clean clone. Production installations must use the [operations runbook](docs/OPERATIONS.md) instead.
 
 ### Prerequisites
 
-- Node.js 24 or higher
-- MariaDB 10.4 or higher
-- npm
+Use the versions exercised by the repository workflows:
 
-### Installation
+- Node.js 24.15.0
+- npm from that Node.js installation
+- MariaDB 10.11
+- Git
 
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Set up your database configuration (see Database Setup below)
-
-4. Build the application:
-   ```bash
-   npm run build
-   ```
-
-5. Start the application:
-   ```bash
-   npm run run
-   ```
-
-## Database Setup
-
-The application requires MariaDB for both development and testing.
-
-### Testing Setup
-
-#### Unit and Integration Tests
-
-Create a `tests/.env.test` file based on `tests/.env.test.example`:
+### 1. Install the locked dependencies
 
 ```bash
-cp tests/.env.test.example tests/.env.test
+git clone https://github.com/JulianiusM/Surveyor.git
+cd Surveyor
+npm ci
 ```
 
-The test database should be configured with:
+### 2. Create an empty development database
 
-- Database name: `surveyor_test`
-- User: `surveyor`
-- Password: `surveyor`
+Create a database and a dedicated account with schema privileges. Adapt the host and password to your local MariaDB installation.
 
-#### E2E Tests
+```sql
+CREATE DATABASE surveyor_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'surveyor_dev'@'127.0.0.1' IDENTIFIED BY 'replace-this-password';
+GRANT ALL PRIVILEGES ON surveyor_dev.* TO 'surveyor_dev'@'127.0.0.1';
+FLUSH PRIVILEGES;
+```
 
-Create a `.env.e2e` file based on `.env.e2e.example`:
+### 3. Create the local configuration
+
+Create an ignored `.env` file in the repository root:
+
+```dotenv
+NODE_ENV=development
+APP_PORT=3000
+ROOT_URL=http://localhost:3000
+
+DB_TYPE=mariadb
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=surveyor_dev
+DB_USER=surveyor_dev
+DB_PASSWORD=replace-this-password
+
+SESSION_SECRET=replace-with-a-long-random-value
+LOCAL_LOGIN_ENABLED=1
+OIDC_ENABLED=0
+
+SMTP_HOST=127.0.0.1
+SMTP_PORT=1025
+SMTP_SECURE=0
+SMTP_POOL=0
+SMTP_EMAIL=surveyor@example.test
+SMTP_USER=surveyor
+SMTP_PASSWORD=surveyor
+```
+
+The SMTP values must point to a real development mail catcher or test SMTP service if you use local registration, password reset, or guest recovery. For organization sign-in instead, configure OIDC as described in the [Configuration Reference](docs/CONFIGURATION.md); the registered callback path is `/users/oidc/callback`.
+
+Surveyor reads built-in defaults, then its CSV settings file, then environment overrides. See the configuration reference before adding more settings or changing precedence.
+
+### 4. Create the schema
+
+The generated TypeORM index is not committed, so generate it before invoking the TypeORM wrapper. The following commands are for a new, empty, disposable development database:
 
 ```bash
-cp .env.e2e.example .env.e2e
+npm run generate
+npm run typeorm:sync
+npm run typeorm:migrate
 ```
 
-The E2E database should be configured with:
+Do not run schema synchronization or destructive TypeORM commands against a production database. Existing databases follow [Database and Migrations](docs/DATABASE.md).
 
-- Database name: `surveyor_e2e` (must contain 'e2e' for safety)
-- User: `surveyor`
-- Password: `surveyor`
-
-## Running Tests
-
-Surveyor uses a **two-runner test strategy** designed to keep useful regression coverage fast for daily work while
-keeping full browser checks focused on critical user journeys:
-
-- **Vitest** runs isolated utility/frontend checks and TypeORM service smoke tests against the MariaDB test database.
-- **Playwright** runs E2E browser/API checks against the built application.
-
-All test files use the `*.spec.ts` suffix. Prefer testing expected production input/output transformations and
-user-visible behavior instead of implementation details.
-
-### Quick Start
+### 5. Start the development server
 
 ```bash
-npm test
+npm run server
 ```
 
-This runs the fast Vitest suite. Use it during normal development.
+This performs a full build, starts the TypeScript server under Nodemon, and starts the client-side esbuild watcher. Confirm startup with:
 
 ```bash
-npm run test:all
+curl http://localhost:3000/healthz
 ```
 
-This runs Vitest, builds the app, initializes the E2E database, starts the built server, and runs the Playwright E2E
-suite. Use it before releases or in CI.
+A healthy instance returns `ok`.
 
-### Test Organization
+### 6. Complete the first sign-in
 
-Tests are organized around regression value and runtime cost:
+With local login enabled, register an account, open the activation message delivered by the configured SMTP service, activate the account, and then log in. With OIDC enabled, use the configured organization sign-in button instead.
 
-- **Unit tests** (`tests/unit/`) - Strictly isolated production utilities and input/output transformations; no service
-  or controller mocking.
-- **Integration tests** (`tests/integration/`) - Core TypeORM services running against the disposable MariaDB test
-  schema.
-- **Frontend tests** (`tests/frontend/`) - Client-side helpers, DOM/component behavior, and future SPA behavior.
-- **E2E tests** (`tests/e2e/`) - A small set of critical workflows run with Playwright.
-- **Factories** (`tests/factories/`) - Reusable data builders for realistic production inputs, including shared entity
-  factories before specialized builders.
-- **Keywords** (`tests/keywords/`) - Reusable smoke-test workflow/assertion keywords used only when they clarify intent
-  and reduce repetition.
-- **Fixtures** (`tests/fixtures/`) - Shared fixture assets and seed data.
-- **Support** (`tests/support/`) - Runner setup, environment loading, and shared utilities.
+## Common development commands
 
-Keep E2E broad and shallow, prefer API/database setup over UI setup, and avoid brittle selectors or snapshots unless the
-markup itself is the contract.
+| Command | Purpose |
+|---|---|
+| `npm run server` | Build once, then run the server and browser-code watchers together. |
+| `npm run server:dev` | Run only the server watcher; existing generated and built assets must already be present. |
+| `npm run server:client` | Run only the browser-code watcher. |
+| `npm run build` | Generate the TypeORM index, compile server and browser TypeScript, compile Sass, and copy views/assets into `dist/`. |
+| `npm run run` | Start the compiled application from `dist/server.js`. |
+| `npm run generate` | Regenerate `src/modules/database/__index__.ts`. |
+| `npm run typeorm:migrate` | Run pending migrations through Surveyor's settings-aware wrapper. |
+| `npm run docs:check` | Validate documentation metadata, links, commands, paths, and registered concepts. |
+| `npm run test:quick` | Run database-free unit and frontend Vitest suites. |
+| `npm test` | Run all Vitest suites, including MariaDB integration tests. |
+| `npm run test:all` | Run Vitest, build the application, and run the Playwright suite. |
 
-### Individual Test Commands
+The [Development Guide](docs/DEVELOPMENT.md) contains database safety, generated-file behavior, change recipes, and troubleshooting. The [Testing Guide](docs/TESTING_GUIDE.md) contains the exact environment and runner contracts.
 
-```bash
-npm test                    # Fast Vitest suite
-npm run test:ci             # Fast Vitest suite with JUnit and LCOV coverage reports for CI/SonarQube
-npm run test:quick          # Database-free utility + frontend checks
-npm run test:unit           # Isolated production utilities only
-npm run test:integration    # Database-backed core service canaries
-npm run test:frontend       # Frontend Vitest tests
-npm run e2e                 # Playwright E2E with managed web server
+## Repository map
+
+```text
+src/server.ts                         startup sequencing and HTTP server
+src/app.ts                            Express middleware, sessions, routes, health endpoint
+src/routes/                           page routes and top-level API router
+src/controller/                       request/response orchestration
+src/middleware/                       authentication, authorization, validation, and shared flows
+src/modules/database/entities/        TypeORM entities
+src/modules/database/services/        database and transaction functions
+src/modules/database/subscribers/     TypeORM subscribers
+src/migrations/                       TypeORM migrations
+src/public/js/                        browser TypeScript
+src/public/style/                     Sass sources
+src/views/                            Pug templates
+tests/unit/                            isolated production logic
+tests/frontend/                        browser-helper behavior under Vitest
+tests/integration/                     MariaDB-backed production-service workflows
+tests/e2e/                             Playwright critical flows
+docs/user-guide/                       canonical in-app help
+docs/                                  maintainer and operator documentation
 ```
 
-**Manual E2E setup (if needed):**
+## Test and release automation
 
-```bash
-npm run build
-npm run e2e:prepare
-npx playwright install chromium
-npm run e2e
-```
+Vitest runs the unit, frontend, and integration suites configured in `vitest.config.mts`. Playwright runs the focused browser/API flows configured in `playwright.config.ts` and manages the built server through `npm run e2e:init`.
 
-## CI Pipeline
+The CI workflow currently runs for manual dispatch, reusable workflow calls, and pushes or pull requests on `master`, `dev`, and `ts-migration`. It uses Node.js 24.15.0 and MariaDB 10.11, checks documentation before installing dependencies, runs Vitest with coverage, builds the application, and then runs Chromium Playwright checks.
 
-The project includes a GitHub Actions CI pipeline that:
-
-1. Sets up a MariaDB 10.11 service container
-2. Creates and configures both test and E2E databases
-3. Installs dependencies and builds the application
-4. Runs isolated utility tests and database-backed integration smoke tests
-5. Runs Playwright E2E tests
-6. Uploads test reports as artifacts
-
-The CI pipeline runs on:
-
-- Push to `main` or `develop` branches
-- Pull requests targeting `main` or `develop` branches
-
-### Database Setup in CI
-
-The CI pipeline automatically:
-
-- Creates the disposable `surveyor_test` database for TypeORM integration smoke tests
-- Creates `surveyor_e2e` database for E2E tests
-- Sets up required users and permissions
-- Lets the integration suite rebuild only the guarded `surveyor_test` schema through the production TypeORM metadata
-- Creates `.env.test` and `.env.e2e` files with appropriate credentials
-
-## Development Scripts
-
-- `npm run server:dev` - Run the server in development mode
-- `npm run server:client` - Build client-side assets in watch mode
-- `npm run server` - Run both server and client in development mode
-- `npm run build` - Build the entire application (includes SASS compilation)
-- `npm run build:server` - Build server-side code only
-- `npm run build:sass` - Compile SASS files to CSS
-- `npm run build:client` - Build client-side assets only
-- `npm run typeorm` - Run TypeORM migrations
-- `npm run generate` - Generate database indexes
-
-## Frontend Architecture
-
-The frontend uses modular TypeScript organized under `src/public/js/` with reusable building blocks:
-
-- **core/** – foundational utilities (HTTP client, navigation helpers, form utilities, formatting, permission loader).
-- **shared/** – UI behaviors shared across pages (alerts, drag-and-drop, assignment helpers, inline editing, list
-  actions, UI helpers).
-- **modules/** – feature-specific widgets (e.g., timezone-select, entity-select) composed from core/shared pieces.
-- **feature files** – page-level scripts such as `activity.ts`, `packing.ts`, and `events.ts` that orchestrate DOM
-  bindings using the shared helpers.
-
-When adding or updating frontend code:
-
-- Reuse the core and shared helpers instead of re-implementing HTTP, drag-and-drop, inline editing, or permission
-  checks.
-- Load permissions with `loadPerms()` and gate UI actions using `requireEntityPerm`/`requireItemPerm` before calling
-  protected endpoints.
-- Keep new components documented with JSDoc comments and prefer type-safe DOM queries (`querySelector`/`closest` with
-  element type casting) over `any`.
-- Expose initialization via `window.Surveyor.init` for consistent page bootstrapping.
-
-## Project Structure
-
-- `src/` - Application source code
-    - `modules/` - Application modules
-    - `migrations/` - Database migrations
-    - `public/` - Static assets
-    - `views/` - View templates
-- `tests/` - Test files
-    - `backend/` - Fast Vitest backend transformations, permissions, and services
-    - `api/` - Fast Vitest API contract/input-shaping tests
-    - `frontend/` - Fast Vitest frontend helper/component tests
-    - `e2e/` - Focused Playwright critical-flow tests
-    - `factories/` - Reusable production-shaped data builders
-    - `fixtures/` - Shared fixture assets and seed data
-    - `support/` - Runner setup and shared utilities
-- `scripts/` - Utility scripts
+The manual release workflow invokes that CI workflow first. After a successful run, it updates the requested version, tags the selected ref, builds the application, and publishes a production archive containing `dist/`, `docs/`, `fonts/`, `package-lock.json`, and a production-only package manifest. Database migrations are deliberately not executed by the release archive.
 
 ## License
 
-Apache-2.0
+Surveyor is licensed under the [Apache License 2.0](LICENSE.md).
+
+```bash
+npm run docs:check:help
+```

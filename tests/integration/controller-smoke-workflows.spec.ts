@@ -208,8 +208,10 @@ describe('remaining high-value controller workflows', () => {
         const help = helpController.fetchHelpIndex();
 
         expect(help.currentDoc).toBe('readme');
+        expect(help.docsGroups.map((group) => group.title)).toEqual(['Start here', 'Plan and decide', 'Organize and share', 'Advanced']);
         expect(help.docsList.length).toBeGreaterThan(0);
-        expect(help.content).toContain('<h1');
+        expect(help.content).toContain('<h1 id=');
+        expect(help.toc.length).toBeGreaterThan(0);
     });
 
     it('renders a requested help document and rewrites internal links', () => {
@@ -218,5 +220,6 @@ describe('remaining high-value controller workflows', () => {
         expect(help.currentDoc).toBe('events');
         expect(help.title).toBeTruthy();
         expect(help.content).toContain('/help/');
+        expect(help.toc).toContainEqual(expect.objectContaining({title: 'Choose your task'}));
     });
 });
