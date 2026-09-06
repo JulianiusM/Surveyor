@@ -68,7 +68,7 @@
     "morgan": "^1.11.0",
     "multer": "^2.2.0",
     "mysql2": "^3.23.2",
-    "nodemailer": "^9.0.4",
+    "nodemailer": "^9.1.1",
     "openid-client": "^6.8.4",
     "pdfmake": "^0.3.11",
     "pug": "^3.0.4",
