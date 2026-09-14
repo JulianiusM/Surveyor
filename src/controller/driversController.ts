@@ -124,7 +124,7 @@ async function deleteEntity(list: DriversList, session: Request['session']) {
 // API-specific controllers
 async function updateDescription(id: string, body: any) {
     const {description} = body;
-    if (description.length > 2000)
+    if (description.length > 16000)
         throw new APIError('Description to long', body, 400)
     await driverService.updateDriversListDescription(id, description);
     return 'Description updated';

@@ -4,9 +4,9 @@ documentation-metadata
 audience: activity participants; activity organizers
 owner: activity-plan maintainers
 status: current
-last-verified: 2026-09-06
+last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D07 basic activity-plan creation and participation plus D08 advanced requirement configuration, live coverage, automatic recommendation generation, review, manual staging, application, and limitations verified; D14 rendered help navigation, semantic checks, and trusted-content integration
+verification-scope: expanded plan descriptions and shared-text limits; D07 basic activity-plan creation and participation plus D08 advanced requirement configuration, live coverage, automatic recommendation generation, review, manual staging, application, and limitations verified; D14 rendered help navigation, semantic checks, and trusted-content integration
 source-anchors: src/views/activity/activity-create.pug; src/views/activity/activity-view.pug; src/views/activity/parts/schedule.pug; src/views/activity/parts/participants.pug; src/views/activity/parts/participant-status.pug; src/views/activity/parts/assignments.pug; src/views/activity/parts/recommendations-schedule.pug; src/views/activity/parts/settings.pug; src/views/activity/export/schedule.pug; src/views/modules/module_role_assignment_addon.pug; src/public/js/activity-create.ts; src/public/js/modules/activity/activity-requirements.ts; src/public/js/modules/activity/activity-recommendation-jobs.ts; src/public/js/modules/activity/activity-recommendations-schedule.ts; src/public/js/modules/activity/activity-recommendations-state.ts; src/public/js/modules/activity/activity-recommendations-logic.ts; src/public/js/modules/activity/activity-recommendations-ui.ts; src/routes/activity.ts; src/routes/api/activity.ts; src/controller/activityController.ts; src/middleware/assignFlowFactory.ts; src/modules/activity/requirements.ts; src/modules/activity/availability.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/autoAssignment.ts; src/modules/activity/recommendations.ts; src/modules/activity/recommendationJobs.ts; src/modules/database/services/ActivityService.ts; src/modules/database/services/ActivityRequirementService.ts; src/modules/database/services/ActivityRecommendationService.ts; tests/unit/activity-requirements.spec.ts; tests/frontend/activity-requirement-coverage.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: activity-plan-visible-UI-or-behavior-change
 -->
@@ -115,7 +115,7 @@ Select **Cancel** to keep the current assignments unchanged. Select **Continue a
 
 ### Use shared text fields
 
-**Shared text fields** appear above the tabs. Organizers can use them for notes that apply to the whole plan, such as meeting points, equipment information, or last-minute instructions.
+**Shared text fields** appear above the tabs. Organizers can use them for notes that apply to the whole plan, such as meeting points, equipment information, or last-minute instructions. Each field's **Text** can contain up to 16,000 characters.
 
 When a pencil button is available:
 
@@ -136,7 +136,7 @@ Creation requires a signed-in full account. The active profile becomes the owner
 3. Complete the plan fields:
    - **Title \*** — the plan name.
    - **Start date \*** and **End date \*** — the complete calendar range. When only the start date is entered, Surveyor initially uses it as the end date. The end date cannot be before the start date.
-   - **Description (optional)** — up to 2,000 characters.
+   - **Description (optional)** — up to 16,000 characters.
    - **Header image (optional)** — JPEG, PNG, or GIF, up to 10 MiB.
    - **Assign to event (optional)** — connects registration, attendance, participant, and advanced assignment features to an event.
 4. Review **Group Permissions**. These control who can view, join, edit, administer, or export the plan. See [Permissions and Sharing](PERMISSIONS.md).

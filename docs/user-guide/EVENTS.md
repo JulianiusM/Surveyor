@@ -6,7 +6,7 @@ owner: event feature maintainers
 status: current
 last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: invoice factors, rebates, progress feedback, calculation previews, payment carry-forward, rollback, and email-control entry points; D05 event creation, registration, deadline, dietary, participant-management, related-entity, export, permission, and privacy workflows verified; D06 invoice-pool entry points and permission boundary linked to the dedicated guide; D14 rendered help navigation, semantic checks, and trusted-content integration
+verification-scope: expanded event descriptions and dietary-note limits; invoice factors, rebates, progress feedback, calculation previews, payment carry-forward, rollback, and email-control entry points; D05 event creation, registration, deadline, dietary, participant-management, related-entity, export, permission, and privacy workflows verified; D06 invoice-pool entry points and permission boundary linked to the dedicated guide; D14 rendered help navigation, semantic checks, and trusted-content integration
 source-anchors: src/views/modules/module_invoice_pool.pug; docs/user-guide/INVOICE_POOLS.md; src/routes/event.ts; src/routes/api/event.ts; src/controller/eventController.ts; src/middleware/guestFlowFactory.ts; src/modules/database/entities/event/; src/modules/database/services/EventService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/modules/lib/permissions.ts; src/views/event/event-create.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/views/modules/module_registration_links.pug; src/views/modules/module_event_participants.pug; src/public/js/events.ts; src/public/js/modules/reg-links.ts; src/public/js/modules/event-participant.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: event-visible-UI-or-behavior-change
 -->
@@ -68,9 +68,9 @@ When **Require dietary info during registration** is enabled, select at least on
 
 Meat and Fish may be selected together. Vegetarian cannot be combined with Meat, Fish, or Vegan. Vegan cannot be combined with Meat, Fish, or Vegetarian.
 
-You may also select **Halal**, **Kosher**, or **Allergies**. When you select **Allergies**, enter the allergy details in **Allergies (if selected)**. Allergy details are limited to 255 characters.
+You may also select **Halal**, **Kosher**, or **Allergies**. When you select **Allergies**, enter the allergy details in **Allergies (if selected)**. Allergy details can contain up to 4,000 characters.
 
-When the organizer enabled diet comments, you can select **Comment** under **Additional diet comments (optional)** and enter the explanation in **Comment (if selected)**. The comment is limited to 255 characters.
+When the organizer enabled diet comments, you can select **Comment** under **Additional diet comments (optional)** and enter the explanation in **Comment (if selected)**. The comment can contain up to 4,000 characters.
 
 Treat allergy and dietary-comment fields as sensitive personal information. The organizer controls who receives **Access Participants**, which permits viewing this information together with participant names, email addresses, and attendance dates.
 
@@ -132,7 +132,7 @@ Creating an event requires a signed-in full account. The active profile becomes 
 | **Max Participants (optional)** | A positive whole-number capacity. Leave it empty for no capacity limit. |
 | **Binding deadline (optional)** | Date and time after which normal self-service registration closes. |
 | **Time zone** | Required time zone used to interpret and display the binding deadline. Surveyor also shows participants the corresponding time in their own time zone. |
-| **Description (optional)** | Event details, up to 2,000 characters. |
+| **Description (optional)** | Event details, up to 16,000 characters. |
 | **Header image (optional)** | JPEG, PNG, or GIF image up to 10 MiB. |
 | **Group Permissions** | Initial capabilities for Participant, Guest, Authenticated, and Public audiences. |
 

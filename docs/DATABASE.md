@@ -5,9 +5,9 @@ documentation-metadata
 audience: database administrators; operators; site reliability engineers; maintainers
 owner: application operators
 status: current
-last-verified: 2026-09-05
+last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: D04 accepted from source review and deployment-practice confirmation for runtime datasource, migration wrapper, schema bootstrap, sessions, backup targeting, and migration commands; controlled execution tracked separately in D04V
+verification-scope: free-text column sizes and migration rollback protection; D04 accepted from source review and deployment-practice confirmation for runtime datasource, migration wrapper, schema bootstrap, sessions, backup targeting, and migration commands; controlled execution tracked separately in D04V
 source-anchors: src/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; src/modules/database/entities/session/Session.ts; src/migrations; package.json; .github/workflows/ci.yml
 next-review: D04V
 -->
@@ -191,6 +191,20 @@ The complete maintenance-window and rollback sequence is in [Upgrading Surveyor]
 Do not use migration reversion as the primary production rollback strategy. A release can contain data transformations
 or application behavior that is not safely reversible one migration at a time. The supported rollback is to restore the
 pre-upgrade database and persistent-file backup as one set and restart the matching previous release.
+
+## Free-text storage
+
+Descriptions on activities, roles, packing items, driver entries, and survey combinations use `TEXT`, matching
+the existing entity descriptions and activity text fields. Description editors and activity text fields allow
+16,000 characters. Allergy details and dietary comments use nullable `VARCHAR(4000)` columns and accept
+4,000 characters. Invoice notes and review explanations retain their existing 4,000-character validation.
+Titles, names, locations, identifiers, and file metadata retain their existing column sizes.
+The HTTP JSON and URL-encoded form parsers accept requests up to 1 MB so Unicode encoding and collections
+of longer items can reach field validation.
+
+Existing installations need `1789776000000-IncreaseFreeTextLimits.ts` through the normal upgrade procedure.
+The migration preserves existing text and null values. Reversion checks all affected columns first and refuses
+to narrow them if any value exceeds the previous 255-character limit.
 
 ## Sessions are database data
 

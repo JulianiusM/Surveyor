@@ -30,7 +30,7 @@ export class EventRegistrationDietary extends NumericBase {
     })
     choice!: DIETARY;
 
-    @Column("varchar", {name: "additional_info", nullable: true, length: 255})
+    @Column("varchar", {name: "additional_info", nullable: true, length: 4000})
     additionalInfo?: string | null;
 
     @RelationId((a: EventRegistrationDietary) => a.registration)

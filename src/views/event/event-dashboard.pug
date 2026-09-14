@@ -103,7 +103,7 @@ block content
                             label.form-label(for="descEdit")
                                 i.bi.bi-pencil-square.me-1
                                 | Description
-                            textarea#descEdit.form-control.text-bg-dark(name="description" rows="3") #{ev.description || ''}
+                            textarea#descEdit.form-control.text-bg-dark(name="description" rows="3" maxlength="16000") #{ev.description || ''}
                     if permData.entity.has("EDIT_META")
                         .col-md-4
                             label.form-label(for="deadlineEdit")

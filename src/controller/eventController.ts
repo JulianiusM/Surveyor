@@ -52,7 +52,7 @@ function preprocessCreate(body: any): Partial<Event> {
 
     const schema = Joi.object({
         title: Joi.string().required(),
-        description: Joi.string().max(2000).allow(''),
+        description: Joi.string().max(16000).allow(''),
         startDate: Joi.string().pattern(datePattern).required(),
         endDate: Joi.string().pattern(datePattern).required(),
         location: Joi.string().max(255).allow(''),
@@ -192,8 +192,8 @@ async function registerAttendance(event: Event, body: any, req: Request) {
             Joi.array().items(Joi.string().valid(...ALLOWED_DIETARY).uppercase()),
             Joi.string().valid(...ALLOWED_DIETARY).uppercase() // handles single value form-post
         ).optional(),
-        allergyNotes: Joi.string().max(255).allow(''),
-        dietComment: Joi.string().max(255).allow(''),
+        allergyNotes: Joi.string().max(4000).allow(''),
+        dietComment: Joi.string().max(4000).allow(''),
     });
     const {error, value} = schema.validate(body, {abortEarly: false, allowUnknown: true});
     if (error) {
@@ -320,7 +320,7 @@ async function updateEventSettings(event: Event, body: any, permData?: PermBundl
 
     const schema = Joi.object({
         title: Joi.string().max(255).allow(''),
-        description: Joi.string().max(2000).allow(''),
+        description: Joi.string().max(16000).allow(''),
         startDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow(''),
         endDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow(''),
         location: Joi.string().max(255).allow(''),

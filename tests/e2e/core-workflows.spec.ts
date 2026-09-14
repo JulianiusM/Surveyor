@@ -38,6 +38,18 @@ test.describe('authenticated core workflow smoke suite', () => {
         expect(resources.event.path).toContain('/event/');
     });
 
+    test('preserves a full-length Unicode description submitted as an encoded form', async () => {
+        const description = '食'.repeat(16000);
+        const eventCase = createE2EEvent();
+        const resource = await createResourceViaForm(authedRequest, {
+            ...eventCase,
+            form: {...eventCase.form, title: 'Detailed Unicode event', description},
+        });
+        const response = await authedRequest.get(resource.path);
+        expect(response.status()).toBe(200);
+        expect(await response.text()).toContain(description);
+    });
+
     // Canary: protects a high-value production behavior while avoiding private implementation details.
     test('opens the created event detail page', async () => {
         await expectCreatedResourceLoaded(authedRequest, resources.event, createE2EEvent().expectedDetailTexts);

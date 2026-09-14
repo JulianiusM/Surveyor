@@ -112,7 +112,7 @@ block content
                                     .mt-2
                                         label.form-label(for="allergyNotes") Allergies (if selected)
                                         input#allergyNotes.form-control.text-bg-dark(
-                                            type="text" name="allergyNotes" placeholder="e.g., peanuts, lactose" value=regAllergies)
+                                            type="text" name="allergyNotes" maxlength="4000" placeholder="e.g., peanuts, lactose" value=regAllergies)
                                     if ev.allow_diet_comment || ev.allowDietComment
                                         hr
                                         label.form-label
@@ -128,7 +128,7 @@ block content
                                         .mt-2
                                             label.form-label(for="dietComment") Comment (if selected)
                                             input#dietComment.form-control.text-bg-dark(
-                                                type="text" name="dietComment" placeholder="e.g. no tomatos, soup only" value=regComment)
+                                                type="text" name="dietComment" maxlength="4000" placeholder="e.g. no tomatos, soup only" value=regComment)
                             if data.regToken
                                 input(type="hidden" name="regToken" value=data.regToken)
 
@@ -201,7 +201,7 @@ block content
                                 .mt-2
                                     label.form-label(for="allergyNotes") Allergies (if selected)
                                     input#allergyNotes.form-control.text-bg-dark(
-                                        type="text" name="allergyNotes" placeholder="e.g. peanuts, lactose" value=regAllergies)
+                                        type="text" name="allergyNotes" maxlength="4000" placeholder="e.g. peanuts, lactose" value=regAllergies)
                                 if ev.allow_diet_comment || ev.allowDietComment
                                     hr
                                     label.form-label
@@ -218,7 +218,7 @@ block content
                                     .mt-2
                                         label.form-label(for="dietComment") Comment (if selected)
                                         input#dietComment.form-control.text-bg-dark(
-                                            type="text" name="dietComment" placeholder="e.g. no tomatos, soup only" value=regComment)
+                                            type="text" name="dietComment" maxlength="4000" placeholder="e.g. no tomatos, soup only" value=regComment)
                         .col-12.d-flex.justify-content-end.gap-2
                             button.btn.btn-primary(type="submit")
                                 i.bi.bi-save.me-1

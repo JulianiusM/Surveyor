@@ -97,7 +97,7 @@ function preprocessCreate(body: any): Partial<ActivityPlan> & { slots: Partial<A
         title: Joi.string().required(),
         startDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
         endDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
-        description: Joi.string().max(2000).allow('').required(),
+        description: Joi.string().max(16000).allow('').required(),
         slots: Joi.object().pattern(
             /^\d{4}-\d{2}-\d{2}$/, Joi.array().items(slotSchema)
         ).min(1).required(),
@@ -589,7 +589,7 @@ async function deleteEntity(plan: ActivityPlan, session: Request['session']) {
 
 async function updateDescription(planId: string, body: any) {
     const {description} = body;
-    if (description.length > 2000)
+    if (description.length > 16000)
         throw new APIError('Description to long', body, 400)
     await activityService.updateActivityPlanDescription(planId, description);
     return 'Description updated';
@@ -599,7 +599,7 @@ async function createTextField(planId: string, body: any) {
     const {title = '', text = ''} = body;
     if (!title.trim()) throw new APIError('Title required', body, 400);
     if (title.length > 255) throw new APIError('Title too long', body, 400);
-    if (text.length > 5000) throw new APIError('Text too long', body, 400);
+    if (text.length > 16000) throw new APIError('Text too long', body, 400);
     return await activityService.createActivityPlanTextField(planId, title.trim(), text);
 }
 
@@ -610,7 +610,7 @@ async function updateTextField(planId: string, textFieldId: string, body: any, p
     }
     const {title, text = ''} = body;
     if (title !== undefined && title.length > 255) throw new APIError('Title too long', body, 400);
-    if (text.length > 5000) throw new APIError('Text too long', body, 400);
+    if (text.length > 16000) throw new APIError('Text too long', body, 400);
 
     if (title !== undefined && !permData?.entity.has('MANAGE_REQUIREMENTS')) {
         throw new APIError('Not allowed', body, 403);
