@@ -4,10 +4,10 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: developer-experience maintainers
 status: current
-last-verified: 2026-09-06
+last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: non-blocking documentation policy and optional report/test routing; D12 clean-clone setup, current scripts, settings and schema bootstrap, generated files, observed repository patterns, route registration, test selection, CI branches, and troubleshooting; D14 focused in-app help validation workflow
-source-anchors: package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
+verification-scope: consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, signed adjustments, revision-checked previews, payment carry-forward, rollback snapshots, configurable settlement notifications, and upload feedback; non-blocking documentation policy and optional report/test routing; D12 clean-clone setup, current scripts, settings and schema bootstrap, generated files, observed repository patterns, route registration, test selection, CI branches, and troubleshooting; D14 focused in-app help validation workflow
+source-anchors: src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
 next-review: development-workflow-or-help-tooling-change
 -->
 
@@ -244,6 +244,72 @@ A schema change normally requires:
 6. Update configuration, operator, architecture, or user documentation where the data contract changes.
 
 Never rely on production `synchronize`; it is disabled.
+
+### Invoice pool calculation and saved changes
+
+`eventPoolController.ts` validates organizer input and coordinates settlement through
+`EventInvoiceService.ts`. Each `EventPoolAssignment` stores its own `factor` (default `1`, range `0`–`1000`,
+up to four decimal places). Assignment membership and exemption are separate from the factor.
+New assignments start at `1`; updating existing assignments preserves factors omitted by a caller.
+
+Use this calculation order:
+
+1. Sum effective amounts of Accepted and Closed invoices. Exclude Awaiting-review and Rejected invoices.
+2. Subtract the signed sum of adjustments whose `subtractFromPool` is true to obtain the distributable amount.
+3. Multiply each non-exempt participant's equal/day/night weight by their factor, then normalize by the sum of
+   effective weights. Round each resulting base to cents in the same direction: `roundUpShares=true` (default) uses
+   mathematical ceiling; false uses floor. Equal effective weights produce identical bases. Use exact integer ratios
+   for the cent boundary; do not distribute leftover cents by participant ID.
+4. Add all signed participant adjustments exactly once. Negative amounts are rebates. Factors do not scale adjustments.
+5. Deduct effective personal invoice amounts when enabled. Factors do not scale invoice credits.
+6. Combine each beneficiary's calculated components into the covering payer without applying the payer's factor again.
+
+`invoiceAmount` is accepted invoice cost, `payableAmount` is the distributable remainder,
+`additionalAmount` contains signed non-redistributed adjustments, and `totalAmount` is invoice cost plus those
+additional adjustments. Do not clamp a negative distributable remainder. The preview reports the signed rounding
+difference between summed rounded bases and the distributable amount; this small surplus or shortfall is intentional.
+The reconciliation is `sum(base) + sum(adjustments) = totalAmount + roundingDifference`, then subtract invoice credits
+and prior signed settlements to obtain the net remaining balance. Positive outstanding shares minus refunds equals
+that net balance. Invoice reimbursement must not be mistaken for a missing share of the pool's gross costs.
+A nonzero distributable amount with no positive effective weight must fail before replacing any shares.
+
+Closed pools accept saved settings, assignments, factors, adjustments, and organizer takeover changes.
+Calculation inputs invalidate the closed pool through `needsRecalculation` and advance `calculationRevision`.
+Attendance and membership changes and accepted invoice changes must also invalidate affected pools.
+Payment-state changes update settlement totals and advance the revision to invalidate an outstanding preview, but do not mark the calculation inputs stale. They remain permitted while `needsRecalculation` is true.
+Automatic invoice retention is a deliberate exception: deleting expired source records preserves historical settlement
+shares and does not itself require recalculation. It still advances the revision to reject a concurrent calculation
+that read the deleted records. A later explicit recalculation uses only the records still retained.
+
+`previewPool` prepares the same gross shares used by closing/recalculation and projects prior settlements without writes
+or notifications. Its revision must still match when a preview is applied. Recalculation uses saved inputs, preserves
+the CLOSED state, and replaces shares in one transaction. A failure keeps the previous shares and payments.
+
+`projectInvoiceShares` carries money by the actual payer registration. For each previous share, cumulative settlement is
+`paymentCreditAmount + (isPaid ? shareAmount : 0)`. The new `shareAmount` is gross liability minus that signed credit.
+Positive credits represent money received; negative credits represent payouts made. Repeated calculations preserve the
+credit without adding it twice. A previously settled payer who disappears from the new payer set retains a credit-only
+share while their event registration exists. Never move that payment to a new covering payer implicitly. Zero remaining
+balances are settled automatically. The Paid switch applies to the current residual balance, not to past carried credit.
+
+A successful calculation saves `calculationSnapshot`: pool-local settings, assignments/factors, adjustments, takeovers,
+and a fingerprint of external calculation inputs. `rollbackPoolChanges` restores those local inputs transactionally
+without touching shares/payment records or sending emails. Event registrations, attendance dates, and invoice reviews
+are not reverted. A fingerprint mismatch or missing registration leaves the pool stale after local rollback. Legacy
+pools without a snapshot cannot roll back until a successful calculation establishes one.
+
+`sendCalculationEmails` is the pool's stored default; close/recalculate accepts a `sendEmails` override. Notification-only
+settings changes do not require recalculation. A separate closed-pool notification endpoint sends the saved settlement
+without recalculation. `buildInvoiceSettlementEmail` reads `isPaid`, signed payment credit, and the residual amount so
+settled shares never appear outstanding. Notification delivery is queued after persistence, outside the transaction.
+
+The participant upload binder in `src/public/js/modules/invoice-submission.ts` owns progress, busy state, and recovery.
+Successful persistence is acknowledged independently of SMTP delivery. An uncertain network outcome must send users
+to invoice history before retrying; never automatically resend a proof upload. Keep validation failures distinguishable
+from failures where the server may have committed the invoice.
+
+Protect calculation arithmetic with unit tests, persistence and recalculation with the invoice integration suite,
+and upload state transitions with frontend tests. Use a real browser for dialog wiring and the saved-edit workflow.
 
 ## Test selection
 

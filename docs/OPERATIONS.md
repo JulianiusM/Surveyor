@@ -5,10 +5,10 @@ documentation-metadata
 audience: operators; site reliability engineers; incident responders; maintainers
 owner: application operators
 status: current
-last-verified: 2026-09-05
+last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: D04 accepted from source review and deployment-practice confirmation for release contents, bootstrap, sessions, proxy behavior, health, logs, persistent files, SMTP/OIDC, retention, backup, restore, and service management; D06 invoice-proof privacy, storage, and retention linkage verified; controlled execution tracked separately in D04V
-source-anchors: .github/workflows/release.yml; package.json; docs/user-guide/INVOICE_POOLS.md; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/database/dataSource.ts; src/modules/invoiceRetention.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/controller/helpController.ts; src/controller/eventPoolController.ts; src/modules/email.ts; src/modules/oidc.ts
+verification-scope: consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factor and settlement migrations, signed payment carry-forward, rollback snapshots, settlement email controls, receipt delivery, and upload recovery; D04 accepted from source review and deployment-practice confirmation for release contents, bootstrap, sessions, proxy behavior, health, logs, persistent files, SMTP/OIDC, retention, backup, restore, and service management; D06 invoice-proof privacy, storage, and retention linkage verified; controlled execution tracked separately in D04V
+source-anchors: src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; docs/user-guide/INVOICE_POOLS.md; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/database/dataSource.ts; src/modules/invoiceRetention.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/controller/helpController.ts; src/controller/eventPoolController.ts; src/modules/email.ts; src/modules/oidc.ts
 next-review: D04V
 -->
 
@@ -336,6 +336,44 @@ retention and disposal.
 
 For the participant- and organizer-visible invoice lifecycle, proof-access boundary, and settlement workflow, see
 [Invoice Pools and Payments](user-guide/INVOICE_POOLS.md#privacy-proof-access-storage-and-retention).
+
+### Invoice pool factors, rebates, and recalculation
+
+The invoice-pool updates include migrations for assignment factors, recalculation state, rollback snapshots, notification
+defaults, and carried settlement credits.
+The rounding migration adds **Round base shares up**, enabled by default, and marks existing closed pools for explicit
+recalculation while preserving stored shares and payments. Every participant base rounds in the selected direction;
+the preview exposes the intentional cent surplus or shortfall and reconciles invoice reimbursements separately from
+pool costs. A net settlement total can therefore be much smaller than the full invoice total.
+Apply them through the matching release's settings-aware migration wrapper before starting the new application, following
+[Database and Migrations](DATABASE.md#upgrade-an-existing-database). Existing assignment factors default to `1`.
+Migration does not replace stored shares or send settlement notifications. Existing Paid flags are retained and existing
+payment credits start at zero; the next recalculation recognizes paid amounts from those saved flags.
+
+Organizers can save calculation changes after pool closure and continue recording payments against the saved shares.
+**Recalculation required** identifies changed inputs. A calculation preview shows the proposed balances without writing
+anything. Applying it carries previously recorded payments/payouts as signed credits and creates only the remaining
+payment or refund. Repeated recalculations do not count the same settlement twice. Operators should not modify stale
+flags, payment credits, or snapshots directly in SQL.
+
+**Roll back pool changes** restores pool-local inputs from the last successful calculation while retaining the saved
+settlement. It does not reverse invoice reviews, attendance changes, or event participant deletion. Those external
+changes can leave a pool needing recalculation after rollback. Legacy pools establish their first rollback snapshot on
+the next successful calculation. This application action is separate from deployment/database backup restoration.
+
+Automatic close/recalculation emails are configurable per pool and per action. Organizers can use **Send settlement
+emails** later, even with automatic emails disabled. Messages describe current saved payment status and outstanding
+differences; no money moves. Payment-status notification behavior is separate from the calculation-email switch.
+
+Automatic invoice retention updates cost totals while preserving historical settlement shares. It does not itself mark
+a closed pool for recalculation. Recalculating later uses only retained invoice records, so coordinate retention and
+settlement review with organizers before costs needed for a revised calculation expire.
+Signed rebates may produce credits owed to participants. Surveyor records those amounts but never transfers money.
+
+Invoice upload success confirms persistence and does not wait for confirmation email delivery. If a user reports an
+uncertain upload outcome, have them check **Your invoice history** before retrying. Investigate repeated slow uploads
+through proxy request limits, storage latency, application errors, and database connectivity. Review SMTP logs separately
+when a persisted invoice has no receipt email.
 
 ## Mail and sign-in smoke tests
 

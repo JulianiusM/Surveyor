@@ -20,7 +20,7 @@ import {EventInvoicePool} from "./EventInvoicePool";
 import {EventRegistration} from "./EventRegistration";
 
 /**
- * Additional charge assigned to a participant before a pool is closed.
+ * Signed adjustment assigned to a participant. Negative amounts are rebates.
  * This is paid only by the participant (or their covering payer) rather than split evenly.
  */
 @Entity("event_invoice_surcharges", {schema: "surveyor"})

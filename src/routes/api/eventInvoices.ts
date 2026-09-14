@@ -169,6 +169,36 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
         })
     );
 
+    router.get(
+        '/:poolId/preview',
+        requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
+        asyncHandler(async (req, res) => {
+            const preview = await eventPoolController.previewPool(resFct(req), req.params.poolId as string);
+            res.set('Cache-Control', 'no-store');
+            renderer.respondWithSuccessDataJson(res, 'calculation preview', preview);
+        })
+    );
+
+    router.post(
+        '/:poolId/rollback',
+        requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
+        asyncHandler(async (req, res) => {
+            const result = await eventPoolController.rollbackPoolChanges(resFct(req), req.params.poolId as string, req.body);
+            renderer.respondWithSuccessDataJson(res, result.needsRecalculation
+                ? 'Pool settings restored. A new calculation is still required because external inputs or calculation rules changed.'
+                : 'Pool changes rolled back. Existing shares and payments have been preserved.', result);
+        })
+    );
+
+    router.post(
+        '/:poolId/notify',
+        requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
+        asyncHandler(async (req, res) => {
+            const result = await eventPoolController.notifyPoolShares(resFct(req), req.params.poolId as string, req.body, req.session);
+            renderer.respondWithSuccessDataJson(res, `Settlement email delivery requested for ${result.count} payer(s).`, result);
+        })
+    );
+
     router.post(
         '/:poolId/shares/:shareId/pay',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),

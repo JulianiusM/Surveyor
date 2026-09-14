@@ -4,10 +4,10 @@ documentation-metadata
 audience: event participants; event organizers
 owner: event feature maintainers
 status: current
-last-verified: 2026-09-05
+last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D05 event creation, registration, deadline, dietary, participant-management, related-entity, export, permission, and privacy workflows verified; D06 invoice-pool entry points and permission boundary linked to the dedicated guide; D14 rendered help navigation, semantic checks, and trusted-content integration
-source-anchors: docs/user-guide/INVOICE_POOLS.md; src/routes/event.ts; src/routes/api/event.ts; src/controller/eventController.ts; src/middleware/guestFlowFactory.ts; src/modules/database/entities/event/; src/modules/database/services/EventService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/modules/lib/permissions.ts; src/views/event/event-create.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/views/modules/module_registration_links.pug; src/views/modules/module_event_participants.pug; src/public/js/events.ts; src/public/js/modules/reg-links.ts; src/public/js/modules/event-participant.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: invoice factors, rebates, progress feedback, calculation previews, payment carry-forward, rollback, and email-control entry points; D05 event creation, registration, deadline, dietary, participant-management, related-entity, export, permission, and privacy workflows verified; D06 invoice-pool entry points and permission boundary linked to the dedicated guide; D14 rendered help navigation, semantic checks, and trusted-content integration
+source-anchors: src/views/modules/module_invoice_pool.pug; docs/user-guide/INVOICE_POOLS.md; src/routes/event.ts; src/routes/api/event.ts; src/controller/eventController.ts; src/middleware/guestFlowFactory.ts; src/modules/database/entities/event/; src/modules/database/services/EventService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/modules/lib/permissions.ts; src/views/event/event-create.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/views/modules/module_registration_links.pug; src/views/modules/module_event_participants.pug; src/public/js/events.ts; src/public/js/modules/reg-links.ts; src/public/js/modules/event-participant.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: event-visible-UI-or-behavior-change
 -->
 
@@ -109,7 +109,7 @@ A registered participant may see:
 - **Things to do**, when the event grants **Access Items** and the organizer linked packing, activity, or drivers lists.
 - **Invoice pools & payments**, when the event uses shared-cost pools.
 
-See [Invoice Pools and Payments](INVOICE_POOLS.md) for submitting receipts, managing takeovers and surcharges, reviewing costs, calculating shares, recording settlement, and understanding proof retention.
+See [Invoice Pools and Payments](INVOICE_POOLS.md) for submitting receipts with progress feedback, setting participant factors, managing takeovers and surcharges/rebates, previewing calculations, carrying recorded payments forward, rolling back pending pool edits, controlling settlement emails, and understanding proof retention.
 
 ## Create an event
 

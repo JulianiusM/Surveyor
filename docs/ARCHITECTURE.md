@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; developers; AI agents
 owner: architecture maintainers
 status: current
-last-verified: 2026-09-06
+last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: non-blocking documentation policy and optional report/test routing; D12 runtime, layer, authentication, authorization, persistence, frontend, background-job, build, release, and testing architecture plus D08 advanced activity requirement, allocation, job, review, and persistence boundaries; help integration remains assigned to D14; D14 fixed-source help search, contextual routing, Markdown validation, local visual assets, and release boundary
-source-anchors: package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoiceRetention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
+verification-scope: consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, preview/commit calculation projection, cumulative settled credits, rollback snapshots, and settlement notification boundaries; non-blocking documentation policy and optional report/test routing; D12 runtime, layer, authentication, authorization, persistence, frontend, background-job, build, release, and testing architecture plus D08 advanced activity requirement, allocation, job, review, and persistence boundaries; help integration remains assigned to D14; D14 fixed-source help search, contextual routing, Markdown validation, local visual assets, and release boundary
+source-anchors: src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoiceRetention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
 next-review: architecture-or-help-delivery-change
 -->
 
@@ -218,7 +218,11 @@ Surveys primarily coordinate recurring monthly patterns represented by weekday p
 
 ### Events and invoice pools
 
-Events own date boundaries, capacity, registration/deadline policy, dietary data, participants, linked activity/packing/drivers resources, and invoice pools. Invoice pools coordinate accepted costs, assignments, takeovers, surcharges, calculated shares, and settlement markers. Proof files live on the filesystem while records and review history live in MariaDB.
+Events own date boundaries, capacity, registration/deadline policy, dietary data, participants, linked activity/packing/drivers resources, and invoice pools. Invoice pools coordinate accepted costs, participant factors, takeovers, signed adjustments, shares, and recorded settlements. Read-only previews share the calculation logic with transactional recalculation. Closed-pool edits mark the saved calculation stale while payment recording remains available; recalculation carries previous payments/payouts as credits against new balances. Revision checks protect previews against concurrent input or settlement changes. Calculation snapshots support rollback of pool-local inputs without rewriting payment records or external event/invoice data. Configurable calculation notifications and later settlement emails use saved payment states. Proof files live on the filesystem while records and review history live in MariaDB. See [Development Guide](DEVELOPMENT.md#invoice-pool-calculation-and-saved-changes) for the arithmetic and rollback contract.
+
+Base-share rounding is a saved pool setting. Exact weighted cent ratios round every participant in the same direction
+before takeovers are combined. Preview reconciliation reports the rounding surplus or shortfall and separates invoice
+reimbursements and recorded settlements from gross costs.
 
 ### Activity plans
 

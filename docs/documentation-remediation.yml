@@ -709,6 +709,22 @@ implementation_defects:
   - the active schedule detects autoGenerationJob, shows its status, polls it, and reloads terminal results
   - stale, failed, and timed-out jobs produce actionable visible messages
   - frontend or E2E tests cover the first post-deadline load with no recommendation history
+- id: IMP-031
+  status: resolved
+  severity: medium
+  owner: event invoice-pool maintainers
+  out_of_scope_for_documentation_migration: true
+  title: Long takeover lists overflow their modal dialog
+  evidence:
+  - The takeover modal wrapped its scrollable body in a block form that could not shrink inside the dialog.
+  - The separately constrained beneficiary list introduced a competing scroll area for larger events.
+  impact: Organizers could lose access to participant choices or the save controls with a long list.
+  documentation_contract: Manage takeovers provides an accessible participant list and Save changes action at desktop and mobile sizes.
+  resolution: The authorized invoice-pool feature follow-up makes the form a shrinkable flex column, scrolls the modal body, keeps header/footer visible, and wraps long participant names.
+  resolution_evidence:
+  - src/views/modules/module_invoice_pool.pug
+  - src/public/style/style.sass
+  - Chromium layout checks with 28 long participant names at desktop and mobile sizes
 findings:
 - id: STR-001
   severity: high
@@ -2897,7 +2913,7 @@ quality_gates:
   - Invoice-pool help distinguishes invoice closure, pool closure, recalculation, and manual settlement.
   - Invoice-pool help states the participant and delegated-organizer boundaries and keeps invoice proofs private from unrelated participants.
   - Invoice-pool help documents accepted proof formats, the 10 MiB limit, database/file backup coupling, and startup/hourly retention.
-  - Invoice-pool help warns that recalculation replaces all shares and resets Paid or Outstanding markers.
+  - Invoice-pool help explains that recalculation replaces the calculated share rows, carries signed recorded settlements forward exactly once, and leaves only the difference outstanding.
   - Activity-plan help distinguishes whole-slot Join/Leave from named-role Take/Leave.
   - Activity-plan help uses Schedule, Participants, Rules & auto-assign, and Settings and contains no Requirements tab or skills field.
   - Activity-plan help explains event-registration gating, Full — join anyway, Assignment warnings, shared text fields, role management, and print-friendly schedule export.

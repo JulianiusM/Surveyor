@@ -63,7 +63,17 @@ export class EventInvoiceShare extends NumericBase {
     })
     invoiceCreditAmount!: number;
 
-    // Store the fully burdened total (base + extras) that the payer owes
+    // Signed payments already carried into this calculation; negative amounts are payouts.
+    @Column("decimal", {
+        name: "payment_credit_amount",
+        precision: 10,
+        scale: 2,
+        default: "0.00",
+        transformer: currencyTransformer,
+    })
+    paymentCreditAmount!: number;
+
+    // Remaining amount after invoice credits and payments from previous calculations.
     @Column("decimal", {name: "share_amount", precision: 10, scale: 2, transformer: currencyTransformer})
     shareAmount!: number;
 

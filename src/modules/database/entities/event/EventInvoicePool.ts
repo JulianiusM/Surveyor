@@ -15,7 +15,7 @@
  */
 
 import {Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
-import type {InvoicePoolDistribution, InvoicePoolStatus} from "../../../../types/InvoicePoolTypes";
+import type {InvoicePoolCalculationSnapshot, InvoicePoolDistribution, InvoicePoolStatus} from "../../../../types/InvoicePoolTypes";
 import {currencyTransformer} from "../../transformers";
 import {UuidBase} from "../abstract/TrackedBase";
 import {Event} from "./Event";
@@ -45,6 +45,22 @@ export class EventInvoicePool extends UuidBase {
 
     @Column("enum", {name: "status", enum: ["OPEN", "CLOSED"], default: "OPEN"})
     status!: InvoicePoolStatus;
+
+    @Column("tinyint", {name: "needs_recalculation", default: 0})
+    needsRecalculation!: boolean;
+
+    // Reject calculations based on inputs that changed while the calculation was running.
+    @Column("int", {name: "calculation_revision", unsigned: true, default: 0})
+    calculationRevision!: number;
+
+    @Column("json", {name: "calculation_snapshot", nullable: true})
+    calculationSnapshot!: InvoicePoolCalculationSnapshot | null;
+
+    @Column("tinyint", {name: "send_calculation_emails", default: 1})
+    sendCalculationEmails!: boolean;
+
+    @Column("tinyint", {name: "round_up_shares", default: 1})
+    roundUpShares!: boolean;
 
     @Column("enum", {name: "distribution_method", enum: InvoicePoolDistributions, default: "EQUAL"})
     distributionMethod!: InvoicePoolDistribution;
@@ -134,7 +150,7 @@ export class EventInvoicePool extends UuidBase {
     })
     surchargeOffsetAmount!: number;
 
-    // Sum of invoices plus additional per-person charges
+    // Signed invoice total minus adjustments redistributed within the pool.
     @Column("decimal", {
         name: "payable_amount",
         precision: 10,

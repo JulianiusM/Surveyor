@@ -19,3 +19,22 @@ import {InvoicePoolDistributions} from "../modules/database/entities/event/Event
 export type InvoicePoolStatus = 'OPEN' | 'CLOSED';
 
 export type InvoicePoolDistribution = (typeof InvoicePoolDistributions)[number];
+
+export interface InvoicePoolCalculationSnapshot {
+    version: 1;
+    settings: {
+        distributionMethod: InvoicePoolDistribution;
+        description: string | null;
+        isDefault: boolean;
+        assignAll: boolean;
+        subtractPersonalInvoices: boolean;
+        sendCalculationEmails: boolean;
+        // Older snapshots predate configurable rounding and cannot certify the new calculation.
+        roundUpShares?: boolean;
+    };
+    assignments: {registrationId: number; isExempt: boolean; factor: number}[];
+    surcharges: {registrationId: number; amount: number; note: string; subtractFromPool: boolean}[];
+    takeovers: {payerRegistrationId: number; beneficiaryRegistrationId: number}[];
+    externalFingerprint: string;
+    externalRegistrationIds: number[];
+}

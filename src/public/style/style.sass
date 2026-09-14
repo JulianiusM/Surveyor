@@ -88,6 +88,160 @@
   max-height: 260px
   overflow-y: auto
 
+.invoice-pool, .pool-edit-modal, #poolCreateModal, #takeoverModal, #invoicePoolCollapse
+  .text-secondary
+    color: #adb5bd !important
+
+// A form between modal-content and modal-body must participate in the flex layout.
+.pool-modal-form
+  display: flex
+  flex: 1 1 auto
+  flex-direction: column
+  min-height: 0
+  min-width: 0
+  overflow: hidden
+
+  > .modal-body
+    flex: 1 1 auto
+    min-height: 0
+    min-width: 0
+    overflow-x: hidden
+    overflow-y: auto
+    overscroll-behavior: contain
+
+  > .modal-footer
+    flex: 0 0 auto
+
+#takeoverModal
+  .modal-content
+    height: 100%
+    min-height: 0
+
+  .modal-header
+    flex: 0 0 auto
+    min-width: 0
+
+  .modal-title, .pool-takeover-selection
+    min-width: 0
+    overflow-wrap: anywhere
+
+.pool-participant-list
+  max-height: 26rem !important
+
+.pool-participant-row
+  display: grid
+  grid-template-columns: minmax(0, 1fr) 6.5rem auto
+  align-items: center
+  gap: 1rem
+
+  .form-check-label
+    overflow-wrap: anywhere
+
+  .form-check-input:disabled ~ .form-check-label
+    opacity: 1
+
+.pool-form-status:empty
+  display: none
+
+.pool-takeover-row
+  display: grid
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto
+  gap: 1rem
+  align-items: center
+
+  + .pool-takeover-row
+    border-top: 1px solid rgba(255, 255, 255, .12)
+
+  .badge
+    white-space: normal
+    text-align: left
+
+.takeover-beneficiaries
+  max-height: none
+  overflow: visible
+
+  .list-group-item > span
+    min-width: 0
+    overflow-wrap: anywhere
+
+.pool-preview-table
+  max-height: 28rem
+  overflow: auto
+
+  table
+    min-width: 42rem
+
+  th
+    position: sticky
+    top: 0
+    background: #212529
+
+  td, th
+    padding: .6rem
+
+  td:first-child
+    min-width: 10rem
+
+  details
+    min-width: 10rem
+
+@media (max-width: 767.98px)
+  .pool-preview-table
+    max-height: none
+    overflow: visible
+
+    table, tbody
+      display: block
+      min-width: 0
+
+    thead
+      display: none
+
+    tr
+      display: grid
+      grid-template-columns: repeat(2, minmax(0, 1fr))
+      gap: .75rem
+      padding: .75rem
+      margin-bottom: .75rem
+      border: 1px solid rgba(255, 255, 255, .15)
+      border-radius: .5rem
+
+    td
+      display: block
+      min-width: 0 !important
+      padding: 0
+      border: 0
+      overflow-wrap: anywhere
+
+      &:first-child, &:last-child
+        grid-column: 1 / -1
+
+      &::before
+        content: attr(data-label)
+        display: block
+        color: #adb5bd
+        font-size: .75rem
+        font-weight: normal
+
+    details
+      min-width: 0
+
+@media (max-width: 575.98px)
+  .pool-takeover-row
+    grid-template-columns: minmax(0, 1fr) auto
+
+    > :first-child
+      grid-column: 1 / -1
+
+  .pool-participant-row
+    grid-template-columns: minmax(0, 1fr) auto
+
+    > .form-check:first-child
+      grid-column: 1 / -1
+
+  .pool-factor-field
+    max-width: 8rem
+
 .invoice-ledger
   min-width: 0
 

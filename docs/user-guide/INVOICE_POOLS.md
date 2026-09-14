@@ -4,10 +4,10 @@ documentation-metadata
 audience: event participants; event organizers
 owner: event invoice-pool maintainers
 status: current
-last-verified: 2026-09-05
+last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D06 pool creation, assignment, takeover, surcharge, invoice submission, proof, review, correction, closure, recalculation, share, payment-status, notification, privacy, storage, and retention workflows verified; D14 rendered help navigation, semantic checks, and trusted-content integration
-source-anchors: src/routes/api/eventInvoices.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/database/entities/event/EventInvoice.ts; src/modules/database/entities/event/EventInvoicePool.ts; src/modules/database/entities/event/EventInvoiceShare.ts; src/modules/database/entities/event/EventInvoiceSurcharge.ts; src/modules/database/entities/event/EventPoolAssignment.ts; src/modules/database/entities/event/EventPoolTakeover.ts; src/views/modules/module_invoice_pool.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/public/js/events.ts; src/modules/invoiceRetention.ts; src/modules/lib/fileCommons.ts; tests/integration/invoice-workflows.spec.ts; tests/frontend/ui-behaviors.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice submission progress and recovery; pool administration dialogs and takeover groups; weighted participant factors and signed adjustments; calculation previews, payment carry-forward, rollback, configurable calculation emails and saved-state notifications; existing review, proof, settlement, and retention workflows
+source-anchors: src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; src/public/js/modules/invoice-submission.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; src/routes/api/eventInvoices.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/database/entities/event/EventInvoice.ts; src/modules/database/entities/event/EventInvoicePool.ts; src/modules/database/entities/event/EventInvoiceShare.ts; src/modules/database/entities/event/EventInvoiceSurcharge.ts; src/modules/database/entities/event/EventPoolAssignment.ts; src/modules/database/entities/event/EventPoolTakeover.ts; src/views/modules/module_invoice_pool.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/public/js/events.ts; src/modules/invoiceRetention.ts; src/modules/lib/fileCommons.ts; tests/integration/invoice-workflows.spec.ts; tests/frontend/ui-behaviors.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: invoice-pool-visible-UI-or-behavior-change
 -->
 
@@ -25,12 +25,15 @@ Invoice pools help an event group collect receipts, decide which costs count, an
 ### Organizer
 
 - [Create an invoice pool](#create-an-invoice-pool)
-- [Choose participants and exemptions](#choose-participants-and-exemptions)
+- [Choose participants, factors, and exemptions](#choose-participants-and-exemptions)
 - [Manage takeovers](#manage-takeovers-for-the-group)
-- [Add a participant-specific surcharge](#add-a-surcharge)
+- [Add a participant-specific surcharge or rebate](#add-a-surcharge)
 - [Review, correct, accept, or reject invoices](#review-submitted-invoices)
+- [Preview a calculation](#preview-a-calculation)
 - [Close a pool and calculate shares](#close-the-pool-and-calculate-shares)
 - [Correct a closed pool](#recalculate-a-closed-pool)
+- [Roll back pending pool changes](#roll-back-pool-changes)
+- [Send settlement emails](#send-settlement-emails)
 - [Record settlement](#record-whether-a-share-is-settled)
 
 ## First understand the two kinds of status
@@ -41,10 +44,12 @@ An invoice and its pool have separate lifecycles. **Closed invoice** and **close
 
 | Pool status | Meaning | Available work |
 |---|---|---|
-| **OPEN** | Costs and allocation rules are still being collected. No final shares have been frozen. | Assigned participants can submit invoices and manage their own takeovers. Organizers can change settings, assignments, exemptions, takeovers, and surcharges, and can review invoices. |
-| **CLOSED** | Surveyor has generated one final share per payer from the current accepted costs and allocation rules. | Participants can see their shares. Organizers can record settlement. Settings can be corrected, but the shares change only after **Recalculate pool**. New invoices cannot be submitted. |
+| **Open for invoices** | Costs and allocation rules are still being collected. No final shares have been frozen. | Assigned participants can submit invoices and manage their own takeovers. Organizers can change settings, assignments, factors, exemptions, takeovers, surcharges, and rebates, and can review invoices. |
+| **Closed** | Surveyor has generated one final share per payer from the accepted costs and allocation rules saved at the last calculation. | Participants can see their shares. Organizers can record settlement, including while pool edits are pending. Settings can be corrected, but the shares change only after **Recalculate pool**. New invoices cannot be submitted. |
 
-Closing a pool does not delete it, and there is no ordinary **Reopen pool** or **Delete pool** control. **Recalculate pool** replaces the shares and leaves the pool closed again.
+Closing a pool does not delete it, and there is no ordinary **Reopen pool** or **Delete pool** control. **Recalculate pool** replaces the shares while the pool remains closed.
+
+**Recalculation required** means saved calculation inputs have changed since the last calculation. Previously calculated shares stay visible, and organizers can still record payments against those amounts. Preview the new calculation, then apply it or roll back pending pool changes. Recorded payments are carried forward when recalculating.
 
 ### Invoice status
 
@@ -93,11 +98,17 @@ Use this task when you paid an expense that should be considered in an event cos
 7. Under **Proof (image or PDF)**, select one proof file.
 8. Select **Submit invoice**.
 
+The form immediately shows submission status and prevents another submission while this one is running. When upload progress is available, the percentage measures the proof transfer; it does not mean the invoice has been saved yet. After transfer, wait for the saving confirmation. A longer request displays further status messages.
+
+Keep the page open until success is confirmed. If the connection fails and Surveyor cannot confirm the result, use **Check invoice history** before trying again. The server may already have saved the invoice. A validation error lets you correct the form and submit again. Email delivery does not delay the successful upload response.
+
 The proof is required. Surveyor accepts JPEG, PNG, GIF, or PDF files up to 10 MiB. Use a clear receipt, invoice, or payment record, but include only the personal and financial information needed for the organizer to verify the cost.
+
+After the form confirms **Invoice submitted successfully**, select **View invoice history** to refresh the page and see the saved record. This also makes the submission form available for a separate invoice.
 
 After a successful submission:
 
-- The invoice appears immediately in **Your invoice history** as **Awaiting review**.
+- The saved invoice appears in **Your invoice history** as **Awaiting review** when the history is refreshed.
 - Surveyor assigns it an invoice number.
 - The organizer can view the submitted amount, description, and proof.
 - Surveyor sends **Invoice submitted** to the email address attached to your account or guest profile, when an address is available and email delivery is configured.
@@ -137,7 +148,7 @@ When your profile has an email address, Surveyor sends a message when an organiz
 
 ### Choose whose share you will cover
 
-A takeover means that one participant, the **payer**, accepts the final share of another participant, the **beneficiary**. The beneficiary will not receive a separate share; their base amount, surcharges, and invoice credit are combined into the payer’s result.
+A takeover means that one participant, the **payer**, accepts the final share of another participant, the **beneficiary**. The beneficiary’s base amount, surcharges, rebates, and invoice credit are combined into the payer’s result. Any money the beneficiary already settled remains with them and can produce a separate refund or balance after recalculation.
 
 To set your own takeovers before the pool closes:
 
@@ -166,18 +177,19 @@ After the organizer closes a pool, **Your pool shares** shows the row assigned t
 
 | Column | Meaning |
 |---|---|
-| **Base** | Your automatic portion of the distributable invoice total, plus the automatic portions of people you cover. |
-| **Surcharges** | Participant-specific charges assigned to you or to people you cover. |
+| **Base** | Your automatic portion of the distributable invoice total, weighted by attendance and your pool-specific factor, plus the portions of people you cover. |
+| **Adjustments** | Signed participant-specific surcharges or rebates assigned to you or to people you cover. Negative amounts reduce the share. |
 | **Invoice credit** | Accepted invoices submitted by you or people you cover when **Deduct submitter invoices from their share** is enabled. |
-| **Total** | `Base + Surcharges - Invoice credit`. |
-| **Notes** | Calculation details, including attendance weight, exemptions, takeovers, surcharges, and credits. |
-| **Status** | **Outstanding** until an organizer records the share as **Paid**; it can later be returned to Outstanding. |
+| **Previously settled** | Signed payments or payouts carried forward from earlier calculations. Positive means received from the payer; negative means paid out to the payer. |
+| **Remaining due / refund** | `Base + Adjustments - Invoice credit - Previously settled`. A positive amount is due from the payer; a negative amount is a refund or payout owed to them. |
+| **Notes** | Calculation details, including attendance weight, factors, exemptions, takeovers, surcharges, rebates, and invoice credits. |
+| **Status** | **Outstanding** until an organizer records the share as **Paid**; it can later be returned to Outstanding. A calculation with no remaining balance is automatically marked Paid. |
 
-A positive Total is an amount the payer owes. A negative Total is a credit that the group owes to the payer. Zero means that no net settlement is due.
+A positive remaining amount is owed by the payer. A negative amount is owed to the payer. Zero means no further settlement is due. **Paid** means the currently displayed amount has already been settled.
 
 **Paid** is only a manual settlement marker. Surveyor does not charge a card, send a transfer, or prove that money changed hands. For a negative share, Paid means the credit has been settled with the participant.
 
-When the pool closes, Surveyor emails each payer who has an email address. The message states the amount due or owed, the people covered, and a calculation breakdown. A later change to Paid or Outstanding also generates an email when an address is available.
+When calculation emails are enabled, Surveyor emails each payer who has an email address after closing or recalculating. Organizers can also send settlement emails later. Messages use the saved payment state: already settled shares show no outstanding balance, and outstanding shares show only the remaining amount. A later change to Paid or Outstanding also generates a payment-status email when an address is available.
 
 ## Organizer tasks
 
@@ -196,70 +208,80 @@ When the pool closes, Surveyor emails each payer who has an email address. The m
 |---|---|
 | **Pool name** | Required name, up to 255 characters. Choose a name participants can recognize in the submission list. |
 | **Share distribution mode** | Chooses how the distributable total is divided when the pool closes. |
+| **Round base shares up** | Rounds every participant's base amount up to the next cent. Clear it to round down. Equal weighted shares always receive the same base amount; a small total surplus or shortfall is shown in the calculation preview. Enabled initially. |
 | **Description** | Optional explanation of which expenses belong in the pool. |
 | **Assign to all participants** | Includes every current and future event registration. This is selected initially. |
 | **Make this the default pool** | Automatically assigns each future event registration while allowing the organizer to choose the current participants separately. |
 | **Deduct submitter invoices from their share** | Credits a participant’s accepted invoices against the final share of that participant or their covering payer. This is selected initially. |
-| **Limit to participants** | Selects current registrations when **Assign to all participants** is off. |
+| **Limit to participants (disabled when assigned to all)** | Selects current registrations when **Assign to all participants** is off. |
 
-The pool starts as **OPEN**. Its name cannot be edited through the current pool-settings form, so choose it carefully. The description and distribution mode can be changed later with **Save base settings**.
+The pool starts as **Open for invoices**. Choose its name carefully; the settings dialog edits the description and distribution mode. Expand the pool to see its summary and invoice ledger. Use **Pool settings**, **Participants & factors**, **Surcharges & rebates**, and **Manage takeovers** for focused editing dialogs.
+
+In **Pool settings**, change the description, distribution mode, **Round base shares up**, or **Send calculation emails automatically**, then select **Save pool settings**. Changing rounding requires recalculation for a closed pool. The email switch sets the default for future calculations; you can override it for an individual calculation. Save each dialog before previewing or calculating. **Close** hides an editing dialog without saving its fields; **Discard edits** resets pending fields to their saved values. Saving reloads the page, so finish one dialog before editing another.
 
 #### Distribution modes
 
 | Visible choice | Calculation |
 |---|---|
-| **Distribute among participants** | Divides the distributable total equally among non-exempt assigned participants. |
-| **Distribute among days attended** | Weights the total by each non-exempt participant’s attendance days, counting both the arrival and departure dates. |
-| **Distribute among nights stayed** | Weights the total by the number of nights between arrival and departure. A same-day registration contributes zero nights. |
+| **Distribute among participants** | Starts each non-exempt assigned participant with weight 1, then multiplies by their factor. Equal factors give an equal split. |
+| **Distribute among days attended** | Multiplies inclusive attendance days by each participant’s factor. |
+| **Distribute among nights stayed** | Multiplies nights between arrival and departure by each participant’s factor. A same-day registration contributes zero nights. |
 
 Check participant attendance dates before using days or nights. A later attendance correction changes the result only after the pool is first closed or explicitly recalculated.
 
 ### Understand the pool totals
 
-The organizer view shows several different totals. They answer different questions.
+The organizer view shows several different totals. They answer different questions. Expand **Calculation breakdown** to see the detailed cost totals and saved distribution settings.
 
 | Display | What it contains |
 |---|---|
 | **Total invoices** | Effective amounts of Accepted and Closed invoices. Awaiting-review and Rejected invoices are excluded. |
 | **Open invoices** | Effective amounts of Accepted invoices that have not been individually closed. |
-| **Extra charges** | Surcharges that are added on top of invoice costs. |
-| **Surcharges reducing pool** | Surcharges earmarked to one participant while removing the same amount from the shared distribution. |
-| **Distributable total** | Total invoices minus offsetting surcharges, never below zero. |
-| **Full total** | Total invoices plus extra-only surcharges. |
+| **Additional charges / credits** | Signed charges or rebates added outside the shared invoice costs. |
+| **Redistributed surcharges / rebates** | Signed amounts assigned to specific participants and subtracted from the shared distribution. A negative rebate increases the remainder to distribute. |
+| **Distributable total** | Total invoices minus redistributed adjustments. |
+| **Full total** | Total invoices plus additional adjustments. Redistributed adjustments do not change this total. |
 | **Outstanding payments** | Positive shares not marked Paid. |
-| **Credits owed to participants** | Absolute value of negative shares not marked Paid. |
+| **Credits owed** | Absolute value of negative shares not marked Paid. |
 
-Pool totals update as invoices are reviewed, surcharges change, and settlement markers change. In a closed pool, these headline totals can reflect a later review or adjustment while the previously generated share rows remain frozen until **Recalculate pool**.
+Pool totals update as invoices are reviewed, adjustments change, and settlement markers change. In a closed pool, current cost totals can differ from the previous settlement snapshot. **Recalculation required** identifies saved calculation changes; preview them before recalculating or rolling them back. Outstanding payments and credits reflect the saved share balances and their current Paid markers until recalculation. Automatic retention has a separate exception described below.
 
 ### Choose participants and exemptions
 
-Open a pool and use **Update assignment**.
+Open a pool and select **Participants & factors**.
 
 1. Select or clear **Assign to all participants**.
 2. Select or clear **Default for new participants**.
 3. Select or clear **Deduct submitter invoices from their share**.
 4. Use **Search participants** when the event has a long registration list.
 5. Select each included registration when the pool is not assigned to all.
-6. Select **Exempt** where appropriate.
-7. Select **Save assignments** while the pool is open.
+6. Set each included participant’s **Share factor**, or leave it at `1`.
+7. Select **Exempt** where appropriate.
+8. Select **Save participants & factors**. This is available for open and closed pools.
+
+Each factor belongs to this participant in this pool. `1.5` gives 50% more weight than `1`; `0.5` gives half the weight. Factors multiply the selected attendance weight before the total is divided. They do not multiply surcharges, rebates, or invoice credits, and do not increase the total cost of the pool. For example, a 120.00 equal-distribution pool with factors `1`, `1.5`, and `0.5` gives base shares of 40.00, 60.00, and 20.00.
+
+Factors can be from `0` to `1000`, with up to four decimal places. Factor `0` gives no automatic base share. At least one participant needs a positive effective weight when a nonzero shared amount must be distributed. In nights mode, check that someone has at least one night. Exemptions always suppress the base share, regardless of factor.
 
 The two automatic assignment switches are different:
 
 - **Assign to all participants** makes the pool apply to every event registration, including registrations created later.
 - **Default for new participants** adds future registrations automatically but does not force every existing registration into the pool.
 
-An exempt participant remains assigned to the pool but receives no automatic Base amount. They can still have a surcharge, an invoice credit, or a takeover relationship. Their final result can therefore be positive, zero, or negative.
+An exempt participant remains assigned to the pool but receives no automatic Base amount. They can still have a surcharge, a rebate, an invoice credit, or a takeover relationship. Their final result can therefore be positive, zero, or negative.
 
-Removing a participant from an open pool also removes incompatible takeovers and surcharges for registrations no longer in the pool. Review the adjustment list after changing the assignment scope.
+Removing a participant from a pool also removes incompatible takeovers and adjustments for registrations no longer in the pool. Review the adjustment list after changing the assignment scope.
 
-For a closed pool, edit the displayed choices and use **Recalculate pool**. **Save assignments** is not available because changing the inputs alone must not alter already generated shares.
+For a closed pool, save the dialog first. The pool then requires recalculation; the previous shares stay unchanged until you explicitly recalculate.
 
 ### Manage takeovers for the group
 
 An organizer can establish or reassign coverage for any payer in the pool.
 
+The **Payer** and **Covers** overview groups beneficiaries under each payer. Select **Edit** to open that payer's coverage directly. The dialog shows the selected coverage and explains why unavailable relationships cannot be chosen.
+
 1. Open the pool.
-2. Under **Takeovers**, select **Manage takeovers**.
+2. Select **Manage takeovers** from the pool’s controls.
 3. Choose the **Payer**.
 4. Use **Search participants** if needed.
 5. Select the beneficiaries this payer covers.
@@ -273,26 +295,28 @@ If takeover configuration is corrected after the pool has closed, the existing s
 
 ### Add a surcharge
 
-Use **Manual surcharge assignment** for a positive participant-specific amount that should not be divided in the ordinary way.
+Select **Surcharges & rebates** for a fixed participant-specific adjustment.
 
 1. Select the **Participant**.
-2. Enter a positive **Amount**.
-3. Enter a required **Note** explaining the charge.
-4. Decide whether **Subtract from pool** applies.
-5. Select **Add surcharge**.
+2. Under **Amount (negative for a rebate)**, enter a positive surcharge or a negative rebate, such as `-15.00`. Zero is not an adjustment; use at most two decimal places.
+3. Enter a required **Note** explaining the adjustment.
+4. Decide whether **Redistribute within pool** applies.
+5. Select **Add surcharge or rebate**.
 
-The two surcharge modes behave differently:
+The two adjustment modes behave differently:
 
-- **Subtract from pool** selected: the participant or covering payer receives the surcharge, and the same amount is removed from the shared distributable total. The list labels it **Offsets pool total**.
-- **Subtract from pool** cleared: the surcharge is added on top of the invoice costs for that participant or covering payer. The list labels it **Extra charge only**.
+- **Redistribute within pool** selected: the signed adjustment is subtracted from the shared amount, then added to the participant or covering payer. A surcharge reduces the shared remainder; a rebate increases it. The full pool total stays the same.
+- **Redistribute within pool** cleared: the adjustment is added directly to the participant or covering payer after the split. Other base shares stay the same. A surcharge increases the full total; a rebate reduces it, so the organizer must account for the funding of that credit outside the shared costs.
 
-Use **Remove** to delete an incorrect surcharge. The note is shown in share details, so write it for the participant who will read the final calculation.
+For example, split 100.00 equally between two participants with invoice credits disabled. A redistributed `-10.00` rebate for one participant makes the shared remainder 110.00: each base is 55.00, then the rebate leaves totals of 45.00 and 55.00. With redistribution cleared, the totals are 40.00 and 50.00. Factors affect the base split in either case; the fixed rebate is applied afterward.
 
-In a closed pool, assignment or surcharge corrections affect the final shares only when submitted through **Recalculate pool**. Review all adjustments before recalculating.
+Use **Remove** to delete an incorrect adjustment, then add its replacement. The note is shown in share details, so write it for the participant who will read the final calculation.
+
+Adjustments can be added or removed after closure. Each saved change requires **Recalculate pool** before it affects the share rows. Review all adjustments before recalculating.
 
 ### Review submitted invoices
 
-Each pool contains **Invoice administration**. Newest submissions appear first.
+Expand the pool’s **Invoices** section to reach **Invoice administration**. It opens automatically for open pools or when invoices await review. Newest submissions appear first.
 
 Use:
 
@@ -338,80 +362,132 @@ When the submitter has an email address, Surveyor sends an acceptance, rejection
 
 Resolve or consciously exclude every Awaiting-review invoice before closing the pool whenever possible. Closing a pool ignores Awaiting-review and Rejected invoices.
 
+### Preview a calculation
+
+1. Save the settings, participant factors, adjustments, and takeovers you want to use.
+2. Select **Preview calculation**, or **Recalculate pool** for a closed pool.
+3. Review each payer's Base, Adjustments, Invoice credit, Previously settled, and Remaining due / refund.
+4. Close the dialog to make further edits, or confirm the calculation when the amounts are correct.
+
+Preview does not save shares, close the pool, change payment markers, or send emails. It uses the same calculation and settlement-credit rules as the final action. If someone changes inputs or records a payment after the preview, refresh the preview before applying it.
+
+Expand **How the totals add up** to reconcile the shared costs, rounded base shares, participant adjustments, invoice reimbursements, and previous settlements. **Rounding difference** shows the small surplus or shortfall caused by the selected rounding direction. For example, splitting 100.00 equally three ways gives 33.34 each when rounding up (100.02 total), or 33.33 each when rounding down (99.99 total). Surveyor does not give otherwise equal participants different cents to force a matching total.
+
+Rounding applies to each participant's base before takeover groups are combined. Surcharges, rebates, and invoice reimbursements keep their entered cent amounts. For negative base amounts, rounding up moves toward the greater amount: −33.333 becomes −33.33; rounding down gives −33.34.
+
+#### Reconcile costs and reimbursements
+
+The cost of the pool and the net amount still owed between participants are different totals. When **Deduct submitter invoices from their share** is selected, invoice reimbursements reduce the net shares. Compare the sum of positive shares **minus** refunds with the net total, rather than adding refunds to payments.
+
+For example, one invoice of 1000.00, three redistributed rebates of 5.00, one redistributed surcharge of 10.00, and an additional surcharge of 20.00 give:
+
+| Step | Amount before rounding |
+|---|---:|
+| Shared invoice costs | 1000.00 |
+| Redistributed adjustments: −5 −5 −5 +10 | −5.00 |
+| Base to distribute: 1000 − (−5) | 1005.00 |
+| All participant adjustments: −5 −5 −5 +10 +20 | 15.00 |
+| Allocated costs: 1005 +15 | 1020.00 |
+| Invoice reimbursement when enabled | 1000.00 |
+| Net calculated shares before rounding | 20.00 |
+
+Add the displayed rounding difference to the allocated costs and net shares. Factors and attendance decide who receives each base portion; takeovers combine those portions and their adjustments without changing these totals. Previously recorded payments or payouts then reduce the net remaining balance. Check exemptions, factors, attendance dates, and the participant selected for every adjustment when a result differs from your expectation.
+
 ### Close the pool and calculate shares
 
-Before selecting **Close pool**, verify:
+Before selecting **Preview calculation**, verify:
 
 1. Every intended participant is assigned.
 2. Attendance dates are correct for days or nights distribution.
-3. Exemptions are correct.
+3. Factors and exemptions are correct.
 4. Takeovers are correct.
-5. Surcharges and their offset mode are correct.
+5. Surcharges, rebates, and their redistribution mode are correct.
 6. Every intended invoice is Accepted or Closed.
 7. **Deduct submitter invoices from their share** has the intended setting.
 
 Then:
 
-1. Open the pool’s **Danger zone**.
-2. Select **Close pool**.
-3. Confirm the warning.
+1. Save each editing dialog.
+2. Select **Preview calculation**.
+3. Review the calculation preview and the **Email participants after this calculation** switch.
+4. Select **Close pool & calculate**.
 
 At least one participant must be assigned. Surveyor then:
 
 - Selects Accepted and Closed invoices and ignores Awaiting-review and Rejected invoices.
-- Calculates the distributable total after offsetting surcharges.
-- Divides the Base amount by participants, inclusive attendance days, or nights.
+- Calculates the distributable total after signed redistributed adjustments.
+- Divides the Base amount by participant, inclusive-day, or night weights multiplied by individual factors.
 - Gives exempt participants no automatic Base amount.
-- Adds participant-specific surcharges.
+- Adds participant-specific surcharges and negative rebates after the weighted split.
 - Applies invoice credits when enabled.
 - Combines beneficiaries into their covering payer.
 - Creates one share row for each resulting payer.
-- Sets every new share to Outstanding.
-- Marks the pool CLOSED.
-- Emails each payer who has an email address with the amount due or owed and the calculation details.
+- Sets nonzero unpaid balances to Outstanding; zero balances need no settlement.
+- Marks the pool **Closed**.
+- Emails payers with an email address if **Email participants after this calculation** is selected.
 
 The final formula for each payer is:
 
 ```text
-Total = Base + Surcharges - Invoice credit
+Calculated share = Base + signed adjustments - Invoice credit
+Remaining due / refund = Calculated share - Previously settled
 ```
 
-A takeover combines the beneficiary’s Base, Surcharges, and Invoice credit into the payer’s row before the Total is produced.
+A takeover combines the beneficiary’s already calculated Base, adjustments, and Invoice credit into the payer’s row. The beneficiary keeps their own factor; the payer’s factor is not applied again. Each participant's Base is rounded consistently in the direction chosen by **Round base shares up**. The resulting surplus or shortfall remains visible in the preview.
 
 ### Recalculate a closed pool
 
-Use **Recalculate pool** only when a closed pool’s frozen shares are wrong because settings, assignments, exemptions, takeovers, surcharges, attendance dates, or accepted invoices changed.
+Use **Recalculate pool** after settings, assignments, factors, exemptions, takeovers, surcharges, rebates, attendance dates, or accepted invoices changed. You can continue recording payments against the saved shares while the pool shows **Recalculation required**.
 
-Recalculation is destructive to the existing share records:
+1. Correct and save the inputs.
+2. Record any payments or payouts already completed using the current Paid switches.
+3. Select **Recalculate pool** and review the preview.
+4. Choose whether to **Email participants after this calculation**.
+5. Select **Apply recalculation**.
 
-- Every current share row is deleted and generated again.
-- Every previous Paid or Outstanding marker and its recorded payment time is lost.
-- The pool remains closed after the new calculation.
-- Participants with email addresses receive the final-share notification again.
-- Invoice records and their review statuses remain; they are not recreated.
+Previously settled money becomes a credit against the new calculation. For example, someone who paid 100.00 and now owes a calculated share of 120.00 gets a remaining share of 20.00. If the new calculation is 80.00, they get a refund of 20.00. If the old share was not marked Paid, its unpaid amount is replaced by the newly calculated amount.
 
-Recommended procedure:
+The credit carries across repeated recalculations exactly once. After the additional 20.00 is marked Paid, a later calculated share of 130.00 leaves 10.00 to pay. Payouts work the same way with negative signs: a previously paid-out 30.00 against a revised payout of 20.00 leaves 10.00 to collect back.
 
-1. Record the current shares and settlement markers outside Surveyor when they are needed for reconciliation.
-2. Correct all base settings, assignment selections, exemptions, takeovers, surcharges, attendance dates, and invoice reviews.
-3. Recheck the intended calculation.
-4. Select **Recalculate pool** and confirm the warning.
-5. Compare every replacement share with the expected result.
-6. Re-enter the correct settlement markers with the Paid switches.
+Payments stay with the person who made or received them. If a takeover changes the payer, or someone is removed from this pool but remains registered for the event, that person's existing payment can appear as a separate refund share. It is not silently transferred to another payer.
 
-There is no undo control for a recalculation.
+The pool stays closed and invoice review records are unchanged. A failed calculation preserves the old shares and payments. A changed input or payment revision requires a fresh preview. Save or **Discard edits** in open dialogs before calculating.
+
+### Roll back pool changes
+
+Use **Roll back pool changes** when you want to keep the last calculation instead of applying saved pool edits.
+
+1. Open the closed pool marked **Recalculation required**.
+2. Select **Roll back pool changes** and read the confirmation.
+3. Select **Restore last calculated settings**, read the result, then select **Return to pool**.
+
+Rollback restores the pool's description, distribution settings, rounding direction, email preference, assignments, factors, exemptions, surcharges/rebates, and takeovers from its last successful calculation. Existing shares and recorded payments are preserved. No calculation or settlement email is sent.
+
+Event registrations, attendance dates, and invoice reviews are separate records. Rollback does not undo those changes or recreate deleted participants. If they changed since the last calculation, the pool may still require recalculation after its local settings are restored. Review the result message.
+
+Rollback needs a saved calculation snapshot. Older closed pools without one gain it when they are next successfully recalculated. A snapshot from before the rounding setting was introduced restores with rounding up enabled and still requires recalculation. **Discard edits** only resets unsaved form fields; **Roll back pool changes** restores saved pool inputs. Rollback does not undo an already applied recalculation.
+
+### Send settlement emails
+
+**Send calculation emails automatically** in **Pool settings** controls the default. **Email participants after this calculation** lets you change the choice before closing or recalculating. Both start enabled for a new pool.
+
+To send updates afterward, open a closed pool, select **Send settlement emails**, and confirm. This works even if automatic emails are switched off. It sends to payers with an email address without recalculating, changing payment markers, or moving money.
+
+Emails describe saved settlement amounts and current Paid markers. Settled shares say there is no outstanding balance. Outstanding shares show the remaining payment or refund after earlier settlements. If pool inputs have changed, the message explains that it describes the previous saved calculation. Delivery still depends on the installation's mail service.
 
 ### Record whether a share is settled
 
-After pool closure, **Outstanding shares** lists each payer, covered beneficiaries, Base, Extra, Invoice credit, Total, Notes, and a **Paid** switch.
+After pool closure, **Shares & settlement** shows each payer's calculation, previously settled credit, remaining payment or refund, notes, and a **Paid** switch. When recalculation is required, these are still the saved amounts and the switches remain available. The **Covers** column then refers to the saved calculation notes.
 
 Use the switch only after the real-world amount has been settled:
 
-- For a positive Total, Paid means the payer’s amount has been received.
-- For a negative Total, Paid means the credit owed to the participant has been paid out.
+- For a positive remaining amount, Paid means that amount has been received.
+- For a negative remaining amount, Paid means that refund or payout has been completed.
 - Clear the switch to return a mistaken or reversed settlement to Outstanding.
 
-The switch changes Surveyor’s record and the pool’s **Outstanding payments** or **Credits owed to participants** total. It does not move money. Surveyor emails the participant when the status changes and an email address is available.
+The switch changes Surveyor’s record and the pool’s **Outstanding payments** or **Credits owed** total. It does not move money. Surveyor emails the participant when the status changes and an email address is available.
+
+Clearing Paid reverses the settlement marker for the currently displayed balance. It does not erase credits carried from earlier calculations. Correct mistaken Paid markers before applying the next recalculation.
 
 ## Privacy, proof access, storage, and retention
 
@@ -428,6 +504,9 @@ Invoice data is sensitive. A proof file may contain personal addresses, bank or 
 Surveyor stores proof files outside the database in the configured invoice directory and stores the corresponding invoice records in the database. Operators back up both as one state set. JPEG, PNG, GIF, and PDF proofs are limited to 10 MiB.
 
 Automatic invoice retention runs when the application starts and then hourly. When an event’s end date reaches the configured month-based cutoff, Surveyor permanently removes its invoice records and proof files and recalculates affected pool totals. The invoice history and proof are then no longer available in the application. Backup copies have their own retention lifecycle.
+
+Automatic retention preserves previously calculated settlement shares and does not itself require recalculation.
+Recalculating later uses only retained invoice records, so complete corrections before the relevant invoices expire.
 
 Operators should use Production Operations — Persistent files and Invoice retention. The setting is defined in Configuration — Persistent files and retention.
 
@@ -459,15 +538,15 @@ The person must be assigned to the same open pool. You cannot select yourself, a
 
 ### A share is different from the simple equal split
 
-Check the pool’s distribution mode, attendance dates, exemptions, offsetting and extra-only surcharges, invoice-credit setting, and takeovers. The Notes column shows the components applied to the payer.
+Check the pool’s distribution mode, attendance dates, individual factors, exemptions, redistributed and additional adjustments, invoice-credit setting, and takeovers. The Notes column shows the components applied to the payer.
 
 ### The pool changed but the shares did not
 
-A closed pool’s shares are frozen. Base settings, assignment choices, surcharge changes, takeover changes, later invoice review, or attendance corrections require **Recalculate pool** before the share rows change.
+A closed pool's calculation stays saved until you apply a recalculation. Save changes in the relevant dialog, then preview and recalculate, or use **Roll back pool changes** to restore saved pool inputs. Settlement switches remain available throughout.
 
-### A Paid marker disappeared
+### A recalculated share is Outstanding although I already paid
 
-Recalculation replaces all shares and resets them to Outstanding. Use the reconciliation record made before recalculation to restore the correct settlement states.
+Check **Previously settled** and the remaining amount. Prior payments reduce the new balance; only a new difference needs settlement. A zero balance is settled automatically. For a refund, the remaining amount is negative.
 
 ### An expected email did not arrive
 

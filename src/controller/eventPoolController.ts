@@ -29,7 +29,9 @@ import * as invoiceService from '../modules/database/services/EventInvoiceServic
 import * as eventService from '../modules/database/services/EventService';
 
 import mailer from '../modules/email';
+import {buildInvoiceSettlementEmail} from '../modules/lib/invoiceSettlementEmail';
 import {APIError} from '../modules/lib/errors';
+import {distributeInvoiceAmount} from '../modules/lib/invoiceDistribution';
 import {
     formatAmount,
     normalizeToArray,
@@ -79,6 +81,8 @@ async function createInvoicePool(event: Event, body: any) {
         isDefault: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on', '')).default(false),
         assignAll: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on', '')).default(false),
         subtractPersonalInvoices: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on', '')).default(true),
+        sendCalculationEmails: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on', '')).default(true),
+        roundUpShares: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on', '')).default(true),
         registrations: Joi.alternatives().try(
             Joi.array().items(Joi.number().integer()),
             Joi.number().integer(),
@@ -105,6 +109,8 @@ async function createInvoicePool(event: Event, body: any) {
         assignAll,
         subtractPersonalInvoices,
         regIds,
+        value.sendCalculationEmails === true || value.sendCalculationEmails === 'on',
+        value.roundUpShares === true || value.roundUpShares === 'on',
     );
 }
 
@@ -114,17 +120,28 @@ async function updatePoolSettings(event: Event, poolId: string, body: any) {
     const schema = Joi.object({
         description: Joi.string().allow('').optional(),
         distribution: Joi.string().valid(...InvoicePoolDistributions).required(),
+        sendCalculationEmails: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on', '')).optional(),
+        roundUpShares: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on', '')).optional(),
     });
     const {error, value} = schema.validate(body, {abortEarly: false, allowUnknown: true});
     if (error) throw new APIError(error.message, body, 400);
 
-    await invoiceService.updatePoolSettings(poolId, value.distribution, value.description);
+    await invoiceService.updatePoolSettings(poolId, value.distribution, value.description,
+        value.sendCalculationEmails === undefined ? undefined : value.sendCalculationEmails === true || value.sendCalculationEmails === 'on',
+        value.roundUpShares === undefined ? undefined : value.roundUpShares === true || value.roundUpShares === 'on');
 }
 
-// Update pool assignments before closure, respecting default/assign-all toggles and allowed participants.
-async function updatePoolAssignments(event: Event, poolId: string, body: any, allowClosed = false) {
+// Save calculation inputs independently; closed pools keep their shares until recalculation.
+async function updatePoolAssignments(event: Event, poolId: string, body: any) {
     const pool = await ensurePool(event, poolId);
-    if (pool.status === 'CLOSED' && !allowClosed) throw new APIError('Pool is closed', body, 400);
+    const {error, value} = Joi.object({
+        participantFactors: Joi.object().pattern(/^[1-9]\d*$/, Joi.number().min(0).max(1000).custom((factor, helpers) => {
+            const scaled = factor * 10000;
+            return Math.abs(scaled - Math.round(scaled)) < 0.0000001
+                ? factor : helpers.error('number.precision', {limit: 4});
+        })).default({}),
+    }).validate(body, {abortEarly: false, allowUnknown: true});
+    if (error) throw new APIError(error.message, body, 400);
     const isDefault = body.isDefault === true || body.isDefault === 'on';
     const assignAll = body.assignAll === true || body.assignAll === 'on';
     const subtractPersonalInvoices = body.subtractPersonalInvoices === undefined
@@ -135,17 +152,24 @@ async function updatePoolAssignments(event: Event, poolId: string, body: any, al
     const allowedIds = (await eventService.getRegistrationsForEvent(event.id)).map((r) => r.id);
     const regIds = assignAll ? allowedIds : regIdsRaw.map(Number).filter((id: number) => allowedIds.includes(id));
     const exemptIds = exemptIdsRaw.map(Number).filter((id: number) => allowedIds.includes(id));
-    await invoiceService.updateAssignments(poolId, isDefault, assignAll, subtractPersonalInvoices, regIds, exemptIds);
+    const participantFactors = value.participantFactors as Record<number, number>;
+    if (Object.keys(participantFactors).some((id) => !regIds.includes(Number(id)))) {
+        throw new APIError('Factors can only be set for participants assigned to this pool', body, 400);
+    }
+    await invoiceService.updateAssignments(poolId, isDefault, assignAll, subtractPersonalInvoices, regIds, exemptIds, participantFactors);
 }
 
-// Create a participant-specific surcharge that will be factored in during pool closure.
-async function addPoolSurcharge(event: Event, poolId: string, body: any, allowClosed = false) {
+// Signed adjustments are applied after the weighted base split.
+async function addPoolSurcharge(event: Event, poolId: string, body: any) {
     const pool = await ensurePool(event, poolId);
-    if (pool.status === 'CLOSED' && !allowClosed) throw new APIError('Pool is closed', body, 400);
     const schema = Joi.object({
-        registrationId: Joi.number().integer().required(),
-        amount: Joi.number().positive().required(),
-        note: Joi.string().required(),
+        registrationId: Joi.number().integer().positive().required(),
+        amount: Joi.number().min(-99999999.99).max(99999999.99).invalid(0).custom((amount, helpers) => {
+            const cents = amount * 100;
+            return Math.abs(cents - Math.round(cents)) < 0.00001
+                ? amount : helpers.error('number.precision', {limit: 2});
+        }).required(),
+        note: Joi.string().trim().max(4000).required(),
         subtractFromPool: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on', '')).default(true),
     });
     const {error, value} = schema.validate(body, {abortEarly: false, allowUnknown: true});
@@ -159,7 +183,7 @@ async function addPoolSurcharge(event: Event, poolId: string, body: any, allowCl
     await invoiceService.addSurcharge(poolId, registrationId, Number(value.amount), cleanedNote, subtractFromPool);
 }
 
-// Remove a surcharge so admins can correct mistakes before the pool closes.
+// Remove an adjustment, invalidating previously calculated shares when necessary.
 async function removePoolSurcharge(event: Event, poolId: string, surchargeId: string) {
     await ensurePool(event, poolId);
     await invoiceService.removeSurcharge(poolId, Number(surchargeId));
@@ -299,7 +323,7 @@ async function submitInvoice(event: Event, poolId: string, body: any, session: R
     if (error) throw new APIError(error.message, body, 400);
     const pool = await ensurePool(event, poolId);
     if (pool.status === 'CLOSED') throw new APIError('Pool is closed', body, 400);
-    const isAssigned = pool.assignAll || pool.isDefault || pool.assignments?.some((a) => a.registration.id === regId);
+    const isAssigned = pool.assignAll || pool.assignments?.some((a) => a.registration.id === regId);
     if (!isAssigned) throw new APIError('Not allowed for this pool', body, 403);
     if (!file) throw new APIError('A proof image or PDF is required', body, 400);
     const isValidProof = file.mimetype === 'application/pdf' || file.mimetype.startsWith('image/');
@@ -317,7 +341,8 @@ async function submitInvoice(event: Event, poolId: string, body: any, session: R
     const invoice = await invoiceService.getInvoiceWithRegistration(poolId, invoiceId);
     const email = invoice?.registration.profile.user?.email || invoice?.registration.profile.guest?.email;
     if (email) {
-        await mailer.sendEmail(
+        // Receipt delivery must not hold the successful upload response open for SMTP.
+        void mailer.sendEmail(
             email,
             'Invoice submitted',
             {
@@ -336,7 +361,7 @@ async function submitInvoice(event: Event, poolId: string, body: any, session: R
                 action: {label: 'View invoice history', url: eventPageUrl(event)},
                 notice: 'You will receive another email when an organizer accepts or rejects this invoice.',
             },
-        );
+        ).catch((error: unknown) => console.error('Invoice receipt email failed:', error));
     }
 }
 
@@ -489,7 +514,7 @@ async function declineInvoice(
 type CalculationDto = {
     pool: EventInvoicePool,
     targetRegistrations: EventRegistration[],
-    individualCosts: Map<number, { total: number, days?: number }>,
+    individualCosts: Map<number, { total: number, days?: number, factor?: number }>,
     exemptIds: Set<number>,
     surchargeMap: Map<number, { amount: number; note: string }[]>,
     invoiceCreditMap: Map<number, number>,
@@ -497,10 +522,9 @@ type CalculationDto = {
     participantMap: Map<string | number, ParticipantRow>
 }
 
-// Close a pool by distributing approved invoice totals, surcharges, and takeovers into payer shares.
-async function closePool(event: Event, poolId: string, body: any = {}, session?: Request['session']) {
+// Build the same gross shares for the read-only preview and the committed calculation.
+async function preparePoolCalculation(event: Event, poolId: string) {
     const pool = await ensurePool(event, poolId);
-    if (pool.status === 'CLOSED') return;
 
     const approvedInvoices = (pool.invoices || []).filter(
         (invoice) => invoice.status === 'APPROVED' || invoice.status === 'CLOSED',
@@ -513,8 +537,8 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
     // Gather target registrations before handing persistence back to the service
     const targetRegistrations = pool.assignAll
         ? await eventService.getRegistrationsForEvent(event.id)
-        : pool.assignments.map((a) => a.registration);
-    if (!targetRegistrations.length) throw new APIError('No participants assigned to this pool', {}, 400);
+        : Array.from(new Map(pool.assignments.map((assignment) => [assignment.registrationId, assignment.registration])).values());
+    if (!targetRegistrations.length && pool.status !== 'CLOSED') throw new APIError('No participants assigned to this pool', {}, 400);
 
     const targetIds = new Set(targetRegistrations.map((r) => r.id));
     const exemptIds = new Set((pool.assignments || []).filter((a) => a.isExempt).map((a) => a.registrationId));
@@ -548,51 +572,119 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
     const payerShares = calculatePayerShares(calcDto);
 
     const sharePayloads = Array.from(payerShares.entries()).map(([registrationId, data]) => {
-        const baseShareAmount = toAmount(data.base);
-        const extraAmount = toAmount(data.surcharges);
-        const invoiceCreditAmount = toAmount(data.invoiceCredits);
-        const shareValue = data.base + data.surcharges - data.invoiceCredits;
-        const shareAmount = toAmount(shareValue);
+        const baseShareAmount = Math.round(data.base * 100) / 100;
+        const extraAmount = Math.round(data.surcharges * 100) / 100;
+        const invoiceCreditAmount = Math.round(data.invoiceCredits * 100) / 100;
+        const shareAmount = Math.round((baseShareAmount + extraAmount - invoiceCreditAmount) * 100) / 100;
         const note = data.detailNotes.filter(Boolean).join(' • ') || undefined;
         return {registrationId, baseShareAmount, extraAmount, invoiceCreditAmount, shareAmount, note};
     });
 
-    await invoiceService.closePool(poolId, approvedInvoices.map((inv) => inv.id), sharePayloads);
+    return {pool, participants, sharePayloads, approvedInvoiceIds: approvedInvoices.map((invoice) => invoice.id)};
+}
 
-    // Notify payers so they know what they owe and whether they are covering someone else
-    const actor = resolveActorLabel(session ?? undefined);
-    for (const [payerId, data] of payerShares.entries()) {
-        const recipient = participantMap.get(payerId);
-        const email = recipient?.email && recipient.email !== '—' ? recipient.email : null;
-        if (!email) continue;
-        const coverageNames = data.beneficiaries
-            .map((id) => participantMap.get(id)?.name || `Participant #${id}`)
-            .join(', ');
-        const totalDue = data.base + data.surcharges - data.invoiceCredits;
-        const verb = totalDue < 0 ? 'are owed' : 'owe';
-        const formattedTotal = formatAmount(Math.abs(totalDue));
-        void mailer.sendEmail(
-            email,
-            'Invoice pool closed',
-            {
-                eyebrow: 'Final invoice share',
-                heading: `You ${verb} ${formattedTotal}`,
-                preheader: `Your final share for ${pool.name} is ready.`,
-                paragraphs: ['The invoice pool has been closed and your final share has been calculated.'],
-                details: [
-                    {label: 'Event', value: event.title},
-                    {label: 'Pool', value: pool.name},
-                    {label: totalDue < 0 ? 'Amount owed to you' : 'Amount due', value: formattedTotal},
-                    ...(coverageNames ? [{label: 'Covering', value: coverageNames}] : []),
-                    {label: 'Closed by', value: actor},
-                ],
-                sections: data.detailNotes.length
-                    ? [{title: 'Calculation breakdown', items: data.detailNotes}]
-                    : undefined,
-                action: {label: 'View invoice pool', url: eventPageUrl(event)},
-            },
-        );
+function calculationOptions(body: unknown) {
+    const {error, value} = Joi.object({
+        sendEmails: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on', '')).optional(),
+        expectedRevision: Joi.number().integer().min(0).optional(),
+    }).validate(body, {allowUnknown: true});
+    if (error) throw new APIError(error.message, {}, 400);
+    return value as {sendEmails?: boolean | 'on' | ''; expectedRevision?: number};
+}
+
+async function previewPool(event: Event, poolId: string) {
+    const {pool, participants, sharePayloads} = await preparePoolCalculation(event, poolId);
+    const participantMap = new Map(participants.map((participant) => [Number(participant.id), participant]));
+    const projected = invoiceService.projectInvoiceShares(pool.shares || [], sharePayloads, participants.map((participant) => Number(participant.id)));
+    const shares = projected.map((share) => ({
+        ...share,
+        payerName: participantMap.get(share.registrationId)?.name || `Participant #${share.registrationId}`,
+        calculatedAmount: Math.round((share.baseShareAmount + share.extraAmount - share.invoiceCreditAmount) * 100) / 100,
+    }));
+    const sum = (amounts: number[]) => Math.round(amounts.reduce((total, amount) => total + amount, 0) * 100) / 100;
+    const invoiceAmount = sum((pool.invoices || [])
+        .filter((invoice) => invoice.status === 'APPROVED' || invoice.status === 'CLOSED')
+        .map((invoice) => resolveInvoiceAmount(invoice.amount, invoice.correctedAmount)));
+    const redistributedAmount = sum((pool.surcharges || []).filter((adjustment) => adjustment.subtractFromPool)
+        .map((adjustment) => toAmount(adjustment.amount)));
+    const additionalAmount = sum((pool.surcharges || []).filter((adjustment) => !adjustment.subtractFromPool)
+        .map((adjustment) => toAmount(adjustment.amount)));
+    const distributableAmount = sum([invoiceAmount, -redistributedAmount]);
+    const allocatedBaseAmount = sum(shares.map((share) => share.baseShareAmount));
+    const adjustmentAmount = sum(shares.map((share) => share.extraAmount));
+    const invoiceCreditAmount = sum(shares.map((share) => share.invoiceCreditAmount));
+    return {
+        revision: pool.calculationRevision,
+        roundUpShares: pool.roundUpShares == null || !!pool.roundUpShares,
+        shares,
+        totals: {
+            invoiceAmount,
+            redistributedAmount,
+            distributableAmount,
+            allocatedBaseAmount,
+            roundingDifference: sum([allocatedBaseAmount, -distributableAmount]),
+            adjustmentAmount,
+            grossAmount: sum([allocatedBaseAmount, adjustmentAmount]),
+            invoiceCreditAmount,
+            expectedNetAmount: sum([invoiceAmount, additionalAmount, -invoiceCreditAmount]),
+            calculatedAmount: sum(shares.map((share) => share.calculatedAmount)),
+            paymentCreditAmount: sum(shares.map((share) => share.paymentCreditAmount)),
+            outstandingAmount: sum(shares.map((share) => share.isPaid ? 0 : Math.max(share.shareAmount, 0))),
+            creditAmount: sum(shares.map((share) => share.isPaid ? 0 : Math.max(-share.shareAmount, 0))),
+        },
+    };
+}
+
+async function closePool(event: Event, poolId: string, body: any = {}, session?: Request['session'], recalculate = false) {
+    const options = calculationOptions(body);
+    const {pool, sharePayloads, approvedInvoiceIds} = await preparePoolCalculation(event, poolId);
+    if (options.expectedRevision !== undefined && options.expectedRevision !== pool.calculationRevision) {
+        throw new APIError('The preview is out of date. Preview the calculation again before applying it.', {}, 409);
     }
+    await invoiceService.closePool(poolId, approvedInvoiceIds, sharePayloads, recalculate, pool.calculationRevision);
+    const sendEmails = options.sendEmails === undefined ? pool.sendCalculationEmails : options.sendEmails === true || options.sendEmails === 'on';
+    if (sendEmails) {
+        try {
+            await notifyPoolShares(event, poolId, {expectedRevision: pool.calculationRevision + 1}, session, recalculate ? 'recalculated' : 'closed');
+        } catch (error) {
+            console.error('[invoice-pool] Calculation saved but settlement notification could not be queued', error);
+        }
+    }
+}
+
+async function rollbackPoolChanges(event: Event, poolId: string, body: any = {}) {
+    await ensurePool(event, poolId);
+    const options = calculationOptions(body);
+    return invoiceService.rollbackPoolChanges(poolId, options.expectedRevision);
+}
+
+async function notifyPoolShares(event: Event, poolId: string, body: any = {}, session?: Request['session'], reason: 'closed' | 'recalculated' | 'requested' = 'requested') {
+    const options = calculationOptions(body);
+    const participants = new Map((await eventService.getEventParticipants(event.id)).map((participant) => [Number(participant.id), participant]));
+    const pool = await ensurePool(event, poolId);
+    if (pool.status !== 'CLOSED') throw new APIError('Close the pool before sending settlement emails', {}, 400);
+    if (options.expectedRevision !== undefined && options.expectedRevision !== pool.calculationRevision) {
+        throw new APIError('The settlement changed. Reload before sending emails.', {}, 409);
+    }
+    let count = 0;
+    for (const share of pool.shares || []) {
+        const email = participants.get(share.registrationId)?.email;
+        if (!email || email === '—') continue;
+        const content = buildInvoiceSettlementEmail({
+            eventTitle: event.title,
+            poolName: pool.name,
+            eventUrl: eventPageUrl(event),
+            actor: resolveActorLabel(session),
+            reason,
+            needsRecalculation: !!pool.needsRecalculation,
+            share,
+        });
+        // Queue delivery without making SMTP availability part of calculation success.
+        void mailer.sendEmail(email, reason === 'closed' ? 'Invoice pool closed' : reason === 'recalculated' ? 'Invoice pool recalculated' : 'Invoice pool settlement', content)
+            .catch((error: unknown) => console.error('[invoice-pool] Could not send settlement notification', error));
+        count++;
+    }
+    return {count};
 }
 
 function bucketSurcharges(pool: EventInvoicePool, targetIds: Set<number>) {
@@ -629,28 +721,27 @@ function calculateTakeovers(pool: EventInvoicePool, targetIds: Set<number>) {
 }
 
 function calculateIndividualCosts(pool: EventInvoicePool, billableRegistrations: EventRegistration[]) {
-    const total = toAmount(pool.payableAmount);
-    let individualCosts = new Map<number, { total: number, days?: number }>();
-    if (pool.distributionMethod === "TIME_BASED" || pool.distributionMethod === "NIGHTS") {
-        const baseDayCount = pool.distributionMethod === "NIGHTS" ? 0 : 1;
-        const individualDays = billableRegistrations.reduce((acc, reg) => {
-            acc.set(reg.id, differenceInCalendarDays(reg.departureDate, reg.arrivalDate) + baseDayCount);
-            return acc;
-        }, new Map<number, number>());
-        const totalDays = Array.from(individualDays.values()).reduce((total, val) => total + val, 0);
-        const costPerDay = totalDays ? total / totalDays : 0;
-        individualCosts = Array.from(individualDays.entries()).reduce((acc, reg) => {
-            acc.set(reg[0], {total: costPerDay * reg[1], days: reg[1]});
-            return acc;
-        }, new Map<number, { total: number, days?: number }>());
-    } else if (pool.distributionMethod === ("EQUAL" as InvoicePoolDistribution)) {
-        const perPerson = billableRegistrations.length ? total / billableRegistrations.length : 0;
-        individualCosts = billableRegistrations.reduce((acc, reg) => {
-            acc.set(reg.id, {total: perPerson});
-            return acc;
-        }, new Map<number, { total: number, days?: number }>())
+    const invoiceTotal = pool.invoices.filter((invoice) => invoice.status === 'APPROVED' || invoice.status === 'CLOSED')
+        .reduce((sum, invoice) => sum + resolveInvoiceAmount(invoice.amount, invoice.correctedAmount), 0);
+    const offset = (pool.surcharges || []).filter((adjustment) => adjustment.subtractFromPool)
+        .reduce((sum, adjustment) => sum + toAmount(adjustment.amount), 0);
+    const factors = new Map((pool.assignments || []).map((assignment) => [assignment.registrationId, assignment.factor ?? 1]));
+    const weights = billableRegistrations.map((registration) => {
+        const days = pool.distributionMethod === 'EQUAL' ? undefined
+            : differenceInCalendarDays(registration.departureDate, registration.arrivalDate)
+                + (pool.distributionMethod === 'NIGHTS' ? 0 : 1);
+        return {registrationId: registration.id, weight: days ?? 1, factor: factors.get(registration.id) ?? 1, days};
+    });
+    try {
+        const amounts = distributeInvoiceAmount(invoiceTotal - offset, weights, pool.roundUpShares == null || !!pool.roundUpShares);
+        return new Map(weights.map((participant) => [participant.registrationId, {
+            total: amounts.get(participant.registrationId) ?? 0,
+            days: participant.days,
+            factor: participant.factor,
+        }]));
+    } catch (error) {
+        throw new APIError(error instanceof Error ? error.message : 'Cannot calculate invoice shares', {}, 400);
     }
-    return individualCosts;
 }
 
 function calculatePayerShares(dto: CalculationDto) {
@@ -663,7 +754,7 @@ function calculatePayerShares(dto: CalculationDto) {
         detailNotes: string[]
     }>();
     for (const registration of dto.targetRegistrations) {
-        const personalCost: { total?: number, days?: number } = dto.individualCosts.get(registration.id) || {};
+        const personalCost: { total?: number, days?: number, factor?: number } = dto.individualCosts.get(registration.id) || {};
         const baseShare = dto.exemptIds.has(registration.id) ? 0 : (personalCost.total || 0);
         const extras = dto.surchargeMap.get(registration.id) || [];
         const extraTotal = extras.reduce((sum, entry) => sum + entry.amount, 0);
@@ -688,8 +779,9 @@ function calculatePayerShares(dto: CalculationDto) {
         extras.forEach((entry) => {
             const adjustmentTarget = beneficiaryName || participantLabel;
             const detailLabel = entry.note ? `${adjustmentTarget} — ${entry.note}` : adjustmentTarget;
-            bucket.detailNotes.push(`Surcharge for ${detailLabel}: ${formatAmount(entry.amount)}`);
-            if (entry.note) bucket.notes.push(`Surcharge for ${adjustmentTarget}: ${entry.note}`);
+            const label = entry.amount < 0 ? 'Rebate' : 'Surcharge';
+            bucket.detailNotes.push(`${label} for ${detailLabel}: ${formatAmount(entry.amount)}`);
+            if (entry.note) bucket.notes.push(`${label} for ${adjustmentTarget}: ${entry.note}`);
         });
         if (invoiceCredit) {
             bucket.detailNotes.push(`Invoice credit for ${beneficiaryName || 'self'}: -${formatAmount(invoiceCredit)}`);
@@ -701,7 +793,8 @@ function calculatePayerShares(dto: CalculationDto) {
 
 function calculatePayerSharesInitialNotes(dto: CalculationDto, registration: EventRegistration, beneficiaryName: string | null, baseShare: number, personalCost: {
     total?: number;
-    days?: number
+    days?: number;
+    factor?: number;
 }, bucket: {
     base: number;
     surcharges: number;
@@ -712,6 +805,9 @@ function calculatePayerSharesInitialNotes(dto: CalculationDto, registration: Eve
 }) {
     const dayLabel = dto.pool.distributionMethod === "NIGHTS" ? "nights" : "days";
     bucket.detailNotes.push(`Base share for ${beneficiaryName || 'self'}: ${formatAmount(baseShare)}`);
+    if (personalCost.factor !== undefined && personalCost.factor !== 1) {
+        bucket.detailNotes.push(`Share factor for ${beneficiaryName || 'self'}: ${personalCost.factor}`);
+    }
     if (dto.exemptIds.has(registration.id)) bucket.detailNotes.push('Exempt from automatic share');
     if (personalCost.days) {
         bucket.detailNotes.push(`(for ${personalCost.days} ${dayLabel})`);
@@ -791,30 +887,14 @@ export async function serveInvoiceProof(event: Event, poolId: string, invoiceId:
     return fullPath;
 }
 
-// Recalculate a closed pool by deleting existing shares and re-running the closePool logic
-// This allows admins to adjust pool settings after closure and recalculate shares
-// The reopenPool and closePool operations use transactions with locks to prevent race conditions
+// Replace the saved calculation atomically while the pool remains closed to new uploads.
 async function recalculatePool(event: Event, poolId: string, body: any = {}, session?: Request['session']) {
     const pool = await ensurePool(event, poolId);
     if (pool.status !== 'CLOSED') {
         throw new APIError('Only closed pools can be recalculated', {}, 400);
     }
 
-    // Persist any pending assignment or surcharge updates submitted with the recalculation request
-    if (body.assignments) {
-        await updatePoolAssignments(event, poolId, body.assignments, true);
-    }
-
-    if (body.surcharge) {
-        await addPoolSurcharge(event, poolId, body.surcharge, true);
-    }
-
-    // Reopen the pool (uses SERIALIZABLE transaction with pessimistic write lock)
-    await invoiceService.reopenPool(poolId);
-
-    // Re-run the close pool logic which will recalculate all shares
-    // closePool also uses transactions (READ COMMITTED) for share deletion and creation
-    await closePool(event, poolId, body, session);
+    await closePool(event, poolId, body, session, true);
 }
 
 export default {
@@ -829,6 +909,9 @@ export default {
     declineInvoice,
     closePool,
     recalculatePool,
+    previewPool,
+    rollbackPoolChanges,
+    notifyPoolShares,
     markSharePaid,
     updateTakeovers,
     serveInvoiceProof

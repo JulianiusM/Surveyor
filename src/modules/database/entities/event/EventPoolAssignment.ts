@@ -36,6 +36,16 @@ export class EventPoolAssignment extends NumericBase {
     @RelationId((assignment: EventPoolAssignment) => assignment.registration)
     registrationId!: number;
 
+    // Multiplies this participant's distribution weight; zero skips the shared portion.
+    @Column("decimal", {
+        name: "factor",
+        precision: 10,
+        scale: 4,
+        default: "1.0000",
+        transformer: {to: (value: number) => value, from: Number},
+    })
+    factor!: number;
+
     // Exempt participants skip automatic share calculation but still allow manual surcharges
     @Column("tinyint", {
         name: "is_exempt",

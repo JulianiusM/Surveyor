@@ -29,7 +29,7 @@ import {EventRegistration} from '../entities/event/EventRegistration';
 import {EventRegistrationDietary} from "../entities/event/EventRegistrationDietary";
 import {PackingList} from "../entities/packing/PackingList";
 import * as entityAdminService from "./EntityAdminService";
-import {registerForDefaultPools} from "./EventInvoiceService";
+import {invalidateEventPools, lockEventPools, registerForDefaultPools} from "./EventInvoiceService";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Events (CRUD)
@@ -147,6 +147,7 @@ export async function register(
     bypass?: { ok: boolean, linkId?: string },
 ) {
     return await AppDataSource.transaction('READ COMMITTED', async (manager) => {
+        await lockEventPools(manager, eventId);
         const repo = manager.getRepository(EventRegistration);
         let reg = await repo.findOneBy({event: {id: eventId}, profile: {id: profileId}});
         if (reg) {
@@ -167,7 +168,8 @@ export async function register(
             const ok = await consumeDeadlineBypassToken(bypass.linkId, profileId);
             if (!ok) throw new ExpectedError('This link has already been used', 'error', 409);
         }
-        await registerForDefaultPools(manager, reg)
+        await registerForDefaultPools(manager, reg);
+        await invalidateEventPools(manager, eventId);
         return reg.id;
     });
 }
@@ -211,8 +213,11 @@ export async function getEventParticipants(eventId: string): Promise<Participant
 }
 
 export async function deleteRegistrationFor(eventId: string, profileId: string) {
-    const repo = AppDataSource.getRepository(EventRegistration);
-    await repo.delete({event: {id: eventId}, profile: {id: profileId}});
+    await AppDataSource.transaction('READ COMMITTED', async (manager) => {
+        await lockEventPools(manager, eventId);
+        const result = await manager.getRepository(EventRegistration).delete({event: {id: eventId}, profile: {id: profileId}});
+        if (result.affected) await invalidateEventPools(manager, eventId);
+    });
 }
 
 // Replace all dietary rows for a registration
@@ -266,20 +271,25 @@ export async function getRegisteredEventsFor(profileId: string): Promise<Event[]
 }
 
 export async function deleteRegistration(eventId: string, regId: string | number) {
-    const repo = AppDataSource.getRepository(EventRegistration);
-
-    // Only delete within the event scope
-    const res = await repo.delete({id: Number(regId), event: {id: eventId}});
-    return (res?.affected ?? 0) > 0;
+    return AppDataSource.transaction('READ COMMITTED', async (manager) => {
+        await lockEventPools(manager, eventId);
+        const res = await manager.getRepository(EventRegistration).delete({id: Number(regId), event: {id: eventId}});
+        if (res.affected) await invalidateEventPools(manager, eventId);
+        return (res?.affected ?? 0) > 0;
+    });
 }
 
 export async function updateRegistrationDates(eventId: string, regId: number, arrivalDate: string, departureDate: string) {
-    const repo = AppDataSource.getRepository(EventRegistration);
-    const reg = await repo.findOne({where: {id: regId, event: {id: eventId}}});
-    if (!reg) throw new ExpectedError('Registration not found', 'error', 404);
-    reg.arrivalDate = arrivalDate;
-    reg.departureDate = departureDate;
-    await repo.save(reg);
+    await AppDataSource.transaction('READ COMMITTED', async (manager) => {
+        await lockEventPools(manager, eventId);
+        const repo = manager.getRepository(EventRegistration);
+        const reg = await repo.findOne({where: {id: regId, event: {id: eventId}}});
+        if (!reg) throw new ExpectedError('Registration not found', 'error', 404);
+        reg.arrivalDate = arrivalDate;
+        reg.departureDate = departureDate;
+        await repo.save(reg);
+        await invalidateEventPools(manager, eventId);
+    });
 }
 
 export async function isEventFull(eventId: string): Promise<boolean> {

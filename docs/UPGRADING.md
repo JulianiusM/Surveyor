@@ -5,10 +5,10 @@ documentation-metadata
 audience: operators; site reliability engineers; database administrators; maintainers
 owner: application operators
 status: current
-last-verified: 2026-09-05
+last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: D04 accepted from source review and deployment-practice confirmation for release packaging, versioned deployment, dependency installation, migration ordering, persistent-state backup, validation, and rollback; controlled execution tracked separately in D04V
-source-anchors: .github/workflows/release.yml; package.json; scripts/runMigration.ts; migrationDataSource.ts; src/server.ts; src/modules/settings.ts; src/modules/invoiceRetention.ts; docs/DATABASE.md; docs/OPERATIONS.md
+verification-scope: consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factor and settlement migrations, preserved paid markers, payment-credit and rollback-snapshot initialization; D04 accepted from source review and deployment-practice confirmation for release packaging, versioned deployment, dependency installation, migration ordering, persistent-state backup, validation, and rollback; controlled execution tracked separately in D04V
+source-anchors: src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; scripts/runMigration.ts; migrationDataSource.ts; src/server.ts; src/modules/settings.ts; src/modules/invoiceRetention.ts; docs/DATABASE.md; docs/OPERATIONS.md
 next-review: D04V
 -->
 
@@ -163,6 +163,21 @@ Confirm that `uploads` in the new release points to `/var/lib/surveyor/uploads` 
 release and write both persistent upload directories.
 
 ### 5. Start and validate
+
+For the invoice-pool updates, apply the factor/recalculation, settlement-credit/snapshot, and share-rounding migrations
+before starting the new release. Existing factors start at `1`; stored shares and Paid markers are preserved. New
+payment credits start at zero and incorporate existing paid amounts on the next recalculation. Rollback snapshots are
+created by successful calculations; no historical input snapshot is invented for older closed pools.
+The rounding setting starts enabled. Existing closed pools are marked for recalculation without changing their saved
+payments or shares. A rollback to inputs saved before rounding was configurable still requires recalculation under
+the new rule. Preview shows any cent surplus or shortfall from rounding every participant in the same direction.
+Ask organizers to preview pools marked **Recalculation required** and reconcile payment markers before applying the
+calculation. Recalculation carries recorded settlements forward; notification switches determine whether emails are
+sent. Do not trigger calculations or settlement emails as unattended upgrade steps.
+After recalculations have stored payment credits, reverting only the settlement migration would discard those credits
+while retaining residual share amounts. Use the full pre-upgrade database restore when rolling back to a release
+without settlement-credit support.
+See [Invoice pool operations](OPERATIONS.md#invoice-pool-factors-rebates-and-recalculation).
 
 ```bash
 systemctl start surveyor
