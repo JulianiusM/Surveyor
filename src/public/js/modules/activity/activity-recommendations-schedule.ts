@@ -11,6 +11,7 @@
 import {get, post} from '../../core/http';
 import {generateRecommendationsAndWait} from './activity-recommendation-jobs';
 import {reloadAfterDelay} from '../../shared/ui-helpers';
+import {showInlineAlert} from '../../shared/alerts';
 import {RecommendationsLogic} from './activity-recommendations-logic';
 import {ActivityRecommendationsState} from './activity-recommendations-state';
 import {RecommendationsUI} from './activity-recommendations-ui';
@@ -107,9 +108,9 @@ export async function initRecommendationScheduleView(planId: string, describeSlo
 
     const generateRecommendations = async () => {
         try {
-            ui!.setAlert('Generating recommendations...', 'info');
+            ui!.setAlert('Generating recommendations...', 'info', true);
             await generateRecommendationsAndWait(planId, (status) => {
-                if (status === 'RUNNING') ui!.setAlert('Calculating recommendations...', 'info');
+                if (status === 'RUNNING') ui!.setAlert('Calculating recommendations...', 'info', true);
             });
             ui!.setAlert('Recommendations generated successfully.', 'info');
             await loadRecommendations();
@@ -134,7 +135,7 @@ export async function initRecommendationScheduleView(planId: string, describeSlo
         }));
 
         try {
-            ui!.setAlert('Saving recommendations...', 'info');
+            ui!.setAlert('Saving recommendations...', 'info', true);
             await post(`/api/activity/${planId}/recommendations/apply`, {recommendations: payload});
             ui!.setAlert('Recommendations saved successfully! Reloading...', 'info');
 
@@ -156,7 +157,7 @@ export async function initRecommendationScheduleView(planId: string, describeSlo
         if (!participant) return;
         if (logic!.isDuplicate(request.targetSlotId, request.profileId)
             || logic!.isAlreadyAssigned(request.targetSlotId, request.profileId)) {
-            alert('This recommendation already exists.');
+            showInlineAlert('error', 'This recommendation already exists.', document.querySelector<HTMLElement>('#addRecommendationModal .modal-body') ?? undefined);
             return;
         }
 
@@ -187,7 +188,7 @@ export async function initRecommendationScheduleView(planId: string, describeSlo
                 if (!outgoingAssignment || !outgoingParticipant) return;
                 if (logic!.isDuplicate(sourceSlot.id, request.swapProfileId)
                     || logic!.isAlreadyAssigned(sourceSlot.id, request.swapProfileId)) {
-                    alert('The selected participant cannot be moved into the other side of this swap.');
+                    showInlineAlert('error', 'The selected participant cannot be moved into the other side of this swap.', document.querySelector<HTMLElement>('#addRecommendationModal .modal-body') ?? undefined);
                     return;
                 }
                 staged.push(logic!.createRecommendation(
@@ -206,7 +207,7 @@ export async function initRecommendationScheduleView(planId: string, describeSlo
 
     const handleUnassign = (slotId: string, profileId: string) => {
         if (logic!.isDuplicate(slotId, profileId)) {
-            alert('A recommendation for this participant and slot already exists.');
+            showInlineAlert('error', 'A recommendation for this participant and slot already exists.');
             return;
         }
         const assignment = state!.getExistingAssignments().find((existing) =>

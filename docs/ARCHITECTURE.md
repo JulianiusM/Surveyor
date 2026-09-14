@@ -6,8 +6,8 @@ owner: architecture maintainers
 status: current
 last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, preview/commit calculation projection, cumulative settled credits, rollback snapshots, and settlement notification boundaries; non-blocking documentation policy and optional report/test routing; D12 runtime, layer, authentication, authorization, persistence, frontend, background-job, build, release, and testing architecture plus D08 advanced activity requirement, allocation, job, review, and persistence boundaries; help integration remains assigned to D14; D14 fixed-source help search, contextual routing, Markdown validation, local visual assets, and release boundary
-source-anchors: src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoiceRetention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
+verification-scope: central named mail delivery and alert lifecycle, consistent pool relation snapshots, post-commit notifications, and saved-share PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, preview/commit calculation projection, cumulative settled credits, rollback snapshots, and settlement notification boundaries; non-blocking documentation policy and optional report/test routing; D12 runtime, layer, authentication, authorization, persistence, frontend, background-job, build, release, and testing architecture plus D08 advanced activity requirement, allocation, job, review, and persistence boundaries; help integration remains assigned to D14; D14 fixed-source help search, contextual routing, Markdown validation, local visual assets, and release boundary
+source-anchors: src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoiceRetention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
 next-review: architecture-or-help-delivery-change
 -->
 
@@ -224,6 +224,12 @@ Base-share rounding is a saved pool setting. Exact weighted cent ratios round ev
 before takeovers are combined. Preview reconciliation reports the rounding surplus or shortfall and separates invoice
 reimbursements and recorded settlements from gross costs.
 
+The pool loader fetches child collections with TypeORM's query relation strategy in a `REPEATABLE READ` transaction,
+keeping a consistent snapshot without a multiplying join. Writes retain locks and revision comparisons. Review and
+settlement notifications start only after persistence; SMTP failures are logged separately from financial results.
+The organizer ledger searches and pages saved shares in the browser, while its authorized portrait A4 PDF endpoint
+exports every persisted share with current payment state and a notice when the saved calculation is stale.
+
 ### Activity plans
 
 Activity plans contain dated slots, optional roles, assignments, shared fields, participant requirements, availability, recommendations, and review operations. The user guide owns the basic and advanced organizer workflows. [Activity Requirements and Assignment Recommendations](ACTIVITY_REQUIREMENTS_ALGORITHM.md) is the canonical technical reference for precedence, coverage, fair allocation, bounded repair, overfill, background jobs, review states, and application persistence.
@@ -240,6 +246,11 @@ A drivers-list row represents a ride offered by the profile that created it. Pas
 
 Identity services manage activation, password reset, OIDC links, guest tokens/recovery, profile creation/default selection, profile migration, and deletion. Relationships throughout the collaboration domains use profiles as the human actor.
 
+`src/modules/email.ts` owns message rendering and SMTP delivery. Its required named recipient contract provides a
+Nodemailer Address object for the To header and a single personal greeting before the heading in both HTML and plain
+text. Callers supply actual account, guest, or profile names. HTML text escaping and HTTP(S)-only action links apply
+centrally to every notification.
+
 ## Frontend architecture
 
 ### Server-rendered pages
@@ -247,6 +258,11 @@ Identity services manage activation, password reset, OIDC links, guest tokens/re
 Pug templates under `src/views/` render the primary HTML. Shared layout and module templates provide navigation, entity headers, permissions, cards, forms, and administration controls.
 
 Page rendering uses `src/modules/renderer.ts` to pass consistent status, message, and data objects. Flash messages cover redirect-based workflows.
+
+The shared layout always loads `notifications.ts`, including pages with their own script blocks. Transient alerts are
+observed centrally and expire ten seconds after insertion or renewal. Persistent warnings and active progress use
+status semantics and remain visible. Pool actions lock relevant controls during a request, report a delayed status
+after five seconds, and change the displayed saved state only after server confirmation.
 
 ### Browser TypeScript
 

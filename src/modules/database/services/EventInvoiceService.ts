@@ -34,10 +34,12 @@ import {EventPoolAssignment} from "../entities/event/EventPoolAssignment";
 import {EventPoolTakeover} from "../entities/event/EventPoolTakeover";
 import {EventRegistration} from "../entities/event/EventRegistration";
 
-// Centralized pool loader to keep relation loading consistent across controllers
+// Separate relation queries avoid multiplying all child collections into one large join.
+// A repeatable-read transaction keeps the revision, settings, and saved shares in one snapshot.
 async function loadPool(poolId: string) {
-    const pool = await AppDataSource.getRepository(EventInvoicePool).findOne({
+    return AppDataSource.transaction("REPEATABLE READ", (manager) => manager.getRepository(EventInvoicePool).findOne({
         where: {id: poolId},
+        relationLoadStrategy: "query",
         relations: {
             event: true,
             assignments: {registration: true},
@@ -46,8 +48,7 @@ async function loadPool(poolId: string) {
             takeovers: {payerRegistration: true, beneficiaryRegistration: true},
             surcharges: {registration: true},
         },
-    });
-    return pool;
+    }));
 }
 
 export interface InvoiceCorrections {
@@ -276,8 +277,9 @@ export async function purgeExpiredInvoices(retentionMonths: number, now: Date = 
 }
 
 export async function listPools(eventId: string) {
-    const pools = await AppDataSource.getRepository(EventInvoicePool).find({
+    return AppDataSource.transaction("REPEATABLE READ", (manager) => manager.getRepository(EventInvoicePool).find({
         where: {event: {id: eventId}},
+        relationLoadStrategy: "query",
         relations: {
             assignments: {registration: true},
             invoices: {registration: true},
@@ -286,8 +288,7 @@ export async function listPools(eventId: string) {
             surcharges: {registration: true},
         },
         order: {track: {createdAt: "ASC"}},
-    });
-    return pools;
+    }));
 }
 
 export async function createPool(
@@ -519,11 +520,12 @@ export async function closeInvoice(poolId: string, invoiceId: number) {
         const repo = manager.getRepository(EventInvoice);
         const invoice = await repo.findOne({where: {id: invoiceId, pool: {id: poolId}}});
         if (!invoice) throw new Error("Invoice not found");
-        if (invoice.status === "CLOSED") return;
+        if (invoice.status === "CLOSED") return false;
         if (invoice.status !== "APPROVED") throw new APIError("Only approved invoices can be marked paid", {}, 400);
         invoice.status = "CLOSED";
         await repo.save(invoice);
         await refreshPoolTotals(manager, poolId);
+        return true;
     });
 }
 

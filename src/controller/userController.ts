@@ -24,7 +24,7 @@ import * as eventService from "../modules/database/services/EventService";
 import * as packingService from "../modules/database/services/PackingService";
 import * as surveyService from "../modules/database/services/SurveyService";
 import * as userService from "../modules/database/services/UserService";
-import mailer from "../modules/email";
+import mailer, {resolveEmailRecipientName} from "../modules/email";
 import {ExpectedError, ValidationError} from "../modules/lib/errors";
 import {persistSession} from "../modules/lib/session";
 import {buildGuestLink, convertToSingleList, merge} from "../modules/lib/util";
@@ -37,9 +37,10 @@ const LOGIN_TEMPLATE = 'users/login';
 
 export async function registerUser(body: any, next?: string) {
     const {username, displayname, password, password_repeat, email} = body;
+    const name = resolveEmailRecipientName(typeof displayname === 'string' ? displayname : undefined, typeof username === 'string' ? username : undefined);
     const returnInfo = {username, email};
 
-    if (!username || !password || !password_repeat || !email) {
+    if (!username || !name || !password || !password_repeat || !email) {
         throw new ValidationError(CREATE_TEMPLATE, 'Not all fields were filled out.', returnInfo);
     }
 
@@ -53,14 +54,14 @@ export async function registerUser(body: any, next?: string) {
     }
 
     // Benutzer registrieren
-    let userId = await userService.registerUser(username, displayname || username, password, email);
+    let userId = await userService.registerUser(username, name, password, email);
 
     // Generiere den Aktivierungs-Token und sende ihn per E-Mail
     const token = await userService.generateActivationToken(userId);
     const nextLink = next ? `?next=${next}` : "";
     const activationLink = `${settings.value.rootUrl}/users/activate/${token}${nextLink}`;
 
-    await mailer.sendActivationEmail(email, activationLink);
+    await mailer.sendActivationEmail({name, address: email}, activationLink);
 }
 
 export async function loginUser(body: any, session: Request["session"]) {
@@ -88,7 +89,7 @@ export async function loginUser(body: any, session: Request["session"]) {
             const token = await userService.generateActivationToken(user.id);
             const activationLink = `${settings.value.rootUrl}/users/activate/${token}`;
 
-            await mailer.sendActivationEmail(user.email, activationLink);
+            await mailer.sendActivationEmail({name: resolveEmailRecipientName(user.name, user.username), address: user.email}, activationLink);
             errorMsg += " The activation link has expired. A new one has been sent to your email account.";
         }
         throw new ValidationError(LOGIN_TEMPLATE, errorMsg, returnInfo);
@@ -171,7 +172,7 @@ export async function sendPasswordForgotMail(username: string) {
     const resetLink = `${settings.value.rootUrl}/users/reset-password/${token}`;
 
     // Sende eine E-Mail mit dem Zurücksetzungs-Link
-    await mailer.sendPasswordResetEmail(user.email, resetLink);
+    await mailer.sendPasswordResetEmail({name: resolveEmailRecipientName(user.name, user.username), address: user.email}, resetLink);
 }
 
 export async function checkPasswordForgotToken(token: string) {
@@ -253,7 +254,8 @@ export async function recoverGuestAccount(email: string) {
     }
 
     if (guestLinkData.length > 0) {
-        await mailer.sendGuestRecoveryEmail(email, guestLinkData);
+        const recipientNames = [...new Set(guestLinkData.map(guest => resolveEmailRecipientName(guest.username, guest.profile?.name)))].filter(Boolean).join(' / ');
+        await mailer.sendGuestRecoveryEmail({name: recipientNames, address: email}, guestLinkData);
     }
 }
 
@@ -278,7 +280,7 @@ export async function migrateProfile(userId: number, token: string) {
     const profile = await getProfileToMigrate(token);
     const previousOwner = await userService.moveProfileToUserTx(profile.id, userId);
     if (previousOwner?.email) {
-        await mailer.sendMigrationEmail(previousOwner.email, profile, (await userService.getUserById(userId))!)
+        await mailer.sendMigrationEmail({name: resolveEmailRecipientName(previousOwner instanceof User ? previousOwner.name : undefined, previousOwner.username), address: previousOwner.email}, profile, (await userService.getUserById(userId))!)
     }
     return `Migration successful. ${await handlePreviousProfileOwner(previousOwner)}`;
 }
@@ -288,13 +290,13 @@ async function handlePreviousProfileOwner(previousOwner?: User | Guest) {
         const otherProfiles = await userService.getProfilesForUser(previousOwner.id);
         if (otherProfiles.length === 0) {
             await userService.deleteUser(previousOwner.id);
-            await mailer.sendDeletionEmail(previousOwner.email, previousOwner);
+            await mailer.sendDeletionEmail({name: resolveEmailRecipientName(previousOwner.name, previousOwner.username), address: previousOwner.email}, previousOwner);
             return "Previous user account permanently deleted!"
         }
     } else if (previousOwner instanceof Guest) {
         await userService.deleteGuest(previousOwner.id);
         if (previousOwner.email) {
-            await mailer.sendDeletionEmail(previousOwner.email, previousOwner);
+            await mailer.sendDeletionEmail({name: resolveEmailRecipientName(previousOwner.username, previousOwner.profile?.name), address: previousOwner.email}, previousOwner);
         }
         return "Previous guest account permanently deleted!"
     }
@@ -324,7 +326,7 @@ export async function deleteUser(session: Request['session']) {
     }
     const deleted = await userService.deleteUser(session.auth.user.id);
     if (deleted?.email) {
-        await mailer.sendDeletionEmail(deleted.email, deleted);
+        await mailer.sendDeletionEmail({name: resolveEmailRecipientName(deleted.name, deleted.username), address: deleted.email}, deleted);
     }
     return await logoutUserOidc(session);
 }
@@ -336,7 +338,7 @@ export async function deleteGuest(session: Request['session']) {
 
     const deleted = await userService.deleteGuest(session.auth.guest.id);
     if (deleted?.email) {
-        await mailer.sendDeletionEmail(deleted.email, deleted);
+        await mailer.sendDeletionEmail({name: resolveEmailRecipientName(deleted.username, deleted.profile?.name), address: deleted.email}, deleted);
     }
     return await logoutUserOidc(session);
 }

@@ -6,6 +6,7 @@
 import {RecommendationsLogic} from './activity-recommendations-logic';
 import {ActivityRecommendationsState} from './activity-recommendations-state';
 import type {BootstrapGlobal, RecommendationRow} from './activity-types';
+import {cancelAlertDismissal, scheduleAlertDismissal} from '../../shared/alerts';
 
 declare const bootstrap: BootstrapGlobal;
 
@@ -66,8 +67,9 @@ export class RecommendationsUI {
     /**
      * Show alert message
      */
-    setAlert(message?: string, variant: 'info' | 'danger' = 'info'): void {
+    setAlert(message?: string, variant: 'info' | 'danger' = 'info', pending = false): void {
         if (!this.alertBox) return;
+        cancelAlertDismissal(this.alertBox);
         const target = this.alertBox.querySelector('span') || this.alertBox;
 
         if (!message) {
@@ -78,7 +80,12 @@ export class RecommendationsUI {
 
         this.alertBox.classList.remove('d-none', 'alert-info', 'alert-danger');
         this.alertBox.classList.add(variant === 'danger' ? 'alert-danger' : 'alert-info');
+        this.alertBox.classList.toggle('alert', !pending);
+        this.alertBox.classList.toggle('status-notice', pending);
+        this.alertBox.setAttribute('role', pending ? 'status' : 'alert');
         target.textContent = message;
+        const alertBox = this.alertBox;
+        if (!pending) scheduleAlertDismissal(alertBox, () => alertBox.classList.add('d-none'));
     }
 
     /**
@@ -496,6 +503,7 @@ export class RecommendationsUI {
      * Cleanup - remove all event listeners and clear DOM
      */
     cleanup(): void {
+        if (this.alertBox) cancelAlertDismissal(this.alertBox);
         // State cleanup handles event listener removal
         this.state.reset();
     }

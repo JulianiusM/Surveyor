@@ -137,7 +137,7 @@ block content
                                     i.bi.bi-check2-circle.me-1
                                     | Save registration
             else
-                .alert.alert-danger
+                .status-notice.alert-danger
                     i.bi.bi-ban.me-2
                     | This event is full.
         else
@@ -255,7 +255,7 @@ block content
                     +entityOverview('sec-related', 'Things to do', 'bi-clipboard-check', data.relatedEntities, "Nothing to do...", "entityLists", false)
 
     else
-        .alert.alert-info.mx-1
+        .status-notice.alert-info.mx-1
             i.bi.bi-info-circle.me-2
             | Log in or use your guest link to register for this event.
 

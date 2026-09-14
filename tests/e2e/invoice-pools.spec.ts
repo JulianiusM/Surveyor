@@ -54,6 +54,9 @@ test('previews invoice settlements, carries payments forward, and restores saved
         expect((await guest.get(`${endpoint}/preview`)).status()).toBe(403);
         expect((await guest.post(`${endpoint}/rollback`)).status()).toBe(403);
         expect((await guest.post(`${endpoint}/notify`)).status()).toBe(403);
+        const pdfEndpoint = `/event/${event.id}/export/invoice-pools/${poolId}/shares`;
+        expect((await guest.get(pdfEndpoint)).status()).toBe(403);
+        expect((await page.request.get(pdfEndpoint)).status()).toBe(409);
 
         await page.goto(event.path);
         await page.getByRole('button', {name: 'Invoice pools & payments'}).click();
@@ -93,7 +96,28 @@ test('previews invoice settlements, carries payments forward, and restores saved
 
         await page.goto(`${event.path}/admin`);
         await openPool(pool);
-        await reloadAfterAction(page, () => pool.getByRole('button', {name: 'Accept', exact: true}).click());
+        // Keep an actual committed review response pending to exercise immediate and delayed feedback.
+        let releaseReview!: () => void;
+        const reviewReleased = new Promise<void>(resolve => { releaseReview = resolve; });
+        let reviewRequests = 0;
+        await page.route(`**${endpoint}/invoices/*/approve`, async route => {
+            reviewRequests++;
+            const response = await route.fetch();
+            await reviewReleased;
+            await route.fulfill({response});
+        });
+        const invoiceRow = pool.locator('[data-invoice-row]').first();
+        try {
+            await invoiceRow.getByRole('button', {name: 'Accept', exact: true}).click();
+            await expect(invoiceRow).toHaveAttribute('aria-busy', 'true');
+            await expect(invoiceRow.getByRole('button', {name: 'Working…'})).toBeDisabled();
+            await expect(invoiceRow.getByRole('button', {name: 'Reject', exact: true})).toBeDisabled();
+            await expect(invoiceRow.getByRole('status')).toContainText('Still working', {timeout: 8000});
+            expect(reviewRequests).toBe(1);
+        } finally {
+            await reloadAfterAction(page, async () => releaseReview());
+        }
+        await page.unroute(`**${endpoint}/invoices/*/approve`);
         await openPool(pool);
         await pool.getByRole('button', {name: 'Preview calculation', exact: true}).click();
         const calculation = page.locator(`#pool-${poolId}-calculation`);
@@ -101,15 +125,16 @@ test('previews invoice settlements, carries payments forward, and restores saved
         await calculation.getByLabel('Email participants after this calculation').uncheck();
         await reloadAfterAction(page, () => calculation.getByRole('button', {name: 'Close pool & calculate', exact: true}).click());
         await openPool(pool);
-        const shares = pool.locator('.invoice-scroll tbody tr');
+        const shares = pool.locator('[data-share-row]');
         await expect(shares).toHaveCount(2);
         const organizerShare = shares.filter({hasText: organizerRegistration.name});
         const guestShare = shares.filter({hasText: guestRegistration.name});
-        const remaining = organizerShare.locator('td').nth(6).locator('strong');
+        const remaining = organizerShare.locator('[data-label="Calculated balance"] strong');
         await expect(remaining).toHaveText('60.00');
         const paid = organizerShare.locator('.share-paid');
         const originalShareId = (await paid.getAttribute('data-id'))!;
-        await paid.check();
+        await paid.click();
+        await expect(paid).toBeChecked();
         await expect(paid).toBeEnabled();
 
         await pool.getByRole('button', {name: 'Pool settings', exact: true}).click();
@@ -127,9 +152,11 @@ test('previews invoice settlements, carries payments forward, and restores saved
         await expect(remaining).toHaveText('60.00');
         await expect(paid).toBeChecked();
         await expect(paid).toBeEnabled();
-        await paid.uncheck();
+        await paid.click();
+        await expect(paid).not.toBeChecked();
         await expect(paid).toBeEnabled();
-        await paid.check();
+        await paid.click();
+        await expect(paid).toBeChecked();
         await expect(paid).toBeEnabled();
         expect(await paid.getAttribute('data-id')).toBe(originalShareId);
 
@@ -161,16 +188,31 @@ test('previews invoice settlements, carries payments forward, and restores saved
         expect((await recalculationRequest).postDataJSON()).toMatchObject({sendEmails: false, expectedRevision: expect.any(Number)});
         await expect(pool).not.toContainText('Recalculation required.');
         // Gross shares 85 : 45 become 25 : 45 remaining after the organizer's previously paid 60.
-        await expect(organizerShare.locator('td').nth(2)).toHaveText('105.00');
-        await expect(organizerShare.locator('td').nth(3)).toHaveText('-20.00');
-        await expect(organizerShare.locator('td').nth(5)).toHaveText('60.00');
+        await organizerShare.getByText('View breakdown', {exact: true}).click();
+        await expect(organizerShare.locator('dd').nth(0)).toHaveText('105.00');
+        await expect(organizerShare.locator('dd').nth(1)).toHaveText('-20.00');
+        await expect(organizerShare.locator('dd').nth(3)).toHaveText('60.00');
         await expect(remaining).toHaveText('25.00');
-        await expect(guestShare.locator('td').nth(6).locator('strong')).toHaveText('45.00');
+        await expect(guestShare.locator('[data-label="Calculated balance"] strong')).toHaveText('45.00');
         await expect(paid).not.toBeChecked();
         await expect(paid).toBeEnabled();
+        await expect(organizerShare.locator('[data-share-state]')).toHaveText('Due');
+        // Browser form restoration must not resurrect the previous calculation's paid state.
+        await paid.evaluate(input => { (input as HTMLInputElement).checked = true; });
+        await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: false})));
+        await expect(paid).not.toBeChecked();
+        await expect(organizerShare.locator('[data-share-state]')).toHaveText('Due');
+        const pdf = await page.request.get(pdfEndpoint);
+        expect(pdf.ok()).toBe(true);
+        expect(pdf.headers()['content-type']).toContain('application/pdf');
+        expect(pdf.headers()['cache-control']).toBe('no-store');
+        expect((await pdf.body()).subarray(0, 5).toString()).toBe('%PDF-');
+        const otherEvent = await createResourceViaForm(page.request, createE2EEvent({title: 'Other export event'}));
+        expect((await page.request.get(`/event/${otherEvent.id}/export/invoice-pools/${poolId}/shares`)).status()).toBe(404);
 
         // Rollback restores pool-local edits while preserving a payment recorded since the last calculation.
-        await paid.check();
+        await paid.click();
+        await expect(paid).toBeChecked();
         await expect(paid).toBeEnabled();
         const calculatedShareId = await paid.getAttribute('data-id');
         await pool.getByRole('button', {name: 'Participants & factors', exact: true}).click();
@@ -185,7 +227,26 @@ test('previews invoice settlements, carries payments forward, and restores saved
         expect(await paid.getAttribute('data-id')).toBe(calculatedShareId);
         await expect(paid).toBeChecked();
         await expect(remaining).toHaveText('25.00');
-        await expect(organizerShare.locator('td').nth(5)).toHaveText('60.00');
+        await expect(organizerShare.locator('dd').nth(3)).toHaveText('60.00');
+        const ledger = pool.locator('[data-share-ledger]');
+        await ledger.getByLabel('Filter share status').selectOption('settled');
+        await expect(organizerShare).toBeVisible();
+        await expect(guestShare).not.toBeVisible();
+        await ledger.getByLabel('Filter share status').selectOption('due');
+        await expect(organizerShare).not.toBeVisible();
+        await expect(guestShare).toBeVisible();
+        await ledger.getByLabel('Filter share status').selectOption('');
+        await ledger.getByLabel('Search shares').fill('Invoice guest');
+        await expect(organizerShare).not.toBeVisible();
+        await expect(guestShare).toBeVisible();
+        await ledger.getByLabel('Search shares').fill('');
+        await ledger.getByLabel('Sort shares').selectOption('amount-desc');
+        await expect(shares.first()).toContainText(guestRegistration.name);
+        const downloadPromise = page.waitForEvent('download');
+        await ledger.getByRole('link', {name: 'Export as PDF'}).click();
+        const download = await downloadPromise;
+        expect(download.suggestedFilename()).toBe(`invoice-pool-${poolId}-shares.pdf`);
+        await download.saveAs(testInfo.outputPath('invoice-shares.pdf'));
 
         await pool.getByRole('button', {name: 'Send settlement emails', exact: true}).click();
         const notification = page.locator(`#pool-${poolId}-notify`);
@@ -243,12 +304,12 @@ test('previews invoice settlements, carries payments forward, and restores saved
         await takeovers.getByLabel('Payer', {exact: true}).selectOption(String(organizerRegistration.id));
         const coveredGuest = takeovers.locator(`.takeover-beneficiaries input[value="${guestRegistration.id}"]`);
         await coveredGuest.check();
-        await expect(takeovers.locator('[data-takeover-summary]')).toHaveText(`${organizerRegistration.name} covers ${guestRegistration.name}.`);
+        await expect(takeovers.locator('[data-takeover-summary]')).toHaveText(`${organizerRegistration.name} covers 1 other participant.`);
         await reloadAfterAction(page, () => takeovers.getByRole('button', {name: 'Save changes', exact: true}).click());
         const takeoverSummary = pool.locator('.pool-takeover-summary');
+        await takeoverSummary.locator(':scope > summary').click();
         await expect(takeoverSummary.locator('.pool-takeover-row')).toHaveCount(1);
-        await expect(takeoverSummary.getByText('Payer', {exact: true})).toBeVisible();
-        await expect(takeoverSummary.getByText('Covers', {exact: true})).toBeVisible();
+        await takeoverSummary.locator('.pool-takeover-row details summary').click();
         await expect(takeoverSummary.getByText(organizerRegistration.name, {exact: true})).toBeVisible();
         await expect(takeoverSummary.getByText(guestRegistration.name, {exact: true})).toBeVisible();
         await expect(paid).toBeChecked();
@@ -341,10 +402,11 @@ test('keeps a 28-participant takeover dialog usable and changes pool rounding th
     await takeovers.getByLabel('Search participants').fill('Participant 01');
     await expect(firstCheckbox).toBeChecked();
     await expect(lastCheckbox).not.toBeVisible();
-    await expect(takeovers.locator('[data-takeover-summary]')).toContainText(last.name);
+    await expect(takeovers.locator('[data-takeover-summary]')).toHaveText(`${organizer.name} covers 2 other participants.`);
     await reloadAfterAction(page, () => takeovers.getByRole('button', {name: 'Save changes', exact: true}).click());
     await expect(pool.locator('.pool-takeover-summary')).toContainText(first.name);
     await expect(pool.locator('.pool-takeover-summary')).toContainText(last.name);
+    await pool.locator('.pool-takeover-summary > summary').click();
     await Promise.all([
         takeovers.evaluate(element => new Promise<void>(resolve => element.addEventListener('shown.bs.modal', () => resolve(), {once: true}))),
         pool.getByRole('button', {name: `Edit takeovers for ${organizer.name}`, exact: true}).click(),
@@ -372,7 +434,30 @@ test('keeps a 28-participant takeover dialog usable and changes pool rounding th
     await expect(preview.locator('[data-preview-total="invoiceCreditAmount"]')).toHaveText('1000.00');
     await expect(preview.locator('[data-preview-total="calculatedAmount"]')).toHaveText('-0.12');
     await preview.getByLabel('Email participants after this calculation').uncheck();
+    await page.setViewportSize({width: 1280, height: 720});
+    await preview.locator('[data-pool-preview-rows] tr').last().scrollIntoViewIfNeeded();
+    const headerVisible = await preview.locator('.modal-header').evaluate(header => {
+        const rect = header.getBoundingClientRect();
+        const top = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        return !!top && header.contains(top);
+    });
+    expect(headerVisible).toBe(true);
+    await page.screenshot({path: testInfo.outputPath('invoice-preview-scrolled-header.png'), animations: 'disabled'});
     await reloadAfterAction(page, () => preview.getByRole('button', {name: 'Close pool & calculate', exact: true}).click());
+    const shareLedger = pool.locator('[data-share-ledger]');
+    await expect(shareLedger.locator('[data-share-row]:visible')).toHaveCount(25);
+    await shareLedger.getByRole('button', {name: 'Next', exact: true}).click();
+    await expect(shareLedger.locator('[data-share-row]:visible')).toHaveCount(1);
+    await expect(shareLedger.locator('[data-share-page-summary]')).toHaveText('26–26 of 26 shares');
+    await shareLedger.getByLabel('Shares per page').selectOption('50');
+    await expect(shareLedger.locator('[data-share-row]:visible')).toHaveCount(26);
+    await shareLedger.getByLabel('Filter share status').selectOption('refund');
+    await expect(shareLedger.locator('[data-share-row]:visible')).toHaveCount(1);
+    await expect(shareLedger.locator('[data-share-row]:visible')).toContainText(organizer.name);
+    await shareLedger.getByLabel('Search shares').fill('No matching participant');
+    await expect(shareLedger.locator('[data-share-empty]')).toBeVisible();
+    await shareLedger.getByLabel('Search shares').fill('');
+    await shareLedger.getByLabel('Filter share status').selectOption('');
 
     await pool.getByRole('button', {name: 'Pool settings', exact: true}).click();
     const settings = page.locator(`#pool-${poolId}-settings`);
@@ -392,4 +477,25 @@ test('keeps a 28-participant takeover dialog usable and changes pool rounding th
     await page.screenshot({path: testInfo.outputPath('rounding-reconciliation-mobile.png'), animations: 'disabled'});
     await reloadAfterAction(page, () => preview.getByRole('button', {name: 'Apply recalculation', exact: true}).click());
     await expect(pool).not.toContainText('Recalculation required.');
+
+    // A payer covering every other long-named participant stays compact and searchable.
+    expect((await page.request.post(`${endpoint}/takeovers/manage`, {data: {
+        payerId: organizer.id,
+        beneficiaries: participants.filter(person => person.id !== organizer.id).map(person => person.id),
+    }})).ok()).toBe(true);
+    await page.reload();
+    await openPool(pool);
+    const overview = pool.locator('[data-takeover-overview]');
+    expect((await overview.boundingBox())!.height).toBeLessThan(180);
+    await overview.locator(':scope > summary').click();
+    await overview.getByLabel('Search takeovers').fill(last.name);
+    await expect(overview.locator('[data-takeover-overview-row]:visible')).toHaveCount(1);
+    await overview.locator('.pool-takeover-row details summary').click();
+    await expect(overview.locator('.pool-takeover-row li')).toHaveCount(27);
+    const bounds = (await overview.boundingBox())!;
+    expect(bounds.height).toBeLessThan(650);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(391);
+    await overview.locator('.pool-takeover-row li').last().scrollIntoViewIfNeeded();
+    await expect(overview.locator('.pool-takeover-row li').last()).toBeInViewport();
+    await page.screenshot({path: testInfo.outputPath('takeovers-long-coverage-mobile.png'), animations: 'disabled'});
 });

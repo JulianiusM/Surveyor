@@ -28,7 +28,8 @@ import {EventRegistration} from "../modules/database/entities/event/EventRegistr
 import * as invoiceService from '../modules/database/services/EventInvoiceService';
 import * as eventService from '../modules/database/services/EventService';
 
-import mailer from '../modules/email';
+import mailer, {type EmailContent, type EmailRecipient, resolveEmailRecipientName} from '../modules/email';
+import type {Profile} from '../modules/database/entities/user/Profile';
 import {buildInvoiceSettlementEmail} from '../modules/lib/invoiceSettlementEmail';
 import {APIError} from '../modules/lib/errors';
 import {distributeInvoiceAmount} from '../modules/lib/invoiceDistribution';
@@ -63,6 +64,20 @@ async function ensurePool(event: Event, poolId: string) {
 
 function eventPageUrl(event: Event): string {
     return `${settings.value.rootUrl.replace(/\/$/, '')}/event/${encodeURIComponent(event.id)}`;
+}
+
+// Financial mutations must finish before this is called. Delivery never changes their outcome.
+function queueInvoiceEmail(recipient: EmailRecipient, subject: string, content: EmailContent): void {
+    const reportFailure = (error: unknown) => console.error('[invoice-pool] Saved change, but email delivery failed', error);
+    try {
+        void mailer.sendEmail(recipient, subject, content).catch(reportFailure);
+    } catch (error) {
+        reportFailure(error);
+    }
+}
+
+function invoiceEmailRecipient(profile: Profile, address: string): EmailRecipient {
+    return {name: resolveEmailRecipientName(profile.name, profile.user?.name, profile.user?.username, profile.guest?.username), address};
 }
 
 // Verify a registration is currently allowed in the pool so surcharge updates cannot target removed participants.
@@ -201,13 +216,14 @@ async function notifyTakeoverChanges(
 ) {
     if ((!changes.added?.length) && (!changes.removed?.length)) return;
     const participants = await eventService.getEventParticipants(event.id);
-    const map = new Map(participants.map((p) => [p.id, p]));
-    const queue = new Map<string, string[]>();
-    const enqueue = (email?: string | null, message?: string) => {
-        if (!email || email === '—' || !message) return;
-        const existing = queue.get(email) || [];
-        existing.push(message);
-        queue.set(email, existing);
+    const map = new Map(participants.map((p) => [Number(p.id), p]));
+    const queue = new Map<number, {recipient: EmailRecipient; messages: string[]}>();
+    const enqueue = (participant: ParticipantRow | undefined, message: string) => {
+        if (!participant?.email || participant.email === '—') return;
+        const id = Number(participant.id);
+        const existing = queue.get(id) || {recipient: {name: participant.name, address: participant.email}, messages: []};
+        existing.messages.push(message);
+        queue.set(id, existing);
     };
 
     for (const add of changes.added || []) {
@@ -216,11 +232,11 @@ async function notifyTakeoverChanges(
         const beneficiaryName = beneficiary?.name || `participant #${add.beneficiaryId}`;
         const payerName = payer?.name || `Participant #${add.payerId}`;
         enqueue(
-            payer?.email,
+            payer,
             `You are now covering ${beneficiaryName}.`,
         );
         enqueue(
-            beneficiary?.email,
+            beneficiary,
             `${payerName} will now pay your share.`,
         );
     }
@@ -231,17 +247,17 @@ async function notifyTakeoverChanges(
         const beneficiaryName = beneficiary?.name || `participant #${remove.beneficiaryId}`;
         const payerName = payer?.name || `Participant #${remove.payerId}`;
         enqueue(
-            payer?.email,
+            payer,
             `You are no longer covering ${beneficiaryName}.`,
         );
         enqueue(
-            beneficiary?.email,
+            beneficiary,
             `${payerName} will no longer pay your share.`,
         );
     }
 
-    queue.forEach((messages, email) => {
-        void mailer.sendEmail(email, 'Invoice takeovers updated', {
+    queue.forEach(({messages, recipient}) => {
+        queueInvoiceEmail(recipient, 'Invoice takeovers updated', {
             eyebrow: 'Invoice pool',
             heading: 'Payment coverage was updated',
             preheader: `Payment coverage changed for ${pool.name}.`,
@@ -308,7 +324,11 @@ async function updateTakeovers(event: Event, poolId: string, body: any, session:
     }
 
     const changes = await invoiceService.updateTakeovers(poolId, payerId, normalizedBeneficiaries, allowReassign);
-    await notifyTakeoverChanges(event, pool, changes, resolveActorLabel(session));
+    try {
+        await notifyTakeoverChanges(event, pool, changes, resolveActorLabel(session));
+    } catch (error) {
+        console.error('[invoice-pool] Takeovers saved, but notification preparation failed', error);
+    }
 }
 
 // Validate and submit a new invoice with its proof file attached.
@@ -338,30 +358,34 @@ async function submitInvoice(event: Event, poolId: string, body: any, session: R
         originalName: file.originalname,
         mimeType: file.mimetype,
     });
-    const invoice = await invoiceService.getInvoiceWithRegistration(poolId, invoiceId);
-    const email = invoice?.registration.profile.user?.email || invoice?.registration.profile.guest?.email;
-    if (email) {
-        // Receipt delivery must not hold the successful upload response open for SMTP.
-        void mailer.sendEmail(
-            email,
-            'Invoice submitted',
-            {
-                eyebrow: 'Invoice received',
-                heading: 'Your invoice was submitted',
-                preheader: `Invoice #${invoiceId} is awaiting organizer review.`,
-                paragraphs: ['We received your invoice successfully. An organizer will review it before it is included in the pool.'],
-                details: [
-                    {label: 'Invoice', value: `#${invoiceId}`},
-                    {label: 'Event', value: event.title},
-                    {label: 'Pool', value: pool.name},
-                    {label: 'Amount', value: formatAmount(Number(value.amount))},
-                    {label: 'Status', value: 'Awaiting review'},
-                    ...(value.description ? [{label: 'Description', value: String(value.description)}] : []),
-                ],
-                action: {label: 'View invoice history', url: eventPageUrl(event)},
-                notice: 'You will receive another email when an organizer accepts or rejects this invoice.',
-            },
-        ).catch((error: unknown) => console.error('Invoice receipt email failed:', error));
+    try {
+        const invoice = await invoiceService.getInvoiceWithRegistration(poolId, invoiceId);
+        const email = invoice?.registration.profile.user?.email || invoice?.registration.profile.guest?.email;
+        if (email && invoice) {
+            // Receipt delivery must not hold the successful upload response open for SMTP.
+            queueInvoiceEmail(
+                invoiceEmailRecipient(invoice.registration.profile, email),
+                'Invoice submitted',
+                {
+                    eyebrow: 'Invoice received',
+                    heading: 'Your invoice was submitted',
+                    preheader: `Invoice #${invoiceId} is awaiting organizer review.`,
+                    paragraphs: ['We received your invoice successfully. An organizer will review it before it is included in the pool.'],
+                    details: [
+                        {label: 'Invoice', value: `#${invoiceId}`},
+                        {label: 'Event', value: event.title},
+                        {label: 'Pool', value: pool.name},
+                        {label: 'Amount', value: formatAmount(Number(value.amount))},
+                        {label: 'Status', value: 'Awaiting review'},
+                        ...(value.description ? [{label: 'Description', value: String(value.description)}] : []),
+                    ],
+                    action: {label: 'View invoice history', url: eventPageUrl(event)},
+                    notice: 'You will receive another email when an organizer accepts or rejects this invoice.',
+                },
+            );
+        }
+    } catch (error) {
+        console.error('[invoice-pool] Invoice saved, but receipt preparation failed', error);
     }
 }
 
@@ -387,7 +411,8 @@ async function approveInvoice(
         ? null
         : value.correctedAmount;
     const correctedDescription = value.correctedDescription?.trim() || null;
-    await invoiceService.approveInvoice(poolId, Number(invoiceId), {correctedAmount, correctedDescription});
+    const accepted = await invoiceService.approveInvoice(poolId, Number(invoiceId), {correctedAmount, correctedDescription});
+    if (!accepted) throw new APIError('Invoice was already reviewed. Reload to see the saved decision.', {}, 409);
     const email = invoice.registration.profile.user?.email || invoice.registration.profile.guest?.email;
     if (email) {
         const actor = resolveActorLabel(session);
@@ -400,8 +425,8 @@ async function approveInvoice(
                 ? [{label: 'Organizer correction', value: correctedDescription}]
                 : []),
         ];
-        await mailer.sendEmail(
-            email,
+        queueInvoiceEmail(
+            invoiceEmailRecipient(invoice.registration.profile, email),
             'Invoice accepted',
             {
                 eyebrow: 'Invoice accepted',
@@ -444,12 +469,13 @@ async function closeInvoice(
     if (!canManage && !isSubmitter) {
         throw new APIError('You can only close your own approved invoices, unless you are an administrator.', {}, 403);
     }
-    await invoiceService.closeInvoice(poolId, Number(invoiceId));
+    const closed = await invoiceService.closeInvoice(poolId, Number(invoiceId));
+    if (!closed) return;
     const email = invoice.registration.profile.user?.email || invoice.registration.profile.guest?.email;
     if (email) {
         const actor = resolveActorLabel(session);
-        await mailer.sendEmail(
-            email,
+        queueInvoiceEmail(
+            invoiceEmailRecipient(invoice.registration.profile, email),
             'Invoice closed',
             {
                 eyebrow: 'Invoice update',
@@ -485,12 +511,13 @@ async function declineInvoice(
     });
     const {error, value} = schema.validate(body || {}, {abortEarly: false, allowUnknown: true});
     if (error) throw new APIError(error.message, body, 400);
-    await invoiceService.declineInvoice(poolId, Number(invoiceId), value.rejectionReason);
+    const declined = await invoiceService.declineInvoice(poolId, Number(invoiceId), value.rejectionReason);
+    if (!declined) throw new APIError('Invoice was already reviewed. Reload to see the saved decision.', {}, 409);
     const email = invoice.registration.profile.user?.email || invoice.registration.profile.guest?.email;
     if (email) {
         const actor = resolveActorLabel(session);
-        await mailer.sendEmail(
-            email,
+        queueInvoiceEmail(
+            invoiceEmailRecipient(invoice.registration.profile, email),
             'Invoice rejected',
             {
                 eyebrow: 'Invoice rejected',
@@ -668,7 +695,8 @@ async function notifyPoolShares(event: Event, poolId: string, body: any = {}, se
     }
     let count = 0;
     for (const share of pool.shares || []) {
-        const email = participants.get(share.registrationId)?.email;
+        const participant = participants.get(share.registrationId);
+        const email = participant?.email;
         if (!email || email === '—') continue;
         const content = buildInvoiceSettlementEmail({
             eventTitle: event.title,
@@ -680,8 +708,7 @@ async function notifyPoolShares(event: Event, poolId: string, body: any = {}, se
             share,
         });
         // Queue delivery without making SMTP availability part of calculation success.
-        void mailer.sendEmail(email, reason === 'closed' ? 'Invoice pool closed' : reason === 'recalculated' ? 'Invoice pool recalculated' : 'Invoice pool settlement', content)
-            .catch((error: unknown) => console.error('[invoice-pool] Could not send settlement notification', error));
+        queueInvoiceEmail({name: participant!.name, address: email}, reason === 'closed' ? 'Invoice pool closed' : reason === 'recalculated' ? 'Invoice pool recalculated' : 'Invoice pool settlement', content);
         count++;
     }
     return {count};
@@ -830,8 +857,8 @@ async function markSharePaid(event: Event, poolId: string, shareId: string, isPa
     if (email) {
         const statusText = isPaid ? 'marked as paid' : 'marked as unpaid';
         const actor = resolveActorLabel(session);
-        void mailer.sendEmail(
-            email,
+        queueInvoiceEmail(
+            invoiceEmailRecipient(share.registration.profile, email),
             'Share status changed',
             {
                 eyebrow: 'Payment status',

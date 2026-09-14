@@ -1,5 +1,5 @@
 import type {Request} from 'express';
-import {afterAll, beforeAll, describe, expect, it} from 'vitest';
+import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 import * as userController from '../../src/controller/userController';
 import {Profile} from '../../src/modules/database/entities/user/Profile';
 import * as userService from '../../src/modules/database/services/UserService';
@@ -23,6 +23,74 @@ afterAll(async () => {
 });
 
 describe('authentication user stories', () => {
+    it.each([
+        ['blank-name-account', '   ', 'blank-name-account'],
+        ['spaced-name-account', '  Morgan\r\n  Example  ', 'Morgan Example'],
+    ])('normalizes the display name before persisting and emailing account %s', async (username, displayname, expectedName) => {
+        const activation = vi.spyOn(email, 'sendActivationEmail').mockResolvedValue(undefined);
+        try {
+            await userController.registerUser({
+                username, displayname, email: `${username}@example.test`,
+                password: 'test-password1', password_repeat: 'test-password1',
+            });
+            const account = (await userService.getUserByUsername(username))!;
+            expect(account.name).toBe(expectedName);
+            expect(account.profiles[0].name).toBe(expectedName);
+            expect(activation).toHaveBeenCalledWith({name: expectedName, address: `${username}@example.test`}, expect.any(String));
+        } finally {
+            activation.mockRestore();
+        }
+    });
+
+    it('falls back to an existing account username for password recovery when its stored name is blank', async () => {
+        const profile = await persistIntegrationProfile({name: ' \r\n ', username: 'legacy-blank-name', email: 'legacy-name@example.test'});
+        const recovery = vi.spyOn(email, 'sendPasswordResetEmail').mockResolvedValue(undefined);
+        try {
+            await userController.sendPasswordForgotMail(profile.user!.username);
+            expect(recovery).toHaveBeenCalledWith({name: 'legacy-blank-name', address: 'legacy-name@example.test'}, expect.any(String));
+        } finally {
+            recovery.mockRestore();
+        }
+    });
+
+    it('addresses activation and password recovery to the saved account name', async () => {
+        const activation = vi.spyOn(email, 'sendActivationEmail').mockResolvedValue(undefined);
+        const recovery = vi.spyOn(email, 'sendPasswordResetEmail').mockResolvedValue(undefined);
+        try {
+            await userController.registerUser({
+                username: 'named-email-account', displayname: 'Morgan Example', email: 'named-account@example.test',
+                password: 'test-password1', password_repeat: 'test-password1',
+            });
+            expect(activation).toHaveBeenCalledWith(
+                {name: 'Morgan Example', address: 'named-account@example.test'}, expect.stringContaining('/users/activate/'),
+            );
+            await userController.sendPasswordForgotMail('named-email-account');
+            expect(recovery).toHaveBeenCalledWith(
+                {name: 'Morgan Example', address: 'named-account@example.test'}, expect.stringContaining('/users/reset-password/'),
+            );
+        } finally {
+            activation.mockRestore();
+            recovery.mockRestore();
+        }
+    });
+
+    it('uses the actual guest names when one recovery email represents multiple guest identities', async () => {
+        const recovery = vi.spyOn(email, 'sendGuestRecoveryEmail').mockResolvedValue(undefined);
+        try {
+            await userService.createGuest('Morgan Guest', 'named-guests@example.test');
+            await userService.createGuest('Casey Guest', 'named-guests@example.test');
+            await userController.recoverGuestAccount('named-guests@example.test');
+            expect(recovery).toHaveBeenCalledOnce();
+            const [recipient, guests] = recovery.mock.calls[0];
+            expect(recipient.address).toBe('named-guests@example.test');
+            expect(recipient.name).toContain('Morgan Guest');
+            expect(recipient.name).toContain('Casey Guest');
+            expect(guests.map(guest => guest.username)).toEqual(expect.arrayContaining(['Morgan Guest', 'Casey Guest']));
+        } finally {
+            recovery.mockRestore();
+        }
+    });
+
     it('registers an inactive account with a usable profile', async () => {
         const {id: userId, username} = await registerLocalAccount('registration');
 

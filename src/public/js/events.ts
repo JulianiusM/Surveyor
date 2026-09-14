@@ -26,7 +26,7 @@ import {loadPerms, requireEntityPerm, requireEntityPermsForForm} from './core/pe
 import {initEntityOverview} from "./modules/entity-cards-overview";
 import {initEntityHeader} from "./modules/entity-header";
 import {bindInvoiceSubmission} from './modules/invoice-submission';
-import {showInlineAlert} from './shared/alerts';
+import {scheduleAlertDismissal, showInlineAlert} from './shared/alerts';
 import {formatDuration, parseJsonScript, reloadAfterDelay, updateToLocalString} from './shared/ui-helpers';
 
 /**
@@ -338,12 +338,42 @@ export function serializePoolAssignments(form: HTMLFormElement): Record<string, 
     };
 }
 
+const poolFeedbackTimers = new WeakMap<HTMLElement, () => void>();
+
+function poolStatusElement(root: Element): HTMLElement {
+    const existing = root.querySelector<HTMLElement>('.pool-form-status');
+    if (existing) return existing;
+    const container = document.createElement('div');
+    container.className = 'pool-form-status small mt-2';
+    container.setAttribute('aria-live', 'polite');
+    const parent = root.tagName === 'TR' ? root.lastElementChild || root : root;
+    parent.appendChild(container);
+    return container;
+}
+
 function showPoolFeedback(root: Element, status: 'success' | 'info' | 'error', message: string): void {
-    const container = root.querySelector<HTMLElement>('.pool-form-status');
-    if (!container) return showInlineAlert(status, message);
+    const container = poolStatusElement(root);
+    poolFeedbackTimers.get(container)?.();
     container.classList.remove('text-success', 'text-info', 'text-danger');
     container.classList.add(status === 'error' ? 'text-danger' : status === 'success' ? 'text-success' : 'text-info');
+    container.setAttribute('role', 'alert');
     container.textContent = message;
+    poolFeedbackTimers.set(container, scheduleAlertDismissal(container, () => {
+        container.replaceChildren();
+        container.removeAttribute('role');
+    }));
+}
+
+function showPoolProgress(root: Element, message: string): void {
+    const container = poolStatusElement(root);
+    poolFeedbackTimers.get(container)?.();
+    container.classList.remove('text-success', 'text-danger');
+    container.classList.add('text-info');
+    container.setAttribute('role', 'status');
+    const spinner = document.createElement('span');
+    spinner.className = 'spinner-border spinner-border-sm me-2';
+    spinner.setAttribute('aria-hidden', 'true');
+    container.replaceChildren(spinner, document.createTextNode(message));
 }
 
 function rememberPool(poolId: string | undefined): void {
@@ -351,24 +381,80 @@ function rememberPool(poolId: string | undefined): void {
     try { sessionStorage.setItem('surveyor:invoice-pool', `${getEventId()}:${poolId}`); } catch { /* Storage is optional. */ }
 }
 
-async function savePoolForm(form: HTMLFormElement, payload: Record<string, unknown>, action: string, message: string): Promise<void> {
-    if (form.dataset.saving === 'true') return;
-    form.dataset.saving = 'true';
-    const buttons = Array.from(form.querySelectorAll<HTMLButtonElement>('button[type="submit"]'));
-    buttons.forEach(button => button.disabled = true);
-    showPoolFeedback(form, 'info', 'Saving changes…');
-    try {
-        requireManageAssignments(action);
-        await post(form.dataset.api!, payload);
-        form.dataset.dirty = 'false';
-        showPoolFeedback(form, 'success', message + (form.dataset.poolStatus === 'CLOSED' ? ' Recalculate the pool to update shares.' : ''));
-        rememberPool(form.dataset.pool);
-        reloadAfterDelay(600);
-    } catch (err) {
-        showPoolFeedback(form, 'error', err instanceof Error ? err.message : 'Unable to save changes.');
-        delete form.dataset.saving;
-        buttons.forEach(button => button.disabled = false);
+interface InvoiceAdminAction {
+    scope: HTMLElement;
+    trigger: HTMLElement;
+    pending: string;
+    success: string | ((response: any) => string);
+    request: () => Promise<any>;
+    permission?: string;
+    onSuccess?: (response: any) => void;
+    reloadPool?: string;
+    reload?: boolean;
+}
+
+/** Keep every financial action visibly pending until its response confirms completion. */
+export async function runInvoiceAdminAction(options: InvoiceAdminAction): Promise<boolean> {
+    const {scope, trigger} = options;
+    if (scope.dataset.saving === 'true') return false;
+    scope.dataset.saving = 'true';
+    scope.setAttribute('aria-busy', 'true');
+    const controls = Array.from(scope.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>('input, select, textarea, button'));
+    const modalClose = scope.closest('.modal')?.querySelector<HTMLButtonElement>('.modal-header .btn-close');
+    const modal = scope.closest<HTMLElement>('.modal');
+    const keepPendingVisible = (event: Event) => event.preventDefault();
+    modal?.addEventListener('hide.bs.modal', keepPendingVisible);
+    if (modalClose && !controls.includes(modalClose)) controls.push(modalClose);
+    const previousControls = controls.map(control => ({control, disabled: control.disabled}));
+    controls.forEach(control => control.disabled = true);
+    const originalChildren = trigger.tagName === 'BUTTON' ? Array.from(trigger.childNodes) : null;
+    if (originalChildren) {
+        const spinner = document.createElement('span');
+        spinner.className = 'spinner-border spinner-border-sm me-2';
+        spinner.setAttribute('aria-hidden', 'true');
+        trigger.replaceChildren(spinner, document.createTextNode('Working…'));
     }
+    showPoolProgress(scope, options.pending);
+    const slow = window.setTimeout(() => showPoolProgress(scope, 'Still working. The server has not confirmed this change yet. Keep this page open and do not repeat the action.'), 5000);
+    let succeeded = false;
+    try {
+        if (options.permission) requireManageAssignments(options.permission);
+        const response = await options.request();
+        if (response?.status !== 'success') throw new Error('The server did not confirm this change. Reload the pool and check its saved state before repeating the action.');
+        succeeded = true;
+        options.onSuccess?.(response);
+        showPoolFeedback(scope, 'success', typeof options.success === 'function' ? options.success(response) : options.success);
+        if (options.reload) {
+            rememberPool(options.reloadPool);
+            reloadAfterDelay(350);
+        }
+        return true;
+    } catch (err) {
+        showPoolFeedback(scope, 'error', err instanceof Error ? err.message : 'Unable to complete this action.');
+        return false;
+    } finally {
+        window.clearTimeout(slow);
+        modal?.removeEventListener('hide.bs.modal', keepPendingVisible);
+        scope.removeAttribute('aria-busy');
+        if (originalChildren) trigger.replaceChildren(...originalChildren);
+        if (!succeeded || !options.reload) {
+            delete scope.dataset.saving;
+            previousControls.forEach(({control, disabled}) => control.disabled = disabled);
+        }
+    }
+}
+
+async function savePoolForm(form: HTMLFormElement, payload: Record<string, unknown>, action: string, message: string): Promise<void> {
+    const trigger = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (!trigger) return;
+    await runInvoiceAdminAction({
+        scope: form, trigger, permission: action,
+        pending: 'Saving pool changes…',
+        success: message + (form.dataset.poolStatus === 'CLOSED' ? ' Recalculate the pool to update shares.' : ''),
+        request: () => post(form.dataset.api!, payload),
+        onSuccess: () => form.dataset.dirty = 'false',
+        reload: true, reloadPool: form.dataset.pool,
+    });
 }
 
 function poolFormSnapshot(form: HTMLFormElement): string {
@@ -398,26 +484,16 @@ export function initInvoiceAdmin(): void {
     if (poolForm) {
         poolForm.addEventListener('submit', async (e: Event) => {
             e.preventDefault();
-            try {
-                requireManageAssignments('manage invoice pools');
-                const payload = serializeForm(poolForm as HTMLFormElement);
-                const checkbox = poolForm.querySelector('#assignAllPools') as HTMLInputElement | null;
-                if (checkbox) payload.assignAll = checkbox.checked ? 'on' : '';
-                const defaultBox = poolForm.querySelector('#defaultPool') as HTMLInputElement | null;
-                if (defaultBox) payload.isDefault = defaultBox.checked ? 'on' : '';
-                const subtractBox = poolForm.querySelector('#subtractPersonalInvoicesCreate') as HTMLInputElement | null;
-                if (subtractBox) payload.subtractPersonalInvoices = subtractBox.checked ? 'on' : '';
-                const roundingBox = poolForm.querySelector<HTMLInputElement>('input[name="roundUpShares"]');
-                if (roundingBox) payload.roundUpShares = roundingBox.checked ? 'on' : '';
-                delete payload.roundUpSharesConfigured;
-
-                await post((poolForm as HTMLElement).dataset.api!, payload);
-                showInlineAlert('success', 'Pool created');
-                reloadAfterDelay(RELOAD_DELAY_MS);
-            } catch (err) {
-                const message = err instanceof Error ? err.message : 'An error occurred';
-                showInlineAlert('error', message);
+            const form = poolForm as HTMLFormElement;
+            const payload = serializeForm(form);
+            for (const name of ['assignAll', 'isDefault', 'subtractPersonalInvoices', 'roundUpShares']) {
+                payload[name] = form.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.checked ? 'on' : '';
             }
+            delete payload.roundUpSharesConfigured;
+            const trigger = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+            if (!trigger) return;
+            await runInvoiceAdminAction({scope: form, trigger, permission: 'create invoice pools', pending: 'Creating the invoice pool…',
+                success: 'Pool created.', request: () => post(form.dataset.api!, payload), reload: true});
         });
 
         const assignAll = poolForm.querySelector('#assignAllPools') as HTMLInputElement | null;
@@ -469,89 +545,59 @@ export function initInvoiceAdmin(): void {
         await savePoolForm(form, serializePoolBaseSettings(form), 'update invoice pool settings', 'Pool settings saved.');
     });
 
-    // Invoice action handlers
+    // Invoice review actions lock the full row so opposite decisions cannot run together.
     document.addEventListener('click', async (e: Event) => {
         const target = (e.target as HTMLElement).closest<HTMLButtonElement>('button');
         if (!target) return;
         try {
-            if (target.classList.contains('invoice-approve')) {
-                requireManageAssignments('approve invoices');
-                const row = target.closest<HTMLElement>('[data-invoice-row]');
-                const correctedAmount = row?.querySelector<HTMLInputElement>('.invoice-corrected-amount')?.value.trim() || '';
-                const correctedDescription = row?.querySelector<HTMLTextAreaElement>('.invoice-corrected-description')?.value.trim() || '';
-                await post(
-                    `/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/approve`,
-                    {correctedAmount, correctedDescription},
-                );
-                showInlineAlert('success', 'Invoice accepted');
-                return reloadAfterDelay(RELOAD_DELAY_MS);
+            const reviewActions = [
+                {css: 'invoice-approve', route: 'approve', permission: 'approve invoices', pending: 'Accepting invoice…', success: 'Invoice accepted.'},
+                {css: 'invoice-decline', route: 'decline', permission: 'reject invoices', pending: 'Rejecting invoice…', success: 'Invoice rejected.'},
+                {css: 'invoice-close', route: 'close', permission: 'close invoices', pending: 'Closing invoice…', success: 'Invoice closed.'},
+                {css: 'invoice-close-self', route: 'close-self', permission: undefined, pending: 'Closing invoice…', success: 'Invoice closed.'},
+            ];
+            const review = reviewActions.find(action => target.classList.contains(action.css));
+            if (review) {
+                const row = target.closest<HTMLElement>('[data-invoice-row]') || target.parentElement!;
+                const payload: Record<string, string> = {};
+                if (review.route === 'approve') {
+                    payload.correctedAmount = row.querySelector<HTMLInputElement>('.invoice-corrected-amount')?.value.trim() || '';
+                    payload.correctedDescription = row.querySelector<HTMLTextAreaElement>('.invoice-corrected-description')?.value.trim() || '';
+                }
+                if (review.route === 'decline') {
+                    payload.rejectionReason = row.querySelector<HTMLTextAreaElement>('.invoice-rejection-reason')?.value.trim() || '';
+                    if (!payload.rejectionReason) {
+                        showPoolFeedback(row, 'error', 'Enter a rejection reason before rejecting this invoice.');
+                        return;
+                    }
+                }
+                await runInvoiceAdminAction({scope: row, trigger: target, permission: review.permission,
+                    pending: review.pending, success: review.success,
+                    request: () => post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/${review.route}`, payload),
+                    reload: true, reloadPool: target.dataset.pool});
+                return;
             }
-            if (target.classList.contains('invoice-decline')) {
-                requireManageAssignments('reject invoices');
-                const row = target.closest<HTMLElement>('[data-invoice-row]');
-                const rejectionReason = row?.querySelector<HTMLTextAreaElement>('.invoice-rejection-reason')?.value.trim() || '';
-                if (!rejectionReason) throw new Error('Enter a rejection reason before rejecting this invoice.');
-                await post(
-                    `/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/decline`,
-                    {rejectionReason},
-                );
-                showInlineAlert('info', 'Invoice rejected');
-                return reloadAfterDelay(RELOAD_DELAY_MS);
-            }
-            if (target.classList.contains('invoice-close')) {
-                requireManageAssignments('close invoices');
-                await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/close`);
-                showInlineAlert('success', 'Invoice closed');
-                return reloadAfterDelay(RELOAD_DELAY_MS);
-            }
-            if (target.classList.contains('invoice-close-self')) {
-                await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/invoices/${target.dataset.id}/close-self`);
-                showInlineAlert('success', 'Invoice closed');
-                return reloadAfterDelay(RELOAD_DELAY_MS);
-            }
-            if (target.classList.contains('pool-close')) {
-                requireManageAssignments('close invoice pools');
-                return await calculatePool(target, false);
-            }
-            if (target.classList.contains('pool-recalculate')) {
-                requireManageAssignments('recalculate invoice pools');
-                return await calculatePool(target, true);
+            if (target.classList.contains('pool-close') || target.classList.contains('pool-recalculate')) {
+                return await calculatePool(target, target.classList.contains('pool-recalculate'));
             }
             if (target.classList.contains('pool-open-calculation') || target.classList.contains('pool-preview-refresh')) {
                 return await loadPoolCalculationPreview(target.dataset.id);
             }
-            if (target.classList.contains('pool-rollback')) {
-                requireManageAssignments('roll back pool changes');
-                return await submitPoolAction(target, 'rollback');
-            }
-            if (target.classList.contains('pool-notify')) {
-                requireManageAssignments('send settlement emails');
-                return await submitPoolAction(target, 'notify');
-            }
+            if (target.classList.contains('pool-rollback')) return await submitPoolAction(target, 'rollback');
+            if (target.classList.contains('pool-notify')) return await submitPoolAction(target, 'notify');
             if (target.classList.contains('pool-return')) {
                 rememberPool(target.dataset.id);
                 return window.location.reload();
             }
             if (target.classList.contains('surcharge-remove')) {
-                requireManageAssignments('remove surcharges or rebates');
-                if (target.dataset.saving === 'true') return;
-                target.dataset.saving = 'true';
-                target.disabled = true;
-                const modal = target.closest('.modal') || document.body;
-                try {
-                    await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/surcharges/${target.dataset.id}/delete`);
-                    showPoolFeedback(modal, 'success', 'Adjustment removed. Closed pools require recalculation.');
-                    rememberPool(target.dataset.pool);
-                    return reloadAfterDelay(600);
-                } catch (err) {
-                    delete target.dataset.saving;
-                    target.disabled = false;
-                    showPoolFeedback(modal, 'error', err instanceof Error ? err.message : 'Unable to remove adjustment.');
-                }
+                const modal = target.closest<HTMLElement>('.modal') || target.parentElement!;
+                await runInvoiceAdminAction({scope: modal, trigger: target, permission: 'remove surcharges or rebates',
+                    pending: 'Removing the adjustment…', success: 'Adjustment removed. Closed pools require recalculation.',
+                    request: () => post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/surcharges/${target.dataset.id}/delete`),
+                    reload: true, reloadPool: target.dataset.pool});
             }
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Request failed.';
-            showInlineAlert('error', message);
+            showPoolFeedback(target.closest('.modal') || target.closest('[data-invoice-row]') || target.parentElement!, 'error', err instanceof Error ? err.message : 'Request failed.');
         }
     });
 
@@ -620,37 +666,61 @@ export function initInvoiceAdmin(): void {
         }
     });
 
-    // Share paid status handler
+    restoreInvoicePaidState();
+    window.addEventListener('pageshow', (event: PageTransitionEvent) => {
+        if (event.persisted) window.location.reload();
+        else restoreInvoicePaidState();
+    });
+
     document.addEventListener('change', async (e: Event) => {
-        const target = e.target as HTMLElement;
-        if (target.classList.contains('share-paid')) {
-            const input = target as HTMLInputElement;
-            const checked = input.checked;
-            if (input.disabled) return;
-            input.disabled = true;
-            try {
-                requireManageAssignments('mark shares paid');
-                await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.pool}/shares/${target.dataset.id}/pay`, {
-                    isPaid: checked ? 'on' : ''
-                });
-                invalidatePoolPreview(target.dataset.pool);
+        const input = e.target as HTMLInputElement;
+        if (!input.classList.contains('share-paid') || input.disabled) return;
+        const checked = input.checked;
+        const previous = input.dataset.paid === 'true';
+        // A browser click moves a switch immediately; keep the displayed state canonical until confirmed.
+        input.checked = previous;
+        const row = input.closest<HTMLElement>('[data-share-row]');
+        if (!row) return;
+        await runInvoiceAdminAction({scope: row, trigger: input, permission: 'mark shares paid', pending: 'Recording settlement…',
+            success: 'Settlement recorded against this calculated amount.',
+            request: () => post(`/api/event/${getEventId()}/invoice-pools/${input.dataset.pool}/shares/${input.dataset.id}/pay`, {isPaid: checked ? 'on' : ''}),
+            onSuccess: () => {
+                input.dataset.paid = String(checked);
+                input.checked = checked;
+                input.defaultChecked = checked;
+                invalidatePoolPreview(input.dataset.pool);
                 const amount = Number(input.dataset.amount);
-                const state = input.closest('[data-share-row]')?.querySelector<HTMLElement>('[data-share-state]');
-                if (state) state.textContent = checked ? 'Settled' : amount < 0 ? 'Refund due' : amount > 0 ? 'To pay' : 'No payment due';
                 const total = input.closest('.invoice-pool')?.querySelector<HTMLElement>(amount < 0 ? '[data-pool-refunds]' : '[data-pool-outstanding]');
-                if (total && Number.isFinite(amount)) {
+                if (total && Number.isFinite(amount) && previous !== checked) {
                     total.textContent = (Number(total.textContent) + (checked ? -1 : 1) * Math.abs(amount)).toFixed(2);
                 }
-                showInlineAlert('success', 'Settlement recorded against this calculated amount. Recalculation will carry it forward.');
-            } catch (err) {
-                input.checked = !checked;
-                const message = err instanceof Error ? err.message : 'Failed to set share as paid.';
-                showInlineAlert('error', message);
-            } finally {
-                input.disabled = false;
-            }
-        }
+                updateShareRowState(row, checked);
+                input.closest('[data-share-ledger]')?.dispatchEvent(new Event('share-state-updated'));
+            }});
     });
+}
+
+/** Browser form restoration must never override the payment state rendered by the server. */
+export function restoreInvoicePaidState(): void {
+    document.querySelectorAll<HTMLInputElement>('.share-paid[data-paid]').forEach(input => {
+        input.checked = input.dataset.paid === 'true';
+        input.defaultChecked = input.checked;
+        const row = input.closest<HTMLElement>('[data-share-row]');
+        if (row) updateShareRowState(row, input.checked);
+    });
+}
+
+function updateShareRowState(row: HTMLElement, paid: boolean): void {
+    const amount = Number(row.dataset.shareAmount);
+    const status = paid || amount === 0 ? 'settled' : amount < 0 ? 'refund' : 'due';
+    row.dataset.shareStatus = status;
+    const badge = row.querySelector<HTMLElement>('[data-share-state]');
+    if (badge) {
+        badge.textContent = status === 'settled' ? 'Settled' : status === 'refund' ? 'Refund' : 'Due';
+        badge.className = `badge ${status === 'settled' ? 'bg-success' : status === 'refund' ? 'bg-info text-dark' : 'bg-warning text-dark'}`;
+    }
+    const note = row.querySelector<HTMLElement>('[data-share-balance-note]');
+    if (note) note.textContent = paid ? 'Already settled' : amount < 0 ? 'Amount to pay out' : amount > 0 ? 'Amount to collect' : 'No payment due';
 }
 
 /**
@@ -716,6 +786,66 @@ export function initInvoiceLedgers(): void {
             render();
         });
         render();
+    });
+}
+
+/** Filter the persisted settlement list without changing its financial state. */
+export function initShareLedgers(): void {
+    document.querySelectorAll<HTMLElement>('[data-share-ledger]').forEach(ledger => {
+        const body = ledger.querySelector<HTMLElement>('[data-share-body]');
+        const rows = Array.from(ledger.querySelectorAll<HTMLTableRowElement>('[data-share-row]'));
+        const search = ledger.querySelector<HTMLInputElement>('input[data-share-search]');
+        const filter = ledger.querySelector<HTMLSelectElement>('[data-share-filter]');
+        const sort = ledger.querySelector<HTMLSelectElement>('[data-share-sort]');
+        const size = ledger.querySelector<HTMLSelectElement>('[data-share-page-size]');
+        const previous = ledger.querySelector<HTMLButtonElement>('[data-share-previous]');
+        const next = ledger.querySelector<HTMLButtonElement>('[data-share-next]');
+        const summary = ledger.querySelector<HTMLElement>('[data-share-page-summary]');
+        const empty = ledger.querySelector<HTMLElement>('[data-share-empty]');
+        let page = 1;
+        const render = () => {
+            const query = search?.value.trim().toLowerCase() || '';
+            const status = filter?.value || '';
+            const pageSize = Math.max(1, Number(size?.value) || 25);
+            const matching = rows.filter(row => (!query || (row.dataset.shareSearch || '').includes(query))
+                && (!status || row.dataset.shareStatus === status));
+            matching.sort((a, b) => {
+                const difference = Number(a.dataset.shareAmount) - Number(b.dataset.shareAmount);
+                if (difference && sort?.value === 'amount-asc') return difference;
+                if (difference && sort?.value === 'amount-desc') return -difference;
+                return (a.dataset.shareName || '').localeCompare(b.dataset.shareName || '', undefined, {sensitivity: 'base'});
+            });
+            const pages = Math.max(1, Math.ceil(matching.length / pageSize));
+            page = Math.min(Math.max(1, page), pages);
+            const start = (page - 1) * pageSize;
+            const visible = new Set(matching.slice(start, start + pageSize));
+            rows.forEach(row => { row.hidden = !visible.has(row); });
+            // Reordering the existing rows preserves expanded details and payment controls.
+            matching.forEach(row => body?.append(row));
+            if (summary) summary.textContent = `${matching.length ? start + 1 : 0}–${Math.min(start + pageSize, matching.length)} of ${matching.length} shares`;
+            if (empty) empty.hidden = matching.length > 0;
+            if (previous) previous.disabled = page <= 1;
+            if (next) next.disabled = page >= pages;
+        };
+        const reset = () => { page = 1; render(); };
+        search?.addEventListener('input', reset);
+        [filter, sort, size].forEach(control => control?.addEventListener('change', reset));
+        previous?.addEventListener('click', () => { page--; render(); });
+        next?.addEventListener('click', () => { page++; render(); });
+        ledger.addEventListener('share-state-updated', render);
+        render();
+    });
+}
+
+function initTakeoverOverviews(): void {
+    document.querySelectorAll<HTMLElement>('[data-takeover-overview]').forEach(overview => {
+        const search = overview.querySelector<HTMLInputElement>('[data-takeover-overview-search]');
+        search?.addEventListener('input', () => {
+            const query = search.value.trim().toLowerCase();
+            overview.querySelectorAll<HTMLElement>('[data-takeover-overview-row]').forEach(row => {
+                row.hidden = !!query && !(row.dataset.searchText || '').includes(query);
+            });
+        });
     });
 }
 
@@ -856,7 +986,7 @@ async function loadPoolCalculationPreview(poolId: string | undefined): Promise<v
     const modal = document.getElementById(`pool-${poolId}-calculation`);
     if (!modal) return;
     const confirm = modal.querySelector<HTMLButtonElement>('.pool-close, .pool-recalculate');
-    if (confirm?.dataset.saving === 'true') return;
+    if (modal.dataset.saving === 'true' || modal.dataset.previewLoading === 'true') return;
     invalidatePoolPreview(poolId);
     modal.querySelector<HTMLElement>('[data-pool-preview-table]')?.setAttribute('hidden', '');
     modal.querySelector<HTMLElement>('[data-pool-preview-summary]')?.setAttribute('hidden', '');
@@ -871,8 +1001,20 @@ async function loadPoolCalculationPreview(poolId: string | undefined): Promise<v
         return;
     }
     const refresh = modal.querySelector<HTMLButtonElement>('.pool-preview-refresh');
-    if (refresh) refresh.disabled = true;
-    showPoolFeedback(modal, 'info', 'Preparing the calculation preview…');
+    modal.dataset.previewLoading = 'true';
+    const refreshLabel = refresh ? Array.from(refresh.childNodes) : [];
+    if (refresh) {
+        refresh.disabled = true;
+        const spinner = document.createElement('span');
+        spinner.className = 'spinner-border spinner-border-sm me-2';
+        spinner.setAttribute('aria-hidden', 'true');
+        refresh.replaceChildren(spinner, document.createTextNode('Preparing…'));
+    }
+    modal.setAttribute('aria-busy', 'true');
+    showPoolProgress(modal, 'Preparing the calculation preview…');
+    const delayed = window.setTimeout(() => {
+        if (modal.dataset.previewRequest === requestId) showPoolProgress(modal, 'Still preparing the preview. No changes have been made.');
+    }, 5000);
     try {
         requireManageAssignments('preview invoice calculations');
         const response = await get(`/api/event/${getEventId()}/invoice-pools/${poolId}/preview`);
@@ -885,13 +1027,21 @@ async function loadPoolCalculationPreview(poolId: string | undefined): Promise<v
         invalidatePoolPreview(poolId);
         showPoolFeedback(modal, 'error', err instanceof Error ? err.message : 'Unable to load the calculation preview.');
     } finally {
-        if (modal.dataset.previewRequest === requestId && refresh) refresh.disabled = false;
+        window.clearTimeout(delayed);
+        if (modal.dataset.previewRequest === requestId) {
+            delete modal.dataset.previewLoading;
+            modal.removeAttribute('aria-busy');
+            if (refresh) {
+                refresh.disabled = false;
+                refresh.replaceChildren(...refreshLabel);
+            }
+        }
     }
 }
 
 async function calculatePool(target: HTMLButtonElement, recalculate: boolean): Promise<void> {
     const modal = target.closest<HTMLElement>('.modal');
-    if (!modal || target.dataset.saving === 'true') return;
+    if (!modal || modal.dataset.saving === 'true') return;
     if (poolHasUnsavedChanges(target.dataset.id)) {
         invalidatePoolPreview(target.dataset.id);
         showPoolFeedback(modal, 'error', 'Save or discard your pending edits and refresh the preview before calculating.');
@@ -903,41 +1053,29 @@ async function calculatePool(target: HTMLButtonElement, recalculate: boolean): P
         return;
     }
     const sendEmails = !!modal.querySelector<HTMLInputElement>('input[name="sendEmails"]')?.checked;
-    target.dataset.saving = 'true';
-    target.disabled = true;
-    const refresh = modal.querySelector<HTMLButtonElement>('.pool-preview-refresh');
-    if (refresh) refresh.disabled = true;
-    showPoolFeedback(modal, 'info', 'Applying the reviewed calculation. Please wait…');
-    const delayed = window.setTimeout(() => showPoolFeedback(modal, 'info', 'Still applying the calculation. Keep this page open and do not calculate again.'), 8000);
-    try {
-        await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.id}/${recalculate ? 'recalculate' : 'close'}`, {
+    const applied = await runInvoiceAdminAction({scope: modal, trigger: target, permission: 'calculate invoice shares',
+        pending: 'Applying the reviewed calculation…',
+        request: () => post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.id}/${recalculate ? 'recalculate' : 'close'}`, {
             sendEmails, expectedRevision: Number(revision),
-        });
-        rememberPool(target.dataset.id);
-        showPoolFeedback(modal, 'success', (recalculate ? 'Pool recalculated. Previous settlements have been credited.' : 'Pool closed and shares calculated.')
-            + (sendEmails ? ' Settlement emails requested.' : ' No calculation emails sent.'));
-        reloadAfterDelay(600);
-    } catch (err) {
-        invalidatePoolPreview(target.dataset.id);
-        showPoolFeedback(modal, 'error', (err instanceof Error ? err.message : 'Unable to calculate the pool.') + ' Refresh the preview before trying again.');
-        delete target.dataset.saving;
-        if (refresh) refresh.disabled = false;
-    } finally {
-        window.clearTimeout(delayed);
-    }
+        }),
+        success: (recalculate ? 'Pool recalculated. Previous settlements have been credited.' : 'Pool closed and shares calculated.')
+            + (sendEmails ? ' Settlement emails requested.' : ' No calculation emails requested.'),
+        reload: true, reloadPool: target.dataset.id,
+    });
+    if (!applied) invalidatePoolPreview(target.dataset.id);
 }
 
 async function submitPoolAction(target: HTMLButtonElement, action: 'rollback' | 'notify'): Promise<void> {
     const modal = target.closest<HTMLElement>('.modal');
-    if (!modal || target.dataset.saving === 'true') return;
-    target.dataset.saving = 'true';
-    target.disabled = true;
-    showPoolFeedback(modal, 'info', action === 'rollback' ? 'Restoring the last calculated pool settings…' : 'Sending settlement emails…');
-    try {
-        const response = await post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.id}/${action}`);
-        if (action === 'rollback') {
+    if (!modal || modal.dataset.saving === 'true') return;
+    const completed = await runInvoiceAdminAction({scope: modal, trigger: target, permission: action === 'rollback' ? 'roll back pool changes' : 'send settlement emails',
+        pending: action === 'rollback' ? 'Restoring the last calculated pool settings…' : 'Requesting settlement emails…',
+        request: () => post(`/api/event/${getEventId()}/invoice-pools/${target.dataset.id}/${action}`),
+        success: response => response.message || (action === 'rollback'
+            ? 'Pool changes rolled back. Existing shares and recorded payments were kept.' : 'Settlement emails requested.'),
+        onSuccess: () => {
+            if (action !== 'rollback') return;
             invalidatePoolPreview(target.dataset.id);
-            showPoolFeedback(modal, 'success', response.message || 'Pool changes rolled back. Existing shares and recorded payments were kept.');
             const returnButton = modal.querySelector<HTMLButtonElement>('.pool-return');
             if (returnButton) returnButton.hidden = false;
             // Leave the outcome visible, including any external changes that still need recalculation.
@@ -945,14 +1083,9 @@ async function submitPoolAction(target: HTMLButtonElement, action: 'rollback' | 
                 rememberPool(target.dataset.id);
                 window.location.reload();
             }, {once: true});
-        } else {
-            showPoolFeedback(modal, 'success', response.message || 'Settlement emails sent to payers with an email address.');
-        }
-    } catch (err) {
-        showPoolFeedback(modal, 'error', err instanceof Error ? err.message : 'Unable to complete this action.');
-        delete target.dataset.saving;
-        target.disabled = false;
-    }
+        },
+    });
+    if (completed) target.disabled = true;
 }
 
 /**
@@ -983,7 +1116,7 @@ function initTakeoverModal(): void {
         const payerId = activePayer();
         const selected = Array.from(beneficiaryList.querySelectorAll<HTMLInputElement>('input:checked')).map(input => participantName(Number(input.value)));
         summary.textContent = !payerId ? 'Choose a payer to manage coverage.'
-            : `${participantName(payerId)} covers ${selected.length ? selected.join(', ') : 'their own share only'}.`;
+            : `${participantName(payerId)} covers ${selected.length ? `${selected.length} other participant${selected.length === 1 ? '' : 's'}` : 'their own share only'}.`;
     };
     const filterBeneficiaries = () => {
         const term = (searchInput?.value || '').toLowerCase();
@@ -1100,19 +1233,13 @@ function initTakeoverModal(): void {
         const endpoint = activeMode === 'admin'
             ? `/api/event/${getEventId()}/invoice-pools/${activePoolId}/takeovers/manage`
             : `/api/event/${getEventId()}/invoice-pools/${activePoolId}/takeovers`;
-        form.dataset.saving = 'true';
-        if (submit) submit.disabled = true;
-        showPoolFeedback(form, 'info', 'Saving takeovers…');
-        try {
-            await post(endpoint, payload);
-            showPoolFeedback(form, 'success', 'Takeovers saved. Closed pools require recalculation.');
-            rememberPool(activePoolId);
-            reloadAfterDelay(600);
-        } catch (err) {
-            delete form.dataset.saving;
-            if (submit) submit.disabled = false;
-            showPoolFeedback(form, 'error', err instanceof Error ? err.message : 'Unable to update takeovers.');
-        }
+        if (!submit) return;
+        await runInvoiceAdminAction({scope: form, trigger: submit,
+            permission: activeMode === 'admin' ? 'manage takeovers' : undefined,
+            pending: 'Saving takeovers…', request: () => post(endpoint, payload),
+            success: 'Takeovers saved.' + (poolClosed ? ' Recalculate the pool to apply these changes.' : ''),
+            reload: true, reloadPool: activePoolId,
+        });
     });
 }
 
@@ -1152,6 +1279,8 @@ export function init(): void {
     initTakeoverModal();
     initInvoiceAdmin();
     initInvoiceLedgers();
+    initShareLedgers();
+    initTakeoverOverviews();
     initInvoiceSubmission();
 
     if (getEventId()) {

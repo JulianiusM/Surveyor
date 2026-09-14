@@ -58,7 +58,7 @@ block content
                         if !searchQuery
                             p.mb-0 Enter a task, control label, or feature name to search the user guides.
                         else if searchResults.length === 0
-                            .alert.alert-info.mb-0(role="status")
+                            .status-notice.alert-info.mb-0(role="status")
                                 | No help topics matched “#{searchQuery}”. Try a shorter task or a visible button label.
                         else
                             p.text-secondary(role="status") #{searchResults.length} topic#{searchResults.length === 1 ? '' : 's'} found for “#{searchQuery}”.

@@ -6,8 +6,8 @@ owner: developer-experience maintainers
 status: current
 last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, signed adjustments, revision-checked previews, payment carry-forward, rollback snapshots, configurable settlement notifications, and upload feedback; non-blocking documentation policy and optional report/test routing; D12 clean-clone setup, current scripts, settings and schema bootstrap, generated files, observed repository patterns, route registration, test selection, CI branches, and troubleshooting; D14 focused in-app help validation workflow
-source-anchors: src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
+verification-scope: named recipient mailer contract, transient alert lifecycle, snapshot relation loading, post-commit invoice review notifications, saved share ledger and PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, signed adjustments, revision-checked previews, payment carry-forward, rollback snapshots, configurable settlement notifications, and upload feedback; non-blocking documentation policy and optional report/test routing; D12 clean-clone setup, current scripts, settings and schema bootstrap, generated files, observed repository patterns, route registration, test selection, CI branches, and troubleshooting; D14 focused in-app help validation workflow
+source-anchors: src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
 next-review: development-workflow-or-help-tooling-change
 -->
 
@@ -232,6 +232,25 @@ The repository is not governed by a single formatting tool or a class-per-file c
 - Treat generated `.gen.js` files as outputs, not source.
 - Consider both the server-rendered fallback and enhanced browser behavior when changing a form or action.
 
+`notifications.ts` is loaded unconditionally by the shared layout. Its `initAlertDismissal` observer covers server
+flashes and inserted or renewed `.alert` / `role="alert"` messages, dismissing each after ten seconds. Use
+`showInlineAlert` for text-only transient feedback. Reusable containers can use `scheduleAlertDismissal` with a clearing
+callback; cancel their timer when changing to ongoing progress. Persistent conditions use `.status-notice` and
+`role="status"`, without alert semantics. Keep required warnings and in-flight financial status visible. Observer cleanup
+cancels timers on removal or page exit; restored pages restart observation.
+
+### Named email delivery
+
+Every mailer entry point requires an `EmailRecipient` with `{name, address}`. Use the actual account, guest, or active
+profile name; do not infer a person's name from their email address. `resolveEmailRecipientName` collapses whitespace
+and selects the first nonblank name from actual identity values, such as a profile name followed by its owner's name or
+username. Registration stores the normalized display name and falls back to the submitted username when it is blank.
+Addresses containing line breaks are rejected. Nodemailer receives an Address object in `to` so
+the recipient display name is preserved. `renderEmail(subject, content, recipient)` supplies exactly one named greeting
+before the heading in HTML and plain text, including for older string content or content with an explicit greeting.
+Text and recipient names are escaped in HTML, and action URLs retain the HTTP(S)-only check. `createMailOptions` exposes
+the same rendering boundary for tests without SMTP delivery.
+
 ### Database changes
 
 A schema change normally requires:
@@ -285,6 +304,10 @@ that read the deleted records. A later explicit recalculation uses only the reco
 or notifications. Its revision must still match when a preview is applied. Recalculation uses saved inputs, preserves
 the CLOSED state, and replaces shares in one transaction. A failure keeps the previous shares and payments.
 
+Pool hydration uses `relationLoadStrategy: "query"` inside a `REPEATABLE READ` transaction so multiple child collections
+do not multiply into one large join and the pool revision, settings, and saved shares come from one snapshot. Mutations
+retain their transaction locks and revision comparisons; optimizing reads must not weaken that boundary.
+
 `projectInvoiceShares` carries money by the actual payer registration. For each previous share, cumulative settlement is
 `paymentCreditAmount + (isPaid ? shareAmount : 0)`. The new `shareAmount` is gross liability minus that signed credit.
 Positive credits represent money received; negative credits represent payouts made. Repeated calculations preserve the
@@ -302,11 +325,24 @@ pools without a snapshot cannot roll back until a successful calculation establi
 settings changes do not require recalculation. A separate closed-pool notification endpoint sends the saved settlement
 without recalculation. `buildInvoiceSettlementEmail` reads `isPaid`, signed payment credit, and the residual amount so
 settled shares never appear outstanding. Notification delivery is queued after persistence, outside the transaction.
+Invoice acceptance, rejection, and closure also confirm persistence before queuing SMTP delivery. Catch and log delivery
+failures independently of the financial response. If a review loses a concurrent state transition, return 409 and do not
+send a notification implying that the losing review succeeded.
 
 The participant upload binder in `src/public/js/modules/invoice-submission.ts` owns progress, busy state, and recovery.
 Successful persistence is acknowledged independently of SMTP delivery. An uncertain network outcome must send users
 to invoice history before retrying; never automatically resend a proof upload. Keep validation failures distinguishable
 from failures where the server may have committed the invoice.
+
+`runInvoiceAdminAction` gives pool mutations immediate busy feedback, blocks repeat actions, and adds a status update
+after five seconds. Update ledger amounts and Paid state only from a successful server confirmation; use canonical
+saved payment data when restoring controls after navigation or a failed request. Transient outcomes expire after ten
+seconds, while the pending state remains visible.
+
+The share ledger searches, filters, sorts, and pages the saved rows in the browser. The portrait A4 PDF export at
+`GET /event/:id/export/invoice-pools/:poolId/shares` requires `MANAGE_ASSIGNMENTS` and verifies that the pool belongs to
+the event. It exports the complete persisted share set, independent of browser filters, with current payment status,
+remaining amounts, and a stale-calculation notice when needed. Export must never recalculate or record payments.
 
 Protect calculation arithmetic with unit tests, persistence and recalculation with the invoice integration suite,
 and upload state transitions with frontend tests. Use a real browser for dialog wiring and the saved-edit workflow.

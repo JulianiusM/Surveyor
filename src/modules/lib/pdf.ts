@@ -18,6 +18,8 @@ import pdfmake, {TCreatedPdf} from 'pdfmake';
 import type {Content, Table, TableCell, TDocumentDefinitions, TFontDictionary} from 'pdfmake/interfaces';
 import type {ParticipantRow} from "../../types/EventTypes";
 import type {Event} from '../database/entities/event/Event';
+import type {EventInvoicePool} from '../database/entities/event/EventInvoicePool';
+import type {EventInvoiceShare} from '../database/entities/event/EventInvoiceShare';
 import {ALLOWED_DIETARY} from "../database/entities/event/EventRegistrationDietary";
 
 const PAGE_MARGINS: [number, number, number, number] = [28, 28, 28, 36];
@@ -323,4 +325,131 @@ export function createParticipantsPdf(
     },
 ): TCreatedPdf {
     return pdfmake.createPdf(buildParticipantsPdfDefinition(data));
+}
+
+export interface InvoiceSharesPdfData {
+    event: Pick<Event, 'title' | 'timezone'>;
+    pool: Pick<EventInvoicePool, 'name' | 'closedAt' | 'needsRecalculation'>;
+    shares: Array<Pick<EventInvoiceShare,
+        'registrationId' | 'baseShareAmount' | 'extraAmount' | 'invoiceCreditAmount'
+        | 'paymentCreditAmount' | 'shareAmount' | 'isPaid' | 'paidAt' | 'note'> & {name: string}>;
+    generatedAt: string;
+}
+
+// Long unbroken names and notes must not impose a wider minimum column width.
+function wrapInvoicePdfText(value: string): string {
+    return value.replace(/\S{19,}/gu, (word) => Array.from(word).reduce<string[]>((parts, character, index) => {
+        if (index % 18 === 0) parts.push('');
+        parts[parts.length - 1] += character;
+        return parts;
+    }, []).join('\u200b'));
+}
+
+function invoicePdfAmount(amount: number): string {
+    return (Math.round(amount * 100) / 100).toFixed(2);
+}
+
+/** Export saved settlement rows; this deliberately does not recalculate the pool. */
+export function buildInvoiceSharesPdfDefinition(data: InvoiceSharesPdfData): TDocumentDefinitions {
+    const labels = ['Participant', 'Base', 'Adjustments', 'Invoice credit', 'Previously settled', 'Remaining', 'Status'];
+    const body: TableCell[][] = [labels.map((text, index) => ({
+        text, bold: true, fillColor: '#e5e7eb', fontSize: FONT_SIZE_SMALL,
+        alignment: index > 0 && index < 6 ? 'right' : 'left',
+    }))];
+    let collectCents = 0;
+    let refundCents = 0;
+    let settledCents = 0;
+    const amountCell = (amount: number, bold = false): TableCell => ({text: invoicePdfAmount(amount), alignment: 'right', bold});
+
+    for (const share of data.shares) {
+        const remaining = share.isPaid ? 0 : share.shareAmount;
+        const remainingCents = Math.round(remaining * 100);
+        collectCents += Math.max(remainingCents, 0);
+        refundCents += Math.max(-remainingCents, 0);
+        if (share.isPaid) settledCents += Math.round(share.shareAmount * 100);
+        body.push([
+            {text: wrapInvoicePdfText(share.name), bold: true},
+            amountCell(share.baseShareAmount),
+            amountCell(share.extraAmount),
+            amountCell(share.invoiceCreditAmount),
+            amountCell(share.paymentCreditAmount),
+            amountCell(remaining, true),
+            {text: share.isPaid ? 'Paid' : remaining < 0 ? 'Refund due' : 'Unpaid', fontSize: FONT_SIZE_SMALL},
+        ]);
+
+        const details: string[] = [];
+        if (share.note?.trim()) details.push(share.note.trim());
+        if (share.isPaid && share.shareAmount !== 0) {
+            details.push(`Settled in this calculation: ${invoicePdfAmount(share.shareAmount)}${share.paidAt
+                ? ` on ${formatDateTime(share.paidAt, data.event.timezone)}` : ''}.`);
+        }
+        if (details.length) body.push([
+            {text: wrapInvoicePdfText(details.join('\n')), colSpan: 7, fontSize: FONT_SIZE_SMALL, color: '#4b5563'},
+            {}, {}, {}, {}, {}, {},
+        ]);
+    }
+    if (!data.shares.length) body.push([
+        {text: 'No calculated shares in this pool.', colSpan: 7, italics: true, color: '#6b7280'},
+        {}, {}, {}, {}, {}, {},
+    ]);
+
+    const content: Content[] = [
+        {text: wrapInvoicePdfText(data.event.title), fontSize: FONT_SIZE_TITLE, bold: true, margin: [0, 0, 0, 6]},
+        {text: wrapInvoicePdfText(`Invoice shares: ${data.pool.name}`), fontSize: FONT_SIZE_SECTION, bold: true, margin: [0, 0, 0, 8]},
+        keyValueLine('Saved calculation', formatDateTime(data.pool.closedAt, data.event.timezone)),
+        keyValueLine('Participants with saved shares', String(data.shares.length)),
+    ];
+    if (data.pool.needsRecalculation) content.push({
+        text: 'Pool inputs have changed. This PDF shows the saved calculation and recorded payments. Recalculate the pool to apply pending changes.',
+        color: '#92400e', bold: true, margin: [0, 4, 0, 8],
+    });
+    content.push(
+        keyValueLine('Still to collect', invoicePdfAmount(collectCents / 100)),
+        keyValueLine('Refunds still to pay', invoicePdfAmount(refundCents / 100)),
+        keyValueLine('Net remaining', invoicePdfAmount((collectCents - refundCents) / 100)),
+        keyValueLine('Settled in this calculation (net)', invoicePdfAmount(settledCents / 100)),
+        {
+            text: 'Base + adjustments − invoice credit − previously settled − payments recorded for this calculation = remaining. '
+                + 'Negative remaining amounts are refunds. Negative previously settled amounts are refunds already paid. '
+                + 'All saved shares are included; screen filters do not affect this export.',
+            fontSize: FONT_SIZE_SMALL, color: '#4b5563', margin: [0, 4, 0, 8],
+        },
+        {
+            table: {
+                headerRows: 1,
+                // A4 portrait: 539.28 pt available after margins. Fixed columns and padding
+                // leave over 140 pt for names, with full-width detail rows below each payer.
+                widths: ['*', 52, 56, 56, 60, 62, 46],
+                body,
+            },
+            layout: {
+                hLineWidth: (index: number) => index === 1 ? 1 : 0.5,
+                vLineWidth: () => 0,
+                hLineColor: () => '#d1d5db',
+                paddingLeft: () => 4,
+                paddingRight: () => 4,
+                paddingTop: () => 5,
+                paddingBottom: () => 5,
+            },
+        },
+    );
+
+    return {
+        pageSize: 'A4',
+        pageOrientation: 'portrait',
+        pageMargins: PAGE_MARGINS,
+        defaultStyle: {fontSize: FONT_SIZE_BASE},
+        content,
+        footer: (currentPage, pageCount) => ({
+            columns: [
+                {text: `Generated: ${formatDateTime(data.generatedAt)} UTC`, fontSize: FONT_SIZE_SMALL, color: '#6b7280'},
+                {text: `Page ${currentPage} / ${pageCount}`, alignment: 'right', fontSize: FONT_SIZE_SMALL, color: '#6b7280'},
+            ],
+            margin: [28, 0, 28, 16],
+        }),
+    };
+}
+
+export function createInvoiceSharesPdf(data: InvoiceSharesPdfData): TCreatedPdf {
+    return pdfmake.createPdf(buildInvoiceSharesPdfDefinition(data));
 }

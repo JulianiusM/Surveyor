@@ -1,51 +1,96 @@
 //- Common invoice pool fragments reused by admin and participant pages
 include mixins/helpers.pug
 //- Render calculated shares and their current settlement state.
-mixin invoiceShareTable(pool, participants, admin = false)
+mixin invoiceShareTable(pool, participants, admin = false, eventId = null)
     if pool.shares && pool.shares.length
-        .table-responsive.invoice-scroll
-            table.table.table-striped.table-hover.table-bordered.table-dark.table-sm.mb-0
-                caption.visually-hidden Calculated payer shares and settlement status
-                thead
-                    tr
-                        th Payer
-                        th Covers
-                        th Base
-                        th Adjustments
-                        th Invoice credit
-                        th Previously settled
-                        th Remaining due / refund
-                        th Notes
-                        th Paid
-                tbody
-                    each share in pool.shares
-                        -
-                            const payerName = (participants || []).find(pt => pt.id === share.registration?.id)?.name || `Participant #${share.registration?.id}`
-                            const covered = pool.needsRecalculation ? 'See calculation notes' : (pool.takeovers || [])
-                                    .filter(t => t.payerRegistrationId === share.registration?.id)
+        .share-ledger.border.border-secondary-subtle.rounded-3.p-3(data-share-ledger)
+            .d-flex.flex-wrap.justify-content-between.align-items-center.gap-2.mb-3
+                .d-flex.align-items-center.flex-wrap.gap-2
+                    strong Calculated shares
+                    span.badge.bg-secondary #{pool.shares.length} payers
+                if admin && eventId
+                    a.btn.btn-outline-light.btn-sm(href=`/event/${eventId}/export/invoice-pools/${pool.id}/shares` download)
+                        i.bi.bi-file-earmark-pdf.me-1(aria-hidden="true")
+                        | Export as PDF
+            .share-ledger-controls.d-flex.flex-wrap.gap-2.mb-3
+                input.form-control.form-control-sm.text-bg-dark(type="search" placeholder="Search payers or calculation notes" aria-label="Search shares" data-share-search)
+                select.form-select.form-select-sm.text-bg-dark(aria-label="Filter share status" data-share-filter)
+                    option(value="") All statuses
+                    option(value="due") Due
+                    option(value="refund") Refund
+                    option(value="settled") Settled
+                select.form-select.form-select-sm.text-bg-dark(aria-label="Sort shares" data-share-sort)
+                    option(value="name") Payer A–Z
+                    option(value="amount-desc") Amount: high to low
+                    option(value="amount-asc") Amount: low to high
+                select.form-select.form-select-sm.text-bg-dark(aria-label="Shares per page" data-share-page-size)
+                    option(value="25") 25 per page
+                    option(value="50") 50 per page
+                    option(value="100") 100 per page
+            .table-responsive.share-ledger-table
+                table.table.table-dark.table-hover.align-middle.mb-0
+                    caption.visually-hidden Calculated payer shares and settlement status
+                    thead
+                        tr
+                            th(scope="col") Payer
+                            th(scope="col") Calculated balance
+                            th(scope="col") Status
+                            th(scope="col") Calculation details
+                            th(scope="col") Paid
+                    tbody(data-share-body)
+                        each share in pool.shares
+                            -
+                                const registrationId = share.registrationId || share.registration?.id;
+                                const payerName = (participants || []).find(pt => pt.id === registrationId)?.name || `Participant #${registrationId}`;
+                                const covered = pool.needsRecalculation ? 'See saved calculation notes' : (pool.takeovers || [])
+                                    .filter(t => t.payerRegistrationId === registrationId)
                                     .map(t => (participants || []).find(pt => pt.id === t.beneficiaryRegistrationId)?.name || `Participant #${t.beneficiaryRegistrationId}`)
                                     .join(', ');
-                            const notes = (share.note || '').split(' • ').filter(Boolean);
-                        tr(data-share-row)
-                            td #{payerName}
-                            td #{covered || 'Self'}
-                            td #{fmtMoney(share.baseShareAmount)}
-                            td #{fmtMoney(share.extraAmount)}
-                            td #{fmtMoney(share.invoiceCreditAmount)}
-                            td #{fmtMoney(share.paymentCreditAmount)}
-                            td
-                                strong #{fmtMoney(share.shareAmount)}
-                                small.d-block.text-info(data-share-state) #{share.isPaid ? 'Settled' : Number(share.shareAmount) < 0 ? 'Refund due' : Number(share.shareAmount) > 0 ? 'To pay' : 'No payment due'}
-                            td
-                                if notes.length
-                                    ul.list-unstyled.mb-0
-                                        each note in notes
-                                            li.text-secondary.small= note
-                                else
-                                    span.text-secondary.small No notes
-                            td
-                                .form-check.form-switch
-                                    input.form-check-input.share-paid(type="checkbox" data-pool=pool.id data-id=share.id data-amount=share.shareAmount checked=!!(share.isPaid) disabled=!admin aria-label=`Mark ${payerName} paid`)
+                                const coveredCount = (pool.takeovers || []).filter(t => t.payerRegistrationId === registrationId).length;
+                                const notes = (share.note || '').split(' • ').filter(Boolean);
+                                const isPaid = share.isPaid === true || share.isPaid === 1;
+                                const amount = Number(share.shareAmount);
+                                const shareStatus = isPaid || amount === 0 ? 'settled' : amount < 0 ? 'refund' : 'due';
+                                const searchText = `${payerName} ${covered} ${share.note || ''}`.toLowerCase();
+                            tr(data-share-row data-share-name=payerName data-share-search=searchText data-share-amount=amount data-share-status=shareStatus)
+                                td(data-label="Payer")
+                                    strong.d-block #{payerName}
+                                    small.text-secondary #{pool.needsRecalculation ? 'Coverage in saved notes' : coveredCount ? `Covers ${coveredCount} other participant${coveredCount === 1 ? '' : 's'}` : 'Own share'}
+                                td(data-label="Calculated balance")
+                                    strong.fs-5 #{fmtMoney(share.shareAmount)}
+                                    small.d-block.text-secondary(data-share-balance-note) #{isPaid ? 'Already settled' : amount < 0 ? 'Amount to pay out' : amount > 0 ? 'Amount to collect' : 'No payment due'}
+                                td(data-label="Status")
+                                    span.badge(data-share-state class=shareStatus === 'settled' ? 'bg-success' : shareStatus === 'refund' ? 'bg-info text-dark' : 'bg-warning text-dark') #{shareStatus === 'settled' ? 'Settled' : shareStatus === 'refund' ? 'Refund' : 'Due'}
+                                td(data-label="Calculation details")
+                                    details.share-calculation-details
+                                        summary.text-info View breakdown
+                                        if covered && !pool.needsRecalculation
+                                            p.small.text-secondary.mt-2.mb-1 Covered participants: #{covered}
+                                        dl.row.g-1.small.mt-2.mb-2
+                                            dt.col-7 Base
+                                            dd.col-5.text-end #{fmtMoney(share.baseShareAmount)}
+                                            dt.col-7 Adjustments
+                                            dd.col-5.text-end #{fmtMoney(share.extraAmount)}
+                                            dt.col-7 Invoice credit
+                                            dd.col-5.text-end #{fmtMoney(share.invoiceCreditAmount)}
+                                            dt.col-7 Previously settled
+                                            dd.col-5.text-end #{fmtMoney(share.paymentCreditAmount)}
+                                            dt.col-7 Calculated balance
+                                            dd.col-5.text-end #{fmtMoney(share.shareAmount)}
+                                        if notes.length
+                                            ul.small.ps-3.mb-0
+                                                each note in notes
+                                                    li.text-secondary= note
+                                td(data-label="Paid")
+                                    .form-check.form-switch
+                                        input.form-check-input.share-paid(type="checkbox" data-pool=pool.id data-id=share.id data-amount=share.shareAmount data-paid=isPaid ? 'true' : 'false' checked=isPaid disabled=!admin autocomplete="off" aria-label=`Mark ${payerName} paid`)
+                                    .pool-form-status.small.mt-1(role="status" aria-live="polite")
+            p.text-secondary.small.mb-0.py-3.text-center(hidden data-share-empty) No shares match these filters.
+            .d-flex.flex-wrap.justify-content-between.align-items-center.gap-2.mt-3
+                small.text-secondary(data-share-page-summary role="status" aria-live="polite")
+                .btn-group.btn-group-sm(role="group" aria-label="Share pages")
+                    button.btn.btn-outline-light(type="button" data-share-previous) Previous
+                    button.btn.btn-outline-light(type="button" data-share-next) Next
 
 //- Takeover summary with consistent layout and manage button
 mixin takeoverOverview(pool, participants, mode, options)
@@ -54,18 +99,20 @@ mixin takeoverOverview(pool, participants, mode, options)
         h6.mb-2 Takeovers
         p.text-secondary.small.mb-2 Assign which participant covers another's share. Covered participants cannot take over other shares.
     if pool.takeovers && pool.takeovers.length
-        ul.list-group.list-group-flush.bg-dark.border.border-secondary-subtle.rounded-3
-            each t in pool.takeovers
-                - const payerName = (participants || []).find(pt => pt.id === t.payerRegistrationId)?.name || `Participant #${t.payerRegistrationId}`
-                - const coverName = (participants || []).find(pt => pt.id === t.beneficiaryRegistrationId)?.name || `Participant #${t.beneficiaryRegistrationId}`
-                li.list-group-item.bg-dark.text-white.d-flex.justify-content-between.align-items-center
-                    span #{payerName} → #{coverName}&nbsp;
-                    if mode === 'participant' && data && data.registration && t.payerRegistrationId === data.registration.id
-                        span.badge.bg-info.text-dark You cover this
-                    else if mode === 'participant' && data && data.registration && t.beneficiaryRegistrationId === data.registration.id
-                        span.badge.bg-warning.text-dark Your share is covered
-                    else
-                        span.badge.bg-secondary Covers
+        details.participant-takeover-overview.w-100
+            summary.text-info View #{pool.takeovers.length} takeover#{pool.takeovers.length === 1 ? '' : 's'}
+            ul.list-group.list-group-flush.bg-dark.border.border-secondary-subtle.rounded-3.mt-2.participant-takeover-list
+                each t in pool.takeovers
+                    - const payerName = (participants || []).find(pt => pt.id === t.payerRegistrationId)?.name || `Participant #${t.payerRegistrationId}`
+                    - const coverName = (participants || []).find(pt => pt.id === t.beneficiaryRegistrationId)?.name || `Participant #${t.beneficiaryRegistrationId}`
+                    li.list-group-item.bg-dark.text-white.d-flex.justify-content-between.align-items-center.gap-2
+                        span #{payerName} → #{coverName}
+                        if mode === 'participant' && data && data.registration && t.payerRegistrationId === data.registration.id
+                            span.badge.bg-info.text-dark You cover this
+                        else if mode === 'participant' && data && data.registration && t.beneficiaryRegistrationId === data.registration.id
+                            span.badge.bg-warning.text-dark Your share is covered
+                        else
+                            span.badge.bg-secondary Covers
     else
         p.text-secondary.small.mb-2 No takeovers configured yet.
     button.btn.btn-outline-light.btn-sm.manage-takeovers.align-self-end.mt-2(type="button" data-id=pool.id data-mode=mode)
@@ -326,7 +373,7 @@ mixin invoiceSubmission(eventId, pools, mode, invoices, allPools = [])
                                         label.form-label(for="invoiceProof") Proof (image or PDF)
                                         input#invoiceProof.form-control.text-bg-dark(type="file" name="proof" accept="image/jpeg,image/png,image/gif,application/pdf" required)
                             .mt-3(data-invoice-feedback hidden)
-                                #invoiceSubmitStatus.alert.alert-info.mb-2(data-invoice-status role="status" aria-live="polite" aria-atomic="true" tabindex="-1")
+                                #invoiceSubmitStatus.status-notice.alert-info.mb-2(data-invoice-status role="status" aria-live="polite" aria-atomic="true" tabindex="-1")
                                 progress.w-100(data-invoice-progress max="100" aria-label="Invoice upload progress" hidden)
                                 button.btn.btn-outline-light.btn-sm(type="button" data-invoice-history hidden) View invoice history
                             .d-flex.justify-content-end.mt-2
@@ -334,7 +381,7 @@ mixin invoiceSubmission(eventId, pools, mode, invoices, allPools = [])
                                     i.bi.bi-cloud-upload.me-1(aria-hidden="true")
                                     | Submit invoice
                     else
-                        .alert.alert-info
+                        .status-notice.alert-info
                             i.bi.bi-info-circle.me-2(aria-hidden="true")
                             | No open pools for submissions right now.
                     #invoiceHistory
@@ -388,10 +435,12 @@ mixin participantShareSummary(registrationId, pools)
                                 else
                                     span.text-secondary.small No notes
                             td
-                                if row.share.isPaid
-                                    span.badge.bg-success.text-dark Paid
+                                if row.share.isPaid || Number(row.share.shareAmount) === 0
+                                    span.badge.bg-success.text-dark Settled
+                                else if Number(row.share.shareAmount) < 0
+                                    span.badge.bg-info.text-dark Refund
                                 else
-                                    span.badge.bg-warning.text-dark Outstanding
+                                    span.badge.bg-warning.text-dark Due
 
 //- Compact pool summary keeps the next action and calculation state visible.
 mixin poolHeaderSummary(pool)
@@ -547,13 +596,13 @@ mixin poolAdjustmentSection(ev, pool, participants)
     h6.mt-3 Add an adjustment
     +poolSurchargeForm(ev, pool, participants)
 
-mixin poolShareSection(pool, participants)
+mixin poolShareSection(pool, participants, eventId)
     if pool.shares && pool.shares.length
         h6.mb-2 Shares & settlement
         if pool.needsRecalculation
             p.text-warning.small Recalculation required. These are the previous calculated amounts. You can still record their settlement; recalculation credits those payments and refunds against the updated shares.
-        p.text-secondary.small Previously settled records payments received (positive) or refunds already paid out (negative). Remaining due / refund is the calculated share after this credit. The Paid switch records settlement of the remaining amount.
-        +invoiceShareTable(pool, participants, true)
+        p.text-secondary.small Previously settled records payments received (positive) or refunds already paid out (negative). Calculated balance is the share after this credit: positive means Due, negative means Refund. The Paid switch marks that balance Settled after payment or payout.
+        +invoiceShareTable(pool, participants, true, eventId)
     else if pool.status === 'CLOSED'
         p.text-secondary.small No participant shares were generated.
 
@@ -570,29 +619,31 @@ mixin poolEditModal(pool, suffix, title)
 //- Group coverage by payer so the relationship is clear before editing.
 mixin poolTakeoverSummary(pool, participants)
     - const payerIds = [...new Set((pool.takeovers || []).map(t => t.payerRegistrationId))]
-    .border.border-secondary-subtle.rounded-3.p-3.mt-3.pool-takeover-summary
-        .d-flex.justify-content-between.align-items-center.flex-wrap.gap-2.mb-2
-            h6.mb-0 Takeovers
-            small.text-secondary #{payerIds.length} covering payer#{payerIds.length === 1 ? '' : 's'}
+    details.border.border-secondary-subtle.rounded-3.p-3.mt-3.pool-takeover-summary(data-takeover-overview)
+        summary
+            strong Takeovers
+            span.text-secondary.small.ms-2 #{payerIds.length} covering payer#{payerIds.length === 1 ? '' : 's'} · #{(pool.takeovers || []).length} covered participants
         if payerIds.length
-            each payerId in payerIds
-                - const payerName = participants.find(p => p.id === payerId)?.name || `Participant #${payerId}`
-                - const beneficiaries = (pool.takeovers || []).filter(t => t.payerRegistrationId === payerId)
-                .pool-takeover-row.py-2
-                    .min-w-0
-                        small.text-secondary.d-block Payer
-                        strong #{payerName}
-                    .min-w-0
-                        small.text-secondary.d-block Covers
-                        .d-flex.flex-wrap.gap-1
-                            each t in beneficiaries
-                                - const beneficiaryName = participants.find(p => p.id === t.beneficiaryRegistrationId)?.name || `Participant #${t.beneficiaryRegistrationId}`
-                                span.badge.bg-secondary #{beneficiaryName}
-                    button.btn.btn-outline-light.btn-sm.manage-takeovers(type="button" data-id=pool.id data-payer=payerId data-mode="admin" aria-label=`Edit takeovers for ${payerName}`) Edit
+            input.form-control.form-control-sm.text-bg-dark.mt-3.mb-2(type="search" placeholder="Find a payer or covered participant" aria-label="Search takeovers" data-takeover-overview-search)
+            .pool-takeover-rows
+                each payerId in payerIds
+                    - const payerName = participants.find(p => p.id === payerId)?.name || `Participant #${payerId}`
+                    - const beneficiaries = (pool.takeovers || []).filter(t => t.payerRegistrationId === payerId)
+                    - const names = beneficiaries.map(t => participants.find(p => p.id === t.beneficiaryRegistrationId)?.name || `Participant #${t.beneficiaryRegistrationId}`)
+                    .pool-takeover-row.py-2(data-takeover-overview-row data-search-text=`${payerName} ${names.join(' ')}`.toLowerCase())
+                        div
+                            small.text-secondary.d-block Payer
+                            strong #{payerName}
+                        details
+                            summary.text-info Covers #{beneficiaries.length} participant#{beneficiaries.length === 1 ? '' : 's'}
+                            ul.small.ps-3.mb-0.mt-2
+                                each name in names
+                                    li #{name}
+                        button.btn.btn-outline-light.btn-sm.manage-takeovers(type="button" data-id=pool.id data-payer=payerId data-mode="admin" aria-label=`Edit takeovers for ${payerName}`) Edit
         else
-            p.text-secondary.small.mb-0 Each participant covers their own share. Use Manage takeovers to choose a payer who covers someone else.
+            p.text-secondary.small.mt-2.mb-0 Each participant covers their own share. Use Manage takeovers to choose a payer who covers someone else.
         if pool.needsRecalculation
-            p.text-warning.small.mt-2.mb-0 These saved takeovers will apply after recalculation. The previous share notes retain the previous coverage.
+            p.text-warning.small.mt-2.mb-0 These saved takeovers apply after recalculation. Previous share notes retain the previous coverage.
 
 mixin poolManagementSection(ev, pool, participants)
     - const assignedIds = pool.assignAll ? participants.map(p => p.id) : (pool.assignments || []).map(a => a.registrationId || a.registration?.id)
@@ -605,7 +656,7 @@ mixin poolManagementSection(ev, pool, participants)
         .accordion-collapse.collapse(id=`pool-${pool.id}-body`)
             .accordion-body
                 if pool.needsRecalculation
-                    .alert.alert-warning(role="status")
+                    .status-notice.alert-warning(role="status")
                         strong Recalculation required.
                         |  Saved changes have not been applied to the shares. Preview the updated amounts before recalculating, or roll back the pool changes. Payments can still be recorded against the previous shares.
                 .d-flex.flex-wrap.gap-2.mb-3(role="group" aria-label=`Manage ${pool.name}`)
@@ -620,7 +671,7 @@ mixin poolManagementSection(ev, pool, participants)
                     +invoiceOverview('admin', {pool: pool, participants: participants, eventId: ev.id})
                 if pool.status === 'CLOSED'
                     .mt-4
-                        +poolShareSection(pool, participants)
+                        +poolShareSection(pool, participants, ev.id)
                 .border-top.border-secondary-subtle.mt-4.pt-3.d-flex.flex-wrap.justify-content-between.align-items-center.gap-3
                     .flex-grow-1
                         strong #{pool.status === 'OPEN' ? 'Ready to calculate shares?' : 'Update the calculated shares'}
@@ -643,7 +694,7 @@ mixin poolManagementModals(ev, pool, participants)
     +poolEditModal(pool, 'adjustments', 'Surcharges & rebates')
         +poolAdjustmentSection(ev, pool, participants)
     +poolEditModal(pool, 'calculation', 'Calculation preview')
-        .pool-unsaved-warning.alert.alert-warning(hidden role="alert") Save or discard your pending edits in the settings, participant, or adjustment dialog before previewing.
+        .pool-unsaved-warning.status-notice.alert-warning(hidden role="status") Save or discard your pending edits in the settings, participant, or adjustment dialog before previewing.
         p.small Review the saved allocation settings and every payer's result below. This preview does not change shares or send emails.
         if pool.status === 'CLOSED'
             p.text-info.small Recorded payments and refunds are carried forward. Someone who has already paid may owe only the difference or be due a refund.
@@ -726,7 +777,7 @@ mixin poolManagementModals(ev, pool, participants)
         +poolEditModal(pool, 'notify', 'Send settlement emails')
             p Send each payer their current calculated share, previous settlement credit, remaining amount, and paid status.
             if pool.needsRecalculation
-                .alert.alert-warning These emails describe the previous calculation. Saved pool changes will only be included after recalculation.
+                .status-notice.alert-warning These emails describe the previous calculation. Saved pool changes will only be included after recalculation.
             p.text-secondary.small Only payers with an email address receive a message. Sending again sends another email; it does not change the calculation or payment records.
             .pool-form-status(role="status" aria-live="polite" tabindex="-1")
             .d-flex.justify-content-end.flex-wrap.gap-2.mt-3
@@ -834,6 +885,7 @@ mixin invoicePoolCreateModal(ev, participants)
                                                 label.form-check-label(for=`pool-create-reg-${p.id}`)= `${p.name} (${p.email})`
                                     else
                                         p.text-secondary.small.mb-0 No participants yet.
+                        .pool-form-status.mt-3(role="status" aria-live="polite")
                     .modal-footer
                         button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Cancel
                         button.btn.btn-primary(type="submit")
@@ -865,7 +917,7 @@ mixin takeoverModal(id)
                 form.pool-modal-form#takeoverForm
                     .modal-body
                         p.text-secondary.small Choose a payer, then the participants they will cover. Each beneficiary keeps their own factor, adjustments, and invoice credit when their share is combined into the payer's result.
-                        .alert.alert-info.small(data-takeover-status hidden)
+                        .status-notice.alert-info.small(data-takeover-status hidden)
                         .pool-takeover-selection.border.border-secondary-subtle.rounded-3.p-3.mb-3
                             strong.d-block Selected coverage
                             span.text-secondary.small(data-takeover-summary role="status" aria-live="polite") Choose a payer to manage coverage.

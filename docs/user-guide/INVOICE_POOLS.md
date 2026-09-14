@@ -6,8 +6,8 @@ owner: event invoice-pool maintainers
 status: current
 last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice submission progress and recovery; pool administration dialogs and takeover groups; weighted participant factors and signed adjustments; calculation previews, payment carry-forward, rollback, configurable calculation emails and saved-state notifications; existing review, proof, settlement, and retention workflows
-source-anchors: src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; src/public/js/modules/invoice-submission.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; src/routes/api/eventInvoices.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/database/entities/event/EventInvoice.ts; src/modules/database/entities/event/EventInvoicePool.ts; src/modules/database/entities/event/EventInvoiceShare.ts; src/modules/database/entities/event/EventInvoiceSurcharge.ts; src/modules/database/entities/event/EventPoolAssignment.ts; src/modules/database/entities/event/EventPoolTakeover.ts; src/views/modules/module_invoice_pool.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/public/js/events.ts; src/modules/invoiceRetention.ts; src/modules/lib/fileCommons.ts; tests/integration/invoice-workflows.spec.ts; tests/frontend/ui-behaviors.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: searchable saved-share ledger, portrait A4 export, compact takeovers, confirmed admin feedback, and named email recipients; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice submission progress and recovery; pool administration dialogs and takeover groups; weighted participant factors and signed adjustments; calculation previews, payment carry-forward, rollback, configurable calculation emails and saved-state notifications; existing review, proof, settlement, and retention workflows
+source-anchors: src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; src/public/js/modules/invoice-submission.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; src/routes/api/eventInvoices.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/database/entities/event/EventInvoice.ts; src/modules/database/entities/event/EventInvoicePool.ts; src/modules/database/entities/event/EventInvoiceShare.ts; src/modules/database/entities/event/EventInvoiceSurcharge.ts; src/modules/database/entities/event/EventPoolAssignment.ts; src/modules/database/entities/event/EventPoolTakeover.ts; src/views/modules/module_invoice_pool.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/public/js/events.ts; src/modules/invoiceRetention.ts; src/modules/lib/fileCommons.ts; tests/integration/invoice-workflows.spec.ts; tests/frontend/ui-behaviors.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: invoice-pool-visible-UI-or-behavior-change
 -->
 
@@ -35,6 +35,7 @@ Invoice pools help an event group collect receipts, decide which costs count, an
 - [Roll back pending pool changes](#roll-back-pool-changes)
 - [Send settlement emails](#send-settlement-emails)
 - [Record settlement](#record-whether-a-share-is-settled)
+- [Export saved shares as a PDF](#export-saved-shares-as-a-pdf)
 
 ## First understand the two kinds of status
 
@@ -167,31 +168,33 @@ Rules:
 - Only people assigned to the same pool can be selected.
 - Participant takeover controls are available only while the pool is open.
 
-The current coverage relationships are shown in the pool. When email addresses are available, Surveyor emails both the payer and beneficiary after a takeover is added or removed and identifies who made the change.
+Expand **View _N_ takeovers** to check current coverage relationships in the pool. When email addresses are available, Surveyor emails both the payer and beneficiary after a takeover is added or removed and identifies who made the change.
 
 A takeover is a calculation instruction, not a payment. It takes effect when the organizer closes or recalculates the pool.
 
 ### Understand your final share
 
-After the organizer closes a pool, **Your pool shares** shows the row assigned to you as payer.
+After the organizer closes a pool, **Your pool shares** shows the row assigned to you as payer. Start with **Remaining due / refund** and **Status**. The other columns show its components and saved notes.
 
-| Column | Meaning |
+| Field | Meaning |
 |---|---|
 | **Base** | Your automatic portion of the distributable invoice total, weighted by attendance and your pool-specific factor, plus the portions of people you cover. |
 | **Adjustments** | Signed participant-specific surcharges or rebates assigned to you or to people you cover. Negative amounts reduce the share. |
 | **Invoice credit** | Accepted invoices submitted by you or people you cover when **Deduct submitter invoices from their share** is enabled. |
 | **Previously settled** | Signed payments or payouts carried forward from earlier calculations. Positive means received from the payer; negative means paid out to the payer. |
-| **Remaining due / refund** | `Base + Adjustments - Invoice credit - Previously settled`. A positive amount is due from the payer; a negative amount is a refund or payout owed to them. |
-| **Notes** | Calculation details, including attendance weight, factors, exemptions, takeovers, surcharges, rebates, and invoice credits. |
-| **Status** | **Outstanding** until an organizer records the share as **Paid**; it can later be returned to Outstanding. A calculation with no remaining balance is automatically marked Paid. |
+| **Remaining due / refund** | `Base + Adjustments - Invoice credit - Previously settled`. The saved amount stays visible after payment; check Status to see whether it has been settled. |
+| **Notes** | Saved calculation details, including attendance weight, factors, exemptions, takeovers, surcharges, rebates, and invoice credits. |
+| **Status** | **Due** means money is owed by the payer; **Refund** means money is owed to them; **Settled** means the amount has been recorded as paid or no payment is needed. |
 
-A positive remaining amount is owed by the payer. A negative amount is owed to the payer. Zero means no further settlement is due. **Paid** means the currently displayed amount has already been settled.
+For **Due**, the positive balance is owed by the payer. For **Refund**, the negative balance is owed to the payer. **Settled** means no further payment is needed for this calculation, even when its original balance remains displayed. Zero is settled automatically.
 
 **Paid** is only a manual settlement marker. Surveyor does not charge a card, send a transfer, or prove that money changed hands. For a negative share, Paid means the credit has been settled with the participant.
 
-When calculation emails are enabled, Surveyor emails each payer who has an email address after closing or recalculating. Organizers can also send settlement emails later. Messages use the saved payment state: already settled shares show no outstanding balance, and outstanding shares show only the remaining amount. A later change to Paid or Outstanding also generates a payment-status email when an address is available.
+When calculation emails are enabled, Surveyor emails each payer who has an email address after closing or recalculating. Organizers can also send settlement emails later. Messages use the saved payment state: already settled shares show no outstanding balance, and outstanding shares show only the remaining amount. Changing the **Paid** switch also generates a payment-status email when an address is available. Emails address the recipient by name in both the greeting and the To field.
 
 ## Organizer tasks
+
+Pool actions show a spinner and status immediately, and prevent duplicate clicks while the request is pending. After five seconds, a further message explains that the server has not yet confirmed the change. Keep the page open and wait for the result. Success and error notices disappear after ten seconds; active progress and **Recalculation required** stay visible while relevant. A change is shown as saved only after the server confirms it.
 
 ### Create an invoice pool
 
@@ -278,7 +281,7 @@ For a closed pool, save the dialog first. The pool then requires recalculation; 
 
 An organizer can establish or reassign coverage for any payer in the pool.
 
-The **Payer** and **Covers** overview groups beneficiaries under each payer. Select **Edit** to open that payer's coverage directly. The dialog shows the selected coverage and explains why unavailable relationships cannot be chosen.
+Expand **Takeovers** to see the counts of covering payers and covered participants. Use **Search takeovers** to find a payer or covered participant, then expand **Covers _N_ participants** to see the names. Select **Edit** to open that payer's coverage directly. The dialog shows the selected coverage and explains why unavailable relationships cannot be chosen. Long participant lists scroll inside the dialog while **Save changes** remains reachable.
 
 1. Open the pool.
 2. Select **Manage takeovers** from the pool’s controls.
@@ -358,7 +361,7 @@ The submitter may also close their own Accepted invoice from **Your invoice hist
 
 #### Notifications and late review
 
-When the submitter has an email address, Surveyor sends an acceptance, rejection, or closure message with the organizer’s displayed actor label. Review actions remain available for an Awaiting-review invoice even if the pool has already been closed. Accepting a cost after pool closure requires **Recalculate pool** before the new cost is represented in the frozen shares.
+When the submitter has an email address, Surveyor sends an acceptance, rejection, or closure message with the organizer’s displayed actor label. The saved review is confirmed without waiting for email delivery. If another organizer has already reviewed the same invoice, reload its saved status before taking another action. Review actions remain available for an Awaiting-review invoice even if the pool has already been closed. Accepting a cost after pool closure requires **Recalculate pool** before the new cost is represented in the frozen shares.
 
 Resolve or consciously exclude every Awaiting-review invoice before closing the pool whenever possible. Closing a pool ignores Awaiting-review and Rejected invoices.
 
@@ -477,17 +480,29 @@ Emails describe saved settlement amounts and current Paid markers. Settled share
 
 ### Record whether a share is settled
 
-After pool closure, **Shares & settlement** shows each payer's calculation, previously settled credit, remaining payment or refund, notes, and a **Paid** switch. When recalculation is required, these are still the saved amounts and the switches remain available. The **Covers** column then refers to the saved calculation notes.
+After pool closure, **Shares & settlement** contains the **Calculated shares** ledger. Each row shows the **Payer**, **Calculated balance**, **Status**, **Calculation details**, and **Paid** switch. Open **View breakdown** for components and notes. When recalculation is required, these are still the saved amounts and the switches remain available; coverage refers to the saved calculation notes.
+
+Use **Search shares** to find payers or calculation notes. **Filter share status** offers **All statuses**, **Due**, **Refund**, and **Settled**. **Sort shares** orders by payer name or amount. Choose 25, 50, or 100 with **Shares per page**, then use **Previous** and **Next** to move through the results.
 
 Use the switch only after the real-world amount has been settled:
 
 - For a positive remaining amount, Paid means that amount has been received.
 - For a negative remaining amount, Paid means that refund or payout has been completed.
-- Clear the switch to return a mistaken or reversed settlement to Outstanding.
+- Clear the switch to return a mistaken or reversed settlement to **Due** or **Refund**.
 
-The switch changes Surveyor’s record and the pool’s **Outstanding payments** or **Credits owed** total. It does not move money. Surveyor emails the participant when the status changes and an email address is available.
+The switch changes Surveyor’s record and the pool’s **Outstanding payments** or **Credits owed** total. It keeps the previous saved state while the update is pending, then shows the server-confirmed result. It does not move money. Surveyor emails the participant when the status changes and an email address is available.
 
 Clearing Paid reverses the settlement marker for the currently displayed balance. It does not erase credits carried from earlier calculations. Correct mistaken Paid markers before applying the next recalculation.
+
+### Export saved shares as a PDF
+
+1. Open the pool's **Calculated shares** ledger.
+2. Select **Export as PDF**.
+3. Save or print the portrait A4 document.
+
+The PDF includes every saved share in the pool, regardless of the screen's search, status filter, sort, or page. It includes component amounts, saved notes, recorded payments, and the amounts still to collect or pay out. A paid share has no remaining amount to settle in the PDF; its recorded settlement remains documented. If **Recalculation required** is shown, the PDF states that it uses the previous saved calculation. Exporting does not recalculate the pool or change payments.
+
+Export requires invoice-pool administration access. Treat the downloaded file as financial participant data and share it only with authorized recipients.
 
 ## Privacy, proof access, storage, and retention
 
@@ -538,13 +553,13 @@ The person must be assigned to the same open pool. You cannot select yourself, a
 
 ### A share is different from the simple equal split
 
-Check the pool’s distribution mode, attendance dates, individual factors, exemptions, redistributed and additional adjustments, invoice-credit setting, and takeovers. The Notes column shows the components applied to the payer.
+Check the pool’s distribution mode, attendance dates, individual factors, exemptions, redistributed and additional adjustments, invoice-credit setting, and takeovers. Participants can read **Notes** beside their share; organizers can open **View breakdown** in the share ledger.
 
 ### The pool changed but the shares did not
 
 A closed pool's calculation stays saved until you apply a recalculation. Save changes in the relevant dialog, then preview and recalculate, or use **Roll back pool changes** to restore saved pool inputs. Settlement switches remain available throughout.
 
-### A recalculated share is Outstanding although I already paid
+### A recalculated share is Due although I already paid
 
 Check **Previously settled** and the remaining amount. Prior payments reduce the new balance; only a new difference needs settlement. A zero balance is settled automatically. For a refund, the remaining amount is negative.
 

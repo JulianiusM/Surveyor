@@ -1,7 +1,7 @@
 // Participant-facing requirement progress, placed before the filters used to choose more slots.
 if data.requirementProgress
     - const progress = data.requirementProgress
-    .alert.d-flex.flex-wrap.justify-content-between.align-items-center.gap-2.mb-3#my-requirement-progress(
+    .status-notice.d-flex.flex-wrap.justify-content-between.align-items-center.gap-2.mb-3#my-requirement-progress(
         class=progress.requiredShifts === 0 ? 'alert-info' : progress.complete ? 'alert-success' : 'alert-warning'
         data-assigned-shifts=progress.assignedShifts
         data-required-shifts=progress.requiredShifts
@@ -25,7 +25,7 @@ if data.requirementProgress
         small.d-none.d-md-inline Use “My slots” or “Open slots” below to focus the schedule.
 
 if data.canSelfAssign === false
-    .alert.alert-info.py-2.px-3.mb-3
+    .status-notice.alert-info.py-2.px-3.mb-3
         i.bi.bi-info-circle.me-2
         | This plan is linked to an event. Register for the event before taking slots, unless an organizer enables external sign-ups.
 

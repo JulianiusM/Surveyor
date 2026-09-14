@@ -7,8 +7,8 @@ owner: application operators
 status: current
 last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factor and settlement migrations, signed payment carry-forward, rollback snapshots, settlement email controls, receipt delivery, and upload recovery; D04 accepted from source review and deployment-practice confirmation for release contents, bootstrap, sessions, proxy behavior, health, logs, persistent files, SMTP/OIDC, retention, backup, restore, and service management; D06 invoice-proof privacy, storage, and retention linkage verified; controlled execution tracked separately in D04V
-source-anchors: src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; docs/user-guide/INVOICE_POOLS.md; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/database/dataSource.ts; src/modules/invoiceRetention.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/controller/helpController.ts; src/controller/eventPoolController.ts; src/modules/email.ts; src/modules/oidc.ts
+verification-scope: named SMTP recipients, asynchronous invoice review notification delivery, confirmed progress feedback, and complete saved-share PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factor and settlement migrations, signed payment carry-forward, rollback snapshots, settlement email controls, receipt delivery, and upload recovery; D04 accepted from source review and deployment-practice confirmation for release contents, bootstrap, sessions, proxy behavior, health, logs, persistent files, SMTP/OIDC, retention, backup, restore, and service management; D06 invoice-proof privacy, storage, and retention linkage verified; controlled execution tracked separately in D04V
+source-anchors: src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; docs/user-guide/INVOICE_POOLS.md; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/database/dataSource.ts; src/modules/invoiceRetention.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/controller/helpController.ts; src/controller/eventPoolController.ts; src/modules/email.ts; src/modules/oidc.ts
 next-review: D04V
 -->
 
@@ -375,6 +375,20 @@ uncertain upload outcome, have them check **Your invoice history** before retryi
 through proxy request limits, storage latency, application errors, and database connectivity. Review SMTP logs separately
 when a persisted invoice has no receipt email.
 
+Acceptance, rejection, and closure also finish their database change before starting email delivery. A slow or failed
+SMTP connection does not delay their success response or reverse the saved review. Delivery runs in the application
+process without a persisted outbox; inspect the saved invoice or payment state before retrying any financial action.
+Do not repeat a review to retry an email. Settlement notices can be requested separately with **Send settlement emails**.
+
+Pool actions show immediate progress and a further status message after five seconds while awaiting server confirmation.
+Transient result notices disappear after ten seconds; ongoing progress and stale-calculation notices remain visible.
+For slow pool loads, inspect database connectivity, query duration, and resource usage separately from SMTP. Pool relation
+reads use a consistent database snapshot; do not change transaction isolation or bypass revision checks as a workaround.
+
+Authorized organizers can use **Export as PDF** to download all saved shares as portrait A4 pages. The export includes
+current recorded payments and indicates pending recalculation; screen filters do not limit its contents. Treat exported
+copies as sensitive financial data with an appropriate storage and deletion policy.
+
 ## Mail and sign-in smoke tests
 
 SMTP is not verified during startup. Test it after first deployment, credential rotation, restore, or upgrade by using a
@@ -385,7 +399,9 @@ controlled account and checking both application logs and actual delivery. Exerc
 - Guest recovery for a controlled guest email address.
 - One event or invoice notification used by the deployment.
 
-Confirm sender alignment, links using the public `ROOT_URL`, and the imprint/privacy footer.
+Confirm sender alignment, links using the public `ROOT_URL`, and the imprint/privacy footer. Check that the To header
+shows the recipient's stored name beside the email address and that both HTML and plain text begin the message with a
+named greeting. Guest recovery can include several stored guest names when they share an address.
 
 For each enabled sign-in mode:
 
@@ -545,7 +561,8 @@ For OIDC, verify the provider's exact callback URL and issuer/client settings.
 ### Email-dependent actions appear to succeed but no mail arrives
 
 Review `Error sending email` log entries, SMTP authentication, TLS mode/port, relay policy, sender verification, and spam
-or bounce logs. SMTP failure is logged and does not make `/healthz` fail.
+or bounce logs. Invoice notification failures can also appear with the `[invoice-pool]` prefix. SMTP failure is logged
+and does not make `/healthz` fail. A successful invoice action confirms its saved state, not delivery to the mailbox.
 
 ### Header images or invoice proofs are missing
 

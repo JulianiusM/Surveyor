@@ -16,7 +16,7 @@ block title
 
 block content
     if data.guestRegistrationNags && data.guestRegistrationNags.accountRecommendation
-        .alert.alert-info.text-center.border-info.mb-4(role="alert")
+        .status-notice.alert-info.text-center.border-info.mb-4(role="status")
             .d-flex
                 i.bi.bi-info-circle-fill.me-2
                 .flex-grow-1
@@ -62,7 +62,7 @@ block content
             | or continue as a guest
 
     //- Guest note
-    .alert.alert-warning.text-center.border-warning.mb-4(role="alert")
+    .status-notice.alert-warning.text-center.border-warning.mb-4(role="status")
         .d-flex
             i.bi.bi-exclamation-triangle-fill.me-2
             .flex-grow-1

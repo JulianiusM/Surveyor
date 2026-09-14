@@ -4,14 +4,18 @@ documentation-metadata
 audience: novice users; guests; registered users
 owner: identity feature maintainers
 status: current
-last-verified: 2026-09-05
+last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D01 identity, onboarding, guest recovery, profile, migration, and account-lifecycle behavior; D14 rendered help navigation, semantic checks, and trusted-content integration
-source-anchors: src/routes/users.ts; src/routes/guests.ts; src/controller/userController.ts; src/middleware/guestFlowFactory.ts; src/middleware/permissionMiddleware.ts; src/modules/database/services/UserService.ts; src/modules/database/entities/user/; src/modules/oidc.ts; src/modules/settings.ts; src/modules/email.ts; src/modules/lib/guestRegistrationNags.ts; src/public/js/core/password-validation.ts; src/views/users/; src/views/layout.pug; tests/integration/authentication-workflows.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: named email greetings and To headers; ten-second transient feedback and persistent progress; D01 identity, onboarding, guest recovery, profile, migration, and account-lifecycle behavior; D14 rendered help navigation, semantic checks, and trusted-content integration
+source-anchors: src/public/js/shared/alerts.ts; src/public/js/notifications.ts; tests/unit/email-rendering.spec.ts; tests/frontend/alerts.spec.ts; src/routes/users.ts; src/routes/guests.ts; src/controller/userController.ts; src/middleware/guestFlowFactory.ts; src/middleware/permissionMiddleware.ts; src/modules/database/services/UserService.ts; src/modules/database/entities/user/; src/modules/oidc.ts; src/modules/settings.ts; src/modules/email.ts; src/modules/lib/guestRegistrationNags.ts; src/public/js/core/password-validation.ts; src/views/users/; src/views/layout.pug; tests/integration/authentication-workflows.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: identity-or-authentication-visible-behavior-change
 -->
 
 Use this guide to enter Surveyor, recover access, and manage the profile that represents you.
+
+Surveyor emails begin with a greeting using your account or profile name, and the To field includes that name beside your email address. A guest-recovery email can name several guest identities connected to the same address.
+
+Success, error, and information notices disappear after ten seconds. Messages showing an action still in progress, registration requirements, or other ongoing conditions remain visible while relevant. Wait for a saved confirmation before repeating an action that is still working.
 
 ## Find your task
 

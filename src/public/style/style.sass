@@ -88,9 +88,38 @@
   max-height: 260px
   overflow-y: auto
 
+// Persistent instructions and financial progress use alert colors without transient alert behavior.
+.status-notice
+  position: relative
+  padding: 1rem
+  margin-bottom: 1rem
+  color: var(--bs-alert-color, inherit)
+  background-color: var(--bs-alert-bg, transparent)
+  border: 1px solid var(--bs-alert-border-color, transparent)
+  border-radius: var(--bs-border-radius)
+
 .invoice-pool, .pool-edit-modal, #poolCreateModal, #takeoverModal, #invoicePoolCollapse
   .text-secondary
     color: #adb5bd !important
+
+.pool-edit-modal, #poolCreateModal, #takeoverModal
+  .modal-content
+    isolation: isolate
+    overflow: hidden
+
+  .modal-header, .modal-footer
+    position: relative
+    z-index: 2
+    flex-shrink: 0
+    background: #212529
+
+  .modal-body
+    position: relative
+    isolation: isolate
+    min-height: 0
+    // Clip all nested scrolling and sticky tables to the body below the modal header.
+    contain: paint
+    overscroll-behavior: contain
 
 // A form between modal-content and modal-body must participate in the flex layout.
 .pool-modal-form
@@ -148,6 +177,16 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto
   gap: 1rem
   align-items: center
+  overflow-wrap: anywhere
+
+  &[hidden]
+    display: none
+
+  > *
+    min-width: 0
+
+  button
+    justify-self: end
 
   + .pool-takeover-row
     border-top: 1px solid rgba(255, 255, 255, .12)
@@ -155,6 +194,25 @@
   .badge
     white-space: normal
     text-align: left
+
+.pool-takeover-rows, .participant-takeover-list
+  max-height: 20rem
+  overflow-y: auto
+  scrollbar-gutter: stable
+  overscroll-behavior: contain
+
+.participant-takeover-list
+  span:first-child
+    min-width: 0
+    overflow-wrap: anywhere
+
+  .badge
+    white-space: normal
+    max-width: 8rem
+    flex-shrink: 0
+
+.pool-takeover-summary > summary
+  overflow-wrap: anywhere
 
 .takeover-beneficiaries
   max-height: none
@@ -167,14 +225,25 @@
 .pool-preview-table
   max-height: 28rem
   overflow: auto
+  position: relative
+  isolation: isolate
+  overscroll-behavior: contain
 
   table
     min-width: 42rem
+    border-collapse: separate
+    border-spacing: 0
 
-  th
+  thead
     position: sticky
     top: 0
+    z-index: 2
     background: #212529
+
+  th
+    position: static
+    background: #212529
+    box-shadow: 0 1px #495057
 
   td, th
     padding: .6rem
@@ -184,6 +253,100 @@
 
   details
     min-width: 10rem
+
+.share-ledger
+  min-width: 0
+
+.share-ledger-controls
+  .form-control
+    flex: 2 1 16rem
+    width: auto
+
+  .form-select
+    flex: 1 1 9rem
+    width: auto
+
+.share-ledger-table
+  max-height: 38rem
+  overflow: auto
+  position: relative
+  isolation: isolate
+  scrollbar-gutter: stable
+
+  table
+    min-width: 48rem
+    border-collapse: separate
+    border-spacing: 0
+
+  thead
+    position: sticky
+    top: 0
+    z-index: 2
+
+  th
+    background: #212529
+
+  td
+    max-width: 24rem
+    overflow-wrap: anywhere
+
+  td:first-child
+    min-width: 11rem
+
+  tr[hidden]
+    display: none
+
+.share-calculation-details
+  min-width: 12rem
+  max-width: 25rem
+
+  summary
+    white-space: nowrap
+
+  dd
+    margin-bottom: .25rem
+
+@media (max-width: 991.98px)
+  .share-ledger-table
+    table, tbody
+      display: block
+      min-width: 0
+
+    thead
+      display: none
+
+    tr
+      display: grid
+      grid-template-columns: repeat(2, minmax(0, 1fr))
+      gap: .75rem
+      margin-bottom: .75rem
+      padding: .875rem
+      border: 1px solid rgba(255, 255, 255, .15)
+      border-radius: .5rem
+
+    td
+      display: block
+      min-width: 0 !important
+      max-width: none
+      padding: 0
+      border: 0
+
+      &:first-child, &:nth-child(4), &:last-child
+        grid-column: 1 / -1
+
+      &::before
+        display: block
+        content: attr(data-label)
+        color: #adb5bd
+        font-size: .75rem
+        margin-bottom: .25rem
+
+    .form-switch
+      display: inline-block
+
+  .share-calculation-details
+    min-width: 0
+    max-width: none
 
 @media (max-width: 767.98px)
   .pool-preview-table

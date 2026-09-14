@@ -19,7 +19,7 @@ import fs from "node:fs";
 import path from "node:path";
 import * as eventService from "../modules/database/services/EventService";
 import * as userService from "../modules/database/services/UserService";
-import mailer from '../modules/email';
+import mailer, {resolveEmailRecipientName} from '../modules/email';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {APIError, ExpectedError, ValidationError} from '../modules/lib/errors';
 import {checkNewImage, prepareFileUploader, removeImage} from "../modules/lib/fileCommons";
@@ -198,7 +198,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
             req.session.profile = newGuest.profile;
             await persistSession(req.session);
             const link = buildGuestLink(newGuest.id, newGuest.token);
-            if (normEmail) await mailer.sendLinkEmail(normEmail, link);
+            if (normEmail) await mailer.sendLinkEmail({name: resolveEmailRecipientName(newGuest.username, newGuest.profile?.name), address: normEmail}, link);
             req.flash('success', `Login successful. Use ${link} to edit later.`);
             res.redirect(buildRedirect(entityId));
         }));

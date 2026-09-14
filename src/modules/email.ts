@@ -15,6 +15,7 @@
  */
 
 import nodemailer, {Transporter} from 'nodemailer';
+import type {Address} from 'nodemailer/lib/mailer';
 import {MailOptions} from 'nodemailer/lib/smtp-pool';
 import type {GuestLinkData} from '../types/UserTypes';
 import {Guest} from './database/entities/user/Guest';
@@ -53,6 +54,7 @@ export interface StructuredEmailContent {
 }
 
 export type EmailContent = string | StructuredEmailContent;
+export type EmailRecipient = Address;
 
 export interface RenderedEmail {
     text: string;
@@ -111,12 +113,34 @@ function contrastingTextColor(hexColor: string): string {
     return perceivedBrightness > 160 ? '#0f172a' : '#ffffff';
 }
 
-function normalizeContent(subject: string, content: EmailContent): StructuredEmailContent {
-    if (typeof content !== 'string') return content;
-    return {
-        heading: subject,
-        paragraphs: content.split(/\r?\n\s*\r?\n/).filter(Boolean),
-    };
+export function resolveEmailRecipientName(...names: (string | null | undefined)[]): string {
+    for (const candidate of names) {
+        const normalized = candidate?.replace(/\s+/g, ' ').trim();
+        if (normalized) return normalized;
+    }
+    return '';
+}
+
+function normalizeRecipient(recipient: EmailRecipient): EmailRecipient {
+    const name = resolveEmailRecipientName(recipient.name);
+    const address = recipient.address?.trim();
+    if (!name || !address || /[\r\n]/.test(recipient.address)) {
+        throw new Error('Email recipients require a name and an address without line breaks');
+    }
+    return {name, address};
+}
+
+function normalizeContent(subject: string, rawContent: EmailContent, recipient: EmailRecipient): StructuredEmailContent {
+    const content = typeof rawContent === 'string'
+        ? {heading: subject, paragraphs: rawContent.split(/\r?\n\s*\r?\n/).filter(Boolean)}
+        : rawContent;
+    const paragraphs = [...(content.paragraphs ?? [])];
+    // Older string notifications may already contain a standalone salutation.
+    if (paragraphs[0]) {
+        paragraphs[0] = paragraphs[0].replace(/^(?:Hello|Hi|Dear)(?:[ \t]+[^\r\n,!]+)?[,!]\s*(?:\r?\n|$)/i, '').trimStart();
+        if (!paragraphs[0]) paragraphs.shift();
+    }
+    return {...content, paragraphs, greeting: `Hello ${recipient.name},`};
 }
 
 function renderAction(action: EmailAction, accentColor: string, accentTextColor: string): string {
@@ -170,8 +194,9 @@ function renderFooterLink(label: string, value: string, accentColor: string): st
 }
 
 function renderText(content: StructuredEmailContent): string {
-    const lines: string[] = [content.heading, ''];
+    const lines: string[] = [];
     if (content.greeting) lines.push(content.greeting, '');
+    lines.push(content.heading, '');
     for (const paragraph of content.paragraphs ?? []) lines.push(paragraph, '');
     for (const detail of content.details ?? []) lines.push(`${detail.label}: ${detail.value}`);
     if (content.details?.length) lines.push('');
@@ -199,8 +224,8 @@ function renderText(content: StructuredEmailContent): string {
     return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-export function renderEmail(subject: string, rawContent: EmailContent): RenderedEmail {
-    const content = normalizeContent(subject, rawContent);
+export function renderEmail(subject: string, rawContent: EmailContent, recipient: EmailRecipient): RenderedEmail {
+    const content = normalizeContent(subject, rawContent, normalizeRecipient(recipient));
     const appName = escapeHtml(settings.value.appName);
     const appInitial = escapeHtml(settings.value.appName.trim().charAt(0).toUpperCase() || 'S');
     const accentColor = normalizedAccentColor();
@@ -257,9 +282,10 @@ export function renderEmail(subject: string, rawContent: EmailContent): Rendered
                     </tr>
                     <tr>
                         <td class="email-padding" style="padding: 34px;">
+                            ${greeting}
                             ${eyebrow}
                             <h1 style="margin: 0 0 22px; color: #0f172a; font-size: 27px; line-height: 34px; letter-spacing: -.02em;">${escapeHtml(content.heading)}</h1>
-                            ${greeting}${paragraphs}${renderDetails(content.details ?? [])}${renderSections(content.sections ?? [], accentColor, accentTextColor)}${action}${notice}
+                            ${paragraphs}${renderDetails(content.details ?? [])}${renderSections(content.sections ?? [], accentColor, accentTextColor)}${action}${notice}
                             <p style="margin: 26px 0 0; color: #475569; font-size: 14px; line-height: 22px;">${closing}</p>
                         </td>
                     </tr>
@@ -290,20 +316,21 @@ function createSender(): MailOptions['from'] {
     };
 }
 
-export function createMailOptions(to: string, subject: string, content: EmailContent): MailOptions {
-    const rendered = renderEmail(subject, content);
+export function createMailOptions(to: EmailRecipient, subject: string, content: EmailContent): MailOptions {
+    const recipient = normalizeRecipient(to);
+    const rendered = renderEmail(subject, content, recipient);
     return {
         from: createSender(),
-        to,
+        to: recipient,
         subject,
         text: rendered.text,
         html: rendered.html,
     };
 }
 
-export async function sendEmail(to: string, subject: string, content: EmailContent): Promise<void> {
-    init();
+export async function sendEmail(to: EmailRecipient, subject: string, content: EmailContent): Promise<void> {
     const mailOptions = createMailOptions(to, subject, content);
+    init();
 
     try {
         await transporter!.sendMail(mailOptions);
@@ -312,36 +339,33 @@ export async function sendEmail(to: string, subject: string, content: EmailConte
     }
 }
 
-async function sendActivationEmail(userEmail: string, activationLink: string): Promise<void> {
+async function sendActivationEmail(userEmail: EmailRecipient, activationLink: string): Promise<void> {
     await sendEmail(userEmail, 'Activate your account', {
         eyebrow: 'Account setup',
         heading: `Welcome to ${settings.value.appName}`,
         preheader: 'Activate your account to finish signing up.',
-        greeting: 'Hello!',
         paragraphs: ['Thanks for signing up. Confirm your email address to activate your account and get started.'],
         action: {label: 'Activate account', url: activationLink},
         notice: 'This activation link expires in 1 hour. If you did not create this account, you can ignore this email.',
     });
 }
 
-async function sendPasswordResetEmail(userEmail: string, resetLink: string): Promise<void> {
+async function sendPasswordResetEmail(userEmail: EmailRecipient, resetLink: string): Promise<void> {
     await sendEmail(userEmail, 'Reset your password', {
         eyebrow: 'Account security',
         heading: 'Choose a new password',
         preheader: 'Use this secure link to reset your password.',
-        greeting: 'Hello!',
         paragraphs: ['We received a request to reset the password for your account. Use the button below to choose a new one.'],
         action: {label: 'Reset password', url: resetLink},
         notice: 'This link expires in 1 hour. If you did not request a password reset, no action is required.',
     });
 }
 
-async function sendLinkEmail(userEmail: string, surveyLink: string): Promise<void> {
+async function sendLinkEmail(userEmail: EmailRecipient, surveyLink: string): Promise<void> {
     await sendEmail(userEmail, 'Your personal editing link', {
         eyebrow: 'Personal access',
         heading: 'Your editing link is ready',
         preheader: 'Keep this private link to return to your answers.',
-        greeting: 'Hello!',
         paragraphs: ['Use this personal link whenever you need to review or update your answers.'],
         action: {label: 'Open my answers', url: surveyLink},
         notice: 'This link provides access to your information. Keep it private and do not forward it to anyone else.',
@@ -360,12 +384,11 @@ function formatGuestCreatedAt(value: Date): string {
     }).format(value);
 }
 
-async function sendGuestRecoveryEmail(email: string, guestLinkData: GuestLinkData[]): Promise<void> {
+async function sendGuestRecoveryEmail(email: EmailRecipient, guestLinkData: GuestLinkData[]): Promise<void> {
     await sendEmail(email, 'Your guest accounts', {
         eyebrow: 'Account recovery',
         heading: guestLinkData.length === 1 ? 'Your guest account' : 'Your guest accounts',
         preheader: 'Here are the guest accounts connected to your email address.',
-        greeting: 'Hello!',
         paragraphs: ['You requested access to the guest accounts connected to this email address. Choose an account below to continue.'],
         sections: guestLinkData.map((guest) => ({
             title: guest.username,
@@ -376,12 +399,11 @@ async function sendGuestRecoveryEmail(email: string, guestLinkData: GuestLinkDat
     });
 }
 
-async function sendMigrationEmail(email: string, profile: Profile, newOwner: User): Promise<void> {
+async function sendMigrationEmail(email: EmailRecipient, profile: Profile, newOwner: User): Promise<void> {
     await sendEmail(email, 'Your profile was migrated', {
         eyebrow: 'Profile update',
         heading: 'Your profile has a new owner',
         preheader: `${profile.name} was migrated to ${newOwner.name}.`,
-        greeting: 'Hello!',
         paragraphs: ['Your individual migration token was used to move this profile to another account.'],
         details: [
             {label: 'Profile', value: profile.name},
@@ -394,12 +416,11 @@ async function sendMigrationEmail(email: string, profile: Profile, newOwner: Use
     });
 }
 
-async function sendDeletionEmail(email: string, account: User | Guest): Promise<void> {
+async function sendDeletionEmail(email: EmailRecipient, account: User | Guest): Promise<void> {
     await sendEmail(email, 'Your account has been closed', {
         eyebrow: 'Account update',
         heading: 'Your account has been closed',
         preheader: `The account ${account.username} was closed as requested.`,
-        greeting: 'Hello!',
         paragraphs: ['We have completed your request to close your account.'],
         details: [{label: 'Account', value: account.username}],
         notice: 'Associated profiles have been deactivated. Existing event and survey participation remains visible where it is needed for shared records.',

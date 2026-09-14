@@ -21,7 +21,7 @@
 
 import {formatDateLabel, toDateTimeLocalValue, toISOStringOrNull} from "../../core/formatting";
 import {get, post} from '../../core/http';
-import {showInlineAlert} from '../../shared/alerts';
+import {cancelAlertDismissal, scheduleAlertDismissal, showInlineAlert} from '../../shared/alerts';
 import {renderParticipantStatus} from './activity-participants';
 import {getAllRoles} from "./activity-roles";
 import type {RequirementConfiguration, RequirementParticipantSummary} from './activity-types';
@@ -218,8 +218,9 @@ export function initRequirementPanel(planId: string): void {
     let requirementsDirty = false;
     type OverrideTarget = NonNullable<RequirementConfiguration['overrideTargets']>[number];
 
-    const setAlert = (message?: string, variant: 'info' | 'warning' | 'danger' = 'info') => {
+    const setAlert = (message?: string, variant: 'info' | 'warning' | 'danger' = 'info', pending = false) => {
         if (!alertBox) return;
+        cancelAlertDismissal(alertBox);
         const target = alertBox.querySelector('span') || alertBox;
         if (!message) {
             alertBox.classList.add('d-none');
@@ -229,7 +230,11 @@ export function initRequirementPanel(planId: string): void {
 
         alertBox.classList.remove('d-none', 'alert-danger', 'alert-info');
         alertBox.classList.add(variant === 'danger' ? 'alert-danger' : 'alert-info');
+        alertBox.classList.toggle('alert', !pending);
+        alertBox.classList.toggle('status-notice', pending);
+        alertBox.setAttribute('role', pending ? 'status' : 'alert');
         target.textContent = message;
+        if (!pending) scheduleAlertDismissal(alertBox, () => alertBox.classList.add('d-none'));
     };
 
     const setRequirementsDirty = (dirty: boolean) => {
@@ -610,7 +615,7 @@ export function initRequirementPanel(planId: string): void {
     };
 
     const loadRequirements = async () => {
-        setAlert('Loading requirements…');
+        setAlert('Loading requirements…', 'info', true);
         try {
             const res = await get(`/api/activity/${planId}/requirements`);
             populateForm(res.data as RequirementConfiguration);
@@ -622,7 +627,7 @@ export function initRequirementPanel(planId: string): void {
     };
 
     const calculateBaselineRequirement = async () => {
-        setAlert('Calculating baseline requirement…');
+        setAlert('Calculating baseline requirement…', 'info', true);
         try {
             if (!loadedConfig?.calculationContext) throw new Error('Requirement calculation context is unavailable');
             const draft = collectDraft();
@@ -763,7 +768,7 @@ export function initRequirementPanel(planId: string): void {
     };
 
     const saveRequirements = async () => {
-        setAlert('Saving settings…');
+        setAlert('Saving settings…', 'info', true);
         saveButtons.forEach((button) => button.disabled = true);
         try {
             const {overrides, hasInvalid} = collectOverrides();

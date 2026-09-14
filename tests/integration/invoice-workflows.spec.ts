@@ -110,7 +110,7 @@ describe('invoice review and retention workflows', () => {
         // Canary: a participant must receive confirmation and see the pending invoice in history immediately.
         expect(invoice).toMatchObject({status: 'NEW', amount: '48.75', description: submission.description});
         expect(sendEmail).toHaveBeenCalledWith(
-            participant.user!.email,
+            {name: participant.name, address: participant.user!.email},
             'Invoice submitted',
             expect.objectContaining({
                 heading: 'Your invoice was submitted',
@@ -146,7 +146,7 @@ describe('invoice review and retention workflows', () => {
         });
         expect(Number(pool!.invoiceAmount)).toBe(44.25);
         expect(sendEmail).toHaveBeenCalledWith(
-            participant.user!.email,
+            {name: participant.name, address: participant.user!.email},
             'Invoice accepted',
             expect.objectContaining({
                 heading: 'Your invoice was accepted',
@@ -180,7 +180,7 @@ describe('invoice review and retention workflows', () => {
         });
         await expect(fs.promises.access(submission.proofPath)).resolves.toBeUndefined();
         expect(sendEmail).toHaveBeenCalledWith(
-            participant.user!.email,
+            {name: participant.name, address: participant.user!.email},
             'Invoice rejected',
             expect.objectContaining({
                 heading: 'Your invoice needs attention',
@@ -508,6 +508,75 @@ describe('invoice pool factors, rebates, and recalculation', () => {
         expect((await invoiceService.getPoolWithInvoices(poolId))!.outstandingAmount).toBe(50);
     });
 
+    it.each([false, true])('persists a nonzero recalculated remainder as unpaid after signed settlement (invoice credit=%s)', async (subtractPersonalInvoices) => {
+        const {poolId, event, firstId, secondId} = await createCalculationContext('Persisted remainder state');
+        await invoiceService.updateAssignments(poolId, false, true, subtractPersonalInvoices, [], []);
+        await eventPoolController.closePool(event, poolId, {sendEmails: false});
+        const initial = (await invoiceService.getPoolWithInvoices(poolId))!.shares.find((share) => share.registrationId === firstId)!;
+        await invoiceService.setSharePaid(poolId, initial.id, true);
+        expect((await invoiceService.getShareWithRegistration(poolId, initial.id))!.isPaid).toBeTruthy();
+        await invoiceService.updateAssignments(poolId, false, true, subtractPersonalInvoices, [], [], {
+            [firstId]: subtractPersonalInvoices ? 0.5 : 1.5,
+            [secondId]: subtractPersonalInvoices ? 1.5 : 0.5,
+        });
+
+        for (let calculation = 0; calculation < 2; calculation++) {
+            await eventPoolController.recalculatePool(event, poolId, {sendEmails: false});
+            const share = (await invoiceService.getPoolWithInvoices(poolId))!.shares.find((row) => row.registrationId === firstId)!;
+            expect(share).toMatchObject({
+                paymentCreditAmount: subtractPersonalInvoices ? -50 : 50,
+                shareAmount: subtractPersonalInvoices ? -25 : 25,
+                paidAt: null,
+            });
+            expect(Boolean(share.isPaid)).toBe(false);
+            const [persisted] = await AppDataSource.query('SELECT is_paid AS isPaid, paid_at AS paidAt FROM event_invoice_shares WHERE id = ?', [share.id]);
+            expect(Number(persisted.isPaid)).toBe(0);
+            expect(persisted.paidAt).toBeNull();
+            const listed = (await invoiceService.listPools(event.id)).find((pool) => pool.id === poolId)!;
+            expect(Boolean(listed.shares.find((row) => row.id === share.id)!.isPaid)).toBe(false);
+        }
+    });
+
+    it('loads complete calculation and payment relations consistently for individual pools and event lists', async () => {
+        const {poolId, event, firstId, secondId} = await createCalculationContext('Pool relation loading');
+        await invoiceService.updateAssignments(poolId, false, true, false, [], [], {[firstId]: 1.5, [secondId]: 0.5});
+        await invoiceService.addSurcharge(poolId, firstId, 10, 'Supplement', false);
+        await invoiceService.addSurcharge(poolId, secondId, -5, 'Rebate', true);
+        await invoiceService.updateTakeovers(poolId, firstId, [secondId], true);
+        await eventPoolController.closePool(event, poolId, {sendEmails: false});
+        const beforePayment = (await invoiceService.getPoolWithInvoices(poolId))!;
+        await invoiceService.setSharePaid(poolId, beforePayment.shares[0].id, true);
+        await invoiceService.addSurcharge(poolId, secondId, 1, 'Pending input', false);
+
+        const loaded = (await invoiceService.getPoolWithInvoices(poolId))!;
+        const listed = (await invoiceService.listPools(event.id)).find((pool) => pool.id === poolId)!;
+        const joined = (await AppDataSource.getRepository(EventInvoicePool).findOne({
+            where: {id: poolId}, relationLoadStrategy: 'join',
+            relations: {
+                event: true, assignments: {registration: true}, invoices: {registration: true}, shares: {registration: true},
+                surcharges: {registration: true}, takeovers: {payerRegistration: true, beneficiaryRegistration: true},
+            },
+        }))!;
+        const normalize = (pool: EventInvoicePool) => ({
+            eventId: pool.eventId, calculationRevision: pool.calculationRevision,
+            needsRecalculation: pool.needsRecalculation, calculationSnapshot: pool.calculationSnapshot,
+            outstandingAmount: pool.outstandingAmount, creditAmount: pool.creditAmount,
+            assignments: [...pool.assignments].sort((left, right) => left.id - right.id),
+            invoices: [...pool.invoices].sort((left, right) => left.id - right.id),
+            shares: [...pool.shares].sort((left, right) => left.id - right.id),
+            surcharges: [...pool.surcharges].sort((left, right) => left.id - right.id),
+            takeovers: [...pool.takeovers].sort((left, right) => left.id - right.id),
+        });
+        expect(normalize(loaded)).toEqual(normalize(joined));
+        expect(normalize(listed)).toEqual(normalize(joined));
+        expect(loaded.event.id).toBe(event.id);
+        expect(loaded.needsRecalculation).toBeTruthy();
+        expect(loaded.shares[0].isPaid).toBeTruthy();
+        expect(loaded.assignments.map((row) => row.registration.id).sort()).toEqual([firstId, secondId].sort());
+        expect(loaded.takeovers[0].payerRegistration.id).toBe(firstId);
+        expect(loaded.takeovers[0].beneficiaryRegistration.id).toBe(secondId);
+    });
+
     it('carries signed payouts and distinguishes a further refund from an amount to pay back', async () => {
         const {poolId, event, firstId, secondId} = await createCalculationContext('Signed payout history');
         const firstShare = async () => (await invoiceService.getPoolWithInvoices(poolId))!.shares.find((share) => share.registrationId === firstId)!;
@@ -761,7 +830,7 @@ describe('invoice pool factors, rebates, and recalculation', () => {
 
         expect(await eventPoolController.notifyPoolShares(event, poolId, {expectedRevision: before.calculationRevision}))
             .toEqual({count: 2});
-        const settledEmail = sendEmail.mock.calls.find((call) => call[0] === participant.user!.email)![2];
+        const settledEmail = sendEmail.mock.calls.find((call) => call[0].address === participant.user!.email)![2];
         expect(settledEmail).toMatchObject({
             heading: 'Your pool share is settled',
             details: expect.arrayContaining([{label: 'Status', value: 'Paid'}, {label: 'Remaining to settle', value: '0.00'}]),
@@ -776,7 +845,7 @@ describe('invoice pool factors, rebates, and recalculation', () => {
         await eventPoolController.recalculatePool(event, poolId, {sendEmails: false});
         sendEmail.mockClear();
         await eventPoolController.notifyPoolShares(event, poolId);
-        const remainingEmail = sendEmail.mock.calls.find((call) => call[0] === participant.user!.email)![2];
+        const remainingEmail = sendEmail.mock.calls.find((call) => call[0].address === participant.user!.email)![2];
         expect(remainingEmail).toMatchObject({
             heading: 'You owe 25.00',
             details: expect.arrayContaining([{label: 'Amount due', value: '25.00'}, {label: 'Previously settled', value: '50.00'}]),

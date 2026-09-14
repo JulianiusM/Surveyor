@@ -204,7 +204,7 @@ export async function getEventParticipants(eventId: string): Promise<Participant
     return rows.map((r): ParticipantRow => ({
         id: r.id,
         profileId: r.profile.id ?? null,
-        name: r.profile.name || '—',
+        name: r.profile.name?.trim() || r.profile.user?.name?.trim() || r.profile.user?.username || r.profile.guest?.username || '—',
         email: r.profile.user?.email || r.profile.guest?.email || '—',
         arrivalDate: r.arrivalDate,
         departureDate: r.departureDate,

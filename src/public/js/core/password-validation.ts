@@ -3,6 +3,8 @@
  * Provides password strength checking and validation
  */
 
+import {showInlineAlert} from '../shared/alerts';
+
 /**
  * Update element class state based on validation
  * @param object jQuery element
@@ -147,7 +149,7 @@ export function validate(
     if (!isPasswordValid(password) || !isPasswordRepeatValid(password, passwordRepeat)) {
         event.preventDefault();
         event.stopPropagation();
-        alert("Please check that both the password and the password repetition are valid!");
+        showInlineAlert('error', 'Please check that both the password and the password repetition are valid!');
         verifyPassword(passwordObj, infoObj);
         removeTooltip(passwordObj, infoObj);
         matchPassword(passwordObj, passwordRepeatObj, passwordRepeatInfoObj);

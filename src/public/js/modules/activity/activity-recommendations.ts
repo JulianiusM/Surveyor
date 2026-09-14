@@ -6,7 +6,7 @@
 import {formatDateLabel, formatTimeLabel} from "../../core/formatting";
 import {get, post} from '../../core/http';
 import {generateRecommendationsAndWait} from './activity-recommendation-jobs';
-import {showInlineAlert} from '../../shared/alerts';
+import {cancelAlertDismissal, scheduleAlertDismissal, showInlineAlert} from '../../shared/alerts';
 import {reloadAfterDelay} from '../../shared/ui-helpers';
 import {describeWarning} from './activity-assignments';
 import type {
@@ -43,8 +43,9 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
 
     let warnings: RecommendationWarning[] = [];
 
-    const setAlert = (message?: string, variant: 'info' | 'danger' = 'info') => {
+    const setAlert = (message?: string, variant: 'info' | 'danger' = 'info', pending = false) => {
         if (!alertBox) return;
+        cancelAlertDismissal(alertBox);
         const target = alertBox.querySelector('span') || alertBox;
         if (!message) {
             alertBox.classList.add('d-none');
@@ -54,7 +55,11 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
 
         alertBox.classList.remove('d-none', 'alert-info', 'alert-danger');
         alertBox.classList.add(variant === 'danger' ? 'alert-danger' : 'alert-info');
+        alertBox.classList.toggle('alert', !pending);
+        alertBox.classList.toggle('status-notice', pending);
+        alertBox.setAttribute('role', pending ? 'status' : 'alert');
         target.textContent = message;
+        if (!pending) scheduleAlertDismissal(alertBox, () => alertBox.classList.add('d-none'));
     };
 
     const warningKey = (slotId: string, profileId?: string | null) => {
@@ -279,7 +284,7 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
     };
 
     const loadRecommendations = async () => {
-        setAlert('Loading recommendations…');
+        setAlert('Loading recommendations…', 'info', true);
         try {
             const res = (await get(`/api/activity/${planId}/recommendations`))?.data;
             warnings = (res?.warnings || []) as RecommendationWarning[];
@@ -288,9 +293,9 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
             renderRecommendations((res?.recommendations || []) as RecommendationRow[]);
 
             if (res?.autoGenerationJob?.id) {
-                setAlert('Binding-deadline recommendations are queued…');
+                setAlert('Binding-deadline recommendations are queued…', 'info', true);
                 await generateRecommendationsAndWait(planId, (status) => {
-                    if (status === 'RUNNING') setAlert('Calculating binding-deadline recommendations…');
+                    if (status === 'RUNNING') setAlert('Calculating binding-deadline recommendations…', 'info', true);
                 });
                 await loadRecommendations();
                 return;
@@ -318,7 +323,7 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
     };
 
     const saveRecommendations = async () => {
-        setAlert('Saving recommendations…');
+        setAlert('Saving recommendations…', 'info', true);
         try {
             await post(`/api/activity/${planId}/recommendations`, {recommendations: collectRecommendationPayload()});
             showInlineAlert('success', 'Recommendations saved');
@@ -331,10 +336,10 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
     };
 
     const autoGenerate = async () => {
-        setAlert('Generating recommendations…');
+        setAlert('Generating recommendations…', 'info', true);
         try {
             await generateRecommendationsAndWait(planId, (status) => {
-                if (status === 'RUNNING') setAlert('Calculating recommendations…');
+                if (status === 'RUNNING') setAlert('Calculating recommendations…', 'info', true);
             });
             showInlineAlert('success', 'Recommendations generated');
             await loadRecommendations();
@@ -346,7 +351,7 @@ export function initRecommendationPanel(planId: string, describeSlot: (slotId: s
     };
 
     const applyRecommendations = async () => {
-        setAlert('Applying approved recommendations…');
+        setAlert('Applying approved recommendations…', 'info', true);
         try {
             const res = await post(`/api/activity/${planId}/recommendations/apply`, {});
             warnings = (res?.warnings || []) as RecommendationWarning[];

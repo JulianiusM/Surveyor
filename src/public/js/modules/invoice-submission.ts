@@ -17,7 +17,7 @@ export function bindInvoiceSubmission(
     const originalLabel = submit.textContent;
     const showStatus = (message: string, kind: 'info' | 'success' | 'danger' = 'info') => {
         feedback.hidden = false;
-        status.className = `alert alert-${kind} mb-2`;
+        status.className = `status-notice alert-${kind} mb-2`;
         status.textContent = message;
     };
     const preventLeave = (event: BeforeUnloadEvent) => {
