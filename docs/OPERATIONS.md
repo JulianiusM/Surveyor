@@ -7,8 +7,8 @@ owner: application operators
 status: current
 last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: named SMTP recipients, asynchronous invoice review notification delivery, confirmed progress feedback, and complete saved-share PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factor and settlement migrations, signed payment carry-forward, rollback snapshots, settlement email controls, receipt delivery, and upload recovery; D04 accepted from source review and deployment-practice confirmation for release contents, bootstrap, sessions, proxy behavior, health, logs, persistent files, SMTP/OIDC, retention, backup, restore, and service management; D06 invoice-proof privacy, storage, and retention linkage verified; controlled execution tracked separately in D04V
-source-anchors: src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; docs/user-guide/INVOICE_POOLS.md; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/database/dataSource.ts; src/modules/invoiceRetention.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/controller/helpController.ts; src/controller/eventPoolController.ts; src/modules/email.ts; src/modules/oidc.ts
+verification-scope: invoice correction and retraction lifecycles, refreshed submission history, and takeover overview dialogs; organizer-entered shared costs, repeat invoice submissions, visible payment feedback, and share breakdown dialogs; named SMTP recipients, asynchronous invoice review notification delivery, confirmed progress feedback, and complete saved-share PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factor and settlement migrations, signed payment carry-forward, rollback snapshots, settlement email controls, receipt delivery, and upload recovery; D04 accepted from source review and deployment-practice confirmation for release contents, bootstrap, sessions, proxy behavior, health, logs, persistent files, SMTP/OIDC, retention, backup, restore, and service management; D06 invoice-proof privacy, storage, and retention linkage verified; controlled execution tracked separately in D04V
+source-anchors: src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; docs/user-guide/INVOICE_POOLS.md; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/database/dataSource.ts; src/modules/invoiceRetention.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/controller/helpController.ts; src/controller/eventPoolController.ts; src/modules/email.ts; src/modules/oidc.ts
 next-review: D04V
 -->
 
@@ -350,6 +350,20 @@ Apply them through the matching release's settings-aware migration wrapper befor
 Migration does not replace stored shares or send settlement notifications. Existing Paid flags are retained and existing
 payment credits start at zero; the next recalculation recognizes paid amounts from those saved flags.
 
+The organizer-expense feature also requires `1789603200000-AddOrganizerInvoices.ts` before the new release starts.
+It adds the recorder profile and name snapshot to invoice records. Organizer expenses have no participant registration,
+can omit proof, and enter accepted shared costs immediately; they never reimburse the recorder through personal
+invoice credit. An authorized organizer does not need to attend the event to record one. Adding an expense after
+closure preserves existing shares/payments and requires explicit recalculation. Deleting the recorder profile clears
+its audit relation but retains the recorded name. Back up these financial records and any optional proofs together.
+
+Apply `1789689600000-AddInvoiceRetraction.ts` before enabling the revised invoice lifecycle. It adds the retained
+Retracted status without rewriting existing invoice or settlement records. Organizers can confirm corrections or
+rejections of Accepted and Closed participant invoices and organizer expenses. Those saved cost changes require
+recalculation for a closed pool; existing payments remain available as settlement credits. Participants can retract
+only their own unreviewed invoice, retaining its details and proof. Retraction advances the pool revision without
+changing its existing recalculation requirement because the unreviewed cost was never counted.
+
 Organizers can save calculation changes after pool closure and continue recording payments against the saved shares.
 **Recalculation required** identifies changed inputs. A calculation preview shows the proposed balances without writing
 anything. Applying it carries previously recorded payments/payouts as signed credits and creates only the remaining
@@ -357,9 +371,14 @@ payment or refund. Repeated recalculations do not count the same settlement twic
 flags, payment credits, or snapshots directly in SQL.
 
 **Roll back pool changes** restores pool-local inputs from the last successful calculation while retaining the saved
-settlement. It does not reverse invoice reviews, attendance changes, or event participant deletion. Those external
+settlement. It does not reverse invoice reviews, remove organizer expenses, undo attendance changes, or restore deleted
+event participants. Those external
 changes can leave a pool needing recalculation after rollback. Legacy pools establish their first rollback snapshot on
 the next successful calculation. This application action is separate from deployment/database backup restoration.
+The organizer-expense migration refuses reversal while invoices without a registration exist; do not delete or reassign
+them to bypass that guard. Follow the [deployment rollback procedure](UPGRADING.md#rollback-decision) for an older release.
+The retraction migration similarly refuses reversal while Retracted invoices exist. Do not convert them to another
+status merely to make older code start. Pool-local rollback also preserves invoice corrections, rejections, and retractions.
 
 Automatic close/recalculation emails are configurable per pool and per action. Organizers can use **Send settlement
 emails** later, even with automatic emails disabled. Messages describe current saved payment status and outstanding
@@ -374,6 +393,9 @@ Invoice upload success confirms persistence and does not wait for confirmation e
 uncertain upload outcome, have them check **Your invoice history** before retrying. Investigate repeated slow uploads
 through proxy request limits, storage latency, application errors, and database connectivity. Review SMTP logs separately
 when a persisted invoice has no receipt email.
+After confirmed success, the participant form clears the invoice details and proof and briefly stays locked while the
+page automatically refreshes to the saved invoice history. The invoice sections reopen and retain the available pool
+selection for another upload. An uncertain outcome intentionally stays locked until the participant checks history.
 
 Acceptance, rejection, and closure also finish their database change before starting email delivery. A slow or failed
 SMTP connection does not delay their success response or reverse the saved review. Delivery runs in the application
@@ -382,6 +404,8 @@ Do not repeat a review to retry an email. Settlement notices can be requested se
 
 Pool actions show immediate progress and a further status message after five seconds while awaiting server confirmation.
 Transient result notices disappear after ten seconds; ongoing progress and stale-calculation notices remain visible.
+Payment feedback appears above the ledger even if filtering removes the updated row. The Paid switch reflects the last
+confirmed state while saving; use the saved status rather than the switch's initial click position when investigating.
 For slow pool loads, inspect database connectivity, query duration, and resource usage separately from SMTP. Pool relation
 reads use a consistent database snapshot; do not change transaction isolation or bypass revision checks as a workaround.
 

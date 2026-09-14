@@ -80,6 +80,10 @@ function invoiceEmailRecipient(profile: Profile, address: string): EmailRecipien
     return {name: resolveEmailRecipientName(profile.name, profile.user?.name, profile.user?.username, profile.guest?.username), address};
 }
 
+function invoiceContactProfile(invoice: EventInvoice): Profile | null | undefined {
+    return invoice.registration?.profile ?? invoice.recordedByProfile;
+}
+
 // Verify a registration is currently allowed in the pool so surcharge updates cannot target removed participants.
 async function assertRegistrationAllowed(pool: Awaited<ReturnType<typeof ensurePool>>, registrationId: number) {
     const assignedIds = pool.assignAll
@@ -360,8 +364,8 @@ async function submitInvoice(event: Event, poolId: string, body: any, session: R
     });
     try {
         const invoice = await invoiceService.getInvoiceWithRegistration(poolId, invoiceId);
-        const email = invoice?.registration.profile.user?.email || invoice?.registration.profile.guest?.email;
-        if (email && invoice) {
+        const email = invoice?.registration?.profile.user?.email || invoice?.registration?.profile.guest?.email;
+        if (email && invoice?.registration) {
             // Receipt delivery must not hold the successful upload response open for SMTP.
             queueInvoiceEmail(
                 invoiceEmailRecipient(invoice.registration.profile, email),
@@ -389,6 +393,28 @@ async function submitInvoice(event: Event, poolId: string, body: any, session: R
     }
 }
 
+// Organizers can enter a shared pool cost without becoming an event participant.
+async function addOrganizerInvoice(event: Event, poolId: string, body: any, session: Request['session'], file?: Express.Multer.File) {
+    try {
+        if (!session.profile?.id) throw new APIError('Log in to record a pool cost', {}, 401);
+        await ensurePool(event, poolId);
+        const {error, value} = Joi.object({
+            amount: Joi.number().positive().max(99999999.99).required(),
+            description: Joi.string().trim().max(4000).required(),
+        }).validate(body || {}, {abortEarly: false, allowUnknown: true});
+        if (error) throw new APIError(error.message, {}, 400);
+        if (file && !['application/pdf', 'image/jpeg', 'image/png', 'image/gif'].includes(file.mimetype)) {
+            throw new APIError('Unsupported proof type', {}, 400);
+        }
+        return await invoiceService.addOrganizerInvoice(poolId, session.profile.id, value.amount, value.description, file ? {
+            path: path.relative(process.cwd(), file.path), originalName: file.originalname, mimeType: file.mimetype,
+        } : null);
+    } catch (error) {
+        if (file) await fs.promises.unlink(file.path).catch(() => undefined);
+        throw error;
+    }
+}
+
 // Accept an invoice, preserve optional organizer corrections, and notify the submitter.
 async function approveInvoice(
     event: Event,
@@ -413,8 +439,9 @@ async function approveInvoice(
     const correctedDescription = value.correctedDescription?.trim() || null;
     const accepted = await invoiceService.approveInvoice(poolId, Number(invoiceId), {correctedAmount, correctedDescription});
     if (!accepted) throw new APIError('Invoice was already reviewed. Reload to see the saved decision.', {}, 409);
-    const email = invoice.registration.profile.user?.email || invoice.registration.profile.guest?.email;
-    if (email) {
+    const contact = invoiceContactProfile(invoice);
+    const email = contact?.user?.email || contact?.guest?.email;
+    if (email && contact) {
         const actor = resolveActorLabel(session);
         const acceptedAmount = formatAmount(resolveInvoiceAmount(invoice.amount, correctedAmount));
         const correctionDetails = [
@@ -426,7 +453,7 @@ async function approveInvoice(
                 : []),
         ];
         queueInvoiceEmail(
-            invoiceEmailRecipient(invoice.registration.profile, email),
+            invoiceEmailRecipient(contact, email),
             'Invoice accepted',
             {
                 eyebrow: 'Invoice accepted',
@@ -465,17 +492,18 @@ async function closeInvoice(
     }
     const actorRegId = await getActorRegistrationId(event, session);
     const canManage = allowManageOverride && (permData?.entity?.has('MANAGE_ASSIGNMENTS') ?? false);
-    const isSubmitter = actorRegId === invoice.registration.id;
+    const isSubmitter = actorRegId !== undefined && actorRegId === invoice.registrationId;
     if (!canManage && !isSubmitter) {
         throw new APIError('You can only close your own approved invoices, unless you are an administrator.', {}, 403);
     }
     const closed = await invoiceService.closeInvoice(poolId, Number(invoiceId));
     if (!closed) return;
-    const email = invoice.registration.profile.user?.email || invoice.registration.profile.guest?.email;
+    const contact = invoiceContactProfile(invoice);
+    const email = contact?.user?.email || contact?.guest?.email;
     if (email) {
         const actor = resolveActorLabel(session);
         queueInvoiceEmail(
-            invoiceEmailRecipient(invoice.registration.profile, email),
+            invoiceEmailRecipient(contact!, email),
             'Invoice closed',
             {
                 eyebrow: 'Invoice update',
@@ -513,11 +541,12 @@ async function declineInvoice(
     if (error) throw new APIError(error.message, body, 400);
     const declined = await invoiceService.declineInvoice(poolId, Number(invoiceId), value.rejectionReason);
     if (!declined) throw new APIError('Invoice was already reviewed. Reload to see the saved decision.', {}, 409);
-    const email = invoice.registration.profile.user?.email || invoice.registration.profile.guest?.email;
+    const contact = invoiceContactProfile(invoice);
+    const email = contact?.user?.email || contact?.guest?.email;
     if (email) {
         const actor = resolveActorLabel(session);
         queueInvoiceEmail(
-            invoiceEmailRecipient(invoice.registration.profile, email),
+            invoiceEmailRecipient(contact!, email),
             'Invoice rejected',
             {
                 eyebrow: 'Invoice rejected',
@@ -536,6 +565,82 @@ async function declineInvoice(
             },
         );
     }
+}
+
+function confirmedInvoiceChange(body: unknown, fields: Joi.SchemaMap = {}) {
+    const {error, value} = Joi.object({
+        ...fields,
+        confirmed: Joi.boolean().valid(true).strict().required(),
+        expectedRevision: Joi.number().integer().min(0).required(),
+    }).validate(body || {}, {abortEarly: false, allowUnknown: true});
+    if (error) throw new APIError(error.message, {}, 400);
+    return value;
+}
+
+function notifySavedInvoiceChange(event: Event, pool: EventInvoicePool, before: EventInvoice, saved: EventInvoice,
+    action: 'corrected' | 'rejected' | 'retracted', session: Request['session']): void {
+    const contact = invoiceContactProfile(before);
+    const email = contact?.user?.email || contact?.guest?.email;
+    if (!contact || !email) return;
+    queueInvoiceEmail(invoiceEmailRecipient(contact, email), `Invoice ${action}`, {
+        eyebrow: 'Invoice history',
+        heading: `Your invoice was ${action}`,
+        paragraphs: [action === 'corrected'
+            ? 'An organizer changed the accepted details used for the next pool calculation.'
+            : action === 'rejected'
+                ? 'An organizer removed this invoice from the costs and personal invoice credits used for the next calculation.'
+                : 'Your invoice was withdrawn before organizer review. It remains in your history and will not be included in pool costs.'],
+        details: [
+            {label: 'Invoice', value: `#${saved.id}`},
+            {label: 'Event', value: event.title},
+            {label: 'Pool', value: pool.name},
+            {label: 'Original amount', value: formatAmount(toAmount(saved.amount))},
+            ...(action === 'corrected' ? [
+                {label: 'Previous counted amount', value: formatAmount(resolveInvoiceAmount(before.amount, before.correctedAmount))},
+                {label: 'Updated counted amount', value: formatAmount(resolveInvoiceAmount(saved.amount, saved.correctedAmount))},
+                {label: 'Updated description', value: saved.correctedDescription ?? saved.description ?? '—'},
+            ] : []),
+            ...(action === 'rejected' ? [{label: 'Rejection reason', value: saved.rejectionReason || '—'}] : []),
+            {label: 'Updated by', value: resolveActorLabel(session)},
+        ],
+        action: {label: 'View invoice history', url: eventPageUrl(event)},
+        notice: action === 'retracted'
+            ? 'This invoice was never counted in shares. Retraction does not change saved shares or recorded payments.'
+            : 'Saved shares and recorded payments stay unchanged until the pool is recalculated.',
+    });
+}
+
+async function reviseInvoice(event: Event, poolId: string, invoiceId: string, body: any, session: Request['session']) {
+    const value = confirmedInvoiceChange(body, {
+        correctedAmount: Joi.number().positive().max(99999999.99).allow(null).required(),
+        correctedDescription: Joi.string().trim().max(4000).allow('', null).required(),
+    });
+    const pool = await ensurePool(event, poolId);
+    const invoice = await invoiceService.getInvoiceWithRegistration(poolId, Number(invoiceId));
+    if (!invoice) throw new APIError('Invoice not found', {}, 404);
+    const saved = await invoiceService.reviseInvoice(poolId, Number(invoiceId), {
+        correctedAmount: value.correctedAmount, correctedDescription: value.correctedDescription || null,
+    }, value);
+    notifySavedInvoiceChange(event, pool, invoice, saved, 'corrected', session);
+}
+
+async function rejectAcceptedInvoice(event: Event, poolId: string, invoiceId: string, body: any, session: Request['session']) {
+    const value = confirmedInvoiceChange(body, {rejectionReason: Joi.string().trim().max(4000).required()});
+    const pool = await ensurePool(event, poolId);
+    const invoice = await invoiceService.getInvoiceWithRegistration(poolId, Number(invoiceId));
+    if (!invoice) throw new APIError('Invoice not found', {}, 404);
+    const saved = await invoiceService.rejectAcceptedInvoice(poolId, Number(invoiceId), value.rejectionReason, value);
+    notifySavedInvoiceChange(event, pool, invoice, saved, 'rejected', session);
+}
+
+async function retractInvoice(event: Event, poolId: string, invoiceId: string, body: any, session: Request['session']) {
+    if (!session.profile?.id) throw new APIError('Log in to retract your invoice', {}, 401);
+    const value = confirmedInvoiceChange(body);
+    const pool = await ensurePool(event, poolId);
+    const invoice = await invoiceService.getInvoiceWithRegistration(poolId, Number(invoiceId));
+    if (!invoice) throw new APIError('Invoice not found', {}, 404);
+    const saved = await invoiceService.retractInvoice(poolId, Number(invoiceId), session.profile.id, value);
+    notifySavedInvoiceChange(event, pool, invoice, saved, 'retracted', session);
 }
 
 type CalculationDto = {
@@ -728,6 +833,7 @@ function bucketSurcharges(pool: EventInvoicePool, targetIds: Set<number>) {
 function bucketInvoiceCredit(approvedInvoices: EventInvoice[], targetIds: Set<number>) {
     const invoiceCreditMap = new Map<number, number>();
     for (const invoice of approvedInvoices) {
+        if (invoice.registrationId == null) continue;
         if (!targetIds.has(invoice.registrationId)) continue;
         const running = invoiceCreditMap.get(invoice.registrationId) || 0;
         invoiceCreditMap.set(
@@ -879,6 +985,7 @@ async function markSharePaid(event: Event, poolId: string, shareId: string, isPa
 
 // Serve invoice proof files securely with authentication and permission checks
 export async function serveInvoiceProof(event: Event, poolId: string, invoiceId: string, session: Request['session'], permData?: PermBundle) {
+    if (!session.profile) throw new APIError('Log in to view invoice proofs', {}, 401);
     await ensurePool(event, poolId);
     const invoice = await invoiceService.getInvoiceWithRegistration(poolId, Number(invoiceId));
     if (!invoice?.proofPath) {
@@ -888,14 +995,14 @@ export async function serveInvoiceProof(event: Event, poolId: string, invoiceId:
     // Verify user has permission: either has MANAGE_ASSIGNMENTS permission or is the invoice submitter
     const actorRegId = await getActorRegistrationId(event, session);
     const hasManagePermission = permData?.entity?.has('MANAGE_ASSIGNMENTS') ?? false;
-    const isSubmitter = actorRegId === invoice.registration.id;
+    const isSubmitter = actorRegId !== undefined && actorRegId === invoice.registrationId;
 
     if (!hasManagePermission && !isSubmitter) {
         throw new APIError('You do not have permission to view this proof', {}, 403);
     }
 
     // Sanitize and validate the proof path to prevent directory traversal
-    const uploadsDir = path.resolve(process.cwd(), 'uploads');
+    const uploadsDir = path.resolve(process.cwd(), settings.value.invoiceDir);
     const fullPath = path.resolve(process.cwd(), invoice.proofPath);
 
     // Use path.relative to ensure the resolved path is within uploads directory
@@ -931,6 +1038,10 @@ export default {
     addPoolSurcharge,
     removePoolSurcharge,
     submitInvoice,
+    addOrganizerInvoice,
+    reviseInvoice,
+    rejectAcceptedInvoice,
+    retractInvoice,
     approveInvoice,
     closeInvoice,
     declineInvoice,

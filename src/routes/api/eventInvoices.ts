@@ -18,12 +18,17 @@ import express, {Request} from "express";
 import eventPoolController from "../../controller/eventPoolController";
 import {requireEventParticipantAPI, requirePermissionApi,} from "../../middleware/permissionMiddleware";
 import {asyncHandler} from "../../modules/lib/asyncHandler";
+import {APIError} from "../../modules/lib/errors";
 import {prepareFileUploader} from "../../modules/lib/fileCommons";
 import {PERM} from "../../modules/lib/permissions";
 import renderer from "../../modules/renderer";
 import settings from "../../modules/settings";
 
 const proofUpload = prepareFileUploader(settings.value.invoiceDir, true, true);
+const requireInvoiceActor = asyncHandler((req, _res, next) => {
+    if (!req.session.profile?.id) throw new APIError('Log in to change an invoice', {}, 401);
+    next();
+});
 
 // Split invoice routes out of the crowded event router to keep handlers focused
 export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req: Request) => any) {
@@ -104,6 +109,20 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
     );
 
     router.post(
+        '/:poolId/invoices/organizer',
+        asyncHandler((req, _res, next) => {
+            if (!req.session.profile?.id) throw new APIError('Log in to record a pool cost', {}, 401);
+            next();
+        }),
+        requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
+        proofUpload.single("proof"),
+        asyncHandler(async (req, res) => {
+            const invoiceId = await eventPoolController.addOrganizerInvoice(resFct(req), req.params.poolId as string, req.body, req.session, req.file);
+            renderer.respondWithSuccessDataJson(res, "Pool cost recorded. Calculate the pool to include this amount in shares.", {id: invoiceId});
+        })
+    );
+
+    router.post(
         '/:poolId/invoices/:invoiceId/approve',
         requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
         asyncHandler(async (req, res) => {
@@ -148,6 +167,35 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
                 req.session,
             );
             renderer.respondWithSuccessJson(res, "rejected");
+        })
+    );
+
+    router.post(
+        '/:poolId/invoices/:invoiceId/revise',
+        requireInvoiceActor,
+        requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
+        asyncHandler(async (req, res) => {
+            await eventPoolController.reviseInvoice(resFct(req), req.params.poolId as string, req.params.invoiceId as string, req.body, req.session);
+            renderer.respondWithSuccessJson(res, "Invoice corrected. Recalculate closed pools to update shares; recorded payments were preserved.");
+        })
+    );
+
+    router.post(
+        '/:poolId/invoices/:invoiceId/reject-accepted',
+        requireInvoiceActor,
+        requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
+        asyncHandler(async (req, res) => {
+            await eventPoolController.rejectAcceptedInvoice(resFct(req), req.params.poolId as string, req.params.invoiceId as string, req.body, req.session);
+            renderer.respondWithSuccessJson(res, "Invoice rejected and kept in history. Recalculate closed pools to remove its cost and invoice credit from shares.");
+        })
+    );
+
+    router.post(
+        '/:poolId/invoices/:invoiceId/retract',
+        requireInvoiceActor,
+        asyncHandler(async (req, res) => {
+            await eventPoolController.retractInvoice(resFct(req), req.params.poolId as string, req.params.invoiceId as string, req.body, req.session);
+            renderer.respondWithSuccessJson(res, "Invoice retracted. It remains in your history and was not included in calculated shares.");
         })
     );
 
@@ -212,7 +260,6 @@ export function buildInvoiceRouter(permFct: (req: Request) => any, resFct: (req:
     // Serve invoice proof files securely with authentication
     router.get(
         '/:poolId/invoices/:invoiceId/proof',
-        requireEventParticipantAPI(resFct),
         asyncHandler(async (req, res) => {
             const filePath = await eventPoolController.serveInvoiceProof(resFct(req), req.params.poolId as string, req.params.invoiceId as string, req.session, res.locals.permData);
             res.sendFile(filePath);

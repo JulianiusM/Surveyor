@@ -1,3 +1,5 @@
+import {showInlineAlert} from '../shared/alerts';
+
 /** Invoice uploads keep their form locked until the server confirms the outcome. */
 export function bindInvoiceSubmission(
     form: HTMLFormElement,
@@ -8,35 +10,92 @@ export function bindInvoiceSubmission(
     const submit = form.querySelector<HTMLButtonElement>('[type="submit"]');
     const feedback = form.querySelector<HTMLElement>('[data-invoice-feedback]');
     const status = form.querySelector<HTMLElement>('[data-invoice-status]');
-    const progress = form.querySelector<HTMLProgressElement>('[data-invoice-progress]');
+    const progress = form.querySelector<HTMLElement>('[data-invoice-progress]');
+    const progressBar = form.querySelector<HTMLElement>('[data-invoice-progress-bar]');
     const history = form.querySelector<HTMLButtonElement>('[data-invoice-history]');
-    if (!fields || !submit || !feedback || !status || !progress || !history) return;
+    if (!fields || !submit || !feedback || !status || !progress || !progressBar || !history) return;
     form.dataset.invoiceSubmissionInitialized = 'true';
 
     let locked = false;
-    const originalLabel = submit.textContent;
-    const showStatus = (message: string, kind: 'info' | 'success' | 'danger' = 'info') => {
+    let navigating = false;
+    let reloadTimer: ReturnType<typeof setTimeout> | undefined;
+    const pool = form.elements.namedItem('poolId') as HTMLSelectElement | null;
+    const returnPoolKey = `surveyor:invoice-submission:${options.eventId}`;
+    const successKey = `${returnPoolKey}:success`;
+    const successMessage = 'Invoice submitted successfully. It is awaiting organizer review.';
+    let submitted = false;
+    const originalContent = Array.from(submit.childNodes);
+    const showBusyButton = (button: HTMLButtonElement, label: string) => {
+        const spinner = document.createElement('span');
+        spinner.className = 'spinner-border spinner-border-sm me-2';
+        spinner.setAttribute('aria-hidden', 'true');
+        button.replaceChildren(spinner, document.createTextNode(label));
+        button.disabled = true;
+    };
+    const clearInvoiceFields = () => {
+        for (const name of ['amount', 'description', 'proof']) {
+            const input = form.elements.namedItem(name) as HTMLInputElement | null;
+            if (input) input.value = '';
+        }
+    };
+    const unlock = () => {
+        locked = false;
+        fields.disabled = false;
+        submit.disabled = false;
+        submit.replaceChildren(...originalContent);
+    };
+    try {
+        const savedPool = sessionStorage.getItem(returnPoolKey);
+        if (savedPool) {
+            sessionStorage.removeItem(returnPoolKey);
+            if (pool && Array.from(pool.options).some(option => option.value === savedPool)) pool.value = savedPool;
+            // Browser form restoration must not bring the completed invoice back after the history refresh.
+            clearInvoiceFields();
+            unlock();
+        }
+        if (sessionStorage.getItem(successKey)) {
+            sessionStorage.removeItem(successKey);
+            showInlineAlert('success', successMessage);
+        }
+    } catch { /* Pool selection remains usable when browser storage is unavailable. */ }
+    const showStatus = (message: string, kind: 'info' | 'danger' = 'info', reveal = false) => {
         feedback.hidden = false;
-        status.className = `status-notice alert-${kind} mb-2`;
+        status.hidden = false;
+        status.className = `alert alert-${kind} mb-2`;
         status.textContent = message;
+        if (reveal) status.scrollIntoView({block: 'nearest'});
+    };
+    const updateProgress = (percent?: number) => {
+        progressBar.style.width = `${percent ?? 100}%`;
+        progressBar.textContent = percent === undefined ? '' : `${percent}%`;
+        if (percent === undefined) progress.removeAttribute('aria-valuenow');
+        else progress.setAttribute('aria-valuenow', String(percent));
     };
     const preventLeave = (event: BeforeUnloadEvent) => {
         event.preventDefault();
         event.returnValue = '';
     };
-    history.addEventListener('click', () => {
+    const reloadHistory = () => {
+        if (navigating) return;
+        navigating = true;
+        clearTimeout(reloadTimer);
+        showBusyButton(history, 'Refreshing history…');
+        try {
+            if (pool?.value) sessionStorage.setItem(returnPoolKey, pool.value);
+            if (submitted) sessionStorage.setItem(successKey, 'true');
+        } catch { /* Refreshing saved history must not depend on browser storage. */ }
         window.location.hash = 'invoiceHistory';
         window.location.reload();
-    });
+    };
+    history.addEventListener('click', reloadHistory);
 
     form.addEventListener('submit', (event) => {
         event.preventDefault();
         if (locked || !form.reportValidity()) return;
-        const pool = form.elements.namedItem('poolId') as HTMLSelectElement | null;
         if (!options.registered || !pool?.value) {
-            showStatus(!options.registered
+            showInlineAlert('error', !options.registered
                 ? 'You must be registered for the event to submit invoices.'
-                : 'Choose a pool before submitting your invoice.', 'danger');
+                : 'Choose a pool before submitting your invoice.');
             return;
         }
 
@@ -44,14 +103,13 @@ export function bindInvoiceSubmission(
         const payload = new FormData(form);
         locked = true;
         fields.disabled = true;
-        submit.disabled = true;
-        submit.textContent = 'Submitting…';
+        showBusyButton(submit, 'Submitting…');
         // Keep the live region outside the busy fields so assistive technology announces progress immediately.
         fields.setAttribute('aria-busy', 'true');
         history.hidden = true;
         progress.hidden = false;
-        progress.removeAttribute('value');
-        showStatus('Uploading your invoice proof. Keep this page open; submit only once.');
+        updateProgress();
+        showStatus('Uploading your invoice proof. Keep this page open; submit only once.', 'info', true);
         window.addEventListener('beforeunload', preventLeave);
 
         let finished = false;
@@ -59,6 +117,7 @@ export function bindInvoiceSubmission(
         let slow = false;
         let lastProgress = -1;
         const slowTimer = setTimeout(() => {
+            if (finished) return;
             slow = true;
             showStatus(uploaded
                 ? 'Your proof has uploaded. Saving is taking longer than usual. Keep this page open; do not submit again.'
@@ -72,20 +131,23 @@ export function bindInvoiceSubmission(
             fields.setAttribute('aria-busy', 'false');
             progress.hidden = true;
             if (outcome === 'success') {
+                submitted = true;
+                clearInvoiceFields();
                 submit.textContent = 'Submitted';
-                showStatus('Invoice submitted successfully. It is awaiting organizer review.', 'success');
+                showStatus('Refreshing your invoice history…');
+                showInlineAlert('success', successMessage);
                 history.textContent = 'View invoice history';
                 history.hidden = false;
+                // Keep inputs locked until navigation so a new draft cannot be lost during the refresh.
+                reloadTimer = setTimeout(reloadHistory, 1000);
             } else if (outcome === 'rejected') {
-                locked = false;
-                fields.disabled = false;
-                submit.disabled = false;
-                submit.textContent = originalLabel;
-                showStatus(message || 'Your invoice was not submitted. Check the fields and try again.', 'danger');
-                status.focus();
+                unlock();
+                feedback.hidden = true;
+                status.textContent = '';
+                showInlineAlert('error', message || 'Your invoice was not submitted. Check the fields and try again.');
             } else {
-                submit.textContent = 'Check submission status';
-                showStatus('We could not confirm whether your invoice was saved. It may still have been submitted. Check invoice history before uploading it again.', 'danger');
+                submit.textContent = 'Submission unconfirmed';
+                showStatus('We could not confirm whether your invoice was saved. It may still have been submitted. Check invoice history before uploading it again.', 'danger', true);
                 history.textContent = 'Check invoice history';
                 history.hidden = false;
                 status.focus();
@@ -100,7 +162,7 @@ export function bindInvoiceSubmission(
             request.upload.onprogress = (upload) => {
                 if (finished || !upload.lengthComputable || !upload.total) return;
                 const percent = Math.min(100, Math.round(upload.loaded / upload.total * 100));
-                progress.value = percent;
+                updateProgress(percent);
                 // Announce in ten-percent steps instead of flooding the live region.
                 const step = Math.floor(percent / 10) * 10;
                 if (!slow && step !== lastProgress) {
@@ -111,7 +173,7 @@ export function bindInvoiceSubmission(
             request.upload.onload = () => {
                 if (finished) return;
                 uploaded = true;
-                progress.value = 100;
+                updateProgress(100);
                 showStatus(slow
                     ? 'Your proof has uploaded. Saving is taking longer than usual. Keep this page open; do not submit again.'
                     : 'Upload complete. Saving your invoice; please wait for confirmation.');

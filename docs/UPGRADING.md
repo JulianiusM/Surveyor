@@ -7,8 +7,8 @@ owner: application operators
 status: current
 last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factor and settlement migrations, preserved paid markers, payment-credit and rollback-snapshot initialization; D04 accepted from source review and deployment-practice confirmation for release packaging, versioned deployment, dependency installation, migration ordering, persistent-state backup, validation, and rollback; controlled execution tracked separately in D04V
-source-anchors: src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; scripts/runMigration.ts; migrationDataSource.ts; src/server.ts; src/modules/settings.ts; src/modules/invoiceRetention.ts; docs/DATABASE.md; docs/OPERATIONS.md
+verification-scope: invoice correction and retraction lifecycles, refreshed submission history, and takeover overview dialogs; organizer-expense migration ordering, preserved financial records, and downgrade guard; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factor and settlement migrations, preserved paid markers, payment-credit and rollback-snapshot initialization; D04 accepted from source review and deployment-practice confirmation for release packaging, versioned deployment, dependency installation, migration ordering, persistent-state backup, validation, and rollback; controlled execution tracked separately in D04V
+source-anchors: src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; scripts/runMigration.ts; migrationDataSource.ts; src/server.ts; src/modules/settings.ts; src/modules/invoiceRetention.ts; docs/DATABASE.md; docs/OPERATIONS.md
 next-review: D04V
 -->
 
@@ -164,7 +164,8 @@ release and write both persistent upload directories.
 
 ### 5. Start and validate
 
-For the invoice-pool updates, apply the factor/recalculation, settlement-credit/snapshot, and share-rounding migrations
+For the invoice-pool updates, apply the factor/recalculation, settlement-credit/snapshot, share-rounding, and
+`1789603200000-AddOrganizerInvoices.ts` and `1789689600000-AddInvoiceRetraction.ts` migrations
 before starting the new release. Existing factors start at `1`; stored shares and Paid markers are preserved. New
 payment credits start at zero and incorporate existing paid amounts on the next recalculation. Rollback snapshots are
 created by successful calculations; no historical input snapshot is invented for older closed pools.
@@ -178,6 +179,16 @@ After recalculations have stored payment credits, reverting only the settlement 
 while retaining residual share amounts. Use the full pre-upgrade database restore when rolling back to a release
 without settlement-credit support.
 See [Invoice pool operations](OPERATIONS.md#invoice-pool-factors-rebates-and-recalculation).
+
+The organizer-expense migration adds recorder attribution while allowing costs with no participant registration.
+Existing invoice amounts, shares, and payment markers are preserved. Validate **Add invoice / amount** with an
+authorized organizer in a controlled pool: the expense is accepted without requiring event registration or proof,
+and a closed pool requires recalculation without immediately changing its saved payments.
+
+The retraction migration adds RETRACTED to the invoice status enum while preserving existing status values. Validate
+that an owner can retract an unreviewed invoice and still see its history, and that confirmed corrections or rejections
+of Accepted/Closed costs preserve recorded payments and require recalculation when the pool is closed. Successful
+participant uploads now refresh the page to reopened invoice history; the next form starts blank with its pool retained.
 
 ```bash
 systemctl start surveyor
@@ -221,6 +232,16 @@ risk, or shows a failure that cannot be corrected safely without additional unre
 
 Do not assume that switching the release symlink alone is safe after migrations or new-version writes. The previous
 application may not understand the new schema or data.
+
+`AddOrganizerInvoices` refuses reversal while any invoice has a null registration, including organizer expenses. The
+guard runs before removing audit fields and prevents orphaning or discarding these costs. Do not delete financial rows
+or invent participant attribution to force a downgrade. Keep the new release and use a reviewed correction, or follow
+the full backup restoration procedure. Preserve the failed-release state and account for writes since the backup in
+the rollback decision; restoring a pre-upgrade backup does not retain expenses entered afterward.
+
+`AddInvoiceRetraction` also refuses reversal while any Retracted invoice exists. Removing the enum value would lose or
+misrepresent retained history. Preserve those rows and use a compatible release or the reviewed full restoration path;
+do not rewrite statuses or delete invoices to bypass the guard.
 
 ## Full rollback procedure
 

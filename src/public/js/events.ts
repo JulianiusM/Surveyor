@@ -26,7 +26,8 @@ import {loadPerms, requireEntityPerm, requireEntityPermsForForm} from './core/pe
 import {initEntityOverview} from "./modules/entity-cards-overview";
 import {initEntityHeader} from "./modules/entity-header";
 import {bindInvoiceSubmission} from './modules/invoice-submission';
-import {scheduleAlertDismissal, showInlineAlert} from './shared/alerts';
+import {initTakeoverOverviews} from './modules/invoice-takeovers';
+import {cancelAlertDismissal, showInlineAlert} from './shared/alerts';
 import {formatDuration, parseJsonScript, reloadAfterDelay, updateToLocalString} from './shared/ui-helpers';
 
 /**
@@ -338,13 +339,11 @@ export function serializePoolAssignments(form: HTMLFormElement): Record<string, 
     };
 }
 
-const poolFeedbackTimers = new WeakMap<HTMLElement, () => void>();
-
 function poolStatusElement(root: Element): HTMLElement {
     const existing = root.querySelector<HTMLElement>('.pool-form-status');
     if (existing) return existing;
     const container = document.createElement('div');
-    container.className = 'pool-form-status small mt-2';
+    container.className = 'pool-form-status mt-2';
     container.setAttribute('aria-live', 'polite');
     const parent = root.tagName === 'TR' ? root.lastElementChild || root : root;
     parent.appendChild(container);
@@ -353,21 +352,22 @@ function poolStatusElement(root: Element): HTMLElement {
 
 function showPoolFeedback(root: Element, status: 'success' | 'info' | 'error', message: string): void {
     const container = poolStatusElement(root);
-    poolFeedbackTimers.get(container)?.();
-    container.classList.remove('text-success', 'text-info', 'text-danger');
-    container.classList.add(status === 'error' ? 'text-danger' : status === 'success' ? 'text-success' : 'text-info');
-    container.setAttribute('role', 'alert');
-    container.textContent = message;
-    poolFeedbackTimers.set(container, scheduleAlertDismissal(container, () => {
-        container.replaceChildren();
-        container.removeAttribute('role');
-    }));
+    clearPoolStatus(container);
+    // Dialog feedback stays within its focus trap. Page actions use the app's shared alert region.
+    showInlineAlert(status, message, root.closest('.modal') || !document.getElementById('liveAlerts') ? container : undefined);
+}
+
+function clearPoolStatus(container: HTMLElement): void {
+    cancelAlertDismissal(container);
+    container.querySelectorAll<HTMLElement>('.alert').forEach(cancelAlertDismissal);
+    container.replaceChildren();
+    container.classList.remove('text-success', 'text-info', 'text-danger', 'alert', 'alert-danger');
+    container.removeAttribute('role');
 }
 
 function showPoolProgress(root: Element, message: string): void {
     const container = poolStatusElement(root);
-    poolFeedbackTimers.get(container)?.();
-    container.classList.remove('text-success', 'text-danger');
+    clearPoolStatus(container);
     container.classList.add('text-info');
     container.setAttribute('role', 'status');
     const spinner = document.createElement('span');
@@ -376,9 +376,62 @@ function showPoolProgress(root: Element, message: string): void {
     container.replaceChildren(spinner, document.createTextNode(message));
 }
 
+function showUncertainPoolExpense(root: Element, poolId?: string): void {
+    const container = poolStatusElement(root);
+    clearPoolStatus(container);
+    container.classList.add('alert', 'alert-danger');
+    container.setAttribute('role', 'status');
+    const explanation = document.createElement('p');
+    explanation.textContent = 'We could not confirm whether this expense was saved. It may already be in the pool. Check saved invoices before adding it again.';
+    const reload = document.createElement('button');
+    reload.type = 'button';
+    reload.className = 'btn btn-outline-light btn-sm';
+    reload.textContent = 'Reload and check saved invoices';
+    reload.addEventListener('click', () => {
+        reload.disabled = true;
+        const spinner = document.createElement('span');
+        spinner.className = 'spinner-border spinner-border-sm me-2';
+        spinner.setAttribute('aria-hidden', 'true');
+        reload.replaceChildren(spinner, document.createTextNode('Reloading…'));
+        rememberPool(poolId);
+        window.location.reload();
+    });
+    container.replaceChildren(explanation, reload);
+    container.tabIndex = -1;
+    container.focus();
+    container.scrollIntoView({block: 'nearest'});
+}
+
+class ConfirmedInvoiceRejection extends Error {}
+
+/** A create request is safe to correct only after a definite API rejection. */
+export async function postOrganizerExpense(url: string, payload: FormData): Promise<any> {
+    const response = await fetch(url, {
+        method: 'POST', credentials: 'same-origin',
+        headers: {'X-Requested-With': 'XMLHttpRequest'}, body: payload,
+    });
+    const result = await response.json();
+    if (response.status >= 400 && response.status < 500 && result?.status === 'error') {
+        throw new ConfirmedInvoiceRejection(typeof result.message === 'string' ? result.message : 'Check the expense fields and try again.');
+    }
+    if (!response.ok || result?.status !== 'success') {
+        throw new Error('The server did not confirm the expense.');
+    }
+    return result;
+}
+
 function rememberPool(poolId: string | undefined): void {
     if (!poolId) return;
     try { sessionStorage.setItem('surveyor:invoice-pool', `${getEventId()}:${poolId}`); } catch { /* Storage is optional. */ }
+}
+
+function restoreInvoiceFeedback(): void {
+    try {
+        const key = `surveyor:invoice-feedback:${getEventId()}`;
+        const message = sessionStorage.getItem(key);
+        sessionStorage.removeItem(key);
+        if (message) showInlineAlert('success', message);
+    } catch { /* Storage is optional. */ }
 }
 
 interface InvoiceAdminAction {
@@ -388,14 +441,17 @@ interface InvoiceAdminAction {
     success: string | ((response: any) => string);
     request: () => Promise<any>;
     permission?: string;
+    subject?: string;
     onSuccess?: (response: any) => void;
     reloadPool?: string;
     reload?: boolean;
+    lockOnUncertainFailure?: boolean;
 }
 
 /** Keep every financial action visibly pending until its response confirms completion. */
 export async function runInvoiceAdminAction(options: InvoiceAdminAction): Promise<boolean> {
     const {scope, trigger} = options;
+    const message = (text: string) => options.subject ? `${options.subject}: ${text}` : text;
     if (scope.dataset.saving === 'true') return false;
     scope.dataset.saving = 'true';
     scope.setAttribute('aria-busy', 'true');
@@ -414,30 +470,45 @@ export async function runInvoiceAdminAction(options: InvoiceAdminAction): Promis
         spinner.setAttribute('aria-hidden', 'true');
         trigger.replaceChildren(spinner, document.createTextNode('Working…'));
     }
-    showPoolProgress(scope, options.pending);
-    const slow = window.setTimeout(() => showPoolProgress(scope, 'Still working. The server has not confirmed this change yet. Keep this page open and do not repeat the action.'), 5000);
+    const switchProgress = trigger.tagName === 'INPUT' ? document.createElement('span') : null;
+    if (switchProgress) {
+        switchProgress.className = 'spinner-border spinner-border-sm ms-2';
+        switchProgress.setAttribute('role', 'status');
+        switchProgress.setAttribute('aria-label', options.pending);
+        trigger.parentElement?.appendChild(switchProgress);
+    }
+    showPoolProgress(scope, message(options.pending));
+    const slow = window.setTimeout(() => showPoolProgress(scope, message('Still working. The server has not confirmed this change yet. Keep this page open and do not repeat the action.')), 5000);
     let succeeded = false;
+    let requestStarted = false;
+    let uncertain = false;
     try {
         if (options.permission) requireManageAssignments(options.permission);
+        requestStarted = true;
         const response = await options.request();
         if (response?.status !== 'success') throw new Error('The server did not confirm this change. Reload the pool and check its saved state before repeating the action.');
         succeeded = true;
         options.onSuccess?.(response);
-        showPoolFeedback(scope, 'success', typeof options.success === 'function' ? options.success(response) : options.success);
+        const successMessage = message(typeof options.success === 'function' ? options.success(response) : options.success);
+        showPoolFeedback(scope, 'success', successMessage);
         if (options.reload) {
             rememberPool(options.reloadPool);
-            reloadAfterDelay(350);
+            try { sessionStorage.setItem(`surveyor:invoice-feedback:${getEventId()}`, successMessage); } catch { /* Alerts still appear without storage. */ }
+            reloadAfterDelay(1000);
         }
         return true;
     } catch (err) {
-        showPoolFeedback(scope, 'error', err instanceof Error ? err.message : 'Unable to complete this action.');
+        uncertain = !!options.lockOnUncertainFailure && requestStarted && !succeeded && !(err instanceof ConfirmedInvoiceRejection);
+        if (uncertain) showUncertainPoolExpense(scope, options.reloadPool);
+        else showPoolFeedback(scope, 'error', message(err instanceof Error ? err.message : 'Unable to complete this action.'));
         return false;
     } finally {
         window.clearTimeout(slow);
         modal?.removeEventListener('hide.bs.modal', keepPendingVisible);
         scope.removeAttribute('aria-busy');
+        switchProgress?.remove();
         if (originalChildren) trigger.replaceChildren(...originalChildren);
-        if (!succeeded || !options.reload) {
+        if (!uncertain && (!succeeded || !options.reload)) {
             delete scope.dataset.saving;
             previousControls.forEach(({control, disabled}) => control.disabled = disabled);
         }
@@ -523,6 +594,7 @@ export function initInvoiceAdmin(): void {
             });
             if (form.classList.contains('pool-assignment')) syncPoolParticipantFields(form);
             trackEdits();
+            showPoolFeedback(form, 'info', 'Unsaved edits discarded. The form now shows its saved values.');
         }));
     });
     try {
@@ -603,7 +675,24 @@ export function initInvoiceAdmin(): void {
 
     document.addEventListener('submit', async (e: Event) => {
         const form = e.target as HTMLFormElement;
-        if (form.classList.contains('pool-assignment')) {
+        if (form.classList.contains('pool-expense-form')) {
+            e.preventDefault();
+            if (form.dataset.saving === 'true') return;
+            const trigger = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+            if (!trigger) return;
+            const payload = new FormData(form);
+            payload.set('description', String(payload.get('description') || '').trim());
+            if (!payload.get('description')) {
+                showPoolFeedback(form, 'error', 'Enter a description for this expense.');
+                return;
+            }
+            const proof = payload.get('proof');
+            if (proof instanceof File && proof.size === 0) payload.delete('proof');
+            await runInvoiceAdminAction({scope: form, trigger, permission: 'add pool expenses', pending: 'Adding the pool expense…',
+                success: 'Expense added and accepted.' + (form.dataset.poolStatus === 'CLOSED' ? ' Recalculate the pool to update shares.' : ''),
+                request: () => postOrganizerExpense(form.dataset.api!, payload), reload: true, reloadPool: form.dataset.pool,
+                lockOnUncertainFailure: true});
+        } else if (form.classList.contains('pool-assignment')) {
             e.preventDefault();
             await savePoolForm(form, serializePoolAssignments(form), 'update pool assignments', 'Participants and factors saved.');
         } else if (form.classList.contains('surcharge-form')) {
@@ -680,9 +769,11 @@ export function initInvoiceAdmin(): void {
         // A browser click moves a switch immediately; keep the displayed state canonical until confirmed.
         input.checked = previous;
         const row = input.closest<HTMLElement>('[data-share-row]');
-        if (!row) return;
-        await runInvoiceAdminAction({scope: row, trigger: input, permission: 'mark shares paid', pending: 'Recording settlement…',
-            success: 'Settlement recorded against this calculated amount.',
+        const ledger = row?.closest<HTMLElement>('[data-share-ledger]');
+        if (!row || !ledger) return;
+        await runInvoiceAdminAction({scope: ledger, trigger: input, permission: 'mark shares paid', subject: row.dataset.shareName,
+            pending: 'Recording settlement…',
+            success: checked ? 'Marked as paid. Settlement recorded against this calculated amount.' : 'Marked as unpaid. This balance is outstanding again.',
             request: () => post(`/api/event/${getEventId()}/invoice-pools/${input.dataset.pool}/shares/${input.dataset.id}/pay`, {isPaid: checked ? 'on' : ''}),
             onSuccess: () => {
                 input.dataset.paid = String(checked);
@@ -800,10 +891,24 @@ export function initShareLedgers(): void {
         const size = ledger.querySelector<HTMLSelectElement>('[data-share-page-size]');
         const previous = ledger.querySelector<HTMLButtonElement>('[data-share-previous]');
         const next = ledger.querySelector<HTMLButtonElement>('[data-share-next]');
+        const refresh = ledger.querySelector<HTMLButtonElement>('[data-share-refresh]');
         const summary = ledger.querySelector<HTMLElement>('[data-share-page-summary]');
         const empty = ledger.querySelector<HTMLElement>('[data-share-empty]');
+        ledger.addEventListener('click', event => {
+            const button = (event.target as HTMLElement).closest<HTMLButtonElement>('.share-details-open');
+            if (!button) return;
+            const row = button.closest<HTMLElement>('[data-share-row]');
+            const template = row?.querySelector<HTMLTemplateElement>('template[data-share-details]');
+            const modal = document.querySelector<HTMLElement>(button.dataset.bsTarget || '');
+            if (!row || !template || !modal) return;
+            const name = modal.querySelector<HTMLElement>('[data-share-details-payer]');
+            if (name) name.textContent = row.dataset.shareName || 'Payer';
+            modal.querySelector<HTMLElement>('[data-share-details-content]')?.replaceChildren(template.content.cloneNode(true));
+        });
         let page = 1;
         const render = () => {
+            refresh?.classList.remove('btn-warning');
+            refresh?.classList.add('btn-outline-light');
             const query = search?.value.trim().toLowerCase() || '';
             const status = filter?.value || '';
             const pageSize = Math.max(1, Number(size?.value) || 25);
@@ -820,7 +925,7 @@ export function initShareLedgers(): void {
             const start = (page - 1) * pageSize;
             const visible = new Set(matching.slice(start, start + pageSize));
             rows.forEach(row => { row.hidden = !visible.has(row); });
-            // Reordering the existing rows preserves expanded details and payment controls.
+            // Keep the same payment controls when the user changes this view.
             matching.forEach(row => body?.append(row));
             if (summary) summary.textContent = `${matching.length ? start + 1 : 0}–${Math.min(start + pageSize, matching.length)} of ${matching.length} shares`;
             if (empty) empty.hidden = matching.length > 0;
@@ -832,20 +937,176 @@ export function initShareLedgers(): void {
         [filter, sort, size].forEach(control => control?.addEventListener('change', reset));
         previous?.addEventListener('click', () => { page--; render(); });
         next?.addEventListener('click', () => { page++; render(); });
-        ledger.addEventListener('share-state-updated', render);
+        refresh?.addEventListener('click', () => {
+            render();
+            showPoolFeedback(ledger, 'info', `List refreshed. ${summary?.textContent || 'The current filters and ordering have been applied.'}`);
+        });
+        ledger.addEventListener('share-state-updated', () => {
+            // Keep the current rows stationary while recording payments, even under a status filter.
+            // The badges update immediately after confirmation; filtering changes only on user navigation.
+            if (filter?.value) {
+                refresh?.classList.remove('btn-outline-light');
+                refresh?.classList.add('btn-warning');
+            }
+        });
         render();
     });
 }
 
-function initTakeoverOverviews(): void {
-    document.querySelectorAll<HTMLElement>('[data-takeover-overview]').forEach(overview => {
-        const search = overview.querySelector<HTMLInputElement>('[data-takeover-overview-search]');
-        search?.addEventListener('input', () => {
-            const query = search.value.trim().toLowerCase();
-            overview.querySelectorAll<HTMLElement>('[data-takeover-overview-row]').forEach(row => {
-                row.hidden = !!query && !(row.dataset.searchText || '').includes(query);
-            });
-        });
+type InvoiceChangeAction = 'revise' | 'reject-accepted';
+
+/** Capture only the reviewed invoice fields; the caller sends this after explicit confirmation. */
+export function invoiceChangePayload(action: InvoiceChangeAction, expectedRevision: number, fields: FormData): Record<string, unknown> {
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw new Error('Reload the page to get the current pool revision.');
+    const confirmation = {confirmed: true, expectedRevision};
+    if (action === 'reject-accepted') {
+        const rejectionReason = String(fields.get('rejectionReason') || '').trim();
+        if (!rejectionReason) throw new Error('Enter a rejection reason.');
+        return {...confirmation, rejectionReason};
+    }
+    const correctedAmount = Number(fields.get('correctedAmount'));
+    if (!Number.isFinite(correctedAmount) || correctedAmount <= 0 || correctedAmount > 99999999.99
+        || Math.abs(correctedAmount * 100 - Math.round(correctedAmount * 100)) > 0.00001) {
+        throw new Error('Enter a positive amount with no more than two decimal places.');
+    }
+    return {...confirmation, correctedAmount, correctedDescription: String(fields.get('correctedDescription') || '').trim() || null};
+}
+
+const invoiceDialogTransitions = new WeakSet<HTMLElement>();
+const invoiceDialogOpeners = new WeakMap<HTMLElement, HTMLElement>();
+
+function showInvoiceDialog(target: HTMLElement, previous?: HTMLElement | null, opener?: HTMLElement): void {
+    if (invoiceDialogTransitions.has(target) || (previous && invoiceDialogTransitions.has(previous))) return;
+    const modal = window.bootstrap?.Modal?.getOrCreateInstance(target);
+    if (!modal) return;
+    const originalOpener = opener || (previous && invoiceDialogOpeners.get(previous)) || invoiceDialogOpeners.get(target);
+    if (originalOpener) invoiceDialogOpeners.set(target, originalOpener);
+    invoiceDialogTransitions.add(target);
+    if (previous) invoiceDialogTransitions.add(previous);
+    target.addEventListener('shown.bs.modal', () => {
+        invoiceDialogTransitions.delete(target);
+        if (previous) invoiceDialogTransitions.delete(previous);
+    }, {once: true});
+    target.addEventListener('hidden.bs.modal', () => {
+        if (!invoiceDialogTransitions.has(target) && originalOpener?.isConnected) originalOpener.focus({preventScroll: true});
+    }, {once: true});
+    const show = () => modal.show();
+    if (previous && previous !== target && previous.classList.contains('show')) {
+        previous.addEventListener('hidden.bs.modal', show, {once: true});
+        window.bootstrap?.Modal?.getOrCreateInstance(previous)?.hide();
+    } else show();
+}
+
+function initInvoiceLifecycleDialogs(): void {
+    interface InvoiceTarget {poolId: string; invoiceId: string; revision: number; amount: string; description: string; originalDescription: string; closed: boolean;}
+    const forms = new WeakMap<HTMLFormElement, InvoiceTarget>();
+    let pending: {action: InvoiceChangeAction; invoice: InvoiceTarget; source: HTMLElement; payload: Record<string, unknown>} | undefined;
+    let retraction: InvoiceTarget | undefined;
+    const readTarget = (button: HTMLElement): InvoiceTarget => {
+        const revision = Number(button.dataset.revision);
+        if (!button.dataset.revision || !Number.isSafeInteger(revision) || revision < 0) throw new Error('Reload the page before changing this invoice.');
+        return {poolId: button.dataset.pool || '', invoiceId: button.dataset.id || '', revision,
+            amount: Number(button.dataset.amount).toFixed(2), description: button.dataset.description || '',
+            originalDescription: button.dataset.originalDescription || '', closed: button.dataset.poolStatus === 'CLOSED'};
+    };
+    const prepare = (modal: HTMLElement, invoice: InvoiceTarget) => {
+        const subject = modal.querySelector<HTMLElement>('[data-invoice-change-subject]');
+        if (subject) subject.textContent = `Invoice #${invoice.invoiceId} · ${invoice.amount}`;
+        const status = modal.querySelector<HTMLElement>('.pool-form-status');
+        if (status) {
+            clearPoolStatus(status);
+        }
+    };
+    document.addEventListener('click', async event => {
+        const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button');
+        if (!button) return;
+        try {
+            if (button.matches('.invoice-edit-open, .invoice-reject-open')) {
+                const invoice = readTarget(button);
+                const editing = button.classList.contains('invoice-edit-open');
+                const modal = document.getElementById(editing ? 'invoiceEditModal' : 'invoiceRejectModal');
+                const form = modal?.querySelector<HTMLFormElement>('form');
+                if (!modal || !form) return;
+                form.reset();
+                if (editing) {
+                    form.querySelector<HTMLInputElement>('[name="correctedAmount"]')!.value = invoice.amount;
+                    form.querySelector<HTMLTextAreaElement>('[name="correctedDescription"]')!.value = invoice.description;
+                }
+                forms.set(form, invoice);
+                prepare(modal, invoice);
+                showInvoiceDialog(modal, null, button);
+            } else if (button.classList.contains('invoice-confirm-back')) {
+                const confirm = document.getElementById('invoiceConfirmModal');
+                if (pending && confirm?.dataset.saving !== 'true') showInvoiceDialog(pending.source, confirm);
+            } else if (button.classList.contains('invoice-confirm-submit')) {
+                const modal = button.closest<HTMLElement>('.modal');
+                if (!modal || !pending) return;
+                const reviewed = pending;
+                await runInvoiceAdminAction({scope: modal, trigger: button, permission: 'change accepted invoices',
+                    subject: `Invoice #${reviewed.invoice.invoiceId}`,
+                    pending: reviewed.action === 'revise' ? 'Saving the confirmed correction…' : 'Saving the confirmed rejection…',
+                    success: (reviewed.action === 'revise' ? 'Invoice corrected.' : 'Invoice rejected from the pool.')
+                        + (reviewed.invoice.closed ? ' Recalculate the pool to update shares; existing payments are preserved.' : ''),
+                    request: () => post(`/api/event/${getEventId()}/invoice-pools/${reviewed.invoice.poolId}/invoices/${reviewed.invoice.invoiceId}/${reviewed.action}`, reviewed.payload),
+                    reload: true, reloadPool: reviewed.invoice.poolId});
+            } else if (button.classList.contains('invoice-retract-open')) {
+                const modal = document.getElementById('invoiceRetractModal');
+                if (!modal) return;
+                retraction = readTarget(button);
+                prepare(modal, retraction);
+                const description = modal.querySelector<HTMLElement>('[data-invoice-retract-description]');
+                if (description) description.textContent = retraction.description;
+                showInvoiceDialog(modal, null, button);
+            } else if (button.classList.contains('invoice-retract-confirm')) {
+                const modal = button.closest<HTMLElement>('.modal');
+                if (!modal || !retraction) return;
+                const invoice = retraction;
+                await runInvoiceAdminAction({scope: modal, trigger: button, subject: `Invoice #${invoice.invoiceId}`,
+                    pending: 'Retracting the invoice…', success: 'Invoice retracted. Its details and proof remain in your history.',
+                    request: () => post(`/api/event/${getEventId()}/invoice-pools/${invoice.poolId}/invoices/${invoice.invoiceId}/retract`, {confirmed: true, expectedRevision: invoice.revision}),
+                    onSuccess: () => window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#invoiceHistory`),
+                    reload: true, reloadPool: invoice.poolId});
+            }
+        } catch (error) {
+            showPoolFeedback(button.closest('.modal') || button.closest('[data-invoice-row]') || button.parentElement!, 'error', error instanceof Error ? error.message : 'Unable to change the invoice.');
+        }
+    });
+    document.addEventListener('submit', event => {
+        const form = event.target as HTMLFormElement;
+        if (!form.classList.contains('invoice-lifecycle-form')) return;
+        event.preventDefault();
+        const invoice = forms.get(form);
+        const source = form.closest<HTMLElement>('.modal');
+        const modal = document.getElementById('invoiceConfirmModal');
+        if (!invoice || !source || !modal) return;
+        if (invoiceDialogTransitions.has(source) || invoiceDialogTransitions.has(modal)) return;
+        try {
+            const action = form.dataset.action as InvoiceChangeAction;
+            const payload = invoiceChangePayload(action, invoice.revision, new FormData(form));
+            pending = {action, invoice, source, payload};
+            prepare(modal, invoice);
+            const review = modal.querySelector<HTMLElement>('[data-invoice-change-review]');
+            if (review) {
+                review.replaceChildren();
+                const entries = action === 'revise'
+                    ? [['New amount', Number(payload.correctedAmount).toFixed(2)], ['Description', String(payload.correctedDescription ?? invoice.originalDescription) || 'No description']]
+                    : [['Rejection reason', String(payload.rejectionReason)]];
+                for (const [label, value] of entries) {
+                    const line = document.createElement('p');
+                    const title = document.createElement('strong');
+                    title.textContent = `${label}: `;
+                    line.append(title, document.createTextNode(value));
+                    review.append(line);
+                }
+            }
+            const warning = modal.querySelector<HTMLElement>('[data-invoice-closed-warning]');
+            if (warning) warning.hidden = !invoice.closed;
+            const confirm = modal.querySelector<HTMLButtonElement>('.invoice-confirm-submit');
+            if (confirm) confirm.textContent = action === 'revise' ? 'Confirm correction' : 'Confirm rejection';
+            showInvoiceDialog(modal, source);
+        } catch (error) {
+            showPoolFeedback(form, 'error', error instanceof Error ? error.message : 'Check the invoice fields.');
+        }
     });
 }
 
@@ -1194,7 +1455,7 @@ function initTakeoverModal(): void {
         const title = modalEl.querySelector<HTMLElement>('[data-takeover-title]');
         if (title) title.textContent = `Manage takeovers${poolRoot.dataset.poolName ? ` · ${poolRoot.dataset.poolName}` : ''}`;
         const feedback = form.querySelector<HTMLElement>('.pool-form-status');
-        if (feedback) feedback.textContent = '';
+        if (feedback) clearPoolStatus(feedback);
         if (context) {
             context.hidden = false;
             context.textContent = poolClosed
@@ -1216,7 +1477,7 @@ function initTakeoverModal(): void {
         }
         if (searchInput) searchInput.value = '';
         renderBeneficiaries(activePayer());
-        window.bootstrap?.Modal?.getOrCreateInstance(modalEl)?.show();
+        showInvoiceDialog(modalEl, btn.closest<HTMLElement>('.modal'), btn);
     });
 
     form.addEventListener('submit', async (e: Event) => {
@@ -1278,10 +1539,12 @@ export function init(): void {
 
     initTakeoverModal();
     initInvoiceAdmin();
+    initInvoiceLifecycleDialogs();
     initInvoiceLedgers();
     initShareLedgers();
     initTakeoverOverviews();
     initInvoiceSubmission();
+    restoreInvoiceFeedback();
 
     if (getEventId()) {
         initRegistration();

@@ -553,7 +553,7 @@ describe('invoice pool factors, rebates, and recalculation', () => {
         const joined = (await AppDataSource.getRepository(EventInvoicePool).findOne({
             where: {id: poolId}, relationLoadStrategy: 'join',
             relations: {
-                event: true, assignments: {registration: true}, invoices: {registration: true}, shares: {registration: true},
+                event: true, assignments: {registration: true}, invoices: {registration: true, recordedByProfile: true}, shares: {registration: true},
                 surcharges: {registration: true}, takeovers: {payerRegistration: true, beneficiaryRegistration: true},
             },
         }))!;

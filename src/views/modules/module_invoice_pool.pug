@@ -62,10 +62,10 @@ mixin invoiceShareTable(pool, participants, admin = false, eventId = null)
                                 td(data-label="Status")
                                     span.badge(data-share-state class=shareStatus === 'settled' ? 'bg-success' : shareStatus === 'refund' ? 'bg-info text-dark' : 'bg-warning text-dark') #{shareStatus === 'settled' ? 'Settled' : shareStatus === 'refund' ? 'Refund' : 'Due'}
                                 td(data-label="Calculation details")
-                                    details.share-calculation-details
-                                        summary.text-info View breakdown
-                                        if covered && !pool.needsRecalculation
-                                            p.small.text-secondary.mt-2.mb-1 Covered participants: #{covered}
+                                    button.btn.btn-outline-light.btn-sm.share-details-open(type="button" data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-share-breakdown` aria-label=`View breakdown for ${payerName}`)
+                                        i.bi.bi-calculator.me-1(aria-hidden="true")
+                                        | View breakdown
+                                    template(data-share-details)
                                         dl.row.g-1.small.mt-2.mb-2
                                             dt.col-7 Base
                                             dd.col-5.text-end #{fmtMoney(share.baseShareAmount)}
@@ -77,6 +77,10 @@ mixin invoiceShareTable(pool, participants, admin = false, eventId = null)
                                             dd.col-5.text-end #{fmtMoney(share.paymentCreditAmount)}
                                             dt.col-7 Calculated balance
                                             dd.col-5.text-end #{fmtMoney(share.shareAmount)}
+                                        if covered && !pool.needsRecalculation
+                                            details.small.mb-2
+                                                summary.text-info Covered participants (#{coveredCount})
+                                                p.text-secondary.mt-2.mb-0= covered
                                         if notes.length
                                             ul.small.ps-3.mb-0
                                                 each note in notes
@@ -84,13 +88,19 @@ mixin invoiceShareTable(pool, participants, admin = false, eventId = null)
                                 td(data-label="Paid")
                                     .form-check.form-switch
                                         input.form-check-input.share-paid(type="checkbox" data-pool=pool.id data-id=share.id data-amount=share.shareAmount data-paid=isPaid ? 'true' : 'false' checked=isPaid disabled=!admin autocomplete="off" aria-label=`Mark ${payerName} paid`)
-                                    .pool-form-status.small.mt-1(role="status" aria-live="polite")
             p.text-secondary.small.mb-0.py-3.text-center(hidden data-share-empty) No shares match these filters.
             .d-flex.flex-wrap.justify-content-between.align-items-center.gap-2.mt-3
                 small.text-secondary(data-share-page-summary role="status" aria-live="polite")
+                button.btn.btn-outline-light.btn-sm(type="button" data-share-refresh) Refresh list
                 .btn-group.btn-group-sm(role="group" aria-label="Share pages")
                     button.btn.btn-outline-light(type="button" data-share-previous) Previous
                     button.btn.btn-outline-light(type="button" data-share-next) Next
+            .pool-form-status.small(role="status" aria-live="polite" aria-atomic="true" data-share-feedback)
+        +poolEditModal(pool, 'share-breakdown', 'Share breakdown')
+            h6(data-share-details-payer)
+            div(data-share-details-content)
+            .d-flex.justify-content-end.mt-3
+                button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Close
 
 //- Takeover summary with consistent layout and manage button
 mixin takeoverOverview(pool, participants, mode, options)
@@ -98,24 +108,8 @@ mixin takeoverOverview(pool, participants, mode, options)
     if showHeading
         h6.mb-2 Takeovers
         p.text-secondary.small.mb-2 Assign which participant covers another's share. Covered participants cannot take over other shares.
-    if pool.takeovers && pool.takeovers.length
-        details.participant-takeover-overview.w-100
-            summary.text-info View #{pool.takeovers.length} takeover#{pool.takeovers.length === 1 ? '' : 's'}
-            ul.list-group.list-group-flush.bg-dark.border.border-secondary-subtle.rounded-3.mt-2.participant-takeover-list
-                each t in pool.takeovers
-                    - const payerName = (participants || []).find(pt => pt.id === t.payerRegistrationId)?.name || `Participant #${t.payerRegistrationId}`
-                    - const coverName = (participants || []).find(pt => pt.id === t.beneficiaryRegistrationId)?.name || `Participant #${t.beneficiaryRegistrationId}`
-                    li.list-group-item.bg-dark.text-white.d-flex.justify-content-between.align-items-center.gap-2
-                        span #{payerName} → #{coverName}
-                        if mode === 'participant' && data && data.registration && t.payerRegistrationId === data.registration.id
-                            span.badge.bg-info.text-dark You cover this
-                        else if mode === 'participant' && data && data.registration && t.beneficiaryRegistrationId === data.registration.id
-                            span.badge.bg-warning.text-dark Your share is covered
-                        else
-                            span.badge.bg-secondary Covers
-    else
-        p.text-secondary.small.mb-2 No takeovers configured yet.
-    button.btn.btn-outline-light.btn-sm.manage-takeovers.align-self-end.mt-2(type="button" data-id=pool.id data-mode=mode)
+    +poolCoverageOverview(pool, participants, mode)
+    button.btn.btn-outline-light.btn-sm.manage-takeovers.align-self-end.mt-2(type="button" data-id=pool.id data-mode=mode disabled=mode === 'participant' && pool.status !== 'OPEN')
         i.bi.bi-person-check.me-1(aria-hidden="true")
         | Manage takeovers
 
@@ -143,7 +137,7 @@ mixin invoiceProofLink(inv, eventId, poolId)
             i.bi.bi-file-earmark-text.me-1(aria-hidden="true")
             | View proof
     else
-        span.text-secondary Proof expired
+        span.text-secondary #{inv.registrationId == null && !inv.proofOriginalName ? 'No proof attached' : 'Proof expired'}
 
 //- Human-readable status badge shared by administration and participant history.
 mixin invoiceStatusBadge(status)
@@ -153,6 +147,8 @@ mixin invoiceStatusBadge(status)
         span.badge.bg-success Accepted
     else if status === 'REJECTED'
         span.badge.bg-danger Rejected
+    else if status === 'RETRACTED'
+        span.badge.bg-secondary Retracted
     else
         span.badge.bg-secondary Closed
 
@@ -162,6 +158,7 @@ mixin invoiceLedgerToolbar(title, invoices)
     - const acceptedCount = invoices.filter(invoice => invoice.status === 'APPROVED').length
     - const rejectedCount = invoices.filter(invoice => invoice.status === 'REJECTED').length
     - const closedCount = invoices.filter(invoice => invoice.status === 'CLOSED').length
+    - const retractedCount = invoices.filter(invoice => invoice.status === 'RETRACTED').length
     .invoice-ledger-toolbar.d-flex.flex-wrap.align-items-center.justify-content-between.gap-2.mb-2
         .d-flex.flex-wrap.align-items-center.gap-2
             h6.mb-0= title
@@ -174,6 +171,8 @@ mixin invoiceLedgerToolbar(title, invoices)
                 span.badge.bg-danger #{rejectedCount} rejected
             if closedCount
                 span.badge.bg-secondary #{closedCount} closed
+            if retractedCount
+                span.badge.bg-secondary #{retractedCount} retracted
         .invoice-ledger-controls.d-flex.flex-wrap.gap-2
             input.form-control.form-control-sm.text-bg-dark.invoice-ledger-search(type="search" data-invoice-search-input placeholder="Search invoices" aria-label="Search invoices")
             select.form-select.form-select-sm.text-bg-dark(data-invoice-status-filter aria-label="Filter invoice status")
@@ -182,6 +181,7 @@ mixin invoiceLedgerToolbar(title, invoices)
                 option(value="APPROVED") Accepted
                 option(value="REJECTED") Rejected
                 option(value="CLOSED") Closed
+                option(value="RETRACTED") Retracted
             select.form-select.form-select-sm.text-bg-dark(data-invoice-page-size aria-label="Invoices per page")
                 option(value="25") 25 per page
                 option(value="50") 50 per page
@@ -209,7 +209,7 @@ mixin adminInvoiceOverview(pool, eventId, participants)
                     thead
                         tr
                             th Invoice
-                            th Participant
+                            th Participant / source
                             th Submitted details
                             th Organizer review
                             th Status
@@ -218,17 +218,20 @@ mixin adminInvoiceOverview(pool, eventId, participants)
                     tbody
                         each inv in invoices
                             - const participant = (participants || []).find(row => row.id === inv.registrationId)
-                            - const participantName = (participant && participant.name) || `Participant #${inv.registrationId}`
+                            - const isPoolExpense = inv.registrationId == null
+                            - const participantName = isPoolExpense ? (inv.recordedByName || inv.recordedByProfile?.name || 'Organizer') : (participant && participant.name) || `Participant #${inv.registrationId}`
                             - const participantEmail = (participant && participant.email) || ''
-                            - const searchText = `${inv.id} ${participantName} ${participantEmail} ${inv.amount} ${inv.description || ''} ${inv.correctedAmount || ''} ${inv.correctedDescription || ''} ${inv.rejectionReason || ''}`.toLowerCase()
+                            - const searchText = `${inv.id} ${isPoolExpense ? 'pool expense' : ''} ${participantName} ${participantEmail} ${inv.amount} ${inv.description || ''} ${inv.correctedAmount || ''} ${inv.correctedDescription || ''} ${inv.rejectionReason || ''}`.toLowerCase()
                             - const createdAt = inv.track && inv.track.createdAt
                             tr(data-invoice-row data-invoice-status=inv.status data-invoice-search=searchText)
                                 td(data-label="Invoice")
                                     strong ##{inv.id}
-                                    small.text-secondary.d-block= `Submitted ${fmtInvoiceDate(createdAt)}`
-                                td(data-label="Participant")
-                                    strong.d-block= participantName
-                                    if participantEmail && participantEmail !== '—'
+                                    small.text-secondary.d-block= `${isPoolExpense ? 'Recorded' : 'Submitted'} ${fmtInvoiceDate(createdAt)}`
+                                td(data-label="Participant / source")
+                                    strong.d-block= isPoolExpense ? 'Pool expense' : participantName
+                                    if isPoolExpense
+                                        small.text-secondary Recorded by #{participantName}
+                                    else if participantEmail && participantEmail !== '—'
                                         small.text-secondary= participantEmail
                                 td.invoice-cell-wide(data-label="Submitted details")
                                     strong.d-block #{fmtMoney(inv.amount)}
@@ -265,10 +268,17 @@ mixin adminInvoiceOverview(pool, eventId, participants)
                                             button.btn.btn-outline-danger.btn-sm.invoice-decline(type="button" data-pool=pool.id data-id=inv.id)
                                                 i.bi.bi-x-lg.me-1(aria-hidden="true")
                                                 | Reject
-                                        else if inv.status === 'APPROVED'
-                                            button.btn.btn-outline-light.btn-sm.invoice-close(type="button" data-pool=pool.id data-id=inv.id)
-                                                i.bi.bi-check2-circle.me-1(aria-hidden="true")
-                                                | Close
+                                        else if inv.status === 'APPROVED' || inv.status === 'CLOSED'
+                                            button.btn.btn-outline-light.btn-sm.invoice-edit-open(type="button" data-pool=pool.id data-id=inv.id data-revision=pool.calculationRevision data-amount=(inv.correctedAmount != null ? inv.correctedAmount : inv.amount) data-description=(inv.correctedDescription != null ? inv.correctedDescription : (inv.description || '')) data-original-description=inv.description data-pool-status=pool.status)
+                                                i.bi.bi-pencil.me-1(aria-hidden="true")
+                                                | Correct
+                                            button.btn.btn-outline-danger.btn-sm.invoice-reject-open(type="button" data-pool=pool.id data-id=inv.id data-revision=pool.calculationRevision data-amount=(inv.correctedAmount != null ? inv.correctedAmount : inv.amount) data-description=(inv.correctedDescription != null ? inv.correctedDescription : (inv.description || '')) data-pool-status=pool.status)
+                                                i.bi.bi-x-circle.me-1(aria-hidden="true")
+                                                | Reject from pool
+                                            if inv.status === 'APPROVED'
+                                                button.btn.btn-outline-light.btn-sm.invoice-close(type="button" data-pool=pool.id data-id=inv.id)
+                                                    i.bi.bi-check2-circle.me-1(aria-hidden="true")
+                                                    | Close
                                         else
                                             span.text-secondary.small No actions
             .invoice-ledger-empty.text-secondary.small.py-3.text-center(hidden data-invoice-empty) No invoices match these filters.
@@ -295,7 +305,8 @@ mixin participantInvoiceOverview(invoices, pools, eventId)
                             th Actions
                     tbody
                         each inv in orderedInvoices
-                            - const poolName = pools.find(pool => pool.id === inv.poolId)?.name || 'Archived pool'
+                            - const historyPool = pools.find(pool => pool.id === inv.poolId) || inv.pool
+                            - const poolName = historyPool?.name || 'Archived pool'
                             - const searchText = `${inv.id} ${poolName} ${inv.amount} ${inv.description || ''} ${inv.correctedAmount || ''} ${inv.correctedDescription || ''} ${inv.rejectionReason || ''}`.toLowerCase()
                             - const createdAt = inv.track && inv.track.createdAt
                             tr(data-invoice-row data-invoice-status=inv.status data-invoice-search=searchText)
@@ -320,7 +331,11 @@ mixin participantInvoiceOverview(invoices, pools, eventId)
                                 td(data-label="Proof")
                                     +invoiceProofLink(inv, eventId, inv.poolId)
                                 td.invoice-cell-actions(data-label="Actions")
-                                    if inv.status === 'APPROVED'
+                                    if inv.status === 'NEW'
+                                        button.btn.btn-outline-danger.btn-sm.invoice-retract-open(type="button" data-pool=inv.poolId data-id=inv.id data-revision=(historyPool && historyPool.calculationRevision) data-amount=inv.amount data-description=inv.description)
+                                            i.bi.bi-arrow-counterclockwise.me-1(aria-hidden="true")
+                                            | Retract
+                                    else if inv.status === 'APPROVED'
                                         button.btn.btn-sm.btn-outline-success.invoice-close-self(type="button" data-pool=inv.poolId data-id=inv.id)
                                             i.bi.bi-check2-circle.me-1(aria-hidden="true")
                                             | Close
@@ -344,7 +359,7 @@ mixin invoiceOverview(mode, options)
 //- Collapsible invoice submission area for both admins (on behalf) and participants
 mixin invoiceSubmission(eventId, pools, mode, invoices, allPools = [])
     - const hasPools = pools && pools.length;
-    - const overviewPools = hasPools ? pools : allPools;
+    - const overviewPools = [...new Map([...(allPools || []), ...(pools || [])].map(pool => [pool.id, pool])).values()];
     .accordion.accordion-dark.mb-3#invoiceSubmission
         .accordion-item.bg-dark.text-white.border-secondary-subtle
             h2.accordion-header
@@ -373,19 +388,21 @@ mixin invoiceSubmission(eventId, pools, mode, invoices, allPools = [])
                                         label.form-label(for="invoiceProof") Proof (image or PDF)
                                         input#invoiceProof.form-control.text-bg-dark(type="file" name="proof" accept="image/jpeg,image/png,image/gif,application/pdf" required)
                             .mt-3(data-invoice-feedback hidden)
-                                #invoiceSubmitStatus.status-notice.alert-info.mb-2(data-invoice-status role="status" aria-live="polite" aria-atomic="true" tabindex="-1")
-                                progress.w-100(data-invoice-progress max="100" aria-label="Invoice upload progress" hidden)
+                                #invoiceSubmitStatus.alert.alert-info.mb-2(data-invoice-status role="status" aria-live="polite" aria-atomic="true" tabindex="-1")
+                                .progress.mb-2(data-invoice-progress hidden role="progressbar" aria-label="Invoice upload progress" aria-valuemin="0" aria-valuemax="100")
+                                    .progress-bar.progress-bar-striped.progress-bar-animated(data-invoice-progress-bar style="width: 100%")
                                 button.btn.btn-outline-light.btn-sm(type="button" data-invoice-history hidden) View invoice history
                             .d-flex.justify-content-end.mt-2
                                 button.btn.btn-primary(type="submit" aria-describedby="invoiceSubmitStatus")
                                     i.bi.bi-cloud-upload.me-1(aria-hidden="true")
                                     | Submit invoice
                     else
-                        .status-notice.alert-info
+                        .alert.alert-info(role="status")
                             i.bi.bi-info-circle.me-2(aria-hidden="true")
                             | No open pools for submissions right now.
                     #invoiceHistory
                         +invoiceOverview('participant', {invoices: invoices || [], pools: overviewPools, eventId: eventId})
+    +invoiceRetractionDialog
 
 //- Participant-friendly snapshot of what they owe in closed pools
 mixin participantShareSummary(registrationId, pools)
@@ -617,33 +634,77 @@ mixin poolEditModal(pool, suffix, title)
                     block
 
 //- Group coverage by payer so the relationship is clear before editing.
-mixin poolTakeoverSummary(pool, participants)
-    - const payerIds = [...new Set((pool.takeovers || []).map(t => t.payerRegistrationId))]
-    details.border.border-secondary-subtle.rounded-3.p-3.mt-3.pool-takeover-summary(data-takeover-overview)
-        summary
-            strong Takeovers
-            span.text-secondary.small.ms-2 #{payerIds.length} covering payer#{payerIds.length === 1 ? '' : 's'} · #{(pool.takeovers || []).length} covered participants
-        if payerIds.length
-            input.form-control.form-control-sm.text-bg-dark.mt-3.mb-2(type="search" placeholder="Find a payer or covered participant" aria-label="Search takeovers" data-takeover-overview-search)
-            .pool-takeover-rows
-                each payerId in payerIds
-                    - const payerName = participants.find(p => p.id === payerId)?.name || `Participant #${payerId}`
-                    - const beneficiaries = (pool.takeovers || []).filter(t => t.payerRegistrationId === payerId)
-                    - const names = beneficiaries.map(t => participants.find(p => p.id === t.beneficiaryRegistrationId)?.name || `Participant #${t.beneficiaryRegistrationId}`)
-                    .pool-takeover-row.py-2(data-takeover-overview-row data-search-text=`${payerName} ${names.join(' ')}`.toLowerCase())
-                        div
-                            small.text-secondary.d-block Payer
-                            strong #{payerName}
-                        details
-                            summary.text-info Covers #{beneficiaries.length} participant#{beneficiaries.length === 1 ? '' : 's'}
-                            ul.small.ps-3.mb-0.mt-2
-                                each name in names
-                                    li #{name}
-                        button.btn.btn-outline-light.btn-sm.manage-takeovers(type="button" data-id=pool.id data-payer=payerId data-mode="admin" aria-label=`Edit takeovers for ${payerName}`) Edit
+mixin poolCoverageOverview(pool, participants, mode)
+    -
+        const participantNames = new Map((participants || []).map(p => [p.id, p.name]));
+        const coverageByPayer = new Map();
+        for (const takeover of pool.takeovers || []) {
+            const id = takeover.payerRegistrationId;
+            if (!coverageByPayer.has(id)) coverageByPayer.set(id, {id, name: participantNames.get(id) || `Participant #${id}`, beneficiaries: []});
+            coverageByPayer.get(id).beneficiaries.push({id: takeover.beneficiaryRegistrationId, name: participantNames.get(takeover.beneficiaryRegistrationId) || `Participant #${takeover.beneficiaryRegistrationId}`});
+        }
+        const coverageGroups = [...coverageByPayer.values()].sort((a, b) => a.name.localeCompare(b.name));
+        coverageGroups.forEach(group => group.beneficiaries.sort((a, b) => a.name.localeCompare(b.name)));
+        const currentRegistrationId = mode === 'participant' && data && data.registration ? data.registration.id : null;
+    - const coverageId = `pool-${pool.id}-coverage-${mode}`
+    .pool-takeover-summary.w-100(data-takeover-overview)
+        if coverageGroups.length
+            .d-flex.align-items-center.flex-wrap.justify-content-between.gap-2.mb-2
+                small.text-secondary #{coverageGroups.length} covering payer#{coverageGroups.length === 1 ? '' : 's'} · #{(pool.takeovers || []).length} covered participants
+            .takeover-overview-controls.d-flex.flex-wrap.gap-2.mb-2
+                input.form-control.form-control-sm.text-bg-dark(id=`${coverageId}-search` type="search" data-takeover-overview-search placeholder="Find a payer or covered participant" aria-label="Search takeovers")
+                select.form-select.form-select-sm.text-bg-dark(data-takeover-page-size aria-label="Takeover payers per page")
+                    option(value="10") 10 per page
+                    option(value="25") 25 per page
+                    option(value="50") 50 per page
+            .table-responsive.pool-takeover-table
+                table.table.table-dark.table-striped.table-bordered.align-middle.mb-0
+                    caption.visually-hidden Payers and the participants whose shares they cover
+                    thead
+                        tr
+                            th(scope="col") Payer
+                            th(scope="col") Covered participants
+                            if mode === 'admin'
+                                th(scope="col") Actions
+                    tbody
+                        each group in coverageGroups
+                            - const beneficiaryListId = `${coverageId}-payer-${group.id}`
+                            tr(data-takeover-overview-row data-payer-name=group.name data-search-text=`${group.name} ${group.beneficiaries.map(p => p.name).join(' ')}`.toLowerCase())
+                                th.fw-normal(scope="row" data-label="Payer")
+                                    strong= group.name
+                                    if currentRegistrationId === group.id
+                                        span.badge.bg-info.text-dark.ms-2 You
+                                    small.text-secondary.d-block.mt-1 Covers #{group.beneficiaries.length} participant#{group.beneficiaries.length === 1 ? '' : 's'}
+                                td(data-label="Covered participants")
+                                    .takeover-beneficiary-chips.d-flex.flex-wrap.align-content-start.gap-1(id=beneficiaryListId data-takeover-beneficiaries tabindex="0" role="group" aria-label=`Participants covered by ${group.name}`)
+                                        each beneficiary in group.beneficiaries
+                                            span.badge.coverage-name-chip(data-takeover-beneficiary data-beneficiary-name=beneficiary.name class=currentRegistrationId === beneficiary.id ? 'bg-info text-dark' : 'bg-secondary')
+                                                | #{beneficiary.name}
+                                                if currentRegistrationId === beneficiary.id
+                                                    |  (You)
+                                    .d-flex.flex-wrap.align-items-center.gap-2.mt-2(data-takeover-beneficiary-controls hidden)
+                                        small.text-secondary(data-takeover-beneficiary-summary role="status" aria-live="polite")
+                                        button.btn.btn-outline-light.btn-sm(type="button" data-takeover-expand aria-expanded="false" aria-controls=beneficiaryListId hidden) Show all #{group.beneficiaries.length}
+                                if mode === 'admin'
+                                    td(data-label="Actions")
+                                        button.btn.btn-outline-light.btn-sm.manage-takeovers(type="button" data-id=pool.id data-payer=group.id data-mode="admin" aria-label=`Edit takeovers for ${group.name}`)
+                                            i.bi.bi-pencil.me-1(aria-hidden="true")
+                                            | Edit
+            p.text-secondary.small.py-3.mb-0(hidden data-takeover-empty) No takeovers match this search.
+            .d-flex.flex-wrap.justify-content-between.align-items-center.gap-2.mt-2
+                small.text-secondary(data-takeover-page-summary role="status" aria-live="polite")
+                .btn-group.btn-group-sm(role="group" aria-label="Takeover pages")
+                    button.btn.btn-outline-light(type="button" data-takeover-previous) Previous
+                    button.btn.btn-outline-light(type="button" data-takeover-next) Next
         else
-            p.text-secondary.small.mt-2.mb-0 Each participant covers their own share. Use Manage takeovers to choose a payer who covers someone else.
+            p.text-secondary.small.mb-0 Each participant covers their own share. Use Manage takeovers to choose a payer who covers someone else.
         if pool.needsRecalculation
             p.text-warning.small.mt-2.mb-0 These saved takeovers apply after recalculation. Previous share notes retain the previous coverage.
+
+mixin poolTakeoverSummary(pool, participants)
+    .border.border-secondary-subtle.rounded-3.p-3.mt-3
+        h6.mb-2 Takeovers
+        +poolCoverageOverview(pool, participants, 'admin')
 
 mixin poolManagementSection(ev, pool, participants)
     - const assignedIds = pool.assignAll ? participants.map(p => p.id) : (pool.assignments || []).map(a => a.registrationId || a.registration?.id)
@@ -660,6 +721,9 @@ mixin poolManagementSection(ev, pool, participants)
                         strong Recalculation required.
                         |  Saved changes have not been applied to the shares. Preview the updated amounts before recalculating, or roll back the pool changes. Payments can still be recorded against the previous shares.
                 .d-flex.flex-wrap.gap-2.mb-3(role="group" aria-label=`Manage ${pool.name}`)
+                    button.btn.btn-primary.btn-sm(type="button" data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-expense`)
+                        i.bi.bi-plus-circle.me-1(aria-hidden="true")
+                        | Add invoice / amount
                     button.btn.btn-outline-light.btn-sm(type="button" data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-settings`) Pool settings
                     button.btn.btn-outline-light.btn-sm(type="button" data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-participants`) Participants & factors
                     button.btn.btn-outline-light.btn-sm(type="button" data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-adjustments`) Surcharges & rebates
@@ -687,6 +751,25 @@ mixin poolManagementSection(ev, pool, participants)
                             small.text-secondary Rollback becomes available after this pool's next successful calculation.
 
 mixin poolManagementModals(ev, pool, participants)
+    +poolEditModal(pool, 'expense', 'Add invoice / amount')
+        form.pool-expense-form(data-api=`/api/event/${ev.id}/invoice-pools/${pool.id}/invoices/organizer` data-pool=pool.id data-pool-status=pool.status enctype="multipart/form-data")
+            p.small Add a shared pool expense without registering for the event. It is accepted immediately and included in the pool costs. It does not reimburse a participant, even if you attend the event.
+            if pool.status === 'CLOSED'
+                p.text-warning.small This adds a saved cost. Existing shares stay unchanged until you recalculate the pool.
+            .mb-3
+                label.form-label(for=`pool-${pool.id}-expense-amount`) Amount
+                input.form-control.text-bg-dark(id=`pool-${pool.id}-expense-amount` type="number" name="amount" min="0.01" max="99999999.99" step="0.01" required inputmode="decimal")
+            .mb-3
+                label.form-label(for=`pool-${pool.id}-expense-description`) Description
+                textarea.form-control.text-bg-dark(id=`pool-${pool.id}-expense-description` name="description" rows="3" maxlength="4000" required)
+            .mb-3
+                label.form-label(for=`pool-${pool.id}-expense-proof`) Proof (optional)
+                input.form-control.text-bg-dark(id=`pool-${pool.id}-expense-proof` type="file" name="proof" accept="image/jpeg,image/png,image/gif,application/pdf" aria-describedby=`pool-${pool.id}-expense-proof-help`)
+                small.text-secondary(id=`pool-${pool.id}-expense-proof-help`) Attach an image or PDF receipt, or leave this empty to record an amount only.
+            .pool-form-status.mt-3(role="status" aria-live="polite")
+            .d-flex.justify-content-end.flex-wrap.gap-2.mt-3
+                button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Cancel
+                button.btn.btn-primary(type="submit") Add expense
     +poolEditModal(pool, 'settings', 'Pool settings')
         +poolBaseSettingsForm(ev, pool)
     +poolEditModal(pool, 'participants', 'Participants & factors')
@@ -695,6 +778,7 @@ mixin poolManagementModals(ev, pool, participants)
         +poolAdjustmentSection(ev, pool, participants)
     +poolEditModal(pool, 'calculation', 'Calculation preview')
         .pool-unsaved-warning.status-notice.alert-warning(hidden role="status") Save or discard your pending edits in the settings, participant, or adjustment dialog before previewing.
+        .pool-form-status(role="status" aria-live="polite" tabindex="-1")
         p.small Review the saved allocation settings and every payer's result below. This preview does not change shares or send emails.
         if pool.status === 'CLOSED'
             p.text-info.small Recorded payments and refunds are carried forward. Someone who has already paid may owe only the difference or be due a refund.
@@ -749,18 +833,19 @@ mixin poolManagementModals(ev, pool, participants)
             p.text-secondary.small.mt-2.mb-1 Shared invoice costs minus redistributed adjustments gives the base to distribute. Rounded base plus participant adjustments gives allocated costs. Invoice reimbursements are accepted personal invoices deducted from those costs; they are not extra charges.
             p.text-secondary.small.mb-1 Previously settled payments are then deducted from the net calculated shares. A positive net remaining balance is money to collect; a negative balance is money to pay out.
             p.text-secondary.small.mb-0(data-preview-rounding-note) Each base share is rounded up or down to cents according to Pool settings. This can leave a small surplus or shortfall; equal unrounded base shares receive the same rounded amount.
-        .table-responsive.pool-preview-table.mb-3(hidden data-pool-preview-table)
-            table.table.table-dark.table-sm.align-middle.mb-0
-                caption.visually-hidden Preview of the next calculation, including previous settlement
-                thead
-                    tr
-                        th(scope="col") Payer
-                        th(scope="col") Base
-                        th(scope="col") Adjustments
-                        th(scope="col") Invoice credit
-                        th(scope="col") Previously settled
-                        th(scope="col") Remaining due / refund
-                tbody(data-pool-preview-rows)
+        .pool-preview-frame.mb-3(hidden data-pool-preview-table)
+            .table-responsive.pool-preview-table
+                table.table.table-dark.table-sm.align-middle.mb-0
+                    caption.visually-hidden Preview of the next calculation, including previous settlement
+                    thead
+                        tr
+                            th(scope="col") Payer
+                            th(scope="col") Base
+                            th(scope="col") Adjustments
+                            th(scope="col") Invoice credit
+                            th(scope="col") Previously settled
+                            th(scope="col") Remaining due / refund
+                    tbody(data-pool-preview-rows)
         p.text-secondary.small Positive settlement credits are payments already received; negative credits are refunds already paid out. The remaining amount is what is still owed after those credits.
         .form-check.form-switch.mt-3
             input.form-check-input(type="checkbox" name="sendEmails" id=`pool-${pool.id}-calculation-emails` checked=pool.sendCalculationEmails == null || !!pool.sendCalculationEmails)
@@ -768,7 +853,6 @@ mixin poolManagementModals(ev, pool, participants)
         p.text-secondary.small.mt-2 This choice applies to this calculation. Change the default in Pool settings. You can also send settlement emails later.
         if pool.status === 'OPEN'
             p.text-secondary.small Confirming closes this pool to new invoice submissions.
-        .pool-form-status(role="status" aria-live="polite" tabindex="-1")
         .d-flex.justify-content-end.flex-wrap.gap-2.mt-3
             button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Cancel
             button.btn.btn-outline-light.pool-preview-refresh(type="button" data-id=pool.id) Refresh preview
@@ -905,6 +989,66 @@ mixin invoiceManagementTabs(ev, data)
         .card-body
             +invoicePoolManageTab(ev, data.invoicePools, data.participants || [])
     +invoicePoolCreateModal(ev, data.participants || [])
+    +invoiceOrganizerActionDialogs
+
+mixin invoiceActionDialog(id, title)
+    .modal.fade.pool-edit-modal(id=id tabindex="-1" aria-labelledby=`${id}-title` aria-hidden="true")
+        .modal-dialog.modal-lg.modal-dialog-scrollable.modal-fullscreen-sm-down
+            .modal-content.bg-dark.text-white
+                .modal-header
+                    h5.modal-title(id=`${id}-title`)= title
+                    button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
+                block
+
+mixin invoiceOrganizerActionDialogs
+    +invoiceActionDialog('invoiceEditModal', 'Correct invoice')
+        form.pool-modal-form.invoice-lifecycle-form(data-action="revise")
+            .modal-body
+                p.fw-semibold(data-invoice-change-subject)
+                p.small.text-secondary Correct the effective amount or description. The original invoice and proof remain in the history.
+                .mb-3
+                    label.form-label(for="invoiceEditAmount") Amount
+                    input#invoiceEditAmount.form-control.text-bg-dark(type="number" name="correctedAmount" min="0.01" max="99999999.99" step="0.01" required)
+                .mb-3
+                    label.form-label(for="invoiceEditDescription") Description
+                    textarea#invoiceEditDescription.form-control.text-bg-dark(name="correctedDescription" rows="3" maxlength="4000")
+                    small.text-secondary Leave this empty to restore the original description.
+                .pool-form-status(role="status" aria-live="polite")
+            .modal-footer
+                button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Cancel
+                button.btn.btn-primary(type="submit") Continue
+    +invoiceActionDialog('invoiceRejectModal', 'Reject invoice from pool')
+        form.pool-modal-form.invoice-lifecycle-form(data-action="reject-accepted")
+            .modal-body
+                p.fw-semibold(data-invoice-change-subject)
+                p.small.text-secondary Rejecting removes this accepted cost from the pool total. Its original details and proof remain in the history.
+                label.form-label(for="invoiceRejectReason") Rejection reason
+                textarea#invoiceRejectReason.form-control.text-bg-dark(name="rejectionReason" rows="3" maxlength="4000" required)
+                .pool-form-status.mt-3(role="status" aria-live="polite")
+            .modal-footer
+                button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Cancel
+                button.btn.btn-danger(type="submit") Continue
+    +invoiceActionDialog('invoiceConfirmModal', 'Confirm invoice change')
+        .modal-body
+            p.fw-semibold(data-invoice-change-subject)
+            div(data-invoice-change-review)
+            p.text-warning.small(data-invoice-closed-warning hidden) Existing shares and payments stay unchanged. Recalculate this closed pool to apply the change to shares.
+            p.small.text-secondary The change is saved only after you confirm below. Original details and proof are preserved.
+            .pool-form-status(role="status" aria-live="polite")
+        .modal-footer
+            button.btn.btn-secondary.invoice-confirm-back(type="button") Back to edit
+            button.btn.btn-warning.invoice-confirm-submit(type="button") Confirm change
+
+mixin invoiceRetractionDialog
+    +invoiceActionDialog('invoiceRetractModal', 'Retract invoice')
+        .modal-body
+            p.fw-semibold(data-invoice-change-subject)
+            p(data-invoice-retract-description)
+            p This invoice will be marked Retracted and will no longer await review. Its details and proof remain in your history.
+            .pool-form-status(role="status" aria-live="polite")
+        .modal-footer
+            button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Cancel
+            button.btn.btn-danger.invoice-retract-confirm(type="button") Confirm retraction
 
 //- Shared takeover modal for admins/participants with a search field
 mixin takeoverModal(id)

@@ -33,6 +33,7 @@ import {EventInvoiceSurcharge} from "../entities/event/EventInvoiceSurcharge";
 import {EventPoolAssignment} from "../entities/event/EventPoolAssignment";
 import {EventPoolTakeover} from "../entities/event/EventPoolTakeover";
 import {EventRegistration} from "../entities/event/EventRegistration";
+import {Profile} from "../entities/user/Profile";
 
 // Separate relation queries avoid multiplying all child collections into one large join.
 // A repeatable-read transaction keeps the revision, settings, and saved shares in one snapshot.
@@ -43,7 +44,7 @@ async function loadPool(poolId: string) {
         relations: {
             event: true,
             assignments: {registration: true},
-            invoices: {registration: true},
+            invoices: {registration: true, recordedByProfile: true},
             shares: {registration: true},
             takeovers: {payerRegistration: true, beneficiaryRegistration: true},
             surcharges: {registration: true},
@@ -54,6 +55,16 @@ async function loadPool(poolId: string) {
 export interface InvoiceCorrections {
     correctedAmount?: number | null;
     correctedDescription?: string | null;
+}
+
+export interface ConfirmedInvoiceChange {
+    confirmed: boolean;
+    expectedRevision: number;
+}
+
+export interface InvoiceRevision {
+    correctedAmount: number | null;
+    correctedDescription: string | null;
 }
 
 export interface InvoiceSharePayload {
@@ -80,6 +91,24 @@ function invoiceCents(amount: number): number {
         throw new APIError("Invoice amounts must be finite and within the supported range", {}, 400);
     }
     return cents;
+}
+
+function assertPositiveInvoiceAmount(amount: number): void {
+    const cents = invoiceCents(amount);
+    const centTolerance = Number.EPSILON * Math.max(1, Math.abs(amount * 100)) * 4;
+    if (cents <= 0 || amount > 99999999.99 || Math.abs(amount * 100 - cents) > centTolerance) {
+        throw new APIError("Enter a positive amount with at most two decimal places", {}, 400);
+    }
+}
+
+function assertConfirmedInvoiceChange(pool: EventInvoicePool, confirmation: ConfirmedInvoiceChange): void {
+    if (confirmation?.confirmed !== true) throw new APIError("Confirm this invoice change before continuing", {}, 400);
+    if (!Number.isSafeInteger(confirmation.expectedRevision) || confirmation.expectedRevision < 0) {
+        throw new APIError("A current pool revision is required", {}, 400);
+    }
+    if (pool.calculationRevision !== confirmation.expectedRevision) {
+        throw new APIError("The pool changed. Reload and review the invoice again before confirming.", {}, 409);
+    }
 }
 
 /** Project the remaining balance while keeping settled money with its actual payer. */
@@ -204,6 +233,8 @@ async function changePool<T>(poolId: string, change: (manager: EntityManager, po
     return AppDataSource.transaction("READ COMMITTED", async (manager) => {
         const pool = await lockPool(manager, poolId);
         const result = await change(manager, pool);
+        // A review that lost a race to approval or retraction did not change calculation inputs.
+        if (result === false) return result;
         await invalidatePool(manager, pool);
         await refreshPoolTotals(manager, poolId);
         return result;
@@ -282,7 +313,7 @@ export async function listPools(eventId: string) {
         relationLoadStrategy: "query",
         relations: {
             assignments: {registration: true},
-            invoices: {registration: true},
+            invoices: {registration: true, recordedByProfile: true},
             shares: {registration: true},
             takeovers: {payerRegistration: true, beneficiaryRegistration: true},
             surcharges: {registration: true},
@@ -496,6 +527,47 @@ export async function submitInvoice(
     });
 }
 
+/** Record an approved shared expense without inventing attendance or a personal reimbursement. */
+export async function addOrganizerInvoice(
+    poolId: string,
+    profileId: string,
+    amount: number,
+    description: string,
+    proof: {path: string; originalName: string; mimeType: string} | null = null,
+): Promise<number> {
+    if (typeof profileId !== "string" || !profileId.trim()) throw new APIError("Organizer profile not found", {}, 401);
+    assertPositiveInvoiceAmount(amount);
+    if (typeof description !== "string" || !description.trim() || description.trim().length > 4000) {
+        throw new APIError("Enter a description of up to 4000 characters", {}, 400);
+    }
+    return changePool(poolId, async (manager) => {
+        const profile = await manager.getRepository(Profile).findOne({
+            where: {id: profileId}, relations: {user: true, guest: true},
+        });
+        if (!profile) throw new APIError("Organizer profile not found", {}, 401);
+        const recordedByName = [profile.name, profile.user?.name, profile.user?.username, profile.guest?.username]
+            .map((name) => name?.replace(/\s+/g, " ").trim()).find(Boolean) || "Organizer";
+        const repo = manager.getRepository(EventInvoice);
+        const invoice = repo.create({
+            pool: {id: poolId} as EventInvoicePool,
+            registration: null,
+            recordedByProfile: profile,
+            recordedByName: recordedByName.slice(0, 50),
+            amount: formatAmount(amount),
+            description: description.trim(),
+            status: "APPROVED",
+            correctedAmount: null,
+            correctedDescription: null,
+            rejectionReason: null,
+            proofPath: proof?.path || null,
+            proofOriginalName: proof?.originalName || null,
+            proofMimeType: proof?.mimeType || null,
+        });
+        await repo.save(invoice);
+        return invoice.id;
+    });
+}
+
 export async function approveInvoice(poolId: string, invoiceId: number, corrections: InvoiceCorrections = {}) {
     return changePool(poolId, async (manager) => {
         const repo = manager.getRepository(EventInvoice);
@@ -541,6 +613,70 @@ export async function declineInvoice(poolId: string, invoiceId: number, rejectio
         invoice.correctedDescription = null;
         await repo.save(invoice);
         return true;
+    });
+}
+
+/** Revise counted costs while preserving the original submission and its current accepted/closed state. */
+export async function reviseInvoice(poolId: string, invoiceId: number, corrections: InvoiceRevision, confirmation: ConfirmedInvoiceChange): Promise<EventInvoice> {
+    if (corrections?.correctedAmount !== null) assertPositiveInvoiceAmount(corrections?.correctedAmount);
+    if (corrections?.correctedDescription !== null && (typeof corrections?.correctedDescription !== "string" || corrections.correctedDescription.trim().length > 4000)) {
+        throw new APIError("Enter a correction description of up to 4000 characters or null to restore the original", {}, 400);
+    }
+    return changePool(poolId, async (manager, pool) => {
+        assertConfirmedInvoiceChange(pool, confirmation);
+        const repo = manager.getRepository(EventInvoice);
+        const invoice = await repo.findOneBy({id: invoiceId, pool: {id: poolId}});
+        if (!invoice) throw new APIError("Invoice not found", {}, 404);
+        if (invoice.status !== "APPROVED" && invoice.status !== "CLOSED") {
+            throw new APIError("Only accepted or closed invoices can be corrected", {}, 409);
+        }
+        invoice.correctedAmount = corrections.correctedAmount === null ? null : formatAmount(corrections.correctedAmount);
+        invoice.correctedDescription = corrections.correctedDescription?.trim() || null;
+        await repo.save(invoice);
+        return invoice;
+    });
+}
+
+/** Remove a counted invoice from future calculations without deleting its history or recorded settlements. */
+export async function rejectAcceptedInvoice(poolId: string, invoiceId: number, reason: string, confirmation: ConfirmedInvoiceChange): Promise<EventInvoice> {
+    if (typeof reason !== "string" || !reason.trim() || reason.trim().length > 4000) {
+        throw new APIError("A rejection reason of up to 4000 characters is required", {}, 400);
+    }
+    return changePool(poolId, async (manager, pool) => {
+        assertConfirmedInvoiceChange(pool, confirmation);
+        const repo = manager.getRepository(EventInvoice);
+        const invoice = await repo.findOneBy({id: invoiceId, pool: {id: poolId}});
+        if (!invoice) throw new APIError("Invoice not found", {}, 404);
+        if (invoice.status !== "APPROVED" && invoice.status !== "CLOSED") {
+            throw new APIError("Only accepted or closed invoices can be removed from the calculation", {}, 409);
+        }
+        invoice.status = "REJECTED";
+        invoice.rejectionReason = reason.trim();
+        await repo.save(invoice);
+        return invoice;
+    });
+}
+
+/** Participants can withdraw only their own unreviewed invoice, even after pool closure. */
+export async function retractInvoice(poolId: string, invoiceId: number, profileId: string, confirmation: ConfirmedInvoiceChange): Promise<EventInvoice> {
+    if (!profileId) throw new APIError("Log in to retract your invoice", {}, 401);
+    return AppDataSource.transaction("READ COMMITTED", async (manager) => {
+        const pool = await lockPool(manager, poolId);
+        assertConfirmedInvoiceChange(pool, confirmation);
+        const repo = manager.getRepository(EventInvoice);
+        const invoice = await repo.findOneBy({id: invoiceId, pool: {id: poolId}});
+        if (!invoice) throw new APIError("Invoice not found", {}, 404);
+        const registration = invoice.registrationId == null ? null
+            : await manager.getRepository(EventRegistration).findOneBy({id: invoice.registrationId, event: {id: pool.eventId}, profile: {id: profileId}});
+        if (!registration) throw new APIError("You can only retract your own invoice", {}, 403);
+        if (invoice.status !== "NEW") throw new APIError("Only invoices awaiting review can be retracted", {}, 409);
+        invoice.status = "RETRACTED";
+        await repo.save(invoice);
+        // Unreviewed invoices were never included in shares; retain the existing recalculation state.
+        pool.calculationRevision++;
+        await manager.getRepository(EventInvoicePool).save(pool);
+        await refreshPoolTotals(manager, poolId);
+        return invoice;
     });
 }
 
@@ -851,7 +987,7 @@ export async function getApprovedInvoices(poolId: string) {
 export async function getInvoiceWithRegistration(poolId: string, invoiceId: number) {
     return AppDataSource.getRepository(EventInvoice).findOne({
         where: {id: invoiceId, pool: {id: poolId}},
-        relations: {registration: {profile: {user: true, guest: true}}},
+        relations: {registration: {profile: {user: true, guest: true}}, recordedByProfile: {user: true, guest: true}},
     });
 }
 

@@ -6,8 +6,8 @@ owner: developer-experience maintainers
 status: current
 last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: named recipient mailer contract, transient alert lifecycle, snapshot relation loading, post-commit invoice review notifications, saved share ledger and PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, signed adjustments, revision-checked previews, payment carry-forward, rollback snapshots, configurable settlement notifications, and upload feedback; non-blocking documentation policy and optional report/test routing; D12 clean-clone setup, current scripts, settings and schema bootstrap, generated files, observed repository patterns, route registration, test selection, CI branches, and troubleshooting; D14 focused in-app help validation workflow
-source-anchors: src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
+verification-scope: invoice correction and retraction lifecycles, refreshed submission history, and searchable payer rows with beneficiary chips; organizer-entered shared costs, repeat invoice submissions, visible payment feedback, and share breakdown dialogs; named recipient mailer contract, transient alert lifecycle, snapshot relation loading, post-commit invoice review notifications, saved share ledger and PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, signed adjustments, revision-checked previews, payment carry-forward, rollback snapshots, configurable settlement notifications, and upload feedback; non-blocking documentation policy and optional report/test routing; D12 clean-clone setup, current scripts, settings and schema bootstrap, generated files, observed repository patterns, route registration, test selection, CI branches, and troubleshooting; D14 focused in-app help validation workflow
+source-anchors: src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
 next-review: development-workflow-or-help-tooling-change
 -->
 
@@ -271,16 +271,33 @@ Never rely on production `synchronize`; it is disabled.
 up to four decimal places). Assignment membership and exemption are separate from the factor.
 New assignments start at `1`; updating existing assignments preserves factors omitted by a caller.
 
+`POST /api/event/:eventId/invoice-pools/:poolId/invoices/organizer` records a shared organizer expense. Require an
+authenticated profile, `MANAGE_ASSIGNMENTS`, and a pool belonging to the event; event registration is not required.
+Validate a positive amount with at most two decimal places and a nonblank description; proof is optional, with the
+existing image/PDF validation and size limit when provided. Persist the invoice as APPROVED with no registration,
+`recordedByProfile` and a `recordedByName` snapshot. Profile deletion sets the audit relation to null while keeping the
+name snapshot. Participant submissions keep their registration and required-proof contract.
+
+Organizer creation uses `postOrganizerExpense` and `lockOnUncertainFailure`: a confirmed API 4xx rejection permits
+correction, while network failures, server errors, or unconfirmed responses retain the form lock and a persistent
+**Reload and check saved invoices** recovery action. Do not automatically retry this non-idempotent cost creation.
+
+Organizer invoices contribute to accepted shared costs and never to personal invoice credit, even if the recorder
+also has an event registration. Adding one to a closed pool advances its revision and marks it stale without changing
+saved shares or payment markers. The matching `1789603200000-AddOrganizerInvoices.ts` migration adds organizer
+attribution; its down migration refuses to run while any invoice has no registration, preserving those financial rows.
+
 Use this calculation order:
 
-1. Sum effective amounts of Accepted and Closed invoices. Exclude Awaiting-review and Rejected invoices.
+1. Sum effective amounts of Accepted and Closed invoices. Exclude Awaiting-review, Rejected, and Retracted invoices.
 2. Subtract the signed sum of adjustments whose `subtractFromPool` is true to obtain the distributable amount.
 3. Multiply each non-exempt participant's equal/day/night weight by their factor, then normalize by the sum of
    effective weights. Round each resulting base to cents in the same direction: `roundUpShares=true` (default) uses
    mathematical ceiling; false uses floor. Equal effective weights produce identical bases. Use exact integer ratios
    for the cent boundary; do not distribute leftover cents by participant ID.
 4. Add all signed participant adjustments exactly once. Negative amounts are rebates. Factors do not scale adjustments.
-5. Deduct effective personal invoice amounts when enabled. Factors do not scale invoice credits.
+5. Deduct effective registration-attributed invoice amounts when enabled. Organizer expenses are excluded from personal
+   invoice credit. Factors do not scale invoice credits.
 6. Combine each beneficiary's calculated components into the covering payer without applying the payer's factor again.
 
 `invoiceAmount` is accepted invoice cost, `payableAmount` is the distributable remainder,
@@ -317,8 +334,10 @@ balances are settled automatically. The Paid switch applies to the current resid
 
 A successful calculation saves `calculationSnapshot`: pool-local settings, assignments/factors, adjustments, takeovers,
 and a fingerprint of external calculation inputs. `rollbackPoolChanges` restores those local inputs transactionally
-without touching shares/payment records or sending emails. Event registrations, attendance dates, and invoice reviews
-are not reverted. A fingerprint mismatch or missing registration leaves the pool stale after local rollback. Legacy
+without touching shares/payment records or sending emails. Event registrations, attendance dates, invoice reviews,
+and organizer expenses are not reverted. The external fingerprint includes accepted organizer costs with a null
+registration; adding one after calculation leaves the pool stale after local rollback. A fingerprint mismatch or
+missing registration leaves the pool stale after local rollback. Legacy
 pools without a snapshot cannot roll back until a successful calculation establishes one.
 
 `sendCalculationEmails` is the pool's stored default; close/recalculate accepts a `sendEmails` override. Notification-only
@@ -329,20 +348,57 @@ Invoice acceptance, rejection, and closure also confirm persistence before queui
 failures independently of the financial response. If a review loses a concurrent state transition, return 409 and do not
 send a notification implying that the losing review succeeded.
 
+Accepted and Closed invoices support `POST .../invoices/:invoiceId/revise` and `reject-accepted` for authenticated
+organizers with `MANAGE_ASSIGNMENTS`. Both require JSON `confirmed: true` and the current pool `expectedRevision`;
+an extra confirmation dialog displays the proposed change before committing. Revision accepts explicit
+`correctedAmount: number | null` and `correctedDescription: string | null`, with null restoring the original value.
+It preserves the Accepted/Closed status and original fields. Retroactive rejection requires `rejectionReason`, changes
+status to REJECTED, and retains existing corrections as well as original details, proof, and recorder attribution.
+Both invalidate a closed pool without changing saved shares or payments. These external invoice changes survive
+pool-local rollback and are included by the next calculation. The original submission and current correction fields
+are preserved; there is no separate chronological review-audit table.
+
+`POST .../invoices/:invoiceId/retract` uses the same confirmation/revision contract but requires ownership of the NEW
+invoice through the active profile's registration, with no administrator override. It works in either pool state,
+persists RETRACTED, and retains details/proof. Because NEW invoices were not counted, retraction advances the pool
+revision while preserving its current stale flag, shares, and payments. Named correction/rejection/retraction receipts
+are queued after commit. Apply `1789689600000-AddInvoiceRetraction.ts` to extend the stored enum; its down migration
+refuses while Retracted invoices exist instead of rewriting or deleting history.
+
 The participant upload binder in `src/public/js/modules/invoice-submission.ts` owns progress, busy state, and recovery.
-Successful persistence is acknowledged independently of SMTP delivery. An uncertain network outcome must send users
+Successful persistence is acknowledged independently of SMTP delivery, clears only amount/description/proof, preserves
+the selected pool in event-scoped session storage, and refreshes the page after a short success message. The
+`#invoiceHistory` hook reopens the invoice sections. Inputs stay locked until navigation so no new draft can be lost;
+the refreshed binder clears browser-restored invoice fields and restores the available pool selection. Each request
+captures its own `FormData` before controls are disabled; completed-request callbacks cannot trigger duplicate navigation.
+An uncertain network outcome must send users
 to invoice history before retrying; never automatically resend a proof upload. Keep validation failures distinguishable
 from failures where the server may have committed the invoice.
 
 `runInvoiceAdminAction` gives pool mutations immediate busy feedback, blocks repeat actions, and adds a status update
 after five seconds. Update ledger amounts and Paid state only from a successful server confirmation; use canonical
-saved payment data when restoring controls after navigation or a failed request. Transient outcomes expire after ten
-seconds, while the pending state remains visible.
+saved payment data when restoring controls after navigation or a failed request. Transient outcomes use the shared
+`showInlineAlert`: page actions target `#liveAlerts`, and dialogs target their local `.pool-form-status` within the
+modal's focus trap. Alerts are brought into view and expire after ten seconds. Confirmed outcomes survive an automatic
+reload through event-scoped session storage and are restored after invoice-history navigation. Pending states remain
+visible until completion. Paid switches show their own spinner; longer progress text goes below the ledger so inserting
+it cannot move the clicked row. **Refresh list** acknowledges every click, including unchanged results.
 
-The share ledger searches, filters, sorts, and pages the saved rows in the browser. The portrait A4 PDF export at
+The share ledger searches, filters, sorts, and pages the saved rows in the browser. Confirmed payments update row status
+without rerendering the current list, preventing another payment switch from moving under the pointer. **Refresh list**
+or a search/filter/sort/page change reapplies the controls; an active status filter highlights the refresh action after
+a payment update. A shared **Share breakdown** dialog
+shows each selected row's saved components and notes without expanding the table. The portrait A4 PDF export at
 `GET /event/:id/export/invoice-pools/:poolId/shares` requires `MANAGE_ASSIGNMENTS` and verifies that the pool belongs to
 the event. It exports the complete persisted share set, independent of browser filters, with current payment status,
 remaining amounts, and a stale-calculation notice when needed. Export must never recalculate or record payments.
+
+Takeover overviews use Bootstrap tables with one payer per row and beneficiary badges in the adjacent cell.
+`initTakeoverOverviews` in `src/public/js/modules/invoice-takeovers.ts` searches payer and beneficiary names and pages
+by payer. Each group initially shows six beneficiaries; **Show all** expands its badges within a bounded scroll area,
+and **Show fewer** collapses them. A beneficiary search reveals matching badges beyond the initial preview.
+Editing stays in **Manage takeovers**, opened directly for the selected payer by the row's **Edit** button.
+On small screens the same table cells stack with their labels, retaining the payer and beneficiary relationship.
 
 Protect calculation arithmetic with unit tests, persistence and recalculation with the invoice integration suite,
 and upload state transitions with frontend tests. Use a real browser for dialog wiring and the saved-edit workflow.

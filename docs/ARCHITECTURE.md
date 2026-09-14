@@ -6,8 +6,8 @@ owner: architecture maintainers
 status: current
 last-verified: 2026-09-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: central named mail delivery and alert lifecycle, consistent pool relation snapshots, post-commit notifications, and saved-share PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, preview/commit calculation projection, cumulative settled credits, rollback snapshots, and settlement notification boundaries; non-blocking documentation policy and optional report/test routing; D12 runtime, layer, authentication, authorization, persistence, frontend, background-job, build, release, and testing architecture plus D08 advanced activity requirement, allocation, job, review, and persistence boundaries; help integration remains assigned to D14; D14 fixed-source help search, contextual routing, Markdown validation, local visual assets, and release boundary
-source-anchors: src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoiceRetention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
+verification-scope: invoice correction and retraction lifecycles, refreshed submission history, and takeover overview dialogs; organizer-entered shared costs, repeat invoice submissions, visible payment feedback, and share breakdown dialogs; central named mail delivery and alert lifecycle, consistent pool relation snapshots, post-commit notifications, and saved-share PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, preview/commit calculation projection, cumulative settled credits, rollback snapshots, and settlement notification boundaries; non-blocking documentation policy and optional report/test routing; D12 runtime, layer, authentication, authorization, persistence, frontend, background-job, build, release, and testing architecture plus D08 advanced activity requirement, allocation, job, review, and persistence boundaries; help integration remains assigned to D14; D14 fixed-source help search, contextual routing, Markdown validation, local visual assets, and release boundary
+source-anchors: src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoiceRetention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
 next-review: architecture-or-help-delivery-change
 -->
 
@@ -220,6 +220,18 @@ Surveys primarily coordinate recurring monthly patterns represented by weekday p
 
 Events own date boundaries, capacity, registration/deadline policy, dietary data, participants, linked activity/packing/drivers resources, and invoice pools. Invoice pools coordinate accepted costs, participant factors, takeovers, signed adjustments, shares, and recorded settlements. Read-only previews share the calculation logic with transactional recalculation. Closed-pool edits mark the saved calculation stale while payment recording remains available; recalculation carries previous payments/payouts as credits against new balances. Revision checks protect previews against concurrent input or settlement changes. Calculation snapshots support rollback of pool-local inputs without rewriting payment records or external event/invoice data. Configurable calculation notifications and later settlement emails use saved payment states. Proof files live on the filesystem while records and review history live in MariaDB. See [Development Guide](DEVELOPMENT.md#invoice-pool-calculation-and-saved-changes) for the arithmetic and rollback contract.
 
+Participant invoices are attributed to registrations and require proof. Organizers with `MANAGE_ASSIGNMENTS` can also
+record immediately accepted shared costs without event registration; these invoices allow optional proof, have no
+registration attribution, and never create a personal reimbursement credit. Their recorder profile reference uses
+`SET NULL` on deletion while the recorded name snapshot remains. Adding one to a closed pool invalidates the calculation
+without changing its saved settlements. Organizer costs are external inputs to pool-local rollback and remain saved.
+
+Accepted and Closed invoices can be corrected or rejected by an organizer after an explicit, revision-checked
+confirmation. Original details and proof remain; corrections retain the existing accepted/closed status, while
+retroactive rejection excludes the cost from future calculations. These changes invalidate closed pools and preserve
+settlements until recalculation. Participants may retract only their own unreviewed invoice into the retained
+RETRACTED state. Retraction advances the revision but does not change the stale flag because the cost was never counted.
+
 Base-share rounding is a saved pool setting. Exact weighted cent ratios round every participant in the same direction
 before takeovers are combined. Preview reconciliation reports the rounding surplus or shortfall and separates invoice
 reimbursements and recorded settlements from gross costs.
@@ -263,6 +275,11 @@ The shared layout always loads `notifications.ts`, including pages with their ow
 observed centrally and expire ten seconds after insertion or renewal. Persistent warnings and active progress use
 status semantics and remain visible. Pool actions lock relevant controls during a request, report a delayed status
 after five seconds, and change the displayed saved state only after server confirmation.
+Payment feedback sits outside the filtered share rows; detailed saved share components open in a separate dialog.
+Takeover summaries use name badges and a button opening a searchable Bootstrap dialog for the complete coverage list.
+Confirmed participant submissions clear invoice-specific inputs and refresh the page to reopened history, retaining
+the available pool selection for the next upload. Inputs remain locked during the refresh; pending and uncertain
+uploads remain protected against duplicate submission.
 
 ### Browser TypeScript
 

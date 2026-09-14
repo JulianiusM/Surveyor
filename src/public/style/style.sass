@@ -172,47 +172,50 @@
 .pool-form-status:empty
   display: none
 
-.pool-takeover-row
-  display: grid
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto
-  gap: 1rem
-  align-items: center
-  overflow-wrap: anywhere
+.pool-takeover-summary
+  min-width: 0
 
-  &[hidden]
-    display: none
+  [hidden]
+    display: none !important
 
-  > *
-    min-width: 0
+.takeover-overview-controls
+  .form-control
+    flex: 1 1 16rem
+    width: auto
 
-  button
-    justify-self: end
+  .form-select
+    flex: 0 1 9rem
+    width: auto
 
-  + .pool-takeover-row
-    border-top: 1px solid rgba(255, 255, 255, .12)
+.pool-takeover-table
+  table
+    table-layout: fixed
 
-  .badge
-    white-space: normal
-    text-align: left
-
-.pool-takeover-rows, .participant-takeover-list
-  max-height: 20rem
-  overflow-y: auto
-  scrollbar-gutter: stable
-  overscroll-behavior: contain
-
-.participant-takeover-list
-  span:first-child
-    min-width: 0
+  th, td
     overflow-wrap: anywhere
 
-  .badge
-    white-space: normal
-    max-width: 8rem
-    flex-shrink: 0
+  thead th:first-child
+    width: 27%
 
-.pool-takeover-summary > summary
+  thead th:nth-child(3)
+    width: 6rem
+
+.takeover-beneficiary-chips
+  &[data-expanded="true"]
+    max-height: 14rem
+    overflow-y: auto
+    scrollbar-gutter: stable
+    overscroll-behavior: contain
+
+.coverage-name-chip
+  max-width: 100%
+  white-space: normal
+  text-align: left
   overflow-wrap: anywhere
+  line-height: 1.4
+
+[data-invoice-progress][hidden]
+  display: none
 
 .takeover-beneficiaries
   max-height: none
@@ -221,6 +224,25 @@
   .list-group-item > span
     min-width: 0
     overflow-wrap: anywhere
+
+.pool-preview-frame
+  position: relative
+  isolation: isolate
+  overflow: hidden
+  background: #212529
+  padding-top: 3px
+
+  // Cover the scrollport seam independently of the table's fractional-pixel sticky layer.
+  &::before
+    content: ""
+    position: absolute
+    top: 0
+    right: 0
+    left: 0
+    height: 7px
+    z-index: 3
+    background: #212529
+    pointer-events: none
 
 .pool-preview-table
   max-height: 28rem
@@ -275,6 +297,7 @@
 
   table
     min-width: 48rem
+    table-layout: fixed
     border-collapse: separate
     border-spacing: 0
 
@@ -286,6 +309,21 @@
   th
     background: #212529
 
+    &:first-child
+      width: 32%
+
+    &:nth-child(2)
+      width: 22%
+
+    &:nth-child(3)
+      width: 13%
+
+    &:nth-child(4)
+      width: 23%
+
+    &:last-child
+      width: 10%
+
   td
     max-width: 24rem
     overflow-wrap: anywhere
@@ -296,15 +334,8 @@
   tr[hidden]
     display: none
 
-.share-calculation-details
-  min-width: 12rem
-  max-width: 25rem
-
-  summary
-    white-space: nowrap
-
-  dd
-    margin-bottom: .25rem
+[data-share-details-content]
+  overflow-wrap: anywhere
 
 @media (max-width: 991.98px)
   .share-ledger-table
@@ -344,11 +375,13 @@
     .form-switch
       display: inline-block
 
-  .share-calculation-details
-    min-width: 0
-    max-width: none
-
 @media (max-width: 767.98px)
+  .pool-preview-frame
+    padding-top: 0
+
+  .pool-preview-frame::before
+    display: none
+
   .pool-preview-table
     max-height: none
     overflow: visible
@@ -390,11 +423,35 @@
       min-width: 0
 
 @media (max-width: 575.98px)
-  .pool-takeover-row
-    grid-template-columns: minmax(0, 1fr) auto
+  .pool-takeover-table
+    table, tbody
+      display: block
 
-    > :first-child
-      grid-column: 1 / -1
+    thead
+      display: none
+
+    tr
+      display: grid
+      grid-template-columns: minmax(0, 1fr)
+      border: var(--bs-border-width) solid var(--bs-table-border-color)
+
+      + tr
+        margin-top: .5rem
+
+    td, th
+      display: block
+      width: auto
+      border-width: 0 0 var(--bs-border-width)
+
+      &::before
+        display: block
+        content: attr(data-label)
+        color: #adb5bd
+        font-size: .75rem
+        margin-bottom: .25rem
+
+      &:last-child
+        border-bottom: 0
 
   .pool-participant-row
     grid-template-columns: minmax(0, 1fr) auto

@@ -16,10 +16,11 @@
 
 import {Column, Entity, JoinColumn, ManyToOne, RelationId,} from "typeorm";
 import {NumericBase} from "../abstract/TrackedBase";
+import {Profile} from "../user/Profile";
 import {EventInvoicePool} from "./EventInvoicePool";
 import {EventRegistration} from "./EventRegistration";
 
-export type InvoiceStatus = 'NEW' | 'APPROVED' | 'REJECTED' | 'CLOSED';
+export type InvoiceStatus = 'NEW' | 'APPROVED' | 'REJECTED' | 'CLOSED' | 'RETRACTED';
 
 @Entity("event_invoices", {schema: "surveyor"})
 export class EventInvoice extends NumericBase {
@@ -30,12 +31,24 @@ export class EventInvoice extends NumericBase {
     @RelationId((invoice: EventInvoice) => invoice.pool)
     poolId!: string;
 
-    @ManyToOne(() => EventRegistration, {onDelete: "CASCADE", onUpdate: "CASCADE"})
+    // Organizer-recorded pool costs have no participant reimbursement or attendance record.
+    @ManyToOne(() => EventRegistration, {nullable: true, onDelete: "CASCADE", onUpdate: "CASCADE"})
     @JoinColumn([{name: "registration_id", referencedColumnName: "id"}])
-    registration!: EventRegistration;
+    registration!: EventRegistration | null;
 
     @RelationId((invoice: EventInvoice) => invoice.registration)
-    registrationId!: number;
+    registrationId!: number | null;
+
+    @ManyToOne(() => Profile, {nullable: true, onDelete: "SET NULL", onUpdate: "CASCADE"})
+    @JoinColumn({name: "recorded_by_profile_id", referencedColumnName: "id", foreignKeyConstraintName: "FK_event_invoices_recorded_by_profile"})
+    recordedByProfile?: Profile | null;
+
+    @RelationId((invoice: EventInvoice) => invoice.recordedByProfile)
+    recordedByProfileId?: string | null;
+
+    // Keep creator attribution even if that profile is subsequently removed or renamed.
+    @Column("varchar", {name: "recorded_by_name", length: 50, nullable: true})
+    recordedByName?: string | null;
 
     @Column("decimal", {name: "amount", precision: 10, scale: 2})
     amount!: string;
@@ -63,6 +76,6 @@ export class EventInvoice extends NumericBase {
     @Column("text", {name: "rejection_reason", nullable: true})
     rejectionReason?: string | null;
 
-    @Column("enum", {name: "status", enum: ["NEW", "APPROVED", "REJECTED", "CLOSED"], default: "NEW"})
+    @Column("enum", {name: "status", enum: ["NEW", "APPROVED", "REJECTED", "CLOSED", "RETRACTED"], default: "NEW"})
     status!: InvoiceStatus;
 }
