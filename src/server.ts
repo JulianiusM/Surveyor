@@ -17,6 +17,7 @@
 import http from 'node:http';
 import {initDataSource} from "./modules/database/dataSource";
 import {startInvoiceRetentionJob} from './modules/invoiceRetention';
+import {startEntityArchivalJob} from './modules/entityArchival';
 import settings from './modules/settings';
 
 async function bootstrap() {
@@ -25,6 +26,11 @@ async function bootstrap() {
         await settings.read();
         await initDataSource();
         await startInvoiceRetentionJob();
+        // Start archival only after settings and the database are ready. Await its
+        // catch-up sweep so the first overview reflects periods expired during downtime
+        // and configuration/schema errors reach this bootstrap error handler.
+        // Its hourly schedule changes metadata only and never invokes file retention.
+        await startEntityArchivalJob();
 
         const {default: app} = await require('./app');
         const server = http.createServer(app);

@@ -1,0 +1,130 @@
+//- Shared archival presentation. The caller supplies the controller's ArchivePresentation rather than
+//- deriving permissions or inherited state here. Including this file only declares mixins; it does not
+//- load browser code or require page-specific locals. Personal visibility is available only on overviews.
+
+//- Call once from the page's scripts block when it renders interactive archival controls. Context-only
+//- creation notices need no handler. The entry point binds archiveAction's data attributes below.
+mixin entityArchiveScripts()
+    //- Each feature/overview page loads the shared behavior once from its scripts block.
+    script(type="module" src="/js/entity-archive.gen.js")
+
+//- Low-level command button: action names the browser payload, url selects the authorized server endpoint,
+//- and label is its visible text. confirmation is optional native-dialog text. compact chooses a dropdown
+//- item instead of a standalone notice button; it never changes command behavior or permissions.
+//- The spinner and data-archive-* attributes form the contract with modules/entity-archive.ts.
+mixin archiveAction(action, url, label, confirmation, compact)
+    button.js-archive-action(
+        class=compact ? 'dropdown-item' : 'btn btn-sm btn-outline-light'
+        type="button"
+        data-archive-action=action
+        data-archive-url=url
+        data-archive-confirm=confirmation || undefined
+    )
+        span.spinner-border.spinner-border-sm.d-none.me-1(aria-hidden="true")
+        | #{label}
+
+//- Accept an optional ArchivePresentation so ordinary cards can use the same markup without feature state.
+//- Effective archival may come from the entity itself or its event. Automation controls/status are shown
+//- only to authorized managers, while the archived badge describes the state for every admitted viewer.
+mixin entityArchiveBadges(state)
+    if state
+        if state.archived
+            span.badge.text-bg-secondary
+                i.bi.bi-archive.me-1(aria-hidden="true")
+                | #{state.inheritedFromEventId ? 'Archived with event' : 'Archived'}
+        if state.autoArchivePaused && state.canManageAutomation
+            span.badge.text-bg-warning Automatic archival paused
+
+//- entity must provide id, route type, and the controller-calculated archive projection. compact is passed
+//- through to archiveAction so cards and detail notices share the exact same commands and explanations.
+//- Capability flags control presentation only: each endpoint checks the current session and state again.
+mixin entityArchiveActions(entity, compact)
+    - const state = entity.archive;
+    - const api = `/api/${entity.type}/${entity.id}`;
+    if state
+        if state.canArchive
+            //- Archiving an event affects every attached entity through inheritance. A child can also be
+            //- archived independently; that stored choice must survive a later restoration of its event.
+            -
+                let archiveExplanation = 'Archive this entity for everyone? '
+                    + 'Existing access, actions, and files are preserved. You can restore it later.';
+                if (entity.type === 'event') {
+                    archiveExplanation = 'Archive this event for everyone? All attached entities and their contents will be archived with it. '
+                        + 'Existing access, actions, and files are preserved. You can restore it later.';
+                } else if (state.inheritedFromEventId) {
+                    archiveExplanation = 'Archive this entity independently? It will stay archived if the event is restored. '
+                        + 'Existing access, actions, and files are preserved.';
+                }
+            +archiveAction('archive', `${api}/archive`, 'Archive for everyone', archiveExplanation, compact)
+        if state.canRestore
+            //- Restoring clears this entity's own archive state. Event restoration releases inherited
+            //- archival, but does not clear independent child choices. Dated roots pause their scheduler
+            //- on restore so an already-expired period cannot immediately archive them again.
+            -
+                let restoreExplanation = 'Restore this entity for everyone?';
+                if (entity.type === 'event') {
+                    restoreExplanation = 'Restore this event for everyone? Its attached entities will follow, except those independently archived. '
+                        + 'Automatic archival will be paused until you resume it.';
+                } else if (state.hasAutomaticSchedule) {
+                    restoreExplanation = 'Restore this entity for everyone? Automatic archival will be paused until you resume it.';
+                }
+            +archiveAction('restore', `${api}/restore`, 'Restore for everyone', restoreExplanation, compact)
+        if state.canManageAutomation
+            //- Manual archival and the automatic schedule are separate controls. Resuming an expired
+            //- schedule can archive the entity on the next run, so that transition needs confirmation.
+            if state.autoArchivePaused
+                -
+                    const resumeExplanation = 'Resume automatic archival? If its date period and the configured delay have already ended, '
+                        + 'the next automatic run can archive this entity.';
+                +archiveAction('resume', `${api}/archive/automation`, 'Resume automatic archival', resumeExplanation, compact)
+            else
+                +archiveAction('pause', `${api}/archive/automation`, 'Pause automatic archival', null, compact)
+
+//- Overview-only preferences use the active profile endpoint, never the authoritative archive endpoint.
+//- entity.visibility is the saved preference, not the effective placement: "shown" overrides archival
+//- hiding, "hidden" hides even an active entity, and "default" follows authoritative archival again.
+//- Omit the already-selected choice so a menu offers only changes the user can actually make.
+mixin entityVisibilityActions(entity)
+    - const api = `/api/users/overview/${entity.type}/${entity.id}/visibility`;
+    if entity.visibility !== 'hidden'
+        +archiveAction('hidden', api, 'Hide for me', null, true)
+    if entity.visibility !== 'shown'
+        +archiveAction('shown', api, 'Show for me', null, true)
+    if entity.visibility && entity.visibility !== 'default'
+        +archiveAction('default', api, 'Use default visibility', null, true)
+
+//- Detail pages pass their existing entity (id required), route entityType, and data.archive explicitly.
+//- context=true is for a creation form whose selected event is already archived: explain inheritance
+//- without offering controls for that event. With the default context=false, render the admitted
+//- viewer's state and available commands. No profile or optional res.locals feature state is read here.
+mixin entityArchiveNotice(entity, entityType, state, context=false)
+    -
+        const hasControls = state && (state.canArchive || state.canRestore || state.canManageAutomation);
+        const followsEventSchedule = state && entityType === 'activity' && state.eventId;
+        // An attached activity uses its event's schedule even while active, so explain that exception.
+        // Active roots without controls or an inherited schedule need no empty archival notice.
+        const showNotice = state && (context ? state.archived : state.archived || hasControls || followsEventSchedule);
+    if showNotice
+        section.status-notice.alert-info.mb-3(data-archive-notice)
+            .d-flex.flex-wrap.gap-2.align-items-center.mb-2
+                strong Archival
+                +entityArchiveBadges(state)
+            if context
+                p.mb-0 The selected event is archived. New entities created for it are archived with it. Existing access and actions remain available.
+            else if state.archived
+                p.mb-2 This entity is archived. Existing access and actions remain available.
+            if state.inheritedFromEventId
+                //- The parent must be restored before a child can become active. Offer its authorized
+                //- navigation URL from the projection instead of constructing a separate restore path.
+                p.mb-2
+                    | This entity is archived with its event. Restore the event before restoring this entity.
+                    if state.eventUrl
+                        a.ms-1(href=state.eventUrl) Open event
+            if followsEventSchedule
+                p.mb-2 Automatic archival follows the event.
+            if !context && state.autoArchivePaused && state.canManageAutomation
+                p.mb-2 Automatic archival stays paused until you resume it. You can still archive manually.
+            if !context && hasControls
+                //- Adapt the detail-page entity to the same minimal card contract used by the action mixin.
+                .d-flex.flex-wrap.gap-2
+                    +entityArchiveActions({id: entity.id, type: entityType, archive: state}, false)

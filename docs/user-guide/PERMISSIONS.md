@@ -4,10 +4,10 @@ documentation-metadata
 audience: organizers; advanced administrators
 owner: permission-system maintainers
 status: current
-last-verified: 2026-09-05
+last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D03 cumulative grants, overlapping audiences, sharing recipes, presets, complete permission labels, page admission, item fallback, administration, and explicit survey exclusion; D14 rendered help navigation, semantic checks, and trusted-content integration
-source-anchors: src/modules/permissionEngine.ts; src/modules/lib/permissions.ts; src/middleware/permissionMiddleware.ts; src/middleware/guestFlowFactory.ts; src/middleware/adminApiFactory.ts; src/controller/entityAdminController.ts; src/modules/database/services/EntityAdminService.ts; src/views/modules/module_perm_matrix.pug; src/views/modules/module_admin_matrix.pug; src/views/modules/module_admin_options.pug; src/public/js/modules/perm-matrix.ts; src/public/js/modules/admin-matrix.ts; src/routes/event.ts; src/routes/api/event.ts; src/routes/api/activity.ts; src/routes/api/packing.ts; src/routes/api/drivers.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D03 cumulative grants, overlapping audiences, sharing recipes, presets, complete permission labels, page admission, item fallback, administration, and explicit survey exclusion; D14 rendered help navigation, semantic checks, and trusted-content integration
+source-anchors: src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/modules/permissionEngine.ts; src/modules/lib/permissions.ts; src/middleware/permissionMiddleware.ts; src/middleware/guestFlowFactory.ts; src/middleware/adminApiFactory.ts; src/controller/entityAdminController.ts; src/modules/database/services/EntityAdminService.ts; src/views/modules/module_perm_matrix.pug; src/views/modules/module_admin_matrix.pug; src/views/modules/module_admin_options.pug; src/public/js/modules/perm-matrix.ts; src/public/js/modules/admin-matrix.ts; src/routes/event.ts; src/routes/api/event.ts; src/routes/api/activity.ts; src/routes/api/packing.ts; src/routes/api/drivers.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: D05,D07,D10,D11,D14
 -->
 
@@ -55,6 +55,10 @@ Clearing **Item Delete** from Alex’s individual entry would not remove it if A
 The **active profile** matters. A full account with several profiles can receive a different result after switching profiles because ownership, event registration, and individual administrator grants belong to profiles rather than to the account as a whole.
 
 ## Open the permission controls
+
+**Edit Meta** also permits **Archive for everyone**, **Restore for everyone**, and automatic archival controls on events and standalone activity plans. The same permission permits manual archive and restore on activity plans, packing lists, and drivers lists. **Access Admin** or an administrator entry alone is insufficient. A child organizer cannot override an archived event or restore that event without event authority. Surveys retain owner-only authoritative archival.
+
+Personal **Hide for me**, **Show for me**, and **Use default visibility** choices require participation or administration membership in the active profile's overview, without changing permissions or anyone else's archival state. See [Your Overview](DASHBOARD.md#hide-or-show-an-item-only-for-yourself).
 
 ### While creating an item
 

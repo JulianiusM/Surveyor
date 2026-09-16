@@ -1,0 +1,88 @@
+import {post} from '../core/http';
+import {showInlineAlert} from '../shared/alerts';
+import {hideSpinner, reloadAfterDelay, showSpinner} from '../shared/ui-helpers';
+
+// Action names match archiveAction's data-archive-action attribute in module_entity_archive.pug.
+// Use explicit desired states instead of toggles: the server remains authoritative if another session
+// changes archival or visibility before this request arrives. The button supplies the endpoint, keeping
+// authoritative archival and profile-only visibility on their separate server authorization paths.
+const actions: Record<string, {body: Record<string, boolean | string>; message: string}> = {
+    archive: {body: {}, message: 'Archived for everyone.'},
+    restore: {body: {}, message: 'Restored for everyone.'},
+    pause: {body: {paused: true}, message: 'Automatic archival paused.'},
+    resume: {body: {paused: false}, message: 'Automatic archival resumed.'},
+    hidden: {body: {visibility: 'hidden'}, message: 'Hidden from your main overview.'},
+    shown: {body: {visibility: 'shown'}, message: 'Shown in your main overview.'},
+    default: {body: {visibility: 'default'}, message: 'Default overview visibility restored.'},
+};
+
+/**
+ * Bind the server-rendered archival controls within root and return a listener cleanup function.
+ * Cards and notices expose the same data-archive-* contract; this module does not infer permissions,
+ * inherited event state, or private placement. A confirmed command reloads their common server projection.
+ */
+export function initEntityArchive(root: Document | HTMLElement = document): () => void {
+    // Capture this binding's controls once. Commands cause a full refresh rather than injecting cards,
+    // so every duplicate appearance can be locked and restored through the same stable collection.
+    const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-archive-action]'));
+    let pending = false;
+
+    async function handleAction(event: Event): Promise<void> {
+        // currentTarget is the bound button even when the user clicked its spinner or inner text.
+        // Ignore incomplete markup and repeat clicks before prompting or sending a request.
+        const button = event.currentTarget as HTMLButtonElement;
+        if (pending || button.disabled) return;
+        const action = actions[button.dataset.archiveAction || ''];
+        const url = button.dataset.archiveUrl;
+        if (!action || !url) return;
+        const confirmation = button.dataset.archiveConfirm;
+        // Only actions whose mixin supplies explanatory confirmation text open a dialog. Cancelling
+        // leaves every control untouched and makes no request (including for event-wide archival).
+        if (confirmation && !window.confirm(confirmation)) return;
+
+        // One request at a time also locks duplicate cards in participation and administration.
+        // Remember preexisting disabled states so a failed request does not accidentally enable a
+        // control disabled by another page concern. Only the selected control shows busy feedback.
+        pending = true;
+        const disabled = new Map<HTMLButtonElement, boolean>();
+        for (const control of buttons) {
+            disabled.set(control, control.disabled);
+            control.disabled = true;
+        }
+        button.setAttribute('aria-busy', 'true');
+        showSpinner(button);
+        try {
+            const response = await post(url, action.body);
+            // A redirected login page is not confirmation that the command succeeded.
+            if (response?.status !== 'success') {
+                throw new Error('The change could not be confirmed. Please reload and try again.');
+            }
+            showInlineAlert('success', action.message);
+            // Keep controls locked until navigation. A local DOM patch could miss another occurrence,
+            // an inherited child state, changed capabilities, or a card that belongs in the other region.
+            reloadAfterDelay(500);
+        } catch (error) {
+            // Failed/unconfirmed requests retain the current page and restore its original controls.
+            // Report the response error, but do not guess a new archival state or retry a mutation.
+            showInlineAlert('error', error instanceof Error ? error.message : 'Could not save the archival setting.');
+            hideSpinner(button);
+            button.removeAttribute('aria-busy');
+            for (const [control, wasDisabled] of disabled) {
+                control.disabled = wasDisabled;
+            }
+            pending = false;
+        }
+    }
+
+    for (const button of buttons) {
+        button.addEventListener('click', handleAction);
+    }
+
+    return function dispose(): void {
+        // Lifecycle cleanup removes this binding only. It does not cancel or reverse a server command
+        // already sent; the entry point reloads cached pages to obtain the resulting persisted state.
+        for (const button of buttons) {
+            button.removeEventListener('click', handleAction);
+        }
+    };
+}

@@ -1,5 +1,7 @@
 //- views/dashboard.pug  – überarbeitetes User-Dashboard
 extends ../layout
+//- Overview cards use the same archive commands as detail pages; include their mixins explicitly here.
+include ../modules/module_entity_archive
 
 block meta
     title My Dashboard | Surveyor
@@ -21,7 +23,9 @@ block content
         p.text-center Here are all entities that you participate in. Open the respective section to see and access them.
         hr
         .accordion.accordion-dark#participationLists
-            +entityOverview('sec-parts', 'Your participation', 'bi-clipboard-check', data.participant, "You are not participating anywhere", "participationLists", false)
+            //- personalVisibility=true enables this profile's private placement/actions in both regions.
+            //- showCreate=false keeps owner Duplicate/Delete controls out of the participation collection.
+            +entityOverview('sec-parts', 'Your participation', 'bi-clipboard-check', data.participant, "You are not participating anywhere", "participationLists", false, true)
 
     if data.owner
         h2.text-center
@@ -30,7 +34,11 @@ block content
         p.text-center These are the entities that you either own or are an admin to. Open the respective section to see and access them.
         hr
         .accordion.accordion-dark#entityLists
-            +entityOverview('sec-own-parts', 'Administrable entities', 'bi-shield-check', data.owner, "You don't have any administrable entities yet", "entityLists", true)
+            //- Administration also uses private preferences, independently of authoritative permissions.
+            //- showCreate=true preserves Duplicate/Delete for actual owners, not every administrator.
+            +entityOverview('sec-own-parts', 'Administrable entities', 'bi-shield-check', data.owner, "You don't have any administrable entities yet", "entityLists", true, true)
 
 block scripts
+    //- A single binding covers both collections; successful changes reload both appearances of an entity.
+    +entityArchiveScripts()
     script(type="module" src="/js/user-dashboard.gen.js")

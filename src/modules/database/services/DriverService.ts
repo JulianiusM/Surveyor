@@ -15,7 +15,7 @@
  */
 
 // src/modules/database/driversService.ts
-import {DeepPartial, EntityNotFoundError, In} from "typeorm";
+import {DeepPartial, EntityNotFoundError, type EntityManager} from "typeorm";
 import type {DriversItemAssignee, EnrichedDriversItem} from "../../../types/DriversTypes";
 import {APIError} from '../../lib/errors';
 import {generateUniqueId} from '../../lib/util';
@@ -76,30 +76,31 @@ export async function updateHeaderImage(listId: string, headerImg?: string | nul
 }
 
 export async function getManagedListsForProfile(profileId: string) {
-    const ids = await entityAdminService.getIds('drivers', profileId);
-    return await AppDataSource.getRepository(DriversList).find({
-        where: [
-            {
-                owner: {id: profileId},
-            },
-            {
-                id: In(ids),
-            }
-        ],
-    });
+    // Use the same ownership/administration predicate as personal visibility writes.
+    return entityAdminService.createManagedEntityQuery(AppDataSource.getRepository(DriversList), 'drivers', profileId).getMany();
 }
 
 export async function getDriversListByParticipant(profileId: string) {
-    return await AppDataSource.getRepository(DriversList).createQueryBuilder('list')
-        .whereExists(AppDataSource.getRepository(DriversAssignment)
+    return getDriversParticipationQuery(profileId).getMany();
+}
+
+/**
+ * Reuse the drivers feature's established participation rule: the profile must own
+ * an item AND have an assignment in this list. These are intentionally separate
+ * EXISTS conditions, not the assignment-only rule used by packing/activity lists.
+ * The optional manager lets a visibility write check membership in its transaction.
+ */
+export function getDriversParticipationQuery(profileId: string, manager: EntityManager = AppDataSource.manager) {
+    return manager.getRepository(DriversList).createQueryBuilder('list')
+        .whereExists(manager.getRepository(DriversAssignment)
             .createQueryBuilder("ass")
             .where("ass.entity_id = list.id")
             .andWhere("ass.profile_id = :userId", {userId: profileId})
-        ).andWhereExists(AppDataSource.getRepository(DriversItem)
+        ).andWhereExists(manager.getRepository(DriversItem)
             .createQueryBuilder("item")
             .where("item.entity_id = list.id")
             .andWhere("item.profile_id = :userId", {userId: profileId})
-        ).getMany();
+        );
 }
 
 // Drivers Items

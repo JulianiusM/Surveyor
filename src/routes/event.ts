@@ -58,6 +58,9 @@ app.use("/", createGuestFlowRouter({
 app.get('/:id/register', (req: Request, res: Response) => res.redirect(`/event/${req.params.id}`));
 
 app.get('/:id/admin', requirePermission(permFct, PERM.ACCESS_ADMIN), asyncHandler(async (req: Request, res: Response) => {
+    // Reuse the event view projection, including its shared archive snapshot and decorated
+    // child cards. The dashboard passes that page data explicitly to its archival mixins;
+    // entering administration does not require a separate feature-state middleware or locals.
     const data = await controller.fetchForView(resFct(req), req);
     renderer.renderWithData(res, 'event/event-dashboard', data);
 }));

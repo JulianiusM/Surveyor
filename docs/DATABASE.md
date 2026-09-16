@@ -5,10 +5,10 @@ documentation-metadata
 audience: database administrators; operators; site reliability engineers; maintainers
 owner: application operators
 status: current
-last-verified: 2026-09-14
+last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: free-text column sizes and migration rollback protection; D04 accepted from source review and deployment-practice confirmation for runtime datasource, migration wrapper, schema bootstrap, sessions, backup targeting, and migration commands; controlled execution tracked separately in D04V
-source-anchors: src/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; src/modules/database/entities/session/Session.ts; src/migrations; package.json; .github/workflows/ci.yml
+verification-scope: archival entity fields, preference constraints, locking, migration compatibility, and downgrade-guard source review; no migration rehearsal claimed here; free-text column sizes and migration rollback protection; D04 accepted from source review and deployment-practice confirmation for runtime datasource, migration wrapper, schema bootstrap, sessions, backup targeting, and migration commands; controlled execution tracked separately in D04V
+source-anchors: src/migrations/1789862400000-AddEntityArchival.ts; src/modules/database/entities/archive/EntityVisibilityPreference.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; src/modules/database/entities/session/Session.ts; src/migrations; package.json; .github/workflows/ci.yml
 next-review: D04V
 -->
 
@@ -206,6 +206,46 @@ Existing installations need `1789776000000-IncreaseFreeTextLimits.ts` through th
 The migration preserves existing text and null values. Reversion checks all affected columns first and refuses
 to narrow them if any value exceeds the previous 255-character limit.
 
+## Entity archival state
+
+Migration `1789862400000-AddEntityArchival.ts` introduces the matching entity schema:
+
+| Storage | Purpose |
+|---|---|
+| Nullable `archived_at` on `events`, `activity_plans`, `packing_lists`, `drivers_lists`, and `surveys` | Direct authoritative archival, inherited from `BaseEntity`. |
+| `auto_archive_paused`, initially false, on `events` and `activity_plans` | Persistent manual pause for dated roots; linked plans still inherit their event's state. |
+| `entity_visibility_preferences` | One `HIDDEN` or `SHOWN` override per `(profile_id, entity_type, entity_id)`; absence means default. |
+| Dated-root eligibility indexes and preference target/profile indexes | Automatic candidate selection, preference lookup, and uniqueness. |
+
+Existing rows begin directly active and unpaused, with no preference rows. The migration does not backfill archival
+from dates; the application job owns eligibility. Its conditional additions also support the documented fresh-schema
+synchronization followed by migration-history bootstrap. The preference profile FK copies the actual `profiles.id`
+type/collation and cascades on profile deletion; polymorphic target validity is enforced by the services.
+
+Inherited archival is computed from the current event relation, never copied to children. Metadata projections use a
+consistent `REPEATABLE READ` snapshot. Manual lifecycle changes and personal visibility writes lock the parent event
+before a linked root. Preference writes recheck overview membership while holding those locks. Permanent deletion
+uses the existing feature service's direct repository delete and database cascades. Its ordinary database write locks
+serialize with the preference transaction; deletion does not call the archival service.
+
+The polymorphic target reference has no cascading FK. A preference may remain stored after its entity is deleted,
+but it cannot create an overview entry or authorize access: discovery starts from existing entities, and new preference
+writes require an existing target and current membership. Normal creation and duplication allocate fresh UUIDs.
+Deleting the profile still removes its preferences through the real profile FK.
+
+Automatic updates repeat the current date, direct-state, pause, and standalone predicates after selecting candidates.
+Restore clears direct archival and pauses an independent automatic schedule atomically. Linked activities acquire no
+independent pause. Neither operation saves a stale full entity,
+changes business records, or deletes files.
+
+The down migration preflights all affected tables before DDL and refuses to discard any archived root, non-default
+pause, or personal preference. Use explicit restore/resume/default-visibility operations when an intentional empty-state
+reversal is appropriate, or the [reviewed full rollback](UPGRADING.md#full-rollback-procedure). Do not delete user state
+to bypass the guard. A retained personal preference after membership loss cannot be reset through the overview until
+that membership is restored. Preferences for deleted entities are also retained; use the reviewed full rollback when
+an explicit empty-state reversal is unavailable or inappropriate. Migration SQL must
+be rehearsed separately from tests that only synchronize entity metadata.
+
 ## Sessions are database data
 
 Surveyor stores sessions in MariaDB through `connect-typeorm`. Session cookies and stored sessions have a one-day
@@ -257,12 +297,16 @@ Invoice retention runs before the HTTP listener starts. A restored database cont
 retention period is therefore cleaned according to the active policy during startup. Choose the rehearsal configuration
 and backup age deliberately, and verify that the observed removals match the approved retention policy.
 
+The separate archival startup sweep can move eligible historical entities into overview archives after a database
+restore. Existing saved pauses and personal preferences are part of the database backup. Review the
+[archival configuration](CONFIGURATION.md#automatic-entity-archival) before the restored application starts.
+
 ## Database troubleshooting
 
 ### Startup exits before listening
 
-The server initializes the settings store, database datasource, and invoice-retention cleanup before opening its HTTP
-port. Check the service log for connection, authentication, schema, or retention errors. Confirm the selected settings
+The server initializes the settings store, database datasource, invoice-retention cleanup, and entity archival before opening its HTTP
+port. Check the service log for connection, authentication, schema, retention, or archival errors. Confirm the selected settings
 file and database target before retrying.
 
 ### Migrations appear to target the wrong database

@@ -17,7 +17,7 @@
 import express, {Request, Response} from 'express';
 
 import controller from "../../controller/driversController";
-import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
+import {createEntityAdminApiRouter, createEntityArchiveApiRouter} from "../../middleware/adminApiFactory";
 import {attachAssignRoutes} from '../../middleware/assignFlowFactory';
 import {createEntityHeaderUpdateRouter} from "../../middleware/entityHeaderUpdateHandler";
 
@@ -59,6 +59,9 @@ apiParamHandler('assignId', app, driverService.getDriversAssignmentById, assignN
 app.use("/:id", attachPermBundle(permFct, itemPermFct))
 
 createEntityAdminApiRouter(app, entityName, permFct)
+// Pass the root resolved by :id so lifecycle commands cannot substitute a payload target.
+// The shared archival controller applies EDIT_META and event-inheritance rules to this list.
+createEntityArchiveApiRouter(app, entityName, resFct);
 
 app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), async (req: Request, res: Response) => {
     const msg = await controller.updateDescription(resFct(req).id, req.body);

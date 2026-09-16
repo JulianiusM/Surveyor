@@ -15,7 +15,7 @@
  */
 
 // TypeORM-based implementation of the packing list module
-import {In} from "typeorm";
+import {type EntityManager} from "typeorm";
 import {APIError} from '../../lib/errors';
 import {generateUniqueId} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
@@ -100,26 +100,26 @@ export async function updateHeaderImage(listId: string, headerImg?: string | nul
 }
 
 export async function getManagedLists(profileId: string) {
-    const ids = await entityAdminService.getIds('packing', profileId);
-    return await AppDataSource.getRepository(PackingList).find({
-        where: [
-            {
-                owner: {id: profileId},
-            },
-            {
-                id: In(ids),
-            }
-        ],
-    });
+    // Use the same ownership/administration predicate as personal visibility writes.
+    return entityAdminService.createManagedEntityQuery(AppDataSource.getRepository(PackingList), 'packing', profileId).getMany();
 }
 
 export async function getPackingListByParticipant(profileId: string) {
-    return await AppDataSource.getRepository(PackingList).createQueryBuilder('list')
-        .whereExists(AppDataSource.getRepository(PackingAssignment)
+    return getPackingParticipationQuery(profileId).getMany();
+}
+
+/**
+ * An assignment makes the profile a participant in this packing list.
+ * Share the query between full overview discovery and the transaction-scoped check
+ * for one visibility change. EXISTS avoids duplicate lists for multiple assignments.
+ */
+export function getPackingParticipationQuery(profileId: string, manager: EntityManager = AppDataSource.manager) {
+    return manager.getRepository(PackingList).createQueryBuilder('list')
+        .whereExists(manager.getRepository(PackingAssignment)
             .createQueryBuilder("ass")
             .where("ass.entity_id = list.id")
             .andWhere("ass.profile_id = :profileId", {profileId: profileId})
-        ).getMany();
+        );
 }
 
 // Packing Items

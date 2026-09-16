@@ -15,6 +15,23 @@
  */
 
 import type {Request} from 'express';
+import type {SessionLike} from '../../types/PermissionTypes';
+import {APIError} from './errors';
+
+/**
+ * Resolve the acting profile for authenticated API commands, including guest sessions.
+ * A submitted profile ID must never select whose personal settings a command changes.
+ * Require both an authentication identity and its active profile: a partial/stale session
+ * with only one of them is not sufficient. Returning the profile ID keeps account and guest
+ * ownership checks on the app's common identity instead of separate user/guest identifiers.
+ */
+export function requireSessionProfileId(session: SessionLike): string {
+    if (!session.profile || !(session.auth?.user || session.auth?.guest)) {
+        throw new APIError('Sign in to change this setting', {}, 401);
+    }
+
+    return session.profile.id;
+}
 
 /**
  * Persist the current session state before continuing the response cycle.

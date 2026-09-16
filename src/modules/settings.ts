@@ -55,6 +55,16 @@ export type Settings = {
     oidcRedirectUrl: string;
     invoiceDir: string;
     invoiceRetentionMonths: number;
+    /**
+     * Controls the background archival job; manual archival and personal choices remain available.
+     * This setting has no connection to invoice/file retention or permanent entity deletion.
+     */
+    autoArchiveEnabled: boolean;
+    /**
+     * Complete UTC days after the inclusive end date; zero still waits until the following day.
+     * The archival policy validates the integer and resulting database-date cutoff at startup.
+     */
+    autoArchiveAfterDays: number;
     headerImgDir: string;
     imprintUrl: string;
     privacyPolicyUrl: string;
@@ -102,6 +112,11 @@ const defaults: Settings = {
 
     invoiceDir: "uploads/invoices/",
     invoiceRetentionMonths: 6,
+    // A fresh installation archives expired dated roots after the waiting period.
+    // Deployments may disable the job or choose a different delay through the normal
+    // settings-file/environment precedence below; feature code uses this store only.
+    autoArchiveEnabled: true,
+    autoArchiveAfterDays: 30,
     headerImgDir: "uploads/headerImgs/",
 
     imprintUrl: "http://example.com/imprint",
@@ -141,6 +156,9 @@ const keyMap: Record<string, keyof Settings> = {
     APP_PORT: "appPort",
     INVOICE_DIR: "invoiceDir",
     INVOICE_RETENTION_MONTHS: "invoiceRetentionMonths",
+    // Keep archival on the existing settings path instead of reading process.env in the job.
+    AUTO_ARCHIVE_ENABLED: "autoArchiveEnabled",
+    AUTO_ARCHIVE_AFTER_DAYS: "autoArchiveAfterDays",
     HEADER_IMG_DIR: "headerImgDir",
     IMPRINT_URL: "imprintUrl",
     PRIVACY_POLICY_URL: "privacyPolicyUrl",
@@ -162,6 +180,10 @@ const coerce: Partial<Record<keyof Settings, (v: string) => any>> = {
     activitySwapOptimizationIterations: Number,
     activityArrivalDeparturePenalty: Number,
     invoiceRetentionMonths: Number,
+    // Match the existing boolean setting convention. Number conversion is followed by
+    // stricter integer/range validation in the archival policy before any database write.
+    autoArchiveEnabled: (v) => /^(1|true|yes|on)$/i.test(v),
+    autoArchiveAfterDays: Number,
 };
 
 // Apply environment variable overrides AFTER reading CSV.

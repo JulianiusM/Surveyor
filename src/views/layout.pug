@@ -26,6 +26,8 @@ include modules/module_admin_options
 include modules/module_registration_links
 include modules/module_event_participants
 include modules/module_invoice_pool
+//- Card mixins are common definitions only. Pages that render them explicitly include module_entity_archive
+//- and its browser entry point, keeping optional archival state and behavior out of this shared layout.
 include modules/module_unified_entity_cards
 include modules/module_entity_header
 

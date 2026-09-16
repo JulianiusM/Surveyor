@@ -1,4 +1,6 @@
 extends ../layout
+//- This page explicitly owns archival presentation and script loading; the layout has no optional state.
+include ../modules/module_entity_archive
 
 block meta
     - const ev = data.event || data; // tolerate different controller shapes
@@ -10,6 +12,9 @@ block title
         | Event Dashboard — #{ev.title}
 
 block content
+    //- The controller provides event-wide archive capabilities separately from dashboard permissions.
+    //- Archiving the event is inherited by attached entities while their existing content remains usable.
+    +entityArchiveNotice(ev, 'event', data.archive)
     -
         const ownerId = ev.ownerId;
         const startDate = ev.startDate;
@@ -270,6 +275,8 @@ block content
                 | Participants (PDF)
 
 block scripts
+    //- Bind event archival independently of the existing participant, registration, and invoice handlers.
+    +entityArchiveScripts()
     script(type="module" src="/js/events.gen.js")
     script.
         window.Surveyor.eventId = "#{ev.id}";

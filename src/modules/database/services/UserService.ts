@@ -15,13 +15,24 @@
  */
 
 import bcrypt from 'bcryptjs';
-import {EntityManager, In, MoreThan, Repository} from "typeorm";
+import {EntityManager, In, MoreThan, Repository, type FindOptionsWhere} from "typeorm";
+import type {ArchiveReference, PersonalVisibility} from '../../../types/ArchiveTypes';
 import type {OidcClaims, UserInfo} from "../../../types/UserTypes";
+import {archiveKey} from '../../archive/policy';
+import {APIError} from '../../lib/errors';
 import {coerceLimit, generateUniqueToken, maskEmail, SQL_ALLOW_LIST} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {Guest} from '../entities/user/Guest';
 import {Profile} from "../entities/user/Profile";
 import {User} from '../entities/user/User';
+import {EntityVisibilityPreference} from '../entities/archive/EntityVisibilityPreference';
+import {getActivityParticipationQuery} from './ActivityService';
+import {getDriversParticipationQuery} from './DriverService';
+import {createManagedEntityQuery} from './EntityAdminService';
+import {getRootRepository, withLockedArchiveTarget} from './EntityLifecycleService';
+import {getEventParticipationQuery} from './EventService';
+import {getPackingParticipationQuery} from './PackingService';
+import {getSurveyParticipationQuery} from './SurveyService';
 
 export async function registerUser(username: string, name: string, password: string, email: string) {
     return await AppDataSource.transaction(async (em: EntityManager) => {
@@ -477,6 +488,105 @@ export async function getProfilesByIds(ids: string[]): Promise<Pick<Profile, 'id
     return await AppDataSource.getRepository(Profile).find({
         where: {id: In(uniqueIds)},
         select: {id: true, name: true},
+    });
+}
+
+// The feature services own participation rules. Reuse their queries for the
+// profile's single-target check instead of duplicating predicates or loading a dashboard.
+// In particular, participation differs by feature (registrations, assignments or
+// responses); private visibility must follow those existing definitions exactly.
+const participationQueries = {
+    activity: getActivityParticipationQuery,
+    drivers: getDriversParticipationQuery,
+    event: getEventParticipationQuery,
+    packing: getPackingParticipationQuery,
+    survey: getSurveyParticipationQuery,
+};
+
+async function isOverviewMember(profileId: string, ref: ArchiveReference, manager: EntityManager): Promise<boolean> {
+    // Either overview permits a private choice. The managed query already includes
+    // ownership and explicit administration assignments, so do not reduce
+    // this to an owner check or accept an arbitrary entity just because it is viewable.
+    const repository = getRootRepository(manager, ref.type);
+    const managed = createManagedEntityQuery(repository, ref.type, profileId)
+        .andWhere('entity.id = :overviewEntityId', {overviewEntityId: ref.id});
+    if (await managed.getExists()) {
+        return true;
+    }
+
+    // Use the same transaction manager as the preference write. The query's existing
+    // joins/predicates remain the single source of truth for current participation.
+    const participation = participationQueries[ref.type](profileId, manager);
+    participation.andWhere(`${participation.alias}.id = :overviewEntityId`, {overviewEntityId: ref.id});
+    return participation.getExists();
+}
+
+/**
+ * Personal visibility belongs to a profile, not to shared entity state.
+ * Only apply preferences to entities already discovered through current membership;
+ * a retained preference must never create a card or grant access on its own.
+ * Root IDs are polymorphic, so a normal domain DELETE can leave a preference row.
+ * That row has no visible effect without an existing, discovered root; newly created
+ * or duplicated entities receive fresh UUIDs. Deleting the profile removes its rows
+ * through the profile foreign key. Do not use this table to discover overview entities.
+ */
+export async function getVisibilityPreferences(profileId: string, refs: ArchiveReference[]): Promise<Map<string, PersonalVisibility>> {
+    // Administration and participation may contain the same root. Resolve its one
+    // profile-specific choice once, then apply it to both existing appearances.
+    const unique = new Map<string, ArchiveReference>();
+    for (const ref of refs) {
+        unique.set(archiveKey(ref), ref);
+    }
+    const references = Array.from(unique.values());
+    const preferences = new Map<string, PersonalVisibility>();
+    const repository = AppDataSource.getRepository(EntityVisibilityPreference);
+
+    // Bound the OR conditions for large overviews. Each condition includes the profile
+    // and the complete type/id pair; separate IN lists could match unintended pairs.
+    // An empty reference list naturally performs no query and returns no preferences.
+    for (let offset = 0; offset < references.length; offset += 250) {
+        const targets: FindOptionsWhere<EntityVisibilityPreference>[] = [];
+        for (const ref of references.slice(offset, offset + 250)) {
+            targets.push({profile: {id: profileId}, entityType: ref.type, entityId: ref.id});
+        }
+        const rows = await repository.find({where: targets});
+        for (const row of rows) {
+            // Translate the storage enum at this boundary. Missing map entries mean
+            // 'default'; callers do not need to know how explicit choices are stored.
+            const key = archiveKey({type: row.entityType, id: row.entityId});
+            preferences.set(key, row.visibility === 'HIDDEN' ? 'hidden' : 'shown');
+        }
+    }
+    return preferences;
+}
+
+/** Set/reset an override for the active profile, after checking its current overview membership. */
+export async function setVisibility(profileId: string, ref: ArchiveReference, visibility: PersonalVisibility): Promise<void> {
+    if (!profileId || !['default', 'hidden', 'shown'].includes(visibility)) {
+        throw new APIError('Invalid personal visibility', {}, 400);
+    }
+
+    await withLockedArchiveTarget(ref, async function savePreference(manager) {
+        // The root lock serializes this write with archival and ordinary database
+        // deletion. A target deleted before the lock is acquired fails with 404.
+        // Validate membership now, rather than trusting a previously rendered card
+        // or caller-supplied permission; merely knowing an entity ID grants no choice.
+        if (!await isOverviewMember(profileId, ref, manager)) {
+            throw new APIError('This entity is not in your overview', {}, 403);
+        }
+        const repository = manager.getRepository(EntityVisibilityPreference);
+        const target = {entityType: ref.type, entityId: ref.id, profile: {id: profileId}};
+        if (visibility === 'default') {
+            // Absence follows the current authoritative archive state automatically.
+            // Delete only this profile's override, never the root or another user's row.
+            await repository.delete(target);
+            return;
+        }
+        const storedVisibility = visibility === 'hidden' ? 'HIDDEN' : 'SHOWN';
+        // The unique profile/type/id constraint makes retries replace the same choice.
+        // SHOWN can keep an archived root in this profile's active overview without
+        // restoring it for anybody else; HIDDEN also works while a root is active.
+        await repository.upsert({...target, visibility: storedVisibility}, ['profile', 'entityType', 'entityId']);
     });
 }
 

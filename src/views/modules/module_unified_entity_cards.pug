@@ -1,19 +1,161 @@
-//- Unified entity overview (card-based)
-//- Args:
-//-   id            : string
-//-   title         : string
-//-   iconHeader    : string
-//-   items         : Entity[]
-//-   emptyText     : string
-//-   parent        : string
-//-   showCreate    : boolean
+//- Shared cards for personal dashboards and event "Things to do" collections. Callers also include
+//- module_entity_archive and load its script once when rendering these interactive cards.
+//- items are the controller's common entity-card projections (identity, URL, title, optional archive state).
+//- showCreate retains the existing owner Duplicate/Delete controls and requires the common profile local.
+//- personalVisibility enables private preference badges/actions; it does not grant archive capabilities.
+mixin entityCards(items, showCreate, personalVisibility)
+    .row.row-cols-1.row-cols-sm-2.row-cols-md-3.row-cols-lg-4.g-4
+        each item in items
+            //- Use server-projected capabilities across entity types; ownership alone is not the archival
+            //- permission model. An ordinary participant can still change their personal overview choice.
+            - const canManageArchive = item.archive && (item.archive.canArchive || item.archive.canRestore || item.archive.canManageAutomation);
+            .col
+                //- The filter module reads these attributes from .js-item and hides its surrounding .col.
+                //- Preserve the data contract when changing card markup so filtered grids leave no gaps.
+                .card.h-100.bg-secondary-subtle.border-secondary.js-item(
+                    data-id=item.id
+                    data-title=item.title
+                    data-type=item.type
+                    data-description=item.description || ''
+                    data-owner=item.ownerId
+                    data-event=item.eventId || ''
+                )
+                    if item.imageUrl
+                        a(href=item.url)
+                            img.card-img-top(
+                                src=item.imageUrl
+                                alt=item.title
+                                style="object-fit: cover; height: 200px;"
+                            )
 
-mixin entityOverview(id, title, iconHeader, items, emptyText, parent, showCreate)
+                    a.card-body.text-decoration-none(href=item.url)
+                        h4.card-title.mb-1.text-break #{item.title}
+                        if item.description
+                            p.card-text.small.mb-2.text-truncate(style="max-width: 100%;") #{item.description}
 
-    - const _count = (items && items.length) || 0;
-    - const _types = [...new Set(items.map(item => item.type))];
+                    .card-footer
+                        .d-flex.flex-wrap.gap-2.align-items-center.mb-2
+                            span.badge.bg-primary #{item.type}
+                            +entityArchiveBadges(item.archive)
+                            //- The authoritative badge above and the private preference badge below can
+                            //- coexist: showing an archived entity for oneself does not restore it globally.
+                            if personalVisibility && item.visibility && item.visibility !== 'default'
+                                span.badge.text-bg-info #{item.visibility === 'hidden' ? 'Hidden for me' : 'Shown for me'}
+                        .d-flex.flex-wrap.gap-2
+                            if personalVisibility || canManageArchive
+                                .dropdown
+                                    button.btn.btn-sm.btn-outline-light.dropdown-toggle(
+                                        type="button"
+                                        data-bs-toggle="dropdown"
+                                        aria-expanded="false"
+                                        aria-label=`Archival and visibility for ${item.title}`
+                                    ) Archival
+                                    .dropdown-menu
+                                        //- Keep shared changes and private placement in visibly separate
+                                        //- groups. The same commands are also available in detail notices.
+                                        if canManageArchive
+                                            h6.dropdown-header For everyone
+                                            +entityArchiveActions(item, true)
+                                            if personalVisibility
+                                                hr.dropdown-divider
+                                        if item.archive && item.archive.inheritedFromEventId
+                                            //- An inherited state can remain even when this child has no
+                                            //- independent restore action. Direct the user to its event.
+                                            p.dropdown-item-text.small.mb-0 Restore the event before restoring this entity.
+                                            if item.archive.eventUrl
+                                                a.dropdown-item(href=item.archive.eventUrl) Open event
+                                            hr.dropdown-divider
+                                        if personalVisibility
+                                            h6.dropdown-header Only my overview
+                                            +entityVisibilityActions(item)
+                            if showCreate && item.ownerId === profile.id
+                                //- Retain the existing owner-only POST delete form and duplicate link.
+                                //- Delete is a separate permanent operation, never an archival command.
+                                form.d-inline.btn-group(
+                                    method="post"
+                                    action=`${item.url}/delete`
+                                    onsubmit="return confirm('Delete this item?');"
+                                )
+                                    a.btn.btn-sm.btn-info(href=`${item.url}/duplicate`)
+                                        i.bi.bi-files.me-1(aria-hidden="true")
+                                        | Duplicate
+                                    button.btn.btn-sm.btn-danger(type="submit")
+                                        i.bi.bi-trash.me-1(aria-hidden="true")
+                                        | Delete
 
-    .accordion-item
+//- Render one independent searchable region. id identifies the region; title supplies its accessible
+//- search text; items are already assigned to this region by entityOverview; emptyText explains a region
+//- with no cards. The final two flags pass unchanged to entityCards. This mixin never moves entities
+//- between main and archived regions or decides permissions.
+mixin entityFilterSection(id, title, items, emptyText, showCreate, personalVisibility)
+    -
+        const itemTypes = new Set();
+        // Only offer types that exist in this region, independent of the collection's other region.
+        for (const item of items) {
+            itemTypes.add(item.type);
+        }
+    //- .js-entity-section scopes search, selected type, visible count, and no-match status to this region.
+    //- Main and archived sections each get their own controls and filter state in entity-cards-overview.ts.
+    .js-entity-section(data-section=id)
+        if items.length
+            .d-flex.flex-wrap.gap-2.mb-3.align-items-center
+                .input-group.input-group-sm(style="max-width: 320px;")
+                    span.input-group-text
+                        i.bi.bi-search(aria-hidden="true")
+                    input.form-control.js-search(
+                        type="search"
+                        placeholder=`Search ${title.toLowerCase()}…`
+                        aria-label=`Search ${title.toLowerCase()}`
+                    )
+                .dropdown
+                    button.btn.btn-outline-secondary.btn-sm.dropdown-toggle(
+                        type="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                    ) Filter
+                    ul.dropdown-menu.js-filter-type
+                        li
+                            button.dropdown-item(type="button" data-type="all" aria-pressed="true") All types
+                        li
+                            hr.dropdown-divider
+                        each type in Array.from(itemTypes)
+                            li
+                                button.dropdown-item(type="button" data-type=type aria-pressed="false") #{type}
+                span.small.text-body-secondary(aria-live="polite")
+                    span.js-count #{items.length}
+                    |  shown
+            +entityCards(items, showCreate, personalVisibility)
+            //- Empty after filtering differs from having no saved entities. JavaScript toggles only this
+            //- status, leaving the original cards available when the search or type choice changes.
+            p.status-notice.alert-info.mb-0.mt-3.js-no-matches(hidden role="status") No entities match your search and filter.
+        else
+            p.status-notice.alert-info.mb-0 #{emptyText}
+
+//- Collection wrapper: id must be unique on the page and parent names its Bootstrap accordion container.
+//- title/iconHeader label the collection; items may be absent; emptyText covers a genuinely empty collection.
+//- showCreate preserves owner Duplicate/Delete controls, while personalVisibility independently enables
+//- private placement and actions. Personal dashboards opt in; shared event collections leave it false.
+//- Archival mixins are an explicit page include, and the established profile local is needed only when
+//- showCreate is true. No optional feature state is pulled from layout-level locals.
+mixin entityOverview(id, title, iconHeader, items, emptyText, parent, showCreate, personalVisibility)
+    -
+        const allItems = items || [];
+        const mainItems = [];
+        const hiddenItems = [];
+        const archiveId = `${id}-archived`;
+        // overviewHidden is the controller's final placement after combining archival with this profile's
+        // preference. Keep that calculation out of templates; "shown" can keep an archived entity here.
+        // Shared event Things to do never applies a personal preference and therefore retains every card.
+        for (const item of allItems) {
+            if (personalVisibility && item.overviewHidden) {
+                hiddenItems.push(item);
+            } else {
+                mainItems.push(item);
+            }
+        }
+
+    //- The dark accordion clips by default. Menus need to escape its card/last-row bounds.
+    .accordion-item.entity-overview.overflow-visible
         h2.accordion-header
             button.accordion-button(
                 type="button"
@@ -22,84 +164,30 @@ mixin entityOverview(id, title, iconHeader, items, emptyText, parent, showCreate
                 aria-expanded="true"
                 aria-controls=id
             )
-                i(class=`bi ${iconHeader} me-2`)
+                i(class=`bi ${iconHeader} me-2` aria-hidden="true")
                 | #{title}
-                span.badge.bg-secondary.ms-2.js-count #{_count}
-
+                span.badge.bg-secondary.ms-2 #{allItems.length}
         .accordion-collapse.collapse.show(id=id data-bs-parent=`#${parent}`)
             .accordion-body
-
-                // Toolbar
-                .d-flex.flex-wrap.gap-2.mb-3.align-items-center
-
-                    // Search
-                    .input-group.input-group-sm(style="max-width: 320px;")
-                        span.input-group-text
-                            i.bi.bi-search
-                        input.form-control.js-search(
-                            type="search"
-                            placeholder=`Search ${title.toLowerCase()}…`
-                        )
-
-                    // Type filter
-                    .dropdown
-                        button.btn.btn-outline-secondary.btn-sm.dropdown-toggle(
-                            type="button"
-                            data-bs-toggle="dropdown"
-                        )
-                            | Filter
-                        ul.dropdown-menu.js-filter-type
-                            li
-                                button.dropdown-item(data-type="all") All types
-                            li
-                                hr.dropdown-divider
-                            each item in _types
-                                li
-                                    button.dropdown-item(data-type=item)
-                                        | #{item}
-
-                if _count
-
-                    // Responsive Bootstrap grid
-                    .row.row-cols-1.row-cols-sm-2.row-cols-md-3.row-cols-lg-4.g-4
-                        each item in items
-                            .col
-                                .card.h-100.bg-secondary-subtle.border-secondary.js-item(
-                                    data-title=item.title
-                                    data-type=item.type
-                                    data-description=item.description || ''
-                                    data-owner=item.ownerId
-                                    data-event=item.eventId || ''
-                                )
-
-                                    if item.imageUrl
-                                        a(href=item.url)
-                                            img.card-img-top(
-                                                src=item.imageUrl
-                                                alt=item.title
-                                                style="object-fit: cover; height: 200px;"
-                                            )
-
-                                    a.card-body.text-decoration-none(href=item.url)
-                                        h4.card-title.mb-1
-                                            | #{item.title}
-                                        if item.description
-                                            p.card-text.small.mb-2.text-truncate(style="max-width: 100%;")
-                                                | #{item.description}
-
-                                    .card-footer
-                                        span.badge.bg-primary
-                                            | #{item.type}
-                                        if showCreate && item.ownerId === profile.id
-                                            form.d-inline.btn-group.float-end(method="post" action=`${item.url}/delete` onsubmit="return confirm('Delete this item?');")
-                                                a.btn.btn-sm.btn-info(href=`${item.url}/duplicate`)
-                                                    i.bi.bi-files.me-1
-                                                    | Duplicate
-                                                button.btn.btn-sm.btn-danger(type="submit")
-                                                    i.bi.bi-trash.me-1
-                                                    | Delete
-
-                else
-                    .status-notice.alert-info.mb-0
-                        i.bi.bi-info-circle.me-2
-                        | #{emptyText}
+                //- A nonempty collection can have an empty main region. Direct users to the collapsed
+                //- archive instead of incorrectly claiming they have no participation or administration.
+                - const mainEmptyText = allItems.length ? 'All your entities in this collection are in Archived and hidden below.' : emptyText;
+                +entityFilterSection(`${id}-main`, title, mainItems, mainEmptyText, showCreate, personalVisibility)
+                if personalVisibility && allItems.length
+                    //- Private overviews retain every entity in one of the two regions. Start this one
+                    //- collapsed on each page load; opening it is a viewing action and saves no preference.
+                    .mt-4
+                        h3.h5
+                            button.btn.btn-outline-secondary.collapsed(
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target=`#${archiveId}`
+                                aria-expanded="false"
+                                aria-controls=archiveId
+                            )
+                                i.bi.bi-archive.me-2(aria-hidden="true")
+                                | Archived and hidden
+                                span.badge.bg-secondary.ms-2 #{hiddenItems.length}
+                        .collapse(id=archiveId)
+                            p.small.text-body-secondary Archived entities and your personal hidden choices remain available here.
+                            +entityFilterSection(archiveId, 'archived and hidden entities', hiddenItems, 'No archived or hidden entities in this collection.', showCreate, personalVisibility)

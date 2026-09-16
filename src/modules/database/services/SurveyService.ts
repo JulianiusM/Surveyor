@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import type {EntityManager} from "typeorm";
 import type {BasePicked, GroupedResponses, SurveyAnswer, WeekDay, WeekInMonth} from "../../../types/SurveyTypes";
 import {generateUniqueId} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
@@ -84,12 +85,22 @@ export async function getSurveysByProfileId(profileId: string) {
 }
 
 export async function getSurveysByParticipant(profileId: string) {
-    return await AppDataSource.getRepository(Survey).createQueryBuilder('survey')
-        .whereExists(AppDataSource.getRepository(SurveyResponse)
+    return getSurveyParticipationQuery(profileId).getMany();
+}
+
+/**
+ * Any stored response establishes participation, regardless of the selected answer.
+ * Reuse this predicate for overview discovery and transaction-scoped visibility writes.
+ * General administration ACLs do not apply to surveys; their owner/response model
+ * remains distinct from the other entity types.
+ */
+export function getSurveyParticipationQuery(profileId: string, manager: EntityManager = AppDataSource.manager) {
+    return manager.getRepository(Survey).createQueryBuilder('survey')
+        .whereExists(manager.getRepository(SurveyResponse)
             .createQueryBuilder("resp")
             .where("resp.entity_id = survey.id")
             .andWhere("resp.profile_id = :userId", {userId: profileId})
-        ).getMany();
+        );
 }
 
 export async function deleteSurvey(id: string) {

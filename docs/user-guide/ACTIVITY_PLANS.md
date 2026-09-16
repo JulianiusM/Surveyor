@@ -4,10 +4,10 @@ documentation-metadata
 audience: activity participants; activity organizers
 owner: activity-plan maintainers
 status: current
-last-verified: 2026-09-14
+last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: expanded plan descriptions and shared-text limits; D07 basic activity-plan creation and participation plus D08 advanced requirement configuration, live coverage, automatic recommendation generation, review, manual staging, application, and limitations verified; D14 rendered help navigation, semantic checks, and trusted-content integration
-source-anchors: src/views/activity/activity-create.pug; src/views/activity/activity-view.pug; src/views/activity/parts/schedule.pug; src/views/activity/parts/participants.pug; src/views/activity/parts/participant-status.pug; src/views/activity/parts/assignments.pug; src/views/activity/parts/recommendations-schedule.pug; src/views/activity/parts/settings.pug; src/views/activity/export/schedule.pug; src/views/modules/module_role_assignment_addon.pug; src/public/js/activity-create.ts; src/public/js/modules/activity/activity-requirements.ts; src/public/js/modules/activity/activity-recommendation-jobs.ts; src/public/js/modules/activity/activity-recommendations-schedule.ts; src/public/js/modules/activity/activity-recommendations-state.ts; src/public/js/modules/activity/activity-recommendations-logic.ts; src/public/js/modules/activity/activity-recommendations-ui.ts; src/routes/activity.ts; src/routes/api/activity.ts; src/controller/activityController.ts; src/middleware/assignFlowFactory.ts; src/modules/activity/requirements.ts; src/modules/activity/availability.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/autoAssignment.ts; src/modules/activity/recommendations.ts; src/modules/activity/recommendationJobs.ts; src/modules/database/services/ActivityService.ts; src/modules/database/services/ActivityRequirementService.ts; src/modules/database/services/ActivityRecommendationService.ts; tests/unit/activity-requirements.spec.ts; tests/frontend/activity-requirement-coverage.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; expanded plan descriptions and shared-text limits; D07 basic activity-plan creation and participation plus D08 advanced requirement configuration, live coverage, automatic recommendation generation, review, manual staging, application, and limitations verified; D14 rendered help navigation, semantic checks, and trusted-content integration
+source-anchors: src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/activity/activity-create.pug; src/views/activity/activity-view.pug; src/views/activity/parts/schedule.pug; src/views/activity/parts/participants.pug; src/views/activity/parts/participant-status.pug; src/views/activity/parts/assignments.pug; src/views/activity/parts/recommendations-schedule.pug; src/views/activity/parts/settings.pug; src/views/activity/export/schedule.pug; src/views/modules/module_role_assignment_addon.pug; src/public/js/activity-create.ts; src/public/js/modules/activity/activity-requirements.ts; src/public/js/modules/activity/activity-recommendation-jobs.ts; src/public/js/modules/activity/activity-recommendations-schedule.ts; src/public/js/modules/activity/activity-recommendations-state.ts; src/public/js/modules/activity/activity-recommendations-logic.ts; src/public/js/modules/activity/activity-recommendations-ui.ts; src/routes/activity.ts; src/routes/api/activity.ts; src/controller/activityController.ts; src/middleware/assignFlowFactory.ts; src/modules/activity/requirements.ts; src/modules/activity/availability.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/autoAssignment.ts; src/modules/activity/recommendations.ts; src/modules/activity/recommendationJobs.ts; src/modules/database/services/ActivityService.ts; src/modules/database/services/ActivityRequirementService.ts; src/modules/database/services/ActivityRecommendationService.ts; tests/unit/activity-requirements.spec.ts; tests/frontend/activity-requirement-coverage.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: activity-plan-visible-UI-or-behavior-change
 -->
 
@@ -389,6 +389,16 @@ Keep these boundaries in mind:
 - Surveyor does not notify participants when an organizer applies schedule changes. Communicate the final assignment plan separately.
 
 Maintainers and advanced reviewers can find the single calculation, job, review-state, and persistence reference in `docs/ACTIVITY_REQUIREMENTS_ALGORITHM.md`.
+
+## Archive or restore a plan
+
+Owners and organizers with **Edit Meta** can use **Archive for everyone** and **Restore for everyone** in the plan's **Archival** section. Archival preserves slots, roles, assignments, requirements, images, and existing permissions; normal authorized actions stay available.
+
+A standalone plan can be archived automatically after its inclusive end date and the site's configured delay. Restoring it pauses automatic archival until you select **Resume automatic archival**. **Pause automatic archival** is also available before it is archived.
+
+A linked plan follows its event's archival schedule, even when its own dates differ. **Archived with event** means the event must be restored first. Restoring the event leaves any independently archived plan archived. Plans created under an archived event inherit its state immediately.
+
+Find archived plans in **Archived and hidden** in [Your Overview](DASHBOARD.md#find-archived-and-hidden-items). **Hide for me**, **Show for me**, and **Use default visibility** change only the active profile's overview placement.
 
 ## Troubleshooting
 

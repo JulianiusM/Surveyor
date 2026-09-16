@@ -17,6 +17,8 @@
 import express, {NextFunction, Request, Response} from 'express';
 import fs from "node:fs";
 import path from "node:path";
+import {getArchivePresentations} from "../controller/entityAdminController";
+import {archiveKey} from "../modules/archive/policy";
 import * as eventService from "../modules/database/services/EventService";
 import * as userService from "../modules/database/services/UserService";
 import mailer, {resolveEmailRecipientName} from '../modules/email';
@@ -125,45 +127,112 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
 
     router.use(attachPermMeta(entityType));
 
+    /**
+     * Build the creation form's event choices and optional archival context in one place.
+     * First display, duplication and validation recovery all use this renderer-data contract;
+     * templates never need to depend on optional feature properties in res.locals.
+     * An eventId query selects context, but permission to attach content is still checked.
+     */
+    async function getCreationData(req: Request) {
+        // Ordinary creation offers active managed events. A contextual create link may name
+        // an archived event that remains accessible, so resolve that selection separately.
+        const events = await eventService.getActiveManagedEvents(req.session.profile!.id);
+        const selected = addToEvent ? eventNewResFn(req) : undefined;
+        if (!selected || !await can({kind: 'entity', entity: await eventPermFct(req)}, req.session, PERM.MANAGE_ASSIGNMENTS)) {
+            // No authorized event context means no event-specific notice or extra picker item.
+            // The route's optionalPermission middleware remains the attachment authorization gate.
+            return {eventId: req.query.eventId, events, archive: null};
+        }
+
+        let selectedIsListed = false;
+        for (const event of events) {
+            if (event.id === selected.id) {
+                selectedIsListed = true;
+                break;
+            }
+        }
+        // Retain the selected event's real title even when the active picker excluded it.
+        // Add it only once; archival must not make an authorized contextual form lose its parent.
+        if (!selectedIsListed) {
+            events.unshift(selected);
+        }
+
+        // This state describes the selected parent event, not the entity that will be created.
+        // Creation templates pass it explicitly to the archive mixin in contextual-notice mode.
+        const ref = {type: 'event' as const, id: selected.id};
+        const archives = await getArchivePresentations([ref], req.session);
+        return {eventId: selected.id, events, archive: archives.get(archiveKey(ref)) ?? null};
+    }
+
+    /** Render the initial form through the same data path used after validation failures. */
+    async function showCreatePage(req: Request, res: Response) {
+        renderer.renderWithData(res, create, await getCreationData(req));
+    }
+
+    /**
+     * Preserve the existing entity creation workflow while supplying complete recovery data.
+     * Only ValidationError carries form state; unexpected failures continue through the
+     * established error handler instead of being treated as a recoverable user-input error.
+     */
+    async function submitCreatePage(req: Request, res: Response) {
+        // Capture choices/context before parsing so image and field validation failures can
+        // render the same form, including a selected archived event's title and explanation.
+        const creationData = await getCreationData(req);
+        try {
+            checkNewImage(req.file);
+            req.body.headerImg = req.file ? path.relative(process.cwd(), req.file.path) : undefined;
+            const parsed = preprocessCreate(req.body);
+            if (parsed.error) {
+                throw new ValidationError(create, parsed.error.msg, parsed.error.data);
+            }
+            if (addToEvent) {
+                // Keep the contextual event available to the domain controller separately
+                // from ordinary form fields; attachment validation still belongs to that flow.
+                parsed._injectedEventId = req.query.eventId;
+            }
+            parsed._body = req.body;
+            parsed._file = req.file;
+            if (!parsed.headerImg && req.file) {
+                parsed.headerImg = req.body.headerImg;
+            }
+
+            let id;
+            try {
+                // Creation and child-item initialization retain their existing domain hooks.
+                // Archival context is presentation data and never alters the submitted entity.
+                id = await createEntity(req.session.profile!.id, parsed);
+                await afterCreateItems(id, parsed);
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'Failed to create the resource.';
+                throw new ValidationError(create, message, parsed);
+            }
+            req.flash('success', `${entityType} created`);
+            res.redirect(buildRedirect(id));
+        } catch (error) {
+            if (error instanceof ValidationError) {
+                // The error renderer receives data only. Preserve submitted fields, then replace
+                // picker choices/archive state with server-owned values. Authorized query context
+                // wins over a submitted eventId; without one, keep the form's submitted selection.
+                const submittedData = error.data as {eventId?: unknown};
+                error.data = {
+                    ...error.data,
+                    ...creationData,
+                    eventId: creationData.eventId ?? submittedData.eventId,
+                };
+            }
+            throw error;
+        }
+    }
+
     // GET+POST /create
     router.route('/create')
         .get(isAuthenticated,
             optionalPermission(eventPermFct, PERM.MANAGE_ASSIGNMENTS, eventNewResFn),
-            asyncHandler(async (req: Request, res: Response) => {
-                renderer.renderWithData(res, create, {
-                    eventId: req.query.eventId,
-                    events: await eventService.getActiveManagedEvents(String(req.session.profile!.id))
-                });
-            }))
+            asyncHandler(showCreatePage))
         .post(isAuthenticated,
             optionalPermission(eventPermFct, PERM.MANAGE_ASSIGNMENTS, eventNewResFn),
             headerImgUpload.single("headerImg"),
-            asyncHandler(async (req: Request, res: Response) => {
-                checkNewImage(req.file);
-                req.body.headerImg = req.file ? path.relative(process.cwd(), req.file.path) : undefined;
-                const parsed = preprocessCreate(req.body);
-                if (parsed.error) {
-                    throw new ValidationError(create, parsed.error.msg, parsed.error.data);
-                }
-                if (addToEvent) {
-                    parsed._injectedEventId = req.query.eventId;
-                }
-                parsed._body = req.body;
-                parsed._file = req.file;
-                if (!parsed.headerImg && req.file) {
-                    parsed.headerImg = req.body.headerImg;
-                }
-                let id;
-                try {
-                    id = await createEntity(req.session.profile!.id, parsed);
-                    await afterCreateItems(id, parsed);
-                } catch (e) {
-                    const message = e instanceof Error ? e.message : 'Failed to create the resource.';
-                    throw new ValidationError(create, message, parsed);
-                }
-                req.flash('success', `${entityType} created`);
-                res.redirect(buildRedirect(id));
-            }));
+            asyncHandler(submitCreatePage));
 
     router.use("/:id", attachPermBundle(permFct, itemPermFct), attachPermMeta(entityType, (req) => req.params['id'] as string), attachAdminData(entityType, (req) => req.params['id'] as string));
 
@@ -206,12 +275,14 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
     // GET /:id/duplicate
     router.get('/:id/duplicate', requirePermission(permFct, PERM.DATA_DUPLICATE), asyncHandler(async (req: Request, res: Response) => {
         const data = await fetchForDuplicate(resFct(req), req.session);
+        // Duplicating copies form content, not lifecycle state. Any archive notice belongs
+        // to the explicitly selected target event, independently of the source entity.
+        const creationData = await getCreationData(req);
         renderer.renderWithData(res, create, {
             title: `Copy of ${resFct(req).title}`,
             entity: resFct(req),
             data: data,
-            eventId: req.query.eventId,
-            events: await eventService.getActiveManagedEvents(req.session.profile!.id),
+            ...creationData,
             isDuplicate: true
         });
     }));
@@ -299,7 +370,12 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         if (!data) {
             throw new ValidationError(view, `${entityType} not found`, {});
         }
-        renderer.renderWithData(res, view, data);
+        // Event controllers already project the event and its attached cards together.
+        // Preserve that snapshot; simpler entity pages receive their root projection here.
+        // A missing projection is explicit null so the page mixin can omit the optional notice.
+        const ref = {type: entityType, id: resFct(req).id};
+        const archive = data.archive ?? (await getArchivePresentations([ref], req.session)).get(archiveKey(ref)) ?? null;
+        renderer.renderWithData(res, view, {...data, archive});
     }));
 
     return router;

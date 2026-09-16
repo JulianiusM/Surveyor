@@ -4,10 +4,10 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: developer-experience maintainers
 status: current
-last-verified: 2026-09-14
+last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: invoice correction and retraction lifecycles, refreshed submission history, and searchable payer rows with beneficiary chips; organizer-entered shared costs, repeat invoice submissions, visible payment feedback, and share breakdown dialogs; named recipient mailer contract, transient alert lifecycle, snapshot relation loading, post-commit invoice review notifications, saved share ledger and PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, signed adjustments, revision-checked previews, payment carry-forward, rollback snapshots, configurable settlement notifications, and upload feedback; non-blocking documentation policy and optional report/test routing; D12 clean-clone setup, current scripts, settings and schema bootstrap, generated files, observed repository patterns, route registration, test selection, CI branches, and troubleshooting; D14 focused in-app help validation workflow
-source-anchors: src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
+verification-scope: explicit maintainer readability, comments, formatting, declaration-file, module-reuse, renderer-data, and deletion-boundary requirements; archival API, presentation, persistence, and extension-boundary source review; invoice correction and retraction lifecycles, refreshed submission history, and searchable payer rows with beneficiary chips; organizer-entered shared costs, repeat invoice submissions, visible payment feedback, and share breakdown dialogs; named recipient mailer contract, transient alert lifecycle, snapshot relation loading, post-commit invoice review notifications, saved share ledger and PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, signed adjustments, revision-checked previews, payment carry-forward, rollback snapshots, configurable settlement notifications, and upload feedback; non-blocking documentation policy and optional report/test routing; D12 clean-clone setup, current scripts, settings and schema bootstrap, generated files, observed repository patterns, route registration, test selection, CI branches, and troubleshooting; D14 focused in-app help validation workflow
+source-anchors: src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/views/modules/module_entity_archive.pug; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
 next-review: development-workflow-or-help-tooling-change
 -->
 
@@ -191,6 +191,29 @@ Do not hand-edit or commit these generated outputs:
 
 The repository is not governed by a single formatting tool or a class-per-file convention. Follow the neighboring production code and preserve these architectural boundaries.
 
+### Readability and shared contracts
+
+Human readability and the established application patterns are acceptance criteria, alongside DRY, separation of
+concerns, a single source of truth, and information hiding. Preserve local indentation, spacing, wrapping, and naming.
+Keep formatting changes within the work being reviewed.
+
+Document nontrivial behavior generously with purposeful comments. Explain why a branch or boundary exists, how data
+flows through it, and which constraints it protects. In particular, explain transaction ordering, authorization
+decisions, inherited state, and exceptional behavior. Keep those comments current as the implementation changes;
+comments should help a maintainer understand the behavior rather than repeat individual expressions.
+
+Pug templates and mixins need the same level of explanation. Document each mixin's parameters, required render data,
+shared request context, meaningful branches, and browser-facing DOM hooks with unbuffered `//-` comments. Explain why
+page scripts and optional state are loaded at that page boundary, especially where the same mixin serves different views.
+
+Use descriptive names, named helpers, and straightforward control flow. Avoid excessive anonymous functions, nested
+lambdas, or chained transformations that make a workflow difficult to follow. Short callbacks remain useful for an
+obvious mapping, predicate, or established framework boundary.
+
+Shared type-only contracts belong in `.d.ts` files under `src/types/`, following the existing declaration-file pattern.
+Executable constants and functions belong in `.ts` modules. Keep private implementation types and repository details
+inside the module that owns them instead of exporting them merely to connect newly introduced layers.
+
 ### Routes
 
 - Use `express.Router()` in a feature route module.
@@ -204,7 +227,9 @@ The repository is not governed by a single formatting tool or a class-per-file c
 
 - Controllers normalize request data, coordinate services, prepare render data, and choose redirects/messages.
 - Database services are functional database service modules that export functions; they do not require a service class or dependency-injection container.
+- Extend an existing controller, service, or middleware module when the responsibility already belongs there. Keep cohesive operations together; a new module must have a distinct responsibility, not just forward calls to another module.
 - Keep repository access and transactions in `src/modules/database/services/` rather than routes or controllers.
+- Expose operations that describe the domain workflow. Keep repository selection, query construction, and lock ordering private to the persistence boundary.
 - Use a TypeORM transaction for multi-record writes that must succeed or fail together.
 - Preserve the distinction between account IDs, guest IDs, profile IDs, entity IDs, item IDs, and event-registration IDs.
 
@@ -228,6 +253,7 @@ The repository is not governed by a single formatting tool or a class-per-file c
 
 - Keep visible labels and form field names aligned with controllers and user documentation.
 - Put reusable Pug fragments under `src/views/modules/` and feature views under the existing feature directory.
+- Pass optional feature and page state through the renderer's `data` object and explicit Pug mixin arguments. Reserve `res.locals` for the established common request infrastructure; do not introduce a second feature-state channel there.
 - Put shared browser behavior under `src/public/js/core/` or `src/public/js/shared/`; keep page-specific behavior in its feature module.
 - Treat generated `.gen.js` files as outputs, not source.
 - Consider both the server-rendered fallback and enhanced browser behavior when changing a form or action.
@@ -263,6 +289,39 @@ A schema change normally requires:
 6. Update configuration, operator, architecture, or user documentation where the data contract changes.
 
 Never rely on production `synchronize`; it is disabled.
+
+### Entity archival
+
+The existing `entityAdminController` owns shared lifecycle actions and authorized presentation, while `userController`
+owns personal overview visibility. `adminApiFactory` registers the shared lifecycle API. `EntityLifecycleService`
+keeps root selection, parent loading, transaction locks, and archive/restore writes together;
+the existing `UserService` owns profile visibility preferences and single-target overview eligibility checks. Feature services
+retain their own membership predicates. `modules/archive/policy.ts` is the single computation boundary, and
+`getArchivePresentations` supplies authorized controls to shared cards and notices. Keep these rules out of individual
+feature controllers and avoid per-card parent queries.
+
+The shared API commands are explicit and retry-safe:
+
+| Request | Body |
+|---|---|
+| `POST /api/{type}/:id/archive` | `{}` |
+| `POST /api/{type}/:id/restore` | `{}` |
+| `POST /api/{type}/:id/archive/automation` | `{ "paused": true }` or `{ "paused": false }` |
+| `POST /api/users/overview/:entityType/:id/visibility` | `{ "visibility": "default" }`, `{ "visibility": "hidden" }`, or `{ "visibility": "shown" }` |
+
+Never accept profile IDs, timestamps, stored parent state, or other arbitrary fields from the browser. Follow the [archival authority contract](PERMISSIONS_REFERENCE.md#archival-authority-and-personal-visibility), including the survey exception. A private preference may change placement only after existing overview membership is established.
+
+Render lifecycle actions through `module_entity_archive.pug`, passing the optional notice state in renderer data and
+explicit mixin arguments. Overview partitioning and personal actions are an explicit `entityOverview` option. The shared
+browser module waits for structured success before refreshing all appearances. It does not infer archival dates or
+parent policy.
+
+Archive and restore write only lifecycle fields and do not call deletion, invoice recalculation, or file operations.
+Permanent deletion remains the simple repository delete in each existing feature service, with database foreign keys
+handling dependent rows. It does not pass through the archival service. Polymorphic visibility preferences may outlive
+a deleted target; overview discovery always starts from existing entities, so these rows cannot create cards or grant
+access. New and duplicated roots receive fresh IDs and default lifecycle state. See
+[Database and Migrations](DATABASE.md#entity-archival-state) for persistence and concurrency details.
 
 ### Invoice pool calculation and saved changes
 
@@ -484,7 +543,7 @@ The manual release workflow invokes full CI, updates the requested semantic vers
 
 ### Startup fails before the server listens
 
-Startup requires settings, MariaDB, invoice-retention initialization, and application construction. Read the first error printed by `src/server.ts`; common causes are an unreachable database, a missing generated TypeORM index, invalid database credentials, or a schema that has not been initialized/migrated.
+Startup requires settings, MariaDB, invoice-retention and entity-archival initialization, and application construction. Read the first error printed by `src/server.ts`; common causes are an unreachable database, a missing generated TypeORM index, invalid database credentials or archival configuration, or a schema that has not been initialized/migrated.
 
 ### A standalone TypeORM command cannot load entities
 

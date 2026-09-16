@@ -4,10 +4,10 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: test maintainers
 status: current
-last-verified: 2026-09-06
+last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: non-blocking documentation policy and optional report/test routing; D12 Vitest and Playwright discovery, layer contracts, environment loading, MariaDB guardrails, E2E lifecycle, current factories/keywords/support paths, commands, coverage, and CI behavior; D14 help authoring, rendered semantic, contextual navigation, and release packaging coverage
-source-anchors: package.json; package-lock.json; vitest.config.mts; playwright.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs
+verification-scope: archival test routing and explicit E2E automation configuration reviewed from source; execution evidence reported separately; non-blocking documentation policy and optional report/test routing; D12 Vitest and Playwright discovery, layer contracts, environment loading, MariaDB guardrails, E2E lifecycle, current factories/keywords/support paths, commands, coverage, and CI behavior; D14 help authoring, rendered semantic, contextual navigation, and release packaging coverage
+source-anchors: tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs
 next-review: test-layout-command-or-help-validation-change
 -->
 
@@ -239,6 +239,10 @@ E2E_DB_NAME=surveyor_e2e
 
 The initializer also requires `E2E_ADMIN_USERNAME`, `E2E_ADMIN_EMAIL`, and `E2E_ADMIN_PASSWORD`. It maps the E2E settings through the normal application settings loader when the built server starts.
 
+Playwright's managed server defaults `E2E_AUTO_ARCHIVE_ENABLED` to `false` so historical fixtures remain stable. The
+example environment makes this choice explicit. Override it only for an intentional automatic-archival workflow;
+manual archive/restore and personal-visibility E2E tests run normally with the automatic job disabled.
+
 By default, the initializer recreates the schema from entity metadata and skips historical migrations. Set `E2E_RUN_MIGRATIONS=true` only for an explicit migration exercise whose database and migration expectations have been reviewed.
 
 ### 3. Install Chromium and run
@@ -284,6 +288,24 @@ Do not create a new helper path in documentation before it exists in the reposit
 | Documentation label/path contract | Optional advisory documentation report | Keep application-behavior tests separate from maintained wording and images. |
 
 A change may need several layers, but more layers are not automatically better. Protect each distinct failure mode at the cheapest stable seam.
+
+## Archival coverage
+
+`tests/unit/entity-archival.spec.ts` protects UTC inclusive-date boundaries, direct/inherited state, personal placement,
+settings, and scheduling. `tests/frontend/entity-archive.spec.ts` and `entity-cards-overview.spec.ts` cover explicit
+commands, success/failure handling, and independent main/archive filters. Keep time deterministic and use `TZ=UTC`,
+matching CI and the datasource contract.
+
+Persistence and concurrency belong in `tests/integration/entity-archival.spec.ts` against the guarded real MariaDB
+schema. Preserve real entity metadata and exercise parent inheritance, durable restore, membership/privacy, target
+deletion cleanup, conditional automatic updates, and unchanged business/file references. Mock only true external
+side effects; file-preservation fixtures must not run invoice retention while asserting archival behavior.
+
+`tests/e2e/archival.spec.ts` covers the actual session/API/render/browser boundaries, including collapsed sections,
+private placement, authorized lifecycle actions, and inherited event state. Schema synchronization in these suites
+does not validate migration SQL: separately rehearse `AddEntityArchival1789862400000` against an existing-schema copy
+and the supported fresh-schema bootstrap. Follow [Database and Migrations](DATABASE.md) and prove the disposable target
+before either rehearsal. Documentation reports remain advisory and are not substitutes for these application checks.
 
 ## Assertions and isolation
 

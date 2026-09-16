@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {Column, Entity, OneToMany} from "typeorm";
+import {Column, Entity, Index, OneToMany} from "typeorm";
 import {BaseEntity} from "../abstract/BaseEntity";
 import {ActivityPlan} from "../activity/ActivityPlan";
 import {DriversList} from "../drivers/DriversList";
@@ -23,7 +23,18 @@ import {EventRegBypassLink} from "./EventRegBypassLink";
 import {EventRegistration} from "./EventRegistration";
 
 @Entity("events", {schema: "surveyor"})
+// The sweep filters archive/pause state and advances through (endDate, id) batches.
+@Index("idx_events_auto_archive", ["archivedAt", "autoArchivePaused", "endDate", "id"])
 export class Event extends BaseEntity {
+    /**
+     * Explicit organizer override; date changes do not silently clear it.
+     * Manual restoration sets the pause in the same write as clearing archivedAt,
+     * preventing the hourly sweep from immediately archiving an expired event again.
+     * Attached entities inherit this event's eventual archive state without a copied flag.
+     */
+    @Column("boolean", {name: "auto_archive_paused", default: false})
+    autoArchivePaused!: boolean;
+
     @Column("date", {name: "start_date"})
     startDate!: string; // YYYY-MM-DD
 

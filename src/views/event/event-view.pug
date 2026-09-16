@@ -1,5 +1,7 @@
 //- views/event/event-view.pug — Event view + registration page
 extends ../layout
+//- Both the event notice and related-entity cards use these mixins and share one page script below.
+include ../modules/module_entity_archive
 
 block meta
     - const ev = data.event || data; // tolerate different controller shapes
@@ -10,6 +12,9 @@ block title
     +entityImageModal(ev, "event")
 
 block content
+    //- Display the controller's event projection for every admitted viewer; available manager actions
+    //- are part of that projection. Archival does not suppress registration, invoices, or related content.
+    +entityArchiveNotice(ev, 'event', data.archive)
     -
         const ownerId = ev.ownerId;
         const startDate = ev.startDate;
@@ -252,6 +257,8 @@ block content
 
             if permData.entity.has("ACCESS_ITEMS")
                 .accordion.accordion-dark#entityLists
+                    //- This is shared event content, so personalVisibility stays unset. A private dashboard
+                    //- preference must not remove a related entity here or hide its inherited archive badge.
                     +entityOverview('sec-related', 'Things to do', 'bi-clipboard-check', data.relatedEntities, "Nothing to do...", "entityLists", false)
 
     else
@@ -265,6 +272,8 @@ block content
 
 
 block scripts
+    //- One handler covers the event notice and all related cards, including duplicate command buttons.
+    +entityArchiveScripts()
     script(type="module" src="/js/events.gen.js")
     script.
         window.Surveyor.eventId = "#{ev.id}";

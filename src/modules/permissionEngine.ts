@@ -171,6 +171,70 @@ export async function evaluateSubject(
     }
 }
 
+/**
+ * Evaluate overview roots and their parent events with the existing permission rules.
+ * Preloading the inputs avoids one database round trip per card; evaluateSubject
+ * remains the sole authority for combining ownership, audiences, and individual grants.
+ * Return one PermView per type + ID, matching the keys used by archival presentation.
+ * Descriptors must include the parent event ID for participant-audience evaluation;
+ * that relationship does not itself copy the event's administrative grants to a child.
+ */
+export async function evaluateEntities(entities: EntityDescriptor[], session: SessionLike): Promise<Map<string, PermView>> {
+    // The same root may occur in both dashboard collections or as several children's parent.
+    // Deduplicate before loading permission rows so all callers share one result for that root.
+    const entitiesByKey = new Map<string, EntityDescriptor>();
+    for (const entity of entities) {
+        entitiesByKey.set(keyEnt(entity.entityType, entity.entityId), entity);
+    }
+    const unique = Array.from(entitiesByKey.values());
+    const profileId = session.profile?.id;
+    const inputs = await entityAdminService.getEntityPermissionInputs(unique, profileId);
+    // These caches live only for this evaluation and this session. Never retain profile grants
+    // or event membership globally: another viewer or a later request may have different access.
+    const caches: Required<PermEngineCaches> = {
+        participant: new Map(),
+        userPerms: new Map(),
+        defaults: new Map(),
+    };
+
+    // Seed negative results as well as positive ones. The existing evaluator interprets an
+    // absent cache entry as "not loaded" and would otherwise issue one fallback query per card.
+    // Defaults use type:id, individual grants add profileId, and participation uses eventId.
+    for (const entity of unique) {
+        caches.defaults.set(keyEnt(entity.entityType, entity.entityId), {});
+        if (profileId) {
+            caches.userPerms.set(keyUser(entity.entityType, entity.entityId, profileId), 0);
+        }
+        if (entity.eventId) {
+            caches.participant.set(entity.eventId, false);
+        }
+    }
+    // Overlay only returned rows on the known-empty inputs. The service queries individual
+    // grants only when profileId exists, so every row below belongs to that same active profile.
+    for (const row of inputs.individual) {
+        caches.userPerms.set(keyUser(row.entityType, row.entityId, profileId!), row.perms);
+    }
+    // One entity can have several audience rows; preserve each named audience for the normal
+    // evaluator to combine according to the session rather than combining masks prematurely.
+    for (const row of inputs.defaults) {
+        caches.defaults.get(keyEnt(row.entityType, row.entityId))![row.audience] = row.perms;
+    }
+    // Registration rows contribute membership only. The participant grant itself still comes
+    // from each evaluated entity's audience defaults, including when multiple children share an event.
+    for (const row of inputs.registrations) {
+        caches.participant.set(row.event.id, true);
+    }
+
+    // With every input populated, the ordinary evaluator now consumes these caches without
+    // per-card permission queries. Ownership and all grant-combination behavior stay in one place.
+    const views = new Map<string, PermView>();
+    for (const entity of unique) {
+        const view = await evaluateSubject({kind: 'entity', entity}, session, caches);
+        views.set(keyEnt(entity.entityType, entity.entityId), view);
+    }
+    return views;
+}
+
 /** Build bundle for an entity and all its items (view helper) */
 export async function buildPermBundle(
     entity: EntityDescriptor,

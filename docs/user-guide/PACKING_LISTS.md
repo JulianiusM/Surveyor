@@ -4,10 +4,10 @@ documentation-metadata
 audience: packing-list participants; packing-list organizers
 owner: packing-list feature maintainers
 status: current
-last-verified: 2026-09-06
+last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D10 packing workflow plus D14 rendered-label assertions, shared-versus-local visual aid, per-page navigation, and trusted-help integration; D14 rendered help navigation, semantic checks, and trusted-content integration; D14 visual correction: measured and individually inspected shared-versus-local diagram
-source-anchors: docs/user-guide/assets/packing-shared-vs-local.png; docs/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; src/views/packing/packing-create.pug; src/views/packing/packing-view.pug; src/public/js/packing-create.ts; src/public/js/packing.ts; src/routes/packing.ts; src/routes/api/packing.ts; src/controller/packingController.ts; src/middleware/guestFlowFactory.ts; src/middleware/assignFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/packing/PackingList.ts; src/modules/database/entities/packing/PackingItem.ts; src/modules/database/entities/packing/PackingAssignment.ts; src/modules/database/services/PackingService.ts; src/modules/lib/permissions.ts; src/views/event/event-dashboard.pug; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/packing-workflows.spec.ts; tests/integration/controller-smoke-workflows.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D10 packing workflow plus D14 rendered-label assertions, shared-versus-local visual aid, per-page navigation, and trusted-help integration; D14 rendered help navigation, semantic checks, and trusted-content integration; D14 visual correction: measured and individually inspected shared-versus-local diagram
+source-anchors: src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; docs/user-guide/assets/packing-shared-vs-local.png; docs/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; src/views/packing/packing-create.pug; src/views/packing/packing-view.pug; src/public/js/packing-create.ts; src/public/js/packing.ts; src/routes/packing.ts; src/routes/api/packing.ts; src/controller/packingController.ts; src/middleware/guestFlowFactory.ts; src/middleware/assignFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/packing/PackingList.ts; src/modules/database/entities/packing/PackingItem.ts; src/modules/database/entities/packing/PackingAssignment.ts; src/modules/database/services/PackingService.ts; src/modules/lib/permissions.ts; src/views/event/event-dashboard.pug; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/packing-workflows.spec.ts; tests/integration/controller-smoke-workflows.spec.ts; src/controller/helpController.ts
 next-review: packing-visible-UI-or-behavior-change
 -->
 
@@ -257,7 +257,7 @@ A linked list:
 - requires effective **Access View** for a nonparticipant;
 - is deleted with the event because it is part of that event’s stored data.
 
-The selected event must be an active event managed by the current profile. Creating from **Event packing lists** preselects that event.
+The event picker offers active, unarchived events managed by the current profile. Creating from **Event packing lists** preselects that event; when you deliberately create from an archived event, the creation page explains that the new list inherits its archival.
 
 Event registration and list permissions are separate. Registration can admit a participant to the linked page, while individual actions such as **Take**, adding items, editing rows, or managing assignments still use the packing list’s effective permissions.
 
@@ -312,7 +312,7 @@ Only the owner can delete the complete list.
 3. Find the packing list and select **Delete**.
 4. Confirm the deletion.
 
-Deletion permanently removes the list, its items, its shared assignments, and its stored header image. Surveyor has no packing-list archive or restore action. A linked list is also removed when its event is deleted.
+Deletion permanently removes the list, its items, its shared assignments, and its stored header image. Archival restoration cannot undo deletion; use archival when you want to keep the list available. A linked list is also removed when its event is deleted.
 
 ## Capabilities and limits
 
@@ -324,7 +324,7 @@ Deletion permanently removes the list, its items, its shared assignments, and it
 | Browser-local **Packed?** checklist | Cross-device, account-based, or organizer-visible packed status |
 | Event-linked and standalone lists | A list deadline, automatic reminders, or change notifications |
 | Delegated permissions and administrators | Anonymous assignee names |
-| Header images, duplication, and permanent deletion | Packing-list export, archive, or in-app restore |
+| Header images, duplication, archival, restoration, and permanent deletion | Packing-list export |
 
 ## Practical examples
 
@@ -339,6 +339,12 @@ Enable **Everyone** for **Water bottle**, **Sleeping bag**, and **Identification
 ### Event setup
 
 Link a list to the event and create ordinary rows such as **Registration signs**, **Extension cables**, and **Projector**. Grant the event team only the editing and assignment permissions they need.
+
+## Archive or restore a list
+
+An owner or organizer with **Edit Meta** can use **Archive for everyone** or **Restore for everyone** in **Archival**. Archival preserves items, assignments, images, and existing access and actions. Packing lists have no independent automatic archival date; a linked list inherits its event's archival.
+
+When **Archived with event** appears, restore the event first. A list archived separately stays archived when its event is restored. Find archived lists under **Archived and hidden** in [Your Overview](DASHBOARD.md#find-archived-and-hidden-items). The card's **Hide for me**, **Show for me**, and **Use default visibility** choices are saved for the active profile; these overview choices are separate from the browser-local **Packed?** marks.
 
 ## Troubleshooting
 
@@ -369,6 +375,8 @@ Register the active profile for the event, or ask an organizer to grant list-spe
 ### The list is missing from **Your overview**
 
 Confirm the active profile.
+
+Expand **Archived and hidden** in both overview collections and clear any filters there.
 
 - The owner and named administrators find the list under **Administrable entities**.
 - A participant finds it under **Your participation** after taking at least one ordinary item.

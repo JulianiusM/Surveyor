@@ -22,6 +22,7 @@ import type {Survey} from "../modules/database/entities/surveys/Survey";
 import {Guest} from "../modules/database/entities/user/Guest";
 import type * as userService from "../modules/database/services/UserService";
 import type {EntityItemType, EntityType} from "./UtilTypes";
+import type {ArchivePresentation, PersonalVisibility} from "./ArchiveTypes";
 
 export type OidcClaims = {
     sub: string;
@@ -91,6 +92,23 @@ export type Entity = EntityBase & {
     url: string;
     type: EntityType;
     imageUrl?: string | null;
+    /**
+     * Shared server-derived lifecycle and permitted actions for an entity card.
+     * Optional because the card contract is also used on pages without archival controls;
+     * those callers do not need to load feature state merely to render a normal link.
+     */
+    archive?: ArchivePresentation;
+    /**
+     * Present only in the acting profile's overview, never in shared event cards.
+     * The controller reads one preference for all appearances of this type/ID pair.
+     */
+    visibility?: PersonalVisibility;
+    /**
+     * Final overview placement computed from authoritative archival and the private preference.
+     * Pug consumes this result rather than reproducing visibility rules. An omitted value
+     * leaves ordinary card collections unpartitioned instead of inferring user preferences.
+     */
+    overviewHidden?: boolean;
 }
 
 export type GuestLinkData = Guest & { link: string }

@@ -49,7 +49,8 @@ async function createInvoiceContext(title: string): Promise<InvoiceContext> {
 
 async function submitInvoice(context: InvoiceContext, submission: InvoiceSubmissionCase = createInvoiceSubmissionCase()): Promise<number> {
     await fs.promises.mkdir(path.dirname(submission.proofPath), {recursive: true});
-    await fs.promises.writeFile(submission.proofPath, '%PDF-1.4 integration proof');
+    // Teardown owns only newly created fixtures, never an existing upload at an overridden path.
+    await fs.promises.writeFile(submission.proofPath, '%PDF-1.4 integration proof', {flag: 'wx'});
     proofPaths.add(submission.proofPath);
     await eventPoolController.submitInvoice(
         context.event,

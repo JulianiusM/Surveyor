@@ -294,12 +294,23 @@ export async function getActivityPlansByProfileId(profileId: string) {
 }
 
 export async function getActivityPlansByParticipant(profileId: string) {
-    return await AppDataSource.getRepository(ActivityPlan).createQueryBuilder('plan')
-        .whereExists(AppDataSource.getRepository(ActivityAssignment)
+    return getActivityParticipationQuery(profileId).getMany();
+}
+
+/**
+ * Build the existing assignment-based participation query without executing it.
+ * Overview discovery loads every matching plan; personal visibility adds one plan ID
+ * and checks existence using its transaction manager. Sharing this predicate keeps
+ * those two entry points consistent without loading an entire overview for a write.
+ */
+export function getActivityParticipationQuery(profileId: string, manager: EntityManager = AppDataSource.manager) {
+    // EXISTS returns each plan once even when the profile has several assignments.
+    return manager.getRepository(ActivityPlan).createQueryBuilder('plan')
+        .whereExists(manager.getRepository(ActivityAssignment)
             .createQueryBuilder("ass")
             .where("ass.entity_id = plan.id")
             .andWhere("ass.profile_id = :profileId", {profileId: profileId})
-        ).getMany();
+        );
 }
 
 export async function updateActivityPlanDescription(
@@ -353,17 +364,9 @@ export async function updateHeaderImage(id: string, headerImg?: string | null) {
 }
 
 export async function getManagedPlans(profileId: string) {
-    const ids = await entityAdminService.getIds('activity', profileId);
-    return await AppDataSource.getRepository(ActivityPlan).find({
-        where: [
-            {
-                owner: {id: profileId},
-            },
-            {
-                id: In(ids),
-            }
-        ],
-    });
+    // Ownership and explicit administration assignments define overview membership.
+    // The permission engine separately decides which actions each member may perform.
+    return entityAdminService.createManagedEntityQuery(AppDataSource.getRepository(ActivityPlan), 'activity', profileId).getMany();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

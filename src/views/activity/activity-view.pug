@@ -1,4 +1,6 @@
 extends ../layout
+//- This page explicitly owns archival presentation and script loading; the layout has no optional state.
+include ../modules/module_entity_archive
 
 include ./parts/participant-status
 
@@ -10,6 +12,9 @@ block title
     +entityImageModal(data.plan, "activity")
 
 block content
+    //- The server combines the plan's own state with its event's state and projects the current user's
+    //- capabilities. An attached plan follows the event's automatic schedule, not its own date range.
+    +entityArchiveNotice(data.plan, 'activity', data.archive)
     //- helper in pug (this won’t be sent to the client)
     -
         function fmtISO(date) {
@@ -321,6 +326,8 @@ block content
 
 
 block scripts
+    //- Bind the notice's data-archive-* buttons once; existing plan behavior keeps its own entry point.
+    +entityArchiveScripts()
     script(type="module" src="/js/activity.gen.js")
     script.
         window.Surveyor.entityId = "#{data.plan.id}";

@@ -125,7 +125,9 @@ app.get('/oidc/callback', asyncHandler(async (req: Request, res: Response) => {
 
 // Dashboard nach dem Login
 app.get('/dashboard', isLoggedIn, asyncHandler(async (req: Request, res: Response) => {
-    renderer.renderWithData(res, 'users/dashboard', await userController.getEntityList(req.session.profile!));
+    // The active profile selects memberships/private preferences; pass the same session to
+    // permission projection for archival controls. Both collections return as explicit page data.
+    renderer.renderWithData(res, 'users/dashboard', await userController.getEntityList(req.session.profile!, req.session));
 }));
 
 // Delete flows

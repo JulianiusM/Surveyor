@@ -15,6 +15,7 @@
  */
 
 import {Request} from "express";
+import Joi from 'joi';
 import {Guest} from "../modules/database/entities/user/Guest";
 import {Profile} from "../modules/database/entities/user/Profile";
 import {User} from "../modules/database/entities/user/User";
@@ -25,12 +26,16 @@ import * as packingService from "../modules/database/services/PackingService";
 import * as surveyService from "../modules/database/services/SurveyService";
 import * as userService from "../modules/database/services/UserService";
 import mailer, {resolveEmailRecipientName} from "../modules/email";
-import {ExpectedError, ValidationError} from "../modules/lib/errors";
-import {persistSession} from "../modules/lib/session";
-import {buildGuestLink, convertToSingleList, merge} from "../modules/lib/util";
+import {APIError, ExpectedError, ValidationError} from "../modules/lib/errors";
+import {persistSession, requireSessionProfileId} from "../modules/lib/session";
+import {buildGuestLink, convertToSingleList, ENTITIES, merge} from "../modules/lib/util";
 import * as oidc from "../modules/oidc";
 import settings from "../modules/settings";
-import {DashboardDTO, GuestLinkData} from "../types/UserTypes";
+import {DashboardDTO, Entity, GuestLinkData} from "../types/UserTypes";
+import type {ArchivePresentation, ArchiveReference, PersonalVisibility} from "../types/ArchiveTypes";
+import type {SessionLike} from "../types/PermissionTypes";
+import {archiveKey, isHiddenInOverview} from "../modules/archive/policy";
+import {getArchivePresentations} from "./entityAdminController";
 
 const CREATE_TEMPLATE = 'users/register';
 const LOGIN_TEMPLATE = 'users/login';
@@ -101,6 +106,9 @@ export async function loginUser(body: any, session: Request["session"]) {
 }
 
 export async function getDashboardEntities(profile: Profile) {
+    // Discover membership independently of archival and dates. Archived and ended entities
+    // must still reach the dashboard so its collapsed section and personal "Show" can expose
+    // them; only creation pickers use the narrower active-managed-event query.
     const [
         surveys,
         partSurveys,
@@ -129,7 +137,7 @@ export async function getDashboardEntities(profile: Profile) {
         driverService.getManagedListsForProfile(profile.id),
         driverService.getDriversListByParticipant(profile.id),
         eventService.getEventsByOwnerId(profile.id),
-        eventService.getActiveManagedEvents(profile.id),
+        eventService.getManagedEvents(profile.id),
         eventService.getRegisteredEventsFor(profile.id),
     ])
 
@@ -156,9 +164,102 @@ export async function getDashboardEntities(profile: Profile) {
     } as DashboardDTO;
 }
 
-export async function getEntityList(profile: Profile) {
+/**
+ * Join discovered cards with shared lifecycle state and this profile's private preference.
+ * Inputs are keyed by type + ID because a dashboard mixes all entity kinds. Return copies
+ * for rendering: decoration must not mutate ORM entities or store personal state on them.
+ */
+function decorateOverviewEntities(
+    items: Entity[],
+    archives: Map<string, ArchivePresentation>,
+    visibility: Map<string, PersonalVisibility>,
+): Entity[] {
+    const decorated: Entity[] = [];
+    for (const item of items) {
+        const key = archiveKey(item);
+        const archive = archives.get(key);
+        if (!archive) {
+            // Discovery and projection are separate reads; omit a root deleted between them.
+            continue;
+        }
+        // No saved preference means "follow authoritative archival". Explicit shown/hidden
+        // changes placement only; keeping archive alongside it preserves truthful status badges.
+        const preference = visibility.get(key) ?? 'default';
+        decorated.push({
+            ...item,
+            archive,
+            visibility: preference,
+            overviewHidden: isHiddenInOverview(archive.archived, preference),
+        });
+    }
+    return decorated;
+}
+
+/**
+ * Build renderer data for both dashboard collections from the active profile's membership.
+ * Pass the route's active session through to permission projection; the profile-only default
+ * also supports callers without an Express session, as the evaluator reads identity from profile.
+ * One entity can appear in both collections, but uses the same lifecycle and preference maps.
+ */
+export async function getEntityList(profile: Profile, session: SessionLike = {profile}) {
     const dto = await getDashboardEntities(profile);
-    return {owner: convertToSingleList(dto.owner ?? {}), participant: convertToSingleList(dto.participant ?? {})}
+    const owner = convertToSingleList(dto.owner ?? {});
+    const participant = convertToSingleList(dto.participant ?? {});
+    // Load independent shared and private state together. Their service readers deduplicate
+    // overlapping references, avoiding separate lookups for administration and participation.
+    const refs = [...owner, ...participant];
+    const [archives, visibility] = await Promise.all([
+        getArchivePresentations(refs, session),
+        userService.getVisibilityPreferences(profile.id, refs),
+    ]);
+    return {
+        owner: decorateOverviewEntities(owner, archives, visibility),
+        participant: decorateOverviewEntities(participant, archives, visibility),
+    };
+}
+
+/**
+ * Change only the authenticated session profile's overview placement, never shared archival.
+ * The service checks current overview membership while holding the target row lock, which
+ * serializes the check/write with a concurrent database deletion. A visible card from an old
+ * page is not sufficient authority to save a preference after membership has been removed.
+ */
+export async function setPersonalVisibility(entityType: string, id: string, body: unknown, session: SessionLike) {
+    // Resolve identity before interpreting route input. Both account and guest sessions use
+    // profiles; no route parameter or payload field may select a different acting profile.
+    const profileId = requireSessionProfileId(session);
+    const targetSchema = Joi.object<ArchiveReference>({
+        type: Joi.string().valid(...Object.values(ENTITIES)).required(),
+        id: Joi.string().uuid().required(),
+    });
+    const target = targetSchema.validate({type: entityType, id}, {convert: false});
+    if (target.error) {
+        throw new APIError('Invalid overview entity', {}, 400);
+    }
+
+    // Unknown fields are rejected so a payload cannot select a different profile or write archive timestamps.
+    const visibilitySchema = Joi.object<{visibility: PersonalVisibility}>({
+        visibility: Joi.string().valid('default', 'hidden', 'shown').required(),
+    }).unknown(false);
+    const preference = visibilitySchema.validate(body ?? {}, {abortEarly: false, convert: false});
+    if (preference.error) {
+        throw new APIError('Invalid visibility request', {}, 400);
+    }
+
+    // UUID input is case-insensitive, while in-memory keys and stored polymorphic
+    // references use the app's canonical lowercase spelling.
+    const reference: ArchiveReference = {type: target.value.type, id: target.value.id.toLowerCase()};
+    const visibility = preference.value.visibility;
+    await userService.setVisibility(profileId, reference, visibility);
+    // Recompute placement against current authoritative state after the private write.
+    // The response preserves both concepts instead of presenting "shown" as a shared restore.
+    const presentations = await getArchivePresentations([reference], session);
+    const archive = presentations.get(archiveKey(reference));
+    return {
+        archive,
+        visibility,
+        overviewHidden: isHiddenInOverview(archive?.archived ?? false, visibility),
+    };
 }
 
 export async function sendPasswordForgotMail(username: string) {

@@ -4,10 +4,10 @@ documentation-metadata
 audience: event participants; event organizers
 owner: event feature maintainers
 status: current
-last-verified: 2026-09-14
+last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: expanded event descriptions and dietary-note limits; invoice factors, rebates, progress feedback, calculation previews, payment carry-forward, rollback, and email-control entry points; D05 event creation, registration, deadline, dietary, participant-management, related-entity, export, permission, and privacy workflows verified; D06 invoice-pool entry points and permission boundary linked to the dedicated guide; D14 rendered help navigation, semantic checks, and trusted-content integration
-source-anchors: src/views/modules/module_invoice_pool.pug; docs/user-guide/INVOICE_POOLS.md; src/routes/event.ts; src/routes/api/event.ts; src/controller/eventController.ts; src/middleware/guestFlowFactory.ts; src/modules/database/entities/event/; src/modules/database/services/EventService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/modules/lib/permissions.ts; src/views/event/event-create.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/views/modules/module_registration_links.pug; src/views/modules/module_event_participants.pug; src/public/js/events.ts; src/public/js/modules/reg-links.ts; src/public/js/modules/event-participant.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; expanded event descriptions and dietary-note limits; invoice factors, rebates, progress feedback, calculation previews, payment carry-forward, rollback, and email-control entry points; D05 event creation, registration, deadline, dietary, participant-management, related-entity, export, permission, and privacy workflows verified; D06 invoice-pool entry points and permission boundary linked to the dedicated guide; D14 rendered help navigation, semantic checks, and trusted-content integration
+source-anchors: src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/modules/module_invoice_pool.pug; docs/user-guide/INVOICE_POOLS.md; src/routes/event.ts; src/routes/api/event.ts; src/controller/eventController.ts; src/middleware/guestFlowFactory.ts; src/modules/database/entities/event/; src/modules/database/services/EventService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/modules/lib/permissions.ts; src/views/event/event-create.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/views/modules/module_registration_links.pug; src/views/modules/module_event_participants.pug; src/public/js/events.ts; src/public/js/modules/reg-links.ts; src/public/js/modules/event-participant.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: event-visible-UI-or-behavior-change
 -->
 
@@ -23,6 +23,7 @@ Use an event to collect attendance dates, optional dietary information, and rela
 - [Use invoice pools and shared payments](INVOICE_POOLS.md)
 - [Link packing, activity, and drivers lists](#link-plans-and-lists-to-the-event)
 - [Export the participant list](#export-the-participant-list)
+- [Archive or restore the event](#archive-or-restore-the-event)
 
 ## Join and register for an event
 
@@ -184,7 +185,7 @@ Sections and controls appear according to the profile’s other permissions:
 |---|---|
 | **Edit Title** | Change the event title. |
 | **Edit Description** | Change the description. |
-| **Edit Metadata** | Change dates, location, binding deadline, time zone, the post-deadline date/cancellation policy, and the header image. |
+| **Edit Meta** | Change dates, location, binding deadline, time zone, the post-deadline date/cancellation policy, and the header image; archive, restore, or pause/resume automatic archival. |
 | **Edit Capacity** | Change **Max Participants**. |
 | **Manage Requirements** | Change required dietary information and dietary-comment/update policies. |
 | **Manage Permissions** | Edit audience permissions and individual administrator grants. |
@@ -269,9 +270,17 @@ The PDF contains event information, attendance totals, dietary totals, and parti
 
 ## Header image, duplication, and deletion
 
-A profile with **Edit Metadata** can add, replace, or remove the event header image. Accepted images are JPEG, PNG, and GIF files up to 10 MiB.
+A profile with **Edit Meta** can add, replace, or remove the event header image. Accepted images are JPEG, PNG, and GIF files up to 10 MiB.
 
 The owner can use **Duplicate** or **Delete** from **Your overview**. Duplicating opens a prefilled creation form so that the copy can be reviewed before it is created. Deletion is an owner-only destructive action; verify the selected event before confirming it.
+
+## Archive or restore the event
+
+In **Archival**, an owner or organizer with **Edit Meta** can select **Archive for everyone** and confirm. The event, its linked plans and lists, registrations, and invoice pools become archived together. Existing access and actions remain available, and archival preserves all data and files. The **Things to do** and invoice sections remain usable.
+
+Events can also be archived automatically after their inclusive end date and the site's configured delay. Use **Pause automatic archival** to keep an event active. Select **Restore for everyone** to restore an archived event; restoration pauses automatic archival until you select **Resume automatic archival**. Separately archived child entities stay archived when their event is restored.
+
+Archived event cards move into **Archived and hidden** by default. To change only your own card placement, use **Hide for me**, **Show for me**, or **Use default visibility** in [Your Overview](DASHBOARD.md#hide-or-show-an-item-only-for-yourself). Invoice retention continues independently; archival does not delete proofs or header images.
 
 ## Troubleshooting
 

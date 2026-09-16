@@ -4,10 +4,10 @@ documentation-metadata
 audience: drivers; passengers; transport organizers
 owner: drivers-list feature maintainers
 status: current
-last-verified: 2026-09-05
+last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D11 driver, passenger, and organizer workflows; profile-derived driver identity; capacity and counter semantics; event linkage; permissions; privacy; images; duplication; deletion; and troubleshooting; D14 rendered help navigation, semantic checks, and trusted-content integration
-source-anchors: src/views/drivers/drivers-create.pug; src/views/drivers/drivers-view.pug; src/public/js/drivers.ts; src/routes/drivers.ts; src/routes/api/drivers.ts; src/controller/driversController.ts; src/middleware/guestFlowFactory.ts; src/middleware/assignFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/drivers/DriversList.ts; src/modules/database/entities/drivers/DriversItem.ts; src/modules/database/entities/drivers/DriversAssignment.ts; src/modules/database/services/DriverService.ts; src/modules/lib/permissions.ts; src/views/event/event-dashboard.pug; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/drivers-workflows.spec.ts; tests/integration/controller-smoke-workflows.spec.ts; docs/decisions/DEC-003-DRIVER-LIST-PARTICIPANT-COUNT.md; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D11 driver, passenger, and organizer workflows; profile-derived driver identity; capacity and counter semantics; event linkage; permissions; privacy; images; duplication; deletion; and troubleshooting; D14 rendered help navigation, semantic checks, and trusted-content integration
+source-anchors: src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/drivers/drivers-create.pug; src/views/drivers/drivers-view.pug; src/public/js/drivers.ts; src/routes/drivers.ts; src/routes/api/drivers.ts; src/controller/driversController.ts; src/middleware/guestFlowFactory.ts; src/middleware/assignFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/drivers/DriversList.ts; src/modules/database/entities/drivers/DriversItem.ts; src/modules/database/entities/drivers/DriversAssignment.ts; src/modules/database/services/DriverService.ts; src/modules/lib/permissions.ts; src/views/event/event-dashboard.pug; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/drivers-workflows.spec.ts; tests/integration/controller-smoke-workflows.spec.ts; docs/decisions/DEC-003-DRIVER-LIST-PARTICIPANT-COUNT.md; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: drivers-visible-UI-or-behavior-change
 -->
 
@@ -254,7 +254,7 @@ A linked list:
 - requires effective list-specific **Access View** for a nonparticipant; and
 - is deleted with the event because it is part of that event’s stored data.
 
-The selected event must be an active event managed by the current profile. Creating from the event administration dashboard preselects it.
+The event picker offers active, unarchived events managed by the current profile. Creating from the event administration dashboard preselects it; when you deliberately create from an archived event, the creation page explains that the new list inherits its archival.
 
 Event registration controls admission to the linked page. Driver-list permissions separately control actions such as taking a place, adding a ride, editing content, removing assignments, or administering permissions.
 
@@ -318,7 +318,7 @@ Only the list owner can delete the complete drivers list.
 3. Find the list and select **Delete**.
 4. Confirm the deletion.
 
-Deletion permanently removes the list, every driver row, every passenger assignment, and the stored header image. Surveyor has no drivers-list archive or in-app restore action. A linked list is also removed when its event is deleted.
+Deletion permanently removes the list, every driver row, every passenger assignment, and the stored header image. Archival restoration cannot undo deletion; use archival when you want to keep the list available. A linked list is also removed when its event is deleted.
 
 ## Capabilities and limits
 
@@ -329,7 +329,7 @@ Deletion permanently removes the list, every driver row, every passenger assignm
 | Capacity-limited self-service passenger assignments | Waiting lists or automatic reassignment |
 | Event-linked and standalone lists | Recurring-driver rotation or schedule generation |
 | Row-owner and delegated organizer controls | Private contact fields or direct messaging |
-| Header images, duplication, and permanent deletion | Transport-cost calculation, export, archive, or in-app restore |
+| Header images, duplication, archival, restoration, and permanent deletion | Transport-cost calculation or export |
 
 ## Practical examples
 
@@ -344,6 +344,12 @@ Add one row for each vehicle and departure time. Put the origin, destination, an
 ### Event transport
 
 Create the list from **Event drivers lists**, grant registered participants the actions they need, and keep personal contact details in an agreed private channel. Event registration admits participants to the linked list, while the list’s permissions control ride creation and assignments.
+
+## Archive or restore a list
+
+An owner or organizer with **Edit Meta** can use **Archive for everyone** or **Restore for everyone** in **Archival**. Archival preserves rides, passenger assignments, images, and existing access and actions. Drivers lists have no independent automatic archival date; a linked list inherits its event's archival.
+
+When **Archived with event** appears, restore the event first. A list archived separately stays archived when its event is restored. Find archived lists under **Archived and hidden** in [Your Overview](DASHBOARD.md#find-archived-and-hidden-items). **Hide for me**, **Show for me**, and **Use default visibility** change only the active profile's overview placement.
 
 ## Troubleshooting
 
@@ -375,6 +381,8 @@ Register the active profile for the event, or ask an organizer to grant list-spe
 ### The list is missing from **Your overview**
 
 Confirm the active profile.
+
+Expand **Archived and hidden** in both overview collections and clear any filters there.
 
 - Owners and delegated administrators find the list under **Administrable entities**.
 - A driver or passenger finds it under **Your participation** after offering a ride or taking a place.

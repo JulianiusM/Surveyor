@@ -5,10 +5,10 @@ documentation-metadata
 audience: operators; site reliability engineers; maintainers
 owner: application operators
 status: current
-last-verified: 2026-09-05
+last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: D04 accepted from source review and deployment-practice confirmation for settings, precedence, authentication, SMTP, storage, and production safety; controlled execution tracked separately in D04V
-source-anchors: src/modules/settings.ts; src/server.ts; src/app.ts; src/modules/email.ts; src/modules/oidc.ts; src/modules/lib/fileCommons.ts; src/modules/invoiceRetention.ts; src/modules/database/services/EventInvoiceService.ts; .github/workflows/ci.yml
+verification-scope: archival defaults, coercion, inclusive UTC cutoff, startup validation, and pause behavior source review; D04 accepted from source review and deployment-practice confirmation for settings, precedence, authentication, SMTP, storage, and production safety; controlled execution tracked separately in D04V
+source-anchors: src/modules/entityArchival.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/settings.ts; src/server.ts; src/app.ts; src/modules/email.ts; src/modules/oidc.ts; src/modules/lib/fileCommons.ts; src/modules/invoiceRetention.ts; src/modules/database/services/EventInvoiceService.ts; .github/workflows/ci.yml
 next-review: D04V
 -->
 
@@ -79,8 +79,8 @@ install -o surveyor -g surveyor -m 0600 /dev/null /etc/surveyor/settings.csv
 
 For Boolean settings, use `true` or `false`. The loader treats `1`, `true`, `yes`, and `on`, case-insensitively, as true;
 any other non-empty value becomes false. Number settings are parsed with JavaScript numeric conversion; use plain decimal notation and validate the resulting
-value. In particular, `INVOICE_RETENTION_MONTHS` must be a non-negative integer or startup fails before the HTTP
-listener is opened.
+value. In particular, `INVOICE_RETENTION_MONTHS` and `AUTO_ARCHIVE_AFTER_DAYS` must be non-negative integers; archival
+also requires a representable cutoff. Invalid values fail startup before the HTTP listener opens.
 
 ## Example production settings file
 
@@ -210,6 +210,30 @@ Behind a proxy, preserve the public host and scheme as shown in the [reverse-pro
 
 Uploads are resolved from the process working directory. Header images accept JPEG, PNG, and GIF. Invoice proofs accept
 those image formats plus PDF. The per-file limit is 10 MiB. These files are not disposable build artifacts.
+
+### Automatic entity archival
+
+| Setting | Type | Built-in default | Used for | Production rule |
+|---|---|---|---|---|
+| `AUTO_ARCHIVE_ENABLED` | Boolean | `true` | Automatic archival of events and standalone activity plans. | Set `false` to stop automatic transitions; manual archival, restoration, and personal visibility remain available. |
+| `AUTO_ARCHIVE_AFTER_DAYS` | Non-negative integer | `30` | Complete UTC calendar days after the inclusive end date. | Must be finite, safe as an integer, and produce a representable database-date cutoff; validated even when automation is disabled. |
+
+Both settings use the normal CSV/environment precedence and support `E2E_` overrides. Restart after changing them.
+The independent archival job runs during startup before the listener opens and hourly afterward; a missed deadline is
+handled at the next run. It considers active, unpaused events and standalone activity plans only. Linked plans follow
+their event even when their own dates differ; packing lists, drivers lists, and surveys have no independent automatic deadline.
+
+Eligibility begins at UTC midnight immediately after the inclusive end date plus the configured number of complete
+calendar days. For an end date of `2026-09-16`, delay `0` first becomes eligible on `2026-09-17 00:00 UTC`, and delay `30`
+on `2026-10-17 00:00 UTC`. The registration-deadline timezone does not change this calendar calculation.
+
+Changing the delay or disabling automation does not restore archived entities or clear pauses. Restoring an event or
+standalone plan pauses its independent automatic archival durably; **Resume automatic archival** makes it eligible
+for future sweeps again and can archive an already-ended root on the next run. Existing historical entities can be
+archived on the first startup after migration; see [Upgrading](UPGRADING.md#introducing-entity-archival).
+
+Archival preserves business data, header images, and proofs and does not change their existing deletion or retention
+policies. [Invoice retention](OPERATIONS.md#invoice-retention) remains independent, including for archived events.
 
 ### Legal links
 

@@ -41,4 +41,13 @@ app.post('/guest/email', searchLimiter, asyncHandler(async (req: Request, res: R
 
 app.use(createUserSearchApiRouter());
 
+// This endpoint changes the session profile's placement only, independently of shared archival.
+// The controller authenticates account/guest sessions and validates the polymorphic route target;
+// UserService checks current overview membership before saving. Public access alone is insufficient.
+app.post('/overview/:entityType/:id/visibility', asyncHandler(async (req: Request, res: Response) => {
+    const state = await userController.setPersonalVisibility(String(req.params.entityType), String(req.params.id), req.body, req.session);
+    // Return shared status and personal placement separately so clients retain the distinction.
+    renderer.respondWithSuccessDataJson(res, 'Your overview updated', state);
+}));
+
 export default app;

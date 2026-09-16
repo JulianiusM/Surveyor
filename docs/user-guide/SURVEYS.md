@@ -4,10 +4,10 @@ documentation-metadata
 audience: survey participants; survey organizers
 owner: survey feature maintainers
 status: current
-last-verified: 2026-09-06
+last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D09 survey workflow plus D14 rendered-label assertions, recurring-use visual aid, per-page navigation, and trusted-help integration; D14 rendered help navigation, semantic checks, and trusted-content integration; D14 visual correction: measured and individually inspected recurring-pattern diagram with current option text
-source-anchors: docs/user-guide/assets/survey-recurring-pattern.png; docs/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; src/views/surveyor/survey-create.pug; src/views/surveyor/survey-vote.pug; src/public/js/survey-create.ts; src/routes/survey.ts; src/routes/api/survey.ts; src/controller/surveyController.ts; src/middleware/guestFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/surveys/Survey.ts; src/modules/database/entities/surveys/SurveyCombination.ts; src/modules/database/entities/surveys/SurveyResponse.ts; src/modules/database/services/SurveyService.ts; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/survey-workflows.spec.ts; tests/e2e/core-workflows.spec.ts; docs/decisions/DEC-001-SURVEY-COMBINATION-AUTHORIZATION.md; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D09 survey workflow plus D14 rendered-label assertions, recurring-use visual aid, per-page navigation, and trusted-help integration; D14 rendered help navigation, semantic checks, and trusted-content integration; D14 visual correction: measured and individually inspected recurring-pattern diagram with current option text
+source-anchors: src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; docs/user-guide/assets/survey-recurring-pattern.png; docs/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; src/views/surveyor/survey-create.pug; src/views/surveyor/survey-vote.pug; src/public/js/survey-create.ts; src/routes/survey.ts; src/routes/api/survey.ts; src/controller/surveyController.ts; src/middleware/guestFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/surveys/Survey.ts; src/modules/database/entities/surveys/SurveyCombination.ts; src/modules/database/entities/surveys/SurveyResponse.ts; src/modules/database/services/SurveyService.ts; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/survey-workflows.spec.ts; tests/e2e/core-workflows.spec.ts; docs/decisions/DEC-001-SURVEY-COMBINATION-AUTHORIZATION.md; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md; src/controller/helpController.ts
 next-review: survey-visible-UI-or-behavior-change
 -->
 
@@ -245,7 +245,7 @@ Only the owner sees the overview-card action.
 3. Find the survey and select **Delete**.
 4. Confirm the deletion.
 
-Deletion permanently removes the survey, all combinations, all submitted answers, and its stored header image. Surveyor has no survey archive or restore action.
+Deletion permanently removes the survey, all combinations, all submitted answers, and its stored header image. Use archival when you want to keep the survey available instead.
 
 ## Practical examples
 
@@ -283,8 +283,14 @@ Create **Monthly equipment check** with several weekday positions, then ask volu
 | All-answer table with participant names | Organizer-only result visibility |
 | Collaborative addition of new combinations | Removing or editing an existing combination |
 | Owner header-image controls | Editing the title or description in place after creation |
-| Owner duplication and permanent deletion | Closing, archiving, or enforcing a response deadline |
+| Owner duplication, archival, restoration, and permanent deletion | Closing responses or enforcing a response deadline |
 | Standalone link sharing | Event linkage or the general permission matrix |
+
+## Archive or restore a survey
+
+The owner can use **Archive for everyone** and **Restore for everyone** in the survey's **Archival** section or its overview card menu. Surveys have no automatic archival schedule. Archival preserves combinations, answers, images, and normal voting and add-combination access; it does not close voting.
+
+Find archived surveys under **Archived and hidden** in [Your Overview](DASHBOARD.md#find-archived-and-hidden-items). Every profile whose overview contains the survey can use **Hide for me**, **Show for me**, and **Use default visibility** for its own card placement. These personal choices do not require ownership and do not change anyone else's overview.
 
 ## Troubleshooting
 
@@ -301,6 +307,8 @@ Check that:
 ### The survey is missing from **Your overview**
 
 Confirm the active profile first.
+
+Expand **Archived and hidden** in both overview collections and clear any filters there.
 
 - The owner finds it under **Administrable entities**.
 - A participant finds it under **Your participation** after submitting a ballot with that profile.

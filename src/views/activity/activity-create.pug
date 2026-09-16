@@ -1,4 +1,6 @@
 extends ../layout
+//- Declare the static event-context notice locally; this creation form has no archival action buttons.
+include ../modules/module_entity_archive
 
 block meta
     title Create Activity Plan | Surveyor
@@ -9,6 +11,9 @@ block title
         | Create activity plan
 
 block content
+    //- The creation route supplies the selected event's projection, including on validation errors.
+    //- context=true explains inherited archival without offering controls for an entity not yet created.
+    +entityArchiveNotice({id: data.eventId}, 'event', data.archive, true)
     -
         let parsed = {}, parsedData = [], parsedEventData = {};
         if (data) {

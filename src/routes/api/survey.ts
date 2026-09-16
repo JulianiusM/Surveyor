@@ -17,6 +17,7 @@
 import express, {Request} from "express";
 import controller from "../../controller/surveyController";
 import {createEntityHeaderUpdateRouter} from "../../middleware/entityHeaderUpdateHandler";
+import {createEntityArchiveApiRouter} from "../../middleware/adminApiFactory";
 import {apiParamHandler} from "../../middleware/paramHandler";
 import * as surveyService from "../../modules/database/services/SurveyService";
 import {ENTITIES, getPermFct, getResource} from "../../modules/lib/util";
@@ -31,5 +32,8 @@ const permFct = getPermFct(resFct, entityName);
 apiParamHandler('id', app, surveyService.getSurveyById, entityName);
 
 createEntityHeaderUpdateRouter(app, permFct, resFct, controller.updateHeaderImg, controller.deleteHeaderImg);
+// Sharing command registration does not opt surveys into the peer features' ACL model:
+// the controller retains owner-only survey archival and rejects unsupported automation.
+createEntityArchiveApiRouter(app, entityName, resFct);
 
 export default app;

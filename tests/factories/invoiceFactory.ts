@@ -1,5 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import path from 'node:path';
+import settings from '../../src/modules/settings';
 
 export interface InvoiceSubmissionCase {
     amount: number;
@@ -13,7 +14,8 @@ export function createInvoiceSubmissionCase(overrides: Partial<InvoiceSubmission
     return {
         amount: 48.75,
         description: 'Shared groceries',
-        proofPath: path.join(process.cwd(), 'uploads', 'invoices', `integration-${randomUUID()}.pdf`),
+        // Retention validates this same configured boundary before removing a proof.
+        proofPath: path.resolve(process.cwd(), settings.value.invoiceDir, `integration-${randomUUID()}.pdf`),
         proofOriginalName: 'groceries.pdf',
         proofMimeType: 'application/pdf',
         ...overrides,

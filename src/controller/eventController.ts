@@ -16,6 +16,7 @@
 
 // controllers/eventController.ts
 import {Request} from "express";
+import {getArchiveView} from "./entityAdminController";
 // Business logic for the Event routes
 import Joi from 'joi';
 
@@ -145,6 +146,11 @@ async function fetchForView(event: Event, req: Request) {
     const isFull = (event.maxParticipants ?? Number.MAX_SAFE_INTEGER) <= participants.length;
 
     const relatedEntities = convertToSingleList({activityPlans, packingLists, driversLists: driverLists});
+    // The event notice and its attached cards must share one archival snapshot. Children
+    // inherit an event archive without copying timestamps, so decorating them independently
+    // could otherwise show conflicting state during a concurrent archive/restore request.
+    // Return this as page data for explicit mixin arguments, not optional request locals.
+    const archiveView = await getArchiveView({type: 'event', id: event.id}, relatedEntities, req.session);
 
     return {
         event,
@@ -157,7 +163,7 @@ async function fetchForView(event: Event, req: Request) {
         participantPools,
         participantInvoices,
         isFull,
-        relatedEntities,
+        ...archiveView,
         regToken: getResource(req, 'regToken'),
     };
 }

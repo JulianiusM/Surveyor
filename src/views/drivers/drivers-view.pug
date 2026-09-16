@@ -1,4 +1,6 @@
 extends ../layout
+//- This page explicitly owns archival presentation and script loading; the layout has no optional state.
+include ../modules/module_entity_archive
 
 block meta
     title #{data.list.title} | Surveyor
@@ -8,6 +10,9 @@ block title
     +entityImageModal(data.list, "drivers")
 
 block content
+    //- The list has no automatic date schedule of its own, but the projection can include event archival.
+    //- Rendering this status does not change access to the list or its existing participant actions.
+    +entityArchiveNotice(data.list, 'drivers', data.archive)
     // ─── Description (editable) ──────────────────────────────
     if permData.entity.has('EDIT_DESC')
         // manager sees pointer
@@ -170,6 +175,8 @@ block content
                         | Add
 
 block scripts
+    //- Bind the notice's data-archive-* buttons once; driving-list actions retain their existing module.
+    +entityArchiveScripts()
     script(type="module" src="/js/drivers.gen.js")
     script.
         window.Surveyor.entityId = "#{data.list.id}";

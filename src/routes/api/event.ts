@@ -17,7 +17,7 @@
 import express, {Request, Response} from 'express';
 
 import eventController from '../../controller/eventController';
-import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
+import {createEntityAdminApiRouter, createEntityArchiveApiRouter} from "../../middleware/adminApiFactory";
 import {createEntityHeaderUpdateRouter} from "../../middleware/entityHeaderUpdateHandler";
 import {apiParamHandler} from "../../middleware/paramHandler";
 import {
@@ -45,6 +45,9 @@ apiParamHandler('id', app, eventService.getEventById, entityName);
 app.use("/:id", attachPermBundle(permFct, itemPermFct));
 
 createEntityAdminApiRouter(app, entityName, permFct)
+// Event archival governs its attached roots through inherited state. Register commands for
+// this resolved event only; attached records and file retention keep their existing workflows.
+createEntityArchiveApiRouter(app, entityName, resFct);
 createEntityHeaderUpdateRouter(app, permFct, resFct, eventController.updateHeaderImg, eventController.deleteHeaderImg);
 
 // Register current user to event

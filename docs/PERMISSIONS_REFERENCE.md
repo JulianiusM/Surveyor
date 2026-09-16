@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; security reviewers; advanced documentation contributors
 owner: permission-system maintainers
 status: current
-last-verified: 2026-09-05
+last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: D03 permission evaluation, storage, audience predicates, page admission, middleware, item fallback, UI management, generated bit/preset/default reference, and survey exclusion
-source-anchors: src/modules/lib/permissions.ts; src/modules/permissionEngine.ts; src/types/PermissionTypes.d.ts; src/middleware/permissionMiddleware.ts; src/middleware/guestFlowFactory.ts; src/middleware/adminApiFactory.ts; src/controller/entityAdminController.ts; src/modules/database/services/EntityAdminService.ts; src/modules/database/entities/permissions/EntityPermissions.ts; src/modules/database/entities/permissions/EntityAdminAssignment.ts; src/views/modules/module_perm_matrix.pug; src/views/modules/module_admin_matrix.pug; src/views/modules/module_admin_options.pug; src/public/js/modules/perm-matrix.ts; src/public/js/modules/admin-matrix.ts; src/routes/event.ts; src/routes/api/event.ts; src/routes/api/activity.ts; src/routes/api/packing.ts; src/routes/api/drivers.ts
+verification-scope: archival EDIT_META and survey-owner authority, parent boundaries, and profile-scoped visibility source review; D03 permission evaluation, storage, audience predicates, page admission, middleware, item fallback, UI management, generated bit/preset/default reference, and survey exclusion
+source-anchors: src/controller/entityAdminController.ts; src/middleware/adminApiFactory.ts; src/modules/database/services/UserService.ts; src/modules/lib/permissions.ts; src/modules/permissionEngine.ts; src/types/PermissionTypes.d.ts; src/middleware/permissionMiddleware.ts; src/middleware/guestFlowFactory.ts; src/modules/database/services/EntityAdminService.ts; src/modules/database/entities/permissions/EntityPermissions.ts; src/modules/database/entities/permissions/EntityAdminAssignment.ts; src/views/modules/module_perm_matrix.pug; src/views/modules/module_admin_matrix.pug; src/views/modules/module_admin_options.pug; src/public/js/modules/perm-matrix.ts; src/public/js/modules/admin-matrix.ts; src/routes/event.ts; src/routes/api/event.ts; src/routes/api/activity.ts; src/routes/api/packing.ts; src/routes/api/drivers.ts
 next-review: D12,D14
 -->
 
@@ -68,6 +68,23 @@ Consequently, audience permissions are capability grants and only a conditional 
 
 ## Persistence
 
+### Archival authority and personal visibility
+
+Shared lifecycle APIs require an authenticated account or guest session with an active profile. Events, activity plans,
+packing lists, and drivers lists require effective `EDIT_META` to archive, restore, or change supported automatic
+archival policy. The normal cumulative engine applies; `ACCESS_ADMIN`, assignment presence, and `MANAGE_ASSIGNMENTS`
+are not substitutes. Surveys require ownership and do not join the general permission-administration contract.
+
+An archived event governs linked entities. A child can be independently archived by someone authorized on that child,
+but a child restore conflicts while the parent is archived. Child ownership does not confer parent archival authority.
+Parent links in archival projections are provided only when the caller can view that event. API and card capabilities
+share the same controller/permission projection, with batched grants and registration checks for overview responses.
+
+Personal visibility uses current membership in either active-profile overview collection, checked again in the write
+transaction. `ACCESS_VIEW` alone does not authorize a preference. The endpoint takes no client-supplied profile ID and
+cannot change shared state or another profile's placement. Preferences cannot retain access after membership is revoked.
+Authoritative archival does not revoke existing access or create a read-only mode.
+
 ### Audience defaults
 
 `EntityPermissions` stores one unsigned integer mask for each `(entityType, entityId, audience)` tuple in `entity_permissions`. Valid audiences are `participant`, `guest`, `authenticated`, and `public`.
@@ -92,7 +109,7 @@ The rows below are generated from the order and values in `PERM` in `src/modules
 | `EDIT_TITLE` | Edit Title | 1 | `0x1` | Editing | Entity title mutation; item-title routes may instead use an item permission with parent fallback. |
 | `EDIT_DESC` | Edit Desc | 2 | `0x2` | Editing | Entity description mutation; child descriptions commonly accept item EDIT_DESC or parent ITEM_EDIT / ITEM_EDIT_DESC. |
 | `EDIT_CAPACITY` | Edit Capacity | 4 | `0x4` | Editing | Entity capacity mutation and supported child-capacity edits. |
-| `EDIT_META` | Edit Meta | 8 | `0x8` | Editing | Entity metadata and header-image mutation; supported child metadata checks use item EDIT_META with explicit parent fallback. |
+| `EDIT_META` | Edit Meta | 8 | `0x8` | Editing | Entity metadata, header-image mutation, authoritative archive/restore, and supported automatic archival policy; supported child metadata checks use item EDIT_META with explicit parent fallback. |
 | `ITEM_ADD` | Item Add | 16 | `0x10` | Items | Create a child item/slot/driver row on the parent entity. |
 | `ITEM_EDIT` | Item Edit | 32 | `0x20` | Items | Reorder children and broad parent fallback for several child edit operations. |
 | `ITEM_EDIT_DESC` | Item Edit Desc | 262144 | `0x40000` | Items | Narrow parent fallback for child description edits. |

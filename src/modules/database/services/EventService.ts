@@ -15,7 +15,7 @@
  */
 
 // TypeORM-based implementation of the event module
-import {EntityManager, In, MoreThanOrEqual} from 'typeorm';
+import {EntityManager, IsNull, MoreThanOrEqual} from 'typeorm';
 import type {DIETARY, ParticipantRow} from "../../../types/EventTypes";
 import {WithRequired} from "../../../types/UtilTypes";
 import {ExpectedError} from "../../lib/errors";
@@ -109,27 +109,31 @@ export async function getActiveEventsByOwnerId(ownerId: string) {
         where: {
             owner: {id: ownerId},
             endDate: MoreThanOrEqual(today),
+            archivedAt: IsNull(),
         },
         order: {startDate: 'ASC'},
     });
 }
 
 export async function getActiveManagedEvents(profileId: string) {
-    const ids = await entityAdminService.getIds('event', profileId);
+    // Creation pickers keep their existing date restriction and omit archived events.
+    // This is deliberately narrower than the administration overview below, where
+    // historical events must remain discoverable for restoration or private showing.
     const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
-    return await AppDataSource.getRepository(Event).find({
-        where: [
-            {
-                owner: {id: profileId},
-                endDate: MoreThanOrEqual(today),
-            },
-            {
-                id: In(ids),
-                endDate: MoreThanOrEqual(today),
-            }
-        ],
-        order: {startDate: 'ASC'},
-    });
+    return entityAdminService.createManagedEntityQuery(AppDataSource.getRepository(Event), 'event', profileId)
+        .andWhere('entity.endDate >= :today', {today})
+        .andWhere('entity.archivedAt IS NULL')
+        .orderBy('entity.startDate', 'ASC').getMany();
+}
+
+/**
+ * Load every owned or explicitly administered event, including ended and archived ones.
+ * The overview controller decides main/hidden placement after loading lifecycle state;
+ * filtering dates here would make delegated administrators lose historical access.
+ */
+export async function getManagedEvents(profileId: string) {
+    return entityAdminService.createManagedEntityQuery(AppDataSource.getRepository(Event), 'event', profileId)
+        .orderBy('entity.startDate', 'ASC').getMany();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -256,18 +260,23 @@ export async function replaceDietaryChoices(
  * - Sorted by event start date descending.
  */
 export async function getRegisteredEventsFor(profileId: string): Promise<Event[]> {
-    const repo = AppDataSource.getRepository(Event);
-    return repo.find({
-        where: {
-            registrations: {
-                profile: {id: profileId},
-            }
-        },
-        relations: {
-            registrations: true
-        },
-        order: {startDate: 'DESC'},
-    });
+    // Preserve the profile's registration relation for existing overview consumers;
+    // other participants' registrations are not needed in this collection.
+    return getEventParticipationQuery(profileId)
+        .leftJoinAndSelect('event.registrations', 'registrations', 'registrations.profile_id = :profileId', {profileId})
+        .orderBy('event.startDate', 'DESC').getMany();
+}
+
+/**
+ * Registration defines participation regardless of dates or archival state.
+ * Return a query so overview discovery can load events while a visibility write
+ * can add a single event ID and check membership using its transaction manager.
+ */
+export function getEventParticipationQuery(profileId: string, manager: EntityManager = AppDataSource.manager) {
+    return manager.getRepository(Event).createQueryBuilder('event')
+        .whereExists(manager.getRepository(EventRegistration).createQueryBuilder('registration')
+            .where('registration.event_id = event.id')
+            .andWhere('registration.profile_id = :profileId', {profileId}));
 }
 
 export async function deleteRegistration(eventId: string, regId: string | number) {

@@ -1,4 +1,6 @@
 extends ../layout
+//- This page explicitly owns archival presentation and script loading; the layout has no optional state.
+include ../modules/module_entity_archive
 
 block meta
     title Vote on #{data.survey.title} | Surveyor
@@ -8,6 +10,9 @@ block title
     +entityImageModal(data.survey, "survey")
 
 block content
+    //- Surveys use their own ownership/participation rules. The controller supplies matching archival
+    //- capabilities; the template must not infer them from the permission model used by other entities.
+    +entityArchiveNotice(data.survey, 'survey', data.archive)
     -
         const weekdays = {
             'MON': 'Monday',
@@ -125,3 +130,7 @@ block content
             button.btn.btn-outline-primary(type="submit")
                 i.bi.bi-plus-lg.me-1
                 | Add
+
+block append scripts
+    //- Append the shared command handler without replacing scripts supplied by the inherited layout.
+    +entityArchiveScripts()

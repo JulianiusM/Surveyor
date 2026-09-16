@@ -4,10 +4,10 @@ documentation-metadata
 audience: novice users; organizers; participants
 owner: dashboard feature maintainers
 status: current
-last-verified: 2026-09-05
+last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D02 global navigation, profile-scoped overview collections, card search and filtering, and owner-only card actions; D14 rendered help navigation, semantic checks, and trusted-content integration
-source-anchors: src/views/layout.pug; src/routes/users.ts; src/controller/userController.ts; src/views/users/dashboard.pug; src/views/modules/module_unified_entity_cards.pug; src/public/js/user-dashboard.ts; src/public/js/modules/entity-cards-overview.ts; tests/integration/controller-smoke-workflows.spec.ts; tests/unit/application-utilities.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D02 global navigation, profile-scoped overview collections, card search and filtering, and owner-only card actions; D14 rendered help navigation, semantic checks, and trusted-content integration
+source-anchors: src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/layout.pug; src/routes/users.ts; src/controller/userController.ts; src/views/users/dashboard.pug; src/views/modules/module_unified_entity_cards.pug; src/public/js/user-dashboard.ts; src/public/js/modules/entity-cards-overview.ts; tests/integration/controller-smoke-workflows.spec.ts; tests/unit/application-utilities.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: overview-or-navigation-visible-UI-change
 -->
 
@@ -52,7 +52,7 @@ The overview does not contain feature-specific create buttons. Use the global **
 
 ## Find an item
 
-Each collection is an expandable section with a count badge, a search field, and a **Filter** menu.
+Each collection is an expandable section with a total count badge. The main cards and **Archived and hidden** section each have their own search field and **Filter** menu when they contain cards.
 
 ### Search
 
@@ -71,7 +71,7 @@ The cards update while you type.
 
 The current type labels are `survey`, `activity`, `packing`, `drivers`, and `event`. The menu lists only types for which that collection currently has cards.
 
-Search and type filters work together. The count badge shows how many cards remain visible after both filters are applied. To restore all cards, clear the search field and select **All types**.
+Search and type filters work together. The **shown** count beside the filters shows how many cards match in that section. The collection heading keeps the total number of associated items. To restore all cards in a section, clear its search field and select **All types**.
 
 ## Read and open a card
 
@@ -80,9 +80,43 @@ A card can show:
 - a header image, when the item has one;
 - the title;
 - a shortened description;
-- a type badge.
+- a type badge;
+- **Archived** or **Archived with event**, independently of whether the card is in the main section;
+- **Hidden for me** or **Shown for me** when you saved a personal visibility choice.
 
 Select the image or the main body of the card to open the item. The feature page then shows the actions available to the active profile.
+
+## Find archived and hidden items
+
+1. Open **Your participation** or **Administrable entities**.
+2. Expand **Archived and hidden** beneath the main cards.
+3. Search or filter that section, then open the item normally.
+
+The section starts collapsed. It remains available when all your items are archived or hidden; the main section then explains where to find them. Archival preserves your existing access and actions. Losing participation or administration membership can still remove an item from the overview.
+
+## Hide or show an item only for yourself
+
+Open a card's **Archival** menu and use the actions under **Only my overview**:
+
+| Action | Result for the active profile |
+|---|---|
+| **Hide for me** | Put the card in **Archived and hidden**, whether or not it is archived for everyone. |
+| **Show for me** | Keep the card in the main section, including after an organizer or the automatic process archives it. The archive badge remains visible. |
+| **Use default visibility** | Remove your personal choice: active items appear in the main section and archived items appear in **Archived and hidden**. |
+
+Your choice applies to both collections and is saved for the active profile, including guests. Other profiles and other users keep their own choices. Hiding an event this way affects its card only; attached plans and lists have their own personal choices. The event's **Things to do** section continues to show its linked items.
+
+## Archive or restore for everyone
+
+An owner or organizer with **Edit Meta** can select **Archive for everyone** or **Restore for everyone** under **For everyone** in a card's **Archival** menu, or in the **Archival** section on the feature page. For surveys, only the owner has these controls. Confirm the action when prompted.
+
+Archiving an event archives all its attached entities and contents together. Restoring the event restores inherited archival; an attached entity archived separately stays archived until restored separately. **Archived with event** means the event must be restored first; use **Open event** where available. Permission to manage a child does not grant permission to restore its event.
+
+You can use **Archive for everyone** on a child already archived with its event to keep that child archived independently after the event is restored. The confirmation explains this effect.
+
+Events and standalone activity plans can also be archived automatically after their end date and the site's configured delay. A linked activity plan follows its event's schedule. Restoring an event or standalone plan pauses automatic archival until an organizer chooses **Resume automatic archival**. **Pause automatic archival** also lets an organizer keep an active entity from being archived automatically. Resuming can make an already-ended entity eligible at the next run.
+
+Archival preserves registrations, answers, assignments, invoice data, images, proofs, and existing permissions. It does not delete files or prevent normal authorized use. Invoice retention and deliberate deletion continue under their existing policies. Your personal visibility choices survive authoritative archive and restore actions.
 
 ## Use owner actions
 
@@ -92,6 +126,8 @@ The **Administrable entities** collection can show these buttons on a card:
 - **Delete** asks **Delete this item?** and then permanently removes the item when confirmed.
 
 These card buttons appear only when the active profile is the item owner. A profile that can administer an item but does not own it can still open the card, but does not receive **Duplicate** or **Delete** on the overview card. Additional administration controls depend on the feature and its access settings.
+
+A duplicate starts without the original's direct archival, automation pause, or personal visibility choices. When it is created under an archived event, it inherits that event's archival. Old dates on a new standalone plan or event can make it eligible for automatic archival.
 
 ## Create a new item
 
@@ -128,8 +164,9 @@ Surveyor opens that feature's creation form. After the form is submitted success
 1. Check the active profile name.
 2. Clear the search field and select **Filter** → **All types** in both collections.
 3. Check both **Your participation** and **Administrable entities**.
-4. Confirm that the active profile has actually joined, been assigned to, registered for, or received administration access to the item.
-5. For a guest, use the private link for the guest identity that joined the item, or recover the correct guest account by email.
+4. Expand **Archived and hidden** in each collection and clear that section's filters too.
+5. Confirm that the active profile has actually joined, been assigned to, registered for, or received administration access to the item.
+6. For a guest, use the private link for the guest identity that joined the item, or recover the correct guest account by email.
 
 ### Duplicate or Delete is missing
 

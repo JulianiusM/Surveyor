@@ -5,10 +5,10 @@ documentation-metadata
 audience: operators; site reliability engineers; database administrators; maintainers
 owner: application operators
 status: current
-last-verified: 2026-09-14
+last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: invoice correction and retraction lifecycles, refreshed submission history, and takeover overview dialogs; organizer-expense migration ordering, preserved financial records, and downgrade guard; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factor and settlement migrations, preserved paid markers, payment-credit and rollback-snapshot initialization; D04 accepted from source review and deployment-practice confirmation for release packaging, versioned deployment, dependency installation, migration ordering, persistent-state backup, validation, and rollback; controlled execution tracked separately in D04V
-source-anchors: src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; scripts/runMigration.ts; migrationDataSource.ts; src/server.ts; src/modules/settings.ts; src/modules/invoiceRetention.ts; docs/DATABASE.md; docs/OPERATIONS.md
+verification-scope: archival first-start behavior, migration ordering, durable restoration, and rollback guard source review; no deployment rehearsal claimed here; invoice correction and retraction lifecycles, refreshed submission history, and takeover overview dialogs; organizer-expense migration ordering, preserved financial records, and downgrade guard; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factor and settlement migrations, preserved paid markers, payment-credit and rollback-snapshot initialization; D04 accepted from source review and deployment-practice confirmation for release packaging, versioned deployment, dependency installation, migration ordering, persistent-state backup, validation, and rollback; controlled execution tracked separately in D04V
+source-anchors: src/migrations/1789862400000-AddEntityArchival.ts; src/modules/entityArchival.ts; src/modules/database/services/EntityLifecycleService.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; scripts/runMigration.ts; migrationDataSource.ts; src/server.ts; src/modules/settings.ts; src/modules/invoiceRetention.ts; docs/DATABASE.md; docs/OPERATIONS.md
 next-review: D04V
 -->
 
@@ -45,6 +45,28 @@ and validation time using production-sized copies—not an empty development dat
 
 Prepare an explicit rollback decision point, responsible operator, and maintenance communication before touching the
 production schema.
+
+## Introducing entity archival
+
+Apply migration `1789862400000-AddEntityArchival.ts` before starting a release with archival. It adds direct archive
+timestamps, dated-root automation pauses, and profile visibility preferences. Existing entities initially remain
+directly active; date-based archival belongs to the application sweep, not the migration.
+
+Automatic archival is enabled by the built-in configuration. **The first startup can archive already-ended events and
+standalone activity plans** after the configured delay; every event attachment inherits the event state immediately.
+Review the [canonical settings and UTC date rule](CONFIGURATION.md#automatic-entity-archival) before startup. Operators
+can explicitly set `AUTO_ARCHIVE_ENABLED=false` during rollout and enable it later with a restart; manual and personal
+controls still work while automatic execution is disabled.
+
+Verify discovery in **Archived and hidden**, normal direct-link access, event/child badges, organizer restoration, and
+private **Show for me**/**Use default visibility** after deployment. Restoring an event or standalone activity pauses automatic archival
+durably, so another sweep or restart will not immediately archive it again. Deliberately resuming automation can make
+it eligible at the next run.
+
+Archival preserves all business data and file references. It does not delay or trigger the separate invoice-retention
+policy. Downgrade preflight refuses to remove archival columns/preferences while any non-default lifecycle or personal
+state exists; use a compatible release or the reviewed full backup restoration path rather than deleting state to
+force reversal.
 
 ## Stage the new version while the old version runs
 
@@ -197,9 +219,9 @@ journalctl -u surveyor --since '5 minutes ago'
 curl --fail --silent --show-error https://surveyor.example.org/healthz
 ```
 
-Startup performs the database connection and invoice-retention cleanup before opening the HTTP listener. Review the
-retention output before continuing; old invoice records and proofs that meet the configured cutoff may be removed at
-this point.
+Startup performs the database connection, invoice-retention cleanup, and entity archival before opening the HTTP listener.
+Review both job outputs before continuing; old invoice records and proofs that meet the retention cutoff may be removed,
+while archival independently moves eligible entities into their overview archives without deleting their data or files.
 
 Run the complete [post-start validation checklist](OPERATIONS.md#post-start-validation), including:
 
@@ -207,6 +229,7 @@ Run the complete [post-start validation checklist](OPERATIONS.md#post-start-vali
 - Every enabled sign-in method and sign-out.
 - Controlled guest access/recovery.
 - Header image and invoice-proof persistence.
+- Archived-entity discovery, authoritative restoration, and personal visibility.
 - Transactional email delivery.
 - Version display, legal links, database monitoring, disk capacity, and backup monitoring.
 
@@ -222,6 +245,7 @@ During the rollback window, monitor:
 - SMTP and OIDC failures.
 - Upload/read errors and filesystem capacity.
 - Invoice-retention actions.
+- Entity-archival counts and failures.
 
 Keep the previous runtime directory, migration workspace, and pre-upgrade backup until the change is formally accepted.
 
@@ -329,6 +353,7 @@ Header image result:
 Invoice proof result:
 Email result:
 Retention observations:
+Archival and restoration observations:
 Rollback deadline:
 Outcome:
 ```
