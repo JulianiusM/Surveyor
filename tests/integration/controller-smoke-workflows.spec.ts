@@ -55,13 +55,15 @@ describe('remaining high-value controller workflows', () => {
         const [packingId] = await createPackingListWithItem(owner.id);
         const [surveyId] = await createSurveyWithCombinations(owner.id);
 
-        const dashboard = await userController.getDashboardEntities(owner);
+        const dashboard = await userController.getOverviewPage({profile: owner, auth: {user: owner.user!}});
 
-        expect(dashboard.owner?.events?.map((event) => event.id)).toContain(eventId);
-        expect(dashboard.owner?.activityPlans?.map((plan) => plan.id)).toContain(planId);
-        expect(dashboard.owner?.driversLists?.map((list) => list.id)).toContain(driversId);
-        expect(dashboard.owner?.packingLists?.map((list) => list.id)).toContain(packingId);
-        expect(dashboard.owner?.surveys?.map((survey) => survey.id)).toContain(surveyId);
+        expect(dashboard.owner.main.items).toEqual(expect.arrayContaining([
+            expect.objectContaining({type: 'event', id: eventId}),
+            expect.objectContaining({type: 'activity', id: planId}),
+            expect.objectContaining({type: 'drivers', id: driversId}),
+            expect.objectContaining({type: 'packing', id: packingId}),
+            expect.objectContaining({type: 'survey', id: surveyId}),
+        ]));
     });
 
     it('builds a participant dashboard from controller-driven assignments', async () => {
@@ -79,13 +81,15 @@ describe('remaining high-value controller workflows', () => {
         await assignPackingItem(packingItem.id, participant.id);
         await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: 'yes'});
 
-        const dashboard = await userController.getDashboardEntities(participant);
+        const dashboard = await userController.getOverviewPage({profile: participant, auth: {user: participant.user!}});
 
-        expect(dashboard.participant?.events?.map((event) => event.id)).toContain(eventId);
-        expect(dashboard.participant?.activityPlans?.map((plan) => plan.id)).toContain(planId);
-        expect(dashboard.participant?.driversLists?.map((list) => list.id)).toContain(driversId);
-        expect(dashboard.participant?.packingLists?.map((list) => list.id)).toContain(packingId);
-        expect(dashboard.participant?.surveys?.map((survey) => survey.id)).toContain(surveyId);
+        expect(dashboard.participant.main.items).toEqual(expect.arrayContaining([
+            expect.objectContaining({type: 'event', id: eventId}),
+            expect.objectContaining({type: 'activity', id: planId}),
+            expect.objectContaining({type: 'drivers', id: driversId}),
+            expect.objectContaining({type: 'packing', id: packingId}),
+            expect.objectContaining({type: 'survey', id: surveyId}),
+        ]));
     });
 
     it('logs a guest into a persisted controller session', async () => {

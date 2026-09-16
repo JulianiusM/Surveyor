@@ -47,8 +47,30 @@ async function state(ref: ArchiveReference) {
 // Inspect the actual controller projection, including membership and private placement.
 // A preference row by itself must never be enough for this helper to find a card.
 async function card(profile: Profile, ref: ArchiveReference, collection: 'owner' | 'participant' = 'owner') {
-    const overview = await userController.getEntityList(profile);
-    return overview[collection].find(item => item.type === ref.type && item.id === ref.id);
+    const states = await archiveService.getArchiveStates([ref]);
+    const parentId = states.get(archiveKey(ref))?.eventId;
+    const auth = profile.userId ? {user: {id: profile.userId}} : {guest: {id: profile.guestId!}};
+    // Follow the same paged navigation as the UI. Children may be in an event sub-view or
+    // ordinary fallback cards when the parent belongs to another region or is not a member.
+    for (const region of ['main', 'hidden'] as const) {
+        const prefix = `${collection}_${region}_`;
+        let page = 1;
+        let lastPage = 1;
+        do {
+            const view = await userController.getOverviewRegion({profile, auth}, {
+                collection, region, [`${prefix}type`]: ref.type,
+                [`${prefix}page`]: String(page), [`${prefix}childPage`]: String(page),
+                ...(parentId ? {[`${prefix}event`]: parentId} : {}),
+            });
+            const found = [...view.items, ...(view.parent ? [view.parent] : [])]
+                .find(item => item.type === ref.type && item.id === ref.id);
+            if (found) return found;
+            const count = view.parent ? view.parent.overview?.matching ?? 0 : view.totalCards;
+            lastPage = Math.ceil(count / view.pageSize);
+            page++;
+        } while (page <= lastPage);
+    }
+    return undefined;
 }
 
 beforeAll(async () => {

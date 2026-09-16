@@ -15,21 +15,23 @@
  */
 
 import bcrypt from 'bcryptjs';
-import {EntityManager, In, MoreThan, Repository, type FindOptionsWhere} from "typeorm";
+import {EntityManager, In, MoreThan, Repository, type FindOptionsWhere, type SelectQueryBuilder} from "typeorm";
 import type {ArchiveReference, PersonalVisibility} from '../../../types/ArchiveTypes';
-import type {OidcClaims, UserInfo} from "../../../types/UserTypes";
+import type {Entity, OidcClaims, OverviewCollection, OverviewQuery, OverviewReadResult, UserInfo} from "../../../types/UserTypes";
+import type {EntityType} from '../../../types/UtilTypes';
 import {archiveKey} from '../../archive/policy';
 import {APIError} from '../../lib/errors';
-import {coerceLimit, generateUniqueToken, maskEmail, SQL_ALLOW_LIST} from '../../lib/util';
+import {coerceLimit, convertEntity, generateUniqueToken, maskEmail, SQL_ALLOW_LIST} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {Guest} from '../entities/user/Guest';
 import {Profile} from "../entities/user/Profile";
 import {User} from '../entities/user/User';
 import {EntityVisibilityPreference} from '../entities/archive/EntityVisibilityPreference';
+import {BaseEntity} from '../entities/abstract/BaseEntity';
 import {getActivityParticipationQuery} from './ActivityService';
 import {getDriversParticipationQuery} from './DriverService';
 import {createManagedEntityQuery} from './EntityAdminService';
-import {getRootRepository, withLockedArchiveTarget} from './EntityLifecycleService';
+import {addOverviewArchiveProjection, getArchiveStates, getRootRepository, withLockedArchiveTarget} from './EntityLifecycleService';
 import {getEventParticipationQuery} from './EventService';
 import {getPackingParticipationQuery} from './PackingService';
 import {getSurveyParticipationQuery} from './SurveyService';
@@ -502,6 +504,376 @@ const participationQueries = {
     packing: getPackingParticipationQuery,
     survey: getSurveyParticipationQuery,
 };
+
+// These limits describe rendered pages, never the total number of memberships.
+// Four regions can be requested together, each with at most 24 cards or a parent
+// and 24 children. No caller can request an unbounded dashboard through this API.
+const OVERVIEW_PAGE_SIZE = 24;
+const OVERVIEW_TYPES: EntityType[] = ['survey', 'activity', 'packing', 'drivers', 'event'];
+
+/** SQL composition and raw rows stay private to this persistence module. */
+interface OverviewSql {
+    sql: string;
+    parameters: unknown[];
+}
+
+interface OverviewRootRow {
+    id: string;
+    type: EntityType;
+    eventId: string | null;
+    visibility: 'HIDDEN' | 'SHOWN' | null;
+}
+
+interface OverviewDisplayRow {
+    id: string;
+    title: string;
+    description: string | null;
+    headerImg: string | null;
+    ownerId: string;
+}
+
+interface OverviewTypeCount {
+    type: EntityType;
+    overviewHidden: number | string;
+    total: number | string;
+}
+
+interface OverviewChildCount {
+    eventId: string;
+    total: number | string;
+    matching: number | string;
+}
+
+/** Reuse exactly the predicates also used to authorize personal visibility writes. */
+function overviewMembershipQuery(manager: EntityManager, profileId: string, collection: OverviewCollection, type: EntityType): SelectQueryBuilder<BaseEntity> {
+    if (collection === 'owner') {
+        return createManagedEntityQuery(getRootRepository(manager, type), type, profileId);
+    }
+    return participationQueries[type](profileId, manager) as SelectQueryBuilder<BaseEntity>;
+}
+
+/**
+ * Project memberships to a common SQL shape without hydrating their relations.
+ * Compile each builder independently: managed builders reuse parameter names
+ * across types, and concatenating their named parameters would overwrite them.
+ * Positional parameters preserve each branch's own type/profile values.
+ */
+function overviewRootQuery(manager: EntityManager, profileId: string, collection: OverviewCollection, type: EntityType, input: OverviewQuery, parent = false): SelectQueryBuilder<BaseEntity> {
+    const query = overviewMembershipQuery(manager, profileId, collection, type);
+    const alias = query.alias;
+    // UUIDs contain ASCII only. Keep their temporary-table representation narrow;
+    // retaining the root tables' utf8mb4 allocation spills large unions to disk.
+    // The parent lookup keeps its primary-key expression unwrapped so MariaDB
+    // can use an indexed join rather than scanning every event for each child.
+    query.select(parent ? `${alias}.id` : `CONVERT(${alias}.id USING ascii)`, 'id')
+        .addSelect(':overviewCardType', 'type')
+        .leftJoin(EntityVisibilityPreference, 'overviewPreference',
+            `overviewPreference.profile_id = :overviewActor AND overviewPreference.entity_type = :overviewCardType AND overviewPreference.entity_id = ${alias}.id`)
+        .addSelect('overviewPreference.visibility', 'visibility')
+        .setParameters({overviewCardType: type, overviewActor: profileId});
+    addOverviewArchiveProjection(query, type);
+    addOverviewMatchProjection(query, type, input);
+    return query;
+}
+
+function overviewSource(manager: EntityManager, profileId: string, input: OverviewQuery): OverviewSql {
+    const branches: string[] = [];
+    const parameters: unknown[] = [];
+    for (const type of OVERVIEW_TYPES) {
+        const query = overviewRootQuery(manager, profileId, input.collection, type, input);
+        const [sql, branchParameters] = query.getQueryAndParameters();
+        branches.push(sql);
+        parameters.push(...branchParameters);
+    }
+
+    // Parent membership is a small event-only relation. Joining the complete
+    // heterogeneous union again would materialize every child a second time.
+    const eventQuery = overviewRootQuery(manager, profileId, input.collection, 'event', input, true);
+    const [eventSql, eventParameters] = eventQuery.getQueryAndParameters();
+    parameters.push(...eventParameters);
+    // This is the single SQL translation of isHiddenInOverview. Parent preference
+    // does not occur here: only shared parent archival affects a child's default.
+    return {
+        sql: `WITH overview_roots AS (${branches.join('\nUNION ALL\n')}),
+            overview_eligible AS (${overviewPlacementSql('overview_roots')}),
+            overview_event_roots AS (${eventSql}),
+            overview_events AS (${overviewPlacementSql('overview_event_roots')})`,
+        parameters,
+    };
+}
+
+function overviewPlacementSql(source: string): string {
+    // source is one of the private CTE identifiers above, never request input.
+    return `SELECT ${source}.*,
+        CASE WHEN visibility = 'HIDDEN' THEN 1
+             WHEN visibility = 'SHOWN' THEN 0
+             ELSE effectiveArchived END AS overviewHidden FROM ${source}`;
+}
+
+/**
+ * Compute search as a boolean while reading the root, before UNION materialization.
+ * Copying TEXT descriptions into temporary tables forced disk-backed work even
+ * for a 24-card page. Only matching and identity fields belong in this stage;
+ * even titles are loaded after grouping so wide strings cannot inflate it.
+ */
+function addOverviewMatchProjection(builder: SelectQueryBuilder<BaseEntity>, type: EntityType, query: OverviewQuery): void {
+    const alias = builder.alias;
+    const conditions: string[] = [];
+    if (query.type !== 'all' && query.type !== type) {
+        builder.addSelect('0', 'matches');
+        return;
+    }
+    if (query.q) {
+        // Use an explicit escape character rather than depending on the server's
+        // NO_BACKSLASH_ESCAPES mode. A user's percent/underscore is ordinary text.
+        const pattern = `%${query.q.toLowerCase().replace(/[!%_]/g, '!$&')}%`;
+        conditions.push(`(
+            LOWER(CONVERT(${alias}.title USING utf8mb4)) COLLATE utf8mb4_bin LIKE :overviewPattern ESCAPE '!'
+            OR LOWER(CONVERT(COALESCE(${alias}.description, '') USING utf8mb4)) COLLATE utf8mb4_bin LIKE :overviewPattern ESCAPE '!'
+            OR CONVERT(:overviewCardType USING utf8mb4) COLLATE utf8mb4_bin LIKE :overviewPattern ESCAPE '!'
+        )`);
+        builder.setParameter('overviewPattern', pattern);
+    }
+    builder.addSelect(conditions.length ? conditions.join(' AND ') : '1', 'matches');
+}
+
+function overviewRegionSource(source: OverviewSql, query: OverviewQuery): OverviewSql {
+    return {
+        sql: `${source.sql}, overview_region AS (
+            SELECT * FROM overview_eligible WHERE overviewHidden = ?
+        ), overview_parent_region AS (
+            SELECT * FROM overview_events WHERE overviewHidden = ?
+        )`,
+        parameters: [...source.parameters, query.region === 'hidden' ? 1 : 0, query.region === 'hidden' ? 1 : 0],
+    };
+}
+
+/**
+ * A child is represented by its event only when that event is independently in
+ * this same collection and visibility region. Search applies to underlying roots;
+ * an event can therefore remain as navigation to a matching child. This mapping
+ * occurs before the mixed-grid LIMIT, so large events occupy one overview slot.
+ */
+function overviewRepresentativeSource(source: OverviewSql): OverviewSql {
+    return {
+        sql: `${source.sql}, overview_matches AS (
+            SELECT item.* FROM overview_region item WHERE item.matches = 1
+        ), overview_representatives AS (
+            SELECT CASE WHEN parent.id IS NULL THEN item.id ELSE parent.id END AS id,
+                CASE WHEN parent.id IS NULL THEN item.type ELSE parent.type END AS type,
+                CASE WHEN parent.id IS NULL THEN item.eventId ELSE NULL END AS eventId,
+                CASE WHEN parent.id IS NULL THEN item.visibility ELSE parent.visibility END AS visibility
+            FROM overview_matches item
+            LEFT JOIN overview_parent_region parent ON parent.id = item.eventId
+        ), overview_cards AS (
+            SELECT id, type, eventId, visibility, COUNT(*) AS matchingCount
+            FROM overview_representatives GROUP BY id, type, eventId, visibility
+        )`,
+        parameters: source.parameters,
+    };
+}
+
+function clampOverviewPage(page: number, count: number): number {
+    return Math.max(1, Math.min(page, Math.ceil(count / OVERVIEW_PAGE_SIZE)));
+}
+
+/** Validate at the public service boundary as well as the HTTP boundary. */
+function normalizeOverviewQuery(query: OverviewQuery): OverviewQuery {
+    if (!['owner', 'participant'].includes(query.collection) || !['main', 'hidden'].includes(query.region)
+        || (query.type !== 'all' && !Object.hasOwn(participationQueries, query.type))
+        || typeof query.q !== 'string' || query.q.length > 200
+        || !Number.isSafeInteger(query.page) || query.page < 1 || query.page > 1_000_000
+        || !Number.isSafeInteger(query.childPage) || query.childPage < 1 || query.childPage > 1_000_000
+        || (query.eventId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(query.eventId))) {
+        throw new APIError('Invalid overview query', {}, 400);
+    }
+    return {...query, q: query.q.trim(), eventId: query.eventId?.toLowerCase()};
+}
+
+function overviewCard(row: OverviewRootRow & OverviewDisplayRow, visibility: Map<string, PersonalVisibility>): Entity {
+    const card = convertEntity(row, row.type);
+    const preference = row.visibility === 'HIDDEN' ? 'hidden' : row.visibility === 'SHOWN' ? 'shown' : 'default';
+    visibility.set(archiveKey(card), preference);
+    return card;
+}
+
+/** Load full display fields only for a selected page, in at most one query per type. */
+async function loadOverviewCards(manager: EntityManager, rows: OverviewRootRow[], visibility: Map<string, PersonalVisibility>): Promise<Entity[]> {
+    const fields = new Map<string, OverviewDisplayRow>();
+    for (const type of OVERVIEW_TYPES) {
+        const ids: string[] = [];
+        for (const row of rows) if (row.type === type) ids.push(row.id);
+        if (!ids.length) continue;
+        const displayRows = await getRootRepository(manager, type).createQueryBuilder('display')
+            .select('display.id', 'id').addSelect('display.title', 'title')
+            .addSelect('display.description', 'description').addSelect('display.header_img', 'headerImg')
+            .addSelect('display.owner_id', 'ownerId')
+            .where('display.id IN (:...ids)', {ids}).getRawMany<OverviewDisplayRow>();
+        for (const row of displayRows) fields.set(archiveKey({type, id: row.id}), row);
+    }
+    const cards: Entity[] = [];
+    for (const row of rows) {
+        const display = fields.get(archiveKey(row));
+        if (display) cards.push(overviewCard({...row, ...display}, visibility));
+    }
+    return cards;
+}
+
+/**
+ * Sort representative identities using indexed root lookups after grouping.
+ * Keeping title strings outside the membership union avoids large temporary
+ * tables for profiles with many linked children. Type-qualified joins preserve
+ * polymorphic identities even when two root tables contain the same UUID.
+ */
+function overviewCardPage(manager: EntityManager, query: OverviewQuery, children = false): OverviewSql {
+    const page = manager.createQueryBuilder().select('card.*')
+        .from(children ? 'overview_region' : 'overview_cards', 'card');
+    const titles: string[] = [];
+    for (const type of OVERVIEW_TYPES) {
+        const alias = `overviewTitle_${type}`;
+        const parameter = `overviewTitleType_${type}`;
+        page.leftJoin(getRootRepository(manager, type).metadata.tablePath, alias,
+            `card.type = :${parameter} AND ${alias}.id = card.id`, {[parameter]: type});
+        titles.push(`${alias}.title`);
+    }
+    const title = `COALESCE(${titles.join(', ')})`;
+    page.orderBy(`LOWER(CONVERT(${title} USING utf8mb4)) COLLATE utf8mb4_bin`)
+        .addOrderBy('card.type').addOrderBy('card.id')
+        .limit(OVERVIEW_PAGE_SIZE)
+        .offset(((children ? query.childPage : query.page) - 1) * OVERVIEW_PAGE_SIZE);
+    if (children) page.where('card.eventId = :overviewSelectedEvent AND card.matches = 1', {overviewSelectedEvent: query.eventId});
+    const [sql, parameters] = page.getQueryAndParameters();
+    return {sql, parameters};
+}
+
+/** Count only eligible children of the bounded set of displayed event cards. */
+async function overviewChildCounts(manager: EntityManager, source: OverviewSql, eventIds: string[]): Promise<Map<string, OverviewChildCount>> {
+    const counts = new Map<string, OverviewChildCount>();
+    if (!eventIds.length) return counts;
+    const placeholders = eventIds.map(() => '?').join(', ');
+    const rows = await manager.query<OverviewChildCount[]>(`${source.sql}
+        SELECT child.eventId, COUNT(*) AS total, SUM(child.matches) AS matching
+        FROM overview_region child WHERE child.eventId IN (${placeholders}) GROUP BY child.eventId`,
+    [...source.parameters, ...eventIds]);
+    for (const row of rows) counts.set(row.eventId, row);
+    return counts;
+}
+
+/** Read one surface using a caller-owned transaction, never an event's full relations. */
+async function readOverviewRegion(manager: EntityManager, profileId: string, input: OverviewQuery): Promise<OverviewReadResult> {
+    const query = normalizeOverviewQuery(input);
+    const source = overviewSource(manager, profileId, query);
+    const region = overviewRegionSource(source, query);
+    const representatives = overviewRepresentativeSource(region);
+    const counts = await manager.query<OverviewTypeCount[]>(`${source.sql}
+        SELECT type, overviewHidden, COUNT(*) AS total FROM overview_eligible GROUP BY type, overviewHidden`, source.parameters);
+    const result: OverviewReadResult = {
+        query, items: [], collectionTotal: 0, hiddenTotal: 0, regionTotal: 0,
+        matchingTotal: 0, cardTotal: 0, childTotal: 0, types: [], pageSize: OVERVIEW_PAGE_SIZE,
+        archives: new Map(), visibility: new Map(), contextEvents: [],
+    };
+    for (const count of counts) {
+        const total = Number(count.total);
+        const hidden = Number(count.overviewHidden) === 1;
+        result.collectionTotal += total;
+        if (hidden) result.hiddenTotal += total;
+        if (hidden === (query.region === 'hidden')) {
+            result.regionTotal += total;
+            result.types.push(count.type);
+        }
+    }
+    // Empty collections need no representative or card queries. Counts still let
+    // the renderer distinguish a genuinely empty collection from hidden content.
+    if (!result.regionTotal) {
+        result.query = {...query, page: 1, childPage: 1, eventId: undefined};
+        return result;
+    }
+
+    const totals = await manager.query<Array<{matchingTotal: number | string; cardTotal: number | string}>>(`${representatives.sql}
+        SELECT COALESCE(SUM(matchingCount), 0) AS matchingTotal, COUNT(*) AS cardTotal
+        FROM overview_cards`, representatives.parameters);
+    result.matchingTotal = Number(totals[0].matchingTotal);
+    result.cardTotal = Number(totals[0].cardTotal);
+    query.page = clampOverviewPage(query.page, result.cardTotal);
+
+    if (query.eventId) {
+        // A stale/forged selection cannot act as a container. Its surviving
+        // children naturally reappear in the mixed grid through the same query.
+        const parents = await manager.query<OverviewRootRow[]>(`${region.sql}
+            SELECT * FROM overview_parent_region WHERE id = ? LIMIT 1`,
+        [...region.parameters, query.eventId]);
+        if (parents.length) {
+            [result.event] = await loadOverviewCards(manager, parents, result.visibility);
+            const childCounts = await overviewChildCounts(manager, region, [query.eventId]);
+            const count = childCounts.get(query.eventId);
+            const matching = Number(count?.matching ?? 0);
+            result.childTotal = Number(count?.total ?? 0);
+            result.event.overview = {total: result.childTotal, matching};
+            query.childPage = clampOverviewPage(query.childPage, matching);
+            const page = overviewCardPage(manager, query, true);
+            const rows = await manager.query<OverviewRootRow[]>(`${region.sql} ${page.sql}`, [...region.parameters, ...page.parameters]);
+            result.items = await loadOverviewCards(manager, rows, result.visibility);
+            return result;
+        }
+        query.eventId = undefined;
+    }
+
+    query.childPage = 1;
+    const page = overviewCardPage(manager, query);
+    const rows = await manager.query<OverviewRootRow[]>(`${representatives.sql} ${page.sql}`, [...representatives.parameters, ...page.parameters]);
+    const eventIds: string[] = [];
+    result.items = await loadOverviewCards(manager, rows, result.visibility);
+    for (const card of result.items) {
+        if (card.type === 'event') eventIds.push(card.id);
+    }
+    const childCounts = await overviewChildCounts(manager, region, eventIds);
+    for (const card of result.items) {
+        const count = card.type === 'event' ? childCounts.get(card.id) : undefined;
+        if (count) card.overview = {total: Number(count.total), matching: Number(count.matching)};
+    }
+    return result;
+}
+
+/**
+ * Read only bounded card pages and their lifecycle inputs in a common snapshot.
+ * Context parents are presentation inputs, never additional overview members;
+ * the controller must check their ACCESS_VIEW before revealing a title/link.
+ */
+export async function getOverviewPages(profileId: string, queries: OverviewQuery[]): Promise<OverviewReadResult[]> {
+    if (!profileId) throw new APIError('An active profile is required', {}, 401);
+    if (!queries.length || queries.length > 4) throw new APIError('Invalid overview regions', {}, 400);
+
+    async function readPages(manager: EntityManager): Promise<OverviewReadResult[]> {
+        const results: OverviewReadResult[] = [];
+        const references: ArchiveReference[] = [];
+        const contextIds = new Set<string>();
+        // Sequential reads share one connection/snapshot; parallel transaction
+        // queries do not gain database concurrency and obscure read ordering.
+        for (const query of queries) {
+            const result = await readOverviewRegion(manager, profileId, query);
+            results.push(result);
+            for (const item of result.items) {
+                references.push(item);
+                if (item.eventId) contextIds.add(item.eventId);
+            }
+            if (result.event) references.push(result.event);
+        }
+        const archives = await getArchiveStates(references, manager);
+        const contextEvents: Entity[] = [];
+        if (contextIds.size) {
+            const parents = await getRootRepository(manager, 'event').createQueryBuilder('parent')
+                .select('parent.id', 'id').addSelect('parent.title', 'title').addSelect('parent.owner_id', 'ownerId')
+                .where('parent.id IN (:...ids)', {ids: Array.from(contextIds)}).getRawMany<Pick<OverviewDisplayRow, 'id' | 'title' | 'ownerId'>>();
+            for (const parent of parents) contextEvents.push(convertEntity(parent, 'event'));
+        }
+        for (const result of results) {
+            result.archives = archives;
+            result.contextEvents = contextEvents;
+        }
+        return results;
+    }
+    return AppDataSource.transaction('REPEATABLE READ', readPages);
+}
 
 async function isOverviewMember(profileId: string, ref: ArchiveReference, manager: EntityManager): Promise<boolean> {
     // Either overview permits a private choice. The managed query already includes

@@ -6,8 +6,8 @@ owner: architecture maintainers
 status: current
 last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: consolidated lifecycle and existing administration/user module boundaries; archival source-boundary, inheritance, overview-identity, and startup review; invoice correction and retraction lifecycles, refreshed submission history, and takeover overview dialogs; organizer-entered shared costs, repeat invoice submissions, visible payment feedback, and share breakdown dialogs; central named mail delivery and alert lifecycle, consistent pool relation snapshots, post-commit notifications, and saved-share PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, preview/commit calculation projection, cumulative settled credits, rollback snapshots, and settlement notification boundaries; non-blocking documentation policy and optional report/test routing; D12 runtime, layer, authentication, authorization, persistence, frontend, background-job, build, release, and testing architecture plus D08 advanced activity requirement, allocation, job, review, and persistence boundaries; help integration remains assigned to D14; D14 fixed-source help search, contextual routing, Markdown validation, local visual assets, and release boundary
-source-anchors: src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/modules/archive/policy.ts; src/modules/entityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoiceRetention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
+verification-scope: source review of bounded mixed-card overview queries, event sub-views, shared membership and lifecycle projections, and fragment navigation; consolidated lifecycle and existing administration/user module boundaries; archival source-boundary, inheritance, overview-identity, and startup review; invoice correction and retraction lifecycles, refreshed submission history, and takeover overview dialogs; organizer-entered shared costs, repeat invoice submissions, visible payment feedback, and share breakdown dialogs; central named mail delivery and alert lifecycle, consistent pool relation snapshots, post-commit notifications, and saved-share PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, preview/commit calculation projection, cumulative settled credits, rollback snapshots, and settlement notification boundaries; non-blocking documentation policy and optional report/test routing; D12 runtime, layer, authentication, authorization, persistence, frontend, background-job, build, release, and testing architecture plus D08 advanced activity requirement, allocation, job, review, and persistence boundaries; help integration remains assigned to D14; D14 fixed-source help search, contextual routing, Markdown validation, local visual assets, and release boundary
+source-anchors: src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/modules/archive/policy.ts; src/modules/entityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoiceRetention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
 next-review: architecture-or-help-delivery-change
 -->
 
@@ -282,6 +282,27 @@ Confirmed participant submissions clear invoice-specific inputs and refresh the 
 the available pool selection for the next upload. Inputs remain locked during the refresh; pending and uncertain
 uploads remain protected against duplicate submission.
 
+### Profile overview
+
+The dashboard keeps participation and administration separate, each with main and hidden regions. Its mixed card
+grid represents an eligible linked plan or list through its event card only when that event independently belongs to
+the same collection and region. Otherwise the child remains an ordinary card. Personal visibility never propagates
+from the event to its children, and event membership never substitutes for a child's own participation or administration.
+
+`UserService.getOverviewPages` composes the existing feature membership queries into a common SQL projection. It
+applies lifecycle and personal placement, matches filters, maps children to eligible parent cards, and pages the
+combined set before returning card data. Counts distinguish underlying entities from displayed cards. A
+`REPEATABLE READ` snapshot covers page selection, totals, placement, and lifecycle inputs; the controller reuses that
+snapshot for archival presentation and batches permission checks for actions and optional fallback parent context.
+Only an event's `ACCESS_VIEW` grant allows new parent context on a child card.
+
+`/users/dashboard` and `GET /api/users/overview` share controller normalization and these service reads. The API
+returns Pug-rendered region HTML in the established JSON envelope, with private, noncacheable responses. Ordinary
+links and search forms retain full-page navigation. Each loaded region renders at most one page or one enclosing
+event card plus a child page; hidden regions load when opened. Browser navigation replaces that region's content,
+preserves namespaced URL state, and rejects stale responses. Shared event **Things to do** retains its existing local
+filtering and ungrouped cards.
+
 ### Browser TypeScript
 
 Browser code lives under `src/public/js/`:
@@ -306,11 +327,11 @@ The implementation keeps these responsibilities separate:
 |---|---|
 | `modules/archive/policy.ts` | Pure UTC cutoff, effective-state, and personal-placement rules. |
 | `database/services/EntityLifecycleService.ts` | Root selection and parent loading inside persistence, snapshot projections, archive/restore writes, conditional automatic updates, and transaction locks for archival and preference commands. |
-| Existing `database/services/UserService.ts` and feature services | Active-profile visibility preferences and single-target eligibility checks; feature services own the predicates shared with overview discovery. |
+| Existing `database/services/UserService.ts` and feature services | Active-profile visibility preferences, single-target eligibility checks, and bounded overview queries; feature services own the shared membership predicates. |
 | Existing `controller/entityAdminController.ts` and `middleware/adminApiFactory.ts` | Shared lifecycle validation, existing authorization, presentation capabilities, and API registration. |
-| Existing `controller/userController.ts` | Personal visibility validation and overview discovery/presentation for the active profile. |
+| Existing `controller/userController.ts` | Personal visibility validation, overview navigation normalization, and bounded presentation for the active profile. |
 | `modules/entityArchival.ts` | Independent startup/hourly scheduling and local overlap prevention. |
-| Shared archive/card Pug mixins and browser modules | Server-calculated state, collapsed overview sections, explicit commands, and refresh after success. |
+| Shared archive/card Pug mixins and browser modules | Server-calculated state, bounded overview/sub-view navigation, explicit commands, and refresh after success. |
 
 Overview membership is discovered before archival placement. Direct and parent state are resolved once per distinct reference in a `REPEATABLE READ` snapshot and reused across participation/administration cards. Personal `hidden` and `shown` overrides belong to the active profile; no preference means default placement. They never enter shared entity serialization or the event's **Things to do** filtering. Complete managed-event discovery includes historical events; creation pickers retain their active-date restriction and exclude archived events by default.
 

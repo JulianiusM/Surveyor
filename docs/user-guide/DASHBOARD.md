@@ -6,8 +6,8 @@ owner: dashboard feature maintainers
 status: current
 last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D02 global navigation, profile-scoped overview collections, card search and filtering, and owner-only card actions; D14 rendered help navigation, semantic checks, and trusted-content integration
-source-anchors: src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/layout.pug; src/routes/users.ts; src/controller/userController.ts; src/views/users/dashboard.pug; src/views/modules/module_unified_entity_cards.pug; src/public/js/user-dashboard.ts; src/public/js/modules/entity-cards-overview.ts; tests/integration/controller-smoke-workflows.spec.ts; tests/unit/application-utilities.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: source review of mixed paged cards, event expansion, search/count labels, profile membership and visibility fallbacks; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D02 global navigation, profile-scoped overview collections, and owner-only card actions; D14 rendered help navigation, semantic checks, and trusted-content integration
+source-anchors: src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/views/modules/module_entity_archive.pug; src/views/layout.pug; src/routes/users.ts; src/routes/api/users.ts; src/controller/userController.ts; src/views/users/dashboard.pug; src/views/modules/module_unified_entity_cards.pug; src/public/js/user-dashboard.ts; src/public/js/modules/entity-cards-overview.ts; tests/integration/controller-smoke-workflows.spec.ts; tests/unit/application-utilities.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: overview-or-navigation-visible-UI-change
 -->
 
@@ -18,6 +18,7 @@ next-review: overview-or-navigation-visible-UI-change
 1. Sign in with a full account or guest account.
 2. In the top navigation, open **Overview**.
 3. Select **Your overview**.
+4. Select an item's image or title to open it. For a plan or list within an event, first select that event card's **Show linked entities** action.
 
 You can also open the user menu showing the active profile name and select **Your overview** there. On a narrow screen, open the navigation menu first.
 
@@ -39,9 +40,11 @@ Your overview contains two separate collections. Both can contain surveys, activ
 | Collection | What it contains |
 |---|---|
 | **Your participation** | Items in which the active profile participates. The action that creates participation depends on the feature, such as voting, registering, or accepting an assignment. |
-| **Administrable entities** | Items that the active profile owns or is allowed to administer. An administrator does not automatically become the owner. |
+| **Administrable entities** | Items that the active profile owns or has been added to as an administrator. Available actions depend on the profile's permissions; an administrator does not automatically become the owner. |
 
 The same item can appear in both collections when the active profile both participates in it and administers it.
+
+Events appear alongside independent surveys, plans, and lists in one card grid. When a linked plan or list belongs to the same collection and main or hidden section as its event, find it through the event's **Show linked entities** action. Each collection includes only your relevant linked items: registering for an event does not automatically add every attached plan or list to **Your participation**.
 
 When a collection has no cards, Surveyor shows one of these messages:
 
@@ -52,7 +55,7 @@ The overview does not contain feature-specific create buttons. Use the global **
 
 ## Find an item
 
-Each collection is an expandable section with a total count badge. The main cards and **Archived and hidden** section each have their own search field and **Filter** menu when they contain cards.
+Each collection is an expandable section with a total count badge. The main cards and **Archived and hidden** section each have their own search field and **Filter** menu. Use **Previous** and **Next** beneath the cards to change pages. Cards are ordered alphabetically by title.
 
 ### Search
 
@@ -62,16 +65,18 @@ Use **Search your participation…** or **Search administrable entities…**. Se
 - the description;
 - the item type.
 
-The cards update while you type.
+The cards update while you type, or you can select **Search**. Search includes later pages and linked items inside events you have not opened.
 
 ### Filter by type
 
 1. Select **Filter** in the relevant collection.
 2. Select a type that is present in that collection, or select **All types** to remove the type filter.
 
-The current type labels are `survey`, `activity`, `packing`, `drivers`, and `event`. The menu lists only types for which that collection currently has cards.
+The current type labels are `survey`, `activity`, `packing`, `drivers`, and `event`. The menu lists types belonging to that main or hidden section, including items on other pages and inside event cards.
 
-Search and type filters work together. The **shown** count beside the filters shows how many cards match in that section. The collection heading keeps the total number of associated items. To restore all cards in a section, clear its search field and select **All types**.
+Search and type filters work together. The **matching entities** count describes the individual matching items; **Cards 1–24 of …** counts the cards in the grid. One event card can lead to several matching linked items. The collection badge counts all associated items, including those in **Archived and hidden**. To restore all results in a section, clear its search field and select **All types**.
+
+An event card can appear because one of its linked items matches, even if the event title does not. For example, filtering to `packing` can show an event card whose **Show linked entities** action says **3 of 8 match**. Open it to see those three matching packing lists. Searching an event's title does not make all its linked items match that text.
 
 ## Read and open a card
 
@@ -86,13 +91,26 @@ A card can show:
 
 Select the image or the main body of the card to open the item. The feature page then shows the actions available to the active profile.
 
+## Open an event's linked entities
+
+1. Find the event card in the relevant collection.
+2. Select **Show linked entities**. The number counts your linked items in that collection and main or hidden section.
+3. Select a linked card to open its feature page. Use **Previous** and **Next** if the event contains several pages of linked items.
+4. Select **Back to overview** to return to the mixed card grid.
+
+The event becomes the enclosing card, keeping its image, title, and usual controls. Its image or title still opens the normal event page. The linked cards retain their own actions and visibility choices.
+
+Search and type filters also apply inside the event. Select **Show all my linked entities** to clear both filters while keeping the event open. If only the event itself matches your search, its linked view can initially be empty; that action reveals your other linked items. Returning with **Back to overview** keeps your current filters. Changing a filter starts at the first page; otherwise the previous overview page is restored. Browser Back and Forward follow your navigation history.
+
+If you participate in or administer a child but its event is absent from that collection or section, the child remains an ordinary card in the mixed grid. Where you can open its event, a small event link supplies context. No replacement event card is added solely because you have a linked item.
+
 ## Find archived and hidden items
 
 1. Open **Your participation** or **Administrable entities**.
 2. Expand **Archived and hidden** beneath the main cards.
 3. Search or filter that section, then open the item normally.
 
-The section starts collapsed. It remains available when all your items are archived or hidden; the main section then explains where to find them. Archival preserves your existing access and actions. Losing participation or administration membership can still remove an item from the overview.
+The section starts collapsed on a normal visit. A saved overview link can reopen it with its search, filters, and selected event. It remains available when all your items are archived or hidden; the main section then explains where to find them. Archival preserves your existing access and actions. Losing participation or administration membership can still remove an item from the overview.
 
 ## Hide or show an item only for yourself
 
@@ -104,7 +122,7 @@ Open a card's **Archival** menu and use the actions under **Only my overview**:
 | **Show for me** | Keep the card in the main section, including after an organizer or the automatic process archives it. The archive badge remains visible. |
 | **Use default visibility** | Remove your personal choice: active items appear in the main section and archived items appear in **Archived and hidden**. |
 
-Your choice applies to both collections and is saved for the active profile, including guests. Other profiles and other users keep their own choices. Hiding an event this way affects its card only; attached plans and lists have their own personal choices. The event's **Things to do** section continues to show its linked items.
+Your choice applies to both collections and is saved for the active profile, including guests. Other profiles and other users keep their own choices. Hiding an event affects its card only: its visible linked plans and lists become ordinary cards in the main grid. A hidden child appears inside its event only when the event is also in **Archived and hidden**; otherwise it remains a separate hidden card. A child kept visible with **Show for me** stays discoverable even while its event is archived or hidden. The event page's **Things to do** section continues to show its linked items.
 
 ## Archive or restore for everyone
 
@@ -164,9 +182,14 @@ Surveyor opens that feature's creation form. After the form is submitted success
 1. Check the active profile name.
 2. Clear the search field and select **Filter** → **All types** in both collections.
 3. Check both **Your participation** and **Administrable entities**.
-4. Expand **Archived and hidden** in each collection and clear that section's filters too.
-5. Confirm that the active profile has actually joined, been assigned to, registered for, or received administration access to the item.
-6. For a guest, use the private link for the guest identity that joined the item, or recover the correct guest account by email.
+4. Use the event card's **Show linked entities** action and check later pages with **Next**. Searching by the missing item's title also finds it inside an event.
+5. Expand **Archived and hidden** in each collection and clear that section's filters too.
+6. Confirm that the active profile has actually joined, been assigned to, registered for, or received administration access to the item.
+7. For a guest, use the private link for the guest identity that joined the item, or recover the correct guest account by email.
+
+### An overview page could not load
+
+Select **Retry** beside the error. If your session expired, sign in again and reopen **Your overview**. If an event or your membership changed while you were browsing, Surveyor returns to the valid overview and keeps any remaining eligible items available.
 
 ### Duplicate or Delete is missing
 

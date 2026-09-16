@@ -6,10 +6,13 @@ import {createResourceViaForm, loginForE2E} from '../keywords/e2eCoreKeywords';
 // Commands acknowledge success briefly before reloading. Register the navigation wait before clicking
 // so assertions use the newly projected cards rather than stale state on the previous document.
 async function chooseCardAction(page: Page, card: Locator, label: string): Promise<void> {
-    await card.getByRole('button', {name: /^Archival and visibility for /}).click();
+    // An expanded event card encloses child cards. Its direct footer selects the event's
+    // own command rather than accidentally matching every child archival menu too.
+    const footer = card.locator(':scope > .card-footer');
+    await footer.getByRole('button', {name: /^Archival and visibility for /}).click();
     await Promise.all([
         page.waitForEvent('load'),
-        card.getByRole('button', {name: label, exact: true}).click(),
+        footer.getByRole('button', {name: label, exact: true}).click(),
     ]);
 }
 
@@ -54,12 +57,13 @@ test('keeps overview dropdowns usable at narrow viewport edges and leaves Delete
     await page.goto('/users/dashboard');
     const owner = page.locator('#sec-own-parts');
     const archived = page.locator('#sec-own-parts-archived');
+    const archivedContainer = page.locator('#sec-own-parts-archived-container');
     await expect(archived).not.toBeVisible();
     await owner.getByRole('button', {name: /^Archived and hidden/}).click();
     await expect(archived).toBeVisible();
     // Bootstrap marks the section visible before its height transition finishes. Keyboard opening
     // must start after expansion, when the menu's placement and viewport scroll use the final layout.
-    await expect(archived).toHaveClass(/\bshow\b/);
+    await expect(archivedContainer).toHaveClass(/\bshow\b/);
     await archived.getByRole('searchbox').fill(title);
     const card = archived.locator(`.js-item[data-id="${event.id}"]`);
     const toggle = card.getByRole('button', {name: /^Archival and visibility for /});
@@ -77,12 +81,12 @@ test('keeps overview dropdowns usable at narrow viewport edges and leaves Delete
     await expect(archived).not.toBeVisible();
     await page.addStyleTag({content: '.entity-overview .collapsing { transition-duration: 2s !important; }'});
     await owner.getByRole('button', {name: /^Archived and hidden/}).click();
-    await expect(archived).toHaveClass(/\bcollapsing\b/);
+    await expect(archivedContainer).toHaveClass(/\bcollapsing\b/);
     await toggle.focus();
     await page.keyboard.press('ArrowDown');
     await expect(menu).toBeVisible();
-    await expect(archived).toHaveClass(/\bcollapsing\b/);
-    await expect(archived).toHaveClass(/\bshow\b/);
+    await expect(archivedContainer).toHaveClass(/\bcollapsing\b/);
+    await expect(archivedContainer).toHaveClass(/\bshow\b/);
     await expectDropdownReachable(menu);
 
     // The last card's permanent delete form remains separate from all archival/visibility controls.
@@ -134,14 +138,25 @@ test('keeps archived cards accessible in collapsed sections and persists persona
     await owner.getByRole('button', {name: /^Archived and hidden/}).click();
     await expect(ownerCard).toBeVisible();
     await expect(ownerCard).toContainText('Archived');
-    await expect(archive.locator(`.js-item[data-id="${child.id}"]`)).toContainText('Archived with event');
-    // The initially collapsed archive retains real, independently searchable cards rather than dead links.
+    await expect(archive.locator(`.js-item[data-id="${child.id}"]`)).toHaveCount(0);
+    await ownerCard.getByRole('link', {name: `Show linked entities for ${event.title}`}).click();
+    const archivedChild = archive.locator(`.js-item[data-id="${child.id}"]`);
+    await expect(archivedChild).toContainText('Archived with event');
+    // These controls arrived in a fetched sub-view. Delegation must preserve personal
+    // placement and refresh the other region without restoring the archived parent.
+    await chooseCardAction(page, archivedChild, 'Show for me');
+    const shownChild = main.locator(`.js-item[data-id="${child.id}"]`);
+    await expect(shownChild).toContainText('Archived with event');
+    await chooseCardAction(page, shownChild, 'Use default visibility');
+    await expect(archivedChild).toBeVisible();
+    await archive.getByRole('link', {name: 'Back to overview', exact: true}).click();
+    // Server search reaches the full region, including children behind unopened event cards.
     const search = archive.getByRole('searchbox');
     await search.fill('no archival match');
     await expect(archive.getByText('No entities match your search and filter.')).toBeVisible();
     await search.fill(event.title);
     await expect(ownerCard).toBeVisible();
-    await expect(archive.locator('.js-count')).toHaveText('1');
+    await expect(archive).toContainText('1 matching entities');
     // "Show for me" changes placement only. The archived badge must remain, proving it did not restore
     // the event globally; returning to default follows the still-archived state again.
     await chooseCardAction(page, ownerCard, 'Show for me');
@@ -149,14 +164,15 @@ test('keeps archived cards accessible in collapsed sections and persists persona
     await expect(ownerCard).toContainText('Archived');
     await expect(page.locator(`#sec-parts .js-item[data-id="${event.id}"]`)).toBeVisible();
     await chooseCardAction(page, ownerCard, 'Use default visibility');
-    await expect(ownerCard).not.toBeVisible();
-    await owner.getByRole('button', {name: /^Archived and hidden/}).click();
+    // The open marker is navigation state and survives the confirmed-command reload.
+    await expect(main.locator(`.js-item[data-id="${event.id}"]`)).toHaveCount(0);
+    await expect(archive.locator(`.js-item[data-id="${event.id}"]`)).toBeVisible();
     await chooseCardAction(page, ownerCard, 'Restore for everyone');
     await expect(ownerCard).toBeVisible();
     await expect(ownerCard).toContainText('Automatic archival paused');
     // A restored, active event can still be hidden privately, and navigation must preserve that choice.
     await chooseCardAction(page, ownerCard, 'Hide for me');
-    await expect(ownerCard).not.toBeVisible();
+    await expect(main.locator(`.js-item[data-id="${event.id}"]`)).toHaveCount(0);
     // Personal hiding affects the overview alone; direct access and shared child cards still work.
     await page.goto(event.path);
     await expect(page.locator(`.js-item[data-id="${child.id}"]`)).toBeVisible();

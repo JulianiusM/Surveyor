@@ -125,9 +125,10 @@ app.get('/oidc/callback', asyncHandler(async (req: Request, res: Response) => {
 
 // Dashboard nach dem Login
 app.get('/dashboard', isLoggedIn, asyncHandler(async (req: Request, res: Response) => {
-    // The active profile selects memberships/private preferences; pass the same session to
-    // permission projection for archival controls. Both collections return as explicit page data.
-    renderer.renderWithData(res, 'users/dashboard', await userController.getEntityList(req.session.profile!, req.session));
+    // URL navigation selects bounded regions; profile membership and permissions come only
+    // from the active session. Private cards must not enter a shared or browser response cache.
+    res.setHeader('Cache-Control', 'private, no-store');
+    renderer.renderWithData(res, 'users/dashboard', await userController.getOverviewPage(req.session, req.query));
 }));
 
 // Delete flows

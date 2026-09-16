@@ -22,7 +22,7 @@ import type {Survey} from "../modules/database/entities/surveys/Survey";
 import {Guest} from "../modules/database/entities/user/Guest";
 import type * as userService from "../modules/database/services/UserService";
 import type {EntityItemType, EntityType} from "./UtilTypes";
-import type {ArchivePresentation, PersonalVisibility} from "./ArchiveTypes";
+import type {ArchivePresentation, ArchiveState, PersonalVisibility} from "./ArchiveTypes";
 
 export type OidcClaims = {
     sub: string;
@@ -73,12 +73,6 @@ export type DashboardEntities = {
     events: Event[];
 }
 
-export type DashboardDTO = {
-    owner?: Partial<DashboardEntities>;
-    participant?: Partial<DashboardEntities>;
-    admin_flag?: boolean;
-}
-
 export type EntityBase = {
     id: string;
     title: string;
@@ -109,6 +103,84 @@ export type Entity = EntityBase & {
      * leaves ordinary card collections unpartitioned instead of inferring user preferences.
      */
     overviewHidden?: boolean;
+    /** Eligible linked-card counts belong to this collection/region, never all event attachments. */
+    overview?: {total: number; matching: number; url?: string};
+    /** Optional parent context is supplied only after checking the event's ACCESS_VIEW permission. */
+    eventContext?: {title: string; url: string};
+}
+
+export type OverviewCollection = 'participant' | 'owner';
+export type OverviewRegion = 'main' | 'hidden';
+
+/** Validated navigation input. Page size and the acting profile are always server-owned. */
+export interface OverviewQuery {
+    collection: OverviewCollection;
+    region: OverviewRegion;
+    q: string;
+    type: EntityType | 'all';
+    page: number;
+    childPage: number;
+    eventId?: string;
+}
+
+/**
+ * Bounded database read projection. Lifecycle and placement share the page's read snapshot;
+ * parent context still requires controller authorization before any title/link is rendered.
+ * Maps contain only returned roots and their necessary parent events, never the full overview.
+ */
+export interface OverviewReadResult {
+    query: OverviewQuery;
+    items: Entity[];
+    event?: Entity;
+    collectionTotal: number;
+    hiddenTotal: number;
+    regionTotal: number;
+    matchingTotal: number;
+    cardTotal: number;
+    childTotal: number;
+    types: EntityType[];
+    pageSize: number;
+    archives: Map<string, ArchiveState>;
+    visibility: Map<string, PersonalVisibility>;
+    contextEvents: Entity[];
+}
+
+/**
+ * One region's explicit Pug/fragment data. The same projection drives ordinary GET links and
+ * enhanced navigation; searchFields preserves other regions when submitting the fallback form.
+ */
+export interface OverviewRegionView extends OverviewQuery {
+    id: string;
+    title: string;
+    queryPrefix: string;
+    items: Entity[];
+    parent?: Entity;
+    totalEntities: number;
+    hiddenEntities: number;
+    regionEntities: number;
+    matchingEntities: number;
+    totalCards: number;
+    totalChildren: number;
+    availableTypes: EntityType[];
+    pageSize: number;
+    canonicalUrl: string;
+    backUrl: string;
+    clearUrl: string;
+    previousUrl?: string;
+    nextUrl?: string;
+    loaded: boolean;
+    searchFields: Array<{name: string; value: string}>;
+}
+
+export interface OverviewCollectionView {
+    main: OverviewRegionView;
+    hidden: OverviewRegionView;
+    total: number;
+}
+
+export interface OverviewPageView {
+    participant: OverviewCollectionView;
+    owner: OverviewCollectionView;
 }
 
 export type GuestLinkData = Guest & { link: string }

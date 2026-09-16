@@ -5,7 +5,7 @@
  * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {EntityManager, EntityTarget, Repository} from 'typeorm';
+import {EntityManager, EntityTarget, Repository, type ObjectLiteral, type SelectQueryBuilder} from 'typeorm';
 import type {ArchiveReference, ArchiveState} from '../../../types/ArchiveTypes';
 import type {EntityType} from '../../../types/UtilTypes';
 import {archiveKey, automaticArchiveCutoff, isEffectivelyArchived} from '../../archive/policy';
@@ -55,6 +55,28 @@ function getRootDescriptor(type: EntityType) {
 /** Share repository selection with the existing profile-overview membership queries. */
 export function getRootRepository(manager: EntityManager, type: EntityType): Repository<BaseEntity> {
     return manager.getRepository(getRootDescriptor(type).entity);
+}
+
+/**
+ * Add the lifecycle inputs used by bounded overview queries before their LIMIT.
+ * Only this service knows which root tables can inherit an event's state. The
+ * profile service composes placement with its private preference, while this
+ * projection is the SQL counterpart of isEffectivelyArchived. Integration cases
+ * compare both paths so pagination cannot silently introduce a different policy.
+ */
+export function addOverviewArchiveProjection<T extends ObjectLiteral>(query: SelectQueryBuilder<T>, type: EntityType): void {
+    const descriptor = getRootDescriptor(type);
+    const alias = query.alias;
+    if (descriptor.linked) {
+        query.leftJoin(Event, 'overviewArchiveParent', `${alias}.event_id = overviewArchiveParent.id`)
+            // UUID-only intermediate identities use one byte per character. The
+            // stored column and indexed relationship remain unchanged.
+            .addSelect(`CONVERT(${alias}.event_id USING ascii)`, 'eventId')
+            .addSelect(`(${alias}.archived_at IS NOT NULL OR overviewArchiveParent.archived_at IS NOT NULL)`, 'effectiveArchived');
+    } else {
+        query.addSelect('NULL', 'eventId')
+            .addSelect(`(${alias}.archived_at IS NOT NULL)`, 'effectiveArchived');
+    }
 }
 
 function rootHasDates(type: EntityType): boolean {
@@ -167,7 +189,7 @@ function projectState(ref: ArchiveReference, root: ArchiveTarget, parent: Archiv
  * All reads use one snapshot: an event and its children must never show opposite
  * lifecycle states because the event changed between separate queries.
  */
-export async function getArchiveStates(refs: ArchiveReference[]): Promise<Map<string, ArchiveState>> {
+export async function getArchiveStates(refs: ArchiveReference[], manager?: EntityManager): Promise<Map<string, ArchiveState>> {
     if (!refs.length) {
         return new Map();
     }
@@ -224,7 +246,10 @@ export async function getArchiveStates(refs: ArchiveReference[]): Promise<Map<st
         return states;
     }
 
-    return AppDataSource.transaction('REPEATABLE READ', readSnapshot);
+    // An overview already owns the read snapshot used for membership, counts and
+    // pagination. Reuse it so its cards cannot acquire a different archive state
+    // between selection and presentation. Ordinary callers still get one snapshot.
+    return manager ? readSnapshot(manager) : AppDataSource.transaction('REPEATABLE READ', readSnapshot);
 }
 
 /** Set direct lifecycle state only. Repeated requests retain the first timestamp. */

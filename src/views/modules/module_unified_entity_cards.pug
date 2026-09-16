@@ -1,87 +1,113 @@
 //- Shared cards for personal dashboards and event "Things to do" collections. Callers also include
 //- module_entity_archive and load its script once when rendering these interactive cards.
-//- items are the controller's common entity-card projections (identity, URL, title, optional archive state).
-//- showCreate retains the existing owner Duplicate/Delete controls and requires the common profile local.
-//- personalVisibility enables private preference badges/actions; it does not grant archive capabilities.
-mixin entityCards(items, showCreate, personalVisibility)
+//- item is a server-projected Entity. showCreate preserves owner-only actions; personalVisibility
+//- enables private preference actions. expansion is optional navigation only, never authorization.
+//- The optional content block lets a selected event enclose its child grid without duplicating its card.
+mixin entityCard(item, showCreate, personalVisibility, expansion)
+    //- Use server-projected capabilities across entity types; ownership alone is not the archival
+    //- permission model. An ordinary participant can still change their personal overview choice.
+    - const canManageArchive = item.archive && (item.archive.canArchive || item.archive.canRestore || item.archive.canManageAutomation);
+    //- Unpaged filtering hides this card's surrounding .col. Paged navigation replaces the whole region.
+    //- Both surfaces retain these identity hooks for actions, keyboard focus, and browser verification.
+    .card.h-100.bg-secondary-subtle.border-secondary.js-item(
+        data-id=item.id
+        data-title=item.title
+        data-type=item.type
+        data-description=item.description || ''
+        data-owner=item.ownerId
+        data-event=item.eventId || ''
+    )
+        if item.imageUrl
+            a(href=item.url)
+                img.card-img-top(
+                    src=item.imageUrl
+                    alt=item.title
+                    style="object-fit: cover; height: 200px;"
+                    loading="lazy"
+                )
+
+        a.card-body.text-decoration-none(href=item.url)
+            h4.card-title.mb-1.text-break #{item.title}
+            if item.description
+                p.card-text.small.mb-2.text-truncate(style="max-width: 100%;") #{item.description}
+
+        .card-footer
+            if item.eventContext
+                p.small.mb-2
+                    i.bi.bi-calendar-event.me-1(aria-hidden="true")
+                    a(href=item.eventContext.url) #{item.eventContext.title}
+            .d-flex.flex-wrap.gap-2.align-items-center.mb-2
+                span.badge.bg-primary #{item.type}
+                +entityArchiveBadges(item.archive)
+                //- The authoritative badge above and the private preference badge below can
+                //- coexist: showing an archived entity for oneself does not restore it globally.
+                if personalVisibility && item.visibility && item.visibility !== 'default'
+                    span.badge.text-bg-info #{item.visibility === 'hidden' ? 'Hidden for me' : 'Shown for me'}
+            .d-flex.flex-wrap.gap-2
+                if personalVisibility || canManageArchive
+                    .dropdown
+                        button.btn.btn-sm.btn-outline-light.dropdown-toggle(
+                            type="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false"
+                            aria-label=`Archival and visibility for ${item.title}`
+                        ) Archival
+                        .dropdown-menu
+                            //- Keep shared changes and private placement in visibly separate
+                            //- groups. The same commands are also available in detail notices.
+                            if canManageArchive
+                                h6.dropdown-header For everyone
+                                +entityArchiveActions(item, true)
+                                if personalVisibility
+                                    hr.dropdown-divider
+                            if item.archive && item.archive.inheritedFromEventId
+                                //- An inherited state can remain even when this child has no
+                                //- independent restore action. Direct the user to its event.
+                                p.dropdown-item-text.small.mb-0 Restore the event before restoring this entity.
+                                if item.archive.eventUrl
+                                    a.dropdown-item(href=item.archive.eventUrl) Open event
+                                hr.dropdown-divider
+                            if personalVisibility
+                                h6.dropdown-header Only my overview
+                                +entityVisibilityActions(item)
+                if showCreate && item.ownerId === profile.id
+                    //- Retain the existing owner-only POST delete form and duplicate link.
+                    //- Delete is a separate permanent operation, never an archival command.
+                    form.d-inline.btn-group(
+                        method="post"
+                        action=`${item.url}/delete`
+                        onsubmit="return confirm('Delete this item?');"
+                    )
+                        a.btn.btn-sm.btn-info(href=`${item.url}/duplicate`)
+                            i.bi.bi-files.me-1(aria-hidden="true")
+                            | Duplicate
+                        button.btn.btn-sm.btn-danger(type="submit")
+                            i.bi.bi-trash.me-1(aria-hidden="true")
+                            | Delete
+            if expansion
+                a.btn.btn-sm.btn-outline-primary.mt-2.js-overview-link(
+                    href=expansion.url
+                    data-overview-action="expand"
+                    data-event-id=item.id
+                    aria-label=`Show linked entities for ${item.title}`
+                )
+                    i.bi.bi-collection.me-1(aria-hidden="true")
+                    if expansion.filtered
+                        | Show linked entities — #{expansion.matching} of #{expansion.total} match
+                    else
+                        | Show linked entities (#{expansion.total})
+        if block
+            .card-body.border-top.entity-overview-children
+                block
+
+//- The responsive grid owns only card placement. Expansion projections belong to the current overview
+//- page; child pages deliberately omit them, preventing recursive event navigation inside a sub-view.
+mixin entityCards(items, showCreate, personalVisibility, overview)
     .row.row-cols-1.row-cols-sm-2.row-cols-md-3.row-cols-lg-4.g-4
         each item in items
-            //- Use server-projected capabilities across entity types; ownership alone is not the archival
-            //- permission model. An ordinary participant can still change their personal overview choice.
-            - const canManageArchive = item.archive && (item.archive.canArchive || item.archive.canRestore || item.archive.canManageAutomation);
             .col
-                //- The filter module reads these attributes from .js-item and hides its surrounding .col.
-                //- Preserve the data contract when changing card markup so filtered grids leave no gaps.
-                .card.h-100.bg-secondary-subtle.border-secondary.js-item(
-                    data-id=item.id
-                    data-title=item.title
-                    data-type=item.type
-                    data-description=item.description || ''
-                    data-owner=item.ownerId
-                    data-event=item.eventId || ''
-                )
-                    if item.imageUrl
-                        a(href=item.url)
-                            img.card-img-top(
-                                src=item.imageUrl
-                                alt=item.title
-                                style="object-fit: cover; height: 200px;"
-                            )
-
-                    a.card-body.text-decoration-none(href=item.url)
-                        h4.card-title.mb-1.text-break #{item.title}
-                        if item.description
-                            p.card-text.small.mb-2.text-truncate(style="max-width: 100%;") #{item.description}
-
-                    .card-footer
-                        .d-flex.flex-wrap.gap-2.align-items-center.mb-2
-                            span.badge.bg-primary #{item.type}
-                            +entityArchiveBadges(item.archive)
-                            //- The authoritative badge above and the private preference badge below can
-                            //- coexist: showing an archived entity for oneself does not restore it globally.
-                            if personalVisibility && item.visibility && item.visibility !== 'default'
-                                span.badge.text-bg-info #{item.visibility === 'hidden' ? 'Hidden for me' : 'Shown for me'}
-                        .d-flex.flex-wrap.gap-2
-                            if personalVisibility || canManageArchive
-                                .dropdown
-                                    button.btn.btn-sm.btn-outline-light.dropdown-toggle(
-                                        type="button"
-                                        data-bs-toggle="dropdown"
-                                        aria-expanded="false"
-                                        aria-label=`Archival and visibility for ${item.title}`
-                                    ) Archival
-                                    .dropdown-menu
-                                        //- Keep shared changes and private placement in visibly separate
-                                        //- groups. The same commands are also available in detail notices.
-                                        if canManageArchive
-                                            h6.dropdown-header For everyone
-                                            +entityArchiveActions(item, true)
-                                            if personalVisibility
-                                                hr.dropdown-divider
-                                        if item.archive && item.archive.inheritedFromEventId
-                                            //- An inherited state can remain even when this child has no
-                                            //- independent restore action. Direct the user to its event.
-                                            p.dropdown-item-text.small.mb-0 Restore the event before restoring this entity.
-                                            if item.archive.eventUrl
-                                                a.dropdown-item(href=item.archive.eventUrl) Open event
-                                            hr.dropdown-divider
-                                        if personalVisibility
-                                            h6.dropdown-header Only my overview
-                                            +entityVisibilityActions(item)
-                            if showCreate && item.ownerId === profile.id
-                                //- Retain the existing owner-only POST delete form and duplicate link.
-                                //- Delete is a separate permanent operation, never an archival command.
-                                form.d-inline.btn-group(
-                                    method="post"
-                                    action=`${item.url}/delete`
-                                    onsubmit="return confirm('Delete this item?');"
-                                )
-                                    a.btn.btn-sm.btn-info(href=`${item.url}/duplicate`)
-                                        i.bi.bi-files.me-1(aria-hidden="true")
-                                        | Duplicate
-                                    button.btn.btn-sm.btn-danger(type="submit")
-                                        i.bi.bi-trash.me-1(aria-hidden="true")
-                                        | Delete
+                - const expansion = overview && item.overview && item.overview.url ? {...item.overview, filtered: !!overview.q || overview.type !== 'all'} : undefined;
+                +entityCard(item, showCreate, personalVisibility, expansion)
 
 //- Render one independent searchable region. id identifies the region; title supplies its accessible
 //- search text; items are already assigned to this region by entityOverview; emptyText explains a region
@@ -191,3 +217,171 @@ mixin entityOverview(id, title, iconHeader, items, emptyText, parent, showCreate
                         .collapse(id=archiveId)
                             p.small.text-body-secondary Archived entities and your personal hidden choices remain available here.
                             +entityFilterSection(archiveId, 'archived and hidden entities', hiddenItems, 'No archived or hidden entities in this collection.', showCreate, personalVisibility)
+
+//- A pager describes displayed cards or selected-event children, never the collection's underlying
+//- membership count. Controller URLs contain normalized pages and preserve the other region state.
+mixin entityOverviewPager(view)
+    - const selected = !!view.parent;
+    - const count = selected ? view.parent.overview.matching : view.totalCards;
+    - const page = selected ? view.childPage : view.page;
+    - const first = count ? (page - 1) * view.pageSize + 1 : 0;
+    - const last = Math.min(page * view.pageSize, count);
+    .d-flex.flex-wrap.justify-content-between.align-items-center.gap-2.mt-3
+        span.small.text-body-secondary #{selected ? 'Linked entities' : 'Cards'} #{first}–#{last} of #{count}
+        nav.d-flex.gap-2(aria-label=selected ? 'Linked entity pages' : 'Overview card pages')
+            if view.previousUrl
+                a.btn.btn-sm.btn-outline-secondary.js-overview-link(href=view.previousUrl data-overview-action="page") Previous
+            else
+                span.btn.btn-sm.btn-outline-secondary.disabled(aria-disabled="true") Previous
+            if view.nextUrl
+                a.btn.btn-sm.btn-outline-secondary.js-overview-link(href=view.nextUrl data-overview-action="page") Next
+            else
+                span.btn.btn-sm.btn-outline-secondary.disabled(aria-disabled="true") Next
+
+//- Full pages and layout-free fragments call this same region body. The stable outer shell owns browser
+//- listeners; this bounded body is replaced, not cached/hidden. `view` is an OverviewRegionView through
+//- renderer data; profile remains the established common request local for owner-only card controls.
+mixin pagedEntityRegion(view)
+    - const showCreate = view.collection === 'owner';
+    - const filtered = !!view.q || view.type !== 'all';
+    .js-overview-content(
+        data-overview-url=view.canonicalUrl
+        data-loaded=String(view.loaded)
+        data-query=view.q
+        data-type=view.type
+        data-page=view.page
+        data-child-page=view.childPage
+        data-event-id=view.eventId || ''
+        data-total-entities=view.totalEntities
+        data-hidden-entities=view.hiddenEntities
+    )
+        h3.visually-hidden.js-overview-heading(tabindex="-1") #{view.title}
+        if !view.loaded
+            //- This ordinary link makes a closed region reachable without JavaScript as well.
+            a.btn.btn-sm.btn-outline-secondary.js-overview-link(href=view.canonicalUrl data-overview-action="open") Show archived and hidden
+        else
+            if view.regionEntities || filtered
+                form.d-flex.flex-wrap.gap-2.mb-3.align-items-center.js-overview-search(method="get" action=`/users/dashboard#${view.id}`)
+                    each field in view.searchFields
+                        input(type="hidden" name=field.name value=field.value)
+                    .input-group.input-group-sm(style="max-width: 320px;")
+                        span.input-group-text
+                            i.bi.bi-search(aria-hidden="true")
+                        input.form-control.js-search(
+                            type="search"
+                            name=`${view.queryPrefix}q`
+                            value=view.q
+                            maxlength="200"
+                            placeholder=`Search ${view.title.toLowerCase()}…`
+                            aria-label=`Search ${view.title.toLowerCase()}`
+                        )
+                    //- Keep the current-type Search button first in DOM order: implicit Enter submission
+                    //- must not activate the dropdown's All types button, including without JavaScript.
+                    button.btn.btn-sm.btn-outline-secondary(type="submit" name=`${view.queryPrefix}type` value=view.type) Search
+                    .dropdown
+                        button.btn.btn-outline-secondary.btn-sm.dropdown-toggle(type="button" data-bs-toggle="dropdown" aria-expanded="false") Filter
+                        ul.dropdown-menu.js-filter-type
+                            li
+                                button.dropdown-item(type="submit" name=`${view.queryPrefix}type` value="all" data-type="all" aria-pressed=String(view.type === 'all')) All types
+                            li
+                                hr.dropdown-divider
+                            each type in view.availableTypes
+                                li
+                                    button.dropdown-item(type="submit" name=`${view.queryPrefix}type` value=type data-type=type aria-pressed=String(view.type === type)) #{type}
+                    span.small.text-body-secondary(aria-live="polite")
+                        span.js-count #{view.matchingEntities}
+                        |  matching entities
+                noscript
+                    //- Bootstrap dropdowns need scripting. A separate ordinary GET form keeps type
+                    //- filtering available without submitting duplicate type values from Search.
+                    form.d-flex.flex-wrap.gap-2.mb-3.align-items-center(method="get" action=`/users/dashboard#${view.id}`)
+                        each field in view.searchFields
+                            input(type="hidden" name=field.name value=field.value)
+                        input(type="hidden" name=`${view.queryPrefix}q` value=view.q)
+                        label.form-label.mb-0(for=`${view.id}-type-fallback`) Filter by type
+                        select.form-select.form-select-sm(id=`${view.id}-type-fallback` name=`${view.queryPrefix}type` style="width: auto;")
+                            option(value="all" selected=view.type === 'all') All types
+                            each type in view.availableTypes
+                                option(value=type selected=view.type === type) #{type}
+                        button.btn.btn-sm.btn-outline-secondary(type="submit") Filter
+
+            if view.parent
+                a.btn.btn-sm.btn-outline-secondary.mb-3.js-overview-link(href=view.backUrl data-overview-action="back" data-event-id=view.parent.id)
+                    i.bi.bi-arrow-left.me-1(aria-hidden="true")
+                    | Back to overview
+                //- Reuse the complete event card as the enclosing surface. The child collection is the
+                //- server-authorized intersection for this collection/region, never all event attachments.
+                +entityCard(view.parent, showCreate, true)
+                    .d-flex.flex-wrap.justify-content-between.align-items-center.gap-2.mb-3
+                        h4.h5.mb-0 #{view.title} · #{view.totalChildren} linked entities
+                        if filtered
+                            a.btn.btn-sm.btn-outline-secondary.js-overview-link(href=view.clearUrl data-overview-action="clear") Show all my linked entities
+                    if view.items.length
+                        +entityCards(view.items, showCreate, true)
+                    else
+                        p.status-notice.alert-info.mb-0(role="status") #{filtered ? 'No linked entities match your search and filter.' : 'No linked entities in this overview region.'}
+                    +entityOverviewPager(view)
+            else if view.items.length
+                +entityCards(view.items, showCreate, true, view)
+                +entityOverviewPager(view)
+            else
+                if filtered
+                    p.status-notice.alert-info.mb-0(role="status") No entities match your search and filter.
+                else if view.region === 'hidden'
+                    p.status-notice.alert-info.mb-0 No archived or hidden entities in this collection.
+                else if view.totalEntities
+                    p.status-notice.alert-info.mb-0 All your entities in this collection are in Archived and hidden below.
+                else
+                    p.status-notice.alert-info.mb-0 #{view.collection === 'participant' ? 'You are not participating anywhere' : "You don't have any administrable entities yet"}
+
+//- Stable shell: event delegation survives replacement, and the status/retry area survives failed reads.
+//- Collection and region select the server scope; neither is a permission or acting-profile identifier.
+mixin pagedEntityRegionShell(view)
+    .js-overview-region(
+        id=view.id
+        data-section=view.id
+        data-collection=view.collection
+        data-region=view.region
+        data-query-prefix=view.queryPrefix
+    )
+        .small.text-body-secondary.mb-2.js-overview-status(role="status" hidden)
+        //- A failed read remains actionable until retry succeeds; global transient-alert dismissal must
+        //- never remove this status or its Retry control from the stable region shell.
+        .status-notice.alert-danger.js-overview-error(role="status" hidden)
+            span.js-overview-error-message
+            button.btn.btn-sm.btn-outline-danger.ms-2.js-overview-retry(type="button") Retry
+        +pagedEntityRegion(view)
+
+//- Personal overview collections deliberately opt into paged navigation. The existing entityOverview
+//- mixin above remains the unpaged/local-filter implementation for shared event "Things to do".
+mixin pagedEntityOverview(id, title, iconHeader, collection, parent)
+    - const hiddenId = `${collection.hidden.id}-container`;
+    .accordion-item.entity-overview.overflow-visible
+        h2.accordion-header
+            button.accordion-button(type="button" data-bs-toggle="collapse" data-bs-target=`#${id}` aria-expanded="true" aria-controls=id)
+                i(class=`bi ${iconHeader} me-2` aria-hidden="true")
+                | #{title}
+                span.badge.bg-secondary.ms-2.js-overview-total #{collection.total}
+        .accordion-collapse.collapse.show(id=id data-bs-parent=`#${parent}`)
+            .accordion-body
+                +pagedEntityRegionShell(collection.main)
+                if collection.total
+                    .mt-4
+                        h3.h5
+                            //- Bootstrap enhances this link; its full-page URL opens the same region when
+                            //- scripting is unavailable. Closed bodies are released by the page module.
+                            a.btn.btn-outline-secondary(
+                                class=collection.hidden.loaded ? '' : 'collapsed'
+                                href=collection.hidden.canonicalUrl
+                                role="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target=`#${hiddenId}`
+                                aria-expanded=String(collection.hidden.loaded)
+                                aria-controls=hiddenId
+                            )
+                                i.bi.bi-archive.me-2(aria-hidden="true")
+                                | Archived and hidden
+                                span.badge.bg-secondary.ms-2.js-overview-hidden-total #{collection.hidden.regionEntities}
+                        .collapse.js-overview-hidden(id=hiddenId class=collection.hidden.loaded ? 'show' : '')
+                            p.small.text-body-secondary Archived entities and your personal hidden choices remain available here.
+                            +pagedEntityRegionShell(collection.hidden)

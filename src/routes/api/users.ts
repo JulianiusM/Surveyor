@@ -41,6 +41,15 @@ app.post('/guest/email', searchLimiter, asyncHandler(async (req: Request, res: R
 
 app.use(createUserSearchApiRouter());
 
+// The controller authenticates full-account and guest sessions before interpreting the
+// requested collection/region. Pug remains the shared source of card and navigation HTML.
+app.get('/overview', asyncHandler(async (req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'private, no-store');
+    const region = await userController.getOverviewRegion(req.session, req.query);
+    const html = await renderer.renderWithDataToString(res, 'users/overview-region', region);
+    renderer.respondWithSuccessDataJson(res, undefined, {html, url: region.canonicalUrl, regionId: region.id});
+}));
+
 // This endpoint changes the session profile's placement only, independently of shared archival.
 // The controller authenticates account/guest sessions and validates the polymorphic route target;
 // UserService checks current overview membership before saving. Public access alone is insufficient.

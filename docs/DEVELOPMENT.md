@@ -6,8 +6,8 @@ owner: developer-experience maintainers
 status: current
 last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit maintainer readability, comments, formatting, declaration-file, module-reuse, renderer-data, and deletion-boundary requirements; archival API, presentation, persistence, and extension-boundary source review; invoice correction and retraction lifecycles, refreshed submission history, and searchable payer rows with beneficiary chips; organizer-entered shared costs, repeat invoice submissions, visible payment feedback, and share breakdown dialogs; named recipient mailer contract, transient alert lifecycle, snapshot relation loading, post-commit invoice review notifications, saved share ledger and PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, signed adjustments, revision-checked previews, payment carry-forward, rollback snapshots, configurable settlement notifications, and upload feedback; non-blocking documentation policy and optional report/test routing; D12 clean-clone setup, current scripts, settings and schema bootstrap, generated files, observed repository patterns, route registration, test selection, CI branches, and troubleshooting; D14 focused in-app help validation workflow
-source-anchors: src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/views/modules/module_entity_archive.pug; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
+verification-scope: source review of bounded mixed-card overview queries, event sub-views, shared membership and lifecycle projections, and fragment navigation; explicit maintainer readability, comments, formatting, declaration-file, module-reuse, renderer-data, and deletion-boundary requirements; archival API, presentation, persistence, and extension-boundary source review; invoice correction and retraction lifecycles, refreshed submission history, and searchable payer rows with beneficiary chips; organizer-entered shared costs, repeat invoice submissions, visible payment feedback, and share breakdown dialogs; named recipient mailer contract, transient alert lifecycle, snapshot relation loading, post-commit invoice review notifications, saved share ledger and PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, signed adjustments, revision-checked previews, payment carry-forward, rollback snapshots, configurable settlement notifications, and upload feedback; non-blocking documentation policy and optional report/test routing; D12 clean-clone setup, current scripts, settings and schema bootstrap, generated files, observed repository patterns, route registration, test selection, CI branches, and troubleshooting; D14 focused in-app help validation workflow
+source-anchors: src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/views/modules/module_entity_archive.pug; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
 next-review: development-workflow-or-help-tooling-change
 -->
 
@@ -312,9 +312,9 @@ The shared API commands are explicit and retry-safe:
 Never accept profile IDs, timestamps, stored parent state, or other arbitrary fields from the browser. Follow the [archival authority contract](PERMISSIONS_REFERENCE.md#archival-authority-and-personal-visibility), including the survey exception. A private preference may change placement only after existing overview membership is established.
 
 Render lifecycle actions through `module_entity_archive.pug`, passing the optional notice state in renderer data and
-explicit mixin arguments. Overview partitioning and personal actions are an explicit `entityOverview` option. The shared
-browser module waits for structured success before refreshing all appearances. It does not infer archival dates or
-parent policy.
+explicit mixin arguments. Personal actions are an explicit card argument; dashboard placement comes from the bounded
+overview service. The shared browser module delegates commands so inserted cards work, keeps one page-wide mutation
+lock, and waits for structured success before refreshing all appearances. It does not infer archival dates or parent policy.
 
 Archive and restore write only lifecycle fields and do not call deletion, invoice recalculation, or file operations.
 Permanent deletion remains the simple repository delete in each existing feature service, with database foreign keys
@@ -322,6 +322,35 @@ handling dependent rows. It does not pass through the archival service. Polymorp
 a deleted target; overview discovery always starts from existing entities, so these rows cannot create cards or grant
 access. New and duplicated roots receive fresh IDs and default lifecycle state. See
 [Database and Migrations](DATABASE.md#entity-archival-state) for persistence and concurrency details.
+
+### Paged profile overview
+
+Keep overview persistence in `UserService.getOverviewPages`, request normalization and presentation in
+`userController`, and shared contracts in `types/UserTypes.d.ts`. Reuse the feature participation query builders and
+`EntityAdminService.createManagedEntityQuery`; drivers participation, survey ownership, and zero-mask administration
+assignments retain their existing meanings. Event registration or ownership never grants membership in every child.
+
+The service joins personal preferences and uses `EntityLifecycleService` for shared archival query inputs. SQL
+placement must agree with `isEffectivelyArchived` and `isHiddenInOverview`. An event represents a child only when both
+independently qualify in the same collection and region, before filtering. Apply text/type matching to the underlying
+roots, map matching children to those eligible parent cards, then sort and page the combined grid in SQL. Escape
+literal search wildcards and retain type/UUID identity. Reuse those predicates for counts, selected-event children,
+and fallback cards; do not group or filter a complete hydrated dashboard in application or browser code.
+
+One service-owned read snapshot covers cards, totals, placement, and lifecycle state. Pass its `ArchiveState` map to
+`getArchivePresentations` rather than rereading archival after paging. Batch permission projection for the returned
+cards and their necessary parents; a fallback parent's title and link require its `ACCESS_VIEW`. Never reuse a
+rendered expansion button as authorization for a later read. The selected event and each child are revalidated on
+every request, and stale selections/pages resolve to the remaining valid overview.
+
+The full-page and region API routes share controller normalization and server-owned page limits. Their namespaced
+URL state preserves independent collection/region filters, pages, and selection. Both render through the existing
+`data` channel: `renderer.renderWithDataToString` uses Express locals for a layout-free fragment without creating a
+second card implementation. `entityCard` owns ordinary, expandable, and enclosing-card markup; `entityCards` owns
+the responsive grid. Keep paged navigation an explicit browser initialization option so shared event **Things to do**
+retains local filtering. Replace previous region content, release closed hidden bodies, and keep request-generation
+checks and the archival mutation lock when extending navigation. Database work can grow with membership size even
+though returned cards and DOM are bounded; measure query plans and first/late-page behavior before adding indexes.
 
 ### Invoice pool calculation and saved changes
 

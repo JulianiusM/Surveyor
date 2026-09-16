@@ -133,11 +133,17 @@ function mayManageArchival(reference: ArchiveReference, state: ArchiveState, ses
  * overview cards without making their templates interpret permissions or inherited state.
  * Only requested roots are returned; additional parent events are internal permission inputs.
  */
-export async function getArchivePresentations(references: ArchiveReference[], session: SessionLike): Promise<Map<string, ArchivePresentation>> {
+export async function getArchivePresentations(
+    references: ArchiveReference[],
+    session: SessionLike,
+    snapshot?: Map<string, ArchiveState>,
+): Promise<Map<string, ArchivePresentation>> {
     // LifecycleService also returns the linked events from this snapshot. Include those
     // parents in the permission batch even when the user's overview contains only a child.
     // This lets us offer a restoration link without assuming that child access grants event access.
-    const states = await lifecycleService.getArchiveStates(references);
+    // Paged overview reads already own a coherent lifecycle/placement snapshot. Reuse that
+    // projection rather than rereading archival after page selection and contradicting it.
+    const states = snapshot ?? await lifecycleService.getArchiveStates(references);
     const permissionTargets = new Map<string, ArchiveReference>();
     for (const reference of references) {
         permissionTargets.set(archiveKey(reference), reference);

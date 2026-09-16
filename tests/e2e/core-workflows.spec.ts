@@ -134,9 +134,15 @@ test.describe('authenticated core workflow smoke suite', () => {
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
     test('shows the created core resources on the authenticated dashboard', async () => {
-        const dashboard = await expectPageContains(authedRequest.get('/users/dashboard'), 'Dashboard');
-        for (const title of [createE2EEvent().title, createE2ESurvey().title, createE2EActivityPlan().title, createE2EDriversList().title, createE2EPackingList().title]) {
-            expect(dashboard).toContain(title);
+        // Other journeys share the seeded organizer and can fill later pages. Search the full
+        // collection rather than assuming every created root is on the first bounded page.
+        for (const key of ['event', 'survey', 'activity', 'drivers', 'packing']) {
+            const resource = resources[key];
+            const dashboard = await expectPageContains(authedRequest.get('/users/dashboard', {
+                params: {owner_main_q: resource.title},
+            }), 'Dashboard');
+            expect(dashboard).toContain(`data-id="${resource.id}"`);
+            expect(dashboard).toContain(resource.title);
         }
     });
 });

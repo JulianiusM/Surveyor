@@ -16,22 +16,26 @@ const actions: Record<string, {body: Record<string, boolean | string>; message: 
     default: {body: {visibility: 'default'}, message: 'Default overview visibility restored.'},
 };
 
+// One page owns the archival binding. Overview navigation reads this state so it cannot replace the
+// controls whose disabled states and confirmation are being coordinated by an in-flight mutation.
+let pending = false;
+
+export function isEntityArchivePending(): boolean {
+    return pending;
+}
+
 /**
  * Bind the server-rendered archival controls within root and return a listener cleanup function.
  * Cards and notices expose the same data-archive-* contract; this module does not infer permissions,
  * inherited event state, or private placement. A confirmed command reloads their common server projection.
  */
 export function initEntityArchive(root: Document | HTMLElement = document): () => void {
-    // Capture this binding's controls once. Commands cause a full refresh rather than injecting cards,
-    // so every duplicate appearance can be locked and restored through the same stable collection.
-    const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-archive-action]'));
-    let pending = false;
-
     async function handleAction(event: Event): Promise<void> {
-        // currentTarget is the bound button even when the user clicked its spinner or inner text.
-        // Ignore incomplete markup and repeat clicks before prompting or sending a request.
-        const button = event.currentTarget as HTMLButtonElement;
-        if (pending || button.disabled) return;
+        // Delegate from a stable page root: paged overviews replace cards after initialization. closest
+        // also handles icons/spinners without rebinding controls or creating another mutation lock.
+        const target = event.target as Element | null;
+        const button = target?.closest<HTMLButtonElement>('button[data-archive-action]');
+        if (!button || !root.contains(button) || pending || button.disabled) return;
         const action = actions[button.dataset.archiveAction || ''];
         const url = button.dataset.archiveUrl;
         if (!action || !url) return;
@@ -45,6 +49,7 @@ export function initEntityArchive(root: Document | HTMLElement = document): () =
         // control disabled by another page concern. Only the selected control shows busy feedback.
         pending = true;
         const disabled = new Map<HTMLButtonElement, boolean>();
+        const buttons = root.querySelectorAll<HTMLButtonElement>('[data-archive-action]');
         for (const control of buttons) {
             disabled.set(control, control.disabled);
             control.disabled = true;
@@ -74,15 +79,12 @@ export function initEntityArchive(root: Document | HTMLElement = document): () =
         }
     }
 
-    for (const button of buttons) {
-        button.addEventListener('click', handleAction);
-    }
+    root.addEventListener('click', handleAction);
 
     return function dispose(): void {
         // Lifecycle cleanup removes this binding only. It does not cancel or reverse a server command
         // already sent; the entry point reloads cached pages to obtain the resulting persisted state.
-        for (const button of buttons) {
-            button.removeEventListener('click', handleAction);
-        }
+        root.removeEventListener('click', handleAction);
+        pending = false;
     };
 }

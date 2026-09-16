@@ -7,7 +7,7 @@ owner: documentation maintainers
 status: current
 last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: archival implementation documentation inventory verified on 2026-09-16; earlier verification retained for non-blocking documentation policy and optional report/test routing; D00 foundation plus D01-D13 reviewed user, operator, permission, activity-algorithm, maintainer, repository-entry, and AI-agent documentation; D14 completed in-app help UX, semantic validation, visual ownership, and trust-boundary enforcement
+verification-scope: implemented event-card overview inventory, mixed cards, scoped child sub-views, and maintained guidance; archival implementation documentation inventory verified on 2026-09-16; earlier verification retained for non-blocking documentation policy and optional report/test routing; D00 foundation plus D01-D13 reviewed user, operator, permission, activity-algorithm, maintainer, repository-entry, and AI-agent documentation; D14 completed in-app help UX, semantic validation, visual ownership, and trust-boundary enforcement
 source-anchors: repository-tree; package.json; README.md; AGENTS.md; .github/copilot-instructions.md; .github/copilot/; docs/documentation-check.json; docs/documentation-remediation.yml; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; docs/user-guide/; src/server.ts; src/app.ts; src/modules/settings.ts; vitest.config.mts; playwright.config.ts; .github/workflows/ci.yml; .github/workflows/release.yml; docs/HELP_VISUALS.md; scripts/check-help-documentation.mjs; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: documentation-inventory-or-status-change
 -->
@@ -49,6 +49,7 @@ The canonical in-app help source is [`docs/user-guide/`](user-guide/). The appli
 | [Activity requirement algorithm](ACTIVITY_REQUIREMENTS_ALGORITHM.md) | Detailed requirement and coverage algorithm | Current: D08 canonical requirement, coverage, allocation, job, review-state, application, and limitation reference |
 | [Permission system reference](PERMISSIONS_REFERENCE.md) | Generated bit/preset/default tables and maintainer authorization semantics | Current: D03 |
 | [Archival design and implementation record](ARCHIVAL_PLAN.md) | Authoritative archival, profile visibility, architecture, implementation steps, and acceptance criteria | Implemented in the working tree; current usage and operations are documented in the canonical guides |
+| [Event-card overview design](EVENT_OVERVIEW_PLAN.md) | Implemented mixed cards with expandable events and eligible linked-card sub-views, bounded queries/rendering, module boundaries, and acceptance criteria | Implemented; application checks and measured scale observations are recorded in the design document |
 
 ## Operators and site reliability engineers
 

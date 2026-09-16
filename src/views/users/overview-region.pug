@@ -1,0 +1,6 @@
+//- Layout-free, server-rendered response for one bounded personal overview region. Keep card and region
+//- markup in the same mixins used by dashboard.pug; data is the controller's OverviewRegionView.
+include ../modules/module_entity_archive
+include ../modules/module_unified_entity_cards
+
++pagedEntityRegion(data)

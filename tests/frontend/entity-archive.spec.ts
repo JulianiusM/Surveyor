@@ -11,6 +11,7 @@ class ButtonStub extends EventTarget {
     disabled = false;
     attributes = new Map<string, string>();
     spinnerHidden = true;
+    root?: RootStub;
     constructor(action: string, url: string, confirmation?: string) {
         super();
         this.dataset = {archiveAction: action, archiveUrl: url};
@@ -26,7 +27,22 @@ class ButtonStub extends EventTarget {
             remove: () => { this.spinnerHidden = false; },
         }};
     }
-    click() { this.dispatchEvent(new Event('click')); }
+    closest() { return this; }
+    click() {
+        const event = new Event('click');
+        Object.defineProperty(event, 'target', {value: this});
+        this.root?.dispatchEvent(event);
+    }
+}
+
+class RootStub extends EventTarget {
+    constructor(public buttons: ButtonStub[]) {
+        super();
+        for (const button of buttons) button.root = this;
+    }
+    querySelectorAll() { return this.buttons; }
+    contains(button: ButtonStub) { return this.buttons.includes(button); }
+    append(button: ButtonStub) { this.buttons.push(button); button.root = this; }
 }
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -36,7 +52,9 @@ let dispose: (() => void) | undefined;
 
 function bind(...buttons: ButtonStub[]) {
     // A page can expose the same entity more than once. One binding must coordinate all supplied buttons.
-    dispose = initEntityArchive({querySelectorAll: () => buttons} as unknown as HTMLElement);
+    const root = new RootStub(buttons);
+    dispose = initEntityArchive(root as unknown as HTMLElement);
+    return root;
 }
 
 function response(body: unknown, status = 200): Response {
@@ -67,6 +85,20 @@ afterEach(() => {
 });
 
 describe('entity archival controls', () => {
+    it('handles cards inserted after initialization and shares the existing mutation lock', async () => {
+        const existing = new ButtonStub('hidden', '/api/users/overview/event/existing/visibility');
+        const root = bind(existing);
+        const inserted = new ButtonStub('shown', '/api/users/overview/event/inserted/visibility');
+        root.append(inserted);
+        fetchMock.mockImplementation(() => new Promise(() => {}));
+        inserted.click();
+        existing.click();
+        expect(fetchMock).toHaveBeenCalledOnce();
+        expect(fetchMock).toHaveBeenCalledWith(inserted.dataset.archiveUrl, expect.objectContaining({body: JSON.stringify({visibility: 'shown'})}));
+        expect(inserted.disabled).toBe(true);
+        expect(existing.disabled).toBe(true);
+    });
+
     it('saves private visibility without a warning, locks duplicate actions, and reloads only after success', async () => {
         const hide = new ButtonStub('hidden', '/api/users/overview/event/event-1/visibility');
         const duplicate = new ButtonStub('hidden', hide.dataset.archiveUrl);
