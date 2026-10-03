@@ -17,6 +17,8 @@
 import type {ActivitySlot} from "../database/entities/activity/ActivitySlot";
 import type {ParticipantAttendance} from "./requirements";
 import {parseTimeToMinutes, slotsOverlap, SlotTimeboxCandidate} from "./timebox";
+import type {AssignmentCandidate, AssignmentWarning} from '../../types/ActivityTypes';
+export type {AssignmentCandidate, AssignmentWarning, AssignmentWarningType} from '../../types/ActivityTypes';
 
 /**
  * Availability helpers for assignment warnings. These utilities normalize slot assignments
@@ -27,28 +29,6 @@ import {parseTimeToMinutes, slotsOverlap, SlotTimeboxCandidate} from "./timebox"
 export interface AttendanceCheck {
     allowed: boolean;
     boundary?: "arrival" | "departure" | "before" | "after";
-}
-
-export type AssignmentWarningType =
-    | "ineligible_participant"
-    | "outside_attendance"
-    | "arrival_day"
-    | "departure_day"
-    | "arrival_time_restricted"
-    | "departure_time_restricted"
-    | "overlap"
-    | "over_capacity";
-
-export interface AssignmentWarning {
-    type: AssignmentWarningType;
-    conflicts?: string[];
-}
-
-export interface AssignmentCandidate extends SlotTimeboxCandidate {
-    id: string;
-    isArrivalEvening?: boolean | null;
-    isDepartureMorning?: boolean | null;
-    hasNamedRole?: boolean;
 }
 
 function isBefore(a: string, b: string): boolean {
@@ -155,7 +135,10 @@ export function collectAssignmentWarnings(
 
     const conflicts = findOverlapConflicts(slot, existingAssignments);
     if (conflicts.length) {
-        warnings.push({type: "overlap", conflicts});
+        // Preserve provenance for the controller's priority decision and confirmation digest.
+        // Display permissions are deliberately handled later, at the HTTP boundary.
+        const overlapDetails = existingAssignments.filter((assignment) => conflicts.includes(assignment.id));
+        warnings.push({type: "overlap", conflicts, overlapDetails, overlapTarget: slot});
     }
 
     return warnings;

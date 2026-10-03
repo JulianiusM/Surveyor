@@ -6,8 +6,8 @@ owner: activity-plan maintainers
 status: current
 last-verified: 2026-10-03
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; source-reviewed Entity settings dialog labels, per-action permissions, root property changes, image/actions, minimal archival hints, and event selection/reassociation boundaries; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; expanded plan descriptions and shared-text limits; D07 basic activity-plan creation and participation plus D08 advanced requirement configuration, live coverage, automatic recommendation generation, review, manual staging, application, and limitations verified; D14 rendered help navigation, semantic checks, and trusted-content integration
-source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/activity/activity-create.pug; src/views/activity/activity-view.pug; src/views/activity/parts/schedule.pug; src/views/activity/parts/participants.pug; src/views/activity/parts/participant-status.pug; src/views/activity/parts/assignments.pug; src/views/activity/parts/recommendations-schedule.pug; src/views/activity/export/schedule.pug; src/views/modules/module_role_assignment_addon.pug; src/public/js/activity-create.ts; src/public/js/modules/activity/activity-requirements.ts; src/public/js/modules/activity/activity-recommendation-jobs.ts; src/public/js/modules/activity/activity-recommendations-schedule.ts; src/public/js/modules/activity/activity-recommendations-state.ts; src/public/js/modules/activity/activity-recommendations-logic.ts; src/public/js/modules/activity/activity-recommendations-ui.ts; src/routes/activity.ts; src/routes/api/activity.ts; src/controller/activityController.ts; src/middleware/assignFlowFactory.ts; src/modules/activity/requirements.ts; src/modules/activity/availability.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/autoAssignment.ts; src/modules/activity/recommendations.ts; src/modules/activity/recommendationJobs.ts; src/modules/database/services/ActivityService.ts; src/modules/database/services/ActivityRequirementService.ts; src/modules/database/services/ActivityRecommendationService.ts; tests/unit/activity-requirements.spec.ts; tests/frontend/activity-requirement-coverage.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: event-wide activity collisions, persistent recommendation warnings, confirmable manual/Required-over-Free overlap, and stale-confirmation recovery; compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; source-reviewed Entity settings dialog labels, per-action permissions, root property changes, image/actions, minimal archival hints, and event selection/reassociation boundaries; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; expanded plan descriptions and shared-text limits; D07 basic activity-plan creation and participation plus D08 advanced requirement configuration, live coverage, automatic recommendation generation, review, manual staging, application, and limitations verified; D14 rendered help navigation, semantic checks, and trusted-content integration
+source-anchors: tests/unit/activity-linked-recommendations.spec.ts; tests/frontend/activity-recommendation-warnings.spec.ts; tests/integration/activity-plan-interlinking.spec.ts; tests/e2e/activity-plan-interlinking.spec.ts; src/public/js/modules/activity/activity-assignments.ts; src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/activity/activity-create.pug; src/views/activity/activity-view.pug; src/views/activity/parts/schedule.pug; src/views/activity/parts/participants.pug; src/views/activity/parts/participant-status.pug; src/views/activity/parts/assignments.pug; src/views/activity/parts/recommendations-schedule.pug; src/views/activity/export/schedule.pug; src/views/modules/module_role_assignment_addon.pug; src/public/js/activity-create.ts; src/public/js/modules/activity/activity-requirements.ts; src/public/js/modules/activity/activity-recommendation-jobs.ts; src/public/js/modules/activity/activity-recommendations-schedule.ts; src/public/js/modules/activity/activity-recommendations-state.ts; src/public/js/modules/activity/activity-recommendations-logic.ts; src/public/js/modules/activity/activity-recommendations-ui.ts; src/routes/activity.ts; src/routes/api/activity.ts; src/controller/activityController.ts; src/middleware/assignFlowFactory.ts; src/modules/activity/requirements.ts; src/modules/activity/availability.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/autoAssignment.ts; src/modules/activity/recommendations.ts; src/modules/activity/recommendationJobs.ts; src/modules/database/services/ActivityService.ts; src/modules/database/services/ActivityRequirementService.ts; src/modules/database/services/ActivityRecommendationService.ts; tests/unit/activity-requirements.spec.ts; tests/frontend/activity-requirement-coverage.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: activity-plan-visible-UI-or-behavior-change
 -->
 
@@ -110,10 +110,12 @@ After the plan’s **Binding deadline**, participants can no longer join, take, 
 Surveyor can warn before joining a slot or taking a role. The **Assignment warnings** dialog can identify issues such as:
 
 - The slot falling outside your event attendance dates or permitted arrival/departure period.
-- An overlap with another slot already assigned to you.
+- An overlap with an assignment or active recommendation for you, including other activity plans linked to the same event.
 - Joining beyond the slot’s capacity.
 
-Select **Cancel** to keep the current assignments unchanged. Select **Continue anyway** only when the exception is intentional. A warning is not the same as an error: settings such as a binding deadline, event-registration requirement, or disabled over-capacity assignment can block the action completely.
+Plans linked to the same event are checked together automatically. Each plan keeps its own requirements and progress. A warning may be generic when you cannot view details of the other plan. Checks require complete overlapping time ranges on the same day; slots that only touch at their endpoints do not overlap.
+
+Select **Cancel** to keep the current assignments unchanged. Discuss the conflict with the organizer before selecting **Continue anyway** when an overlap is intentional. If the conflicting assignments change while the dialog is open, review and confirm the updated warning again. A warning is not the same as an error: settings such as a binding deadline, event-registration requirement, or disabled over-capacity assignment can block the action completely.
 
 ### Use shared text fields
 
@@ -186,6 +188,8 @@ During creation, use **Assign to event (optional)**. For an existing plan:
 3. Review the effect on access and archival, then select **Save event link** and confirm.
 
 Changing the relationship requires **Edit Meta** on the plan. Selecting an event also requires **Manage Assignments** on that event. Past events, events whose registration deadline has passed, and archived events are selectable when authorized. See [Choose an event](EVENTS.md#choose-an-event) for the shared search and filters.
+
+Activity plans linked to the same event automatically share overlap checks. Linking, changing, or removing the event immediately changes which plans are checked together; archived or personally hidden plans still contribute their saved commitments.
 
 The plan keeps its slots, roles, assignments, rules, images, and direct archive state. Event-derived admission and participant permissions follow the new event, so review access before changing the link. Existing assignments do not register people in the destination event automatically.
 
@@ -362,11 +366,13 @@ After saving a complete Required-mode configuration, use the **Assignment recomm
 4. If the plan changes during calculation, generate again from the new state.
 5. Review every proposed row in the schedule before saving anything.
 
-Automatic suggestions use participant requirements, event attendance, arrival/departure switches, existing assignments, time overlaps, capacity, and previously rejected participant/slot pairs. Surveyor aims to distribute progress fairly and spread assignments across the available dates.
+Automatic suggestions use participant requirements, event attendance, arrival/departure switches, existing assignments, active recommendations across the event’s activity plans, time overlaps, capacity, and previously rejected participant/slot pairs. Surveyor aims to distribute progress fairly and spread assignments across the available dates.
 
 Automatic generation creates only ordinary slot assignments. It does not fill named roles. It can propose a **REASSIGNMENT** for an existing assignment without a named role when moving it helps satisfy the plan and the vacated place can also be repaired. An assignment carrying a named role is never moved automatically.
 
 When **Allow assignments beyond slot capacity** is enabled, Surveyor considers overfill only after ordinary capacity and its bounded repair search cannot place the remaining requirements. Overfill never ignores attendance boundaries, overlap checks, named-role protection, or a rejected participant/slot pair.
+
+When normal placement, bounded repair, and any permitted overlap-free overfill cannot satisfy a Required target, a suggestion may overlap commitments in Free plans. That row shows a persistent warning explaining that Required takes precedence over Free. Discuss it with the affected participant before applying the decision. Surveyor keeps the other plan’s assignment in place. Automatic generation does not make the same exception for conflicts with Required plans.
 
 The allocator is deliberately bounded rather than exhaustive. A workable arrangement can exist even when no suggestion is found. Treat the result as an organizer aid, not as proof that the plan has or lacks a feasible schedule.
 
@@ -393,15 +399,18 @@ Use the recommendation schedule when a correction should be reviewed together wi
 - Select **Stage as approved** to add the operation to the review.
 - Select **Stage unassignment** beside a confirmed assignment to propose removing it.
 
-A reassignment or swap can use only a source assignment without a named role. A manually staged row starts Approved. Remove or revert it before saving when it should not be applied.
+Manual assignment and reassignment overlaps remain possible after confirmation. Warnings appear in the add dialog and stay beside the staged row, giving you time to discuss them with the affected participant. A reassignment or swap can use only a source assignment without a named role in this plan. A manually staged row starts Approved. Remove or revert it before saving when it should not be applied.
 
 ### Save and apply the review
 
-Select **Save changes** only after reviewing the complete staged batch.
+1. Review the complete staged batch and its persistent row warnings.
+2. Discuss any overlap with the affected participant before applying it.
+3. Select **Save changes**.
+4. When **Assignment warnings** appears for manual overlaps or Required-over-Free suggestions, select **Confirm overlapping changes** only when you intend to accept them. **Cancel** keeps the draft and its warnings visible without applying or saving the review.
 
-Surveyor saves the review states and applies every Approved operation that is still valid. Pending and Rejected rows do not change the schedule. Before applying, Surveyor checks the plan and participants again, including source assignments, duplicate targets, attendance, arrival/departure boundaries, overlaps, named roles, and capacity. A blocked operation is skipped rather than forced; both legs of a swap are kept together.
+Surveyor saves the review states and applies every Approved operation that is still valid. Pending and Rejected rows do not change the schedule. Before applying, Surveyor checks the plan and participants again, including source assignments, duplicate targets, attendance, arrival/departure boundaries, overlaps, named roles, and capacity. Manual overlaps and Required-over-Free overlaps can be confirmed; other blocking warnings still skip the operation, and both legs of a swap are kept together. A changed overlap requires a fresh review and confirmation before any part of the batch is saved.
 
-After applying, reload and check the schedule, participant progress, and any reported warnings or skipped operations. Applied rows leave the active review and remain as history. When the binding deadline has passed, Surveyor recalculates replaceable pending work after a successful application. Before the deadline, select **Auto-generate** again when another calculation is needed.
+After applying, check the reported **Applied** and **skipped** counts and the remaining row warnings. The page reloads the schedule and participant progress. Applied rows leave the active review and remain as history. When the binding deadline has passed, Surveyor recalculates replaceable pending work after a successful application. Before the deadline, select **Auto-generate** again when another calculation is needed.
 
 ### Advanced limitations
 

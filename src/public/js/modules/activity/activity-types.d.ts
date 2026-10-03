@@ -24,23 +24,13 @@ export interface RoleSummary {
 }
 
 // Assignment warning types
-export type WarningType =
-    | 'ineligible_participant'
-    | 'outside_attendance'
-    | 'arrival_day'
-    | 'arrival_time_restricted'
-    | 'departure_day'
-    | 'departure_time_restricted'
-    | 'over_capacity'
-    | 'overlap';
-
-export interface AssignmentWarning {
-    type: WarningType;
-    conflicts?: string[];
-}
+export type {AssignmentWarningType as WarningType, AssignmentWarning,
+    AssignmentWarningPreview, RecommendationWarningPreview,
+    RecommendationWarningResult as RecommendationWarning} from '../../../../types/ActivityTypes';
+import type {AssignmentWarning} from '../../../../types/ActivityTypes';
 
 export interface WarningModal {
-    confirm: (warnings: AssignmentWarning[], slotId: string) => Promise<boolean>;
+    confirm: (warnings: AssignmentWarning[], slotId: string, confirmationLabel?: string) => Promise<boolean>;
 }
 
 // Slot editor types
@@ -80,14 +70,6 @@ export interface RecommendationRow {
     operation?: RecommendationOperation;
     manual?: boolean;
     hidden?: boolean;
-}
-
-export interface RecommendationWarning {
-    recommendation: {
-        itemId: string;
-        profileId: string;
-    };
-    warnings: AssignmentWarning[];
 }
 
 // Requirements types

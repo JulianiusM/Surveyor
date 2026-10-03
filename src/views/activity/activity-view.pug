@@ -184,7 +184,8 @@ block content
                         i.bi.bi-save.me-1
                         | Save changes
 
-    // Assignment warnings modal
+    //- Shared by participant signups and the recommendation review. The browser supplies
+    //- permission-filtered server warnings and a context-specific confirmation label.
     #assignmentWarningModal.modal.fade(tabindex="-1" aria-labelledby="assignmentWarningTitle" aria-hidden="true")
         .modal-dialog
             .modal-content.text-bg-dark
@@ -194,7 +195,7 @@ block content
                         | Assignment warnings
                     button.btn-close(data-bs-dismiss="modal" aria-label="Close")
                 .modal-body
-                    p.small.text-secondary.mb-2 Potential issues were detected for this slot:
+                    p.small.text-secondary.mb-2 Review these assignment warnings before continuing:
                     strong#assignmentWarningSlot.d-block.mb-2
                     ul#assignmentWarningList.list-group.list-group-flush
                 .modal-footer

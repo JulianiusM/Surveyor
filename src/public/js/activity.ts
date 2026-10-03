@@ -127,7 +127,7 @@ export function init(): void {
         initSlotEditorModal(planId);
         initDnD(planId);
         initRequirementPanel(planId);
-        initRecommendationScheduleView(planId, describeSlot); // Don't need to wait, best effort.
+        initRecommendationScheduleView(planId, describeSlot, warningModal); // Share the existing signup confirmation modal.
         initSlotFilters();
         initParticipantsTab();
         initSlotRoleAdminModal(planId, describeSlot);

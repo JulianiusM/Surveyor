@@ -59,6 +59,26 @@ function canonicalize(value: unknown): unknown {
     return value;
 }
 
+/** Normalize sibling commitments with straightforward loops; display labels do not affect allocation. */
+function summarizeLinkedPlans(context: AutoAssignmentContext): unknown {
+    const linked = context.linkedPlans;
+    const commitments: Record<string, unknown[]> = {};
+    for (const key of Object.keys(linked?.commitments ?? {}).sort()) {
+        const normalized: unknown[] = [];
+        for (const assignment of linked!.commitments[key]) {
+            normalized.push({
+                id: assignment.id, planId: assignment.planId, assignmentMode: assignment.assignmentMode,
+                day: assignment.day, startTime: assignment.startTime, endTime: assignment.endTime,
+                recommendationId: assignment.recommendationId, recommendationStatus: assignment.recommendationStatus,
+                operation: assignment.operation, sourceItemId: assignment.sourceItemId,
+            });
+        }
+        normalized.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+        commitments[key] = normalized;
+    }
+    return {plans: [...(linked?.plans ?? [])].sort((a, b) => a.id.localeCompare(b.id)), commitments};
+}
+
 export function fingerprintRecommendationContext(context: AutoAssignmentContext): string {
     const stableContext = {
         plan: context.plan,
@@ -116,6 +136,10 @@ export function fingerprintRecommendationContext(context: AutoAssignmentContext)
                     .localeCompare(
                         `${b.operation ?? "ASSIGN"}:${b.sourceItemId ?? ""}:${b.itemId}:${b.profileId}:${b.status}`,
                     )),
+        // Sibling pending proposals are input here, although this plan's generated pending
+        // rows remain replaceable output above. Include provenance and operation state so
+        // changed priority, a reassignment, or a proposal deletion revokes cached work.
+        linkedPlans: summarizeLinkedPlans(context),
     };
     return crypto
         .createHash("sha256")
@@ -300,6 +324,7 @@ export class RecommendationJobCoordinator {
                 eventId: context.plan.eventId ?? null,
                 startDate: context.plan.startDate,
                 endDate: context.plan.endDate,
+                inputFingerprint: fingerprint,
                 // Recheck after acquiring the database lock, including an A→B→A relink
                 // while this job was already waiting to persist its original context.
                 isCurrent: this.isCurrentJob.bind(this, job),

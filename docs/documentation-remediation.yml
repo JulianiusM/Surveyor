@@ -688,6 +688,10 @@ implementation_defects:
   - activity-recommendations-schedule.ts stores warnings returned by the recommendation endpoint but no active renderer consumes ActivityRecommendationsState.getWarnings()
   - the apply endpoint returns applied, skipped, and warning details, while the active interface ignores the response body and displays only a generic success message before reload
   - the older unused activity-recommendations.ts module contains warning rendering that is not connected to the active schedule view
+  remediation_progress:
+  - 2026-10-03 activity-plan interlinking implements persistent server-backed row warnings and actual applied/skipped result counts across reload
+  - tests/frontend/activity-recommendation-warnings.spec.ts and tests/integration/activity-plan-interlinking.spec.ts protect operation matching, overlap confirmation, freshness, priority and atomic history
+  - broader frontend blocking scenarios listed below remain a separate coverage follow-up; this record stays open until all closure criteria are verified
   impact: An organizer can approve a blocked operation and see it omitted after saving without the intended row-level reason or skipped count.
   documentation_contract: D08 states that validation warnings and skipped operations are surfaced for organizer review after Save changes.
   closes_when:

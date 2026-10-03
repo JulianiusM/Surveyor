@@ -15,7 +15,8 @@
  */
 
 import {ActivitySlot} from "../database/entities/activity/ActivitySlot";
-import type {RecommendationInput} from "../../types/ActivityTypes";
+import type {RecommendationInput, RecommendationWarningResult} from "../../types/ActivityTypes";
+export type {RecommendationWarningResult} from '../../types/ActivityTypes';
 import {AssignmentCandidate, AttendancePolicy, collectAssignmentWarnings, toAssignmentCandidate} from "./availability";
 import {ParticipantAttendance, toParticipantKey} from "./requirements";
 
@@ -25,15 +26,11 @@ import {ParticipantAttendance, toParticipantKey} from "./requirements";
  * keep per-participant queues consistent across the UI and controller layers.
  */
 
-export interface RecommendationWarningResult {
-    recommendation: RecommendationInput;
-    warnings: ReturnType<typeof collectAssignmentWarnings>;
-}
-
 export interface RecommendationWarningOptions {
     slots: ActivitySlot[];
     recommendations: RecommendationInput[];
     existingAssignments?: Record<string, AssignmentCandidate[]>;
+    linkedAssignments?: Record<string, AssignmentCandidate[]>;
     participantAttendance?: Record<string, ParticipantAttendance>;
     slotCapacities?: Record<string, number>;
     allowOverfill?: boolean;
@@ -61,6 +58,7 @@ export function buildRecommendationWarnings({
                                                 slots,
                                                 recommendations,
                                                 existingAssignments = {},
+                                                linkedAssignments = {},
                                                 participantAttendance = {},
                                                 slotCapacities = {},
                                                 allowOverfill = false,
@@ -71,11 +69,12 @@ export function buildRecommendationWarnings({
         slotMap.set(slot.id, slot);
     }
 
-    const participantQueue = new Map<string, AssignmentCandidate[]>();
     const slotUsage = new Map<string, number>();
     const results: RecommendationWarningResult[] = [];
     const normalizedRecommendations = recommendations.map(normalizeRecommendationInput);
     const releasedCapacity = new Map<string, number>();
+    const releasedByParticipant = new Map<string, Set<string>>();
+    const proposedByParticipant = new Map<string, AssignmentCandidate[]>();
 
     for (const recommendation of normalizedRecommendations) {
         const releasedSlotId = recommendation.operation === "REASSIGN"
@@ -85,6 +84,18 @@ export function buildRecommendationWarnings({
                 : null;
         if (releasedSlotId) {
             releasedCapacity.set(releasedSlotId, (releasedCapacity.get(releasedSlotId) ?? 0) + 1);
+            const key = toParticipantKey({profileId: recommendation.profileId});
+            const released = releasedByParticipant.get(key) ?? new Set<string>();
+            released.add(releasedSlotId);
+            releasedByParticipant.set(key, released);
+        }
+        if (recommendation.operation !== 'UNASSIGN') {
+            const slot = slotMap.get(recommendation.itemId);
+            if (!slot) throw new Error(`Slot ${recommendation.itemId} not found for recommendation warnings`);
+            const key = toParticipantKey({profileId: recommendation.profileId});
+            const proposed = proposedByParticipant.get(key) ?? [];
+            proposed.push({...toAssignmentCandidate(slot), title: slot.title});
+            proposedByParticipant.set(key, proposed);
         }
     }
 
@@ -96,21 +107,21 @@ export function buildRecommendationWarnings({
 
         const participantKey = toParticipantKey({profileId: rec.profileId});
         const attendance = participantAttendance[participantKey] ?? {profileId: rec.profileId};
-        const existing = existingAssignments[participantKey] ?? [];
-        const prior = participantQueue.get(participantKey) ?? existing;
-
         if (rec.operation === "UNASSIGN") {
             results.push({recommendation: rec, warnings: []});
-            participantQueue.set(
-                participantKey,
-                prior.filter((assignment) => assignment.id !== rec.itemId),
-            );
             continue;
         }
 
-        const projected = rec.operation === "REASSIGN"
-            ? prior.filter((assignment) => assignment.id !== rec.sourceItemId)
-            : prior;
+        // Project the complete selected batch before checking any target, making swaps
+        // and paired removals independent of payload order. Foreign sources are never
+        // released by this plan's proposals: their own application has not committed.
+        const released = releasedByParticipant.get(participantKey);
+        const local = (existingAssignments[participantKey] ?? []).filter((assignment) => !released?.has(assignment.id));
+        const projected = [
+            ...local,
+            ...(linkedAssignments[participantKey] ?? []),
+            ...(proposedByParticipant.get(participantKey) ?? []),
+        ];
 
         const candidate = toAssignmentCandidate(slot);
         const warnings = collectAssignmentWarnings(candidate, attendance, projected, attendancePolicy);
@@ -129,7 +140,6 @@ export function buildRecommendationWarnings({
 
         results.push({recommendation: rec, warnings});
 
-        participantQueue.set(participantKey, [...projected, candidate]);
     }
 
     return results;

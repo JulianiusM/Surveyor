@@ -242,8 +242,8 @@ export async function getRegistrationsForEvent(eventId: string) {
     return await AppDataSource.getRepository(EventRegistration).findBy({event: {id: eventId}});
 }
 
-export async function getEventParticipants(eventId: string): Promise<ParticipantRow[]> {
-    const repo = AppDataSource.getRepository(EventRegistration);
+export async function getEventParticipants(eventId: string, manager: EntityManager = AppDataSource.manager): Promise<ParticipantRow[]> {
+    const repo = manager.getRepository(EventRegistration);
     const rows = await repo.find({
         where: {event: {id: eventId}},
         relations: {

@@ -8,7 +8,7 @@ import type {ActivityPlanRequirement} from "../database/entities/activity/Activi
 import type {ActivityPlanRequirementOverride} from "../database/entities/activity/ActivityPlanRequirementOverride";
 import type {ActivityPlanStayRequirement} from "../database/entities/activity/ActivityPlanStayRequirement";
 import type {RecommendationInput} from "../database/services/ActivityRecommendationService";
-import {AssignmentCandidate, AttendancePolicy, collectAssignmentWarnings} from "./availability";
+import {AssignmentCandidate, AttendancePolicy, collectAssignmentWarnings, findOverlapConflicts} from "./availability";
 import {
     calculateRequirementsForParticipants,
     countInclusiveDays,
@@ -17,6 +17,7 @@ import {
     toParticipantKey,
 } from "./requirements";
 import {compareSlotsByDayAndTime} from "./timebox";
+import type {ActivityLinkedPlanContext} from '../../types/ActivityTypes';
 
 export interface FairAssignmentSlot {
     id: string;
@@ -48,6 +49,7 @@ export interface FairAssignmentContext {
     stayRequirements: ActivityPlanStayRequirement[];
     existingAssignments: Record<string, AssignmentCandidate[]>;
     existingRecommendations?: RecommendationInput[];
+    linkedPlans?: ActivityLinkedPlanContext;
 }
 
 interface ParticipantState {
@@ -181,7 +183,21 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
         context.stayRequirements,
     );
     const lockedRecommendations: Record<string, AssignmentCandidate[]> = {};
+    const reviewedTargets: Record<string, AssignmentCandidate[]> = {};
     for (const recommendation of context.existingRecommendations ?? []) {
+        // Manual drafts and reviewed moves reserve their targets without releasing sources
+        // or changing the established count/temporal model for approved ASSIGN rows.
+        const operation = recommendation.operation ?? 'ASSIGN';
+        if (recommendation.profileId && ['PENDING', 'APPROVED'].includes(recommendation.status ?? 'PENDING')
+            && (recommendation.manual || recommendation.status === 'APPROVED') && operation !== 'UNASSIGN'
+            && !(recommendation.status === 'APPROVED' && operation === 'ASSIGN')) {
+            const target = slotById.get(recommendation.itemId);
+            if (target) {
+                const key = toParticipantKey({profileId: recommendation.profileId});
+                reviewedTargets[key] ??= [];
+                reviewedTargets[key].push(toCandidate(target));
+            }
+        }
         if (
             recommendation.status !== "APPROVED"
             || (recommendation.operation ?? "ASSIGN") !== "ASSIGN"
@@ -240,7 +256,12 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
             const warnings = collectAssignmentWarnings(
                 toCandidate(slot),
                 state.participant,
-                [...(context.existingAssignments[state.key] ?? []), ...(lockedRecommendations[state.key] ?? [])],
+                [
+                    ...(context.existingAssignments[state.key] ?? []),
+                    ...(lockedRecommendations[state.key] ?? []),
+                    ...(reviewedTargets[state.key] ?? []),
+                    ...(context.linkedPlans?.commitments[state.key] ?? []),
+                ],
                 policy,
             );
             if (!warnings.some((warning) => isBlockingWarning(warning.type))) eligible.add(slot.id);
@@ -351,12 +372,12 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
     const canTake = (state: ParticipantState, slot: FairAssignmentSlot, excluded?: PendingAssignment): boolean => {
         if (rejected.has(`${slot.id}:${state.participant.profileId}`)) return false;
         if (!baseEligibility.get(state.key)?.has(slot.id)) return false;
-        const currentAssignments = assignmentsForParticipant(state.key, excluded);
+        const currentAssignments = [...assignmentsForParticipant(state.key, excluded), ...(reviewedTargets[state.key] ?? [])];
         if (currentAssignments.some((assignment) => assignment.id === slot.id)) return false;
         const warnings = collectAssignmentWarnings(
             toCandidate(slot),
             state.participant,
-            currentAssignments,
+            [...currentAssignments, ...(context.linkedPlans?.commitments[state.key] ?? [])],
             policy,
         );
         return !warnings.some((warning) => isBlockingWarning(warning.type));
@@ -367,15 +388,23 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
         source: AssignmentCandidate,
     ): boolean => {
         if (source.id === slot.id || source.hasNamedRole) return false;
+        // A manual/approved removal still owns its local source until it is applied.
+        // Automatic repair must not invalidate that retained operation.
+        if ((context.existingRecommendations ?? []).some((recommendation) =>
+            recommendation.profileId === state.participant.profileId
+            && ['PENDING', 'APPROVED'].includes(recommendation.status ?? 'PENDING')
+            && (recommendation.manual || recommendation.status === 'APPROVED')
+            && (recommendation.operation === 'REASSIGN' ? recommendation.sourceItemId
+                : recommendation.operation === 'UNASSIGN' ? recommendation.itemId : null) === source.id)) return false;
         if (pending.some((assignment) => assignment.sourceSlotId === source.id)) return false;
         if (rejected.has(`${slot.id}:${state.participant.profileId}`)) return false;
-        const projected = assignmentsForParticipant(state.key)
+        const projected = [...assignmentsForParticipant(state.key), ...(reviewedTargets[state.key] ?? [])]
             .filter((assignment) => assignment.id !== source.id);
         if (projected.some((assignment) => assignment.id === slot.id)) return false;
         const warnings = collectAssignmentWarnings(
             toCandidate(slot),
             state.participant,
-            projected,
+            [...projected, ...(context.linkedPlans?.commitments[state.key] ?? [])],
             policy,
         );
         return !warnings.some((warning) => isBlockingWarning(warning.type));
@@ -625,6 +654,53 @@ export function generateFairRecommendations(context: FairAssignmentContext): Rec
             }
             if (!assigned) break;
         }
+    }
+
+    // Required work takes precedence over optional commitments only after normal placement,
+    // bounded repair and permitted overlap-free overfill have exhausted their opportunities.
+    // Keep this phase separate so a good temporal anchor never outweighs avoiding an overlap.
+    // It adds local proposals, never moves foreign assignments or changes local shift targets.
+    function choosePrioritySlot(state: ParticipantState): FairAssignmentSlot | undefined {
+        const linked = context.linkedPlans?.commitments[state.key] ?? [];
+        const local = [...assignmentsForParticipant(state.key), ...(reviewedTargets[state.key] ?? [])];
+        let selected: FairAssignmentSlot | undefined;
+        let selectedScore: number[] | undefined;
+        for (let index = 0; index < slots.length; index++) {
+            const slot = slots[index];
+            if (rejected.has(`${slot.id}:${state.participant.profileId}`)) continue;
+            if (local.some((assignment) => assignment.id === slot.id)) continue;
+            if (!context.plan.allowOverfillAfterFull && slotCount(slot.id) >= slotCapacity(slot.id)) continue;
+            const warnings = collectAssignmentWarnings(toCandidate(slot), state.participant, local, policy);
+            if (warnings.some((warning) => isBlockingWarning(warning.type))) continue;
+            const conflicts = findOverlapConflicts(toCandidate(slot), linked);
+            if (!conflicts.length) continue;
+            const overlapping = linked.filter((assignment) => conflicts.includes(assignment.id));
+            if (overlapping.some((assignment) => assignment.assignmentMode !== 'FREE')) continue;
+            const score = [
+                conflicts.length,
+                Math.max(slotCount(slot.id) - slotCapacity(slot.id) + 1, 0),
+                temporalIncrement(state, slot),
+                boundaryPenalty(state.participant, slot),
+                index,
+            ];
+            if (!selectedScore || precedesScore(score, selectedScore)) {
+                selected = slot;
+                selectedScore = score;
+            }
+        }
+        return selected;
+    }
+    while (true) {
+        const underserved = participants.filter((state) => deficit(state) > 0).sort(nextParticipantOrder);
+        let placed = false;
+        for (const state of underserved) {
+            const slot = choosePrioritySlot(state);
+            if (!slot) continue;
+            addPending({slotId: slot.id, participantKey: state.key, retained: false});
+            placed = true;
+            break;
+        }
+        if (!placed) break;
     }
 
     return pending

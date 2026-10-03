@@ -15,6 +15,7 @@ import type {ActivityPlanStayRequirement} from "../database/entities/activity/Ac
 import type {ActivitySlot} from "../database/entities/activity/ActivitySlot";
 import type {RecommendationInput} from "../database/services/ActivityRecommendationService";
 import type {AssignmentCandidate} from "./availability";
+import type {ActivityLinkedPlanContext} from '../../types/ActivityTypes';
 import {generateFairRecommendations} from "./fairAssignment";
 import {ParticipantAttendance, toParticipantKey} from "./requirements";
 
@@ -49,6 +50,8 @@ export interface AutoAssignmentContext {
     stayRequirements: ActivityPlanStayRequirement[];
     existingAssignments: Record<string, AssignmentCandidate[]>;
     existingRecommendations?: RecommendationInput[];
+    /** Availability only: these shifts belong to other plans and cannot satisfy local requirements. */
+    linkedPlans?: ActivityLinkedPlanContext;
 }
 
 export function generateAutoRecommendations(context: AutoAssignmentContext): RecommendationInput[] {

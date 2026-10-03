@@ -28,6 +28,8 @@ import {ActivityRole} from "../entities/activity/ActivityRole";
 import {ActivitySlot} from "../entities/activity/ActivitySlot";
 import {ActivitySlotRole} from "../entities/activity/ActivitySlotRole";
 import {EventRegistration} from "../entities/event/EventRegistration";
+import {Event} from '../entities/event/Event';
+import {ActivityAssignmentRecommendation} from '../entities/activity/ActivityAssignmentRecommendation';
 import * as entityAdminService from "./EntityAdminService";
 import * as eventService from "./EventService";
 
@@ -37,7 +39,68 @@ import * as eventService from "./EventService";
  * must be reused by every operation so validation never observes a different transaction.
  */
 export async function withActivityTransaction<T>(work: (manager: EntityManager) => Promise<T>): Promise<T> {
-    return AppDataSource.transaction(work);
+    // Discovery before a lock wait must not pin a repeatable-read snapshot of the old event.
+    return AppDataSource.transaction('READ COMMITTED', work);
+}
+
+/** A calculation is assembled from one snapshot; workers receive plain values after this read ends. */
+export async function withActivityReadSnapshot<T>(work: (manager: EntityManager) => Promise<T>): Promise<T> {
+    return AppDataSource.transaction('REPEATABLE READ', work);
+}
+
+/**
+ * Serialize linked-plan writers through their event before acquiring child locks, matching
+ * event reassociation's parent-before-child order. Lock sibling roots and commitment rows too:
+ * ordinary repository deletion remains simple and waits on these same database row locks.
+ * A changed discovery relationship is returned for the controller to reject, never interpreted here.
+ */
+export async function lockActivityContext(manager: EntityManager, planId: string) {
+    const repo = manager.getRepository(ActivityPlan);
+    const initial = await repo.findOneBy({id: planId});
+    const initialEventId = initial?.eventId ?? null;
+    let planIds = [planId];
+    if (initialEventId) {
+        await manager.getRepository(Event).findOne({where: {id: initialEventId}, lock: {mode: 'pessimistic_write'}});
+        const siblings = await repo.find({
+            where: {event: {id: initialEventId}}, order: {id: 'ASC'}, lock: {mode: 'pessimistic_write'},
+        });
+        planIds = [...new Set([planId, ...siblings.map((plan) => plan.id)])].sort();
+    }
+    const plan = await lockActivityPlan(manager, planId);
+    // Rejecting a concurrent reassociation is the controller's responsibility. Avoid taking
+    // locks in its new event before that decision, which would invert the parent lock order.
+    if (plan && (plan.eventId ?? null) === initialEventId) {
+        await manager.getRepository(ActivitySlot).find({
+            where: {entity: {id: In(planIds)}}, select: {id: true}, order: {id: 'ASC'}, lock: {mode: 'pessimistic_write'},
+        });
+        await manager.getRepository(ActivityAssignment).find({
+            where: {entity: {id: In(planIds)}}, select: {id: true}, order: {id: 'ASC'}, lock: {mode: 'pessimistic_write'},
+        });
+        await manager.getRepository(ActivityAssignmentRecommendation).find({
+            where: {entity: {id: In(planIds)}}, select: {id: true}, order: {id: 'ASC'}, lock: {mode: 'pessimistic_write'},
+        });
+        if (initialEventId) {
+            await manager.getRepository(EventRegistration).find({
+                where: {event: {id: initialEventId}}, select: {id: true}, order: {id: 'ASC'}, lock: {mode: 'pessimistic_write'},
+            });
+        }
+    }
+    return {initialEventId, plan};
+}
+
+/** Membership is the saved event relationship, independent of archival or personal overview placement. */
+export async function getLinkedActivityPlans(eventId: string, planId: string, manager: EntityManager = AppDataSource.manager) {
+    return manager.getRepository(ActivityPlan).find({
+        where: {event: {id: eventId}, id: Not(planId)}, order: {id: 'ASC'},
+    });
+}
+
+/** Batched assignment data for controller-owned collision projections; no eligibility decisions. */
+export async function getAssignmentsForPlans(planIds: string[], manager: EntityManager = AppDataSource.manager) {
+    if (!planIds.length) return [];
+    return manager.getRepository(ActivityAssignment).find({
+        where: {entity: {id: In(planIds)}}, relations: {item: true, profile: true}, order: {id: 'ASC'},
+    });
 }
 
 /** Root-before-slot lock order is shared with entity relinking and activity date edits. */
@@ -240,8 +303,8 @@ export async function createActivityPlanTx(
     });
 }
 
-export async function getActivityPlanById(id: string) {
-    return await AppDataSource.getRepository(ActivityPlan).findOne({
+export async function getActivityPlanById(id: string, manager: EntityManager = AppDataSource.manager) {
+    return await manager.getRepository(ActivityPlan).findOne({
         where: {id},
         relations: {
             event: true
@@ -390,8 +453,8 @@ export async function addActivitySlots(planId: string, slots: Partial<ActivitySl
     else await AppDataSource.transaction(saveSlots);
 }
 
-export async function getActivitySlotsFlat(planId: string) {
-    const repo = AppDataSource.getRepository(ActivitySlot);
+export async function getActivitySlotsFlat(planId: string, manager: EntityManager = AppDataSource.manager) {
+    const repo = manager.getRepository(ActivitySlot);
 
     const {entities: slots, raw} = await repo
         .createQueryBuilder("s")
@@ -434,8 +497,8 @@ export async function getActivitySlots(planId: string) {
     return grouped;
 }
 
-export async function getActivitySlotById(slotId: string) {
-    return await AppDataSource.getRepository(ActivitySlot).findOneBy({id: slotId});
+export async function getActivitySlotById(slotId: string, manager: EntityManager = AppDataSource.manager) {
+    return await manager.getRepository(ActivitySlot).findOneBy({id: slotId});
 }
 
 export async function updateActivitySlot(slotId: string, fields: Partial<ActivitySlot>, manager: EntityManager = AppDataSource.manager) {
@@ -496,8 +559,8 @@ export async function getActivitySlotAssignments(planId: string, profileId: stri
     return assignments.map(a => a.item.id);
 }
 
-export async function getParticipantAssignmentsWithSlots(planId: string): Promise<Record<string, AssignmentCandidate[]>> {
-    const repo = AppDataSource.getRepository(ActivityAssignment);
+export async function getParticipantAssignmentsWithSlots(planId: string, manager: EntityManager = AppDataSource.manager): Promise<Record<string, AssignmentCandidate[]>> {
+    const repo = manager.getRepository(ActivityAssignment);
     const assignments = await repo.find({
         where: {entity: {id: planId}},
         relations: {item: true, profile: true, activityAssignmentRoles: {role: true}},
@@ -535,9 +598,9 @@ export async function getActivitySlotAssignmentById(assignId: number) {
 // Aggregates
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function getActivitySlotAssignees(planId: string): Promise<SlotAssignmentMap> {
+export async function getActivitySlotAssignees(planId: string, manager: EntityManager = AppDataSource.manager): Promise<SlotAssignmentMap> {
     // Use QueryBuilder to avoid DISTINCT alias issues in MySQL/MariaDB when loading nested relations.
-    const assignments = await AppDataSource.getRepository(ActivityAssignment)
+    const assignments = await manager.getRepository(ActivityAssignment)
         .createQueryBuilder('aa')
         .innerJoinAndSelect('aa.item', 'slot')
         .leftJoinAndSelect('aa.profile', 'profile')
@@ -626,11 +689,11 @@ export async function getActivityPlanParticipants(planId: string): Promise<PlanP
     return Array.from(participantMap.values());
 }
 
-export async function getParticipantRolesForPlan(planId: string): Promise<{
+export async function getParticipantRolesForPlan(planId: string, manager: EntityManager = AppDataSource.manager): Promise<{
     participantKey: string;
     roleIds: number[]
 }[]> {
-    const assignments = await AppDataSource
+    const assignments = await manager
         .getRepository(ActivityAssignment)
         .find({
             where: {entity: {id: planId}},

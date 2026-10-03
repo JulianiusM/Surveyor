@@ -27,6 +27,14 @@ export async function getRecommendations(planId: string, manager: EntityManager 
     });
 }
 
+/** Read sibling review rows in one query; the controller chooses which states reserve time. */
+export async function getRecommendationsForPlans(planIds: string[], manager: EntityManager = AppDataSource.manager) {
+    if (!planIds.length) return [];
+    return manager.getRepository(ActivityAssignmentRecommendation).find({
+        where: {entity: {id: In(planIds)}}, relations: {item: true, sourceItem: true, profile: true}, order: {id: 'ASC'},
+    });
+}
+
 /** Delete precisely the selected generated rows; callers decide when invalidation is required. */
 export async function invalidateGeneratedRecommendations(manager: EntityManager, planId: string): Promise<void> {
     await manager.getRepository(ActivityAssignmentRecommendation).delete({
@@ -61,9 +69,9 @@ export async function replaceRecommendations(
     else await AppDataSource.transaction(replaceRows);
 }
 
-export async function markRecommendationsApplied(planId: string, ids: string[]): Promise<void> {
+export async function markRecommendationsApplied(planId: string, ids: string[], manager: EntityManager = AppDataSource.manager): Promise<void> {
     if (!ids.length) return;
-    await AppDataSource.getRepository(ActivityAssignmentRecommendation).update(
+    await manager.getRepository(ActivityAssignmentRecommendation).update(
         {id: In(ids), entity: {id: planId}}, {status: 'APPLIED', hidden: true},
     );
 }

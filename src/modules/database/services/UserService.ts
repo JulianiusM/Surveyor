@@ -483,10 +483,10 @@ export async function getProfileById(id: string) {
     return await AppDataSource.getRepository(Profile).findOneBy({id});
 }
 
-export async function getProfilesByIds(ids: string[]): Promise<Pick<Profile, 'id' | 'name'>[]> {
+export async function getProfilesByIds(ids: string[], manager: EntityManager = AppDataSource.manager): Promise<Pick<Profile, 'id' | 'name'>[]> {
     const uniqueIds = [...new Set(ids.filter(Boolean))];
     if (!uniqueIds.length) return [];
-    return await AppDataSource.getRepository(Profile).find({
+    return await manager.getRepository(Profile).find({
         where: {id: In(uniqueIds)},
         select: {id: true, name: true},
     });

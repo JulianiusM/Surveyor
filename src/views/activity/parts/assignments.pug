@@ -165,6 +165,12 @@ if permData.entity.has('MANAGE_ASSIGNMENTS') && data.plan.eventId
         .card-body
             p.text-secondary.small
                 | Recommendations fill participant capacity only. Automatic reassignments can move existing assignments without named roles; named roles remain manual.
+            //- The saved event relationship interlinks plans automatically. Row warnings are
+            //- persistent DOM notices; the shared confirmation modal acknowledges the latest preview.
+            p.status-notice.alert-warning.small(role="status")
+                | Assignments and active recommendations in other activity plans for this event are checked for overlaps.
+                |  Required recommendations take precedence over Free commitments only when a conflict cannot be avoided.
+                |  Discuss any overlap with the affected participant before confirming overlapping changes.
             .d-flex.justify-content-between.align-items-center.mb-2
                 p.text-secondary.small.mb-0
                     | Review recommendations visually in the schedule below.
@@ -175,6 +181,6 @@ if permData.entity.has('MANAGE_ASSIGNMENTS') && data.plan.eventId
                 i.bi.bi-info-circle.me-2
                 span
 
-            // Enhanced schedule-based recommendations view
+            //- The schedule module attaches persistent warnings to each operation using server preview data.
             #recommendationScheduleView
                 include ./recommendations-schedule

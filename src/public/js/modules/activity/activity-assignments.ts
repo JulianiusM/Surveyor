@@ -3,10 +3,10 @@
  * Handles assignment warnings and take/leave actions
  */
 
-import {post} from '../../core/http';
+import {assertSuccessfulResponse, post} from '../../core/http';
 import {showInlineAlert} from '../../shared/alerts';
 import {reloadAfterDelay} from '../../shared/ui-helpers';
-import type {AssignmentWarning, BootstrapGlobal, WarningModal,} from './activity-types';
+import type {AssignmentWarning, AssignmentWarningPreview, BootstrapGlobal, WarningModal,} from './activity-types';
 
 declare const bootstrap: BootstrapGlobal;
 
@@ -30,9 +30,20 @@ export function describeWarning(warning: AssignmentWarning, describeSlot: (slotI
         case "over_capacity":
             return "This slot is already full. Joining will exceed its capacity.";
         case "overlap": {
-            const conflicts = (warning.conflicts || []).map(describeSlot);
+            const conflicts: string[] = [];
+            for (const conflict of warning.overlapDetails ?? []) {
+                const title = conflict.title || describeSlot(conflict.id);
+                const time = conflict.startTime && conflict.endTime ? ` (${conflict.startTime.slice(0, 5)}–${conflict.endTime.slice(0, 5)})` : '';
+                conflicts.push(`${conflict.planTitle ? conflict.planTitle + ': ' : ''}${title} on ${conflict.day}${time}`);
+            }
+            if (!conflicts.length) {
+                for (const id of warning.conflicts ?? []) conflicts.push(describeSlot(id));
+            }
             const detail = conflicts.length ? `: ${conflicts.join(', ')}` : '';
-            return `This slot overlaps with another assignment${detail}`;
+            const priority = warning.requiredPriority
+                ? ' Required takes precedence over Free. Discuss this conflict with the participant before confirming.'
+                : warning.confirmable ? ' Resolve this with the affected participant before confirming the overlap.' : '';
+            return `This slot overlaps with another assignment or recommendation${detail}.${priority}`;
         }
         default:
             return "Assignment warning detected.";
@@ -52,9 +63,11 @@ export function buildWarningModal(describeSlot: (slotId: string) => string): War
     const modal = modalEl && typeof bootstrap !== 'undefined'
         ? new bootstrap.Modal(modalEl, {focus: true})
         : null;
+    let confirming = false;
 
-    async function confirm(warnings: AssignmentWarning[], slotId: string): Promise<boolean> {
+    async function confirm(warnings: AssignmentWarning[], slotId: string, confirmationLabel = 'Continue anyway'): Promise<boolean> {
         if (!warnings.length) return true;
+        if (confirming) return false;
         if (!modal || !modalEl || !list || !confirmBtn || !cancelBtn) {
             const proceed = window.confirm(
                 `Warnings detected for this assignment. Proceed?\n${warnings.map(w => describeWarning(w, describeSlot)).join('\n')}`,
@@ -62,37 +75,55 @@ export function buildWarningModal(describeSlot: (slotId: string) => string): War
             return Promise.resolve(proceed);
         }
 
-        const title = describeSlot(slotId);
+        const title = slotId ? describeSlot(slotId) : 'Approved recommendations';
         if (titleEl) titleEl.textContent = title;
+        confirmBtn.textContent = confirmationLabel;
 
         list.innerHTML = '';
-        warnings.forEach((warning) => {
+        for (const warning of warnings) {
             const li = document.createElement('li');
             li.className = 'list-group-item text-bg-dark d-flex align-items-start gap-2';
-            li.innerHTML = `<i class="bi bi-exclamation-triangle text-warning"></i><span>${describeWarning(warning, describeSlot)}</span>`;
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-exclamation-triangle text-warning';
+            const text = document.createElement('span');
+            // Plan and slot titles are user content; never interpolate them into HTML.
+            text.textContent = describeWarning(warning, describeSlot);
+            li.append(icon, text);
             list.appendChild(li);
-        });
+        }
 
-        return await new Promise((resolve) => {
+        confirming = true;
+        return await new Promise<boolean>(function waitForConfirmation(resolve) {
             let settled = false;
 
             function cleanup(result: boolean) {
                 if (settled) return;
                 settled = true;
+                confirming = false;
+                modalEl!.removeEventListener('hidden.bs.modal', onHidden);
+                confirmBtn!.onclick = null;
+                cancelBtn!.onclick = null;
                 confirmBtn!.disabled = false;
                 modal!.hide();
                 resolve(result);
             }
 
-            const onHidden = () => cleanup(false);
-            modalEl.addEventListener('hidden.bs.modal', onHidden, {once: true});
+            function onHidden(): void {
+                cleanup(false);
+            }
 
-            confirmBtn.onclick = async () => {
-                confirmBtn.disabled = true;
+            function onConfirmed(): void {
+                confirmBtn!.disabled = true;
                 cleanup(true);
-            };
+            }
 
-            cancelBtn.onclick = () => cleanup(false);
+            function onCancelled(): void {
+                cleanup(false);
+            }
+
+            modalEl!.addEventListener('hidden.bs.modal', onHidden, {once: true});
+            confirmBtn!.onclick = onConfirmed;
+            cancelBtn!.onclick = onCancelled;
             modal.show();
         });
     }
@@ -104,18 +135,16 @@ export function buildWarningModal(describeSlot: (slotId: string) => string): War
  * Initialize assign/unassign slot functionality
  */
 export function initAssign(planId: string, warningModal: WarningModal): void {
-    async function fetchWarnings(slotId: string): Promise<AssignmentWarning[]> {
-        try {
-            const res = await post(`/api/activity/${planId}/slot/${slotId}/warnings`, {});
-            return res?.data?.warnings || [];
-        } catch {
-            return [];
-        }
+    async function fetchWarnings(slotId: string): Promise<AssignmentWarningPreview> {
+        const res = await post(`/api/activity/${planId}/slot/${slotId}/warnings`, {});
+        assertSuccessfulResponse(res);
+        // A failed preview cannot be interpreted as permission to silently skip mandatory warnings.
+        return res.data;
     }
 
-    document.addEventListener('click', async (e: Event) => {
+    async function handleAssignmentClick(e: Event): Promise<void> {
         const btn = (e.target as Element | null)?.closest('[data-action]') as HTMLElement | null;
-        if (!btn) return;
+        if (!btn || btn.hasAttribute('disabled')) return;
 
         const card = btn.closest('.slot') as HTMLElement | null;
         const slotId = card?.dataset.slotid;
@@ -129,23 +158,31 @@ export function initAssign(planId: string, warningModal: WarningModal): void {
 
         const shouldCheckWarnings = act === 'assign' || (act === 'take-role' && !hasExistingAssignment);
 
-        const performUpdate = async () => {
-            await post(`/api/activity/${planId}/${act}`, {itemId: slotId, role});
+        async function performUpdate(confirmation?: string): Promise<void> {
+            const response = await post(`/api/activity/${planId}/${act}`, {itemId: slotId, role, overlapConfirmation: confirmation});
+            assertSuccessfulResponse(response);
             showInlineAlert('success', 'Updated');
             reloadAfterDelay(120);
-        };
+        }
 
+        // Prevent repeated clicks from opening concurrent confirmation dialogs.
+        btn.setAttribute('disabled', 'disabled');
         try {
+            let confirmation: string | undefined;
             if (shouldCheckWarnings) {
-                const warnings = await fetchWarnings(slotId);
-                const proceed = await warningModal.confirm(warnings, slotId);
+                const preview = await fetchWarnings(slotId);
+                const proceed = await warningModal.confirm(preview.warnings, slotId);
                 if (!proceed) return;
+                confirmation = preview.overlapConfirmation;
             }
-
-            await performUpdate();
+            await performUpdate(confirmation);
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to update slot assignment.';
             showInlineAlert('error', message);
+        } finally {
+            btn.removeAttribute('disabled');
         }
-    });
+    }
+
+    document.addEventListener('click', handleAssignmentClick);
 }
