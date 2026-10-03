@@ -30,6 +30,8 @@ include modules/module_invoice_pool
 //- and its browser entry point, keeping optional archival state and behavior out of this shared layout.
 include modules/module_unified_entity_cards
 include modules/module_entity_header
+//- Definitions only: each entity page supplies its own property and archival projections explicitly.
+include modules/module_entity_properties
 
 doctype html
 html(lang="en" data-bs-theme="dark")

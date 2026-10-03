@@ -6,8 +6,8 @@ block meta
     title Vote on #{data.survey.title} | Surveyor
 
 block title
-    +entityHeader(data.survey, "survey", "bi-clipboard-check", permData)
-    +entityImageModal(data.survey, "survey")
+    +entityHeader(data.survey, "survey", "bi-clipboard-check", permData, data.entityProperties, data.archive)
+    +entityPropertiesModal(data.survey, data.entityProperties, data.archive)
 
 block content
     //- Surveys use their own ownership/participation rules. The controller supplies matching archival

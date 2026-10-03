@@ -4,10 +4,10 @@ documentation-metadata
 audience: activity participants; activity organizers
 owner: activity-plan maintainers
 status: current
-last-verified: 2026-09-16
+last-verified: 2026-10-03
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; expanded plan descriptions and shared-text limits; D07 basic activity-plan creation and participation plus D08 advanced requirement configuration, live coverage, automatic recommendation generation, review, manual staging, application, and limitations verified; D14 rendered help navigation, semantic checks, and trusted-content integration
-source-anchors: src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/activity/activity-create.pug; src/views/activity/activity-view.pug; src/views/activity/parts/schedule.pug; src/views/activity/parts/participants.pug; src/views/activity/parts/participant-status.pug; src/views/activity/parts/assignments.pug; src/views/activity/parts/recommendations-schedule.pug; src/views/activity/parts/settings.pug; src/views/activity/export/schedule.pug; src/views/modules/module_role_assignment_addon.pug; src/public/js/activity-create.ts; src/public/js/modules/activity/activity-requirements.ts; src/public/js/modules/activity/activity-recommendation-jobs.ts; src/public/js/modules/activity/activity-recommendations-schedule.ts; src/public/js/modules/activity/activity-recommendations-state.ts; src/public/js/modules/activity/activity-recommendations-logic.ts; src/public/js/modules/activity/activity-recommendations-ui.ts; src/routes/activity.ts; src/routes/api/activity.ts; src/controller/activityController.ts; src/middleware/assignFlowFactory.ts; src/modules/activity/requirements.ts; src/modules/activity/availability.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/autoAssignment.ts; src/modules/activity/recommendations.ts; src/modules/activity/recommendationJobs.ts; src/modules/database/services/ActivityService.ts; src/modules/database/services/ActivityRequirementService.ts; src/modules/database/services/ActivityRecommendationService.ts; tests/unit/activity-requirements.spec.ts; tests/frontend/activity-requirement-coverage.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; source-reviewed Entity settings dialog labels, per-action permissions, root property changes, image/actions, minimal archival hints, and event selection/reassociation boundaries; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; expanded plan descriptions and shared-text limits; D07 basic activity-plan creation and participation plus D08 advanced requirement configuration, live coverage, automatic recommendation generation, review, manual staging, application, and limitations verified; D14 rendered help navigation, semantic checks, and trusted-content integration
+source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/activity/activity-create.pug; src/views/activity/activity-view.pug; src/views/activity/parts/schedule.pug; src/views/activity/parts/participants.pug; src/views/activity/parts/participant-status.pug; src/views/activity/parts/assignments.pug; src/views/activity/parts/recommendations-schedule.pug; src/views/activity/export/schedule.pug; src/views/modules/module_role_assignment_addon.pug; src/public/js/activity-create.ts; src/public/js/modules/activity/activity-requirements.ts; src/public/js/modules/activity/activity-recommendation-jobs.ts; src/public/js/modules/activity/activity-recommendations-schedule.ts; src/public/js/modules/activity/activity-recommendations-state.ts; src/public/js/modules/activity/activity-recommendations-logic.ts; src/public/js/modules/activity/activity-recommendations-ui.ts; src/routes/activity.ts; src/routes/api/activity.ts; src/controller/activityController.ts; src/middleware/assignFlowFactory.ts; src/modules/activity/requirements.ts; src/modules/activity/availability.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/autoAssignment.ts; src/modules/activity/recommendations.ts; src/modules/activity/recommendationJobs.ts; src/modules/database/services/ActivityService.ts; src/modules/database/services/ActivityRequirementService.ts; src/modules/database/services/ActivityRecommendationService.ts; tests/unit/activity-requirements.spec.ts; tests/frontend/activity-requirement-coverage.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: activity-plan-visible-UI-or-behavior-change
 -->
 
@@ -27,6 +27,8 @@ Activity plans provide a dated schedule of slots. Participants can join a comple
 ### I am organizing
 
 - [Create an activity plan](#create-an-activity-plan)
+- [Change plan properties](#change-plan-properties)
+- [Link, change, or remove an event](#link-change-or-remove-an-event)
 - [Add or edit slots](#add-and-edit-slots)
 - [Add named roles](#add-named-roles-to-a-slot)
 - [Correct role assignments](#manage-role-assignments)
@@ -160,9 +162,34 @@ The tabs are shown only when they apply to the plan and your access:
 | **Schedule** | View slots, join or leave, and perform slot-management tasks. | Always. |
 | **Participants** | Review assignment, requirement, attendance, and role information. | When participant data exists and you have **Access Participants**. |
 | **Rules & auto-assign** | Configure event-linked assignment rules and, with the relevant access, work with assignment suggestions. | On an event-linked plan for organizers with rule- or assignment-management access. |
-| **Settings** | Manage group permissions and delegated administrators. | With **Manage Permissions**. |
 
-The plan description appears above **Shared text fields**. When **Double click to edit** is shown, double-click the description to change it.
+The plan description appears above **Shared text fields**. To change it, open **Entity settings** in the header. Only the settings and actions available to your active profile appear in that dialog.
+
+### Change plan properties
+
+1. Open the plan and select **Entity settings**.
+2. In **General**, open **Details** for **Title** and **Description**, or **Dates and time** for **Start date** and **End date**. Only permitted fields appear.
+3. Select **Save properties**.
+
+Title, description, and dates have separate edit permissions. Dates must still include every existing slot; changing them never moves or removes slots or assignments. Slot editing and **Rules & auto-assign** remain separate tasks.
+
+Each dialog section saves separately. Close the dialog to discard an unsaved draft; a command that would refresh the page asks you to resolve drafts in other sections first. A failed save keeps your input available for correction.
+
+In **General**, open **Header image**, select **Choose image**, then **Upload** to add or replace a JPEG, PNG, or GIF up to 10 MiB. **Remove image** deletes the current image after confirmation. Under **Actions**, **Duplicate** opens a creation form for a new plan; **Delete permanently** is available only to the owner and removes the plan and its contents after confirmation. Use archival when the plan should remain available.
+
+### Link, change, or remove an event
+
+During creation, use **Assign to event (optional)**. For an existing plan:
+
+1. Open **Entity settings** → **Linked event**.
+2. Find and select an event, or select **No event** to make the plan standalone.
+3. Review the effect on access and archival, then select **Save event link** and confirm.
+
+Changing the relationship requires **Edit Meta** on the plan. Selecting an event also requires **Manage Assignments** on that event. Past events, events whose registration deadline has passed, and archived events are selectable when authorized. See [Choose an event](EVENTS.md#choose-an-event) for the shared search and filters.
+
+The plan keeps its slots, roles, assignments, rules, images, and direct archive state. Event-derived admission and participant permissions follow the new event, so review access before changing the link. Existing assignments do not register people in the destination event automatically.
+
+Generated pending suggestions from the old context are cleared. Manual drafts and reviewed history remain, and reviewed changes are checked against the new participant eligibility before application. Review requirements and generate fresh suggestions for the new event. On unlinking, event-dependent tools become unavailable and the plan follows its own automatic archival schedule again; an already-ended plan may become eligible for archival. Linking an archived event adds inherited archival, while unlinking leaves any independently archived plan archived.
 
 ### Add and edit slots
 
@@ -240,9 +267,9 @@ For an event-linked plan, authorized organizers can open **Rules & auto-assign**
 
 Select **Save settings** or **Save requirement settings** before leaving the tab. For a required-participation plan, continue with [Set participant requirements](#set-participant-requirements), [Check requirement coverage](#check-requirement-coverage), and [Generate assignment suggestions](#generate-assignment-suggestions).
 
-### Open the settings tab
+### Change permissions and administrators
 
-Open **Settings** to edit **Group Permissions** and delegated administrators. This tab is not general plan configuration: it appears only with **Manage Permissions**.
+Open **Entity settings** and select **Access** to edit **Group Permissions** and delegated administrators. This section appears only with **Manage Permissions**. The plan's assignment rules remain under **Rules & auto-assign**.
 
 The owner always keeps full access. A delegated organizer needs the specific permissions for the tasks they perform; being listed as an administrator does not automatically grant every capability. See [Permissions and Sharing](PERMISSIONS.md#delegate-an-organizer).
 
@@ -250,7 +277,7 @@ The owner always keeps full access. A delegated organizer needs the specific per
 
 With **Data Export** permission:
 
-1. Open **Schedule**.
+1. Open **Entity settings**.
 2. Select **Export schedule**.
 3. A print-friendly page opens in a new browser tab.
 4. Select **Print** to print it or use the browser’s print dialog to save a PDF.
@@ -392,11 +419,11 @@ Maintainers and advanced reviewers can find the single calculation, job, review-
 
 ## Archive or restore a plan
 
-Owners and organizers with **Edit Meta** can use **Archive for everyone** and **Restore for everyone** in the plan's **Archival** section. Archival preserves slots, roles, assignments, requirements, images, and existing permissions; normal authorized actions stay available.
+Owners and organizers with **Edit Meta** can open **Entity settings** → **Actions** → **Archival** and use **Archive for everyone** or **Restore for everyone**. Archival preserves slots, roles, assignments, requirements, images, and existing permissions; normal authorized actions stay available. The ordinary plan view shows only **This entity is archived.** when applicable.
 
 A standalone plan can be archived automatically after its inclusive end date and the site's configured delay. Restoring it pauses automatic archival until you select **Resume automatic archival**. **Pause automatic archival** is also available before it is archived.
 
-A linked plan follows its event's archival schedule, even when its own dates differ. **Archived with event** means the event must be restored first. Restoring the event leaves any independently archived plan archived. Plans created under an archived event inherit its state immediately.
+A linked plan follows its event's archival schedule, even when its own dates differ. The **Archival** section inside **Entity settings** explains when the event must be restored first and provides **Open event** when available. Restoring the event leaves any independently archived plan archived. Plans created under an archived event inherit its state immediately.
 
 Find archived plans in **Archived and hidden** in [Your Overview](DASHBOARD.md#find-archived-and-hidden-items). **Hide for me**, **Show for me**, and **Use default visibility** change only the active profile's overview placement.
 

@@ -15,7 +15,7 @@
  */
 
 import {ActivitySlot} from "../database/entities/activity/ActivitySlot";
-import {normalizeRecommendationInput, RecommendationInput} from "../database/services/ActivityRecommendationService";
+import type {RecommendationInput} from "../../types/ActivityTypes";
 import {AssignmentCandidate, AttendancePolicy, collectAssignmentWarnings, toAssignmentCandidate} from "./availability";
 import {ParticipantAttendance, toParticipantKey} from "./requirements";
 
@@ -38,6 +38,23 @@ export interface RecommendationWarningOptions {
     slotCapacities?: Record<string, number>;
     allowOverfill?: boolean;
     attendancePolicy?: AttendancePolicy;
+}
+
+/** Supply canonical defaults for pure recommendation calculations; controllers validate inputs. */
+export function normalizeRecommendationInput(input: RecommendationInput): RecommendationInput {
+    const operation = input.operation ?? "ASSIGN";
+    const sourceItemId = input.sourceItemId == null ? null : String(input.sourceItemId);
+
+    return {
+        id: input.id,
+        itemId: input.itemId,
+        profileId: String(input.profileId),
+        status: input.status ?? "PENDING",
+        operation,
+        sourceItemId: operation === "REASSIGN" ? sourceItemId : null,
+        manual: Boolean(input.manual),
+        hidden: Boolean(input.hidden),
+    };
 }
 
 export function buildRecommendationWarnings({

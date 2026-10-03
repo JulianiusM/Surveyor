@@ -4,6 +4,7 @@ import path from 'node:path';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import eventController from '../../src/controller/eventController';
 import * as userController from '../../src/controller/userController';
+import * as entityAdminController from '../../src/controller/entityAdminController';
 import {archiveKey} from '../../src/modules/archive/policy';
 import {AppDataSource} from '../../src/modules/database/dataSource';
 import {EntityVisibilityPreference} from '../../src/modules/database/entities/archive/EntityVisibilityPreference';
@@ -15,13 +16,12 @@ import {Profile} from '../../src/modules/database/entities/user/Profile';
 import * as activityService from '../../src/modules/database/services/ActivityService';
 import * as driverService from '../../src/modules/database/services/DriverService';
 import * as adminService from '../../src/modules/database/services/EntityAdminService';
-import * as archiveService from '../../src/modules/database/services/EntityLifecycleService';
 import * as eventService from '../../src/modules/database/services/EventService';
 import * as packingService from '../../src/modules/database/services/PackingService';
 import * as surveyService from '../../src/modules/database/services/SurveyService';
 import * as userService from '../../src/modules/database/services/UserService';
 import {PERM} from '../../src/modules/lib/permissions';
-import type {ArchiveReference} from '../../src/types/ArchiveTypes';
+import type {ArchiveReference, PersonalVisibility} from '../../src/types/ArchiveTypes';
 import {createActivitySlotEntity, createPackingItemEntity, createProfileEntity} from '../factories/integrationEntityFactory';
 import {persistIntegrationProfile, registerEventAttendance} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
@@ -29,6 +29,26 @@ import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../suppor
 let owner: Profile;
 let participant: Profile;
 let temporaryDirectory: string;
+
+/** Exercise controller policy with real DBAL operations and the fixture owner's identity. */
+function archiveAsOwner(reference: ArchiveReference, now?: Date) {
+    return entityAdminController.archiveEntity(reference, {}, {profile: owner, auth: {user: owner.user!}}, now);
+}
+
+function restoreAsOwner(reference: ArchiveReference) {
+    return entityAdminController.restoreEntity(reference, {}, {profile: owner, auth: {user: owner.user!}});
+}
+
+function pauseAsOwner(reference: ArchiveReference, paused: boolean) {
+    return entityAdminController.setAutomaticArchival(reference, {paused}, {profile: owner, auth: {user: owner.user!}});
+}
+
+/** Membership/deletion rejections belong to the controller, never the persistence writer. */
+async function setVisibility(profileId: string, reference: ArchiveReference, visibility: PersonalVisibility) {
+    const profile = (await userService.getProfileById(profileId))!;
+    const auth = profile.userId ? {user: {id: profile.userId}} : {guest: {id: profile.guestId!}};
+    return userController.setPersonalVisibility(reference.type, reference.id, {visibility}, {profile, auth});
+}
 
 // Create through the existing domain service so IDs, defaults, and ownership match
 // real application entities. Tests choose an explicit clock rather than today's date.
@@ -39,7 +59,7 @@ async function createEvent(title: string, endDate = '2027-06-03'): Promise<Archi
 }
 
 async function state(ref: ArchiveReference) {
-    const states = await archiveService.getArchiveStates([ref]);
+    const states = await entityAdminController.getArchiveStates([ref]);
     expect(states.has(archiveKey(ref))).toBe(true);
     return states.get(archiveKey(ref))!;
 }
@@ -47,7 +67,7 @@ async function state(ref: ArchiveReference) {
 // Inspect the actual controller projection, including membership and private placement.
 // A preference row by itself must never be enough for this helper to find a card.
 async function card(profile: Profile, ref: ArchiveReference, collection: 'owner' | 'participant' = 'owner') {
-    const states = await archiveService.getArchiveStates([ref]);
+    const states = await entityAdminController.getArchiveStates([ref]);
     const parentId = states.get(archiveKey(ref))?.eventId;
     const auth = profile.userId ? {user: {id: profile.userId}} : {guest: {id: profile.guestId!}};
     // Follow the same paged navigation as the UI. Children may be in an event sub-view or
@@ -101,26 +121,26 @@ describe('authoritative archival and personal overview visibility', () => {
         const refs = [event, activity, packing, drivers];
         // Give one child independent state before archiving the event. Restoration must
         // release inheritance for the other children while preserving that separate choice.
-        await archiveService.archiveEntity(packing);
-        await archiveService.archiveEntity(event);
-        const archived = await archiveService.getArchiveStates(refs);
+        await archiveAsOwner(packing);
+        await archiveAsOwner(event);
+        const archived = await entityAdminController.getArchiveStates(refs);
         for (const ref of refs) expect(archived.get(archiveKey(ref))?.archived).toBe(true);
         expect(archived.get(archiveKey(activity))).toMatchObject({directArchived: false, inheritedFromEventId: event.id});
         expect(archived.get(archiveKey(packing))).toMatchObject({directArchived: true, inheritedFromEventId: event.id});
-        await expect(archiveService.restoreEntity(activity)).rejects.toThrow();
+        await expect(restoreAsOwner(activity)).rejects.toThrow();
 
         // Inheritance also applies to children created after archival; no copied flag
         // or one-off cascade update may be required to make the new child archived.
         const newChild: ArchiveReference = {type: 'drivers', id: await driverService.createDriversList(owner.id, 'Added after archive', '', event.id)};
         expect(await state(newChild)).toMatchObject({archived: true, directArchived: false, inheritedFromEventId: event.id});
-        await archiveService.restoreEntity(event);
+        await restoreAsOwner(event);
         expect(await state(event)).toMatchObject({archived: false, autoArchivePaused: true});
         for (const ref of [activity, drivers, newChild]) expect((await state(ref)).archived).toBe(false);
         expect(await state(packing)).toMatchObject({archived: true, directArchived: true, inheritedFromEventId: null});
-        await archiveService.restoreEntity(packing);
+        await restoreAsOwner(packing);
         expect((await state(packing)).archived).toBe(false);
-        await archiveService.archiveEntity(activity);
-        expect(await archiveService.restoreEntity(activity)).toMatchObject({
+        await archiveAsOwner(activity);
+        expect(await restoreAsOwner(activity)).toMatchObject({
             archived: false, directArchived: false, autoArchivePaused: false, hasAutomaticSchedule: false,
         });
         expect(await state(activity)).toMatchObject({autoArchivePaused: false});
@@ -136,46 +156,46 @@ describe('authoritative archival and personal overview visibility', () => {
 
         // Check both sides of the inclusive end-day plus complete-day delay boundary.
         // The linked plan remains governed by its later event despite its earlier dates.
-        await archiveService.archiveExpiredEntities(30, new Date('2027-07-03T23:59:59Z'));
+        await entityAdminController.archiveExpiredEntities(30, new Date('2027-07-03T23:59:59Z'));
         for (const ref of [event, standalone, linked]) expect((await state(ref)).archived).toBe(false);
-        await archiveService.archiveExpiredEntities(30, new Date('2027-07-04T00:00:00Z'));
+        await entityAdminController.archiveExpiredEntities(30, new Date('2027-07-04T00:00:00Z'));
         expect((await state(event)).archived).toBe(true);
         expect((await state(standalone)).archived).toBe(true);
         expect((await state(linked)).archived).toBe(false);
         const timestamp = (await eventService.getEventById(event.id))!.archivedAt;
-        await archiveService.archiveEntity(event, new Date('2027-07-05T00:00:00Z'));
+        await archiveAsOwner(event, new Date('2027-07-05T00:00:00Z'));
         expect((await eventService.getEventById(event.id))!.archivedAt).toEqual(timestamp);
 
         // A manual restoration pauses the independent schedule until explicitly resumed.
-        await archiveService.restoreEntity(event);
-        await archiveService.restoreEntity(standalone);
-        await archiveService.archiveExpiredEntities(0, new Date('2027-08-01T12:00:00Z'));
+        await restoreAsOwner(event);
+        await restoreAsOwner(standalone);
+        await entityAdminController.archiveExpiredEntities(0, new Date('2027-08-01T12:00:00Z'));
         for (const ref of [event, standalone]) expect(await state(ref)).toMatchObject({archived: false, autoArchivePaused: true});
-        await archiveService.setAutomaticArchivalPaused(event, false);
-        await archiveService.archiveExpiredEntities(0, new Date('2027-08-01T12:00:00Z'));
+        await pauseAsOwner(event, false);
+        await entityAdminController.archiveExpiredEntities(0, new Date('2027-08-01T12:00:00Z'));
         expect((await state(event)).archived).toBe(true);
-        await expect(archiveService.setAutomaticArchivalPaused(linked, true)).rejects.toThrow();
+        await expect(pauseAsOwner(linked, true)).rejects.toThrow();
     });
 
     it('keeps persisted show/hide overrides independent for profiles and shared between their two collections', async () => {
         const event = await createEvent('Private precedence');
         await registerEventAttendance(event.id, owner, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
         await registerEventAttendance(event.id, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
-        await userService.setVisibility(owner.id, event, 'shown');
-        await userService.setVisibility(participant.id, event, 'hidden');
-        await archiveService.archiveEntity(event);
+        await setVisibility(owner.id, event, 'shown');
+        await setVisibility(participant.id, event, 'hidden');
+        await archiveAsOwner(event);
         // The owner participates too: both appearances consume one saved preference.
         // The second profile's explicit hiding remains independent of that choice.
         for (const collection of ['owner', 'participant'] as const) {
             expect(await card(owner, event, collection)).toMatchObject({overviewHidden: false, visibility: 'shown', archive: {archived: true}});
         }
         expect(await card(participant, event, 'participant')).toMatchObject({overviewHidden: true, visibility: 'hidden'});
-        await archiveService.restoreEntity(event);
+        await restoreAsOwner(event);
         expect(await card(participant, event, 'participant')).toMatchObject({overviewHidden: true, visibility: 'hidden', archive: {archived: false}});
-        await userService.setVisibility(participant.id, event, 'default');
+        await setVisibility(participant.id, event, 'default');
         expect(await card(participant, event, 'participant')).toMatchObject({overviewHidden: false, visibility: 'default'});
-        await archiveService.archiveEntity(event);
-        await userService.setVisibility(owner.id, event, 'default');
+        await archiveAsOwner(event);
+        await setVisibility(owner.id, event, 'default');
         expect(await card(owner, event)).toMatchObject({overviewHidden: true, visibility: 'default'});
     });
 
@@ -184,7 +204,7 @@ describe('authoritative archival and personal overview visibility', () => {
         const child: ArchiveReference = {type: 'drivers', id: await driverService.createDriversList(owner.id, 'Visible child', '', event.id)};
         const otherProfile = await AppDataSource.getRepository(Profile).save(createProfileEntity(owner.user!));
         await adminService.addAdmin('event', event.id, otherProfile.id, PERM.ACCESS_ADMIN);
-        await userService.setVisibility(owner.id, event, 'hidden');
+        await setVisibility(owner.id, event, 'hidden');
         expect(await card(owner, event)).toMatchObject({overviewHidden: true});
         expect(await card(owner, child)).toMatchObject({overviewHidden: false});
         expect(await card(otherProfile, event)).toMatchObject({overviewHidden: false, visibility: 'default'});
@@ -195,7 +215,7 @@ describe('authoritative archival and personal overview visibility', () => {
         await AppDataSource.getRepository(Event).save({
             id: event.id, owner, title: 'Canonical visibility identity', startDate: '2027-06-01', endDate: '2027-06-03',
         });
-        await archiveService.archiveEntity(event);
+        await archiveAsOwner(event);
         const session = {profile: owner, auth: {user: owner.user!}};
 
         const response = await userController.setPersonalVisibility('event', event.id.toUpperCase(), {visibility: 'shown'}, session);
@@ -215,7 +235,7 @@ describe('authoritative archival and personal overview visibility', () => {
         const guest = await userService.createGuest('Archive guest');
         const event = await createEvent('Guest transfer');
         await registerEventAttendance(event.id, guest.profile, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
-        await userService.setVisibility(guest.profile.id, event, 'hidden');
+        await setVisibility(guest.profile.id, event, 'hidden');
         expect(await card(guest.profile, event, 'participant')).toMatchObject({overviewHidden: true});
         await userService.moveProfileToUserTx(guest.profile.id, participant.user!.id);
         const transferred = (await userService.getProfileById(guest.profile.id))!;
@@ -228,13 +248,13 @@ describe('authoritative archival and personal overview visibility', () => {
         const event = await createEvent('Historical administration', '2027-06-03');
         await eventService.updateEventDates(event.id, '2000-01-01', '2000-01-02');
         await adminService.addAdmin('event', event.id, participant.id, PERM.ACCESS_ADMIN);
-        await archiveService.archiveEntity(event);
+        await archiveAsOwner(event);
         expect(await card(participant, event)).toMatchObject({overviewHidden: true});
-        await userService.setVisibility(participant.id, event, 'shown');
+        await setVisibility(participant.id, event, 'shown');
         expect(await card(participant, event)).toMatchObject({overviewHidden: false});
         await adminService.removeAdmin('event', event.id, participant.id);
         expect(await card(participant, event)).toBeUndefined();
-        await expect(userService.setVisibility(participant.id, event, 'hidden')).rejects.toThrow();
+        await expect(setVisibility(participant.id, event, 'hidden')).rejects.toThrow();
         await adminService.addAdmin('event', event.id, participant.id, PERM.ACCESS_ADMIN);
         expect(await card(participant, event)).toMatchObject({visibility: 'shown'});
         expect((await eventService.getActiveManagedEvents(participant.id)).some(item => item.id === event.id)).toBe(false);
@@ -265,13 +285,13 @@ describe('authoritative archival and personal overview visibility', () => {
             invoice: await AppDataSource.getRepository(EventInvoice).findOneByOrFail({id: invoice.id}),
             share: await AppDataSource.getRepository(EventInvoiceShare).findOneByOrFail({id: share.id}),
         };
-        await archiveService.archiveEntity(event);
-        await archiveService.restoreEntity(event);
-        await archiveService.setAutomaticArchivalPaused(event, false);
-        await archiveService.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z'));
+        await archiveAsOwner(event);
+        await restoreAsOwner(event);
+        await pauseAsOwner(event, false);
+        await entityAdminController.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z'));
         expect((await state(event)).archived).toBe(true);
-        await archiveService.restoreEntity(event);
-        await userService.setVisibility(participant.id, event, 'hidden');
+        await restoreAsOwner(event);
+        await setVisibility(participant.id, event, 'hidden');
         expect(await AppDataSource.getRepository(EventInvoicePool).findOneByOrFail({id: pool.id})).toEqual(before.pool);
         expect(await AppDataSource.getRepository(EventInvoice).findOneByOrFail({id: invoice.id})).toEqual(before.invoice);
         expect(await AppDataSource.getRepository(EventInvoiceShare).findOneByOrFail({id: share.id})).toEqual(before.share);
@@ -284,9 +304,9 @@ describe('authoritative archival and personal overview visibility', () => {
 
     it('creates a duplicate with fresh lifecycle and visibility defaults', async () => {
         const original = await createEvent('Original archived event');
-        await archiveService.archiveEntity(original);
-        await archiveService.setAutomaticArchivalPaused(original, true);
-        await userService.setVisibility(owner.id, original, 'hidden');
+        await archiveAsOwner(original);
+        await pauseAsOwner(original, true);
+        await setVisibility(owner.id, original, 'hidden');
         const loaded = (await eventService.getEventById(original.id))!;
         // Duplication is the existing prefilled-create flow, so exercise its input normalization.
         const input = {title: 'Duplicated event', startDate: loaded.startDate, endDate: loaded.endDate};
@@ -303,7 +323,7 @@ describe('authoritative archival and personal overview visibility', () => {
         await editor.connect();
         await editor.startTransaction();
         await editor.manager.getRepository(Event).findOneOrFail({where: {id: event.id}, lock: {mode: 'pessimistic_write'}});
-        const sweep = archiveService.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z'));
+        const sweep = entityAdminController.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z'));
         // Observe the real MariaDB connection waiting on our row lock: the candidate
         // has been read, but its conditional write cannot yet see the new dates.
         try {
@@ -327,7 +347,7 @@ describe('authoritative archival and personal overview visibility', () => {
         await blocker.connect();
         await blocker.startTransaction();
         await blocker.manager.getRepository(Event).findOneOrFail({where: {id: event.id}, lock: {mode: 'pessimistic_write'}});
-        const restore = archiveService.restoreEntity(event);
+        const restore = restoreAsOwner(event);
         let sweep: Promise<number> | undefined;
         try {
             // Queue restoration first, then wait for the automatic UPDATE to reach the
@@ -337,7 +357,7 @@ describe('authoritative archival and personal overview visibility', () => {
                 const processes: {Info: string | null}[] = await AppDataSource.query('SHOW FULL PROCESSLIST');
                 return processes.some(row => row.Info?.includes('FOR UPDATE') && row.Info.includes(event.id));
             }, {timeout: 5000}).toBe(true);
-            sweep = archiveService.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z'));
+            sweep = entityAdminController.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z'));
             await expect.poll(async () => {
                 const processes: {Info: string | null}[] = await AppDataSource.query('SHOW FULL PROCESSLIST');
                 return processes.some(row => row.Info?.startsWith('UPDATE') && row.Info.includes(event.id));
@@ -349,10 +369,10 @@ describe('authoritative archival and personal overview visibility', () => {
             await Promise.all([restore, sweep]);
         }
         expect(await state(event)).toMatchObject({archived: false, autoArchivePaused: true});
-        await archiveService.setAutomaticArchivalPaused(event, false);
+        await pauseAsOwner(event, false);
         const counts = await Promise.all([
-            archiveService.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z')),
-            archiveService.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z')),
+            entityAdminController.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z')),
+            entityAdminController.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z')),
         ]);
         expect(counts.reduce((sum, count) => sum + count, 0)).toBe(1);
         expect((await state(event)).archived).toBe(true);
@@ -361,9 +381,9 @@ describe('authoritative archival and personal overview visibility', () => {
     it('deletes archived events with their children and keeps profile preference cleanup independent', async () => {
         const event = await createEvent('Actual deletion');
         const child: ArchiveReference = {type: 'packing', id: await packingService.createPackingListTx(owner.id, 'Deleted child', '', [], event.id)};
-        await userService.setVisibility(owner.id, event, 'hidden');
-        await userService.setVisibility(owner.id, child, 'shown');
-        await archiveService.archiveEntity(event);
+        await setVisibility(owner.id, event, 'hidden');
+        await setVisibility(owner.id, child, 'shown');
+        await archiveAsOwner(event);
         expect(await eventService.getEventById(event.id)).not.toBeNull();
         expect(await packingService.getPackingListById(child.id)).not.toBeNull();
         await eventService.deleteEvent(event.id);
@@ -373,9 +393,9 @@ describe('authoritative archival and personal overview visibility', () => {
         expect(await card(owner, child)).toBeUndefined();
         // Stored preferences are not an entity inventory. They cannot restore a deleted
         // root, grant access to it, or make an event-cascaded child reappear as a card.
-        expect(await archiveService.getArchiveStates([event, child])).toEqual(new Map());
-        await expect(userService.setVisibility(owner.id, child, 'shown')).rejects.toMatchObject({status: 404});
-        await expect(archiveService.restoreEntity(event)).rejects.toMatchObject({status: 404});
+        expect(await entityAdminController.getArchiveStates([event, child])).toEqual(new Map());
+        await expect(setVisibility(owner.id, child, 'shown')).rejects.toMatchObject({status: 404});
+        await expect(restoreAsOwner(event)).rejects.toMatchObject({status: 404});
         await expect(eventService.deleteEvent(event.id)).resolves.toBeUndefined();
 
         // Normal creation generates a fresh identity; it never reuses a deleted root's
@@ -390,7 +410,7 @@ describe('authoritative archival and personal overview visibility', () => {
         // Unlike the polymorphic entity reference, profile_id is a real cascading FK.
         // Recreating only the profile proves that the database removed its preferences.
         await adminService.addAdmin('packing', newChild.id, transient.id, PERM.ACCESS_ADMIN);
-        await userService.setVisibility(transient.id, newChild, 'hidden');
+        await setVisibility(transient.id, newChild, 'hidden');
         await AppDataSource.getRepository(Profile).delete(transient.id);
         await AppDataSource.getRepository(Profile).save(createProfileEntity(owner.user!, {id: transient.id}));
         await adminService.addAdmin('packing', newChild.id, transient.id, PERM.ACCESS_ADMIN);
@@ -410,18 +430,18 @@ describe('authoritative archival and personal overview visibility', () => {
         ] as const;
 
         for (const {ref, load, remove} of cases) {
-            await userService.setVisibility(owner.id, ref, 'hidden');
-            await archiveService.archiveEntity(ref);
+            await setVisibility(owner.id, ref, 'hidden');
+            await archiveAsOwner(ref);
             expect(await load(ref.id)).not.toBeNull();
-            await archiveService.restoreEntity(ref);
+            await restoreAsOwner(ref);
             expect(await load(ref.id)).not.toBeNull();
             expect(await userService.getVisibilityPreferences(owner.id, [ref])).toEqual(new Map([[archiveKey(ref), 'hidden']]));
 
             await remove(ref.id);
             expect(await load(ref.id)).toBeNull();
-            expect(await archiveService.getArchiveStates([ref])).toEqual(new Map());
+            expect(await entityAdminController.getArchiveStates([ref])).toEqual(new Map());
             expect(await card(owner, ref)).toBeUndefined();
-            await expect(userService.setVisibility(owner.id, ref, 'shown')).rejects.toMatchObject({status: 404});
+            await expect(setVisibility(owner.id, ref, 'shown')).rejects.toMatchObject({status: 404});
             // Preserve the original repository.delete semantics for a missing row too.
             await expect(remove(ref.id)).resolves.toBeUndefined();
         }
@@ -452,7 +472,7 @@ describe('authoritative archival and personal overview visibility', () => {
 
         try {
             await expect.poll(deletionIsWaiting, {timeout: 5000}).toBe(true);
-            preference = expect(userService.setVisibility(owner.id, child, 'hidden')).rejects.toMatchObject({status: 404});
+            preference = expect(setVisibility(owner.id, child, 'hidden')).rejects.toMatchObject({status: 404});
             await expect.poll(preferenceIsWaiting, {timeout: 5000}).toBe(true);
             await blocker.commitTransaction();
         } finally {
@@ -469,11 +489,11 @@ describe('authoritative archival and personal overview visibility', () => {
         const survey: ArchiveReference = {type: 'survey', id: await surveyService.createSurveyTx(owner.id, 'Archived survey', '', [{weekday: 'MON', week: '1'}])};
         const [choice] = await surveyService.getCombinationsBySurveyId(survey.id);
         await surveyService.saveResponse(survey.id, participant.id, choice.id, 'yes');
-        await archiveService.archiveEntity(survey);
+        await archiveAsOwner(survey);
         expect(await state(survey)).toMatchObject({archived: true, hasAutomaticSchedule: false});
-        await archiveService.restoreEntity(survey);
+        await restoreAsOwner(survey);
         expect(await state(survey)).toMatchObject({archived: false, hasAutomaticSchedule: false});
         expect(await surveyService.getResponsesByProfileId(participant.id)).toContainEqual(expect.objectContaining({entityId: survey.id, answer: 'yes'}));
-        await expect(archiveService.setAutomaticArchivalPaused(survey, false)).rejects.toThrow();
+        await expect(pauseAsOwner(survey, false)).rejects.toThrow();
     });
 });

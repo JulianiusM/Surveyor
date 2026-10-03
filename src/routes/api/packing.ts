@@ -17,7 +17,7 @@
 import express, {Request, Response} from 'express';
 
 import controller from "../../controller/packingController";
-import {createEntityAdminApiRouter, createEntityArchiveApiRouter} from "../../middleware/adminApiFactory";
+import {createEntityAdminApiRouter, createEntityArchiveApiRouter, createEntityPropertyApiRouter} from "../../middleware/adminApiFactory";
 import {attachAssignRoutes} from '../../middleware/assignFlowFactory';
 import {createEntityHeaderUpdateRouter} from "../../middleware/entityHeaderUpdateHandler";
 
@@ -62,9 +62,10 @@ createEntityAdminApiRouter(app, entityName, permFct)
 // Undated lists still support manual archival and event inheritance. Resolve the target
 // through the existing :id loader and leave lifecycle authorization to the shared controller.
 createEntityArchiveApiRouter(app, entityName, resFct);
+createEntityPropertyApiRouter(app, entityName, resFct, controller.updateProperties);
 
 app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.updateDescription(resFct(req).id, req.body);
+    const msg = await controller.updateDescription(resFct(req).id, req.body, resFct(req).eventId ?? null);
     renderer.respondWithSuccessJson(res, msg);
 }))
 

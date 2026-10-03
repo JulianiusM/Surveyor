@@ -15,6 +15,8 @@
  */
 
 import {Request} from "express";
+import {assertEntityPropertyContext, normalizeBasicProperties} from './entityAdminController';
+import type {BasicEntityPropertyPatch} from '../types/EntityPropertyTypes';
 import Joi from 'joi';
 import {PackingItem} from "../modules/database/entities/packing/PackingItem";
 import {PackingList} from "../modules/database/entities/packing/PackingList";
@@ -150,11 +152,8 @@ async function deleteEntity(list: PackingList, session: Request['session']) {
 
 // ---------- API ----------
 // API-specific controllers
-async function updateDescription(id: string, body: any) {
-    const {description} = body;
-    if (description.length > 16000)
-        throw new APIError('Description to long', body, 400)
-    await packingService.updatePackingListDescription(id, description);
+async function updateDescription(id: string, body: any, expectedEventId?: string | null) {
+    await saveProperties(id, normalizeBasicProperties({description: body.description}), expectedEventId);
     return 'Description updated';
 }
 
@@ -232,12 +231,47 @@ async function deleteHeaderImg(entity: EntityBase) {
 
 function getAssignmentAccessMapping() {
     return {
-        assign: (body: any, profileId: string) => packingService.assignPackingItem(body.itemId, profileId),
+        assign: (body: any, profileId: string) => assignItem(body.itemId, profileId),
         unassign: (body: any, profileId: string) => packingService.unassignPackingItem(body.itemId, profileId),
     };
 }
 
+/**
+ * Assignment policy belongs to the controller. Check the locked DB snapshot in this order:
+ * absence is a 404, an existing assignment is an idempotent retry, then capacity constrains
+ * a new assignment. The DBAL keeps the item lock until the approved insertion commits.
+ */
+async function assignItem(itemId: string, profileId: string): Promise<void> {
+    await packingService.withPackingAssignmentLock(itemId, profileId, async function assignLocked(manager, item, existing, count) {
+        if (!item) throw new APIError('Packing item not found', {itemId}, 404);
+        if (existing) return;
+        if (typeof item.maxAssignees === 'number' && count >= item.maxAssignees) {
+            throw new APIError('This packing item is already fully assigned', {itemId}, 409);
+        }
+        await packingService.assignPackingItem(itemId, profileId, manager);
+    });
+}
+
+/**
+ * Both the legacy description route and the property form use this controller boundary.
+ * A parent change after route authorization must reject the whole patch, since permissions
+ * might have come from registration in the old event. Keep that check under the root lock.
+ */
+async function saveProperties(id: string, patch: BasicEntityPropertyPatch, expectedEventId?: string | null): Promise<void> {
+    await packingService.withPackingListLock(id, async function saveLocked(manager, current) {
+        assertEntityPropertyContext(current, expectedEventId);
+        await packingService.updatePackingListProperties(id, patch, manager);
+    });
+}
+
+/** Normalize all submitted fields before acquiring a lock; omitted fields remain unchanged. */
+async function updateProperties(entity: EntityBase, body: unknown) {
+    await saveProperties(entity.id, normalizeBasicProperties(body), entity.eventId ?? null);
+    return 'Properties updated';
+}
+
 export default {
+    updateProperties,
     preprocessCreate,
     createEntity,
     afterCreateItems,

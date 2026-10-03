@@ -17,9 +17,9 @@
 import express, {NextFunction, Request, Response} from 'express';
 import fs from "node:fs";
 import path from "node:path";
-import {getArchivePresentations} from "../controller/entityAdminController";
+import {canAccessEntityView, getArchivePresentations, getEntityPropertyPresentation} from "../controller/entityAdminController";
+import {authorizeEventLink, projectEventLinkOption} from "../controller/eventController";
 import {archiveKey} from "../modules/archive/policy";
-import * as eventService from "../modules/database/services/EventService";
 import * as userService from "../modules/database/services/UserService";
 import mailer, {resolveEmailRecipientName} from '../modules/email';
 import {asyncHandler} from '../modules/lib/asyncHandler';
@@ -29,19 +29,17 @@ import {getGuestRegistrationNags} from "../modules/lib/guestRegistrationNags";
 import {PERM} from "../modules/lib/permissions";
 import {persistSession} from "../modules/lib/session";
 import {buildGuestLink, getItemFromEntityPermFct, getResource} from "../modules/lib/util";
-import {can} from "../modules/permissionEngine";
 
 import renderer from '../modules/renderer';
 import settings from "../modules/settings";
 import type {EntityDescriptor, EntityGetter, GetResource, ItemGetter} from "../types/PermissionTypes";
 import type {EntityBase, GuestFlowConfig, GuestFlowDb} from "../types/UserTypes";
-import {paramHandler, queryHandler} from "./paramHandler";
+import {paramHandler} from "./paramHandler";
 import {
     attachAdminData,
     attachPermBundle,
     attachPermMeta,
     isAuthenticated,
-    optionalPermission,
     requireOwner,
     requirePermission
 } from "./permissionMiddleware";
@@ -102,7 +100,6 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
     // Preload entity for any route containing :id
     const resFct: GetResource = (req: Request) => getResource(req, entityType);
     const eventResFn: GetResource = (req: Request) => getResource(req, 'event');
-    const eventNewResFn: GetResource = (req: Request) => getResource(req, 'eventNew');
     const permFct: EntityGetter = (req: Request): EntityDescriptor => {
         const resource = getResource(req, entityType);
         return {
@@ -112,18 +109,9 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
             eventId: entityType === "event" ? resource?.id : resource?.eventId,
         };
     }
-    const eventPermFct: EntityGetter = (req: Request): EntityDescriptor => {
-        const resource = eventNewResFn(req);
-        return {
-            entityType: 'event',
-            entityId: resource.id,
-            ownerId: resource.ownerId
-        };
-    }
     const itemPermFct: ItemGetter = getItemFromEntityPermFct(getItems, resFct, entityItemType);
 
     paramHandler('id', router, getById, entityType);
-    queryHandler("eventId", router, eventService.getEventById, 'eventNew');
 
     router.use(attachPermMeta(entityType));
 
@@ -134,34 +122,24 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
      * An eventId query selects context, but permission to attach content is still checked.
      */
     async function getCreationData(req: Request) {
-        // Ordinary creation offers active managed events. A contextual create link may name
-        // an archived event that remains accessible, so resolve that selection separately.
-        const events = await eventService.getActiveManagedEvents(req.session.profile!.id);
-        const selected = addToEvent ? eventNewResFn(req) : undefined;
-        if (!selected || !await can({kind: 'entity', entity: await eventPermFct(req)}, req.session, PERM.MANAGE_ASSIGNMENTS)) {
-            // No authorized event context means no event-specific notice or extra picker item.
-            // The route's optionalPermission middleware remains the attachment authorization gate.
-            return {eventId: req.query.eventId, events, archive: null};
-        }
-
-        let selectedIsListed = false;
-        for (const event of events) {
-            if (event.id === selected.id) {
-                selectedIsListed = true;
-                break;
+        // Search results are loaded by the shared picker endpoint. Only a permitted initial
+        // choice is rendered here, including on validation recovery; historical state never
+        // excludes a destination. A posted choice supersedes a contextual URL preselection.
+        const submitted = req.body && Object.hasOwn(req.body, 'event_id') ? req.body.event_id : req.query.eventId;
+        const selectedId = typeof submitted === 'string' ? submitted : undefined;
+        let selected = null;
+        if (addToEvent && selectedId) {
+            try { selected = await authorizeEventLink(selectedId, req.session); }
+            catch (error) {
+                if (!(error instanceof APIError)) throw error;
+                // Do not leak a forbidden selection's label into recovery HTML. Submission
+                // performs its own mandatory check after feature field normalization.
             }
         }
-        // Retain the selected event's real title even when the active picker excluded it.
-        // Add it only once; archival must not make an authorized contextual form lose its parent.
-        if (!selectedIsListed) {
-            events.unshift(selected);
-        }
-
-        // This state describes the selected parent event, not the entity that will be created.
-        // Creation templates pass it explicitly to the archive mixin in contextual-notice mode.
+        if (!selected) return {eventId: undefined, events: [], archive: null};
         const ref = {type: 'event' as const, id: selected.id};
         const archives = await getArchivePresentations([ref], req.session);
-        return {eventId: selected.id, events, archive: archives.get(archiveKey(ref)) ?? null};
+        return {eventId: selected.id, events: [projectEventLinkOption(selected)], archive: archives.get(archiveKey(ref)) ?? null};
     }
 
     /** Render the initial form through the same data path used after validation failures. */
@@ -181,15 +159,26 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         try {
             checkNewImage(req.file);
             req.body.headerImg = req.file ? path.relative(process.cwd(), req.file.path) : undefined;
+            let selectedEventId: string | undefined;
+            if (addToEvent) {
+                // Multipart parsing necessarily precedes body-target authorization. Validate
+                // that actual field before feature parsing so malformed and forbidden targets
+                // both discard only this request's fresh upload, never a persisted image.
+                try {
+                    const target = await authorizeEventLink(req.body.event_id, req.session);
+                    selectedEventId = target?.id;
+                } catch (error) {
+                    if (req.file) removeImage(path.relative(process.cwd(), req.file.path));
+                    throw error;
+                }
+            }
             const parsed = preprocessCreate(req.body);
             if (parsed.error) {
                 throw new ValidationError(create, parsed.error.msg, parsed.error.data);
             }
-            if (addToEvent) {
-                // Keep the contextual event available to the domain controller separately
-                // from ordinary form fields; attachment validation still belongs to that flow.
-                parsed._injectedEventId = req.query.eventId;
-            }
+            // A query-string event is only a preselection. Use exactly the authorized body
+            // relationship, including an explicit empty choice, in the creation service.
+            if (addToEvent) parsed.eventId = selectedEventId;
             parsed._body = req.body;
             parsed._file = req.file;
             if (!parsed.headerImg && req.file) {
@@ -211,8 +200,8 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         } catch (error) {
             if (error instanceof ValidationError) {
                 // The error renderer receives data only. Preserve submitted fields, then replace
-                // picker choices/archive state with server-owned values. Authorized query context
-                // wins over a submitted eventId; without one, keep the form's submitted selection.
+                // picker choices/archive state with server-owned values. The posted selection
+                // wins over URL preselection and retains a label only when it is authorized.
                 const submittedData = error.data as {eventId?: unknown};
                 error.data = {
                     ...error.data,
@@ -227,10 +216,8 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
     // GET+POST /create
     router.route('/create')
         .get(isAuthenticated,
-            optionalPermission(eventPermFct, PERM.MANAGE_ASSIGNMENTS, eventNewResFn),
             asyncHandler(showCreatePage))
         .post(isAuthenticated,
-            optionalPermission(eventPermFct, PERM.MANAGE_ASSIGNMENTS, eventNewResFn),
             headerImgUpload.single("headerImg"),
             asyncHandler(submitCreatePage));
 
@@ -331,26 +318,9 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         const entity = resFct(req);
         const event = eventResFn(req);
         if (addToEvent && event) {
-            if (await eventService.isRegisteredForEvent(req.session.profile?.id || '', event.id)) {
-                // We have a valid registration --> Don't need to check in more detail.
-                return next();
-            }
-
-            if (req.session.profile) {
-                const canAccess = await can({
-                    entity: {
-                        entityId: entity.id,
-                        entityType: entityType,
-                        eventId: event.id,
-                        ownerId: entity.ownerId
-                    },
-                    kind: "entity"
-                }, req.session, PERM.ACCESS_VIEW);
-                if (canAccess) {
-                    // We specifically are allowed to access
-                    return next();
-                }
-            }
+            // The controller shares this rule with the event-link command's post-save
+            // navigation. The middleware retains transport-specific error/guest redirects.
+            if (await canAccessEntityView(entityType, {...entity, eventId: event.id}, req.session)) return next();
 
             // No valid registration
             throw new ExpectedError('You must be registered for the event to access this resource');
@@ -375,7 +345,8 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         // A missing projection is explicit null so the page mixin can omit the optional notice.
         const ref = {type: entityType, id: resFct(req).id};
         const archive = data.archive ?? (await getArchivePresentations([ref], req.session)).get(archiveKey(ref)) ?? null;
-        renderer.renderWithData(res, view, {...data, archive});
+        const entityProperties = await getEntityPropertyPresentation(entityType, resFct(req), req.session);
+        renderer.renderWithData(res, view, {...data, archive, entityProperties});
     }));
 
     return router;

@@ -15,6 +15,7 @@
  */
 
 import express, {Request, Response} from 'express';
+import {getEntityPropertyPresentation} from '../controller/entityAdminController';
 import controller from '../controller/eventController';
 import {createGuestFlowRouter} from '../middleware/guestFlowFactory';
 import {queryHandler} from "../middleware/paramHandler";
@@ -62,7 +63,8 @@ app.get('/:id/admin', requirePermission(permFct, PERM.ACCESS_ADMIN), asyncHandle
     // child cards. The dashboard passes that page data explicitly to its archival mixins;
     // entering administration does not require a separate feature-state middleware or locals.
     const data = await controller.fetchForView(resFct(req), req);
-    renderer.renderWithData(res, 'event/event-dashboard', data);
+    const entityProperties = await getEntityPropertyPresentation('event', resFct(req), req.session);
+    renderer.renderWithData(res, 'event/event-dashboard', {...data, entityProperties});
 }));
 
 app.get("/:id/export/participants", requirePermission(permFct, PERM.DATA_EXPORT | PERM.ACCESS_PARTICIPANTS), asyncHandler(async (req: Request, res: Response) => {

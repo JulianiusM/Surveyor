@@ -16,7 +16,7 @@
 
 // TypeORM-based implementation of the packing list module
 import {type EntityManager} from "typeorm";
-import {APIError} from '../../lib/errors';
+import type {BasicEntityPropertyPatch} from '../../../types/EntityPropertyTypes';
 import {generateUniqueId} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {PackingAssignment} from '../entities/packing/PackingAssignment';
@@ -219,32 +219,30 @@ export async function getLastPackingItemNumber(listId: string): Promise<number> 
     return (await AppDataSource.getRepository(PackingItem).maximum("pos", {entity: {id: listId},})) ?? 0;
 }
 
-// Assignments
-export async function assignPackingItem(itemId: string, profileId: string) {
-    await AppDataSource.transaction(async (manager) => {
-        const item = await manager.getRepository(PackingItem).findOne({
-            where: {id: itemId},
-            lock: {mode: 'pessimistic_write'},
-        });
-        if (!item) throw new APIError('Packing item not found', {itemId}, 404);
-
+/**
+ * Hold the item row while the controller evaluates assignment policy. Every assignment write
+ * through the controller acquires this lock, so its existing/count snapshot cannot become stale
+ * before the transaction commits. Missing records remain nullable; the caller chooses the error.
+ */
+export async function withPackingAssignmentLock<T>(
+    itemId: string, profileId: string,
+    action: (manager: EntityManager, item: PackingItem | null, existing: PackingAssignment | null, count: number) => Promise<T>,
+): Promise<T> {
+    async function readLocked(manager: EntityManager): Promise<T> {
+        const item = await manager.getRepository(PackingItem).findOne({where: {id: itemId}, lock: {mode: 'pessimistic_write'}});
         const repo = manager.getRepository(PackingAssignment);
-        const exists = await repo.findOneBy({item: {id: itemId}, profile: {id: profileId}});
-        if (exists) return;
+        const existing = await repo.findOneBy({item: {id: itemId}, profile: {id: profileId}});
+        const count = await repo.countBy({item: {id: itemId}});
+        return action(manager, item, existing, count);
+    }
+    return AppDataSource.transaction('READ COMMITTED', readLocked);
+}
 
-        if (typeof item.maxAssignees === 'number') {
-            const assignedCount = await repo.countBy({item: {id: itemId}});
-            if (assignedCount >= item.maxAssignees) {
-                throw new APIError('This packing item is already fully assigned', {itemId}, 409);
-            }
-        }
-
-        await repo.save(repo.create({
-            item: {id: itemId},
-            profile: {id: profileId},
-            entity: {id: item.entityId}
-        }));
-    });
+/** Insert a controller-approved assignment. TypeORM reports missing foreign records as DB errors. */
+export async function assignPackingItem(itemId: string, profileId: string, manager: EntityManager = AppDataSource.manager): Promise<void> {
+    const item = await manager.getRepository(PackingItem).findOneByOrFail({id: itemId});
+    const repo = manager.getRepository(PackingAssignment);
+    await repo.save(repo.create({item: {id: itemId}, profile: {id: profileId}, entity: {id: item.entityId}}));
 }
 
 export async function unassignPackingItem(itemId: string, profileId: string) {
@@ -296,3 +294,21 @@ export async function togglePackingItemRequiredByAll(itemId: string, flag: boole
     await AppDataSource.getRepository(PackingItem).update(itemId, {requiredByAll: flag});
 }
 
+
+/**
+ * Serialize root property writes with relinking by locking the same root row. Transaction and
+ * repository details stay in the DBAL; the controller validates existence and the parent snapshot
+ * before calling updatePackingListProperties with this transaction's manager.
+ */
+export async function withPackingListLock<T>(id: string, action: (manager: EntityManager, current: PackingList | null) => Promise<T>): Promise<T> {
+    async function readLocked(manager: EntityManager): Promise<T> {
+        const current = await manager.getRepository(PackingList).findOne({where: {id}, lock: {mode: 'pessimistic_write'}});
+        return action(manager, current);
+    }
+    return AppDataSource.transaction('READ COMMITTED', readLocked);
+}
+
+/** Persist only the normalized fields supplied by the controller in its existing transaction. */
+export async function updatePackingListProperties(id: string, patch: BasicEntityPropertyPatch, manager: EntityManager): Promise<void> {
+    await manager.getRepository(PackingList).update(id, patch);
+}

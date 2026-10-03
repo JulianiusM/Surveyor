@@ -16,9 +16,9 @@
 
 // TypeORM-based implementation of the event module
 import {EntityManager, IsNull, MoreThanOrEqual} from 'typeorm';
-import type {DIETARY, ParticipantRow} from "../../../types/EventTypes";
+import type {DIETARY, EventLinkOptionsQuery, ParticipantRow} from "../../../types/EventTypes";
+import type {EntityPermissionQueryScope} from '../../../types/PermissionTypes';
 import {WithRequired} from "../../../types/UtilTypes";
-import {ExpectedError} from "../../lib/errors";
 import {generateUniqueId, generateUniqueToken, now} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {ActivityPlan} from "../entities/activity/ActivityPlan";
@@ -116,14 +116,67 @@ export async function getActiveEventsByOwnerId(ownerId: string) {
 }
 
 export async function getActiveManagedEvents(profileId: string) {
-    // Creation pickers keep their existing date restriction and omit archived events.
-    // This is deliberately narrower than the administration overview below, where
-    // historical events must remain discoverable for restoration or private showing.
+    // Legacy active-membership query: deliberately narrower than the administration overview.
+    // Interactive creation/linking uses permission-filtered getEventLinkCandidates instead,
+    // so this helper's date and archival restrictions do not define selectable destinations.
     const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
     return entityAdminService.createManagedEntityQuery(AppDataSource.getRepository(Event), 'event', profileId)
         .andWhere('entity.endDate >= :today', {today})
         .andWhere('entity.archivedAt IS NULL')
         .orderBy('entity.startDate', 'ASC').getMany();
+}
+
+/** Database transaction boundary shared by controller-orchestrated event writes. */
+export async function withEventTransaction<T>(action: (manager: EntityManager) => Promise<T>): Promise<T> {
+    return AppDataSource.transaction('READ COMMITTED', action);
+}
+
+/** Lock the latest persisted row; absence is returned for the controller to interpret. */
+export async function lockEvent(manager: EntityManager, eventId: string): Promise<Event | null> {
+    return manager.getRepository(Event).findOne({where: {id: eventId}, lock: {mode: 'pessimistic_write'}});
+}
+
+/** Store an already normalized patch using the controller's current locking transaction. */
+export async function updateEventProperties(eventId: string, patch: Partial<Event>, manager: EntityManager = AppDataSource.manager): Promise<void> {
+    await manager.getRepository(Event).update(eventId, patch);
+}
+
+/**
+ * Bounded candidates, not authorized options. The controller batches the existing permission
+ * engine over these rows; filtering by overview membership here would miss audience grants.
+ * A stable date/id seek lets it continue past denied candidates without exposing their identity.
+ */
+export async function getEventLinkCandidates(
+    filters: EventLinkOptionsQuery,
+    scope: EntityPermissionQueryScope,
+    referenceTime: Date,
+    after?: {startDate: string; id: string},
+    limit = 100,
+): Promise<Event[]> {
+    const query = AppDataSource.getRepository(Event).createQueryBuilder('event');
+    entityAdminService.addEntityPermissionCandidates(query, 'event', scope, 'event.id');
+    // Calendar filters use one controller-captured UTC day; deadlines compare instants.
+    // The same clock is reused across candidate batches so midnight cannot shift a page.
+    const today = referenceTime.toISOString().slice(0, 10);
+    if (filters.q) {
+        // Search text is literal, not SQL's pattern language. Escape the chosen escape
+        // character first as part of the same replacement, then add only our own wildcards.
+        const term = `%${filters.q.replace(/[!%_]/g, '!$&')}%`;
+        query.andWhere("(event.title LIKE :term ESCAPE '!' OR event.description LIKE :term ESCAPE '!')", {term});
+    }
+    // From/to select overlapping date periods, rather than only events beginning inside them.
+    if (filters.from) query.andWhere('event.endDate >= :from', {from: filters.from});
+    if (filters.to) query.andWhere('event.startDate <= :to', {to: filters.to});
+    if (filters.period === 'upcoming') query.andWhere('event.startDate > :today', {today});
+    if (filters.period === 'ongoing') query.andWhere('event.startDate <= :today AND event.endDate >= :today', {today});
+    if (filters.period === 'ended') query.andWhere('event.endDate < :today', {today});
+    // Archive and deadline are independent dimensions; neither implies a calendar period.
+    if (filters.archive === 'active') query.andWhere('event.archivedAt IS NULL');
+    if (filters.archive === 'archived') query.andWhere('event.archivedAt IS NOT NULL');
+    if (filters.deadline === 'open') query.andWhere('(event.bindingDeadline IS NULL OR event.bindingDeadline >= :now)', {now: referenceTime});
+    if (filters.deadline === 'passed') query.andWhere('event.bindingDeadline < :now', {now: referenceTime});
+    if (after) query.andWhere('(event.startDate > :start OR (event.startDate = :start AND event.id > :id))', {start: after.startDate, id: after.id});
+    return query.orderBy('event.startDate', 'ASC').addOrderBy('event.id', 'ASC').take(limit).getMany();
 }
 
 /**
@@ -148,9 +201,9 @@ export async function register(
     dietaryChoices?: DIETARY[] | null,
     dietaryAllergies?: string | null,
     dietComment?: string | null,
-    bypass?: { ok: boolean, linkId?: string },
+    manager?: EntityManager,
 ) {
-    return await AppDataSource.transaction('READ COMMITTED', async (manager) => {
+    async function persistRegistration(manager: EntityManager) {
         await lockEventPools(manager, eventId);
         const repo = manager.getRepository(EventRegistration);
         let reg = await repo.findOneBy({event: {id: eventId}, profile: {id: profileId}});
@@ -168,14 +221,11 @@ export async function register(
             reg = await repo.save(reg);
         }
         await replaceDietaryChoicesTx(manager, reg.id, dietaryChoices, dietaryAllergies, dietComment);
-        if (bypass && bypass.ok && bypass.linkId) {
-            const ok = await consumeDeadlineBypassToken(bypass.linkId, profileId);
-            if (!ok) throw new ExpectedError('This link has already been used', 'error', 409);
-        }
         await registerForDefaultPools(manager, reg);
         await invalidateEventPools(manager, eventId);
         return reg.id;
-    });
+    }
+    return manager ? persistRegistration(manager) : withEventTransaction(persistRegistration);
 }
 
 export async function getRegistrationFor(profileId: string, eventId: string) {
@@ -289,33 +339,22 @@ export async function deleteRegistration(eventId: string, regId: string | number
 }
 
 export async function updateRegistrationDates(eventId: string, regId: number, arrivalDate: string, departureDate: string) {
-    await AppDataSource.transaction('READ COMMITTED', async (manager) => {
+    return AppDataSource.transaction('READ COMMITTED', async (manager) => {
         await lockEventPools(manager, eventId);
         const repo = manager.getRepository(EventRegistration);
         const reg = await repo.findOne({where: {id: regId, event: {id: eventId}}});
-        if (!reg) throw new ExpectedError('Registration not found', 'error', 404);
+        if (!reg) return false;
         reg.arrivalDate = arrivalDate;
         reg.departureDate = departureDate;
         await repo.save(reg);
         await invalidateEventPools(manager, eventId);
+        return true;
     });
 }
 
-export async function isEventFull(eventId: string): Promise<boolean> {
-    const eventRepo = AppDataSource.getRepository(Event);
-    const regRepo = AppDataSource.getRepository(EventRegistration);
-
-    const event = await eventRepo.findOne({
-        where: {id: eventId},
-        select: {id: true, maxParticipants: true},
-    });
-    if (!event) throw new Error("Event not found");
-
-    // null => unlimited
-    if (event.maxParticipants == null) return false;
-
-    const registrations = await regRepo.countBy({event: {id: eventId}});
-    return registrations >= event.maxParticipants;
+/** Raw cardinality; capacity decisions belong to the event controller. */
+export async function getEventRegistrationCount(eventId: string): Promise<number> {
+    return AppDataSource.getRepository(EventRegistration).countBy({event: {id: eventId}});
 }
 
 export async function isRegisteredForEvent(profileId: string, eventId: string) {
@@ -364,7 +403,7 @@ export async function createDeadlineBypassLink(
         event: {id: eventId},
         token,
         createdBy,
-        maxUses: Math.max(1, Number(opts?.maxUses ?? 1)),
+        maxUses: opts?.maxUses ?? 1,
         usedCount: 0,
         expiresAt: opts?.expiresAt ?? null,
     });
@@ -373,29 +412,7 @@ export async function createDeadlineBypassLink(
 }
 
 export async function listDeadlineBypassLinks(eventId: string) {
-    const repo = AppDataSource.getRepository(EventRegBypassLink);
-    const rows = await repo.find({where: {event: {id: eventId}}, order: {track: {createdAt: 'DESC'}}});
-    return rows.map(r => ({
-        id: r.id,
-        token: r.token, // you may redact on the UI if preferred
-        createdAt: r.track.createdAt,
-        expiresAt: r.expiresAt,
-        revokedAt: r.revokedAt,
-        used: r.usedCount > 0 || !!r.usedAt,
-        profileId: r.profileId,
-        status: calculateBypassLinkStatus(r)
-    }));
-}
-
-function calculateBypassLinkStatus(r: EventRegBypassLink) {
-    if (r.revokedAt) {
-        return 'revoked'
-    } else if (r.expiresAt && r.expiresAt < now()) {
-        return 'expired';
-    } else if (r.usedCount >= r.maxUses) {
-        return 'consumed';
-    }
-    return 'active';
+    return AppDataSource.getRepository(EventRegBypassLink).find({where: {event: {id: eventId}}, order: {track: {createdAt: 'DESC'}}});
 }
 
 export async function revokeDeadlineBypassLink(eventId: string, linkId: string) {
@@ -403,53 +420,32 @@ export async function revokeDeadlineBypassLink(eventId: string, linkId: string) 
     await repo.update({id: linkId, event: {id: eventId}}, {revokedAt: now()});
 }
 
-export async function validateDeadlineBypassToken(eventId: string, token: string) {
-    const repo = AppDataSource.getRepository(EventRegBypassLink);
-    const row = await repo.findOne({where: {event: {id: eventId}, token}});
-    if (!row) return null;
-    if (row.revokedAt) return null;
-    if (row.expiresAt && row.expiresAt < now()) return null;
-    if (row.usedCount >= row.maxUses) return null;
-    return row;
+/** Load token state; deadline, revocation and usage checks are controller policy. */
+export async function getDeadlineBypassToken(eventId: string, token: string) {
+    return AppDataSource.getRepository(EventRegBypassLink).findOne({where: {event: {id: eventId}, token}});
 }
 
-/**
- * Consume token in a race-safe way. Write who used it.
- * Returns true if consumed; false otherwise.
- */
-export async function consumeDeadlineBypassToken(
-    linkId: string,
-    profileId: string
-): Promise<boolean> {
-    return await AppDataSource.transaction(async (manager) => {
-        const repo = manager.getRepository(EventRegBypassLink);
-        // SELECT ... FOR UPDATE could be used as well; here we use an atomic UPDATE condition.
-        const res = await repo.createQueryBuilder()
-            .update(EventRegBypassLink)
-            .set({
-                usedCount: () => 'used_count + 1',
-                profile: {id: profileId},
-                usedAt: () => 'CURRENT_TIMESTAMP',
-            })
-            .where('id = :id', {id: linkId})
-            .andWhere('revoked_at IS NULL')
-            .andWhere('(expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)')
-            .andWhere('used_count < max_uses')
-            .execute();
-
-        return (res.affected ?? 0) > 0;
+/** Lock token data on the controller's registration transaction before checking eligibility. */
+export async function lockDeadlineBypassLink(manager: EntityManager, eventId: string, linkId: string): Promise<EventRegBypassLink | null> {
+    return manager.getRepository(EventRegBypassLink).findOne({
+        where: {id: linkId, event: {id: eventId}}, lock: {mode: 'pessimistic_write'},
     });
 }
 
-/** Helper used by registration to decide deadline enforcement */
-export async function canBypassDeadlineWithToken(
-    eventId: string,
-    token?: string | null
-): Promise<{ ok: boolean; linkId?: string }> {
-    if (!token) return {ok: false};
-    const row = await validateDeadlineBypassToken(eventId, token);
-    if (!row) return {ok: false};
-    return {ok: true, linkId: row.id};
+/**
+ * Record consumption after the controller checks the locked row. The caller must use the
+ * same transaction for this write and registration: failure rolls both operations back.
+ */
+export async function consumeDeadlineBypassToken(
+    linkId: string,
+    profileId: string,
+    manager: EntityManager,
+): Promise<void> {
+    await manager.getRepository(EventRegBypassLink).createQueryBuilder()
+        .update(EventRegBypassLink)
+        .set({usedCount: () => 'used_count + 1', profile: {id: profileId}, usedAt: () => 'CURRENT_TIMESTAMP'})
+        .where('id = :id', {id: linkId})
+        .execute();
 }
 
 export async function updateHeaderImage(eventId: string, headerImg?: string | null) {

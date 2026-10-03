@@ -19,6 +19,8 @@ import rateLimit from "express-rate-limit";
 import {
     addAdmin,
     archiveEntity,
+    changeEntityEvent,
+    requireEntityPropertyUpdate,
     removeAdmin,
     requiredAdminManagePerm,
     restoreEntity,
@@ -26,6 +28,7 @@ import {
     setAutomaticArchival,
     updateAdmin
 } from '../controller/entityAdminController';
+import type {EntityBase} from '../types/UserTypes';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import renderer from "../modules/renderer";
 import type {EntityGetter, GetResource} from "../types/PermissionTypes";
@@ -114,6 +117,31 @@ export function createEntityArchiveApiRouter(app: Router, entityType: EntityType
 
         app.post(`/:id/${action.path}`, asyncHandler(handleLifecycleCommand));
     }
+}
+
+/** Share root API authorization while each feature retains normalization and persistence. */
+export function createEntityPropertyApiRouter(
+    app: Router,
+    entityType: EntityType,
+    getResource: GetResource,
+    updateProperties: (entity: any, body: unknown) => Promise<string>,
+    invalidateEventContext?: (id: string) => void,
+) {
+    async function update(req: Request, res: Response) {
+        const entity: EntityBase = getResource(req);
+        await requireEntityPropertyUpdate(entityType, entity, req.body, req.session);
+        const message = await updateProperties(entity, req.body);
+        renderer.respondWithSuccessJson(res, message);
+    }
+    app.post('/:id/update', asyncHandler(update));
+    if (!['activity', 'packing', 'drivers'].includes(entityType)) return;
+
+    async function changeEvent(req: Request, res: Response) {
+        const entity: EntityBase = getResource(req);
+        const {changed, ...result} = await changeEntityEvent(entityType, entity, req.body, req.session, invalidateEventContext);
+        renderer.respondWithSuccessDataJson(res, 'Linked event updated', result);
+    }
+    app.post('/:id/event', asyncHandler(changeEvent));
 }
 
 /** Optional: top-level typeahead */

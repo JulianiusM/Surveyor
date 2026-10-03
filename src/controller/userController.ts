@@ -15,6 +15,8 @@
  */
 
 import {Request} from "express";
+import * as lifecycleService from '../modules/database/services/EntityLifecycleService';
+import {requireLockedArchiveRoot} from './entityAdminController';
 import Joi from 'joi';
 import {Guest} from "../modules/database/entities/user/Guest";
 import {Profile} from "../modules/database/entities/user/Profile";
@@ -27,7 +29,7 @@ import {buildGuestLink, ENTITIES} from "../modules/lib/util";
 import * as oidc from "../modules/oidc";
 import settings from "../modules/settings";
 import type {Entity, GuestLinkData, OverviewCollection, OverviewPageView, OverviewQuery, OverviewReadResult, OverviewRegion, OverviewRegionView} from "../types/UserTypes";
-import type {ArchivePresentation, ArchiveReference, ArchiveState, PersonalVisibility} from "../types/ArchiveTypes";
+import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, PersonalVisibility} from "../types/ArchiveTypes";
 import type {SessionLike} from "../types/PermissionTypes";
 import {archiveKey, isHiddenInOverview} from "../modules/archive/policy";
 import {getArchivePresentations} from "./entityAdminController";
@@ -234,16 +236,16 @@ function overviewUrl(state: OverviewNavigationState, key: string, change: Partia
  */
 async function decorateOverviewReads(reads: OverviewReadResult[], session: SessionLike): Promise<void> {
     const references: ArchiveReference[] = [];
-    const states = new Map<string, ArchiveState>();
+    const snapshot = new Map<string, ArchiveSnapshotEntry>();
     const contextEvents = new Map<string, Entity>();
     for (const read of reads) {
         references.push(...read.items);
         if (read.event) references.push(read.event);
-        for (const [key, value] of read.archives) states.set(key, value);
+        for (const [key, value] of read.archiveSnapshot) snapshot.set(key, value);
         for (const event of read.contextEvents) contextEvents.set(event.id, event);
     }
     const [archives, permissions] = await Promise.all([
-        getArchivePresentations(references, session, states),
+        getArchivePresentations(references, session, snapshot),
         evaluateEntities(Array.from(contextEvents.values(), event => ({
             entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
         })), session),
@@ -317,6 +319,9 @@ async function readOverviewNavigation(session: SessionLike, input: unknown, frag
     const {state, target} = normalizeOverviewNavigation(input, fragment);
     const selected = target ? [state[target]] : Object.values(state).filter(query => query.open);
     const queries: OverviewQuery[] = selected.map(({open, ...query}) => query);
+    // Identity, normalized query values and the maximum of four regions are owned here:
+    // the closed navigation matrix cannot select another profile or arbitrary DBAL input.
+    // Services consume this validated contract without repeating transport-level checks.
     const reads = await userService.getOverviewPages(profileId, queries);
     await decorateOverviewReads(reads, session);
     const byRegion = new Map<string, OverviewReadResult>();
@@ -353,7 +358,7 @@ export async function getOverviewRegion(session: SessionLike, query: unknown): P
 
 /**
  * Change only the authenticated session profile's overview placement, never shared archival.
- * The service checks current overview membership while holding the target row lock, which
+ * The controller checks current overview membership while holding the target row lock, which
  * serializes the check/write with a concurrent database deletion. A visible card from an old
  * page is not sufficient authority to save a preference after membership has been removed.
  */
@@ -383,7 +388,13 @@ export async function setPersonalVisibility(entityType: string, id: string, body
     // references use the app's canonical lowercase spelling.
     const reference: ArchiveReference = {type: target.value.type, id: target.value.id.toLowerCase()};
     const visibility = preference.value.visibility;
-    await userService.setVisibility(profileId, reference, visibility);
+    await lifecycleService.withLockedArchiveTarget(reference, async function saveVisibility(manager, context) {
+        // A page rendered earlier does not authorize a write after deletion or membership loss.
+        // The controller checks both against the transaction holding the current root lock.
+        requireLockedArchiveRoot(context);
+        if (!await userService.isOverviewMember(profileId, reference, manager)) throw new APIError('This entity is not in your overview', {}, 403);
+        await userService.setVisibility(profileId, reference, visibility, manager);
+    });
     // Recompute placement against current authoritative state after the private write.
     // The response preserves both concepts instead of presenting "shown" as a shared restore.
     const presentations = await getArchivePresentations([reference], session);

@@ -6,7 +6,7 @@
  */
 
 import {validateArchiveAfterDays} from './archive/policy';
-import {archiveExpiredEntities} from './database/services/EntityLifecycleService';
+import {archiveExpiredEntities} from '../controller/entityAdminController';
 import settings from './settings';
 
 const ARCHIVE_INTERVAL_MS = 60 * 60 * 1000;

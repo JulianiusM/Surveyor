@@ -1,6 +1,6 @@
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {Request} from 'express';
-import activityController from '../../src/controller/activityController';
+import activityController, {saveGeneratedRecommendations} from '../../src/controller/activityController';
 import driversController from '../../src/controller/driversController';
 import * as entityAdminController from '../../src/controller/entityAdminController';
 import eventPoolController from '../../src/controller/eventPoolController';
@@ -593,7 +593,7 @@ describe('automatic activity assignment user stories', () => {
         ]);
 
         // Simulates an in-flight generation result that was calculated before the rejection was saved.
-        await recommendationService.replacePendingRecommendations(planId, [{
+        await saveGeneratedRecommendations(planId, [{
             itemId: recommendation.item.id,
             profileId: recommendation.profileId,
             status: 'PENDING',

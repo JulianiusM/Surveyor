@@ -15,6 +15,8 @@ declare const bootstrap: BootstrapGlobal;
  */
 export function describeWarning(warning: AssignmentWarning, describeSlot: (slotId: string) => string): string {
     switch (warning.type) {
+        case "ineligible_participant":
+            return "This profile is not eligible for recommendations in the linked event.";
         case "outside_attendance":
             return "This slot is outside your attendance window.";
         case "arrival_day":

@@ -5,9 +5,9 @@ documentation-metadata
 audience: documentation contributors; feature maintainers
 owner: product documentation maintainers
 status: current
-last-verified: 2026-09-06
+last-verified: 2026-10-03
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: non-blocking documentation policy and optional report/test routing; D14 ownership, accessibility, source mapping, release packaging, and update rules for annotated in-app help visuals; D14 visual correction: actual-header provenance, mandatory per-revision individual inspection and final-asset hash evidence
+verification-scope: obsolete controls illustration removed from displayed help after entity settings integration, retained as an authoring reference with refresh tracked in remediation; non-blocking documentation policy and optional report/test routing; D14 ownership, accessibility, source mapping, release packaging, and update rules for annotated in-app help visuals; D14 visual correction: actual-header provenance, mandatory per-revision individual inspection and final-asset hash evidence
 source-anchors: docs/user-guide/assets/; docs/user-guide/README.md; docs/user-guide/SURVEYS.md; docs/user-guide/PACKING_LISTS.md; src/views/layout.pug; src/views/surveyor/survey-vote.pug; src/views/packing/packing-view.pug; .github/workflows/release.yml; tests/unit/help-documentation.spec.ts
 next-review: help-visual-or-visible-UI-change
 -->
@@ -16,7 +16,10 @@ The images under `docs/user-guide/assets/` are maintained instructional visuals.
 
 The other three images are explicitly captioned explanatory diagrams, not screenshots. Their labels and state distinctions must match the application. The survey example uses the visible option **1. day in month**, rather than inventing a replacement label.
 
-All four assets retain their existing filenames. Each adjacent caption includes a full-size image link through the existing help-asset route. Small previews do not replace the written procedures or the ability to inspect the full-size image.
+Assets retain their existing filenames. Each displayed image's adjacent caption includes a full-size image link through the existing help-asset route. Small previews do not replace the written procedures or the ability to inspect the full-size image.
+
+The controls illustration is retained as an authoring reference while its entity-settings update is tracked in the
+remediation backlog. It is not embedded in the current user guide; written guidance provides the current controls.
 
 ## Ownership
 
@@ -25,7 +28,7 @@ The product documentation maintainers own the asset set. A feature maintainer id
 | Asset | Used by | Implementation sources to compare |
 |---|---|---|
 | `navigation-at-a-glance.png` | User-guide home | `src/views/layout.pug`, `src/views/users/dashboard.pug` |
-| `participant-and-organizer-controls.png` | User-guide home | `src/views/layout.pug`, feature views, permission metadata |
+| `participant-and-organizer-controls.png` | Retained authoring reference; refresh tracked as DOC-ENTITY-PROPERTIES-VISUAL | `src/views/modules/module_entity_properties.pug`, feature views, permission metadata |
 | `survey-recurring-pattern.png` | Surveys | `src/views/surveyor/survey-create.pug`, `src/views/surveyor/survey-vote.pug` |
 | `packing-shared-vs-local.png` | Packing Lists | `src/views/packing/packing-create.pug`, `src/views/packing/packing-view.pug`, `src/public/js/packing.ts` |
 

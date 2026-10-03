@@ -1,4 +1,6 @@
-mixin entityHeader(entity, entityType, icon, permData)
+//- Header presentation remains read-only. Optional settings/archive are explicit page projections;
+//- the single settings trigger replaces image-specific controls without becoming an authority check.
+mixin entityHeader(entity, entityType, icon, permData, settings, archive)
     .card-header.p-0
         if entity.headerImg
             img.card-img-top(
@@ -8,79 +10,23 @@ mixin entityHeader(entity, entityType, icon, permData)
             )
 
         .p-3.d-flex.flex-column.flex-md-row.align-items-md-center.justify-content-between.gap-3
-            if entity.eventId
+            if settings && settings.currentEvent && settings.currentEvent.url
                 .btn-group.d-md-inline.d-none
-                    a.btn.btn-outline-light(href=`/event/${entity.eventId}`)
-                        i.bi.bi-arrow-left-circle.me-1
+                    a.btn.btn-outline-light(href=settings.currentEvent.url)
+                        i.bi.bi-arrow-left-circle.me-1(aria-hidden="true")
                         | Go to event
             else
                 .d-none.d-md-inline
 
             h1.mb-0.text-center
-                i(class=`bi ${icon} me-2`)
+                i(class=`bi ${icon} me-2` aria-hidden="true")
                 | #{entity.title}
 
-            // Event moved down under title header for small devices
-            if entity.eventId
+            //- Repeat parent navigation beneath the title on small devices.
+            if settings && settings.currentEvent && settings.currentEvent.url
                 .btn-group.d-md-none
-                    a.btn.btn-outline-light(href=`/event/${entity.eventId}`)
-                        i.bi.bi-arrow-left-circle.me-1
+                    a.btn.btn-outline-light(href=settings.currentEvent.url)
+                        i.bi.bi-arrow-left-circle.me-1(aria-hidden="true")
                         | Go to event
 
-            if permData.entity.has("EDIT_META")
-                .btn-group
-                    if entity.headerImg
-                        button.btn.btn-outline-light(
-                            type="button"
-                            data-bs-toggle="modal"
-                            data-bs-target="#entityImageModal"
-                        )
-                            i.bi.bi-pencil.me-1
-                            | Change image
-                        button.btn.btn-outline-danger.js-delete-image(
-                            type="button"
-                            data-api=`/api/${entityType}/${entity.id}/header`
-                        )
-                            i.bi.bi-trash.me-1
-                            | Remove
-                    else
-                        button.btn.btn-outline-light(
-                            type="button"
-                            data-bs-toggle="modal"
-                            data-bs-target="#entityImageModal"
-                        )
-                            i.bi.bi-image.me-1
-                            | Add image
-            else
-                .d-none.d-md-inline
-
-mixin entityImageModal(entity, entityType)
-    .modal.fade#entityImageModal(tabindex="-1")
-        .modal-dialog
-            .modal-content.bg-dark.text-white
-                .modal-header
-                    h5.modal-title
-                        | Header image
-                    button.btn-close.btn-close-white(
-                        type="button"
-                        data-bs-dismiss="modal"
-                    )
-
-                .modal-body
-                    input.form-control(
-                        type="file"
-                        accept="image/jpeg,image/png,image/gif"
-                        id="entityImageInput"
-                    )
-
-                .modal-footer
-                    button.btn.btn-secondary(
-                        type="button"
-                        data-bs-dismiss="modal"
-                    )
-                        | Cancel
-                    button.btn.btn-primary#uploadEntityImage(
-                        type="button"
-                        data-api=`/api/${entityType}/${entity.id}/header`
-                    )
-                        | Upload
+            +entitySettingsButton(settings, archive)

@@ -4,10 +4,10 @@ documentation-metadata
 audience: event participants; event organizers
 owner: event feature maintainers
 status: current
-last-verified: 2026-09-16
+last-verified: 2026-10-03
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; expanded event descriptions and dietary-note limits; invoice factors, rebates, progress feedback, calculation previews, payment carry-forward, rollback, and email-control entry points; D05 event creation, registration, deadline, dietary, participant-management, related-entity, export, permission, and privacy workflows verified; D06 invoice-pool entry points and permission boundary linked to the dedicated guide; D14 rendered help navigation, semantic checks, and trusted-content integration
-source-anchors: src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/modules/module_invoice_pool.pug; docs/user-guide/INVOICE_POOLS.md; src/routes/event.ts; src/routes/api/event.ts; src/controller/eventController.ts; src/middleware/guestFlowFactory.ts; src/modules/database/entities/event/; src/modules/database/services/EventService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/modules/lib/permissions.ts; src/views/event/event-create.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/views/modules/module_registration_links.pug; src/views/modules/module_event_participants.pug; src/public/js/events.ts; src/public/js/modules/reg-links.ts; src/public/js/modules/event-participant.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; source-reviewed Entity settings dialog labels, per-action permissions, root property changes, image/actions, minimal archival hints, and event selection/reassociation boundaries; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; expanded event descriptions and dietary-note limits; invoice factors, rebates, progress feedback, calculation previews, payment carry-forward, rollback, and email-control entry points; D05 event creation, registration, deadline, dietary, participant-management, related-entity, export, permission, and privacy workflows verified; D06 invoice-pool entry points and permission boundary linked to the dedicated guide; D14 rendered help navigation, semantic checks, and trusted-content integration
+source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/modules/module_invoice_pool.pug; docs/user-guide/INVOICE_POOLS.md; src/routes/event.ts; src/routes/api/event.ts; src/controller/eventController.ts; src/middleware/guestFlowFactory.ts; src/modules/database/entities/event/; src/modules/database/services/EventService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/modules/lib/permissions.ts; src/views/event/event-create.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/views/modules/module_registration_links.pug; src/views/modules/module_event_participants.pug; src/public/js/events.ts; src/public/js/modules/reg-links.ts; src/public/js/modules/event-participant.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: event-visible-UI-or-behavior-change
 -->
 
@@ -18,6 +18,7 @@ Use an event to collect attendance dates, optional dietary information, and rela
 - [Join and register for an event](#join-and-register-for-an-event)
 - [Change or cancel your registration](#change-or-cancel-your-registration)
 - [Create an event](#create-an-event)
+- [Change event properties](#change-event-properties)
 - [Manage registrations](#manage-registrations)
 - [Create a late-registration link](#create-a-late-registration-link)
 - [Use invoice pools and shared payments](INVOICE_POOLS.md)
@@ -175,18 +176,38 @@ Share the normal event page URL with participants. A recipient can log in, creat
 
 The normal URL is the appropriate invitation before the binding deadline. Use a late-registration link only for a person who must register after that deadline.
 
+## Change event properties
+
+1. Open the event and select **Entity settings** in the header.
+2. In **General**, expand **Details**, **Dates and time**, **Registration**, or **Dietary requirements** and edit the permitted fields.
+3. Select **Save properties**.
+
+The dialog shows only permitted fields and actions. A profile allowed to edit only the title sees **Title**; one allowed to manage dietary requirements sees those switches. **Access Admin** is not required for these settings on the ordinary event page. The same dialog is available from the administration dashboard.
+
+**General** contains property groups and **Header image**. **Access** contains **Group Permissions** and
+**Administrators**. **Actions** contains archival and other permitted commands. A tab appears only when you can use
+something in it. Switching tabs keeps your drafts; opening the dialog does not expose all controls at once.
+
+In **Dates and time**, select **Time zone** to search IANA zone names or open **Common time zones**. Each result shows
+its UTC offset. **Use my time zone** selects the browser's zone. The chooser expands within the settings dialog and
+retains these same features when used during event creation.
+
+Dates, location, deadline, time zone, post-deadline policies, **Maximum participants**, and dietary switches use their separate permissions listed below. Each section saves separately. Errors keep your draft available; closing the dialog discards unsaved changes. Before a command refreshes the page, Surveyor asks you to resolve unsaved changes in other sections.
+
+To change sharing or delegated access, open **Entity settings** → **Access**. See [Permissions and Sharing](PERMISSIONS.md#after-creation).
+
 ## Open the administration dashboard
 
 A profile with **Access Admin** sees **Event administration dashboard** on the event page.
 
-Sections and controls appear according to the profile’s other permissions:
+The dashboard keeps participant, registration, related-resource, and invoice workspaces. Properties and sharing controls are in **Entity settings**. Each control uses the profile’s relevant permission:
 
 | Permission | Main event-administration capability |
 |---|---|
 | **Edit Title** | Change the event title. |
-| **Edit Description** | Change the description. |
+| **Edit Desc** | Change the description. |
 | **Edit Meta** | Change dates, location, binding deadline, time zone, the post-deadline date/cancellation policy, and the header image; archive, restore, or pause/resume automatic archival. |
-| **Edit Capacity** | Change **Max Participants**. |
+| **Edit Capacity** | Change **Maximum participants** in **Entity settings**. |
 | **Manage Requirements** | Change required dietary information and dietary-comment/update policies. |
 | **Manage Permissions** | Edit audience permissions and individual administrator grants. |
 | **Access Participants** | View participant details, attendance totals, dietary totals, allergies, and comments. |
@@ -254,29 +275,57 @@ These creation actions preselect the current event. A profile needs **Manage Ass
 
 You can also create one of these resources from **New** and choose **Assign to event (optional)** in its creation form.
 
+For a resource that already exists, open its own **Entity settings** → **Linked event**. Select the event, then **Save event link** and confirm. Changing the link requires **Edit Meta** on that plan or list and **Manage Assignments** on the destination event. Select **No event** to unlink; this preserves the resource and its records, assignments, files, and independent archival.
+
+Moving a resource changes which event supplies participant access and inherited archival. Existing assignees are not automatically registered in the destination. Activity plans additionally recheck recommendation eligibility and clear obsolete generated pending suggestions; see [Activity Plans](ACTIVITY_PLANS.md#link-change-or-remove-an-event).
+
 Registered participants can access an event-linked resource through their event participation. The **Things to do** collection appears on the event page only when the event also grants them **Access Items**. A person who is not registered needs suitable direct access to the linked resource.
 
 The event dashboard does not currently expose an **Event surveys** section or a **Create new survey** action. Create and share a survey separately rather than expecting it to appear with the event’s packing, activity, and drivers lists.
+
+### Choose an event
+
+The event selector works the same way during creation and in **Entity settings** → **Linked event**. It includes every event your active profile may attach to, including past events, events whose registration deadline has passed, and archived events. You need **Manage Assignments** on the selected event; merely appearing as an administrator does not guarantee that permission.
+
+1. Use **Search events** to find a title or description.
+2. Select the event, using **Next page** when necessary.
+3. During creation, finish the creation form. In **Linked event**, select **Save event link** and confirm.
+
+The selector shows one page at a time. Use **Next page** and **Previous page** to browse while retaining your current selection. To narrow a long list, open **Filter by dates and state** and use these optional filters:
+
+| Filter | Meaning |
+|---|---|
+| **From** / **To** | Events whose date range overlaps the selected dates. Either boundary may be left empty. |
+| **Period** | **All**, **Upcoming**, **Ongoing**, or **Ended**. |
+| **Archive state** | **All**, **Active**, or **Archived**. |
+| **Registration deadline** | **All**, **Not passed / no deadline**, or **Passed**. |
+
+All state filters start on **All**. A passed registration deadline and archival are different conditions; neither by itself prevents linking. Selecting an archived event shows **Archived with selected event** inside the selector because the resource inherits that event's archival.
+
+**Reset filters** clears the search and filters without changing your selection. **No event** explicitly clears the selection. Filtering, paging, and empty results never change the selected event; **Current selection** stays visible. **Current event** can appear when the existing relationship is preserved but its details are unavailable to the active profile.
+
+On a loading error, use **Try again**. If an expected event remains missing, reset the filters and check the active profile's **Manage Assignments** permission for that event.
 
 ## Export the participant list
 
 A profile needs both **Data Export** and **Access Participants**.
 
-1. Open **Event administration dashboard**.
-2. Find **Exports**.
-3. Select **Participants (PDF)**.
+1. Open the event and select **Entity settings**.
+2. Under **Actions**, select **Export participants**.
+
+The administration dashboard also offers **Exports** → **Participants (PDF)** to profiles admitted to that dashboard.
 
 The PDF contains event information, attendance totals, dietary totals, and participant rows with names, available email addresses, dates, dietary choices, allergy details, and comments. Store and share it as sensitive personal data, and delete local copies when they are no longer needed.
 
 ## Header image, duplication, and deletion
 
-A profile with **Edit Meta** can add, replace, or remove the event header image. Accepted images are JPEG, PNG, and GIF files up to 10 MiB.
+A profile with **Edit Meta** can open **Entity settings** → **General** → **Header image**, use **Choose image**, and select **Upload**. Accepted images are JPEG, PNG, and GIF files up to 10 MiB. To remove the current image, select **Remove image** and confirm.
 
-The owner can use **Duplicate** or **Delete** from **Your overview**. Duplicating opens a prefilled creation form so that the copy can be reviewed before it is created. Deletion is an owner-only destructive action; verify the selected event before confirming it.
+Under **Actions**, **Duplicate** opens a prefilled creation form for a new event. It requires a full account and **Data Duplicate**. **Delete permanently** is owner-only; verify the event and its linked contents before confirming. Owners can also use **Duplicate** or **Delete** from **Your overview**.
 
 ## Archive or restore the event
 
-In **Archival**, an owner or organizer with **Edit Meta** can select **Archive for everyone** and confirm. The event, its linked plans and lists, registrations, and invoice pools become archived together. Existing access and actions remain available, and archival preserves all data and files. The **Things to do** and invoice sections remain usable.
+In **Entity settings** → **Actions** → **Archival**, an owner or organizer with **Edit Meta** can select **Archive for everyone** and confirm. The event, its linked plans and lists, registrations, and invoice pools become archived together. Existing access and actions remain available, and archival preserves all data and files. The **Things to do** and invoice sections remain usable. The ordinary event view shows only **This entity is archived.** when applicable.
 
 Events can also be archived automatically after their inclusive end date and the site's configured delay. Use **Pause automatic archival** to keep an event active. Select **Restore for everyone** to restore an archived event; restoration pauses automatic archival until you select **Resume automatic archival**. Separately archived child entities stay archived when their event is restored.
 
@@ -309,6 +358,8 @@ Confirm that:
 ### I cannot open or use the administration dashboard
 
 **Access Admin** is required to open the dashboard. Each section then requires its own permission. Ask the owner to grant the specific action rather than only the dashboard-entry permission.
+
+Property, image, sharing, and archival controls can be available in **Entity settings** on the ordinary event page without dashboard access. If that button or a particular field is absent, the active profile lacks the corresponding action permission.
 
 ### Participant information is visible to more people than expected
 

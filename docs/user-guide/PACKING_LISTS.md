@@ -4,10 +4,10 @@ documentation-metadata
 audience: packing-list participants; packing-list organizers
 owner: packing-list feature maintainers
 status: current
-last-verified: 2026-09-16
+last-verified: 2026-10-03
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D10 packing workflow plus D14 rendered-label assertions, shared-versus-local visual aid, per-page navigation, and trusted-help integration; D14 rendered help navigation, semantic checks, and trusted-content integration; D14 visual correction: measured and individually inspected shared-versus-local diagram
-source-anchors: src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; docs/user-guide/assets/packing-shared-vs-local.png; docs/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; src/views/packing/packing-create.pug; src/views/packing/packing-view.pug; src/public/js/packing-create.ts; src/public/js/packing.ts; src/routes/packing.ts; src/routes/api/packing.ts; src/controller/packingController.ts; src/middleware/guestFlowFactory.ts; src/middleware/assignFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/packing/PackingList.ts; src/modules/database/entities/packing/PackingItem.ts; src/modules/database/entities/packing/PackingAssignment.ts; src/modules/database/services/PackingService.ts; src/modules/lib/permissions.ts; src/views/event/event-dashboard.pug; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/packing-workflows.spec.ts; tests/integration/controller-smoke-workflows.spec.ts; src/controller/helpController.ts
+verification-scope: compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; source-reviewed Entity settings dialog labels, per-action permissions, root property changes, image/actions, minimal archival hints, and event selection/reassociation boundaries; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D10 packing workflow plus D14 rendered-label assertions, shared-versus-local visual aid, per-page navigation, and trusted-help integration; D14 rendered help navigation, semantic checks, and trusted-content integration; D14 visual correction: measured and individually inspected shared-versus-local diagram
+source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; docs/user-guide/assets/packing-shared-vs-local.png; docs/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; src/views/packing/packing-create.pug; src/views/packing/packing-view.pug; src/public/js/packing-create.ts; src/public/js/packing.ts; src/routes/packing.ts; src/routes/api/packing.ts; src/controller/packingController.ts; src/middleware/guestFlowFactory.ts; src/middleware/assignFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/packing/PackingList.ts; src/modules/database/entities/packing/PackingItem.ts; src/modules/database/entities/packing/PackingAssignment.ts; src/modules/database/services/PackingService.ts; src/modules/lib/permissions.ts; src/views/event/event-dashboard.pug; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/packing-workflows.spec.ts; tests/integration/controller-smoke-workflows.spec.ts; src/controller/helpController.ts
 next-review: packing-visible-UI-or-behavior-change
 -->
 
@@ -159,7 +159,7 @@ An event organizer can instead open **Event administration dashboard**, expand *
 | **Title \*** | A required name participants will recognize. |
 | **Description (optional)** | General instructions, meeting point, ownership rules, or other context. |
 | **Header image(optional)** | An optional JPEG, PNG, or GIF image up to 10 MiB. |
-| **Assign to event (optional)** | An active event managed by the current profile, or no event for a standalone list. |
+| **Assign to event (optional)** | An event the current profile may attach to, including past or archived events; choose **No event** for a standalone list. |
 | **Group Permissions** | Audience grants for viewing, editing, assignments, administration, duplication, and related actions. |
 
 The creation form starts with the standard non-event permission defaults. Review [Permissions and Sharing](PERMISSIONS.md) before publishing sensitive names or granting edit actions.
@@ -190,13 +190,15 @@ Surveyor creates the list and all initial items together, then opens the shared 
 
 Controls appear according to the active profile’s effective permissions. The owner receives every permission automatically.
 
-### Edit the list description
+### Edit the list title or description
 
-A permitted editor sees **Double click to edit** above the description.
+A permitted editor sees **Entity settings** in the list header. The dialog contains only the fields and actions the active profile can use.
 
-1. Double-click the description area.
-2. Enter the revised text.
-3. Save the inline edit.
+1. Open **Entity settings**.
+2. In **General** → **Details**, change **Title** or **Description**, when available.
+3. Select **Save properties**.
+
+The title requires **Edit Title** and the description requires **Edit Desc**. The description on the ordinary list page is read-only. A failed save retains your draft; closing the dialog discards unsaved changes. Each section saves separately, and commands that refresh the page ask you to resolve drafts in other sections first.
 
 ### Add another item
 
@@ -238,10 +240,7 @@ Deletion removes the item and all of its shared assignments. It cannot be undone
 
 ## Manage the header image
 
-A profile with **Edit Meta** sees one of these controls in the list header:
-
-- **Add image** when no header image exists;
-- **Change image** and **Remove** when an image exists.
+A profile with **Edit Meta** can open **Entity settings** → **General** → **Header image**. Select **Choose image**, choose a file, and select **Upload** to add or replace the image. Use **Remove image** and confirm to delete it.
 
 The upload accepts JPEG, PNG, and GIF images up to 10 MiB. Replacing or removing an image removes the previous stored file.
 
@@ -257,21 +256,27 @@ A linked list:
 - requires effective **Access View** for a nonparticipant;
 - is deleted with the event because it is part of that event’s stored data.
 
-The event picker offers active, unarchived events managed by the current profile. Creating from **Event packing lists** preselects that event; when you deliberately create from an archived event, the creation page explains that the new list inherits its archival.
+Creating from **Event packing lists** preselects that event. The picker includes authorized past, deadline-passed, and archived events. Use its text, date, and state filters or **No event**; [Choose an event](EVENTS.md#choose-an-event) explains the shared controls. Selecting an archived event shows its archival effect inside the picker.
+
+After creation, open **Entity settings** → **Linked event**, choose a different event or **No event**, then select **Save event link** and confirm. You need **Edit Meta** on the list and **Manage Assignments** on any selected destination event. Unlinking needs no destination-event permission.
+
+Changing the link preserves the list, items, assignments, image, personal overview choices, and independent archival. Event-derived access follows the new relationship. Linking an archived event adds inherited archival; unlinking removes that inheritance but does not restore an independently archived list.
 
 Event registration and list permissions are separate. Registration can admit a participant to the linked page, while individual actions such as **Take**, adding items, editing rows, or managing assignments still use the packing list’s effective permissions.
 
 ## Configure sharing and permissions
 
-Packing lists use the general cumulative permission system. A profile with **Manage Permissions** can expand **Administration Options** on the list page, then change **Group Permissions** or named **Administrators**.
+Packing lists use the general cumulative permission system. A profile with **Manage Permissions** can open **Entity settings**, select **Access**, then change **Group Permissions** or named **Administrators**.
 
 Common packing-list permissions include:
 
 | Goal | Relevant permission |
 |---|---|
 | Take or remove your own ordinary assignment | **Access View** |
+| Edit the list title | **Edit Title** |
 | Edit the list description | **Edit Desc** |
 | Add, replace, or remove the header image | **Edit Meta** |
+| Change or clear the event link | **Edit Meta**, plus **Manage Assignments** on a selected destination event |
 | Add rows | **Item Add** |
 | Reorder rows and broadly edit child items | **Item Edit** |
 | Edit only item descriptions | **Item Edit Desc** |
@@ -292,14 +297,15 @@ The **Packed?** state is private only because it stays in that browser; it is no
 
 ### Duplicate a list
 
-The owner can duplicate a list from **Overview** → **Your overview**:
+With a full account and **Data Duplicate**, duplicate from the list's **Entity settings**:
 
-1. Expand **Administrable entities**.
-2. Find the packing list.
-3. Select **Duplicate**.
-4. Review the prefilled title, description, items, **Max #** values, and **Everyone** settings.
-5. Review **Assign to event (optional)** and **Group Permissions** for the new list.
-6. Select **Create list**.
+1. Open the packing list and select **Entity settings**.
+2. Under **Actions**, select **Duplicate**.
+3. Review the prefilled title, description, items, **Max #** values, and **Everyone** settings.
+4. Review **Assign to event (optional)** and **Group Permissions** for the new list.
+5. Select **Create list**.
+
+Owners can also use **Duplicate** on their **Administrable entities** overview card.
 
 The duplicate is an independent list with new item identifiers. It does not copy participant assignments, browser-local **Packed?** marks, or the header image. The active profile creating the copy becomes its owner.
 
@@ -307,10 +313,11 @@ The duplicate is an independent list with new item identifiers. It does not copy
 
 Only the owner can delete the complete list.
 
-1. Open **Overview** → **Your overview**.
-2. Expand **Administrable entities**.
-3. Find the packing list and select **Delete**.
-4. Confirm the deletion.
+1. Open the packing list and select **Entity settings**.
+2. Under **Actions**, select **Delete permanently**.
+3. Confirm the deletion.
+
+The owner's overview card also retains its **Delete** action.
 
 Deletion permanently removes the list, its items, its shared assignments, and its stored header image. Archival restoration cannot undo deletion; use archival when you want to keep the list available. A linked list is also removed when its event is deleted.
 
@@ -342,9 +349,9 @@ Link a list to the event and create ordinary rows such as **Registration signs**
 
 ## Archive or restore a list
 
-An owner or organizer with **Edit Meta** can use **Archive for everyone** or **Restore for everyone** in **Archival**. Archival preserves items, assignments, images, and existing access and actions. Packing lists have no independent automatic archival date; a linked list inherits its event's archival.
+An owner or organizer with **Edit Meta** can open **Entity settings** → **Actions** → **Archival** and use **Archive for everyone** or **Restore for everyone**. Archival preserves items, assignments, images, and existing access and actions. Packing lists have no independent automatic archival date; a linked list inherits its event's archival. The ordinary view shows only **This entity is archived.** when applicable.
 
-When **Archived with event** appears, restore the event first. A list archived separately stays archived when its event is restored. Find archived lists under **Archived and hidden** in [Your Overview](DASHBOARD.md#find-archived-and-hidden-items). The card's **Hide for me**, **Show for me**, and **Use default visibility** choices are saved for the active profile; these overview choices are separate from the browser-local **Packed?** marks.
+When archival comes from the event, the dialog explains that the event must be restored first and offers **Open event** when available. A list archived separately stays archived when its event is restored. Find archived lists under **Archived and hidden** in [Your Overview](DASHBOARD.md#find-archived-and-hidden-items). The card's **Hide for me**, **Show for me**, and **Use default visibility** choices are saved for the active profile; these overview choices are separate from the browser-local **Packed?** marks.
 
 ## Troubleshooting
 
@@ -392,7 +399,7 @@ The marks are browser-local, not profile-private. Anyone using the same browser 
 
 ### Item-editing or organizer controls are missing
 
-The active profile lacks the relevant permission. Ask the owner or a profile with **Manage Permissions** to review **Administration Options**. Remember that permission grants are cumulative across every matching audience and individual assignment.
+The active profile lacks the relevant permission. Ask the owner or a profile with **Manage Permissions** to review **Access**. Remember that permission grants are cumulative across every matching audience and individual assignment.
 
 ### An item stays at the top of the list
 

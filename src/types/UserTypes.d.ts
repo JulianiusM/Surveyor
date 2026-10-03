@@ -22,7 +22,7 @@ import type {Survey} from "../modules/database/entities/surveys/Survey";
 import {Guest} from "../modules/database/entities/user/Guest";
 import type * as userService from "../modules/database/services/UserService";
 import type {EntityItemType, EntityType} from "./UtilTypes";
-import type {ArchivePresentation, ArchiveState, PersonalVisibility} from "./ArchiveTypes";
+import type {ArchivePresentation, ArchiveSnapshotEntry, PersonalVisibility} from "./ArchiveTypes";
 
 export type OidcClaims = {
     sub: string;
@@ -140,7 +140,7 @@ export interface OverviewReadResult {
     childTotal: number;
     types: EntityType[];
     pageSize: number;
-    archives: Map<string, ArchiveState>;
+    archiveSnapshot: Map<string, ArchiveSnapshotEntry>;
     visibility: Map<string, PersonalVisibility>;
     contextEvents: Entity[];
 }

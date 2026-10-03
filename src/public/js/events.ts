@@ -22,7 +22,7 @@
 import {formatISOInTimeZone} from './core/formatting';
 import {get, post} from './core/http';
 import {initEntityLists, setCurrentNavLocation} from './core/navigation';
-import {loadPerms, requireEntityPerm, requireEntityPermsForForm} from './core/permissions';
+import {loadPerms, requireEntityPerm} from './core/permissions';
 import {initEntityOverview} from "./modules/entity-cards-overview";
 import {initEntityHeader} from "./modules/entity-header";
 import {bindInvoiceSubmission} from './modules/invoice-submission';
@@ -191,47 +191,6 @@ export function initRegistration(): void {
             reloadAfterDelay(RELOAD_DELAY_MS);
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Registration failed.';
-            showInlineAlert('error', message);
-        }
-    });
-}
-
-/**
- * Initialize event update form
- */
-export function initUpdate(): void {
-    const form = document.getElementById('eventUpdateForm');
-    if (!form) return;
-
-    form.addEventListener('submit', async (e: Event) => {
-        e.preventDefault();
-        try {
-            const formData = new FormData(form as HTMLFormElement);
-            const checkboxes = form.querySelectorAll<HTMLInputElement>("input[type=checkbox]");
-            for (const checkbox of checkboxes) {
-                formData.set(checkbox.name, checkbox.checked ? 'on' : 'off');
-            }
-
-            requireEntityPermsForForm(formData, [
-                {
-                    fields: ['location', 'startDate', 'endDate', 'bindingDeadline', 'deadlineTz', 'allowRegDateUpdateAfterDeadline', 'allowRegCancelAfterDeadline'],
-                    perm: 'EDIT_META',
-                    action: 'update event metadata'
-                },
-                {fields: ['title'], perm: 'EDIT_TITLE', action: 'update the event title'},
-                {fields: ['description'], perm: 'EDIT_DESC', action: 'update the description'},
-                {
-                    fields: ['requireDietaryInfo', 'allowDietComment', 'allowDietUpdateAfterDeadline'],
-                    perm: 'MANAGE_REQUIREMENTS',
-                    action: 'change dietary settings'
-                },
-                {fields: ['maxParticipants'], perm: 'EDIT_CAPACITY', action: 'change participant limits'},
-            ]);
-            await post(`/api/event/${getEventId()}/update`, Object.fromEntries(formData.entries()));
-            showInlineAlert('success', 'Updated');
-            reloadAfterDelay(RELOAD_DELAY_MS);
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to update the event.';
             showInlineAlert('error', message);
         }
     });
@@ -1549,7 +1508,7 @@ export function init(): void {
     if (getEventId()) {
         initRegistration();
         initCancelRegistration();
-        initUpdate();
+
 
         initEntityHeader();
     }

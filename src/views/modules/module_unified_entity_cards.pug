@@ -60,13 +60,6 @@ mixin entityCard(item, showCreate, personalVisibility, expansion)
                                 +entityArchiveActions(item, true)
                                 if personalVisibility
                                     hr.dropdown-divider
-                            if item.archive && item.archive.inheritedFromEventId
-                                //- An inherited state can remain even when this child has no
-                                //- independent restore action. Direct the user to its event.
-                                p.dropdown-item-text.small.mb-0 Restore the event before restoring this entity.
-                                if item.archive.eventUrl
-                                    a.dropdown-item(href=item.archive.eventUrl) Open event
-                                hr.dropdown-divider
                             if personalVisibility
                                 h6.dropdown-header Only my overview
                                 +entityVisibilityActions(item)

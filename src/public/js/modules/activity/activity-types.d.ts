@@ -25,6 +25,7 @@ export interface RoleSummary {
 
 // Assignment warning types
 export type WarningType =
+    | 'ineligible_participant'
     | 'outside_attendance'
     | 'arrival_day'
     | 'arrival_time_restricted'
@@ -138,7 +139,7 @@ export interface RequirementConfiguration {
         hypotheticalRoleCoverage?: {
             matches?: Array<{
                 participantKey: string;
-                slotId: string;
+                slotId: string | number;
                 roleId: number;
                 requirementBefore: number;
                 requirementAfter: number;
@@ -149,7 +150,7 @@ export interface RequirementConfiguration {
             unfilledRoleCount: number;
             removedRequiredShifts: number;
             roleCapacityConflicts: Array<{
-                slotId: string;
+                slotId: string | number;
                 roleCapacity: number;
                 slotCapacity: number;
             }>;

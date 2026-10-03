@@ -1,0 +1,222 @@
+//- Root property editing consumes only the controller's capability projection and explicit archive
+//- presentation. It neither derives grants from ownership nor embeds a second editable entity object.
+//- permissionOptions carries the established admins/perms render data only when permitted.
+-
+    function hasEntitySettings(state, archive) {
+        return !!state && (state.canEditProperties || state.canLinkEvent || state.canEditHeader
+            || state.canDuplicate || state.canDelete || state.canManagePermissions || state.exportUrl
+            || (archive && archive.canManage));
+    }
+
+mixin entitySettingsButton(state, archive)
+    if hasEntitySettings(state, archive)
+        button.btn.btn-outline-light(type="button" data-bs-toggle="modal" data-bs-target="#entityPropertiesModal")
+            i.bi.bi-gear.me-1(aria-hidden="true")
+            | Entity settings
+
+//- Single-field layout is shared across supported root types. The allowlist comes from the API's
+//- own field policy; omitted fields produce no input, default value, or client-side payload entry.
+mixin entityPropertyInput(state, name, label, type='text', maxLength)
+    if state.editableFields.includes(name)
+        .col-md-6
+            label.form-label(for=`entity-property-${name}`)= label
+            input.form-control.text-bg-dark(
+                id=`entity-property-${name}` name=name type=type
+                value=(state.values[name] == null ? '' : state.values[name]) maxlength=maxLength
+                required=(name === 'title' || name === 'startDate' || name === 'endDate')
+                min=(type === 'number' ? 1 : undefined) step=(type === 'datetime-local' ? 1 : undefined)
+            )
+
+mixin entityPropertyCheckbox(state, name, label)
+    if state.editableFields.includes(name)
+        .col-12
+            .form-check
+                input.form-check-input(id=`entity-property-${name}` type="checkbox" name=name checked=!!state.values[name])
+                label.form-check-label(for=`entity-property-${name}`)= label
+
+//- A panel is a presentation boundary, not a draft or transaction boundary. Existing section
+//- forms keep their own data-entity-section scopes while only the selected panel is visible.
+//- The stable IDs and Bootstrap tab attributes supply keyboard navigation and lazy picker activation.
+mixin entitySettingsPanel(key, first)
+    .tab-pane.entity-settings-panel(id='entity-settings-' + key class=first === key ? 'show active' : '' role="tabpanel" aria-labelledby='entity-settings-tab-' + key tabindex="0" data-entity-settings-panel=key)
+        block
+
+//- Each permitted field family gets its own disclosure group. The server's editableFields allowlist remains
+//- authoritative; this helper only avoids rendering empty groups for narrowly delegated editors.
+-
+    function hasEntityPropertyGroup(state, names) {
+        for (const name of names) {
+            if (state.editableFields.includes(name)) return true;
+        }
+        return false;
+    }
+
+//- General edits and images remain separate saves; uploading never submits property drafts.
+mixin entityGeneralSettings(entity, state)
+    if state.canEditProperties
+        section.mb-4(data-entity-section="properties" aria-labelledby="entityPropertiesHeading")
+            h3.fs-5#entityPropertiesHeading Properties
+            div(data-command-feedback aria-live="polite")
+            -
+                const groups = [];
+                if (hasEntityPropertyGroup(state, ['title', 'description', 'location'])) groups.push('details');
+                if (hasEntityPropertyGroup(state, ['startDate', 'endDate', 'bindingDeadline', 'deadlineTz'])) groups.push('schedule');
+                if (hasEntityPropertyGroup(state, ['maxParticipants', 'allowRegDateUpdatesAfterDeadline', 'allowRegCancelationAfterDeadline'])) groups.push('registration');
+                if (hasEntityPropertyGroup(state, ['requireDietaryInfo', 'allowDietComment', 'allowRegDietUpdateAfterDeadline'])) groups.push('dietary');
+            //- The first permitted family opens automatically; remaining families use progressive
+            //- disclosure. All fields still belong to one atomic property form and one save action.
+            form(data-property-form data-api=state.updateUrl novalidate)
+                if groups.includes('details')
+                    details.entity-property-group.mb-3(open=groups[0] === 'details')
+                        summary.fw-semibold Details
+                        .row.g-3.pt-3
+                            +entityPropertyInput(state, 'title', 'Title', 'text', 255)
+                            +entityPropertyInput(state, 'location', 'Location', 'text', 255)
+                            if state.editableFields.includes('description')
+                                .col-12
+                                    label.form-label(for="entity-property-description") Description
+                                    textarea.form-control.text-bg-dark#entity-property-description(name="description" rows="4" maxlength="16000")= state.values.description || ''
+                if groups.includes('schedule')
+                    details.entity-property-group.mb-3(open=groups[0] === 'schedule')
+                        summary.fw-semibold Dates and time
+                        .row.g-3.pt-3
+                            +entityPropertyInput(state, 'startDate', 'Start date', 'date')
+                            +entityPropertyInput(state, 'endDate', 'End date', 'date')
+                            +entityPropertyInput(state, 'bindingDeadline', 'Binding deadline', 'datetime-local')
+                            if state.editableFields.includes('deadlineTz')
+                                .col-12
+                                    +timezonePicker('deadlineTz', {id: 'entity-property-timezone', label: 'Time zone', value: state.values.deadlineTz, mode: 'inline'})
+                if groups.includes('registration')
+                    details.entity-property-group.mb-3(open=groups[0] === 'registration')
+                        summary.fw-semibold Registration
+                        .row.g-3.pt-3
+                            +entityPropertyInput(state, 'maxParticipants', 'Maximum participants', 'number')
+                            +entityPropertyCheckbox(state, 'allowRegDateUpdatesAfterDeadline', 'Allow registration date update after deadline expired')
+                            +entityPropertyCheckbox(state, 'allowRegCancelationAfterDeadline', 'Allow cancelling registration after deadline expired')
+                if groups.includes('dietary')
+                    details.entity-property-group.mb-3(open=groups[0] === 'dietary')
+                        summary.fw-semibold Dietary requirements
+                        .row.g-3.pt-3
+                            +entityPropertyCheckbox(state, 'requireDietaryInfo', 'Require dietary info during registration')
+                            +entityPropertyCheckbox(state, 'allowDietComment', 'Allow diet comment during registration')
+                            +entityPropertyCheckbox(state, 'allowRegDietUpdateAfterDeadline', 'Allow diet update after deadline expired')
+                .text-end
+                    button.btn.btn-primary(type="submit")
+                        span.spinner-border.spinner-border-sm.d-none.me-1(aria-hidden="true")
+                        | Save properties
+
+    if state.canEditHeader
+        section.mb-4(data-entity-section="image" aria-labelledby="entityImageHeading")
+            details.entity-property-group(open=!state.canEditProperties)
+                summary.fw-semibold#entityImageHeading Header image
+                .pt-3
+                    div(data-command-feedback aria-live="polite")
+                    label.form-label(for="entityImageInput") Choose image
+                    input.form-control#entityImageInput(type="file" accept="image/jpeg,image/png,image/gif")
+                    p.form-text JPEG, PNG, or GIF, up to 10 MiB.
+                    .d-flex.flex-wrap.gap-2
+                        button.btn.btn-primary#uploadEntityImage(type="button" data-api=`/api/${state.entityType}/${state.id}/header`)
+                            span.spinner-border.spinner-border-sm.d-none.me-1(aria-hidden="true")
+                            | Upload
+                        if entity.headerImg
+                            button.btn.btn-outline-danger.js-delete-image(type="button" data-api=`/api/${state.entityType}/${state.id}/header`) Remove image
+
+
+//- Association editing has its own confirmation and transaction, independent of properties.
+mixin entityEventSettings(state)
+    if state.canLinkEvent
+        section.mb-4(data-entity-section="event" aria-labelledby="entityEventHeading")
+            h3.fs-5#entityEventHeading Linked event
+            div(data-command-feedback aria-live="polite")
+            form(data-event-link-form data-api=state.eventUrl data-current-event-id=state.currentEvent ? state.currentEvent.id : '')
+                //- The selected reference survives filters and may lack a title when event
+                //- details are not disclosed. Search results contain only permitted destinations.
+                +entityPicker('event_id', state.currentEvent ? [state.currentEvent] : [], {id: 'entity-properties-event', value: state.currentEvent ? state.currentEvent.id : '', mode: 'inline', endpoint: '/api/event/link-options'})
+                p.form-text Access and archival follow the linked event. Existing records and files are kept.
+                if state.entityType === 'activity'
+                    p.form-text Assignments and rules are kept. Generated pending suggestions are refreshed; reviewed suggestions are checked again. Unlinking restores the plan's own automatic archival schedule.
+                button.btn.btn-primary(type="submit")
+                    span.spinner-border.spinner-border-sm.d-none.me-1(aria-hidden="true")
+                    | Save event link
+
+
+//- Reuse permission/admin controls with their compact inline host and established API commands.
+mixin entityAccessSettings(state, permissionOptions)
+    if state.canManagePermissions && permissionOptions
+        //- The shared matrices own their commands. Inline Add administrator mode avoids
+        //- placing a second Bootstrap modal inside this dialog's focus trap.
+        +permissionManagement(permissionOptions.admins, permissionOptions.perms.permMeta, permissionOptions.perms.defaultPerms, permissionOptions.perms.presets, {entityType: state.entityType, entityId: state.id, inline: true})
+
+
+//- Lifecycle commands and destructive actions retain distinct controls and confirmations.
+mixin entityActionSettings(entity, state, archive)
+    if archive && archive.canManage
+        section.mb-4(data-entity-section="archival" aria-labelledby="entityArchivalHeading")
+            h3.fs-5#entityArchivalHeading Archival
+            div(data-command-feedback aria-live="polite")
+            +entityArchiveDetails(entity, state.entityType, archive)
+
+    if state.canDuplicate || state.canDelete || state.exportUrl
+        section(data-entity-section="actions" aria-labelledby="entityActionsHeading")
+            h3.fs-5#entityActionsHeading Other actions
+            .d-flex.flex-wrap.gap-2
+                if state.canDuplicate
+                    a.btn.btn-outline-light(href=`/${state.entityType}/${state.id}/duplicate` data-entity-navigation) Duplicate
+                if state.exportUrl
+                    a.btn.btn-outline-light(href=state.exportUrl target="_blank" rel="noopener" data-entity-navigation)= state.exportLabel
+                if state.canDelete
+                    //- Permanent deletion retains the owner-only page POST and its existing
+                    //- service. It never runs through property or archival persistence.
+                    form(method="post" action=`/${state.entityType}/${state.id}/delete` data-entity-delete-form)
+                        button.btn.btn-outline-danger(type="submit") Delete permanently
+
+//- Render once outside every page form. Navigation is built only from permitted capabilities,
+//- so the first available panel is always selected even for a narrowly delegated editor. Tabs keep
+//- drafts alive when switching sections; closing the modal restores all original saved values.
+mixin entityPropertiesModal(entity, state, archive, permissionOptions)
+    if hasEntitySettings(state, archive)
+        -
+            const panels = [];
+            if (state.canEditProperties || state.canEditHeader) panels.push({key: 'general', label: 'General', icon: 'bi-sliders'});
+            if (state.canLinkEvent) panels.push({key: 'event', label: 'Linked event', icon: 'bi-calendar-event'});
+            if (state.canManagePermissions && permissionOptions) panels.push({key: 'access', label: 'Access', icon: 'bi-people'});
+            if ((archive && archive.canManage) || state.canDuplicate || state.canDelete || state.exportUrl) panels.push({key: 'actions', label: 'Actions', icon: 'bi-three-dots'});
+            const firstPanel = panels[0].key;
+        .modal.fade#entityPropertiesModal(tabindex="-1" aria-labelledby="entityPropertiesTitle" aria-hidden="true")
+            .modal-dialog.modal-lg.modal-dialog-scrollable.modal-fullscreen-sm-down
+                .modal-content.text-bg-dark
+                    .modal-header
+                        div
+                            h2.modal-title.fs-5#entityPropertiesTitle Entity settings
+                            p.small.text-secondary.mb-0.text-break= entity.title
+                        button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
+                    //- Keep the compact navigation outside the scroll area so every section remains
+                    //- reachable on a phone. Bootstrap supplies focus and arrow-key behavior.
+                    if panels.length > 1
+                        .px-3.pt-3
+                            ul.nav.nav-pills.nav-fill.gap-1.entity-settings-nav(role="tablist" aria-label="Entity settings sections")
+                                each panel in panels
+                                    li.nav-item(role="presentation")
+                                        button.nav-link.text-light(id='entity-settings-tab-' + panel.key class=firstPanel === panel.key ? 'active' : '' type="button" role="tab" data-bs-toggle="tab" data-bs-target='#entity-settings-' + panel.key aria-controls='entity-settings-' + panel.key aria-selected=firstPanel === panel.key)
+                                            i.bi.me-1(class=panel.icon aria-hidden="true")
+                                            = panel.label
+                    else
+                        //- A single permitted panel does not need navigation; retain its accessible label.
+                        span.visually-hidden(id='entity-settings-tab-' + firstPanel)= panels[0].label
+                    .modal-body
+                        div(data-dialog-feedback aria-live="polite")
+                        .tab-content
+                            if state.canEditProperties || state.canEditHeader
+                                +entitySettingsPanel('general', firstPanel)
+                                    +entityGeneralSettings(entity, state)
+                            if state.canLinkEvent
+                                +entitySettingsPanel('event', firstPanel)
+                                    +entityEventSettings(state)
+                            if state.canManagePermissions && permissionOptions
+                                +entitySettingsPanel('access', firstPanel)
+                                    +entityAccessSettings(state, permissionOptions)
+                            if (archive && archive.canManage) || state.canDuplicate || state.canDelete || state.exportUrl
+                                +entitySettingsPanel('actions', firstPanel)
+                                    +entityActionSettings(entity, state, archive)
+                    .modal-footer
+                        button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Close

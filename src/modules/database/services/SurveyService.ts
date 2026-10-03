@@ -15,6 +15,7 @@
  */
 
 import type {EntityManager} from "typeorm";
+import type {BasicEntityPropertyPatch} from '../../../types/EntityPropertyTypes';
 import type {BasePicked, GroupedResponses, SurveyAnswer, WeekDay, WeekInMonth} from "../../../types/SurveyTypes";
 import {generateUniqueId} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
@@ -166,4 +167,18 @@ export async function getResponsesSorted(surveyId: string): Promise<GroupedRespo
 
 export async function updateHeaderImage(surveyId: string, headerImg?: string | null) {
     await AppDataSource.getRepository(Survey).update(surveyId, {headerImg});
+}
+
+/** Lock the survey for a controller-owned property operation; absence is returned without UI policy. */
+export async function withSurveyLock<T>(id: string, action: (manager: EntityManager, current: Survey | null) => Promise<T>): Promise<T> {
+    async function readLocked(manager: EntityManager): Promise<T> {
+        const current = await manager.getRepository(Survey).findOne({where: {id}, lock: {mode: 'pessimistic_write'}});
+        return action(manager, current);
+    }
+    return AppDataSource.transaction('READ COMMITTED', readLocked);
+}
+
+/** One statement persists the controller-approved patch inside its existing transaction. */
+export async function updateSurveyProperties(id: string, patch: BasicEntityPropertyPatch, manager: EntityManager): Promise<void> {
+    await manager.getRepository(Survey).update(id, patch);
 }

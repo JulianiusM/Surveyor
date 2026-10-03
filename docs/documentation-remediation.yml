@@ -355,7 +355,7 @@ implementation_defects:
   - rendered-view tests assert the absence of sensitive participant JSON for unauthorized profiles
   - the participant API and PDF permission tests remain aligned
 - id: IMP-009
-  status: open
+  status: resolved
   severity: high
   owner: application maintainers
   out_of_scope_for_documentation_migration: true
@@ -370,6 +370,8 @@ implementation_defects:
   - view, browser, schema, permission checks, and persistence use one canonical field name per switch
   - route-level negative tests cover each switch for profiles missing the required permission
   - authorized updates remain covered
+  resolved_on: 2026-09-16
+  resolution: Canonical field policy now drives modal visibility and server authorization; atomic event patches preserve omission and explicit false. Integration cases and browser requests verify all three unauthorized policy switches are rejected and requirements-only saves work.
 - id: IMP-010
   status: open
   severity: high
@@ -725,7 +727,58 @@ implementation_defects:
   - src/views/modules/module_invoice_pool.pug
   - src/public/style/style.sass
   - Chromium layout checks with 28 long participant names at desktop and mobile sizes
+- id: IMP-032
+  status: resolved
+  severity: high
+  owner: entity feature maintainers
+  out_of_scope_for_documentation_migration: true
+  title: Entity creation authorizes a different event input from the persisted relationship
+  evidence:
+  - src/middleware/guestFlowFactory.ts resolves and authorizes query eventId, then writes parsed._injectedEventId
+  - src/controller/activityController.ts, src/controller/packingController.ts, and src/controller/driversController.ts normalize body event_id and persist that eventId without consuming _injectedEventId
+  - The target event permission descriptor in guestFlowFactory omits the event's own eventId used for participant-audience evaluation
+  - EventService.getActiveManagedEvents selects owner or administrator-assignment membership rather than effective MANAGE_ASSIGNMENTS
+  impact: A submitted destination can differ from the authorized query context, while legitimate audience-derived attachment permission is not represented consistently by creation checks and choices.
+  documentation_contract: Only authorized destination events may be selected and persisted; the actual submitted relationship must pass the same effective permission evaluation as event attachment.
+  planned_follow_up: docs/ENTITY_PROPERTY_MODAL_PLAN.md
+  closes_when:
+  - creation normalizes and authorizes the actual selected event before persistence, including a null standalone choice
+  - target event descriptors include their own eventId and use the established cumulative permission engine
+  - event discovery exposes only permitted choices without treating administrator-assignment presence as authorization
+  - route tests cover forged body/query differences and positive and negative audience-derived grants
+  resolved_on: 2026-09-16
+  resolution: Creation authorizes the actual submitted event_id with the cumulative active-profile evaluator, including participant audiences. The same destination authority drives filtered historical discovery and transactional reassociation. Browser tests cover forged body/query differences, active profiles, and valid replacement destinations.
+- id: IMP-033
+  status: resolved
+  severity: medium
+  owner: event feature maintainers
+  out_of_scope_for_documentation_migration: true
+  title: Event settings omit controls for profiles with only requirement-management permission
+  evidence:
+  - src/views/event/event-dashboard.pug gates the entire Event settings form on EDIT_TITLE, EDIT_DESC, EDIT_CAPACITY, or EDIT_META
+  - Dietary setting controls inside that form use MANAGE_REQUIREMENTS, which the outer condition omits
+  - src/controller/eventController.ts accepts dietary setting updates under MANAGE_REQUIREMENTS independently of the four edit permissions
+  impact: A profile can have API permission to change dietary requirements without receiving the corresponding settings controls.
+  documentation_contract: Each supported setting is available when its own required permission is granted, without requiring an unrelated edit capability.
+  planned_follow_up: docs/ENTITY_PROPERTY_MODAL_PLAN.md
+  closes_when:
+  - the dialog trigger and section visibility include every supported field capability
+  - rendered-view and route tests cover a requirements-only event editor
+  resolved_on: 2026-09-16
+  resolution: Entity settings derives its trigger, sections, and values from every editable field capability. Rendered-view and browser tests verify requirements-only event editors receive dietary controls on the ordinary view and can save without dashboard authority.
 findings:
+- id: DOC-ENTITY-PROPERTIES-VISUAL
+  severity: low
+  category: visual-maintenance
+  package: entity-property-modal
+  title: Refresh the participant and organizer controls illustration
+  status: open
+  document_evidence:
+  - docs/user-guide/assets/participant-and-organizer-controls.png uses the former activity Settings label and owner-only duplicate grouping
+  implementation_evidence:
+  - src/views/modules/module_entity_properties.pug supplies permission-filtered Entity settings and distinct duplication and owner-only deletion actions
+  desired_outcome: Refresh and individually inspect the existing illustration against the implemented dialog before restoring its guide reference.
+  containment: The user-guide home now provides current written control guidance and does not embed the obsolete illustration; the PNG is retained as an authoring reference under docs/HELP_VISUALS.md.
 - id: STR-001
   severity: high
   category: structural-integrity

@@ -15,13 +15,14 @@
  */
 
 // src/modules/database/services/EntityAdminService.ts
-import {Brackets, In, type FindOptionsWhere, type ObjectLiteral, type Repository} from "typeorm";
-import type {Audience, EntityDescriptor, PermData} from "../../../types/PermissionTypes";
+import {Brackets, In, type EntityManager, type FindOptionsWhere, type ObjectLiteral, type Repository, type SelectQueryBuilder, type WhereExpressionBuilder} from "typeorm";
+import type {Audience, EntityDescriptor, EntityPermissionQueryScope, PermData} from "../../../types/PermissionTypes";
 import type {CombEntityType, EntityType} from "../../../types/UtilTypes";
 import {AppDataSource} from '../dataSource';
 import {EntityAdminAssignment as ACL} from '../entities/permissions/EntityAdminAssignment';
 import {EntityPermissions} from "../entities/permissions/EntityPermissions";
 import {EventRegistration} from "../entities/event/EventRegistration";
+import {Event} from "../entities/event/Event";
 
 /**
  * Share overview membership between full discovery and a single-target visibility write.
@@ -56,13 +57,14 @@ export function createManagedEntityQuery<T extends ObjectLiteral>(repo: Reposito
  * Load permission inputs in batches, without introducing another authorization rule.
  * The existing permission engine still combines owner, individual and audience grants.
  * Event registration is needed for participant-audience grants on linked entities too.
- * Return raw grant/registration rows for the evaluator's request-local caches; ownership
- * already lives in the descriptors and needs no additional owner query here.
+ * Return raw grants, registrations and parent-event ownership for request-local caches.
+ * Root ownership already lives in descriptors; parent ownership needs its own batched read
+ * because a child can be owned by another profile and still use event membership defaults.
  */
-export async function getEntityPermissionInputs(entities: EntityDescriptor[], profileId?: string | null) {
+export async function getEntityPermissionInputs(entities: EntityDescriptor[], profileId?: string | null, manager: EntityManager = AppDataSource.manager) {
     if (!entities.length) {
         // An empty TypeORM where-array must never become an unrestricted permission-table read.
-        return {individual: [], defaults: [], registrations: []};
+        return {individual: [], defaults: [], registrations: [], ownedEvents: []};
     }
     const targets: FindOptionsWhere<EntityPermissions>[] = [];
     const profileTargets: FindOptionsWhere<ACL>[] = [];
@@ -81,19 +83,66 @@ export async function getEntityPermissionInputs(entities: EntityDescriptor[], pr
         }
     }
 
-    // The three independent inputs can load together. Anonymous viewers still need audience
+    // The independent inputs can load together. Anonymous viewers still need audience
     // defaults, but have no individual grants or event registrations to look up. Registration
     // projection includes the event ID because that, not the registration ID, keys the cache.
-    const [individual, defaults, registrations] = await Promise.all([
-        profileId ? AppDataSource.getRepository(ACL).find({where: profileTargets}) : [],
-        AppDataSource.getRepository(EntityPermissions).find({where: targets}),
-        profileId && eventIds.size ? AppDataSource.getRepository(EventRegistration).find({
+    // Event ownership is a separate raw input: the permission engine decides how ownership
+    // contributes to membership, including for children owned by another profile.
+    const [individual, defaults, registrations, ownedEvents] = await Promise.all([
+        profileId ? manager.getRepository(ACL).find({where: profileTargets}) : [],
+        manager.getRepository(EntityPermissions).find({where: targets}),
+        profileId && eventIds.size ? manager.getRepository(EventRegistration).find({
             where: {profile: {id: profileId}, event: {id: In(Array.from(eventIds))}},
             select: {id: true, event: {id: true}},
             relations: {event: true},
         }) : [],
+        profileId && eventIds.size ? manager.getRepository(Event).find({
+            where: {id: In(Array.from(eventIds)), owner: {id: profileId}}, select: {id: true},
+        }) : [],
     ]);
-    return {individual, defaults, registrations};
+    return {individual, defaults, registrations, ownedEvents};
+}
+
+/**
+ * Translate engine-provided candidate scope to SQL before LIMIT. No session or audience
+ * policy is inferred here. EXISTS preserves one root row even when multiple ACL rows match;
+ * all polymorphic lookups constrain both type and ID. The event expression is an internal
+ * schema expression supplied by a service, never request text or an authorization decision.
+ */
+export function addEntityPermissionCandidates<T extends ObjectLiteral>(query: SelectQueryBuilder<T>, type: EntityType, scope: EntityPermissionQueryScope, eventIdExpression: string): void {
+    const alias = query.alias;
+    const manager = query.connection.manager;
+    // One requested permission bit means a matching grant row is sufficient. Numeric masks
+    // and active-profile identity come from the engine, while these clauses only read storage.
+    const assignments = manager.getRepository(ACL).createQueryBuilder('permissionAssignment')
+        .select('1').where(`permissionAssignment.entity_id = ${alias}.id`)
+        .andWhere('permissionAssignment.entity_type = :permissionEntityType')
+        .andWhere('permissionAssignment.profile_id = :permissionProfileId')
+        .andWhere('(permissionAssignment.perms & :permissionMask) <> 0');
+    const registrations = manager.getRepository(EventRegistration).createQueryBuilder('permissionRegistration')
+        .select('1').where(`permissionRegistration.event_id = ${eventIdExpression}`)
+        .andWhere('permissionRegistration.profile_id = :permissionProfileId');
+    const defaults = manager.getRepository(EntityPermissions).createQueryBuilder('permissionDefault')
+        .select('1').where(`permissionDefault.entity_id = ${alias}.id`)
+        .andWhere('permissionDefault.entity_type = :permissionEntityType')
+        .andWhere('(permissionDefault.perms & :permissionMask) <> 0');
+    const audiencePredicate = 'permissionDefault.audience IN (:...permissionAudiences)';
+    // Nonparticipant audiences are already selected by the engine. Participant rows also
+    // need a matching registration; its EXISTS uses the same profile and current event ID.
+    defaults.andWhere(scope.profileId
+        ? `(${audiencePredicate} OR (permissionDefault.audience = 'participant' AND EXISTS (${registrations.getQuery()})))`
+        : audiencePredicate);
+    function alternatives(where: WhereExpressionBuilder): void {
+        where.where(`EXISTS (${defaults.getQuery()})`);
+        if (scope.profileId) {
+            where.orWhere(`${alias}.owner_id = :permissionProfileId`);
+            where.orWhere(`EXISTS (${assignments.getQuery()})`);
+        }
+    }
+    // Group alternatives before search/date conditions are appended, so no owner/grant
+    // alternative can accidentally bypass a filter. All values use bound parameters.
+    query.andWhere(new Brackets(alternatives)).setParameters({permissionEntityType: type,
+        permissionProfileId: scope.profileId, permissionMask: scope.requiredMask, permissionAudiences: scope.audiences});
 }
 
 export async function addAdmin(entityType: CombEntityType, entityId: string, profileId: string, perms: number, createdBy?: number) {

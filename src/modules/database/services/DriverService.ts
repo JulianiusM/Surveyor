@@ -16,8 +16,8 @@
 
 // src/modules/database/driversService.ts
 import {DeepPartial, EntityNotFoundError, type EntityManager} from "typeorm";
+import type {BasicEntityPropertyPatch} from '../../../types/EntityPropertyTypes';
 import type {DriversItemAssignee, EnrichedDriversItem} from "../../../types/DriversTypes";
-import {APIError} from '../../lib/errors';
 import {generateUniqueId} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {DriversAssignment} from '../entities/drivers/DriversAssignment';
@@ -213,35 +213,30 @@ export async function getLastDriversItemNumber(listId: string): Promise<number> 
     return (await AppDataSource.getRepository(DriversItem).maximum("pos", {entity: {id: listId}})) ?? 0;
 }
 
-// Assignments
-export async function assignDriversItem(
-    itemId: string,
-    profileId: string
-): Promise<void> {
-    await AppDataSource.transaction(async (manager) => {
-        const item = await manager.getRepository(DriversItem).findOne({
-            where: {id: itemId},
-            lock: {mode: 'pessimistic_write'},
-        });
-        if (!item) throw new APIError('Drivers item not found', {itemId}, 404);
-
+/**
+ * Hold the item row while the controller evaluates assignment policy. Every assignment write
+ * through the controller acquires this lock, so its existing/count snapshot cannot become stale
+ * before the transaction commits. Missing records remain nullable; the caller chooses the error.
+ */
+export async function withDriversAssignmentLock<T>(
+    itemId: string, profileId: string,
+    action: (manager: EntityManager, item: DriversItem | null, existing: DriversAssignment | null, count: number) => Promise<T>,
+): Promise<T> {
+    async function readLocked(manager: EntityManager): Promise<T> {
+        const item = await manager.getRepository(DriversItem).findOne({where: {id: itemId}, lock: {mode: 'pessimistic_write'}});
         const repo = manager.getRepository(DriversAssignment);
         const existing = await repo.findOneBy({item: {id: itemId}, profile: {id: profileId}});
-        if (existing) return;
+        const count = await repo.countBy({item: {id: itemId}});
+        return action(manager, item, existing, count);
+    }
+    return AppDataSource.transaction('READ COMMITTED', readLocked);
+}
 
-        if (typeof item.maxAssignees === 'number') {
-            const assignedCount = await repo.countBy({item: {id: itemId}});
-            if (assignedCount >= item.maxAssignees) {
-                throw new APIError('This driver offer is already full', {itemId}, 409);
-            }
-        }
-
-        await repo.save(repo.create({
-            item: {id: itemId},
-            profile: {id: profileId},
-            entity: {id: item.entityId},
-        }));
-    });
+/** Insert a controller-approved assignment. TypeORM reports missing foreign records as DB errors. */
+export async function assignDriversItem(itemId: string, profileId: string, manager: EntityManager = AppDataSource.manager): Promise<void> {
+    const item = await manager.getRepository(DriversItem).findOneByOrFail({id: itemId});
+    const repo = manager.getRepository(DriversAssignment);
+    await repo.save(repo.create({item: {id: itemId}, profile: {id: profileId}, entity: {id: item.entityId}}));
 }
 
 export async function unassignDriversItem(itemId: string, profileId: string): Promise<void> {
@@ -296,4 +291,22 @@ export async function getDriversItemAssignees(listId: string) {
 
 export async function deleteDriversAssignment(assignId: number): Promise<void> {
     await AppDataSource.getRepository(DriversAssignment).delete({id: assignId});
+}
+
+/**
+ * Serialize root property writes with relinking by locking the same root row. Transaction and
+ * repository details stay in the DBAL; the controller validates existence and the parent snapshot
+ * before calling updateDriversListProperties with this transaction's manager.
+ */
+export async function withDriversListLock<T>(id: string, action: (manager: EntityManager, current: DriversList | null) => Promise<T>): Promise<T> {
+    async function readLocked(manager: EntityManager): Promise<T> {
+        const current = await manager.getRepository(DriversList).findOne({where: {id}, lock: {mode: 'pessimistic_write'}});
+        return action(manager, current);
+    }
+    return AppDataSource.transaction('READ COMMITTED', readLocked);
+}
+
+/** Persist only the normalized fields supplied by the controller in its existing transaction. */
+export async function updateDriversListProperties(id: string, patch: BasicEntityPropertyPatch, manager: EntityManager): Promise<void> {
+    await manager.getRepository(DriversList).update(id, patch);
 }

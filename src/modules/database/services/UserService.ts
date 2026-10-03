@@ -20,7 +20,6 @@ import type {ArchiveReference, PersonalVisibility} from '../../../types/ArchiveT
 import type {Entity, OidcClaims, OverviewCollection, OverviewQuery, OverviewReadResult, UserInfo} from "../../../types/UserTypes";
 import type {EntityType} from '../../../types/UtilTypes';
 import {archiveKey} from '../../archive/policy';
-import {APIError} from '../../lib/errors';
 import {coerceLimit, convertEntity, generateUniqueToken, maskEmail, SQL_ALLOW_LIST} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
 import {Guest} from '../entities/user/Guest';
@@ -31,7 +30,7 @@ import {BaseEntity} from '../entities/abstract/BaseEntity';
 import {getActivityParticipationQuery} from './ActivityService';
 import {getDriversParticipationQuery} from './DriverService';
 import {createManagedEntityQuery} from './EntityAdminService';
-import {addOverviewArchiveProjection, getArchiveStates, getRootRepository, withLockedArchiveTarget} from './EntityLifecycleService';
+import {addOverviewArchiveProjection, getArchiveSnapshot, getRootRepository} from './EntityLifecycleService';
 import {getEventParticipationQuery} from './EventService';
 import {getPackingParticipationQuery} from './PackingService';
 import {getSurveyParticipationQuery} from './SurveyService';
@@ -677,19 +676,6 @@ function clampOverviewPage(page: number, count: number): number {
     return Math.max(1, Math.min(page, Math.ceil(count / OVERVIEW_PAGE_SIZE)));
 }
 
-/** Validate at the public service boundary as well as the HTTP boundary. */
-function normalizeOverviewQuery(query: OverviewQuery): OverviewQuery {
-    if (!['owner', 'participant'].includes(query.collection) || !['main', 'hidden'].includes(query.region)
-        || (query.type !== 'all' && !Object.hasOwn(participationQueries, query.type))
-        || typeof query.q !== 'string' || query.q.length > 200
-        || !Number.isSafeInteger(query.page) || query.page < 1 || query.page > 1_000_000
-        || !Number.isSafeInteger(query.childPage) || query.childPage < 1 || query.childPage > 1_000_000
-        || (query.eventId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(query.eventId))) {
-        throw new APIError('Invalid overview query', {}, 400);
-    }
-    return {...query, q: query.q.trim(), eventId: query.eventId?.toLowerCase()};
-}
-
 function overviewCard(row: OverviewRootRow & OverviewDisplayRow, visibility: Map<string, PersonalVisibility>): Entity {
     const card = convertEntity(row, row.type);
     const preference = row.visibility === 'HIDDEN' ? 'hidden' : row.visibility === 'SHOWN' ? 'shown' : 'default';
@@ -761,7 +747,9 @@ async function overviewChildCounts(manager: EntityManager, source: OverviewSql, 
 
 /** Read one surface using a caller-owned transaction, never an event's full relations. */
 async function readOverviewRegion(manager: EntityManager, profileId: string, input: OverviewQuery): Promise<OverviewReadResult> {
-    const query = normalizeOverviewQuery(input);
+    // Navigation is validated and normalized by userController before this DBAL call.
+    // Keep a local copy because bounded pagination adjusts page numbers in the read result.
+    const query = {...input};
     const source = overviewSource(manager, profileId, query);
     const region = overviewRegionSource(source, query);
     const representatives = overviewRepresentativeSource(region);
@@ -770,7 +758,7 @@ async function readOverviewRegion(manager: EntityManager, profileId: string, inp
     const result: OverviewReadResult = {
         query, items: [], collectionTotal: 0, hiddenTotal: 0, regionTotal: 0,
         matchingTotal: 0, cardTotal: 0, childTotal: 0, types: [], pageSize: OVERVIEW_PAGE_SIZE,
-        archives: new Map(), visibility: new Map(), contextEvents: [],
+        archiveSnapshot: new Map(), visibility: new Map(), contextEvents: [],
     };
     for (const count of counts) {
         const total = Number(count.total);
@@ -840,9 +828,6 @@ async function readOverviewRegion(manager: EntityManager, profileId: string, inp
  * the controller must check their ACCESS_VIEW before revealing a title/link.
  */
 export async function getOverviewPages(profileId: string, queries: OverviewQuery[]): Promise<OverviewReadResult[]> {
-    if (!profileId) throw new APIError('An active profile is required', {}, 401);
-    if (!queries.length || queries.length > 4) throw new APIError('Invalid overview regions', {}, 400);
-
     async function readPages(manager: EntityManager): Promise<OverviewReadResult[]> {
         const results: OverviewReadResult[] = [];
         const references: ArchiveReference[] = [];
@@ -858,7 +843,7 @@ export async function getOverviewPages(profileId: string, queries: OverviewQuery
             }
             if (result.event) references.push(result.event);
         }
-        const archives = await getArchiveStates(references, manager);
+        const archives = await getArchiveSnapshot(references, manager);
         const contextEvents: Entity[] = [];
         if (contextIds.size) {
             const parents = await getRootRepository(manager, 'event').createQueryBuilder('parent')
@@ -867,7 +852,7 @@ export async function getOverviewPages(profileId: string, queries: OverviewQuery
             for (const parent of parents) contextEvents.push(convertEntity(parent, 'event'));
         }
         for (const result of results) {
-            result.archives = archives;
+            result.archiveSnapshot = archives;
             result.contextEvents = contextEvents;
         }
         return results;
@@ -875,7 +860,7 @@ export async function getOverviewPages(profileId: string, queries: OverviewQuery
     return AppDataSource.transaction('REPEATABLE READ', readPages);
 }
 
-async function isOverviewMember(profileId: string, ref: ArchiveReference, manager: EntityManager): Promise<boolean> {
+export async function isOverviewMember(profileId: string, ref: ArchiveReference, manager: EntityManager): Promise<boolean> {
     // Either overview permits a private choice. The managed query already includes
     // ownership and explicit administration assignments, so do not reduce
     // this to an owner check or accept an arbitrary entity just because it is viewable.
@@ -932,34 +917,18 @@ export async function getVisibilityPreferences(profileId: string, refs: ArchiveR
     return preferences;
 }
 
-/** Set/reset an override for the active profile, after checking its current overview membership. */
-export async function setVisibility(profileId: string, ref: ArchiveReference, visibility: PersonalVisibility): Promise<void> {
-    if (!profileId || !['default', 'hidden', 'shown'].includes(visibility)) {
-        throw new APIError('Invalid personal visibility', {}, 400);
+/** Write the caller-normalized personal preference using the supplied transaction. */
+export async function setVisibility(profileId: string, ref: ArchiveReference, visibility: PersonalVisibility, manager: EntityManager = AppDataSource.manager): Promise<void> {
+    const repository = manager.getRepository(EntityVisibilityPreference);
+    const target = {entityType: ref.type, entityId: ref.id, profile: {id: profileId}};
+    // Absence is the storage representation of the default. The compound identity ensures
+    // this statement cannot remove another profile's preference or any shared entity data.
+    if (visibility === 'default') {
+        await repository.delete(target);
+        return;
     }
-
-    await withLockedArchiveTarget(ref, async function savePreference(manager) {
-        // The root lock serializes this write with archival and ordinary database
-        // deletion. A target deleted before the lock is acquired fails with 404.
-        // Validate membership now, rather than trusting a previously rendered card
-        // or caller-supplied permission; merely knowing an entity ID grants no choice.
-        if (!await isOverviewMember(profileId, ref, manager)) {
-            throw new APIError('This entity is not in your overview', {}, 403);
-        }
-        const repository = manager.getRepository(EntityVisibilityPreference);
-        const target = {entityType: ref.type, entityId: ref.id, profile: {id: profileId}};
-        if (visibility === 'default') {
-            // Absence follows the current authoritative archive state automatically.
-            // Delete only this profile's override, never the root or another user's row.
-            await repository.delete(target);
-            return;
-        }
-        const storedVisibility = visibility === 'hidden' ? 'HIDDEN' : 'SHOWN';
-        // The unique profile/type/id constraint makes retries replace the same choice.
-        // SHOWN can keep an archived root in this profile's active overview without
-        // restoring it for anybody else; HIDDEN also works while a root is active.
-        await repository.upsert({...target, visibility: storedVisibility}, ['profile', 'entityType', 'entityId']);
-    });
+    const storedVisibility = visibility === 'hidden' ? 'HIDDEN' : 'SHOWN';
+    await repository.upsert({...target, visibility: storedVisibility}, ['profile', 'entityType', 'entityId']);
 }
 
 export async function generateMigrationToken(profileId: string) {

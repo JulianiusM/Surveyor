@@ -16,7 +16,8 @@
 
 // controllers/eventController.ts
 import {Request} from "express";
-import {getArchiveView} from "./entityAdminController";
+import {assertEditableEntityFields, getArchiveView} from "./entityAdminController";
+import crypto from 'node:crypto';
 // Business logic for the Event routes
 import Joi from 'joi';
 
@@ -38,14 +39,126 @@ import {
     normalizeToArray,
     rewriteISOToZone
 } from "../modules/lib/util";
-import {can, saveDefaultPermsFromBody} from "../modules/permissionEngine";
-import type {DIETARY} from "../types/EventTypes";
-import type {PermBundle} from "../types/PermissionTypes";
+import {can, evaluateEntities, getEntityPermissionQueryScope, saveDefaultPermsFromBody} from "../modules/permissionEngine";
+import {requireSessionProfileId} from '../modules/lib/session';
+import type {DIETARY, EventLinkOption, EventLinkOptionsQuery, EventLinkOptionsResult} from "../types/EventTypes";
+import type {PermBundle, SessionLike} from "../types/PermissionTypes";
 import type {EntityBase} from "../types/UserTypes";
 import {WithRequired} from "../types/UtilTypes";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'event/event-create';
+
+// A grant can be revoked between candidate discovery and evaluation. Cursor positions may
+// therefore refer to a now-private event: encrypt them rather than exposing an encoded ID.
+// They are process-local navigation state; a restart simply requires restarting the search.
+const eventCursorKey = crypto.randomBytes(32);
+
+/** Reject impossible calendar dates as well as malformed strings before SQL sees them. */
+function validateCalendarDate(value: string, helpers: Joi.CustomHelpers): string | Joi.ErrorReport {
+    const date = new Date(`${value}T00:00:00Z`);
+    if (!Number.isFinite(date.getTime()) || date.getUTCFullYear() < 1000 || date.toISOString().slice(0, 10) !== value) return helpers.error('any.invalid');
+    return value;
+}
+
+/** Authenticate both the seek position and the profile/filter scope as one opaque token. */
+function encodeEventCursor(position: {startDate: string; id: string}, scope: string): string {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', eventCursorKey, iv);
+    const encrypted = Buffer.concat([cipher.update(JSON.stringify({position, scope}), 'utf8'), cipher.final()]);
+    return Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString('base64url');
+}
+
+/** Reject changed filters, another profile's token, and modified bytes before querying. */
+function decodeEventCursor(token: string, scope: string): {startDate: string; id: string} {
+    try {
+        const bytes = Buffer.from(token, 'base64url');
+        const decipher = crypto.createDecipheriv('aes-256-gcm', eventCursorKey, bytes.subarray(0, 12));
+        decipher.setAuthTag(bytes.subarray(12, 28));
+        const decoded = JSON.parse(Buffer.concat([decipher.update(bytes.subarray(28)), decipher.final()]).toString('utf8'));
+        if (decoded.scope !== scope) throw new Error('Cursor scope changed');
+        return decoded.position;
+    } catch {
+        throw new APIError('Search expired or changed. Reset filters and try again.', {}, 400);
+    }
+}
+
+export function projectEventLinkOption(event: Event): EventLinkOption {
+    return {
+        id: event.id, title: event.title, description: event.description ?? undefined,
+        startDate: event.startDate, endDate: event.endDate, archived: event.archivedAt !== null,
+        deadlinePassed: !!event.bindingDeadline && new Date(event.bindingDeadline).getTime() < Date.now(),
+    };
+}
+
+/** Shared authority for a selected target, including the actual submitted creation target. */
+export async function authorizeEventLink(eventId: string | null | undefined, session: SessionLike): Promise<Event | null> {
+    requireSessionProfileId(session);
+    if (eventId === null || eventId === undefined || eventId === '') return null;
+    const {error} = Joi.string().uuid().validate(eventId);
+    if (error) throw new APIError('Invalid event.', {}, 400);
+    const event = await eventService.getEventById(eventId);
+    if (!event) throw new APIError('Event not found.', {}, 404);
+    const allowed = await can({kind: 'entity', entity: {
+        entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
+    }}, session, PERM.MANAGE_ASSIGNMENTS);
+    if (!allowed) throw new APIError('Not allowed to attach entities to this event.', {}, 403);
+    return event;
+}
+
+/** Search all historical states without turning candidate discovery into an ACL implementation. */
+export async function getEventLinkOptions(query: unknown, session: SessionLike): Promise<EventLinkOptionsResult> {
+    const profileId = requireSessionProfileId(session);
+    const schema = Joi.object({
+        q: Joi.string().trim().max(200).allow('').default(''),
+        from: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).custom(validateCalendarDate),
+        to: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).custom(validateCalendarDate),
+        period: Joi.string().valid('all', 'upcoming', 'ongoing', 'ended').default('all'),
+        archive: Joi.string().valid('all', 'active', 'archived').default('all'),
+        deadline: Joi.string().valid('all', 'open', 'passed').default('all'),
+        cursor: Joi.string().max(2048), selectedId: Joi.string().uuid().lowercase(),
+    }).unknown(false).required();
+    const {value, error} = schema.validate(query);
+    if (error || (value.from && value.to && value.from > value.to)) throw new APIError('Invalid event filters.', {}, 400);
+    const {cursor, selectedId, ...filters} = value as EventLinkOptionsQuery;
+    const scope = JSON.stringify({profileId, ...filters});
+    let position = cursor ? decodeEventCursor(cursor, scope) : undefined;
+    const result: EventLinkOptionsResult = {items: [], nextCursor: null};
+    if (selectedId) {
+        // An unauthorized formerly selected event is omitted, never echoed with a title.
+        try { result.selected = projectEventLinkOption((await authorizeEventLink(selectedId, session))!); }
+        catch (error) {
+            if (!(error instanceof APIError)) throw error;
+            result.selected = null;
+        }
+    }
+    // SQL prefilters the engine's exact one-bit eligibility inputs before LIMIT. Thousands
+    // of denied rows therefore do not become empty user-facing pages. A final evaluation is
+    // still required because grants may change between SQL discovery and this batch read.
+    const permissionScope = getEntityPermissionQueryScope(session, 'MANAGE_ASSIGNMENTS');
+    const referenceTime = new Date();
+    while (true) {
+        const candidates = await eventService.getEventLinkCandidates(filters, permissionScope, referenceTime, position);
+        if (!candidates.length) return result;
+        const descriptors = candidates.map(event => ({entityType: 'event' as const, entityId: event.id, ownerId: event.ownerId, eventId: event.id}));
+        const permissions = await evaluateEntities(descriptors, session);
+        for (const event of candidates) {
+            if (!permissions.get(`event:${event.id}`)?.has('MANAGE_ASSIGNMENTS')) {
+                position = {startDate: event.startDate, id: event.id};
+                continue;
+            }
+            // Read one authorized lookahead result. Only then emit a continuation after the
+            // last displayed item, avoiding a misleading Next page button on a terminal page.
+            if (result.items.length === 25) {
+                result.nextCursor = encodeEventCursor(position!, scope);
+                return result;
+            }
+            result.items.push(projectEventLinkOption(event));
+            position = {startDate: event.startDate, id: event.id};
+        }
+        if (candidates.length < 100) return result;
+    }
+}
 
 function preprocessCreate(body: any): Partial<Event> {
     // Basic date validation as strings (YYYY-MM-DD) to match existing patterns
@@ -187,7 +300,7 @@ async function registerAttendance(event: Event, body: any, req: Request) {
 
     // Deny registration if not already registered (allow updates to registration)
     const registration = await eventService.getRegistrationFor(session.profile.id, event.id);
-    if (!registration && await eventService.isEventFull(event.id)) {
+    if (!registration && await isEventFull(event.id)) {
         throw new APIError('Event is full', body, 403);
     }
 
@@ -222,7 +335,7 @@ async function registerAttendance(event: Event, body: any, req: Request) {
                 throw new APIError('Diet updates not allowed after deadline has passed', {}, 403);
             }
         } else {
-            bypass = await eventService.canBypassDeadlineWithToken(event.id, body.regToken ?? getResource(req, 'regToken') ?? null);
+            bypass = await canBypassDeadlineWithToken(event.id, body.regToken ?? getResource(req, 'regToken') ?? null);
             if (!bypass.ok) {
                 // owners/co-organizers may bypass via permission in your middleware;
                 // if you still reach here, reject:
@@ -240,7 +353,21 @@ async function registerAttendance(event: Event, body: any, req: Request) {
     checkMeals(dietary, allergyNotes, dietComment, body);
 
 
-    await eventService.register(event.id, value.arrivalDate, value.departureDate, session.profile.id, dietary, allergyNotes?.trim() || null, dietComment?.trim() || null, bypass);
+    const profileId = session.profile.id;
+    await eventService.withEventTransaction(async function saveRegistration(manager) {
+        // The earlier eligibility read is only a preview. Recheck the token while holding
+        // its row lock so simultaneous submissions cannot both spend its final use. The
+        // controller owns that policy; DBAL only reads/locks and records the decided write.
+        if (bypass.ok && bypass.linkId) {
+            const link = await eventService.lockDeadlineBypassLink(manager, event.id, bypass.linkId);
+            if (!link || bypassStatus(link) !== 'active') throw new APIError('This link has already been used', {}, 409);
+            await eventService.consumeDeadlineBypassToken(link.id, profileId, manager);
+        }
+        // Consumption and attendance commit together. A failed attendance write also
+        // rolls back token usage, leaving the same link available for a corrected retry.
+        await eventService.register(event.id, value.arrivalDate, value.departureDate, profileId, dietary,
+            allergyNotes?.trim() || null, dietComment?.trim() || null, manager);
+    });
     return 'Registration saved';
 }
 
@@ -313,97 +440,68 @@ async function cancelRegistration(event: Event, session: Request['session']) {
 /* ----------------------- API: Organizer edit ----------------------- */
 
 async function updateEventSettings(event: Event, body: any, permData?: PermBundle) {
+    if (!event) throw new APIError('Event not found', {}, 404);
     const normalizedBody = {...body};
-    if (normalizedBody.startDate === undefined) {
-        normalizedBody.startDate = normalizedBody.start;
-    }
-    if (normalizedBody.endDate === undefined) {
-        normalizedBody.endDate = normalizedBody.end;
-    }
+    // Retain the old date aliases at this request boundary only. The shared permission
+    // policy and persistence see one canonical field name for each editable property.
+    if (normalizedBody.startDate === undefined && normalizedBody.start !== undefined) normalizedBody.startDate = normalizedBody.start;
+    if (normalizedBody.endDate === undefined && normalizedBody.end !== undefined) normalizedBody.endDate = normalizedBody.end;
+    delete normalizedBody.start;
+    delete normalizedBody.end;
+    if (!permData) throw new APIError('Not allowed', {}, 403);
+    assertEditableEntityFields('event', normalizedBody, permData.entity);
 
-    if (!event) throw new APIError('Event not found', normalizedBody, 404);
-    checkUpdateSettingsPerms(normalizedBody, permData);
-
+    const checkbox = Joi.boolean().truthy('on').falsy('off', '');
+    const date = Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).custom(validateCalendarDate);
     const schema = Joi.object({
-        title: Joi.string().max(255).allow(''),
-        description: Joi.string().max(16000).allow(''),
-        startDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow(''),
-        endDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).allow(''),
-        location: Joi.string().max(255).allow(''),
-        bindingDeadline: Joi.string().allow(''),
-        allowRegDateUpdatesAfterDeadline: Joi.string().allow('').allow('on'),
-        allowRegCancelationAfterDeadline: Joi.string().allow('').allow('on'),
-        requireDietaryInfo: Joi.allow('').allow('on'),
-        allowDietComment: Joi.allow('').allow('on'),
-        allowRegDietUpdateAfterDeadline: Joi.allow('').allow('on'),
-        maxParticipants: Joi.number().positive().allow('').optional(),
-        deadlineTz: Joi.string().allow(''),
-    });
-
-    const {error, value} = schema.validate(normalizedBody, {abortEarly: false, allowUnknown: true});
-    if (error) {
-        const msg = error.details.map(d => d.message).join(', ');
-        throw new APIError(msg, normalizedBody, 400);
+        title: Joi.string().trim().min(1).max(255),
+        description: Joi.string().max(16000).allow('', null),
+        startDate: date, endDate: date,
+        location: Joi.string().max(255).allow('', null),
+        bindingDeadline: Joi.string().allow('', null),
+        allowRegDateUpdatesAfterDeadline: checkbox,
+        allowRegCancelationAfterDeadline: checkbox,
+        requireDietaryInfo: checkbox,
+        allowDietComment: checkbox,
+        allowRegDietUpdateAfterDeadline: checkbox,
+        maxParticipants: Joi.number().integer().positive().allow('', null),
+        deadlineTz: Joi.string().max(255).allow(''),
+    }).min(1).unknown(false);
+    const {error, value} = schema.validate(normalizedBody, {abortEarly: false});
+    if (error) throw new APIError(error.message, {}, 400);
+    const patch: Partial<Event> = {};
+    for (const field of ['title', 'description', 'startDate', 'endDate', 'location',
+        'allowRegDateUpdatesAfterDeadline', 'allowRegCancelationAfterDeadline',
+        'requireDietaryInfo', 'allowDietComment', 'allowRegDietUpdateAfterDeadline'] as const) {
+        if (value[field] !== undefined) Object.assign(patch, {[field]: value[field] === '' ? null : value[field]});
     }
-
-    const start = value.startDate || event.startDate;
-    const end = value.endDate || event.endDate;
-    if (start && end && start > end) {
-        throw new APIError('Start date must be before end date', {start, end}, 400);
+    if (value.maxParticipants !== undefined) patch.maxParticipants = value.maxParticipants || null;
+    if (value.deadlineTz !== undefined) {
+        try { new Intl.DateTimeFormat('en', {timeZone: value.deadlineTz || 'UTC'}); }
+        catch { throw new APIError('Invalid time zone.', {}, 400); }
+        patch.timezone = value.deadlineTz || null;
     }
-
-    const timedDeadline = value.bindingDeadline ? rewriteISOToZone(value.bindingDeadline, value.deadlineTz || 'UTC') : undefined;
-
-    const update: {
-        location?: string | null;
-        bindingDeadline?: string | null;
-        allowRegDateUpdateAfterDeadline?: boolean;
-        allowRegCancelAfterDeadline?: boolean;
-        requireDietaryInfo?: boolean;
-        allowDietComment?: boolean;
-        allowDietUpdateAfterDeadline?: boolean;
-        maxParticipants?: number;
-        timezone?: string | null;
-    } = {};
-    if (value.location !== undefined) update.location = value.location || null;
-    // Keep existing deadline unless the field was explicitly submitted.
-    if (value.bindingDeadline !== undefined) update.bindingDeadline = timedDeadline || null;
-    if (value.allowRegDateUpdatesAfterDeadline !== undefined) update.allowRegDateUpdateAfterDeadline = value.allowRegDateUpdatesAfterDeadline === 'on';
-    if (value.allowRegCancelationAfterDeadline !== undefined) update.allowRegCancelAfterDeadline = value.allowRegCancelationAfterDeadline === 'on';
-    if (value.requireDietaryInfo !== undefined) update.requireDietaryInfo = value.requireDietaryInfo === 'on';
-    if (value.allowDietComment !== undefined) update.allowDietComment = value.allowDietComment === 'on';
-    if (value.allowRegDietUpdateAfterDeadline !== undefined) update.allowDietUpdateAfterDeadline = value.allowRegDietUpdateAfterDeadline === 'on';
-    if (value.maxParticipants !== undefined) update.maxParticipants = value.maxParticipants || null;
-    if (value.deadlineTz !== undefined) update.timezone = value.deadlineTz || null;
-
-    await eventService.updateEventMeta(event.id, update);
-    if (value.title !== undefined) await eventService.updateEventTitle(event.id, value.title || event.title);
-    if (value.description !== undefined) await eventService.updateEventDescription(event.id, value.description || null);
-    // Optionally persist start/end if changed (add a meta helper if you prefer keeping them together):
-    await eventService.updateEventDates(event.id, start, end);
-
+    async function updateLocked(manager: import('typeorm').EntityManager): Promise<void> {
+        const current = await eventService.lockEvent(manager, event.id);
+        if (!current) throw new APIError('Event not found', {}, 404);
+        const startDate = patch.startDate ?? current.startDate;
+        const endDate = patch.endDate ?? current.endDate;
+        if (startDate > endDate) throw new APIError('Start date must be before end date', {}, 400);
+        // An omitted deadline is never rewritten. A supplied local deadline uses the submitted
+        // zone or the locked row's current zone, avoiding an earlier request-load snapshot.
+        if (value.bindingDeadline !== undefined) {
+            try {
+                patch.bindingDeadline = value.bindingDeadline
+                    ? rewriteISOToZone(value.bindingDeadline, value.deadlineTz || current.timezone || 'UTC') : null;
+                if (patch.bindingDeadline && !Number.isFinite(Date.parse(patch.bindingDeadline))) throw new Error('Invalid deadline');
+            } catch {
+                throw new APIError('Invalid binding deadline or time zone.', {}, 400);
+            }
+        }
+        await eventService.updateEventProperties(event.id, patch, manager);
+    }
+    await eventService.withEventTransaction(updateLocked);
     return 'Event updated';
-}
-
-function checkUpdateSettingsPerms(normalizedBody: any, permData?: PermBundle) {
-    // Permission check
-    if (!permData ||
-        ((normalizedBody.location !== undefined
-            || normalizedBody.startDate !== undefined
-            || normalizedBody.endDate !== undefined
-            || normalizedBody.bindingDeadline !== undefined
-            || normalizedBody.deadlineTz !== undefined
-            || normalizedBody.allowRegDateUpdateAfterDeadline !== undefined
-            || normalizedBody.allowRegCancelAfterDeadline !== undefined) && !permData.entity.has("EDIT_META"))
-        || (normalizedBody.title !== undefined && !permData.entity.has("EDIT_TITLE"))
-        || (normalizedBody.description !== undefined && !permData.entity.has("EDIT_DESC"))
-        || ((normalizedBody.requireDietaryInfo !== undefined
-            || normalizedBody.allowDietComment !== undefined
-            || normalizedBody.allowDietUpdateAfterDeadline !== undefined) && !permData.entity.has("MANAGE_REQUIREMENTS"))
-        || (normalizedBody.maxParticipants !== undefined && !permData.entity.has("EDIT_CAPACITY"))
-    ) {
-        throw new APIError("Not allowed", normalizedBody, 403);
-    }
 }
 
 async function updateSettings(id: string, body: any) {
@@ -411,8 +509,36 @@ async function updateSettings(id: string, body: any) {
     return 'Settings saved';
 }
 
+/** Capacity is policy over persisted event limits and registration counts. */
+export async function isEventFull(eventId: string): Promise<boolean> {
+    const event = await eventService.getEventById(eventId);
+    if (!event) throw new APIError('Event not found', {}, 404);
+    // Optional/NULL limits both mean unlimited. Keep zero meaningful for persisted data,
+    // rather than using a truthiness check that would accidentally turn zero into unlimited.
+    return event.maxParticipants != null && await eventService.getEventRegistrationCount(eventId) >= event.maxParticipants;
+}
+
+/** Keep display, preview and locked consumption aligned on the same eligibility rule. */
+function bypassStatus(link: import('../modules/database/entities/event/EventRegBypassLink').EventRegBypassLink) {
+    if (link.revokedAt) return 'revoked';
+    if (link.expiresAt && link.expiresAt < new Date()) return 'expired';
+    if (link.usedCount >= link.maxUses) return 'consumed';
+    return 'active';
+}
+
+/** Eligibility and display status share one controller rule; the service only returns rows. */
+export async function canBypassDeadlineWithToken(eventId: string, token?: string | null): Promise<{ok: boolean; linkId?: string}> {
+    if (!token) return {ok: false};
+    const link = await eventService.getDeadlineBypassToken(eventId, token);
+    return link && bypassStatus(link) === 'active' ? {ok: true, linkId: link.id} : {ok: false};
+}
+
 async function listDeadlineBypassLinks(event: Event) {
-    return await eventService.listDeadlineBypassLinks(event.id);
+    const links = await eventService.listDeadlineBypassLinks(event.id);
+    return links.map(function presentLink(link) {
+        return {id: link.id, token: link.token, createdAt: link.track.createdAt, expiresAt: link.expiresAt,
+            revokedAt: link.revokedAt, used: link.usedCount > 0 || !!link.usedAt, profileId: link.profileId, status: bypassStatus(link)};
+    });
 }
 
 async function createDeadlineBypassLink(event: Event, body: any, session: Request['session']) {
@@ -456,7 +582,8 @@ async function updateRegistrationDates(event: Event, registrationId: string, bod
         throw new APIError('Arrival/Departure must be within event dates', body, 400);
     }
 
-    await eventService.updateRegistrationDates(event.id, Number(registrationId), value.arrivalDate, value.departureDate);
+    const updated = await eventService.updateRegistrationDates(event.id, Number(registrationId), value.arrivalDate, value.departureDate);
+    if (!updated) throw new APIError('Registration not found', {}, 404);
     return 'Registration updated';
 }
 

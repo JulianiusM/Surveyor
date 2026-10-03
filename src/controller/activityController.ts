@@ -16,14 +16,19 @@
 
 // controllers/activityController.js
 import {Request} from "express";
+import type {EntityManager} from "typeorm";
+import type {ActivityAssignment} from "../modules/database/entities/activity/ActivityAssignment";
+import {assertEntityPropertyContext} from './entityAdminController';
 // Business logic for the Activity routes
 import Joi from 'joi';
-import {generatePlanRecommendations} from "../modules/activity/autoAssignment";
+import {generateAutoRecommendations, mergeParticipants, participantsFromAssignments} from "../modules/activity/autoAssignment";
+import type {AutoAssignmentContext, AutoAssignmentSlot} from "../modules/activity/autoAssignment";
 import {collectAssignmentWarnings, toAssignmentCandidate} from "../modules/activity/availability";
-import {buildRecommendationWarnings} from "../modules/activity/recommendations";
+import {buildRecommendationWarnings, normalizeRecommendationInput} from "../modules/activity/recommendations";
 import {
-    recommendationJobCoordinator,
+    RecommendationJobCoordinator,
     RecommendationQueueFullError,
+    fingerprintRecommendationContext,
 } from "../modules/activity/recommendationJobs";
 import {
     calculateBaselineRequirementForPlan,
@@ -32,6 +37,7 @@ import {
     countInclusiveDays,
     hasCompleteStayRequirements,
     ParticipantAttendance,
+    RequirementOverrideInput,
     toParticipantKey,
     toParticipantName
 } from "../modules/activity/requirements";
@@ -53,9 +59,47 @@ import {performImageSwap} from "../modules/lib/fileCommons";
 
 import {ENTITIES, fromISOtoLocal, generateUniqueId} from '../modules/lib/util';
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
-import type {SlotAssignee} from "../types/ActivityTypes";
+import type {ActivityPropertyPatch, ActivityRecommendationContext, ActivityRecommendationPersistenceContext, ActivityRecommendationOperationInput, SlotAssignee} from "../types/ActivityTypes";
 import type {PermBundle, SessionLike} from "../types/PermissionTypes";
 import type {EntityBase} from "../types/UserTypes";
+
+/** Controllers translate a missing DBAL snapshot into the established API response. */
+async function requireRequirementConfiguration(planId: string, manager?: EntityManager): Promise<requirementService.RequirementConfiguration> {
+    const configuration = await requirementService.getRequirementConfiguration(planId, manager);
+    if (!configuration) throw new APIError('Activity plan not found', {planId}, 404);
+    return configuration;
+}
+
+/**
+ * Decisions are made after acquiring the root lock, not between separate service transactions.
+ * The process-local callback detects jobs invalidated while they wait for that lock.
+ */
+async function requireRecommendationContext(
+    manager: EntityManager, planId: string, expected?: ActivityRecommendationPersistenceContext,
+): Promise<ActivityPlan> {
+    const plan = await activityService.lockActivityPlan(manager, planId);
+    if (!plan) throw new APIError('Activity plan not found', {planId}, 404);
+    if (expected && (expected.isCurrent?.() === false || (plan.eventId ?? null) !== expected.eventId
+        || plan.startDate !== expected.startDate || plan.endDate !== expected.endDate)) {
+        throw new APIError('Activity plan context changed; reload and try again', {reason: 'activity-context-changed'}, 409);
+    }
+    return plan;
+}
+
+// The controller wires background persistence to the same command boundary as HTTP edits.
+// The coordinator performs scheduling/cache work and never chooses a database write policy.
+const recommendationJobCoordinator = new RecommendationJobCoordinator({
+    loadContext: loadRecommendationJobContext,
+    persist: saveGeneratedRecommendations,
+});
+
+async function loadRecommendationJobContext(planId: string): Promise<AutoAssignmentContext> {
+    const context = await buildPlanRecommendationContext(planId);
+    if (context.plan.assignmentMode === 'FREE') {
+        throw new APIError('Automatic recommendations are disabled in free assignment mode', {planId}, 409);
+    }
+    return context;
+}
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'activity/activity-create';
@@ -302,7 +346,7 @@ async function fetchForView(plan: ActivityPlan, req: Request) {
         activityService.getActivitySlotAssignees(plan.id),
         activityService.getAllRoles(plan.id),
         activityService.getActivitySlotRoles(plan.id),
-        requirementService.getRequirementConfiguration(plan.id),
+        requireRequirementConfiguration(plan.id),
         plan.event?.id ? eventService.getEventParticipants(plan.event.id) : Promise.resolve([]),
         activityService.getParticipantRolesForPlan(plan.id),
     ]);
@@ -587,12 +631,94 @@ async function deleteEntity(plan: ActivityPlan, session: Request['session']) {
 // ---------- API ----------
 // API-specific controllers
 
-async function updateDescription(planId: string, body: any) {
-    const {description} = body;
-    if (description.length > 16000)
-        throw new APIError('Description to long', body, 400)
-    await activityService.updateActivityPlanDescription(planId, description);
+/** Calendar dates remain DATE values; reject rollover dates rather than letting JavaScript normalize them. */
+function validatePropertyDate(value: string, helpers: Joi.CustomHelpers): string | Joi.ErrorReport {
+    const date = new Date(`${value}T00:00:00.000Z`);
+    if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value || value < '1000-01-01') {
+        return helpers.error('any.invalid');
+    }
+    return value;
+}
+
+/** Schema ownership stays with this feature; the shared API checks each supplied field's permission first. */
+function normalizeActivityProperties(body: unknown): ActivityPropertyPatch {
+    const date = Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).custom(validatePropertyDate);
+    const schema = Joi.object<ActivityPropertyPatch>({
+        title: Joi.string().trim().min(1).max(255),
+        description: Joi.string().max(16000).allow('', null),
+        startDate: date,
+        endDate: date,
+    }).min(1).unknown(false).required();
+    const {error, value} = schema.validate(body, {abortEarly: false});
+    if (error) throw new APIError(error.message, {}, 400);
+    if (value.description === '') value.description = null;
+    return value;
+}
+
+/**
+ * Used under the plan lock after validation by relationship/date mutations. A later rollback
+ * may conservatively cancel an in-flight calculation, but never changes saved assignments.
+ */
+function invalidateEventContext(planId: string): void {
+    recommendationJobCoordinator.invalidate(planId);
+}
+
+async function updateProperties(plan: ActivityPlan, body: unknown): Promise<string> {
+    const patch = normalizeActivityProperties(body);
+    await saveActivityProperties(plan.id, patch, plan.eventId ?? null);
+    return 'Activity plan updated';
+}
+
+async function updateDescription(planId: string, body: any, expectedEventId?: string | null) {
+    const patch = normalizeActivityProperties({description: body?.description});
+    if (patch.description === undefined) throw new APIError('Description is required', {}, 400);
+    await saveActivityProperties(planId, patch, expectedEventId);
     return 'Description updated';
+}
+
+/**
+ * Keep semantic date and parent-context checks beside property parsing. The DBAL callback
+ * holds the root lock through those checks, generated-work invalidation and the final write;
+ * concurrent slot creation takes the same lock before deciding whether its date is allowed.
+ */
+async function saveActivityProperties(planId: string, patch: ActivityPropertyPatch, expectedEventId?: string | null): Promise<void> {
+    async function saveProperties(manager: EntityManager): Promise<void> {
+        const plan = await requireRecommendationContext(manager, planId);
+        assertEntityPropertyContext(plan, expectedEventId);
+        const startDate = patch.startDate ?? plan.startDate;
+        const endDate = patch.endDate ?? plan.endDate;
+        if (startDate > endDate) throw new APIError('Start date must be before end date', {}, 400);
+        if (startDate !== plan.startDate || endDate !== plan.endDate) {
+            if (await activityService.hasActivitySlotsOutsideRange(manager, planId, startDate, endDate)) {
+                throw new APIError('The activity date range must include every saved slot', {}, 409);
+            }
+            // Cancel while holding the lock: even a change back to the original dates
+            // must invalidate a waiting job. Cancellation after rollback is conservative.
+            invalidateEventContext(planId);
+            await recommendationService.invalidateGeneratedRecommendations(manager, planId);
+        }
+        await activityService.updateActivityPlanProperties(planId, patch, manager);
+    }
+    await activityService.withActivityTransaction(saveProperties);
+}
+
+function validateSlotDate(plan: ActivityPlan, day?: string): void {
+    if (!day || day < plan.startDate || day > plan.endDate) {
+        throw new APIError('Slot date must be within the activity plan date range', {}, 400);
+    }
+}
+
+/** Serialize edits with narrowing the parent range; missing snapshots become controller errors. */
+async function saveActivitySlot(slotId: string, fields: Partial<ActivitySlot>): Promise<boolean | undefined> {
+    const current = await activityService.getActivitySlotById(slotId);
+    if (!current) throw new APIError('Activity slot not found', {slotId}, 404);
+    const planId = current.entityId;
+    async function saveSlot(manager: EntityManager): Promise<boolean | undefined> {
+        const plan = await requireRecommendationContext(manager, planId);
+        if (fields.day !== undefined) validateSlotDate(plan, fields.day);
+        return activityService.updateActivitySlot(slotId, fields, manager);
+    }
+    return activityService.withActivityTransaction(saveSlot);
 }
 
 async function createTextField(planId: string, body: any) {
@@ -666,7 +792,12 @@ async function quickAddSlot(plan: ActivityPlan, body: any, session: SessionLike)
         pos: last + 1
     };
 
-    await activityService.addActivitySlot(plan.id, slot, session.profile!.id);
+    async function saveSlot(manager: EntityManager): Promise<void> {
+        const currentPlan = await requireRecommendationContext(manager, plan.id);
+        validateSlotDate(currentPlan, slot.day);
+        await activityService.addActivitySlots(plan.id, [slot], session.profile!.id, manager);
+    }
+    await activityService.withActivityTransaction(saveSlot);
 
     if (normalizedRoles.length > 0) {
         await activityService.addActivitySlotRoles(slot.id!, normalizedRoles);
@@ -675,7 +806,7 @@ async function quickAddSlot(plan: ActivityPlan, body: any, session: SessionLike)
 }
 
 async function updateSlotDescription(slotId: string, body: any) {
-    if (!(await activityService.updateActivitySlot(slotId, {description: body.description}))) {
+    if (!(await saveActivitySlot(slotId, {description: body.description}))) {
         throw new APIError('Unknown error while saving', body, 500);
     }
     return 'Description updated';
@@ -709,7 +840,7 @@ async function updateSlotAttr(slotId: string, body: any, permData?: PermBundle) 
     if (body.description !== undefined) staged.description = body.description || null;
     if (body.maxAssignees !== undefined) staged.maxAssignees = Number(body.maxAssignees) || null;
 
-    if (!(await activityService.updateActivitySlot(slotId, staged))) {
+    if (!(await saveActivitySlot(slotId, staged))) {
         throw new APIError('Unknown error while saving', body, 500);
     }
 
@@ -735,7 +866,7 @@ async function updateSettings(id: string, body: any) {
 async function getRequirements(planId: string) {
     const [plan, requirementConfig, assignments, slots, allRoles, slotRoles] = await Promise.all([
         activityService.getActivityPlanById(planId),
-        requirementService.getRequirementConfiguration(planId),
+        requireRequirementConfiguration(planId),
         activityService.getParticipantAssignmentsWithSlots(planId),
         activityService.getActivitySlotsFlat(planId),
         activityService.getAllRoles(planId),
@@ -813,7 +944,7 @@ async function getRequirements(planId: string) {
 async function calculateBaselineRequirement(planId: string) {
     const [plan, requirementConfig, slots, assignments, slotRoles] = await Promise.all([
         activityService.getActivityPlanById(planId),
-        requirementService.getRequirementConfiguration(planId),
+        requireRequirementConfiguration(planId),
         activityService.getActivitySlotsFlat(planId),
         activityService.getParticipantAssignmentsWithSlots(planId),
         activityService.getActivitySlotRoles(planId),
@@ -855,83 +986,130 @@ async function calculateBaselineRequirement(planId: string) {
     return baseline;
 }
 
+/**
+ * A settings form may no longer list a saved profile after the plan moves to another event.
+ * Preserve those unchanged rows, including omitted rows, inside the same locked transaction.
+ * Their existence never authorizes a new target or a changed override for a nonparticipant.
+ */
+async function mergeRequirementOverrides(
+    manager: EntityManager,
+    plan: ActivityPlan,
+    submitted: RequirementOverrideInput[],
+): Promise<RequirementOverrideInput[]> {
+    const {overrides: saved} = await requireRequirementConfiguration(plan.id, manager);
+    const savedById = new Map(saved.map((override) => [override.id, override]));
+    const registered = new Set(plan.eventId ? await activityService.getRegisteredProfileIds(manager, plan.eventId) : []);
+    const result: RequirementOverrideInput[] = [];
+    const submittedIds = new Set<number>();
+    const targetKeys = new Set<string>();
+    for (const input of submitted) {
+        const override = {...input, roleId: input.roleId ?? null};
+        const previous = override.id == null ? undefined : savedById.get(override.id);
+        if (override.id != null && (!previous || submittedIds.has(override.id))) {
+            throw new APIError('Override does not belong to this activity plan or is duplicated', {}, 400);
+        }
+        const unchanged = previous && previous.profileId === override.profileId
+            && (previous.roleId ?? null) === (override.roleId ?? null)
+            && previous.requiredShifts === override.requiredShifts;
+        if (!unchanged && (!override.profileId || !registered.has(override.profileId))) {
+            throw new APIError('Overrides must target participants registered for this event', {}, 400);
+        }
+        const key = `${override.profileId}:${override.roleId ?? ''}`;
+        if (targetKeys.has(key)) throw new APIError('An override target may only appear once', {}, 400);
+        targetKeys.add(key);
+        if (override.id != null) submittedIds.add(override.id);
+        result.push(override);
+    }
+    // Omission still removes a current participant's override, as in the existing editor.
+    // A former participant is absent from that editor's choices, so omission must retain
+    // the original row instead of turning an unrelated settings save into data deletion.
+    for (const previous of saved) {
+        if (registered.has(previous.profileId) || submittedIds.has(previous.id)) continue;
+        result.push({
+            id: previous.id,
+            profileId: previous.profileId,
+            roleId: previous.roleId ?? null,
+            requiredShifts: previous.requiredShifts,
+        });
+    }
+    return result;
+}
+
 async function updateRequirements(planId: string, body: any) {
     const {roleRequirements, stayRequirements, overrides, ...planSettings} = preprocessRequirementUpdate(body);
-    const plan = await activityService.getActivityPlanById(planId);
-
-    if (!plan) {
-        throw new APIError('Activity plan not found', {planId}, 404);
-    }
-    if (!plan.event?.id) {
-        throw new APIError('Event is required to configure participant overrides', {planId}, 400);
-    }
-
-    const eventParticipants = await eventService.getEventParticipants(plan.event.id);
-    const allowed = new Set(eventParticipants.map((p) => p.profileId).filter((id): id is string => id != null));
-
-    const invalidOverride = overrides.find((override) => {
-        if (override.profileId) return !allowed.has(override.profileId);
-        return false;
-    });
-
-    if (invalidOverride) {
-        throw new APIError('Overrides must target participants registered for this event', invalidOverride, 400);
-    }
-
-    const allowedRoleIds = new Set((await activityService.getAllRoles(planId)).map((role) => role.id));
-    const invalidRoleRequirement = roleRequirements.find((requirement) => !allowedRoleIds.has(requirement.roleId));
-    const invalidOverrideRole = overrides.find(
-        (override) => override.roleId != null && !allowedRoleIds.has(Number(override.roleId)),
-    );
-    if (invalidRoleRequirement || invalidOverrideRole) {
-        throw new APIError(
-            'Requirement roles must belong to this activity plan',
-            invalidRoleRequirement ?? invalidOverrideRole,
-            400,
-        );
-    }
-
-    const planDays = countInclusiveDays(plan.startDate, plan.endDate);
-    const invalidStayRequirement = stayRequirements.find((requirement) => requirement.stayDays > planDays);
-    if (invalidStayRequirement) {
-        throw new APIError('Stay duration cannot exceed the activity plan duration', invalidStayRequirement, 400);
-    }
-    const targetAssignmentMode = planSettings.assignmentMode ?? plan.assignmentMode;
-    const savedStayDays = new Set(stayRequirements.map((requirement) => requirement.stayDays));
-    if (
-        targetAssignmentMode === "REQUIRED"
-        && (stayRequirements.length !== planDays
-            || Array.from({length: planDays}, (_, index) => index + 1).some((day) => !savedStayDays.has(day)))
-    ) {
-        throw new APIError(
-            `Required mode needs exactly one saved requirement for every stay duration from 1 to ${planDays} days`,
-            {stayRequirements, planDays},
-            400,
-        );
-    }
-
-    // Convert bindingDeadline string to Date if present
-    const normalizedSettings: Partial<Pick<ActivityPlan, "assignmentMode" | "generalRequiredShifts" | "roundingMode" | "bindingDeadline" | "allowOverfillAfterFull" | "allowExternalAssignees" | "allowArrivalDayEvening" | "allowDepartureDayMorning">> = {
-        assignmentMode: planSettings.assignmentMode,
-        generalRequiredShifts: planSettings.generalRequiredShifts,
-        roundingMode: planSettings.roundingMode,
-        allowOverfillAfterFull: planSettings.allowOverfillAfterFull,
-        allowExternalAssignees: planSettings.allowExternalAssignees,
-        allowArrivalDayEvening: planSettings.allowArrivalDayEvening,
-        allowDepartureDayMorning: planSettings.allowDepartureDayMorning,
-    };
-
-    if (planSettings.bindingDeadline !== undefined) {
-        if (planSettings.bindingDeadline === null) {
-            normalizedSettings.bindingDeadline = null;
-        } else if (typeof planSettings.bindingDeadline === 'string') {
-            normalizedSettings.bindingDeadline = new Date(planSettings.bindingDeadline);
-        } else {
-            normalizedSettings.bindingDeadline = planSettings.bindingDeadline;
+    const expectedPlan = await activityService.getActivityPlanById(planId);
+    async function saveRequirements(manager: EntityManager): Promise<void> {
+        const plan = await requireRecommendationContext(manager, planId);
+        if (expectedPlan && (expectedPlan.eventId ?? null) !== (plan.eventId ?? null)) {
+            throw new APIError('Activity plan event changed; reload the requirements', {}, 409);
         }
-    }
 
-    await requirementService.replaceRequirements(planId, roleRequirements, overrides, normalizedSettings, stayRequirements);
+        if (!plan.eventId) {
+            throw new APIError('Event is required to configure participant overrides', {planId}, 400);
+        }
+
+        // Membership and saved-override decisions use this same locked transaction.
+        // Unchanged targets from a former event are retained; new/changed overrides still
+        // require current registration. Checking only the posted rows here would reject a
+        // harmless settings save after relinking and encourage the browser to drop history.
+
+        const allowedRoleIds = new Set((await activityService.getAllRoles(planId, manager)).map((role) => role.id));
+        const invalidRoleRequirement = roleRequirements.find((requirement) => !allowedRoleIds.has(requirement.roleId));
+        const invalidOverrideRole = overrides.find(
+            (override) => override.roleId != null && !allowedRoleIds.has(Number(override.roleId)),
+        );
+        if (invalidRoleRequirement || invalidOverrideRole) {
+            throw new APIError(
+                'Requirement roles must belong to this activity plan',
+                invalidRoleRequirement ?? invalidOverrideRole,
+                400,
+            );
+        }
+
+        const planDays = countInclusiveDays(plan.startDate, plan.endDate);
+        const invalidStayRequirement = stayRequirements.find((requirement) => requirement.stayDays > planDays);
+        if (invalidStayRequirement) {
+            throw new APIError('Stay duration cannot exceed the activity plan duration', invalidStayRequirement, 400);
+        }
+        const targetAssignmentMode = planSettings.assignmentMode ?? plan.assignmentMode;
+        const savedStayDays = new Set(stayRequirements.map((requirement) => requirement.stayDays));
+        if (
+            targetAssignmentMode === "REQUIRED"
+            && (stayRequirements.length !== planDays
+                || Array.from({length: planDays}, (_, index) => index + 1).some((day) => !savedStayDays.has(day)))
+        ) {
+            throw new APIError(
+                `Required mode needs exactly one saved requirement for every stay duration from 1 to ${planDays} days`,
+                {stayRequirements, planDays},
+                400,
+            );
+        }
+
+        // Convert bindingDeadline string to Date if present
+        const normalizedSettings: Partial<Pick<ActivityPlan, "assignmentMode" | "generalRequiredShifts" | "roundingMode" | "bindingDeadline" | "allowOverfillAfterFull" | "allowExternalAssignees" | "allowArrivalDayEvening" | "allowDepartureDayMorning">> = {
+            assignmentMode: planSettings.assignmentMode,
+            generalRequiredShifts: planSettings.generalRequiredShifts,
+            roundingMode: planSettings.roundingMode,
+            allowOverfillAfterFull: planSettings.allowOverfillAfterFull,
+            allowExternalAssignees: planSettings.allowExternalAssignees,
+            allowArrivalDayEvening: planSettings.allowArrivalDayEvening,
+            allowDepartureDayMorning: planSettings.allowDepartureDayMorning,
+        };
+
+        if (planSettings.bindingDeadline !== undefined) {
+            if (planSettings.bindingDeadline === null) {
+                normalizedSettings.bindingDeadline = null;
+            } else if (typeof planSettings.bindingDeadline === 'string') {
+                normalizedSettings.bindingDeadline = new Date(planSettings.bindingDeadline);
+            } else {
+                normalizedSettings.bindingDeadline = planSettings.bindingDeadline;
+            }
+        }
+
+        const retainedOverrides = await mergeRequirementOverrides(manager, plan, overrides);
+        await requirementService.replaceRequirements(planId, roleRequirements, retainedOverrides, normalizedSettings, stayRequirements, manager);
+    }
+    await activityService.withActivityTransaction(saveRequirements);
     return 'Requirements updated';
 }
 
@@ -941,8 +1119,8 @@ async function collectRecommendationWarnings(planId: string, recommendations: {
     status?: RecommendationStatus;
     operation?: RecommendationOperation;
     sourceItemId?: string | null;
-}[]) {
-    await validateRecommendationTargets(planId, recommendations);
+}[], validateTargets = true) {
+    if (validateTargets) await validateRecommendationTargets(planId, recommendations);
     const activeRecommendations = recommendations.filter(
         (recommendation) => recommendation.status == null
             || recommendation.status === "PENDING"
@@ -950,7 +1128,7 @@ async function collectRecommendationWarnings(planId: string, recommendations: {
     );
     const [plan, requirementConfig, slots, existingAssignments] = await Promise.all([
         activityService.getActivityPlanById(planId),
-        requirementService.getRequirementConfiguration(planId),
+        requireRequirementConfiguration(planId),
         activityService.getActivitySlotsFlat(planId),
         activityService.getParticipantAssignmentsWithSlots(planId),
     ]);
@@ -985,7 +1163,7 @@ async function collectRecommendationWarnings(planId: string, recommendations: {
         )
         : {};
 
-    return buildRecommendationWarnings({
+    const warnings = buildRecommendationWarnings({
         slots,
         recommendations: activeRecommendations,
         existingAssignments,
@@ -997,6 +1175,22 @@ async function collectRecommendationWarnings(planId: string, recommendations: {
             allowDepartureDayMorning: plan?.allowDepartureDayMorning,
         },
     });
+    // The review read must remain available after relinking. Keep old drafts/history
+    // visible with a precise warning, while mutation paths still reject ineligible targets.
+    if (!validateTargets && plan?.eventId) {
+        const eligible = new Set(eventParticipants.map((participant) => participant.profileId));
+        if (plan.allowExternalAssignees) {
+            for (const participantKey of Object.keys(existingAssignments)) {
+                eligible.add(participantKey.replace(/^profile:/, ''));
+            }
+        }
+        for (const warning of warnings) {
+            if (warning.recommendation.profileId && !eligible.has(warning.recommendation.profileId)) {
+                warning.warnings.push({type: 'ineligible_participant'});
+            }
+        }
+    }
+    return warnings;
 }
 
 async function validateRecommendationTargets(planId: string, recommendations: {
@@ -1091,7 +1285,8 @@ async function validateRecommendationTargets(planId: string, recommendations: {
         Object.values(assignees).flat().forEach((assignee) => allowedProfileIds.add(assignee.profileId));
     }
     const invalidProfile = recommendations.find(
-        (recommendation) => recommendation.profileId && !allowedProfileIds.has(recommendation.profileId),
+        (recommendation) => !['APPLIED', 'REJECTED'].includes(recommendation.status ?? 'PENDING')
+            && recommendation.profileId && !allowedProfileIds.has(recommendation.profileId),
     );
     if (invalidProfile) {
         throw new APIError('Recommendations must target participants registered for this event', invalidProfile, 400);
@@ -1100,7 +1295,7 @@ async function validateRecommendationTargets(planId: string, recommendations: {
 
 async function buildParticipantAttendanceMap(
     plan: ActivityPlan,
-    overrides: Awaited<ReturnType<typeof requirementService.getRequirementConfiguration>>["overrides"],
+    overrides: requirementService.RequirementConfiguration["overrides"],
     existingAssignments: Record<string, {
         id: string;
         day: string;
@@ -1140,13 +1335,9 @@ async function buildParticipantAttendanceMap(
         });
     });
 
-    for (const override of overrides) {
-        upsert({
-            profileId: override.profile.id ?? undefined,
-            name: override.profile.name ?? undefined,
-        });
-    }
-
+    // Committed assignees remain part of the read projection after relinking or an
+    // external-assignee policy change. Their names and recorded work must stay visible;
+    // recommendation selection and persistence enforce eligibility independently.
     Object.keys(existingAssignments).forEach((key) => {
         const [type, id] = key.split(":");
         if (type === "profile") {
@@ -1154,8 +1345,17 @@ async function buildParticipantAttendanceMap(
         }
     });
 
+    // Retained overrides can enrich a registered or already assigned profile's name,
+    // but an override alone never adds a participant or grants recommendation eligibility.
+    for (const override of overrides) {
+        if (attendance[toParticipantKey({profileId: override.profileId})]) {
+            upsert({profileId: override.profileId, name: override.profile.name});
+        }
+    }
     for (const rec of recommendations) {
-        upsert({profileId: rec.profileId ?? undefined});
+        if (!plan.eventId || attendance[toParticipantKey({profileId: rec.profileId})]) {
+            upsert({profileId: rec.profileId ?? undefined});
+        }
     }
 
     const unnamedProfileIds = Object.values(attendance)
@@ -1220,7 +1420,7 @@ async function getAssignmentWarnings(
     const [plan, slot, requirementConfig, assignments, assignees] = await Promise.all([
         activityService.getActivityPlanById(planId),
         activityService.getActivitySlotById(slotId),
-        requirementService.getRequirementConfiguration(planId),
+        requireRequirementConfiguration(planId),
         activityService.getParticipantAssignmentsWithSlots(planId),
         activityService.getActivitySlotAssignees(planId),
     ]);
@@ -1406,7 +1606,7 @@ async function authorizeSelfAssignment(
 async function getRecommendations(planId: string) {
     const [plan, requirementConfig, initialRecommendations, slots, assignments, assignees] = await Promise.all([
         activityService.getActivityPlanById(planId),
-        requirementService.getRequirementConfiguration(planId),
+        requireRequirementConfiguration(planId),
         recommendationService.getRecommendations(planId),
         activityService.getActivitySlotsFlat(planId),
         activityService.getParticipantAssignmentsWithSlots(planId),
@@ -1474,7 +1674,7 @@ async function getRecommendations(planId: string) {
         sourceItemId: rec.sourceItem?.id ?? null,
     }));
 
-    const warnings = await collectRecommendationWarnings(planId, normalized);
+    const warnings = await collectRecommendationWarnings(planId, normalized, false);
     const eventParticipants = plan.event ? await eventService.getEventParticipants(plan.event.id) : [];
     const attendance = await buildParticipantAttendanceMap(
         plan,
@@ -1484,7 +1684,14 @@ async function getRecommendations(planId: string) {
         eventParticipants,
     );
 
-    const participants = Object.values(attendance).map((participant) => ({
+    // Attendance also describes committed historical work. Restrict the manual picker
+    // to the same current-event policy used by validation and automatic generation.
+    const registeredProfileIds = new Set(eventParticipants.map((participant) => participant.profileId));
+    const restrictToRegistered = Boolean(plan.eventId) && !plan.allowExternalAssignees;
+    function isSelectableParticipant(participant: ParticipantAttendance): boolean {
+        return !restrictToRegistered || Boolean(participant.profileId && registeredProfileIds.has(participant.profileId));
+    }
+    const participants = Object.values(attendance).filter(isSelectableParticipant).map((participant) => ({
         key: toParticipantKey(participant),
         profileId: participant.profileId ?? null,
         label: toParticipantName(participant),
@@ -1521,16 +1728,183 @@ async function getRecommendations(planId: string) {
 }
 
 async function updateRecommendations(planId: string, body: any) {
+    const plan = await activityService.getActivityPlanById(planId);
+    if (!plan) throw new APIError('Activity plan not found', {planId}, 404);
     const submitted = preprocessRecommendationUpdate(body).recommendations;
     const existingRecommendations = await recommendationService.getRecommendations(planId);
     const recommendations = reconcileSubmittedRecommendations(existingRecommendations, submitted);
     await validateRecommendationTargets(planId, recommendations, true);
-    await recommendationService.replaceRecommendations(
+    await saveReviewedRecommendations(
         planId,
         preserveRecommendationHistory(existingRecommendations, recommendations),
+        recommendationContext(plan),
     );
     const warnings = await collectRecommendationWarnings(planId, recommendations);
     return {message: 'Recommendations updated', warnings};
+}
+
+/** Validation belongs at the command boundary, including generated internal commands. */
+function normalizeRecommendationForPersistence(input: RecommendationInput): RecommendationInput {
+    if (!input.itemId || !input.profileId) throw new APIError('Recommendation requires a slot and profile', input, 400);
+    if (input.operation === 'REASSIGN' && (!input.sourceItemId || input.sourceItemId === input.itemId)) {
+        throw new APIError('Reassignment requires a different source slot', input, 400);
+    }
+    return normalizeRecommendationInput(input);
+}
+
+/** Review commands recheck their original event/date context after acquiring the root lock. */
+async function saveReviewedRecommendations(
+    planId: string, recommendations: RecommendationInput[], expected: ActivityRecommendationPersistenceContext,
+): Promise<void> {
+    const normalized = recommendations.map(normalizeRecommendationForPersistence);
+    async function saveReviewed(manager: EntityManager): Promise<void> {
+        await requireRecommendationContext(manager, planId, expected);
+        await recommendationService.replaceRecommendations(planId, normalized, manager);
+    }
+    await activityService.withActivityTransaction(saveReviewed);
+}
+
+/**
+ * Atomically reconciles generated work without erasing manual drafts or review history.
+ * Only generated pending rows are replaceable. A participant/slot pair matching rejection memory is
+ * re-exposed as rejected instead of being inserted as a new pending recommendation.
+ */
+export async function saveGeneratedRecommendations(
+    planId: string,
+    recommendations: RecommendationInput[],
+    expected?: ActivityRecommendationPersistenceContext,
+): Promise<void> {
+    async function saveGenerated(manager: EntityManager): Promise<void> {
+        await requireRecommendationContext(manager, planId, expected);
+        const normalized = recommendations.map(normalizeRecommendationForPersistence);
+        await recommendationService.invalidateGeneratedRecommendations(manager, planId);
+
+        if (!normalized.length) return;
+        const preserved = await recommendationService.getRecommendations(planId, manager);
+        // Accepted/manual work is deduplicated by the complete operation. Rejection memory
+        // deliberately uses only participant plus target slot: regenerating another kind of
+        // suggestion for that same target must not silently undo the organizer's rejection.
+        const preservedKeys = new Set(preserved
+            .filter((row) => row.status !== "REJECTED")
+            .map((row) => `${row.operation}:${row.sourceItem?.id ?? ""}:${row.item.id}:${row.profile.id}`));
+        const rejectedByTarget = new Map(preserved
+            .filter((row) => row.status === "REJECTED")
+            .map((row) => [`${row.item.id}:${row.profile.id}`, row]));
+        const rows: RecommendationInput[] = [];
+        for (const recommendation of normalized) {
+            const rejectedMemory = rejectedByTarget.get(`${recommendation.itemId}:${recommendation.profileId}`);
+            if (rejectedMemory) {
+                rows.push({
+                    ...toRecommendationInput(rejectedMemory),
+                    operation: recommendation.operation ?? "ASSIGN",
+                    sourceItemId: recommendation.sourceItemId ?? null,
+                    manual: false,
+                    hidden: false,
+                });
+                continue;
+            }
+            if (preservedKeys.has(
+                `${recommendation.operation}:${recommendation.sourceItemId ?? ""}:${recommendation.itemId}:${recommendation.profileId}`,
+            )) continue;
+            rows.push({...recommendation, id: undefined, status: 'PENDING', manual: false, hidden: false});
+        }
+        await recommendationService.saveRecommendations(planId, rows, manager);
+    }
+    await activityService.withActivityTransaction(saveGenerated);
+}
+
+/** The final persistence check needs the relationship and dates that this read actually used. */
+function recommendationContext(plan: Pick<ActivityPlan, 'eventId' | 'startDate' | 'endDate'>): ActivityRecommendationContext {
+    return {eventId: plan.eventId ?? null, startDate: plan.startDate, endDate: plan.endDate};
+}
+
+/**
+ * Assemble algorithm input at the controller boundary. Current registration and the explicit
+ * external-assignee policy select participants; saved overrides contribute requirements only.
+ * The worker receives values, never repositories or an independent authorization decision.
+ */
+export async function buildPlanRecommendationContext(
+    planId: string,
+    existingRecommendations?: ActivityAssignmentRecommendation[],
+): Promise<AutoAssignmentContext> {
+    const [requirementConfig, plan, slots, existingAssignments, participantRoles] = await Promise.all([
+        requireRequirementConfiguration(planId),
+        activityService.getActivityPlanById(planId),
+        activityService.getActivitySlotsFlat(planId) as Promise<AutoAssignmentSlot[]>,
+        activityService.getParticipantAssignmentsWithSlots(planId),
+        activityService.getParticipantRolesForPlan(planId),
+    ]);
+    if (!plan) throw new APIError('Activity plan not found', {planId}, 404);
+
+    existingRecommendations ??= await recommendationService.getRecommendations(planId);
+    const recommendationMemory: RecommendationInput[] = existingRecommendations.map((recommendation) => ({
+        itemId: recommendation.item.id,
+        profileId: recommendation.profile.id,
+        status: recommendation.status,
+        operation: recommendation.operation,
+        sourceItemId: recommendation.sourceItem?.id ?? null,
+        manual: recommendation.manual,
+        hidden: recommendation.hidden,
+    }));
+    const eventParticipants = plan.event
+        ? await eventService.getEventParticipants(plan.event.id)
+        : [];
+    const participants = mergeParticipants(
+        eventParticipants.map((participant) => ({
+            profileId: participant.profileId ?? undefined,
+            arrivalDate: participant.arrivalDate ?? undefined,
+            departureDate: participant.departureDate ?? undefined,
+            name: participant.name ?? undefined,
+        })),
+        // Existing external assignees remain eligible only under the plan's established
+        // external policy (or for a standalone plan). Retained overrides are requirements,
+        // never an independent source of participants after a relationship changes.
+        !plan.event || plan.allowExternalAssignees ? participantsFromAssignments(existingAssignments) : [],
+    );
+    const participantByKey = new Map(participants.map((participant) => [toParticipantKey(participant), participant]));
+    for (const participantRole of participantRoles) {
+        const participant = participantByKey.get(participantRole.participantKey);
+        if (participant) participant.roleIds = participantRole.roleIds;
+    }
+
+    return {
+        plan: {
+            eventId: plan.eventId ?? null,
+            allowExternalAssignees: plan.allowExternalAssignees,
+            assignmentMode: plan.assignmentMode,
+            generalRequiredShifts: plan.generalRequiredShifts,
+            roundingMode: plan.roundingMode,
+            startDate: plan.startDate,
+            endDate: plan.endDate,
+            allowOverfillAfterFull: plan.allowOverfillAfterFull,
+            allowArrivalDayEvening: plan.allowArrivalDayEvening,
+            allowDepartureDayMorning: plan.allowDepartureDayMorning,
+        },
+        slots,
+        participants,
+        roleRequirements: requirementConfig.roleRequirements,
+        overrides: requirementConfig.overrides,
+        stayRequirements: requirementConfig.stayRequirements,
+        existingAssignments,
+        existingRecommendations: recommendationMemory,
+    };
+}
+
+/** Shared by synchronous generation and post-application refresh; jobs use the same persistence guard. */
+async function generateAndSaveRecommendations(planId: string, existing: ActivityAssignmentRecommendation[]): Promise<RecommendationInput[]> {
+    const context = await buildPlanRecommendationContext(planId, existing);
+    const fingerprint = fingerprintRecommendationContext(context);
+    const recommendations = generateAutoRecommendations(context);
+    const freshContext = await buildPlanRecommendationContext(planId);
+    if (fingerprintRecommendationContext(freshContext) !== fingerprint) {
+        throw new APIError('Plan inputs changed while recommendations were being calculated', {}, 409);
+    }
+    await saveGeneratedRecommendations(planId, recommendations, {
+        eventId: context.plan.eventId ?? null,
+        startDate: context.plan.startDate,
+        endDate: context.plan.endDate,
+    });
+    return recommendations;
 }
 
 async function autoGenerateRecommendations(planId: string) {
@@ -1541,7 +1915,7 @@ async function autoGenerateRecommendations(planId: string) {
     if (plan.assignmentMode === "FREE") {
         throw new APIError('Automatic recommendations are disabled in free assignment mode', {planId}, 409);
     }
-    const requirementConfig = await requirementService.getRequirementConfiguration(planId);
+    const requirementConfig = await requireRequirementConfiguration(planId);
     const planDays = countInclusiveDays(plan.startDate, plan.endDate);
     if (!hasCompleteStayRequirements(planDays, requirementConfig.stayRequirements)) {
         throw new APIError(
@@ -1556,10 +1930,7 @@ async function autoGenerateRecommendations(planId: string) {
     const existingRecommendations = await recommendationService.getRecommendations(planId);
 
     // Generate with rejection memory
-    const recommendations = await generatePlanRecommendations(planId, existingRecommendations);
-
-    // Now replace with new recommendations that respect rejection memory
-    await recommendationService.replacePendingRecommendations(planId, recommendations);
+    const recommendations = await generateAndSaveRecommendations(planId, existingRecommendations);
 
     const warnings = await collectRecommendationWarnings(planId, recommendations);
     return {message: 'Recommendations generated', warnings};
@@ -1568,7 +1939,7 @@ async function autoGenerateRecommendations(planId: string) {
 async function applyRecommendations(planId: string, body?: any) {
     const [plan, requirementConfig, slots, recommendations, existingAssignments] = await Promise.all([
         activityService.getActivityPlanById(planId),
-        requirementService.getRequirementConfiguration(planId),
+        requireRequirementConfiguration(planId),
         activityService.getActivitySlotsFlat(planId),
         recommendationService.getRecommendations(planId),
         activityService.getParticipantAssignmentsWithSlots(planId),
@@ -1614,9 +1985,10 @@ async function applyRecommendations(planId: string, body?: any) {
         }));
 
         // Applied history is hidden from the review payload, but remains available for audit and rejection memory.
-        await recommendationService.replaceRecommendations(
+        await saveReviewedRecommendations(
             planId,
             preserveRecommendationHistory(recommendations, updatedRecommendations),
+            recommendationContext(plan),
         );
 
         const persistedRecommendations = await recommendationService.getRecommendations(planId);
@@ -1718,7 +2090,7 @@ async function applyRecommendations(planId: string, body?: any) {
     }
 
     const applicable = normalized.filter((rec) => !blockedKeys.has(recommendationInputKey(rec)));
-    await activityService.applyActivityRecommendationOperations(
+    await applyActivityRecommendationOperations(
         planId,
         applicable.map((recommendation) => ({
             itemId: recommendation.itemId,
@@ -1726,6 +2098,7 @@ async function applyRecommendations(planId: string, body?: any) {
             operation: recommendation.operation ?? "ASSIGN",
             sourceItemId: recommendation.sourceItemId ?? null,
         })),
+        recommendationContext(plan),
     );
 
     await recommendationService.markRecommendationsApplied(
@@ -1739,10 +2112,7 @@ async function applyRecommendations(planId: string, body?: any) {
         const existingForRejectionMemory = await recommendationService.getRecommendations(planId);
 
         // Generate fresh recommendations with rejection memory
-        const freshRecommendations = await generatePlanRecommendations(planId, existingForRejectionMemory);
-
-        // Replace only obsolete pending recommendations with fresh ones.
-        await recommendationService.replacePendingRecommendations(planId, freshRecommendations);
+        await generateAndSaveRecommendations(planId, existingForRejectionMemory);
     }
 
     return {
@@ -1777,7 +2147,7 @@ async function queueAutoGenerateRecommendations(planId: string) {
     if (plan.assignmentMode === "FREE") {
         throw new APIError('Automatic recommendations are disabled in free assignment mode', {planId}, 409);
     }
-    const requirementConfig = await requirementService.getRequirementConfiguration(planId);
+    const requirementConfig = await requireRequirementConfiguration(planId);
     const planDays = countInclusiveDays(plan.startDate, plan.endDate);
     if (!hasCompleteStayRequirements(planDays, requirementConfig.stayRequirements)) {
         throw new APIError(
@@ -1830,23 +2200,109 @@ async function addActivityRole(plan: ActivityPlan, body: any) {
     return activityService.ensureRoleId(plan.id, name, isDefault === 'on', description);
 }
 
+/** Role quotas and assignment ownership are checked before replacing any role links. */
 async function updateRoleAssignments(slotId: string, body: any) {
-    const {assignments} = body
+    const {assignments} = body;
     if (!Array.isArray(assignments)) throw new APIError('Not an array', body, 400);
-    const slot = await activityService.getActivitySlotById(slotId);
-    if (!slot) throw new APIError('Activity slot not found', {slotId}, 404);
-    const allowedRoles = new Set(
-        ((await activityService.getActivitySlotRoles(slot.entityId))[slotId] ?? []).map((role) => role.name),
-    );
-    if (assignments.some((assignment) => !assignment || !allowedRoles.has(assignment.role))) {
-        throw new APIError('Roles must be configured for this activity slot', body, 400);
+    const current = await activityService.getActivitySlotById(slotId);
+    if (!current) throw new APIError('Activity slot not found', {slotId}, 404);
+    const planId = current.entityId;
+    async function saveRoles(manager: EntityManager): Promise<void> {
+        await requireRecommendationContext(manager, planId);
+        const [slot] = await activityService.getLockedActivitySlots(manager, [slotId]);
+        if (!slot) throw new APIError('Activity slot not found', {slotId}, 404);
+        const configured = await activityService.getConfiguredSlotRoles(manager, slotId);
+        const byName = new Map(configured.map((entry) => [entry.role.title, entry]));
+        const currentAssignments = await activityService.getLockedPlanAssignments(manager, planId, slotId);
+        const assignmentIds = new Set(currentAssignments.map((assignment) => assignment.id));
+        const requestedCounts = new Map<string, number>();
+        const rows: {assignmentId: number; roleId: number}[] = [];
+        for (const entry of assignments) {
+            const role = entry && byName.get(entry.role);
+            if (!role) throw new APIError('Roles must be configured for this activity slot', body, 400);
+            const assignmentId = entry.assignmentId === null ? null : Number.parseInt(entry.assignmentId) || null;
+            if (assignmentId === null) continue;
+            if (!assignmentIds.has(assignmentId)) throw new APIError('Assignment not found in this slot', body, 400);
+            const count = (requestedCounts.get(entry.role) ?? 0) + 1;
+            if (entry.role !== 'default' && count > (role.maxQty ?? 0)) {
+                throw new APIError('This activity role is already full', {slotId, role: entry.role}, 409);
+            }
+            requestedCounts.set(entry.role, count);
+            rows.push({assignmentId, roleId: role.role.id});
+        }
+        await activityService.replaceActivityAssignmentRoles(manager, [...assignmentIds], rows);
     }
-    const parsed: { assignmentId: number | null, role: string }[] = assignments.map(v => {
-        v.assignmentId = v.assignmentId !== null ? Number.parseInt(v.assignmentId) || null : null;
-        return v
-    });
-    await activityService.updateRoleAssignments(slotId, parsed);
-    return "Assignments updated";
+    await activityService.withActivityTransaction(saveRoles);
+    return 'Assignments updated';
+}
+
+/**
+ * Slot/role quotas are command policy. Read and validate them after the root and slot locks,
+ * then pass only the selected IDs to DBAL. An existing role link is an idempotent no-op.
+ */
+async function assignActivityAssignmentRole(itemId: string, profileId: string, roleName = 'default'): Promise<void> {
+    const current = await activityService.getActivitySlotById(itemId);
+    if (!current) throw new APIError('Activity slot not found', {itemId}, 404);
+    const planId = current.entityId;
+    async function assignParticipant(manager: EntityManager): Promise<void> {
+        const plan = await requireRecommendationContext(manager, planId);
+        const [slot] = await activityService.getLockedActivitySlots(manager, [itemId]);
+        if (!slot) throw new APIError('Activity slot not found', {itemId}, 404);
+        const assignments = await activityService.getLockedPlanAssignments(manager, planId, itemId);
+        const existing = assignments.find((assignment) => assignment.profile.id === profileId);
+        if (!existing && !plan.allowOverfillAfterFull && slot.maxAssignees != null && assignments.length >= slot.maxAssignees) {
+            throw new APIError('This activity slot is already full', {itemId}, 409);
+        }
+        let role = await activityService.getActivityRoleByName(manager, planId, roleName);
+        if (!role && roleName !== 'default') {
+            throw new APIError('Activity role is not available for this plan', {itemId, roleName}, 400);
+        }
+        if (role && existing && assignmentHasRole(existing, role.id)) return;
+        if (roleName !== 'default') {
+            // A named role must have survived the existence check above; capture its ID
+            // once so all quota comparisons use the same selected role snapshot.
+            const roleId = role!.id;
+            const configured = await activityService.getConfiguredSlotRoles(manager, itemId);
+            const slotRole = configured.find((entry) => entry.role.id === roleId);
+            if (!slotRole) throw new APIError('Activity role is not available for this slot', {itemId, roleName}, 400);
+            let roleCount = 0;
+            for (const assignment of assignments) {
+                if (assignmentHasRole(assignment, roleId)) roleCount++;
+            }
+            // Slot overfill does not relax the independently configured named-role quota.
+            if (slotRole.maxQty != null && roleCount >= slotRole.maxQty) {
+                throw new APIError('This activity role is already full', {itemId, roleName}, 409);
+            }
+        }
+        if (!role) [role] = await activityService.ensureRoleId(planId, 'default', true, undefined, manager);
+        await activityService.saveActivityAssignmentRole(manager, planId, itemId, profileId, role.id, existing?.id);
+    }
+    await activityService.withActivityTransaction(assignParticipant);
+}
+
+function assignmentHasRole(assignment: ActivityAssignment, roleId: number): boolean {
+    return assignment.activityAssignmentRoles.some((entry) => entry.role.id === roleId);
+}
+
+/** Removing the last role ends the signup; the controller owns this domain decision. */
+async function unassignActivityAssignmentRole(itemId: string, profileId: string, roleName = 'default'): Promise<void> {
+    const current = await activityService.getActivitySlotById(itemId);
+    if (!current) return;
+    const planId = current.entityId;
+    async function unassignParticipant(manager: EntityManager): Promise<void> {
+        await requireRecommendationContext(manager, planId);
+        await activityService.getLockedActivitySlots(manager, [itemId]);
+        const assignments = await activityService.getLockedPlanAssignments(manager, planId, itemId);
+        const assignment = assignments.find((entry) => entry.item.id === itemId && entry.profile.id === profileId);
+        if (!assignment) return;
+        const role = assignment.activityAssignmentRoles.find((entry) => entry.role.title === roleName);
+        if (roleName === 'default' || (role && assignment.activityAssignmentRoles.length === 1)) {
+            await activityService.deleteActivitySlotAssignment(assignment.id, manager);
+        } else if (role) {
+            await activityService.deleteActivityAssignmentRole(manager, role.id);
+        }
+    }
+    await activityService.withActivityTransaction(unassignParticipant);
 }
 
 async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
@@ -1859,17 +2315,137 @@ async function deleteHeaderImg(entity: EntityBase) {
     return 'Image deleted';
 }
 
+/**
+ * Applies a reviewed recommendation batch atomically. Reassignments release all
+ * source slots before capacity is checked for their targets, which also makes a
+ * two-row swap safe regardless of row order.
+ */
+async function applyActivityRecommendationOperations(
+    planId: string,
+    operations: ActivityRecommendationOperationInput[],
+    expected?: ActivityRecommendationContext,
+): Promise<void> {
+    if (operations.length === 0) return;
+
+    async function applyOperations(manager: EntityManager): Promise<void> {
+        const plan = await requireRecommendationContext(manager, planId, expected);
+
+        const referencedSlotIds = [...new Set(operations.flatMap((operation) => [
+            operation.itemId,
+            ...(operation.sourceItemId ? [operation.sourceItemId] : []),
+        ]))];
+        const slots = await activityService.getLockedActivitySlots(manager, referencedSlotIds);
+        if (slots.length !== referencedSlotIds.length || slots.some((slot) => slot.entityId !== planId)) {
+            throw new APIError("Recommendation slot does not belong to this activity plan", {planId}, 400);
+        }
+        const slotById = new Map(slots.map((slot) => [slot.id, slot]));
+
+        const assignments = await activityService.getLockedPlanAssignments(manager, planId);
+        function pairKey(itemId: string, profileId: string): string {
+            return `${itemId}:${profileId}`;
+        }
+        const assignmentByPair = new Map(
+            assignments.map((assignment) => [pairKey(assignment.item.id, assignment.profile.id), assignment]),
+        );
+        // Retained drafts can name profiles from a former event. Recheck eligibility using
+        // the now-locked relationship; saved overrides alone never authorize an assignment.
+        if (plan.eventId) {
+            const allowedProfiles = new Set(await activityService.getRegisteredProfileIds(manager, plan.eventId));
+            if (plan.allowExternalAssignees) {
+                for (const assignment of assignments) allowedProfiles.add(assignment.profile.id);
+            }
+            for (const operation of operations) {
+                if (!allowedProfiles.has(operation.profileId)) {
+                    throw new APIError('Recommendations must target participants registered for this event', operation, 400);
+                }
+            }
+        }
+        const removals = new Map<number, ActivityAssignment>();
+        const additions: ActivityRecommendationOperationInput[] = [];
+        const additionPairs = new Set<string>();
+
+        for (const operation of operations) {
+            const targetPair = pairKey(operation.itemId, operation.profileId);
+            if (operation.operation === "ASSIGN") {
+                if (assignmentByPair.has(targetPair) || additionPairs.has(targetPair)) {
+                    throw new APIError("Participant is already assigned to the recommendation slot", operation, 409);
+                }
+                additionPairs.add(targetPair);
+                additions.push(operation);
+                continue;
+            }
+
+            const sourceItemId = operation.operation === "REASSIGN"
+                ? operation.sourceItemId
+                : operation.itemId;
+            if (!sourceItemId) {
+                throw new APIError("Reassignment requires a source slot", operation, 400);
+            }
+            const source = assignmentByPair.get(pairKey(sourceItemId, operation.profileId));
+            if (!source) {
+                throw new APIError("Recommendation source assignment no longer exists", operation, 409);
+            }
+            if (removals.has(source.id)) {
+                throw new APIError("An assignment can only be changed once per recommendation batch", operation, 409);
+            }
+
+            if (operation.operation === "REASSIGN") {
+                if (sourceItemId === operation.itemId) {
+                    throw new APIError("Reassignment target must differ from its source", operation, 400);
+                }
+                if (source.activityAssignmentRoles.some(({role}) => !role.isDefault)) {
+                    throw new APIError("Assignments with named roles cannot be automatically reassigned", operation, 409);
+                }
+                if (assignmentByPair.has(targetPair) || additionPairs.has(targetPair)) {
+                    throw new APIError("Participant is already assigned to the recommendation slot", operation, 409);
+                }
+                additionPairs.add(targetPair);
+                additions.push(operation);
+            }
+            removals.set(source.id, source);
+        }
+
+        const projectedCounts = new Map<string, number>();
+        // Calculate final occupancy before any write. Removing every source first permits
+        // reciprocal moves between full slots; validating additions against the original
+        // occupancy would wrongly reject those swaps or make the result depend on row order.
+        for (const assignment of assignments) {
+            if (!removals.has(assignment.id)) {
+                projectedCounts.set(assignment.item.id, (projectedCounts.get(assignment.item.id) ?? 0) + 1);
+            }
+        }
+        for (const addition of additions) {
+            const target = slotById.get(addition.itemId)!;
+            const count = projectedCounts.get(target.id) ?? 0;
+            if (!plan.allowOverfillAfterFull && target.maxAssignees != null && count >= target.maxAssignees) {
+                throw new APIError("This activity slot is already full", addition, 409);
+            }
+            projectedCounts.set(target.id, count + 1);
+        }
+
+        // Only the controller decides which removals/additions are valid. The DBAL receives
+        // the resulting write set and applies it in this still-locked transaction.
+        const rows: {itemId: string; profileId: string; roleId: number}[] = [];
+        if (additions.length) {
+            const [defaultRole] = await activityService.ensureRoleId(planId, 'default', true, undefined, manager);
+            for (const addition of additions) rows.push({...addition, roleId: defaultRole.id});
+        }
+        await activityService.writeAssignmentChanges(manager, planId, [...removals.keys()], rows);
+    }
+    await activityService.withActivityTransaction(applyOperations);
+}
+
 function getAssignmentAccessMapping() {
     return {
-        assign: (body: any, profileId: string) => activityService.assignActivityAssignmentRole(body.itemId, profileId),
-        unassign: (body: any, profileId: string) => activityService.unassignActivityAssignmentRole(body.itemId, profileId),
+        assign: (body: any, profileId: string) => assignActivityAssignmentRole(body.itemId, profileId),
+        unassign: (body: any, profileId: string) => unassignActivityAssignmentRole(body.itemId, profileId),
     };
 }
 
 function getRoleAccessMapping() {
     return {
-        assign: (body: any, profileId: string) => activityService.assignActivityAssignmentRole(body.itemId, profileId, body.role),
-        unassign: (body: any, profileId: string) => activityService.unassignActivityAssignmentRole(body.itemId, profileId, body.role),
+        assign: (body: any, profileId: string) => assignActivityAssignmentRole(body.itemId, profileId, body.role),
+        unassign: (body: any, profileId: string) => unassignActivityAssignmentRole(body.itemId, profileId, body.role),
     };
 }
 
@@ -1884,6 +2460,8 @@ export default {
     deleteEntity,
 
     updateDescription,
+    updateProperties,
+    invalidateEventContext,
     createTextField,
     updateTextField,
     deleteTextField,

@@ -11,22 +11,12 @@ import {startInlineEdit, startInlineEditArea} from '../../shared/inline-edit';
 import {reloadAfterDelay} from '../../shared/ui-helpers';
 
 /**
- * Initialize inline editing for slots and plan description
+ * Initialize inline editing for slots and shared text fields; root properties use Entity settings.
  */
 export function initInlineEdit(planId: string): void {
     document.addEventListener('dblclick', (e: Event) => {
         const target = e.target as Element | null;
         if (!target) return;
-
-        // Plan description
-        const desc = target.closest<HTMLElement>('[data-edit="planDescription"]');
-        if (desc) {
-            return startInlineEditArea(desc, `/api/activity/${planId}/description`, {
-                scope: 'entity',
-                key: 'EDIT_DESC',
-                action: 'edit activity descriptions',
-            });
-        }
 
         const textField = target.closest<HTMLElement>('[data-edit="textField"]');
         if (textField && textField.dataset.id) {

@@ -8,8 +8,8 @@ block meta
     title #{ev.title} | Event
 
 block title
-    +entityHeader(ev, "event", "bi-calendar2-event", permData)
-    +entityImageModal(ev, "event")
+    +entityHeader(ev, "event", "bi-calendar2-event", permData, data.entityProperties, data.archive)
+    +entityPropertiesModal(ev, data.entityProperties, data.archive, {admins, perms})
 
 block content
     //- Display the controller's event projection for every admitted viewer; available manager actions

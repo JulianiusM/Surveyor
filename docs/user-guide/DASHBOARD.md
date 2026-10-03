@@ -4,10 +4,10 @@ documentation-metadata
 audience: novice users; organizers; participants
 owner: dashboard feature maintainers
 status: current
-last-verified: 2026-09-16
+last-verified: 2026-10-03
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: source review of mixed paged cards, event expansion, search/count labels, profile membership and visibility fallbacks; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D02 global navigation, profile-scoped overview collections, and owner-only card actions; D14 rendered help navigation, semantic checks, and trusted-content integration
-source-anchors: src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/views/modules/module_entity_archive.pug; src/views/layout.pug; src/routes/users.ts; src/routes/api/users.ts; src/controller/userController.ts; src/views/users/dashboard.pug; src/views/modules/module_unified_entity_cards.pug; src/public/js/user-dashboard.ts; src/public/js/modules/entity-cards-overview.ts; tests/integration/controller-smoke-workflows.spec.ts; tests/unit/application-utilities.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; source-reviewed Entity settings dialog labels, per-action permissions, root property changes, image/actions, minimal archival hints, and event selection/reassociation boundaries; source review of mixed paged cards, event expansion, search/count labels, profile membership and visibility fallbacks; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D02 global navigation, profile-scoped overview collections, and owner-only card actions; D14 rendered help navigation, semantic checks, and trusted-content integration
+source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/views/modules/module_entity_archive.pug; src/views/layout.pug; src/routes/users.ts; src/routes/api/users.ts; src/controller/userController.ts; src/views/users/dashboard.pug; src/views/modules/module_unified_entity_cards.pug; src/public/js/user-dashboard.ts; src/public/js/modules/entity-cards-overview.ts; tests/integration/controller-smoke-workflows.spec.ts; tests/unit/application-utilities.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: overview-or-navigation-visible-UI-change
 -->
 
@@ -86,10 +86,12 @@ A card can show:
 - the title;
 - a shortened description;
 - a type badge;
-- **Archived** or **Archived with event**, independently of whether the card is in the main section;
+- **Archived**, independently of whether the card is in the main section;
 - **Hidden for me** or **Shown for me** when you saved a personal visibility choice.
 
 Select the image or the main body of the card to open the item. The feature page then shows the actions available to the active profile.
+
+On a feature page, **Entity settings** gathers permitted property, image, sharing, event-link, archival, and other actions. Only actions available to the active profile appear. Ordinary archived feature views show **This entity is archived.**; organizer explanations are inside the dialog.
 
 ## Open an event's linked entities
 
@@ -126,9 +128,9 @@ Your choice applies to both collections and is saved for the active profile, inc
 
 ## Archive or restore for everyone
 
-An owner or organizer with **Edit Meta** can select **Archive for everyone** or **Restore for everyone** under **For everyone** in a card's **Archival** menu, or in the **Archival** section on the feature page. For surveys, only the owner has these controls. Confirm the action when prompted.
+An owner or organizer with **Edit Meta** can select **Archive for everyone** or **Restore for everyone** under **For everyone** in a card's **Archival** menu, or open the feature page's **Entity settings** → **Actions** → **Archival**. For surveys, only the owner has these controls. Confirm the action when prompted.
 
-Archiving an event archives all its attached entities and contents together. Restoring the event restores inherited archival; an attached entity archived separately stays archived until restored separately. **Archived with event** means the event must be restored first; use **Open event** where available. Permission to manage a child does not grant permission to restore its event.
+Archiving an event archives all its attached entities and contents together. Restoring the event restores inherited archival; an attached entity archived separately stays archived until restored separately. The **Archival** section inside **Entity settings** explains inherited archival and provides **Open event** where available when the event must be restored first. Permission to manage a child does not grant permission to restore its event.
 
 You can use **Archive for everyone** on a child already archived with its event to keep that child archived independently after the event is restored. The confirmation explains this effect.
 
@@ -144,6 +146,8 @@ The **Administrable entities** collection can show these buttons on a card:
 - **Delete** asks **Delete this item?** and then permanently removes the item when confirmed.
 
 These card buttons appear only when the active profile is the item owner. A profile that can administer an item but does not own it can still open the card, but does not receive **Duplicate** or **Delete** on the overview card. Additional administration controls depend on the feature and its access settings.
+
+The feature page's **Entity settings** → **Actions** also offers **Duplicate** when the active full-account profile has **Data Duplicate**, and **Delete permanently** for the owner. This can give a delegated profile access to duplication without showing an owner-only card button. The same dialog contains authorized exports where the feature supports them.
 
 A duplicate starts without the original's direct archival, automation pause, or personal visibility choices. When it is created under an archived event, it inherits that event's archival. Old dates on a new standalone plan or event can make it eligible for automatic archival.
 

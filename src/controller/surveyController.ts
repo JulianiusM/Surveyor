@@ -15,6 +15,7 @@
  */
 
 import {Request} from "express";
+import {assertEntityPropertyContext, normalizeBasicProperties} from './entityAdminController';
 import Joi from 'joi';
 import {Survey} from "../modules/database/entities/surveys/Survey";
 import {SurveyCombination} from "../modules/database/entities/surveys/SurveyCombination";
@@ -161,7 +162,22 @@ async function deleteHeaderImg(entity: EntityBase) {
     return 'Image deleted';
 }
 
+/**
+ * Surveys keep their owner-only authorization in the shared property controller. Normalize before
+ * locking, then check existence under the lock so a concurrent deletion cannot report a false save.
+ * The service receives a plain patch and transaction manager, never request-specific error policy.
+ */
+async function updateProperties(entity: EntityBase, body: unknown) {
+    const patch = normalizeBasicProperties(body);
+    await surveyService.withSurveyLock(entity.id, async function saveLocked(manager, current) {
+        assertEntityPropertyContext(current);
+        await surveyService.updateSurveyProperties(entity.id, patch, manager);
+    });
+    return 'Properties updated';
+}
+
 export default {
+    updateProperties,
     preprocessCreate,
     createEntity,
     afterCreateItems,

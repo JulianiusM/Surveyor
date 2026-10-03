@@ -141,12 +141,12 @@ test('keeps archived cards accessible in collapsed sections and persists persona
     await expect(archive.locator(`.js-item[data-id="${child.id}"]`)).toHaveCount(0);
     await ownerCard.getByRole('link', {name: `Show linked entities for ${event.title}`}).click();
     const archivedChild = archive.locator(`.js-item[data-id="${child.id}"]`);
-    await expect(archivedChild).toContainText('Archived with event');
+    await expect(archivedChild).toContainText('Archived');
     // These controls arrived in a fetched sub-view. Delegation must preserve personal
     // placement and refresh the other region without restoring the archived parent.
     await chooseCardAction(page, archivedChild, 'Show for me');
     const shownChild = main.locator(`.js-item[data-id="${child.id}"]`);
-    await expect(shownChild).toContainText('Archived with event');
+    await expect(shownChild).toContainText('Archived');
     await chooseCardAction(page, shownChild, 'Use default visibility');
     await expect(archivedChild).toBeVisible();
     await archive.getByRole('link', {name: 'Back to overview', exact: true}).click();
@@ -169,14 +169,17 @@ test('keeps archived cards accessible in collapsed sections and persists persona
     await expect(archive.locator(`.js-item[data-id="${event.id}"]`)).toBeVisible();
     await chooseCardAction(page, ownerCard, 'Restore for everyone');
     await expect(ownerCard).toBeVisible();
-    await expect(ownerCard).toContainText('Automatic archival paused');
+    await expect(ownerCard).not.toContainText('Automatic archival paused');
     // A restored, active event can still be hidden privately, and navigation must preserve that choice.
     await chooseCardAction(page, ownerCard, 'Hide for me');
     await expect(main.locator(`.js-item[data-id="${event.id}"]`)).toHaveCount(0);
     // Personal hiding affects the overview alone; direct access and shared child cards still work.
     await page.goto(event.path);
     await expect(page.locator(`.js-item[data-id="${child.id}"]`)).toBeVisible();
-    await expect(page.locator('[data-archive-notice]')).toContainText('Automatic archival paused');
+    await expect(page.locator('[data-archive-notice]')).toHaveCount(0);
+    await page.getByRole('button', {name: 'Entity settings', exact: true}).click();
+    await expect(page.locator('#entityPropertiesModal')).toContainText('Automatic archival stays paused');
+    await page.locator('#entityPropertiesModal .modal-footer').getByRole('button', {name: 'Close', exact: true}).click();
     await page.goto(child.path);
     await expect(page.getByRole('heading', {name: child.title, exact: true})).toBeVisible();
     await page.goto('/users/dashboard');
@@ -200,8 +203,8 @@ test('enforces metadata authority, owner-only surveys and session-only personal 
             form: {...createE2EEvent().form, title: 'Archival access rules', startDate: '2099-08-05', endDate: '2099-08-07'},
         });
         Object.assign(eventCase.form, {'defaultPerms[public][0]': 'ACCESS_REGISTRATION', 'defaultPerms[public][1]': 'ACCESS_VIEW'});
-        // Future dates keep the event eligible for the ordinary creation picker until archival explicitly
-        // removes it. Public view/registration grants let us distinguish access from overview membership.
+        // Public view/registration grants distinguish admission from overview membership.
+        // Future dates and archival are independent filters in the ordinary creation picker.
         const event = await createResourceViaForm(request, eventCase);
         const archiveUrl = `/api/event/${event.id}/archive`;
         const visibilityUrl = `/api/users/overview/event/${event.id}/visibility`;
@@ -270,7 +273,7 @@ test('enforces metadata authority, owner-only surveys and session-only personal 
         // Inherited archival cannot be removed from just the child, but it must not revoke direct access.
         expect((await request.post(`/api/packing/${child.id}/restore`, {data: {}})).status()).toBe(409);
         expect((await request.get(child.path)).status()).toBe(200);
-        expect(await (await request.get(child.path)).text()).toContain('Archived with event');
+        expect(await (await request.get(child.path)).text()).toContain('This entity is archived.');
 
         // Archival preserves downloadable records and their existing access boundaries.
         const retainedProof = await request.get(proofUrl);
@@ -285,16 +288,22 @@ test('enforces metadata authority, owner-only surveys and session-only personal 
         expect((await exported.body()).subarray(0, 5).toString()).toBe('%PDF-');
         expect((await guest.get(exportUrl)).status()).toBe(403);
 
-        // An archived future event leaves the general picker, but an explicit,
-        // authorized creation context retains its selection and inheritance notice.
+        // Ordinary discovery includes archived destinations. Contextual creation preserves
+        // the selected title and keeps its inheritance explanation inside the picker.
         await page.goto('/packing/create');
         await page.locator('#event_id-btn').click();
         await expect(page.locator('#event_id-modal')).toBeVisible();
-        await expect(page.locator(`#event_id-list [data-event-id="${event.id}"]`)).toHaveCount(0);
+        await page.locator('#event_id-search').fill(event.title);
+        await page.locator('#event_id-modal').getByText('Filter by dates and state', {exact: true}).click();
+        await page.locator('#event_id-archive').selectOption('archived');
+        await expect(page.locator(`#event_id-list [data-event-id="${event.id}"]`)).toBeVisible();
         await page.goto(childCase.createPath);
         await expect(page.locator('#event_id')).toHaveValue(event.id);
         await expect(page.locator('#event_id-btn-label')).toHaveText(event.title);
-        await expect(page.locator('[data-archive-notice]')).toContainText('The selected event is archived.');
+        await expect(page.locator('[data-archive-notice]')).toHaveCount(0);
+        await page.locator('#event_id-btn').click();
+        await expect(page.locator('#event_id-archive-hint')).toBeVisible();
+        await expect(page.locator('#event_id-archive-hint')).toContainText('Archived with selected event');
         const invalidCreate = await request.post(childCase.createPath, {
             form: {title: '', description: '', items: childCase.form.items, event_id: event.id}, maxRedirects: 0,
         });
@@ -302,8 +311,10 @@ test('enforces metadata authority, owner-only surveys and session-only personal 
         // data just like the initial GET; optional request locals must not be required to reconstruct it.
         const validationPage = await invalidCreate.text();
         expect(validationPage).toContain('id="packingForm"');
-        expect(validationPage).toContain('data-archive-notice');
-        expect(validationPage).toContain('The selected event is archived.');
+        expect(validationPage).not.toContain('data-archive-notice');
+        expect(validationPage).toContain('id="event_id-archive-hint"');
+        expect(validationPage).toContain('Archived with selected event');
+        expect(validationPage).toContain(event.title);
 
         // Surveys intentionally retain owner-only archival and have no automatic date schedule. Do not
         // infer the event's delegated-admin or date behavior simply because the API factory is shared.

@@ -42,3 +42,42 @@ export type PlanParticipant = {
 };
 
 export type SlotAssignmentMap = Record<string, SlotAssignee[]>;
+
+/** Only root properties accepted by the activity property editor; omission preserves saved values. */
+export interface ActivityPropertyPatch {
+    title?: string;
+    description?: string | null;
+    startDate?: string;
+    endDate?: string;
+}
+
+/** Relationship and dates used when computing work that must be checked under the plan write lock. */
+export interface ActivityRecommendationContext {
+    eventId: string | null;
+    startDate: string;
+    endDate: string;
+}
+
+/** Optional in-process freshness check for a job invalidated while it waited for the database lock. */
+export interface ActivityRecommendationPersistenceContext extends ActivityRecommendationContext {
+    isCurrent?: () => boolean;
+}
+
+export interface ActivityRecommendationOperationInput {
+    itemId: string;
+    profileId: string;
+    operation: import("../modules/database/entities/activity/ActivityAssignmentRecommendation").RecommendationOperation;
+    sourceItemId?: string | null;
+}
+
+
+export interface RecommendationInput {
+    id?: string;
+    itemId: string;
+    profileId?: string | null;
+    status?: import("../modules/database/entities/activity/ActivityAssignmentRecommendation").RecommendationStatus;
+    operation?: import("../modules/database/entities/activity/ActivityAssignmentRecommendation").RecommendationOperation;
+    sourceItemId?: string | null;
+    manual?: boolean;
+    hidden?: boolean;
+}

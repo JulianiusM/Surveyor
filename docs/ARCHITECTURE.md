@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; developers; AI agents
 owner: architecture maintainers
 status: current
-last-verified: 2026-09-16
+last-verified: 2026-10-03
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: source review of bounded mixed-card overview queries, event sub-views, shared membership and lifecycle projections, and fragment navigation; consolidated lifecycle and existing administration/user module boundaries; archival source-boundary, inheritance, overview-identity, and startup review; invoice correction and retraction lifecycles, refreshed submission history, and takeover overview dialogs; organizer-entered shared costs, repeat invoice submissions, visible payment feedback, and share breakdown dialogs; central named mail delivery and alert lifecycle, consistent pool relation snapshots, post-commit notifications, and saved-share PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, preview/commit calculation projection, cumulative settled credits, rollback snapshots, and settlement notification boundaries; non-blocking documentation policy and optional report/test routing; D12 runtime, layer, authentication, authorization, persistence, frontend, background-job, build, release, and testing architecture plus D08 advanced activity requirement, allocation, job, review, and persistence boundaries; help integration remains assigned to D14; D14 fixed-source help search, contextual routing, Markdown validation, local visual assets, and release boundary
-source-anchors: src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/modules/archive/policy.ts; src/modules/entityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoiceRetention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
+verification-scope: explicit controller-owned checks and pure DBAL/no context-specific service errors; implemented permission-filtered entity settings, atomic property updates, authorized event discovery/reassociation, and activity context preservation; source review of bounded mixed-card overview queries, event sub-views, shared membership and lifecycle projections, and fragment navigation; consolidated lifecycle and existing administration/user module boundaries; archival source-boundary, inheritance, overview-identity, and startup review; invoice correction and retraction lifecycles, refreshed submission history, and takeover overview dialogs; organizer-entered shared costs, repeat invoice submissions, visible payment feedback, and share breakdown dialogs; central named mail delivery and alert lifecycle, consistent pool relation snapshots, post-commit notifications, and saved-share PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, preview/commit calculation projection, cumulative settled credits, rollback snapshots, and settlement notification boundaries; non-blocking documentation policy and optional report/test routing; D12 runtime, layer, authentication, authorization, persistence, frontend, background-job, build, release, and testing architecture plus D08 advanced activity requirement, allocation, job, review, and persistence boundaries; help integration remains assigned to D14; D14 fixed-source help search, contextual routing, Markdown validation, local visual assets, and release boundary
+source-anchors: src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/modules/archive/policy.ts; src/modules/entityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/lib/invoiceDistribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoiceRetention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
 next-review: architecture-or-help-delivery-change
 -->
 
@@ -131,6 +131,7 @@ Several entity types use `createGuestFlowRouter` from `src/middleware/guestFlowF
 `src/controller/` contains request/response orchestration and feature-level normalization. Controllers commonly:
 
 - normalize or validate posted values;
+- enforce business rules and authorization, including checks against locked database snapshots;
 - call one or more service functions;
 - build data for a Pug view or API response;
 - choose flash messages, redirects, or expected errors; and
@@ -140,9 +141,15 @@ Most feature controllers export a plain object of functions; other controllers u
 
 ### Database services
 
-`src/modules/database/services/` exports functions that query repositories, save entities, and run transactions. Service files are organized by domain, but one function may coordinate several entities when the domain operation requires it. Callers import the module namespace or named functions.
+`src/modules/database/services/` is the pure database abstraction layer (DBAL). It exports repository queries, locks,
+transactions, and persistence functions. Business rules, authorization decisions, and input checks belong to
+controllers. Services do not throw `APIError`, `ExpectedError`, or other errors tied to an HTTP/UI context.
+Callers import the module namespace or named functions.
 
-Multi-step writes that must be atomic use TypeORM transactions. Service functions return entities, identifiers, projections, or workflow-specific data rather than HTTP responses.
+Multi-step writes that must be atomic use TypeORM transactions. A service-managed transaction can invoke a named
+controller operation with a manager and nullable locked rows. The controller checks the snapshot and calls DBAL writes
+with that same manager. Services return database rows or persistence results; controllers decide whether absence,
+conflicts, capacity, or lifecycle state should reject the operation. Native database failures propagate normally.
 
 ### Entities, migrations, and subscribers
 
@@ -282,6 +289,27 @@ Confirmed participant submissions clear invoice-specific inputs and refresh the 
 the available pool selection for the next upload. Inputs remain locked during the refresh; pending and uncertain
 uploads remain protected against duplicate submission.
 
+### Entity settings
+
+The five root views and event dashboard use `module_entity_properties.pug`. The existing
+`entityAdminController` builds `data.entityProperties` from the same field policy used to authorize property writes.
+Feature controllers normalize input, and their existing services persist each property patch atomically.
+The browser dialog hosts the existing image, permission, administrator, and archival commands through shared UI
+helpers. Each section has its own draft and save boundary; pending writes freeze controls and successful writes
+refresh server-rendered permissions and context. General, Linked event, Access, and Actions tabs appear only when
+usable. Property families expand individually, and Access shows one audience or administrator editor at a time.
+Inline event, time-zone, and administrator controls avoid nested modals; time-zone search, common choices, browser
+detection, and UTC offsets remain shared between inline and standalone hosts.
+
+Creation and later event linking use the actual submitted destination and the cumulative permission engine.
+The permission engine supplies query scope for event discovery. `EventService` applies those supplied predicates
+before the page limit; `eventController` rechecks effective attachment permission before returning options. The picker
+replaces pages rather than accumulating DOM rows, preserves the selected event, and keeps bounded navigation history.
+`EntityLifecycleService` locks old/new parents in deterministic order, then the child. Its controller callback checks
+the expected relationship and authorizes the change while those locks remain held. Activity context changes invalidate generated
+pending suggestions and jobs while preserving committed assignments, manual drafts, overrides, and review history.
+Surveys remain standalone with owner-only property editing. No new schema is required.
+
 ### Profile overview
 
 The dashboard keeps participation and administration separate, each with main and hidden regions. Its mixed card
@@ -326,14 +354,14 @@ The implementation keeps these responsibilities separate:
 | Boundary | Responsibility |
 |---|---|
 | `modules/archive/policy.ts` | Pure UTC cutoff, effective-state, and personal-placement rules. |
-| `database/services/EntityLifecycleService.ts` | Root selection and parent loading inside persistence, snapshot projections, archive/restore writes, conditional automatic updates, and transaction locks for archival and preference commands. |
-| Existing `database/services/UserService.ts` and feature services | Active-profile visibility preferences, single-target eligibility checks, and bounded overview queries; feature services own the shared membership predicates. |
-| Existing `controller/entityAdminController.ts` and `middleware/adminApiFactory.ts` | Shared lifecycle validation, existing authorization, presentation capabilities, and API registration. |
-| Existing `controller/userController.ts` | Personal visibility validation, overview navigation normalization, and bounded presentation for the active profile. |
+| `database/services/EntityLifecycleService.ts` | Root and parent reads, coherent raw snapshots, lifecycle writes, conditional automatic updates, and transaction locks. |
+| Existing `database/services/UserService.ts` and feature services | Visibility preference persistence, membership queries, and bounded overview queries; feature services own the shared SQL membership predicates. |
+| Existing `controller/entityAdminController.ts` and `middleware/adminApiFactory.ts` | Lifecycle validation and authorization, effective-state and scheduling projection, presentation capabilities, and API registration. |
+| Existing `controller/userController.ts` | Personal visibility validation and membership decisions under the service-managed lock, overview navigation normalization, and bounded presentation. |
 | `modules/entityArchival.ts` | Independent startup/hourly scheduling and local overlap prevention. |
 | Shared archive/card Pug mixins and browser modules | Server-calculated state, bounded overview/sub-view navigation, explicit commands, and refresh after success. |
 
-Overview membership is discovered before archival placement. Direct and parent state are resolved once per distinct reference in a `REPEATABLE READ` snapshot and reused across participation/administration cards. Personal `hidden` and `shown` overrides belong to the active profile; no preference means default placement. They never enter shared entity serialization or the event's **Things to do** filtering. Complete managed-event discovery includes historical events; creation pickers retain their active-date restriction and exclude archived events by default.
+Overview membership is discovered before archival placement. Direct and parent state are resolved once per distinct reference in a `REPEATABLE READ` snapshot and reused across participation/administration cards. Personal `hidden` and `shown` overrides belong to the active profile; no preference means default placement. They never enter shared entity serialization or the event's **Things to do** filtering. Creation and settings event pickers include authorized historical and archived events by default, with explicit date, archive, period, and registration-deadline filters.
 
 Optional lifecycle notices travel with the renderer's page data and explicit Pug mixin arguments. Shared contracts
 live in `types/ArchiveTypes.d.ts`; repository dispatch and lock implementation stay inside the persistence boundary.

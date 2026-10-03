@@ -88,7 +88,8 @@ describe('automatic archival runner', () => {
         // date halfway through a run. Disabling automation must bypass persistence entirely.
         const now = new Date('2026-09-16T14:00:00Z');
         await runEntityArchival(now);
-        expect(archiveExpiredEntities).toHaveBeenCalledWith(30, now);
+        // The controller resolves policy into one SQL date before calling the pure DBAL.
+        expect(archiveExpiredEntities).toHaveBeenCalledWith('2026-08-16', now);
         settings.value.autoArchiveEnabled = false;
         expect(await runEntityArchival(now)).toBe(0);
         expect(archiveExpiredEntities).toHaveBeenCalledTimes(1);

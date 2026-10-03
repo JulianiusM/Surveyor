@@ -29,6 +29,62 @@ export type CreateEventDTO = {
 
 export type DIETARY = "MEAT" | "FISH" | "VEGETARIAN" | "VEGAN" | "HALAL" | "KOSHER" | "ALLERGIES" | "COMMENT";
 
+/** Minimal, authorized event information shared by creation and entity settings pickers. */
+export interface EventLinkOption {
+    id: string;
+    title: string;
+    description?: string | null;
+    startDate: string;
+    endDate: string;
+    archived: boolean;
+    deadlinePassed: boolean;
+}
+
+/** Date filters overlap the event window. State filters never change attachment authority. */
+export interface EventLinkOptionsQuery {
+    q?: string;
+    from?: string;
+    to?: string;
+    period?: 'all' | 'upcoming' | 'ongoing' | 'ended';
+    archive?: 'all' | 'active' | 'archived';
+    deadline?: 'all' | 'open' | 'passed';
+    cursor?: string;
+    selectedId?: string;
+}
+
+export interface EventLinkOptionsResult {
+    items: EventLinkOption[];
+    nextCursor: string | null;
+    /** Selection resolution is independent of filters and applies the same disclosure policy. */
+    selected?: EventLinkOption | null;
+}
+
+/** Creation callers may seed only a saved ID/title; remote options fill in other details. */
+export interface EntityPickerOption {
+    id: string | number;
+    title?: string;
+    description?: string | null;
+    dateIso?: string;
+    name?: string;
+    startDate?: string;
+    endDate?: string;
+    archived?: boolean;
+    deadlinePassed?: boolean;
+}
+
+export interface EntityPickerOptions {
+    id?: string;
+    label?: string;
+    value?: string | number | null;
+    required?: boolean;
+    class?: string;
+    help?: string;
+    placeholderLabel?: string;
+    mode?: 'inline' | 'modal';
+    /** Omit to use event discovery; null retains local-only selection for other callers. */
+    endpoint?: string | null;
+}
+
 type ParticipantRow = {
     id: string | number;
     profileId: string | null;

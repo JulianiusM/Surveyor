@@ -15,9 +15,11 @@
  */
 
 // src/lib/permEngine.ts
+import type {EntityManager} from 'typeorm';
 import type {
     Audience,
     EntityDescriptor,
+    EntityPermissionQueryScope,
     ItemDescriptor,
     PermBundle,
     PermEngineCaches,
@@ -49,6 +51,23 @@ function isOwner(
     return !!(session.profile && ownerId && session.profile.id === ownerId);
 }
 
+/** Share session-audience activation between ordinary evaluation and candidate discovery. */
+function activeAudiences(session: SessionLike): Exclude<Audience, 'participant'>[] {
+    const audiences: Exclude<Audience, 'participant'>[] = ['public'];
+    if (session.profile?.user?.id) audiences.push('authenticated');
+    if (session.profile?.user?.id || session.profile?.guest?.id) audiences.push('guest');
+    return audiences;
+}
+
+/**
+ * Prepare one-bit discovery policy before LIMIT. Reusing audience activation prevents a
+ * second interpretation of account/guest identity in SQL; participation comes from persisted
+ * registrations. The normal batch evaluator remains authoritative over returned candidates.
+ */
+export function getEntityPermissionQueryScope(session: SessionLike, permission: PermType): EntityPermissionQueryScope {
+    return {profileId: session.profile?.id ?? null, audiences: activeAudiences(session), requiredMask: PERM[permission]};
+}
+
 /** Core: compute effective mask for ONE subject (no parent) */
 async function computeMaskFor(
     t: CombEntityType,
@@ -62,8 +81,6 @@ async function computeMaskFor(
     if (isOwner(session, ownerId)) return ALL_MASK;
 
     const profileId = session.profile?.id ?? null;
-    const userId = session.profile?.user?.id ?? null;
-    const guestId = session.profile?.guest?.id ?? null;
 
     // The effective ACL including all inheritances
     let eff = 0;
@@ -79,9 +96,7 @@ async function computeMaskFor(
         caches?.defaults?.set?.(kd, defaults);
     }
 
-    if (defaults?.public) eff |= defaults.public;
-    if (userId && defaults?.authenticated) eff |= defaults.authenticated;
-    if ((userId || guestId) && defaults?.guest) eff |= defaults.guest;
+    for (const audience of activeAudiences(session)) eff |= defaults?.[audience] ?? 0;
 
     // Participant audience
     eff |= await loadEventParticipantPerms(eventId, profileId, defaults, caches);
@@ -179,7 +194,7 @@ export async function evaluateSubject(
  * Descriptors must include the parent event ID for participant-audience evaluation;
  * that relationship does not itself copy the event's administrative grants to a child.
  */
-export async function evaluateEntities(entities: EntityDescriptor[], session: SessionLike): Promise<Map<string, PermView>> {
+export async function evaluateEntities(entities: EntityDescriptor[], session: SessionLike, manager?: EntityManager): Promise<Map<string, PermView>> {
     // The same root may occur in both dashboard collections or as several children's parent.
     // Deduplicate before loading permission rows so all callers share one result for that root.
     const entitiesByKey = new Map<string, EntityDescriptor>();
@@ -188,7 +203,7 @@ export async function evaluateEntities(entities: EntityDescriptor[], session: Se
     }
     const unique = Array.from(entitiesByKey.values());
     const profileId = session.profile?.id;
-    const inputs = await entityAdminService.getEntityPermissionInputs(unique, profileId);
+    const inputs = await entityAdminService.getEntityPermissionInputs(unique, profileId, manager);
     // These caches live only for this evaluation and this session. Never retain profile grants
     // or event membership globally: another viewer or a later request may have different access.
     const caches: Required<PermEngineCaches> = {
@@ -223,6 +238,12 @@ export async function evaluateEntities(entities: EntityDescriptor[], session: Se
     // from each evaluated entity's audience defaults, including when multiple children share an event.
     for (const row of inputs.registrations) {
         caches.participant.set(row.event.id, true);
+    }
+    // Ordinary event membership includes its owner without requiring a registration row.
+    // Preserve that same rule in batches, especially when evaluating a separately owned
+    // child whose participant audience is governed by this event.
+    for (const event of inputs.ownedEvents) {
+        caches.participant.set(event.id, true);
     }
 
     // With every input populated, the ordinary evaluator now consumes these caches without

@@ -4,10 +4,10 @@ documentation-metadata
 audience: drivers; passengers; transport organizers
 owner: drivers-list feature maintainers
 status: current
-last-verified: 2026-09-16
+last-verified: 2026-10-03
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D11 driver, passenger, and organizer workflows; profile-derived driver identity; capacity and counter semantics; event linkage; permissions; privacy; images; duplication; deletion; and troubleshooting; D14 rendered help navigation, semantic checks, and trusted-content integration
-source-anchors: src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/drivers/drivers-create.pug; src/views/drivers/drivers-view.pug; src/public/js/drivers.ts; src/routes/drivers.ts; src/routes/api/drivers.ts; src/controller/driversController.ts; src/middleware/guestFlowFactory.ts; src/middleware/assignFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/drivers/DriversList.ts; src/modules/database/entities/drivers/DriversItem.ts; src/modules/database/entities/drivers/DriversAssignment.ts; src/modules/database/services/DriverService.ts; src/modules/lib/permissions.ts; src/views/event/event-dashboard.pug; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/drivers-workflows.spec.ts; tests/integration/controller-smoke-workflows.spec.ts; docs/decisions/DEC-003-DRIVER-LIST-PARTICIPANT-COUNT.md; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; source-reviewed Entity settings dialog labels, per-action permissions, root property changes, image/actions, minimal archival hints, and event selection/reassociation boundaries; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D11 driver, passenger, and organizer workflows; profile-derived driver identity; capacity and counter semantics; event linkage; permissions; privacy; images; duplication; deletion; and troubleshooting; D14 rendered help navigation, semantic checks, and trusted-content integration
+source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/drivers/drivers-create.pug; src/views/drivers/drivers-view.pug; src/public/js/drivers.ts; src/routes/drivers.ts; src/routes/api/drivers.ts; src/controller/driversController.ts; src/middleware/guestFlowFactory.ts; src/middleware/assignFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/drivers/DriversList.ts; src/modules/database/entities/drivers/DriversItem.ts; src/modules/database/entities/drivers/DriversAssignment.ts; src/modules/database/services/DriverService.ts; src/modules/lib/permissions.ts; src/views/event/event-dashboard.pug; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/drivers-workflows.spec.ts; tests/integration/controller-smoke-workflows.spec.ts; docs/decisions/DEC-003-DRIVER-LIST-PARTICIPANT-COUNT.md; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: drivers-visible-UI-or-behavior-change
 -->
 
@@ -173,7 +173,7 @@ An event organizer with **Manage Assignments** for the event can instead open th
 | **Title \*** | A required name participants will recognize. |
 | **Description (optional)** | Shared overall instructions, common meeting information, or transport scope. |
 | **Header image (optional)** | An optional JPEG, PNG, or GIF image up to 10 MiB. |
-| **Assign to event (optional)** | An active event managed by the current profile. |
+| **Assign to event (optional)** | An event the current profile may attach to, including past or archived events; choose **No event** for a standalone list. |
 | **Group Permissions** | The initial audience permissions for the new list. |
 
 The creation form does not add driver rows. Create the list first, then grant the intended audience **Item Add** and let each driver add their own ride under the correct active profile.
@@ -194,15 +194,15 @@ For an event-linked list, granting **Item Add** to the Participant audience is a
 
 ## Manage list content
 
-### Edit the shared list description
+### Edit the list title or description
 
-A profile with **Edit Desc** sees **Double click to edit** above the description.
+A permitted editor sees **Entity settings** in the list header. The dialog contains only the fields and actions the active profile can use.
 
-1. Double-click the description area.
-2. Enter the revised text.
-3. Press **Ctrl+Enter** or click elsewhere to save. Press **Escape** to cancel.
+1. Open **Entity settings**.
+2. In **General** → **Details**, change **Title** or **Description**, when available.
+3. Select **Save properties**.
 
-The list title has no in-place editor on the current drivers-list page.
+Title editing requires **Edit Title**; description editing requires **Edit Desc**. The description on the ordinary page is read-only. A failed save retains your draft; closing discards unsaved changes. Each section saves separately, and commands that refresh the page ask you to resolve drafts in other sections first.
 
 ## Manage ride offers
 
@@ -235,10 +235,7 @@ Deleting the row permanently removes that ride offer and all passenger assignmen
 
 ## Manage the header image
 
-A profile with **Edit Meta** sees one of these controls in the list header:
-
-- **Add image** when no image exists;
-- **Change image** and **Remove** when an image exists.
+A profile with **Edit Meta** can open **Entity settings** → **General** → **Header image**. Select **Choose image**, choose a file, and select **Upload** to add or replace it. Use **Remove image** and confirm to delete it.
 
 The upload accepts JPEG, PNG, and GIF images up to 10 MiB. Replacing or removing an image removes the previous stored file.
 
@@ -254,13 +251,17 @@ A linked list:
 - requires effective list-specific **Access View** for a nonparticipant; and
 - is deleted with the event because it is part of that event’s stored data.
 
-The event picker offers active, unarchived events managed by the current profile. Creating from the event administration dashboard preselects it; when you deliberately create from an archived event, the creation page explains that the new list inherits its archival.
+Creating from the event administration dashboard preselects that event. The picker includes authorized past, deadline-passed, and archived events. Use its text, date, and state filters or **No event**; [Choose an event](EVENTS.md#choose-an-event) explains the shared controls. Selecting an archived event shows its archival effect inside the picker.
+
+After creation, open **Entity settings** → **Linked event**, choose a different event or **No event**, then select **Save event link** and confirm. You need **Edit Meta** on the list and **Manage Assignments** on any selected destination event. Unlinking needs no destination-event permission.
+
+Changing the link preserves rides, passenger assignments, the image, personal overview choices, and independent archival. Event-derived access follows the new relationship. Linking an archived event adds inherited archival; unlinking removes that inheritance but does not restore an independently archived list. Existing passengers are not registered in the destination event automatically.
 
 Event registration controls admission to the linked page. Driver-list permissions separately control actions such as taking a place, adding a ride, editing content, removing assignments, or administering permissions.
 
 ## Configure sharing and permissions
 
-A profile with **Manage Permissions** can expand **Administration Options** and edit **Group Permissions** or named **Administrators**. Grants are cumulative; the owner always has complete access.
+A profile with **Manage Permissions** can open **Entity settings**, select **Access**, and edit **Group Permissions** or named **Administrators**. Grants are cumulative; the owner always has complete access.
 
 Common drivers-list actions use these permissions:
 
@@ -268,8 +269,10 @@ Common drivers-list actions use these permissions:
 |---|---|
 | Open an event-linked list without event registration | **Access View** |
 | Take or remove your own passenger place | **Access View** |
+| Edit the list title | **Edit Title** |
 | Edit the shared list description | **Edit Desc** |
 | Add, replace, or remove the header image | **Edit Meta** |
+| Change or clear the event link | **Edit Meta**, plus **Manage Assignments** on a selected destination event |
 | Add a ride offer | **Item Add** |
 | Reorder rows and broadly edit child rows | **Item Edit** |
 | Edit only a ride description | **Item Edit Desc** |
@@ -298,10 +301,10 @@ There is no organizer-only passenger column, anonymous assignment, private ride 
 
 ### Duplicate a list
 
-Duplicating requires **Data Duplicate**. The owner can start the flow from **Overview** → **Your overview**:
+Duplicating requires a full account and **Data Duplicate**. Start from the list's **Entity settings**:
 
-1. Expand **Administrable entities**.
-2. Find the drivers list and select **Duplicate**.
+1. Open the drivers list and select **Entity settings**.
+2. Under **Actions**, select **Duplicate**.
 3. Review the prefilled title, description, and **Group Permissions**.
 4. Choose **Assign to event (optional)** for the new list when needed.
 5. Select **Create list**.
@@ -309,14 +312,17 @@ Duplicating requires **Data Duplicate**. The owner can start the flow from **Ove
 
 The duplicate is an independent list. It does not copy driver rows, passenger assignments, the previous event link, or the header image. Review all fields before creation rather than assuming the copy inherits the old event or sharing boundary.
 
+Owners can also use **Duplicate** on their **Administrable entities** overview card.
+
 ### Delete a complete list
 
 Only the list owner can delete the complete drivers list.
 
-1. Open **Overview** → **Your overview**.
-2. Expand **Administrable entities**.
-3. Find the list and select **Delete**.
-4. Confirm the deletion.
+1. Open the drivers list and select **Entity settings**.
+2. Under **Actions**, select **Delete permanently**.
+3. Confirm the deletion.
+
+The owner's overview card also retains its **Delete** action.
 
 Deletion permanently removes the list, every driver row, every passenger assignment, and the stored header image. Archival restoration cannot undo deletion; use archival when you want to keep the list available. A linked list is also removed when its event is deleted.
 
@@ -347,15 +353,15 @@ Create the list from **Event drivers lists**, grant registered participants the 
 
 ## Archive or restore a list
 
-An owner or organizer with **Edit Meta** can use **Archive for everyone** or **Restore for everyone** in **Archival**. Archival preserves rides, passenger assignments, images, and existing access and actions. Drivers lists have no independent automatic archival date; a linked list inherits its event's archival.
+An owner or organizer with **Edit Meta** can open **Entity settings** → **Actions** → **Archival** and use **Archive for everyone** or **Restore for everyone**. Archival preserves rides, passenger assignments, images, and existing access and actions. Drivers lists have no independent automatic archival date; a linked list inherits its event's archival. The ordinary view shows only **This entity is archived.** when applicable.
 
-When **Archived with event** appears, restore the event first. A list archived separately stays archived when its event is restored. Find archived lists under **Archived and hidden** in [Your Overview](DASHBOARD.md#find-archived-and-hidden-items). **Hide for me**, **Show for me**, and **Use default visibility** change only the active profile's overview placement.
+When archival comes from the event, the dialog explains that the event must be restored first and offers **Open event** when available. A list archived separately stays archived when its event is restored. Find archived lists under **Archived and hidden** in [Your Overview](DASHBOARD.md#find-archived-and-hidden-items). **Hide for me**, **Show for me**, and **Use default visibility** change only the active profile's overview placement.
 
 ## Troubleshooting
 
 ### **Add new item** is missing
 
-The active profile lacks effective **Item Add** permission. Event registration and page access alone do not grant it. Ask the list owner or a profile with **Manage Permissions** to review **Administration Options**.
+The active profile lacks effective **Item Add** permission. Event registration and page access alone do not grant it. Ask the list owner or a profile with **Manage Permissions** to review **Access**.
 
 ### The wrong driver name appears
 

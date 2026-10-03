@@ -1,6 +1,6 @@
-import {post} from '../core/http';
+import {assertSuccessfulResponse, post} from '../core/http';
 import {showInlineAlert} from '../shared/alerts';
-import {hideSpinner, reloadAfterDelay, showSpinner} from '../shared/ui-helpers';
+import {getEntityCommandHost, hideSpinner, reloadAfterDelay, showSpinner} from '../shared/ui-helpers';
 
 // Action names match archiveAction's data-archive-action attribute in module_entity_archive.pug.
 // Use explicit desired states instead of toggles: the server remains authoritative if another session
@@ -44,6 +44,12 @@ export function initEntityArchive(root: Document | HTMLElement = document): () =
         // leaves every control untouched and makes no request (including for event-wide archival).
         if (confirmation && !window.confirm(confirmation)) return;
 
+        // The optional modal host checks other dirty sections and places errors inside the dialog.
+        // Its lock supplements, rather than replaces, this existing page-wide archival lock.
+        const host = getEntityCommandHost(button);
+        const command = host?.begin(button);
+        if (host && !command) return;
+
         // One request at a time also locks duplicate cards in participation and administration.
         // Remember preexisting disabled states so a failed request does not accidentally enable a
         // control disabled by another page concern. Only the selected control shows busy feedback.
@@ -58,24 +64,24 @@ export function initEntityArchive(root: Document | HTMLElement = document): () =
         showSpinner(button);
         try {
             const response = await post(url, action.body);
-            // A redirected login page is not confirmation that the command succeeded.
-            if (response?.status !== 'success') {
-                throw new Error('The change could not be confirmed. Please reload and try again.');
-            }
-            showInlineAlert('success', action.message);
+            assertSuccessfulResponse(response);
+            if (command) command.success(action.message);
+            else showInlineAlert('success', action.message);
             // Keep controls locked until navigation. A local DOM patch could miss another occurrence,
             // an inherited child state, changed capabilities, or a card that belongs in the other region.
-            reloadAfterDelay(500);
+            if (!command) reloadAfterDelay(500);
         } catch (error) {
             // Failed/unconfirmed requests retain the current page and restore its original controls.
             // Report the response error, but do not guess a new archival state or retry a mutation.
-            showInlineAlert('error', error instanceof Error ? error.message : 'Could not save the archival setting.');
+            if (!command) showInlineAlert('error', error instanceof Error ? error.message : 'Could not save the archival setting.');
             hideSpinner(button);
             button.removeAttribute('aria-busy');
             for (const [control, wasDisabled] of disabled) {
                 control.disabled = wasDisabled;
             }
             pending = false;
+            // Restore the host last: its snapshot predates the local archival button lock.
+            command?.error(error);
         }
     }
 

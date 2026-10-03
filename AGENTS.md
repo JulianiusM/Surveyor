@@ -4,9 +4,9 @@ documentation-metadata
 audience: AI coding agents; maintainers
 owner: project maintainers
 status: current
-last-verified: 2026-09-16
+last-verified: 2026-10-03
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit maintainer requirements for human readability, purposeful comments, existing formatting and module reuse, declaration-file contracts, renderer data, and deletion boundaries; non-blocking documentation policy and optional report/test routing; D13 repository-wide agent contract, source precedence, change boundaries, test selection, database safety, documentation rules, and canonical-reference routing; D14 implemented fixed-source in-app help validation and maintained visual-asset rules
+verification-scope: explicit controller-owned checks and pure DBAL/no context-specific service errors; explicit maintainer requirements for human readability, purposeful comments, existing formatting and module reuse, declaration-file contracts, renderer data, and deletion boundaries; non-blocking documentation policy and optional report/test routing; D13 repository-wide agent contract, source precedence, change boundaries, test selection, database safety, documentation rules, and canonical-reference routing; D14 implemented fixed-source in-app help validation and maintained visual-asset rules
 source-anchors: docs/DOCUMENTATION_POLICY.md; README.md; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; docs/PERMISSIONS_REFERENCE.md; docs/DOCUMENTATION_MIGRATION_STATUS.md; package.json; repository-tree; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
 next-review: AI-instruction-or-help-trust-boundary-change
 -->
@@ -92,6 +92,10 @@ path inventories. Do not copy dependency versions, test counts, branch lists, or
 - Keep visible labels, form field names, routes, controller parsing, and user documentation aligned.
 - Enforce authentication, authorization, validation, and ownership on the server. UI visibility is not an authorization
   boundary.
+- Controllers own business checks, authorization decisions, validation, and context-specific errors. Database
+  services are pure DBAL: queries, locks, transactions, and persistence only. They must not throw `APIError`,
+  `ExpectedError`, or other request/UI-specific errors. When a check depends on locked data, invoke the controller's
+  named operation inside the service-managed transaction; do not move the check into the service or outside the lock.
 - Keep authoritative archival, personal overview visibility, actual hard deletion, and file retention separate.
   Archiving or restoring must not delete business records or files. Preserve the simple repository deletion in each
   feature's existing service; do not route permanent deletion through archival coordination helpers.

@@ -15,29 +15,99 @@
  */
 
 import {EntityManager, In, Not} from "typeorm";
-import type {PlanParticipant, PlanParticipantRow, SlotAssignmentMap} from "../../../types/ActivityTypes";
+import type {ActivityPropertyPatch, PlanParticipant, PlanParticipantRow, SlotAssignmentMap} from "../../../types/ActivityTypes";
 import {AssignmentCandidate} from "../../activity/availability";
 import {toParticipantKey} from "../../activity/requirements";
-import {APIError} from "../../lib/errors";
 import {generateUniqueId} from "../../lib/util";
 import {AppDataSource} from "../dataSource";
 import {ActivityAssignment} from "../entities/activity/ActivityAssignment";
 import {ActivityAssignmentRole} from "../entities/activity/ActivityAssignmentRole";
-import type {RecommendationOperation} from "../entities/activity/ActivityAssignmentRecommendation";
 import {ActivityPlan} from "../entities/activity/ActivityPlan";
 import {ActivityPlanTextField} from "../entities/activity/ActivityPlanTextField";
 import {ActivityRole} from "../entities/activity/ActivityRole";
 import {ActivitySlot} from "../entities/activity/ActivitySlot";
 import {ActivitySlotRole} from "../entities/activity/ActivitySlotRole";
+import {EventRegistration} from "../entities/event/EventRegistration";
 import * as entityAdminService from "./EntityAdminService";
 import * as eventService from "./EventService";
+
+/**
+ * Transaction ownership stays at the database boundary; the named callback belongs to
+ * the controller and performs decisions between these reads and writes. A supplied manager
+ * must be reused by every operation so validation never observes a different transaction.
+ */
+export async function withActivityTransaction<T>(work: (manager: EntityManager) => Promise<T>): Promise<T> {
+    return AppDataSource.transaction(work);
+}
+
+/** Root-before-slot lock order is shared with entity relinking and activity date edits. */
+export async function lockActivityPlan(manager: EntityManager, planId: string): Promise<ActivityPlan | null> {
+    return manager.getRepository(ActivityPlan).findOne({where: {id: planId}, lock: {mode: 'pessimistic_write'}});
+}
+
+/** Lock the requested child rows after their plan root; absence is returned for controller interpretation. */
+export async function getLockedActivitySlots(manager: EntityManager, ids: string[]): Promise<ActivitySlot[]> {
+    if (!ids.length) return [];
+    return manager.getRepository(ActivitySlot).find({where: {id: In(ids)}, lock: {mode: 'pessimistic_write'}});
+}
+
+/** Read locked signup/role snapshots so capacity and reassignment decisions share one transaction. */
+export async function getLockedPlanAssignments(manager: EntityManager, planId: string, itemId?: string): Promise<ActivityAssignment[]> {
+    return manager.getRepository(ActivityAssignment).find({
+        where: {entity: {id: planId}, ...(itemId ? {item: {id: itemId}} : {})},
+        relations: {item: true, profile: true, activityAssignmentRoles: {role: true}},
+        lock: {mode: 'pessimistic_write'},
+    });
+}
+
+/** Return membership data for the event selected from the locked plan, without deciding eligibility. */
+export async function getRegisteredProfileIds(manager: EntityManager, eventId: string): Promise<string[]> {
+    const registrations = await manager.getRepository(EventRegistration).findBy({event: {id: eventId}});
+    return registrations.map((registration) => registration.profileId);
+}
+
+/** Load configured role limits under the already-held root/slot locks. */
+export async function getConfiguredSlotRoles(manager: EntityManager, slotId: string): Promise<ActivitySlotRole[]> {
+    return manager.getRepository(ActivitySlotRole).find({
+        where: {item: {id: slotId}}, relations: {role: true}, lock: {mode: 'pessimistic_write'},
+    });
+}
+
+/** Return a nullable role lookup; callers decide whether a missing role can be created. */
+export async function getActivityRoleByName(manager: EntityManager, planId: string, title: string): Promise<ActivityRole | null> {
+    return manager.getRepository(ActivityRole).findOneBy({entity: {id: planId}, title});
+}
+
+/** Insert the validated assignment/role link; uniqueness and foreign keys remain database constraints. */
+export async function saveActivityAssignmentRole(
+    manager: EntityManager, planId: string, itemId: string, profileId: string, roleId: number, assignmentId?: number,
+): Promise<void> {
+    if (assignmentId === undefined) {
+        const repo = manager.getRepository(ActivityAssignment);
+        const assignment = await repo.save(repo.create({entity: {id: planId}, item: {id: itemId}, profile: {id: profileId}}));
+        assignmentId = assignment.id;
+    }
+    const roleRepo = manager.getRepository(ActivityAssignmentRole);
+    await roleRepo.save(roleRepo.create({assignment: {id: assignmentId}, role: {id: roleId}}));
+}
+
+/** Apply the controller's complete write set without interpreting recommendation rules. */
+export async function writeAssignmentChanges(
+    manager: EntityManager, planId: string, removals: number[], additions: {itemId: string; profileId: string; roleId: number}[],
+): Promise<void> {
+    if (removals.length) await manager.getRepository(ActivityAssignment).delete(removals);
+    if (!additions.length) return;
+    for (const addition of additions) {
+        await saveActivityAssignmentRole(manager, planId, addition.itemId, addition.profileId, addition.roleId);
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Role & Assignment helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function ensureRoleId(planId: string, roleNames: string[] | string, isDefault?: boolean, description?: string): Promise<ActivityRole[]> {
-    return await AppDataSource.transaction(async (manager) => {
+export async function ensureRoleId(planId: string, roleNames: string[] | string, isDefault?: boolean, description?: string, manager?: EntityManager): Promise<ActivityRole[]> {
+    async function persistRoles(manager: EntityManager): Promise<ActivityRole[]> {
         const repo = manager.getRepository(ActivityRole);
         if (!Array.isArray(roleNames)) {
             roleNames = [roleNames];
@@ -49,30 +119,29 @@ export async function ensureRoleId(planId: string, roleNames: string[] | string,
 
             roles.push(repo.create({
                 title: name,
-                isDefault: isDefault ?? name === "default",
+                isDefault: isDefault ?? false,
                 description: description,
                 entity: {id: planId}
             }));
         }
 
         return await repo.save(roles);
-    });
+    }
+    return manager ? persistRoles(manager) : AppDataSource.transaction(persistRoles);
 }
 
 export async function ensureAssignment(
     itemId: string,
     profileId: string
-): Promise<number> {
-    if (!itemId) throw new Error("itemId is required");
-
+): Promise<number | null> {
     const repo = AppDataSource.getRepository(ActivityAssignment);
-    const planId = (
-        await AppDataSource.getRepository(ActivitySlot).findOneOrFail({
+    const slot = await AppDataSource.getRepository(ActivitySlot).findOne({
             where: {id: itemId},
             relations: {entity: true},
             select: {id: true, entity: {id: true}},
-        })
-    ).entity.id;
+        });
+    if (!slot) return null;
+    const planId = slot.entity.id;
 
     let ass = await repo.findOneBy({
         item: {id: itemId},
@@ -88,118 +157,19 @@ export async function ensureAssignment(
     return (await repo.save(ass)).id
 }
 
-export async function assignRole(assignmentId: number, roleName: string[] | string, manager?: EntityManager) {
-    async function doAssign(manager: EntityManager): Promise<void> {
-        const repo = manager.getRepository(ActivityAssignmentRole);
-        const ass = await manager.getRepository(ActivityAssignment).findOneBy({id: assignmentId});
-        if (!ass) throw new Error("assignment not found");
-
-        const roles = await ensureRoleId(ass.entityId, roleName);
-
-        const newRoles: ActivityAssignmentRole[] = [];
-        for (const role of roles) {
-            const exists = await repo
-                .createQueryBuilder('aar')
-                .where('aar.assignment_id = :aid AND aar.role_id = :rid', {aid: assignmentId, rid: role.id})
-                .getExists();
-
-            if (!exists) {
-                newRoles.push(repo.create({assignment: {id: assignmentId}, role: {id: role.id}}));
-            }
-        }
-        await repo.save(newRoles);
-    }
-
-    if (manager) return await doAssign(manager);
-    return AppDataSource.transaction(doAssign);
+export async function getAllRoles(planId: string, manager: EntityManager = AppDataSource.manager) {
+    return manager.getRepository(ActivityRole).findBy({entity: {id: planId}, title: Not("default")});
 }
 
-export async function doUnassignRole(assignmentId: number, roleName: string) {
-    // Get assignment to find planId
-    const assignment = await AppDataSource.getRepository(ActivityAssignment).findOne({
-        where: {id: assignmentId},
-        relations: {entity: true},
-        select: {id: true, entity: {id: true}},
-    });
-    if (!assignment) return false;
-
-    // Find role by name AND planId to avoid cross-plan conflicts
-    const role = await AppDataSource.getRepository(ActivityRole).findOne({
-        where: {title: roleName, entity: {id: assignment.entity.id}},
-    });
-    if (!role) return false;
-
-    const aarRepo = AppDataSource.getRepository(ActivityAssignmentRole);
-    await aarRepo.delete({assignment: {id: assignmentId}, role: {id: role.id}});
-
-    const remaining = await aarRepo.count({where: {assignment: {id: assignmentId}}});
-
-    if (remaining === 0 || roleName === "default") {
-        await AppDataSource.getRepository(ActivityAssignment).delete(assignmentId);
-    }
-
-    return true;
+/** Replace the supplied assignments' role links with a controller-validated set of IDs. */
+export async function replaceActivityAssignmentRoles(
+    manager: EntityManager, assignmentIds: number[], entries: {assignmentId: number; roleId: number}[],
+): Promise<void> {
+    const repo = manager.getRepository(ActivityAssignmentRole);
+    if (assignmentIds.length) await repo.delete({assignment: {id: In(assignmentIds)}});
+    const rows = entries.map((entry) => repo.create({assignment: {id: entry.assignmentId}, role: {id: entry.roleId}}));
+    if (rows.length) await repo.save(rows);
 }
-
-export async function getAllRoles(planId: string) {
-    return AppDataSource.getRepository(ActivityRole).findBy({entity: {id: planId}, title: Not("default")});
-}
-
-export async function updateRoleAssignments(slotId: string, assign: {
-    assignmentId: number | null,
-    role: string
-}[]) {
-    await AppDataSource.transaction(async (manager) => {
-        const repo = manager.getRepository(ActivityAssignmentRole);
-        const assRepo = manager.getRepository(ActivityAssignment);
-        const configuredRoles = await manager.getRepository(ActivitySlotRole).find({
-            where: {item: {id: slotId}},
-            relations: {role: true},
-        });
-        const roleLimits = new Map(configuredRoles.map((slotRole) => [slotRole.role.title, slotRole.maxQty ?? 0]));
-        const requestedCounts = new Map<string, number>();
-        for (const entry of assign) {
-            if (!entry.assignmentId || entry.role === "default") continue;
-            const maxQty = roleLimits.get(entry.role);
-            if (maxQty == null) {
-                throw new APIError('Activity role is not available for this slot', {slotId, role: entry.role}, 400);
-            }
-            const requestedCount = (requestedCounts.get(entry.role) ?? 0) + 1;
-            if (requestedCount > maxQty) {
-                throw new APIError('This activity role is already full', {slotId, role: entry.role}, 409);
-            }
-            requestedCounts.set(entry.role, requestedCount);
-        }
-
-        // 1. Get all assignments for this slot
-        const assignments = await assRepo.find({
-            where: {item: {id: slotId}}, // relations ARE allowed in find()
-            select: {
-                id: true
-            },
-        });
-
-        const assignmentIds = assignments.map(a => a.id);
-        if (assignmentIds.length === 0) {
-            // nothing to delete
-            return;
-        }
-
-        // 2. Delete all roles for those assignments
-        await repo.delete({assignment: {id: In(assignmentIds)}});
-
-        for (const part of assign) {
-            if (!part.assignmentId) continue;
-            const ass = await assRepo.findOneBy({id: part.assignmentId, item: {id: slotId}});
-            if (!ass) throw new Error("Assignment not found");
-            await assignRole(part.assignmentId, part.role, manager);
-        }
-    });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Plan CRUD
-// ─────────────────────────────────────────────────────────────────────────────
 
 export async function createActivityPlan(
     id: string,
@@ -317,7 +287,26 @@ export async function updateActivityPlanDescription(
     planId: string,
     description: string
 ) {
-    await AppDataSource.getRepository(ActivityPlan).update(planId, {description});
+    await updateActivityPlanProperties(planId, {description});
+}
+
+/** Persist an already validated root-property patch in the caller's transaction. */
+export async function updateActivityPlanProperties(
+    planId: string,
+    patch: ActivityPropertyPatch,
+    manager: EntityManager = AppDataSource.manager,
+): Promise<void> {
+    await manager.getRepository(ActivityPlan).update(planId, patch);
+}
+
+/** Read only: the controller decides whether an excluded slot makes a proposed range invalid. */
+export async function hasActivitySlotsOutsideRange(
+    manager: EntityManager, planId: string, startDate: string, endDate: string,
+): Promise<boolean> {
+    return manager.getRepository(ActivitySlot).createQueryBuilder('slot')
+        .where('slot.entity_id = :planId', {planId})
+        .andWhere('(slot.day < :startDate OR slot.day > :endDate)', {startDate, endDate})
+        .getExists();
 }
 
 export async function getActivityPlanTextFields(planId: string) {
@@ -374,39 +363,31 @@ export async function getManagedPlans(profileId: string) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function addActivitySlot(planId: string, slot: Partial<ActivitySlot>, profileId: string) {
-    const repo = AppDataSource.getRepository(ActivitySlot);
-    const slotEntity = repo.create({
-        id: slot.id,
-        entity: {id: planId},
-        title: slot.title,
-        description: slot.description,
-        day: slot.day,
-        pos: slot.pos,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        maxAssignees: slot.maxAssignees,
-        profile: {id: profileId},
-    });
-    await repo.save(slotEntity);
+    await addActivitySlots(planId, [slot], profileId);
 }
 
-export async function addActivitySlots(planId: string, slots: Partial<ActivitySlot>[], profileId: string) {
-    const repo = AppDataSource.getRepository(ActivitySlot);
-    const slotEntities = slots.map((s) =>
-        repo.create({
-            id: s.id,
-            entity: {id: planId},
-            title: s.title,
-            description: s.description,
-            day: s.day,
-            pos: s.pos,
-            startTime: s.startTime,
-            endTime: s.endTime,
-            maxAssignees: s.maxAssignees,
-            profile: {id: profileId},
-        })
-    );
-    await repo.save(slotEntities);
+export async function addActivitySlots(planId: string, slots: Partial<ActivitySlot>[], profileId: string, manager?: EntityManager) {
+    async function saveSlots(manager: EntityManager): Promise<void> {
+        const repo = manager.getRepository(ActivitySlot);
+        const slotEntities: ActivitySlot[] = [];
+        for (const slot of slots) {
+            slotEntities.push(repo.create({
+                id: slot.id,
+                entity: {id: planId},
+                title: slot.title,
+                description: slot.description,
+                day: slot.day,
+                pos: slot.pos,
+                startTime: slot.startTime,
+                endTime: slot.endTime,
+                maxAssignees: slot.maxAssignees,
+                profile: {id: profileId},
+            }));
+        }
+        await repo.save(slotEntities);
+    }
+    if (manager) await saveSlots(manager);
+    else await AppDataSource.transaction(saveSlots);
 }
 
 export async function getActivitySlotsFlat(planId: string) {
@@ -457,8 +438,8 @@ export async function getActivitySlotById(slotId: string) {
     return await AppDataSource.getRepository(ActivitySlot).findOneBy({id: slotId});
 }
 
-export async function updateActivitySlot(slotId: string, fields: Partial<ActivitySlot>) {
-    const repo = AppDataSource.getRepository(ActivitySlot);
+export async function updateActivitySlot(slotId: string, fields: Partial<ActivitySlot>, manager: EntityManager = AppDataSource.manager) {
+    const repo = manager.getRepository(ActivitySlot);
 
     // Build partial update object conditionally
     const updateData: Partial<ActivitySlot> = {};
@@ -499,250 +480,6 @@ export async function getLastActivitySlotNumber(planId: string, date: string) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Role-based assignment wrappers
-// ─────────────────────────────────────────────────────────────────────────────
-
-export async function assignActivityAssignmentRole(
-    itemId: string,
-    profileId: string,
-    roleName = "default"
-) {
-    await AppDataSource.transaction(async (manager) => {
-        const slot = await manager.getRepository(ActivitySlot).findOne({
-            where: {id: itemId},
-            lock: {mode: 'pessimistic_write'},
-        });
-        if (!slot) throw new APIError('Activity slot not found', {itemId}, 404);
-
-        const plan = await manager.getRepository(ActivityPlan).findOne({
-            where: {id: slot.entityId},
-            lock: {mode: 'pessimistic_write'},
-        });
-        if (!plan) throw new APIError('Activity plan not found', {itemId}, 404);
-
-        const assignmentRepo = manager.getRepository(ActivityAssignment);
-        let assignment = await assignmentRepo.findOneBy({
-            item: {id: itemId},
-            profile: {id: profileId},
-        });
-
-        if (!assignment) {
-            if (!plan.allowOverfillAfterFull && typeof slot.maxAssignees === 'number') {
-                const assignedCount = await assignmentRepo.countBy({item: {id: itemId}});
-                if (assignedCount >= slot.maxAssignees) {
-                    throw new APIError('This activity slot is already full', {itemId}, 409);
-                }
-            }
-            assignment = await assignmentRepo.save(assignmentRepo.create({
-                item: {id: itemId},
-                entity: {id: plan.id},
-                profile: {id: profileId},
-            }));
-        }
-
-        const roleRepo = manager.getRepository(ActivityRole);
-        let role = await roleRepo.findOneBy({title: roleName, entity: {id: plan.id}});
-        if (!role) {
-            if (roleName !== 'default') {
-                throw new APIError('Activity role is not available for this plan', {itemId, roleName}, 400);
-            }
-            role = await roleRepo.save(roleRepo.create({
-                title: 'default',
-                isDefault: true,
-                entity: {id: plan.id},
-            }));
-        }
-
-        const assignmentRoleRepo = manager.getRepository(ActivityAssignmentRole);
-        const existingRole = await assignmentRoleRepo.findOneBy({
-            assignment: {id: assignment.id},
-            role: {id: role.id},
-        });
-        if (existingRole) return;
-
-        if (roleName !== 'default') {
-            const slotRole = await manager.getRepository(ActivitySlotRole).findOne({
-                where: {item: {id: itemId}, role: {id: role.id}},
-                lock: {mode: 'pessimistic_write'},
-            });
-            if (!slotRole) {
-                throw new APIError('Activity role is not available for this slot', {itemId, roleName}, 400);
-            }
-
-            // Overfill applies to the slot's participant capacity only. Named role
-            // quotas remain hard constraints because roles are assigned manually.
-            if (typeof slotRole.maxQty === 'number') {
-                const roleCount = await assignmentRoleRepo
-                    .createQueryBuilder('assignmentRole')
-                    .innerJoin('assignmentRole.assignment', 'assignment')
-                    .where('assignment.item_id = :itemId', {itemId})
-                    .andWhere('assignmentRole.role_id = :roleId', {roleId: role.id})
-                    .getCount();
-                if (roleCount >= slotRole.maxQty) {
-                    throw new APIError('This activity role is already full', {itemId, roleName}, 409);
-                }
-            }
-        }
-
-        await assignmentRoleRepo.save(assignmentRoleRepo.create({
-            assignment: {id: assignment.id},
-            role: {id: role.id},
-        }));
-    });
-}
-
-export interface ActivityRecommendationOperationInput {
-    itemId: string;
-    profileId: string;
-    operation: RecommendationOperation;
-    sourceItemId?: string | null;
-}
-
-/**
- * Applies a reviewed recommendation batch atomically. Reassignments release all
- * source slots before capacity is checked for their targets, which also makes a
- * two-row swap safe regardless of row order.
- */
-export async function applyActivityRecommendationOperations(
-    planId: string,
-    operations: ActivityRecommendationOperationInput[],
-): Promise<void> {
-    if (operations.length === 0) return;
-
-    await AppDataSource.transaction(async (manager) => {
-        const plan = await manager.getRepository(ActivityPlan).findOne({
-            where: {id: planId},
-            lock: {mode: "pessimistic_write"},
-        });
-        if (!plan) throw new APIError("Activity plan not found", {planId}, 404);
-
-        const referencedSlotIds = [...new Set(operations.flatMap((operation) => [
-            operation.itemId,
-            ...(operation.sourceItemId ? [operation.sourceItemId] : []),
-        ]))];
-        const slots = await manager.getRepository(ActivitySlot).find({
-            where: {id: In(referencedSlotIds)},
-            lock: {mode: "pessimistic_write"},
-        });
-        if (slots.length !== referencedSlotIds.length || slots.some((slot) => slot.entityId !== planId)) {
-            throw new APIError("Recommendation slot does not belong to this activity plan", {planId}, 400);
-        }
-        const slotById = new Map(slots.map((slot) => [slot.id, slot]));
-
-        const assignmentRepo = manager.getRepository(ActivityAssignment);
-        const assignments = await assignmentRepo.find({
-            where: {entity: {id: planId}},
-            relations: {item: true, profile: true, activityAssignmentRoles: {role: true}},
-            lock: {mode: "pessimistic_write"},
-        });
-        const pairKey = (itemId: string, profileId: string): string => `${itemId}:${profileId}`;
-        const assignmentByPair = new Map(
-            assignments.map((assignment) => [pairKey(assignment.item.id, assignment.profile.id), assignment]),
-        );
-        const removals = new Map<number, ActivityAssignment>();
-        const additions: ActivityRecommendationOperationInput[] = [];
-        const additionPairs = new Set<string>();
-
-        for (const operation of operations) {
-            const targetPair = pairKey(operation.itemId, operation.profileId);
-            if (operation.operation === "ASSIGN") {
-                if (assignmentByPair.has(targetPair) || additionPairs.has(targetPair)) {
-                    throw new APIError("Participant is already assigned to the recommendation slot", operation, 409);
-                }
-                additionPairs.add(targetPair);
-                additions.push(operation);
-                continue;
-            }
-
-            const sourceItemId = operation.operation === "REASSIGN"
-                ? operation.sourceItemId
-                : operation.itemId;
-            if (!sourceItemId) {
-                throw new APIError("Reassignment requires a source slot", operation, 400);
-            }
-            const source = assignmentByPair.get(pairKey(sourceItemId, operation.profileId));
-            if (!source) {
-                throw new APIError("Recommendation source assignment no longer exists", operation, 409);
-            }
-            if (removals.has(source.id)) {
-                throw new APIError("An assignment can only be changed once per recommendation batch", operation, 409);
-            }
-
-            if (operation.operation === "REASSIGN") {
-                if (sourceItemId === operation.itemId) {
-                    throw new APIError("Reassignment target must differ from its source", operation, 400);
-                }
-                if (source.activityAssignmentRoles.some(({role}) => !role.isDefault)) {
-                    throw new APIError("Assignments with named roles cannot be automatically reassigned", operation, 409);
-                }
-                if (assignmentByPair.has(targetPair) || additionPairs.has(targetPair)) {
-                    throw new APIError("Participant is already assigned to the recommendation slot", operation, 409);
-                }
-                additionPairs.add(targetPair);
-                additions.push(operation);
-            }
-            removals.set(source.id, source);
-        }
-
-        const projectedCounts = new Map<string, number>();
-        for (const assignment of assignments) {
-            if (!removals.has(assignment.id)) {
-                projectedCounts.set(assignment.item.id, (projectedCounts.get(assignment.item.id) ?? 0) + 1);
-            }
-        }
-        for (const addition of additions) {
-            const target = slotById.get(addition.itemId)!;
-            const count = projectedCounts.get(target.id) ?? 0;
-            if (!plan.allowOverfillAfterFull && target.maxAssignees != null && count >= target.maxAssignees) {
-                throw new APIError("This activity slot is already full", addition, 409);
-            }
-            projectedCounts.set(target.id, count + 1);
-        }
-
-        if (removals.size > 0) {
-            await assignmentRepo.delete([...removals.keys()]);
-        }
-        if (additions.length === 0) return;
-
-        const roleRepo = manager.getRepository(ActivityRole);
-        let defaultRole = await roleRepo.findOneBy({title: "default", entity: {id: planId}});
-        if (!defaultRole) {
-            defaultRole = await roleRepo.save(roleRepo.create({
-                title: "default",
-                isDefault: true,
-                entity: {id: planId},
-            }));
-        }
-        const assignmentRoleRepo = manager.getRepository(ActivityAssignmentRole);
-        for (const addition of additions) {
-            const assignment = await assignmentRepo.save(assignmentRepo.create({
-                item: {id: addition.itemId},
-                entity: {id: planId},
-                profile: {id: addition.profileId},
-            }));
-            await assignmentRoleRepo.save(assignmentRoleRepo.create({
-                assignment: {id: assignment.id},
-                role: {id: defaultRole.id},
-            }));
-        }
-    });
-}
-
-export async function unassignActivityAssignmentRole(
-    itemId: string,
-    profileId: string,
-    roleName = "default"
-) {
-    const assignment = await AppDataSource.getRepository(ActivityAssignment).findOne({
-        where: {item: {id: itemId}, profile: {id: profileId}},
-    });
-
-    if (assignment) {
-        await doUnassignRole(assignment.id, roleName);
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Legacy Compatibility
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function getActivitySlotAssignments(planId: string, profileId: string) {
@@ -933,8 +670,8 @@ export async function getParticipantRolesForPlan(planId: string): Promise<{
     }));
 }
 
-export async function deleteActivitySlotAssignment(assignId: number) {
-    return await AppDataSource.getRepository(ActivityAssignment).delete(assignId);
+export async function deleteActivitySlotAssignment(assignId: number, manager: EntityManager = AppDataSource.manager) {
+    return await manager.getRepository(ActivityAssignment).delete(assignId);
 }
 
 export async function getActivitySlotRoles(planId: string) {
@@ -1020,4 +757,9 @@ export async function updateActivitySlotRoles(slotId: string, roles: number[]) {
 
         await repo.save(newRoles);
     });
+}
+
+/** Delete one already selected role link without deciding whether its signup should survive. */
+export async function deleteActivityAssignmentRole(manager: EntityManager, id: number): Promise<void> {
+    await manager.getRepository(ActivityAssignmentRole).delete(id);
 }

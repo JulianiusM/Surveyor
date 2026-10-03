@@ -7,7 +7,7 @@ import {Survey} from '../../src/modules/database/entities/surveys/Survey';
 import {Profile} from '../../src/modules/database/entities/user/Profile';
 import * as activityService from '../../src/modules/database/services/ActivityService';
 import * as adminService from '../../src/modules/database/services/EntityAdminService';
-import * as archiveService from '../../src/modules/database/services/EntityLifecycleService';
+import {archiveEntity, getArchiveStates} from '../../src/controller/entityAdminController';
 import * as driverService from '../../src/modules/database/services/DriverService';
 import * as eventService from '../../src/modules/database/services/EventService';
 import * as packingService from '../../src/modules/database/services/PackingService';
@@ -230,8 +230,8 @@ describe('bounded event-card overview', () => {
                     const title = `Matrix ${inherited}-${direct}-${visibility}`;
                     const eventId = await createEvent(owner, `Parent ${title}`);
                     const child = await createPacking(owner, title, eventId);
-                    if (direct) await archiveService.archiveEntity({type: 'packing', id: child}, timestamp);
-                    if (inherited) await archiveService.archiveEntity({type: 'event', id: eventId}, timestamp);
+                    if (direct) await archiveEntity({type: 'packing', id: child}, {}, {profile: owner, auth: {user: owner.user!}}, timestamp);
+                    if (inherited) await archiveEntity({type: 'event', id: eventId}, {}, {profile: owner, auth: {user: owner.user!}}, timestamp);
                     await userService.setVisibility(owner.id, {type: 'packing', id: child}, visibility);
                     const expectedHidden = isHiddenInOverview(isEffectivelyArchived(direct ? timestamp : null, inherited ? timestamp : null), visibility);
                     const results = await userService.getOverviewPages(owner.id, [
@@ -242,7 +242,7 @@ describe('bounded event-card overview', () => {
                     expect(results[1].matchingTotal, title).toBe(expectedHidden ? 1 : 0);
                     const placed = results[expectedHidden ? 1 : 0];
                     expect(placed.items.map(item => item.id), title).toEqual([child]);
-                    expect(placed.archives.get(archiveKey({type: 'packing', id: child}))?.archived, title).toBe(direct || inherited);
+                    expect((await getArchiveStates([], placed.archiveSnapshot)).get(archiveKey({type: 'packing', id: child}))?.archived, title).toBe(direct || inherited);
                 }
             }
         }

@@ -10,7 +10,7 @@ import {initEntityHeader} from "./modules/entity-header";
 import {showInlineAlert} from './shared/alerts';
 import {initTableReorder} from './shared/drag-drop';
 import {initAssignButtons} from './shared/entity-assign';
-import {startInlineEdit, startInlineEditArea} from './shared/inline-edit';
+import {startInlineEdit} from './shared/inline-edit';
 import {initAssignmentRemoval, initItemDeletion, initQuickAdd} from './shared/list-actions';
 import {reloadAfterDelay} from './shared/ui-helpers';
 
@@ -33,15 +33,6 @@ function initInlineEdit(): void {
         });
     });
 
-    document.querySelectorAll('[data-edit="planDescription"]').forEach(elem => {
-        elem.addEventListener('dblclick', () => {
-            startInlineEditArea(elem as HTMLElement, `/api/packing/${listId}/description`, {
-                scope: 'entity',
-                key: 'EDIT_DESC',
-                action: 'edit packing list descriptions'
-            });
-        });
-    });
 }
 
 /**

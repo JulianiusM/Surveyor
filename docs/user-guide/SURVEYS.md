@@ -4,10 +4,10 @@ documentation-metadata
 audience: survey participants; survey organizers
 owner: survey feature maintainers
 status: current
-last-verified: 2026-09-16
+last-verified: 2026-10-03
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D09 survey workflow plus D14 rendered-label assertions, recurring-use visual aid, per-page navigation, and trusted-help integration; D14 rendered help navigation, semantic checks, and trusted-content integration; D14 visual correction: measured and individually inspected recurring-pattern diagram with current option text
-source-anchors: src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; docs/user-guide/assets/survey-recurring-pattern.png; docs/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; src/views/surveyor/survey-create.pug; src/views/surveyor/survey-vote.pug; src/public/js/survey-create.ts; src/routes/survey.ts; src/routes/api/survey.ts; src/controller/surveyController.ts; src/middleware/guestFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/surveys/Survey.ts; src/modules/database/entities/surveys/SurveyCombination.ts; src/modules/database/entities/surveys/SurveyResponse.ts; src/modules/database/services/SurveyService.ts; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/survey-workflows.spec.ts; tests/e2e/core-workflows.spec.ts; docs/decisions/DEC-001-SURVEY-COMBINATION-AUTHORIZATION.md; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md; src/controller/helpController.ts
+verification-scope: compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; source-reviewed Entity settings dialog labels, per-action permissions, root property changes, image/actions, minimal archival hints, and event selection/reassociation boundaries; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D09 survey workflow plus D14 rendered-label assertions, recurring-use visual aid, per-page navigation, and trusted-help integration; D14 rendered help navigation, semantic checks, and trusted-content integration; D14 visual correction: measured and individually inspected recurring-pattern diagram with current option text
+source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; docs/user-guide/assets/survey-recurring-pattern.png; docs/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; src/views/surveyor/survey-create.pug; src/views/surveyor/survey-vote.pug; src/public/js/survey-create.ts; src/routes/survey.ts; src/routes/api/survey.ts; src/controller/surveyController.ts; src/middleware/guestFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/surveys/Survey.ts; src/modules/database/entities/surveys/SurveyCombination.ts; src/modules/database/entities/surveys/SurveyResponse.ts; src/modules/database/services/SurveyService.ts; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/survey-workflows.spec.ts; tests/e2e/core-workflows.spec.ts; docs/decisions/DEC-001-SURVEY-COMBINATION-AUTHORIZATION.md; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md; src/controller/helpController.ts
 next-review: survey-visible-UI-or-behavior-change
 -->
 
@@ -210,40 +210,46 @@ A survey can still help choose or discuss an event date: put the relevant month 
 
 ## Manage a survey
 
+Open **Entity settings** in the survey header to find the actions available to the active profile. Survey title and description changes and archival remain owner-only. Surveys stay standalone and do not gain event or **Group Permissions** controls.
+
 ### Header image
 
-The owner can manage the image from the survey page:
-
-- **Add image** when no image is present;
-- **Change image** to replace it;
-- **Remove** to delete it.
+Open **Entity settings** → **General** → **Header image**. Select **Choose image**, choose a file, and select **Upload** to add or replace the image. Select **Remove image** and confirm to delete the existing image.
 
 The replacement file must be JPEG, PNG, or GIF and no larger than 10 MiB.
 
 ### Title and description
 
-Surveyor does not provide in-place editing for a survey title or description after creation. Check them before sharing. To create a revised independent survey, use **Duplicate** and edit the prefilled form before creating the copy.
+The owner can change these properties without creating a new survey:
+
+1. Open **Entity settings**.
+2. In **General** → **Details**, edit **Title** or **Description**.
+3. Select **Save properties**.
+
+The survey keeps its link, combinations, and participant answers. Each dialog section saves separately. A failed save keeps your draft; closing discards unsaved changes. Commands that refresh the page ask you to resolve drafts in other sections first.
 
 ### Duplicate a survey
 
-Only the owner sees the overview-card action.
+Use the owning full-account profile to create a separate copy:
 
-1. Open **Overview** → **Your overview**.
-2. Expand **Administrable entities**.
-3. Find the survey and select **Duplicate**.
-4. Review the prefilled title, description, and combinations.
-5. Change anything needed and select **Create Survey**.
+1. Open the survey and select **Entity settings**.
+2. Under **Actions**, select **Duplicate**.
+3. Review the prefilled title, description, and combinations.
+4. Change anything needed and select **Create Survey**.
+
+The owner can also use **Duplicate** on the survey's **Administrable entities** overview card.
 
 The duplicate is a new survey with its own link and no participant responses. The header image is not copied; upload one on the new survey when required.
 
 ### Delete a survey
 
-Only the owner sees the overview-card action.
+Only the owner can permanently delete the survey.
 
-1. Open **Overview** → **Your overview**.
-2. Expand **Administrable entities**.
-3. Find the survey and select **Delete**.
-4. Confirm the deletion.
+1. Open the survey and select **Entity settings**.
+2. Under **Actions**, select **Delete permanently**.
+3. Confirm the deletion.
+
+The owner's overview card also retains its **Delete** action.
 
 Deletion permanently removes the survey, all combinations, all submitted answers, and its stored header image. Use archival when you want to keep the survey available instead.
 
@@ -282,13 +288,13 @@ Create **Monthly equipment check** with several weekday positions, then ask volu
 | Full-account and guest participation | Anonymous voting or private answers |
 | All-answer table with participant names | Organizer-only result visibility |
 | Collaborative addition of new combinations | Removing or editing an existing combination |
-| Owner header-image controls | Editing the title or description in place after creation |
+| Header-image controls and owner title/description editing | — |
 | Owner duplication, archival, restoration, and permanent deletion | Closing responses or enforcing a response deadline |
 | Standalone link sharing | Event linkage or the general permission matrix |
 
 ## Archive or restore a survey
 
-The owner can use **Archive for everyone** and **Restore for everyone** in the survey's **Archival** section or its overview card menu. Surveys have no automatic archival schedule. Archival preserves combinations, answers, images, and normal voting and add-combination access; it does not close voting.
+The owner can open **Entity settings** → **Actions** → **Archival** and use **Archive for everyone** or **Restore for everyone**, or use the overview card menu. Surveys have no automatic archival schedule. Archival preserves combinations, answers, images, and normal voting and add-combination access; it does not close voting. The ordinary survey view shows only **This entity is archived.** when applicable.
 
 Find archived surveys under **Archived and hidden** in [Your Overview](DASHBOARD.md#find-archived-and-hidden-items). Every profile whose overview contains the survey can use **Hide for me**, **Show for me**, and **Use default visibility** for its own card placement. These personal choices do not require ownership and do not change anyone else's overview.
 
@@ -330,9 +336,9 @@ Check whether the same weekday-and-position combination is already present. A su
 
 They are not part of surveys. Share the standalone survey link with the intended group. Use [Permissions and Sharing](PERMISSIONS.md) only for the other feature types that implement the general permission system.
 
-### Image, **Duplicate**, or **Delete** controls are missing
+### Entity settings or an expected action is missing
 
-Switch to the owner profile. These lifecycle controls are owner-only and the overview actions appear under **Administrable entities**.
+Check the active profile and open **Entity settings** on the survey page. Title, description, archival, and **Delete permanently** require the owner profile. Creating a copy also requires a full account. Overview **Duplicate** and **Delete** actions appear only for the owner under **Administrable entities**.
 
 ## Related guides
 

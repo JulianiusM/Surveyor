@@ -1,6 +1,31 @@
 @import "accordion"
 @import "timezone-select"
 
+// Settings keep navigation outside the scrolling body. Wrapping the four short tabs avoids a
+// horizontally scrolling strip on phones; each property family opens independently below it.
+#entityPropertiesModal
+  .entity-settings-nav .nav-item
+    flex: 1 1 auto
+
+  .entity-settings-nav .nav-link
+    width: 100%
+    padding: .5rem .65rem
+
+  .entity-property-group
+    padding: .85rem
+    border: 1px solid var(--bs-border-color-translucent)
+    border-radius: var(--bs-border-radius)
+
+    > summary
+      cursor: pointer
+
+  .entity-settings-panel
+    min-width: 0
+
+  @media (max-width: 575.98px)
+    .entity-settings-nav .nav-item
+      flex: 1 1 40%
+
 .table-responsive
   .sticky-col
     position: sticky

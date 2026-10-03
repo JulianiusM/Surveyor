@@ -4,11 +4,11 @@ documentation-metadata
 audience: organizers; advanced administrators
 owner: permission-system maintainers
 status: current
-last-verified: 2026-09-16
+last-verified: 2026-10-03
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D03 cumulative grants, overlapping audiences, sharing recipes, presets, complete permission labels, page admission, item fallback, administration, and explicit survey exclusion; D14 rendered help navigation, semantic checks, and trusted-content integration
-source-anchors: src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/modules/permissionEngine.ts; src/modules/lib/permissions.ts; src/middleware/permissionMiddleware.ts; src/middleware/guestFlowFactory.ts; src/middleware/adminApiFactory.ts; src/controller/entityAdminController.ts; src/modules/database/services/EntityAdminService.ts; src/views/modules/module_perm_matrix.pug; src/views/modules/module_admin_matrix.pug; src/views/modules/module_admin_options.pug; src/public/js/modules/perm-matrix.ts; src/public/js/modules/admin-matrix.ts; src/routes/event.ts; src/routes/api/event.ts; src/routes/api/activity.ts; src/routes/api/packing.ts; src/routes/api/drivers.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
-next-review: D05,D07,D10,D11,D14
+verification-scope: compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; source-reviewed Entity settings dialog labels, per-action permissions, root property changes, image/actions, minimal archival hints, and event selection/reassociation boundaries; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D03 cumulative grants, overlapping audiences, sharing recipes, presets, complete permission labels, page admission, item fallback, administration, and explicit survey exclusion; D14 rendered help navigation, semantic checks, and trusted-content integration
+source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/modules/permissionEngine.ts; src/modules/lib/permissions.ts; src/middleware/permissionMiddleware.ts; src/middleware/guestFlowFactory.ts; src/middleware/adminApiFactory.ts; src/controller/entityAdminController.ts; src/modules/database/services/EntityAdminService.ts; src/views/modules/module_perm_matrix.pug; src/views/modules/module_admin_matrix.pug; src/views/modules/module_admin_options.pug; src/public/js/modules/perm-matrix.ts; src/public/js/modules/admin-matrix.ts; src/routes/event.ts; src/routes/api/event.ts; src/routes/api/activity.ts; src/routes/api/packing.ts; src/routes/api/drivers.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+next-review: permission-or-entity-settings-behavior-change
 -->
 
 Use permissions to decide which actions people may perform in an **Event**, **Activity plan**, **Packing list**, or **Drivers list**. Start with a sharing recipe, test it with a non-owner profile, and use the reference sections only when you need finer control.
@@ -62,19 +62,18 @@ Personal **Hide for me**, **Show for me**, and **Use default visibility** choice
 
 ### While creating an item
 
-Creation forms for Events, Activity plans, Packing lists, and Drivers lists contain **Group Permissions**. Expand an audience, choose a preset or individual checkboxes, and then submit the creation form.
+Creation forms for Events, Activity plans, Packing lists, and Drivers lists contain **Group Permissions**. Choose a
+**Permission audience**, use **Presets** or individual checkboxes, and then submit the creation form.
 
 Surveys do not show this matrix.
 
 ### After creation
 
-You need **Manage Permissions** to see and use the controls.
+You need **Manage Permissions** to see and use the controls. Open the event, activity plan, packing list, or drivers list, select **Entity settings** in the header, then select **Access**.
 
-- **Event:** Open the event, select **Event administration dashboard**, and expand **Administration Options**. A delegated organizer also needs **Access Admin** to reach that dashboard.
-- **Activity plan:** Open the **Settings** tab and expand **Administration Options**.
-- **Packing list or Drivers list:** Expand **Administration Options** on the main page.
+For events, these controls are available on the ordinary event page without **Access Admin**. The administration dashboard offers the same dialog but still requires **Access Admin** to enter. Activity assignment rules remain in **Rules & auto-assign**.
 
-Inside **Administration Options**:
+Inside **Access**:
 
 - **Group Permissions** changes grants for Participant, Guest, Authenticated, and Public.
 - **Administrators** changes grants for named full-account profiles.
@@ -83,18 +82,20 @@ After changing a group, select **Update permissions**. After changing a named ad
 
 ## Configure Group Permissions
 
-1. Expand **Administration Options**, then **Group Permissions**.
-2. Expand one audience: **participant**, **guest**, **authenticated**, or **public**.
+1. Open **Entity settings** and select **Access**, then **Group Permissions**.
+2. Choose **Participant**, **Guest**, **Authenticated**, or **Public** under **Permission audience**. Only that audience's editor is shown.
 3. Select a preset, **All**, **None**, or individual permission checkboxes.
 4. Select **Update permissions**.
 5. Test the result using the kind of profile you intended to affect.
 
-Because grants combine, changing one audience never subtracts permissions supplied by another audience.
+Switching audiences keeps every unsaved selection. **Update permissions** saves all four audiences together, including
+an audience whose checkboxes you cleared. Permission checkboxes are grouped by purpose; expand **Presets** for a
+starting set. Because grants combine, changing one audience never subtracts permissions supplied by another audience.
 
 ## Add or change a named administrator
 
-1. Open **Administrators** and select **Add**.
-2. In **Add administrator**, search under **User (name or email)** and select the intended profile.
+1. Open **Entity settings** → **Access** → **Administrators** and select **Add**.
+2. In the **Add administrator** area within the dialog, search under **User (name or email)** and select the intended profile.
 3. Choose an **Initial preset**, or leave it on **None**.
 4. Select **Add**.
 5. Expand the new administrator, adjust the checkboxes, and select **Save**.
@@ -160,7 +161,15 @@ Add the organizer under **Administrators**, then grant only the required labels.
 - **Manage Permissions** for changing sharing and administrators.
 - **Access Admin** for entering an event’s administration dashboard.
 
-For an event permission manager, grant both **Access Admin** and **Manage Permissions**. **Access Admin** opens the dashboard; **Manage Permissions** exposes and authorizes the permission controls.
+For an event permission manager, grant **Manage Permissions**. That exposes the permission controls in **Entity settings** on the event page. Add **Access Admin** only when the organizer also needs to enter the dashboard.
+
+### Delegate property or event-link editing
+
+**Entity settings** shows only authorized fields and actions. Grant **Edit Title** for a title-only editor or **Edit Desc** for a description-only editor. An event editor with only **Manage Requirements** sees the dietary requirement controls. These profiles do not need **Access Admin** merely to use the dialog.
+
+Changing or clearing the event linked to an activity plan, packing list, or drivers list requires **Edit Meta** on that resource. Selecting a destination additionally requires **Manage Assignments** on the destination event. Past, deadline-passed, and archived events remain eligible under those same permissions; being listed as an event administrator without the required grant is insufficient.
+
+After a link change, event-participant grants are evaluated against the new event. Existing records and individual grants remain, but a profile relying on the old event's participant access may lose access. Review the new sharing boundary before selecting **Save event link**. See [Choose an event](EVENTS.md#choose-an-event) for the selector and its filters.
 
 ### Delegate complete control
 
@@ -175,7 +184,7 @@ The interface generates these labels from the current permission definition. Fea
 | **Edit Title** | `EDIT_TITLE` | Change the top-level title. |
 | **Edit Desc** | `EDIT_DESC` | Change the top-level description. |
 | **Edit Capacity** | `EDIT_CAPACITY` | Change the event capacity or a supported item capacity. |
-| **Edit Meta** | `EDIT_META` | Change other top-level settings such as dates, location, or the header image. |
+| **Edit Meta** | `EDIT_META` | Change other top-level settings such as dates, location, the header image, or a plan/list's event link. Selecting a destination also needs Manage Assignments there. |
 | **Item Add** | `ITEM_ADD` | Add child entries such as activity slots, packing items, or driver rows. |
 | **Item Edit** | `ITEM_EDIT` | Reorder child entries and provide the broad parent-level fallback used by many child-edit actions. |
 | **Item Edit Desc** | `ITEM_EDIT_DESC` | Edit child-entry descriptions without granting the broader Item Edit permission. |
@@ -269,6 +278,8 @@ Confirm all of the following:
 ### An event organizer cannot open the administration dashboard
 
 Grant **Access Admin**. Grant the additional management permissions needed inside the dashboard, such as **Manage Permissions**, **Manage Registrations**, or **Access Participants**.
+
+Property and permission changes can instead be made through **Entity settings** on the ordinary event page with their respective action grants. If **Entity settings** or a field is missing, check the active profile's relevant permission rather than granting dashboard access alone.
 
 ### An administrator appears but cannot do anything
 

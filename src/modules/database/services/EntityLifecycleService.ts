@@ -6,10 +6,9 @@
  */
 
 import {EntityManager, EntityTarget, Repository, type ObjectLiteral, type SelectQueryBuilder} from 'typeorm';
-import type {ArchiveReference, ArchiveState} from '../../../types/ArchiveTypes';
+import type {ArchiveMetadataPatch, ArchiveReference, ArchiveSnapshotEntry, ArchiveTarget, LockedArchiveContext} from '../../../types/ArchiveTypes';
 import type {EntityType} from '../../../types/UtilTypes';
-import {archiveKey, automaticArchiveCutoff, isEffectivelyArchived} from '../../archive/policy';
-import {APIError} from '../../lib/errors';
+import {archiveKey} from '../../archive/policy';
 import {AppDataSource} from '../dataSource';
 import {BaseEntity} from '../entities/abstract/BaseEntity';
 import {ActivityPlan} from '../entities/activity/ActivityPlan';
@@ -33,22 +32,8 @@ const roots: Record<EntityType, {entity: EntityTarget<BaseEntity>; linked: boole
 // Bound the automatic sweep's memory use and query size without loading full entities.
 const BATCH_SIZE = 200;
 
-/** Only lifecycle metadata is loaded; assignments, invoices and files stay outside this service. */
-interface ArchiveTarget {
-    id: string;
-    ownerId: string;
-    eventId: string | null;
-    archivedAt: Date | null;
-    autoArchivePaused: boolean;
-    endDate: string | null;
-}
-
+/** The type is already validated by the controller; this lookup only maps schema metadata. */
 function getRootDescriptor(type: EntityType) {
-    // Runtime inputs can reach this boundary despite the TypeScript union. Reject
-    // unknown keys before selecting a repository, including Object prototype keys.
-    if (!Object.hasOwn(roots, type)) {
-        throw new APIError('Invalid entity type.', {}, 400);
-    }
     return roots[type];
 }
 
@@ -77,10 +62,6 @@ export function addOverviewArchiveProjection<T extends ObjectLiteral>(query: Sel
         query.addSelect('NULL', 'eventId')
             .addSelect(`(${alias}.archived_at IS NOT NULL)`, 'effectiveArchived');
     }
-}
-
-function rootHasDates(type: EntityType): boolean {
-    return getRootDescriptor(type).dated;
 }
 
 function archiveTargetQuery(manager: EntityManager, type: EntityType) {
@@ -119,69 +100,43 @@ async function lockTarget(manager: EntityManager, ref: ArchiveReference): Promis
 }
 
 /**
- * Give an archival or personal-preference command a current, stable target.
- * Every linked command locks the event before its child, so competing commands use
- * the same order and cannot observe a parent restoration halfway through a child write.
- * The initial relationship lookup only decides which parent to lock; it is not the
- * state passed to the callback. We reload and check the root after acquiring locks.
+ * Open one transaction and load a stable root/parent snapshot without interpreting it.
+ * Discovery happens before any child lock. Existing and requested parents are then locked
+ * in ascending ID order before the root, matching every lifecycle/association writer.
  *
- * Domain deletion still uses its normal repository DELETE. Database row locks make
- * it wait if this transaction came first; if deletion wins, the locking read returns
- * no root and the command fails with 404. This helper does not perform deletion or
- * promise cleanup of the separately stored polymorphic visibility preferences.
+ * The callback receives nullable reads and the discovered relationship so its controller
+ * can distinguish deletion, a concurrent relink, and missing destinations. Throwing there
+ * rolls back the transaction; this DBAL never chooses a status code or an allowed action.
  */
 export async function withLockedArchiveTarget<T>(
     ref: ArchiveReference,
-    action: (manager: EntityManager, root: ArchiveTarget, parent: ArchiveTarget | null) => Promise<T>,
+    action: (manager: EntityManager, context: LockedArchiveContext) => Promise<T>,
+    additionalEventIds: string[] = [],
 ): Promise<T> {
     async function lockAndRun(manager: EntityManager): Promise<T> {
-        // Discover the parent without locking the child first. Reversing the order
-        // here would conflict with other commands that already hold the event lock.
         const [initial] = await loadArchiveTargets(manager, ref.type, [ref.id]);
-        if (!initial) {
-            throw new APIError('Entity not found.', {}, 404);
-        }
-
-        let parent: ArchiveTarget | null = null;
-        if (initial.eventId) {
-            parent = await lockTarget(manager, {type: 'event', id: initial.eventId});
+        const parentIds = new Set(additionalEventIds);
+        if (initial?.eventId) parentIds.add(initial.eventId);
+        const parents = new Map<string, ArchiveTarget>();
+        for (const id of [...parentIds].sort()) {
+            const parent = await lockTarget(manager, {type: 'event', id});
+            if (parent) parents.set(id, parent);
         }
         const root = await lockTarget(manager, ref);
-        if (!root) {
-            throw new APIError('Entity not found.', {}, 404);
-        }
-        if (root.eventId !== initial.eventId || (root.eventId && !parent)) {
-            // A concurrent relink invalidates the parent lock we chose. Ask the
-            // caller to reload instead of writing against an unlocked new parent.
-            throw new APIError('The linked event changed. Reload and try again.', {}, 409);
-        }
-        return action(manager, root, parent);
+        return action(manager, {initialEventId: initial?.eventId, root, parents});
     }
-
-    // Each statement sees committed changes after waiting for locks. In particular,
-    // the callback's overview-membership check must not use the initial lookup's view.
+    // Locking reads after a wait must see the committed relationship, not discovery's snapshot.
     return AppDataSource.transaction('READ COMMITTED', lockAndRun);
 }
 
-function hasIndependentAutomaticSchedule(ref: ArchiveReference, root: ArchiveTarget): boolean {
-    // A linked activity plan's own dates never schedule its archival independently;
-    // it follows the event even if its period ends earlier or later than the event's.
-    return rootHasDates(ref.type) && root.eventId === null;
+/** Persist controller-normalized lifecycle columns on the caller's locked transaction. */
+export async function updateLifecycleMetadata(manager: EntityManager, ref: ArchiveReference, patch: ArchiveMetadataPatch): Promise<void> {
+    await getRootRepository(manager, ref.type).update(ref.id, patch);
 }
 
-function projectState(ref: ArchiveReference, root: ArchiveTarget, parent: ArchiveTarget | null): ArchiveState {
-    // Keep stored direct state and effective inherited state distinct. Restoring an
-    // event removes inheritance but must preserve any child archived on its own.
-    // Raw MariaDB boolean columns arrive as numbers, so normalize the pause flag.
-    return {
-        archived: isEffectivelyArchived(root.archivedAt, parent?.archivedAt ?? null),
-        directArchived: root.archivedAt !== null,
-        inheritedFromEventId: parent?.archivedAt ? parent.id : null,
-        eventId: root.eventId,
-        ownerId: root.ownerId,
-        autoArchivePaused: Boolean(root.autoArchivePaused),
-        hasAutomaticSchedule: hasIndependentAutomaticSchedule(ref, root),
-    };
+/** Persist only the relationship. The controller coordinates any affected domain records. */
+export async function updateEventAssociation(manager: EntityManager, ref: ArchiveReference, eventId: string | null): Promise<void> {
+    await manager.createQueryBuilder().relation(getRootDescriptor(ref.type).entity, 'event').of(ref.id).set(eventId);
 }
 
 /**
@@ -189,12 +144,12 @@ function projectState(ref: ArchiveReference, root: ArchiveTarget, parent: Archiv
  * All reads use one snapshot: an event and its children must never show opposite
  * lifecycle states because the event changed between separate queries.
  */
-export async function getArchiveStates(refs: ArchiveReference[], manager?: EntityManager): Promise<Map<string, ArchiveState>> {
+export async function getArchiveSnapshot(refs: ArchiveReference[], manager?: EntityManager): Promise<Map<string, ArchiveSnapshotEntry>> {
     if (!refs.length) {
         return new Map();
     }
 
-    async function readSnapshot(manager: EntityManager): Promise<Map<string, ArchiveState>> {
+    async function readSnapshot(manager: EntityManager): Promise<Map<string, ArchiveSnapshotEntry>> {
         // Phase 1: group and deduplicate overview references so repeated cards in
         // administration/participation require only one metadata read per root.
         const idsByType = new Map<EntityType, Set<string>>();
@@ -233,15 +188,15 @@ export async function getArchiveStates(refs: ArchiveReference[], manager?: Entit
             targets.set(archiveKey(ref), {ref, root});
         }
 
-        const states = new Map<string, ArchiveState>();
-        // Phase 4: derive all effective states from the completed snapshot. Resolve
-        // inheritance only after every parent is available, independent of input order.
+        const states = new Map<string, ArchiveSnapshotEntry>();
+        // Phase 4: pair raw roots with their parent rows in the completed snapshot. Resolve
+        // relationships only after every parent is available, independent of input order.
         for (const [key, {ref, root}] of targets) {
             let parent: ArchiveTarget | null = null;
             if (root.eventId) {
                 parent = targets.get(archiveKey({type: 'event', id: root.eventId}))?.root ?? null;
             }
-            states.set(key, projectState(ref, root, parent));
+            states.set(key, {reference: ref, root, parent});
         }
         return states;
     }
@@ -252,67 +207,10 @@ export async function getArchiveStates(refs: ArchiveReference[], manager?: Entit
     return manager ? readSnapshot(manager) : AppDataSource.transaction('REPEATABLE READ', readSnapshot);
 }
 
-/** Set direct lifecycle state only. Repeated requests retain the first timestamp. */
-export async function archiveEntity(ref: ArchiveReference, now: Date = new Date()): Promise<ArchiveState> {
-    if (!Number.isFinite(now.getTime())) {
-        throw new Error('Invalid archival time.');
-    }
-    return withLockedArchiveTarget(ref, async function archive(manager, root, parent) {
-        // The event timestamp itself governs every attached entity immediately;
-        // copying timestamps to children would lose their independent archive state.
-        // An already archived root keeps its timestamp when a request is retried.
-        if (!root.archivedAt) {
-            await getRootRepository(manager, ref.type).update(ref.id, {archivedAt: now});
-            root.archivedAt = now;
-        }
-        return projectState(ref, root, parent);
-    });
-}
-
-/** Restoration changes only this root; a child cannot undo its event's archival. */
-export async function restoreEntity(ref: ArchiveReference): Promise<ArchiveState> {
-    return withLockedArchiveTarget(ref, async function restore(manager, root, parent) {
-        // A child's own timestamp cannot override an archived event. Returning a
-        // conflict keeps the restore action honest instead of reporting a still-hidden
-        // inherited archive as successfully restored.
-        if (parent?.archivedAt) {
-            throw new APIError('Restore the linked event before restoring this entity.', {eventId: parent.id}, 409);
-        }
-
-        // Pausing and restoring are one write, so the next hourly run cannot undo a
-        // manual restoration of an already expired period. The pause persists until
-        // an organizer explicitly resumes it; ordinary date edits do not clear it.
-        // Linked plans have no independent schedule to pause.
-        const pauseAutomaticArchival = hasIndependentAutomaticSchedule(ref, root);
-        const patch = pauseAutomaticArchival ? {archivedAt: null, autoArchivePaused: true} : {archivedAt: null};
-        await getRootRepository(manager, ref.type).update(ref.id, patch);
-        root.archivedAt = null;
-        if (pauseAutomaticArchival) {
-            root.autoArchivePaused = true;
-        }
-        return projectState(ref, root, parent);
-    });
-}
-
-/** Set an explicit value instead of toggling, making retried requests idempotent. */
-export async function setAutomaticArchivalPaused(ref: ArchiveReference, paused: boolean): Promise<ArchiveState> {
-    return withLockedArchiveTarget(ref, async function setPause(manager, root, parent) {
-        if (!hasIndependentAutomaticSchedule(ref, root)) {
-            throw new APIError('Automatic archival is controlled by an event or a standalone activity plan.', {}, 409);
-        }
-        // This changes scheduling only. Resuming an expired root lets the next sweep
-        // archive it; pausing an archived root does not implicitly restore it.
-        await getRootRepository(manager, ref.type).update(ref.id, {autoArchivePaused: paused} as Partial<ArchiveTarget>);
-        root.autoArchivePaused = paused;
-        return projectState(ref, root, parent);
-    });
-}
-
 /** Archive eligible dated roots in bounded batches using one captured UTC cutoff. */
-export async function archiveExpiredEntities(afterDays: number, now: Date = new Date()): Promise<number> {
-    // Capture one date boundary and timestamp for the entire sweep. Crossing UTC
-    // midnight while processing batches must not change which end dates are due.
-    const cutoff = automaticArchiveCutoff(afterDays, now);
+export async function archiveExpiredEntities(cutoff: string, now: Date): Promise<number> {
+    // The controller supplies one validated cutoff and timestamp. SQL retains every
+    // predicate in the write so concurrent changes cannot satisfy an earlier stale read.
     let archived = 0;
     for (const type of ['event', 'activity'] as const) {
         let previous: {id: string; endDate: string} | undefined;

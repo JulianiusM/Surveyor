@@ -12,6 +12,9 @@ block title
         | Event Dashboard — #{ev.title}
 
 block content
+    .d-flex.justify-content-end.mb-3
+        +entitySettingsButton(data.entityProperties, data.archive)
+    +entityPropertiesModal(ev, data.entityProperties, data.archive, {admins, perms})
     //- The controller provides event-wide archive capabilities separately from dashboard permissions.
     //- Archiving the event is inherited by attached entities while their existing content remains usable.
     +entityArchiveNotice(ev, 'event', data.archive)
@@ -63,122 +66,6 @@ block content
                     a.btn.btn-primary(href=`/event/${ev.id}`)
                         i.bi.bi-calendar2-event.me-1
                         | Event page
-
-    if permData.entity.any("EDIT_TITLE", "EDIT_DESC", "EDIT_CAPACITY", "EDIT_META")
-        .card.mb-2.bg-dark.text-white.border-secondary-subtle
-            .card-header.py-2
-                i.bi.bi-gear-fill.me-2
-                | Event settings
-            .card-body
-                form.row.g-3#eventUpdateForm
-                    if permData.entity.has("EDIT_TITLE")
-                        .col-md-6
-                            label.form-label(for="titleEdit")
-                                i.bi.bi-tag.me-1
-                                | Title
-                            input#titleEdit.form-control.text-bg-dark(type="text" name="title" maxlength="255" value=ev.title)
-                    if permData.entity.has("EDIT_META")
-                        .col-md-6
-                            label.form-label(for="locationEdit")
-                                i.bi.bi-geo-alt.me-1
-                                | Location
-                            input#locationEdit.form-control.text-bg-dark(type="text" name="location" maxlength="255" value=location)
-                        .col-md-4
-                            label.form-label(for="startEdit")
-                                i.bi.bi-calendar-event.me-1
-                                | Start date
-                            input#startEdit.form-control.text-bg-dark(type="date" name="startDate" value=startDate)
-                        .col-md-4
-                            label.form-label(for="endEdit")
-                                i.bi.bi-calendar2-event.me-1
-                                | End date
-                            input#endEdit.form-control.text-bg-dark(type="date" name="endDate" value=endDate)
-                    if permData.entity.has("EDIT_CAPACITY")
-                        .col-md-4
-                            label.form-label(for="maxParticipants")
-                                i.bi.bi-people.me-1
-                                | Max Participants
-                            input#maxParticipants.form-control.text-bg-dark(
-                                type="number"
-                                name="maxParticipants"
-                                placeholder=""
-                                value=(ev.maxParticipants || ''))
-                    if permData.entity.has("EDIT_DESC")
-                        .col-md-12
-                            label.form-label(for="descEdit")
-                                i.bi.bi-pencil-square.me-1
-                                | Description
-                            textarea#descEdit.form-control.text-bg-dark(name="description" rows="3" maxlength="16000") #{ev.description || ''}
-                    if permData.entity.has("EDIT_META")
-                        .col-md-4
-                            label.form-label(for="deadlineEdit")
-                                i.bi.bi-hourglass-split.me-1
-                                | Binding deadline
-                            input#deadlineEdit.form-control.text-bg-dark(type="datetime-local" name="bindingDeadline" step=1 value=(deadline ? new Date(deadline).toISOString().slice(0, 19) : ''))
-                        .col-md-4
-                            +timezonePicker('deadlineTz', {
-                                label: 'Time zone',
-                                required: true,
-                                value: ev.timezone,
-                                help: 'Times will be converted for each user.'
-                            })
-                        .col-md-4
-                        .col-md-4.d-flex.align-items-end
-                            .form-check
-                                input#allowRegDateUpdatesAfterDeadline.form-check-input(
-                                    type="checkbox"
-                                    name="allowRegDateUpdatesAfterDeadline"
-                                    checked=!!ev.allowRegDateUpdatesAfterDeadline)
-                                label.form-check-label(for="allowRegDateUpdatesAfterDeadline")
-                                    i.bi.bi-calendar-range.me-1
-                                    | Allow registration date update after deadline expired
-                        .col-md-4.d-flex.align-items-end
-                            .form-check
-                                input#allowRegCancelationAfterDeadline.form-check-input(
-                                    type="checkbox"
-                                    name="allowRegCancelationAfterDeadline"
-                                    checked=!!ev.allowRegCancelationAfterDeadline)
-                                label.form-check-label(for="allowRegCancelationAfterDeadline")
-                                    i.bi.bi-calendar-x.me-1
-                                    | Allow cancelling registration after deadline expired
-                    if permData.entity.has("MANAGE_REQUIREMENTS")
-                        .col-md-4.d-flex.align-items-end
-                            .form-check
-                                input#requireDietEdit.form-check-input(
-                                    type="checkbox"
-                                    name="requireDietaryInfo"
-                                    checked=!!ev.requireDietaryInfo)
-                                label.form-check-label(for="requireDietEdit")
-                                    i.bi.bi-egg-fried.me-1
-                                    | Require dietary info during registration
-                        .col-md-4.d-flex.align-items-end
-                            .form-check
-                                input#allowDietCommentEdit.form-check-input(
-                                    type="checkbox"
-                                    name="allowDietComment"
-                                    checked=!!ev.allowDietComment)
-                                label.form-check-label(for="allowDietCommentEdit")
-                                    i.bi.bi-chat-dots.me-1
-                                    | Allow diet comment during registration
-                        .col-md-4.d-flex.align-items-end
-                            .form-check
-                                input#allowRegDietUpdateAfterDeadline.form-check-input(
-                                    type="checkbox"
-                                    name="allowRegDietUpdateAfterDeadline"
-                                    checked=!!ev.allowRegDietUpdateAfterDeadline)
-                                label.form-check-label(for="allowRegDietUpdateAfterDeadline")
-                                    i.bi.bi-egg-fried.me-1
-                                    | Allow diet update after deadline expired
-                    .col-12.d-flex.justify-content-end.gap-2
-                        button.btn.btn-primary(type="submit")
-                            i.bi.bi-save.me-1
-                            | Save settings
-
-    if permData.entity.has('MANAGE_PERMISSIONS')
-        +permissionManagement(admins, perms.permMeta, perms.defaultPerms, perms.presets, {
-            entityType: 'event',
-            entityId: ev.id,
-        })
 
     if permData.entity.has('MANAGE_REGISTRATIONS')
         +eventRegLinks({

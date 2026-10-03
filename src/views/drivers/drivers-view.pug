@@ -6,31 +6,15 @@ block meta
     title #{data.list.title} | Surveyor
 
 block title
-    +entityHeader(data.list, "drivers", "bi-car-front", permData)
-    +entityImageModal(data.list, "drivers")
+    +entityHeader(data.list, "drivers", "bi-car-front", permData, data.entityProperties, data.archive)
+    +entityPropertiesModal(data.list, data.entityProperties, data.archive, {admins, perms})
 
 block content
     //- The list has no automatic date schedule of its own, but the projection can include event archival.
     //- Rendering this status does not change access to the list or its existing participant actions.
     +entityArchiveNotice(data.list, 'drivers', data.archive)
-    // ─── Description (editable) ──────────────────────────────
-    if permData.entity.has('EDIT_DESC')
-        // manager sees pointer
-        small.text-info.fst-italic.fw-light Double click to edit
-        p#planDesc.border.border-secondary.rounded.p-1(
-            style="cursor:pointer"
-            data-edit="planDescription"
-        )
-            if data.list.description
-                - const lines = data.list.description.split('\n')
-                each line, i in lines
-                    | #{line}
-                    if i < lines.length - 1
-                        br
-            else
-                em.text-secondary double-click to add description
-        hr.mb-1.mt-0
-    else if data.list.description
+    //- Root descriptions are edited in Entity settings; ride-level editors remain independent.
+    if data.list.description
         p#planDesc.mb-0.mt-2
             - const lines = data.list.description.split('\n')
             each line, i in lines
@@ -39,12 +23,6 @@ block content
                     br
         hr.mb-1.mt-0
 
-    // Owner settings toggles
-    if permData.entity.has('MANAGE_PERMISSIONS')
-        +permissionManagement(admins, perms.permMeta, perms.defaultPerms, perms.presets, {
-            entityType: 'drivers',
-            entityId: data.list.id
-        })
 
     //Erste Zeile: Metainfos / Badge
     .d-flex.justify-content-between.align-items-center.mb-3

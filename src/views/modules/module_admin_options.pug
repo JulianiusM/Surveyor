@@ -34,6 +34,26 @@ mixin permissionManagement(admins, permMeta, defaults, presets=[], opts={}, audi
             }, opts)
         }
 
+    if opts.inline
+        //- The root entity dialog already provides an Access tab. Keep one access editor visible
+        //- within it, without another accordion or modal; Bootstrap preserves drafts on tab switch.
+        .perm-mgmnt.text-bg-dark#permMgmnt
+            if !opts.disablePermMatrix && !opts.disableAdminMatrix
+                .nav.nav-pills.gap-1.mb-3(role='tablist' aria-label='Access settings')
+                    button.nav-link.active#entity-access-groups-tab(type='button' role='tab' data-bs-toggle='pill' data-bs-target='#entity-access-groups' aria-controls='entity-access-groups' aria-selected='true') Group Permissions
+                    button.nav-link#entity-access-admins-tab(type='button' role='tab' data-bs-toggle='pill' data-bs-target='#entity-access-admins' aria-controls='entity-access-admins' aria-selected='false') Administrators
+            .tab-content
+                if !opts.disablePermMatrix
+                    .tab-pane.active#entity-access-groups(role=opts.disableAdminMatrix ? undefined : 'tabpanel' aria-labelledby=opts.disableAdminMatrix ? undefined : 'entity-access-groups-tab' tabindex='0')
+                        +permMatrix(audiences, permMeta, defaults, presets, fieldBase, opts)
+                if !opts.disableAdminMatrix
+                    .tab-pane#entity-access-admins(class=opts.disablePermMatrix ? 'active' : undefined role=opts.disablePermMatrix ? undefined : 'tabpanel' aria-labelledby=opts.disablePermMatrix ? undefined : 'entity-access-admins-tab' tabindex='0')
+                        +adminMatrix(admins, permMeta, presets, opts)
+    else
+        +permissionManagementAccordion(admins, permMeta, defaults, presets, opts, audiences, fieldBase)
+
+//- Standalone creation and administration pages retain their existing collapsible entry point.
+mixin permissionManagementAccordion(admins, permMeta, defaults, presets, opts, audiences, fieldBase)
     .perm-mgmnt.text-bg-dark.border.border-secondary.rounded-2.py-1.my-2#permMgmnt
         .accordion.accordion-flush
             .accordion-item.bg-dark.border-secondary

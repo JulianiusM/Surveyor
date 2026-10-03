@@ -17,6 +17,40 @@ export interface ArchiveReference {
     id: string;
 }
 
+/** Minimal persisted columns needed while coordinating lifecycle and relationship writes. */
+export interface ArchiveTarget {
+    id: string;
+    ownerId: string;
+    eventId: string | null;
+    archivedAt: Date | null;
+    autoArchivePaused: boolean;
+    endDate: string | null;
+}
+
+/**
+ * A locking read is data, not permission. The controller checks missing rows and whether
+ * the discovery relationship still agrees with the root read after acquiring its lock.
+ * All entries in parents have been locked before root, in ascending event-ID order.
+ */
+export interface LockedArchiveContext {
+    initialEventId: string | null | undefined;
+    root: ArchiveTarget | null;
+    parents: Map<string, ArchiveTarget>;
+}
+
+/** Normalized lifecycle columns; choosing these values belongs to the controller. */
+export interface ArchiveMetadataPatch {
+    archivedAt?: Date | null;
+    autoArchivePaused?: boolean;
+}
+
+/** Raw root and optional parent columns read in one database snapshot, before policy. */
+export interface ArchiveSnapshotEntry {
+    reference: ArchiveReference;
+    root: ArchiveTarget;
+    parent: ArchiveTarget | null;
+}
+
 /**
  * Default follows authoritative archival; the other values affect only the acting profile's overview.
  * 'shown' also keeps archived roots visible in the active section, while 'hidden' can

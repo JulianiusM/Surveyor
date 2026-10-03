@@ -30,6 +30,7 @@ export interface AttendanceCheck {
 }
 
 export type AssignmentWarningType =
+    | "ineligible_participant"
     | "outside_attendance"
     | "arrival_day"
     | "departure_day"

@@ -79,6 +79,13 @@ export type PermData = PartialRecord<Audience, number>
 
 export type Audience = 'guest' | 'participant' | 'authenticated' | 'public';
 
+/** Engine-provided one-bit candidate filter; the DBAL translates it without inferring policy. */
+export interface EntityPermissionQueryScope {
+    profileId: string | null;
+    audiences: Exclude<Audience, 'participant'>[];
+    requiredMask: number;
+}
+
 export type SaveOpts = {
     /** Name of the root field in the form body (default: "defaultPerms") */
     fieldBase?: string;

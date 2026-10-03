@@ -15,13 +15,11 @@
  */
 
 import {
-    normalizeOverrideInput,
-    normalizeRoleRequirementInput,
-    normalizeStayRequirementInput,
     RequirementOverrideInput,
     RoleRequirementInput,
     StayRequirementInput,
 } from "../../activity/requirements";
+import type {EntityManager} from "typeorm";
 import {AppDataSource} from "../dataSource";
 import {ActivityPlan} from "../entities/activity/ActivityPlan";
 import {ActivityPlanRequirement} from "../entities/activity/ActivityPlanRequirement";
@@ -67,8 +65,11 @@ export interface RequirementConfiguration {
     stayRequirements: ActivityPlanStayRequirement[];
 }
 
-export async function getRequirementConfiguration(planId: string): Promise<RequirementConfiguration> {
-    const planRepo = AppDataSource.getRepository(ActivityPlan);
+export async function getRequirementConfiguration(
+    planId: string,
+    manager: EntityManager = AppDataSource.manager,
+): Promise<RequirementConfiguration | null> {
+    const planRepo = manager.getRepository(ActivityPlan);
     const plan = await planRepo.findOne({
         where: {id: planId},
         select: {
@@ -91,9 +92,7 @@ export async function getRequirementConfiguration(planId: string): Promise<Requi
         },
     });
 
-    if (!plan) {
-        throw new Error(`Activity plan ${planId} not found`);
-    }
+    if (!plan) return null;
 
     return {
         plan,
@@ -106,12 +105,11 @@ export async function getRequirementConfiguration(planId: string): Promise<Requi
 export async function replaceRoleRequirements(planId: string, requirements: RoleRequirementInput[]): Promise<void> {
     await AppDataSource.transaction(async (manager) => {
         const repo = manager.getRepository(ActivityPlanRequirement);
-        const normalized = requirements.map(normalizeRoleRequirementInput);
         await repo.delete({entity: {id: planId}});
 
-        if (!normalized.length) return;
+        if (!requirements.length) return;
 
-        const rows = normalized.map((req) =>
+        const rows = requirements.map((req) =>
             repo.create({
                 entity: {id: planId},
                 role: {id: req.roleId},
@@ -125,12 +123,11 @@ export async function replaceRoleRequirements(planId: string, requirements: Role
 export async function replaceRequirementOverrides(planId: string, overrides: RequirementOverrideInput[]): Promise<void> {
     await AppDataSource.transaction(async (manager) => {
         const repo = manager.getRepository(ActivityPlanRequirementOverride);
-        const normalized = overrides.map(normalizeOverrideInput);
         await repo.delete({entity: {id: planId}});
 
-        if (!normalized.length) return;
+        if (!overrides.length) return;
 
-        const rows = normalized.map((override) =>
+        const rows = overrides.map((override) =>
             repo.create({
                 id: override.id,
                 entity: {id: planId},
@@ -150,20 +147,17 @@ export async function replaceRequirements(
     overrides: RequirementOverrideInput[],
     planSettings?: PlanRequirementSettings,
     stayRequirements: StayRequirementInput[] = [],
+    manager?: EntityManager,
 ): Promise<void> {
-    await AppDataSource.transaction(async (manager) => {
+    // The controller supplies validated, reconciled rows under its plan lock. This callback
+    // only maps those rows to persistence and participates in that same transaction.
+    async function persistRequirements(manager: EntityManager): Promise<void> {
         const roleRepo = manager.getRepository(ActivityPlanRequirement);
         const overrideRepo = manager.getRepository(ActivityPlanRequirementOverride);
         const stayRepo = manager.getRepository(ActivityPlanStayRequirement);
         const planRepo = manager.getRepository(ActivityPlan);
-        const normalizedRoles = roleRequirements.map(normalizeRoleRequirementInput);
-        const normalizedOverrides = overrides.map(normalizeOverrideInput);
-        const normalizedStayRequirements = stayRequirements.map(normalizeStayRequirementInput);
-
-        if (new Set(normalizedStayRequirements.map((requirement) => requirement.stayDays)).size !== normalizedStayRequirements.length) {
-            throw new Error("Stay durations must be unique");
-        }
-
+        // Omitted settings are deliberately excluded from the SQL patch. Validation and
+        // defaults have already been decided by the controller; omission preserves storage.
         const planPatch: PlanRequirementSettings = {};
 
         if (planSettings?.assignmentMode !== undefined) {
@@ -200,8 +194,8 @@ export async function replaceRequirements(
             await planRepo.update({id: planId}, planPatch);
         }
 
-        if (normalizedRoles.length) {
-            const roleRows = normalizedRoles.map((req) =>
+        if (roleRequirements.length) {
+            const roleRows = roleRequirements.map((req) =>
                 roleRepo.create({
                     entity: {id: planId},
                     role: {id: req.roleId},
@@ -211,8 +205,8 @@ export async function replaceRequirements(
             await roleRepo.save(roleRows);
         }
 
-        if (normalizedOverrides.length) {
-            const overrideRows = normalizedOverrides.map((override) =>
+        if (overrides.length) {
+            const overrideRows = overrides.map((override) =>
                 overrideRepo.create({
                     id: override.id,
                     entity: {id: planId},
@@ -224,8 +218,8 @@ export async function replaceRequirements(
             await overrideRepo.save(overrideRows);
         }
 
-        if (normalizedStayRequirements.length) {
-            const stayRows = normalizedStayRequirements.map((requirement) =>
+        if (stayRequirements.length) {
+            const stayRows = stayRequirements.map((requirement) =>
                 stayRepo.create({
                     entity: {id: planId},
                     stayDays: requirement.stayDays,
@@ -234,5 +228,7 @@ export async function replaceRequirements(
             );
             await stayRepo.save(stayRows);
         }
-    });
+    }
+    if (manager) await persistRequirements(manager);
+    else await AppDataSource.transaction(persistRequirements);
 }
