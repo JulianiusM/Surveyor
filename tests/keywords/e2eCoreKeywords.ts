@@ -22,7 +22,8 @@ export async function confirmInvoiceCommand(page: Page, opener: Locator): Promis
 export async function loginForE2E(request: APIRequestContext, credentials: {username: string; password: string}): Promise<void> {
     // Keep login at the HTTP boundary: it is faster and less brittle than driving the form UI,
     // but still verifies the real Express login route, session cookie, and seeded E2E account.
-    const response = await request.post('/users/login', {form: credentials, maxRedirects: 0});
+    // Retry only connection resets during session setup; HTTP errors and financial commands remain single attempts.
+    const response = await request.post('/users/login', {form: credentials, maxRedirects: 0, maxRetries: 2});
     expect(response.status()).toBe(302);
     expect(response.headers().location).toContain('/users/dashboard');
 }

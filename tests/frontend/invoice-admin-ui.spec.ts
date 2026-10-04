@@ -530,6 +530,7 @@ class ConfirmationElement extends EventTarget {
     textContent = '';
     disabled = false;
     isConnected = true;
+    transitioning = false;
     source: ConfirmationElement | null = null;
     matches: Record<string, ConfirmationElement> = {};
     classes = new Set<string>();
@@ -539,7 +540,7 @@ class ConfirmationElement extends EventTarget {
     closest(selector: string) { return selector === '.modal' ? this.source : this.matches[selector] || null; }
 }
 
-function confirmationFixture() {
+function confirmationFixture({deferShown = false, deferHidden = false} = {}) {
     const modal = new ConfirmationElement();
     const subject = new ConfirmationElement();
     const description = new ConfirmationElement();
@@ -551,16 +552,37 @@ function confirmationFixture() {
         '[data-invoice-command-cancel]': cancel, '[data-invoice-command-confirm]': confirm,
     };
     confirm.matches['[data-invoice-command-confirm]'] = confirm;
+    /** Complete an explicit transition so tests can exercise clicks before Bootstrap is ready. */
+    function finishShowing(node = modal): void {
+        node.transitioning = false;
+        node.dispatchEvent(new Event('shown.bs.modal'));
+    }
+    /** Close the gate only when Bootstrap finishes hiding the modal. */
+    function finishHiding(node = modal): void {
+        node.transitioning = false;
+        node.dispatchEvent(new Event('hidden.bs.modal'));
+    }
     function getOrCreateInstance(node: ConfirmationElement) {
         return {
-            show() { node.classes.add('show'); node.dispatchEvent(new Event('shown.bs.modal')); },
-            hide() { node.classes.delete('show'); node.dispatchEvent(new Event('hidden.bs.modal')); },
+            show() {
+                if (node.transitioning || node.classes.has('show')) return;
+                node.classes.add('show');
+                node.transitioning = true;
+                if (!deferShown) finishShowing(node);
+            },
+            hide() {
+                // Bootstrap silently ignores hide during its opening animation; an early acknowledgement must not stick.
+                if (node.transitioning || !node.classes.has('show')) return;
+                node.classes.delete('show');
+                node.transitioning = true;
+                if (!deferHidden) finishHiding(node);
+            },
         };
     }
     vi.stubGlobal('window', {bootstrap: {Modal: {getOrCreateInstance}}});
     vi.stubGlobal('document', {getElementById: () => modal});
     initInvoiceCommandConfirmation();
-    return {modal, subject, description, cancel, confirm, opener, getOrCreateInstance};
+    return {modal, subject, description, cancel, confirm, opener, getOrCreateInstance, finishShowing, finishHiding};
 }
 
 describe('invoice state confirmation', () => {
@@ -590,6 +612,47 @@ describe('invoice state confirmation', () => {
         expect(await review).toBe(true);
         expect(source.classes.has('show')).toBe(true);
         expect(source.dataset.draft).toBe('25.50');
+        expect(opener.focus).toHaveBeenCalled();
+    });
+
+    it('keeps acknowledgement disabled until the review is fully shown and resolves only after it closes', async () => {
+        const {modal, cancel, confirm, opener, finishShowing, finishHiding} = confirmationFixture({deferShown: true, deferHidden: true});
+        const review = requestInvoiceConfirmation('Payer', 'Calculated balance: 60.00.', 'Record payment', opener as unknown as HTMLButtonElement);
+        let decision: boolean | undefined;
+        void review.then(result => { decision = result; });
+        expect(confirm.disabled).toBe(true);
+        expect(cancel.focus).not.toHaveBeenCalled();
+        const click = new Event('click');
+        Object.defineProperty(click, 'target', {value: confirm});
+        modal.dispatchEvent(click);
+        await Promise.resolve();
+        expect(modal.classes.has('show')).toBe(true);
+        expect(decision).toBeUndefined();
+
+        finishShowing();
+        expect(confirm.disabled).toBe(false);
+        expect(cancel.focus).toHaveBeenCalledOnce();
+        modal.dispatchEvent(click);
+        expect(confirm.disabled).toBe(true);
+        expect(modal.classes.has('show')).toBe(false);
+        // Repeated acknowledgements and an unfinished closing animation cannot release the caller's request.
+        modal.dispatchEvent(click);
+        await Promise.resolve();
+        expect(decision).toBeUndefined();
+        finishHiding();
+        expect(await review).toBe(true);
+        expect(opener.focus).toHaveBeenCalled();
+    });
+
+    it('keeps a transition-time click cancelled when the ready review is dismissed', async () => {
+        const {modal, confirm, opener, getOrCreateInstance, finishShowing} = confirmationFixture({deferShown: true});
+        const review = requestInvoiceConfirmation('Payer', 'Calculated balance: 60.00.', 'Record payment', opener as unknown as HTMLButtonElement);
+        const click = new Event('click');
+        Object.defineProperty(click, 'target', {value: confirm});
+        modal.dispatchEvent(click);
+        finishShowing();
+        getOrCreateInstance(modal).hide();
+        expect(await review).toBe(false);
         expect(opener.focus).toHaveBeenCalled();
     });
 

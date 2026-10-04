@@ -56,18 +56,39 @@ test('records organizer expenses without attendance and accepts consecutive part
         await expense.getByLabel('Description', {exact: true}).fill('Shared equipment');
         await expense.getByLabel('Proof (optional)').setInputFiles({name: 'equipment.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\nEquipment\n%%EOF')});
         let expenseRequests = 0;
-        await page.route(`**${endpoint}/invoices/organizer`, async route => {
-            expenseRequests++;
-            expect((await route.fetch()).ok()).toBe(true);
-            await route.abort('failed'); // The cost is committed, but its response never reaches the browser.
-        });
-        await expense.getByRole('button', {name: 'Add expense', exact: true}).click();
-        await expect(expense.getByRole('button', {name: 'Reload and check saved invoices'})).toBeVisible();
-        await expect(expense.getByRole('button', {name: 'Add expense', exact: true})).toBeDisabled();
-        await expense.locator('form').evaluate(form => form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true})));
-        expect(expenseRequests).toBe(1);
-        await Promise.all([page.waitForEvent('load'), expense.getByRole('button', {name: 'Reload and check saved invoices'}).click()]);
-        await page.unroute(`**${endpoint}/invoices/organizer`);
+        const responseLossSession = await page.context().newCDPSession(page);
+        try {
+            // Let Chromium send the original financial POST once. Intercept only this endpoint's response,
+            // after the real server commits, without forwarding or retrying it through Playwright's API transport.
+            const committedExpenseResponse = new Promise<void>((resolve, reject) => {
+                /** Drop a successful committed response before the submission code can observe its result. */
+                async function loseCommittedExpenseResponse(response: {requestId: string; responseStatusCode?: number}): Promise<void> {
+                    expenseRequests++;
+                    try {
+                        expect(response.responseStatusCode).toBe(200);
+                        await responseLossSession.send('Fetch.failRequest', {requestId: response.requestId, errorReason: 'Failed'});
+                        resolve();
+                    } catch (error) {
+                        reject(error);
+                    }
+                }
+                responseLossSession.on('Fetch.requestPaused', loseCommittedExpenseResponse);
+            });
+            await responseLossSession.send('Fetch.enable', {patterns: [{
+                urlPattern: new URL(`${endpoint}/invoices/organizer`, page.url()).href,
+                requestStage: 'Response',
+            }]});
+            await Promise.all([committedExpenseResponse, expense.getByRole('button', {name: 'Add expense', exact: true}).click()]);
+            await expect(expense.getByRole('button', {name: 'Reload and check saved invoices'})).toBeVisible();
+            await expect(expense.getByRole('button', {name: 'Add expense', exact: true})).toBeDisabled();
+            await expense.locator('form').evaluate(form => form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true})));
+            expect(expenseRequests).toBe(1);
+            await Promise.all([page.waitForEvent('load'), expense.getByRole('button', {name: 'Reload and check saved invoices'}).click()]);
+        } finally {
+            // Always remove interception, including when an assertion fails or the runner has closed the page.
+            await responseLossSession.send('Fetch.disable').catch(() => undefined);
+            await responseLossSession.detach().catch(() => undefined);
+        }
         const equipment = pool.locator('[data-invoice-row]').filter({hasText: 'Shared equipment'});
         await expect(equipment).toHaveCount(1);
         const proofUrl = (await equipment.getByRole('link', {name: 'View proof'}).getAttribute('href'))!;

@@ -67,6 +67,8 @@ export function requestInvoiceConfirmation(subject: string, description: string,
     subjectElement.textContent = subject;
     descriptionElement.textContent = description;
     confirm.textContent = action;
+    // Bootstrap ignores hide() during its opening animation. Enable acknowledgement only once the dialog is ready.
+    confirm.disabled = true;
     /** Capture a cancellation-default review without invoking the caller's command. */
     function review(resolve: (confirmed: boolean) => void): void {
         invoiceConfirmation = {opener, confirmed: false, resolve};
@@ -85,11 +87,14 @@ export function initInvoiceCommandConfirmation(): void {
     function confirmCommand(event: Event): void {
         const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-invoice-command-confirm]');
         if (!button || button.disabled || !invoiceConfirmation) return;
+        button.disabled = true;
         invoiceConfirmation.confirmed = true;
         window.bootstrap?.Modal.getOrCreateInstance(modal!).hide();
     }
-    /** Put initial focus on the safe cancellation action when the review becomes visible. */
-    function focusCancel(): void {
+    /** Enable acknowledgement after Bootstrap can hide the dialog, keeping initial focus on cancellation. */
+    function readyReview(): void {
+        const confirm = modal!.querySelector<HTMLButtonElement>('[data-invoice-command-confirm]');
+        if (confirm && invoiceConfirmation) confirm.disabled = false;
         modal!.querySelector<HTMLButtonElement>('[data-invoice-command-cancel]')?.focus();
     }
     /** Restore the source draft and resolve the caller after this review modal has fully closed. */
@@ -111,7 +116,7 @@ export function initInvoiceCommandConfirmation(): void {
     }
     // Bootstrap visibility events ensure cancellation and focus restoration happen once per complete review.
     modal.addEventListener('click', confirmCommand);
-    modal.addEventListener('shown.bs.modal', focusCancel);
+    modal.addEventListener('shown.bs.modal', readyReview);
     modal.addEventListener('hidden.bs.modal', finishReview);
 }
 
