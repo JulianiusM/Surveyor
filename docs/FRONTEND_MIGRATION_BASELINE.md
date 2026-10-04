@@ -8,7 +8,7 @@ last-verified: 2026-10-04
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: step-one source inventory and second-pass edge-case review of existing routes, behaviors, permissions, rendering, native fallbacks and test assertions; first-pass application build and controlled browser capture; implementation of the replacement frontend is not included
 source-anchors: src/app.ts; src/routes/; src/controller/; src/views/; src/public/js/; src/types/; src/modules/invoice/; src/modules/activity/; tests/; scripts/capture-frontend-baseline.cjs; package.json; esbuild.client.js; playwright.config.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/DOCUMENTATION_POLICY.md
-next-review: frontend-migration-contract-and-foundation-design
+next-review: frontend-foundation-proof-slice-implementation
 -->
 
 This is the first-step baseline for replacing Surveyor's Pug and imperative browser frontend with a more uniform
@@ -133,5 +133,7 @@ checks remain separate, as required by the [documentation policy](DOCUMENTATION_
   clean repository-wide documentation result. The new local E2E configuration reference is accounted for in the
   report configuration. Reports remain under `test-results/frontend-baseline/documentation-report/`.
 
-The next implementation step is contract and frontend foundation design using these records. Any library selection,
-API-version implementation, database revision fields or production route cutover remains subsequent work.
+Step 2 is recorded in the [frontend foundation design](FRONTEND_FOUNDATION_DESIGN.md), including the framework,
+versioned contract, shared localization and refresh/conflict decisions. The next step is its bounded working proof
+slice. API implementation, database revision fields and production route cutover remain subsequent work; this
+baseline stays the historical behavior and evidence reference.
