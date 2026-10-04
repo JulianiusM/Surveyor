@@ -471,7 +471,7 @@ describe('staged takeover notifications', () => {
     });
 
     it('does not guess applied coverage from a legacy snapshot that has neither saved coverage source', async () => {
-        const {event, poolId, firstId, secondId} = await createCalculationContext('Legacy coverage without evidence');
+        const {event, poolId, firstId, secondId} = await createCalculationContext('Legacy missing evidence');
         await eventPoolController.closePool(event, poolId, {sendEmails: false});
         const saved = (await invoiceService.getPoolWithInvoices(poolId))!;
         const legacySnapshot = structuredClone(saved.calculationSnapshot)!;

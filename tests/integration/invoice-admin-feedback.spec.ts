@@ -94,7 +94,7 @@ describe('invoice administration feedback and committed decisions', () => {
         expect(sendEmail).toHaveBeenCalledOnce();
         const saved = (await invoiceService.getInvoiceWithRegistration(poolId, invoiceId))!;
         expect(sendEmail.mock.calls[0][2]).toMatchObject({details: expect.arrayContaining([
-            {label: 'Accepted amount', value: Number(saved.correctedAmount).toFixed(2)},
+            {label: 'Your accepted invoice amount', value: Number(saved.correctedAmount).toFixed(2)},
         ])});
     });
 
