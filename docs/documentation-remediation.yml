@@ -394,6 +394,11 @@ implementation_defects:
   owner: application maintainers
   out_of_scope_for_documentation_migration: true
   title: Delegated invoice organizers can be rejected by the proof route's outer participant guard
+  second_pass_review:
+    date: 2026-10-04
+    finding: Current proof routing no longer has the outer participant guard; current controller policy accepts an effective manager or the attributed participant. The original description is historical evidence, not an intentional exception to preserve.
+    source_evidence: src/routes/api/eventInvoices.ts; src/controller/eventPoolController.ts; src/modules/invoice/proofs.ts; tests/integration/organizer-invoices.spec.ts
+    remaining_verification: Retain open status until the full route actor matrix in closes_when is checked; this source review did not execute tests.
   evidence:
   - src/routes/api/eventInvoices.ts protects the proof route first with requireEventParticipantAPI
   - requireEventParticipantAPI admits only the event owner or a registered event participant
@@ -410,6 +415,11 @@ implementation_defects:
   owner: application maintainers
   out_of_scope_for_documentation_migration: true
   title: Invoice submission and participant pool listing disagree about default-pool assignment
+  second_pass_review:
+    date: 2026-10-04
+    finding: Current controller, locked state validation and participant-pool query use assignAll or explicit assignment for eligibility; default enrollment is separate. The original mismatch appears superseded by current code.
+    source_evidence: src/controller/eventPoolController.ts; src/modules/invoice/state.ts; src/modules/database/services/EventInvoiceService.ts
+    remaining_verification: The complete current-participant, future-participant, default-enrollment and listing matrix was not verified in execution; retain open status pending reconciliation.
   evidence:
   - src/modules/database/services/EventInvoiceService.ts lists an open participant pool only when assignAll is true or an explicit assignment exists
   - src/controller/eventPoolController.ts also treats pool.isDefault as sufficient for invoice submission
@@ -442,6 +452,11 @@ implementation_defects:
   owner: application maintainers
   out_of_scope_for_documentation_migration: true
   title: Participant takeover updates do not independently enforce the pool's open state
+  second_pass_review:
+    date: 2026-10-04
+    finding: Current locked takeover operation rejects participant changes unless the pool is OPEN, including ORGANIZER_ONLY. Existing integration assertions include organizer-only and closed rejection.
+    source_evidence: src/modules/invoice/takeovers.ts; tests/integration/invoice-workflows.spec.ts
+    remaining_verification: Source assertions were inspected but not run; retain open status until the stated route-level acceptance matrix is reconciled with current evidence.
   evidence:
   - src/views/modules/module_invoice_pool.pug exposes participant takeover controls only for open pools
   - src/controller/eventPoolController.ts updateTakeovers validates assignment and relationship rules but not pool.status
@@ -458,6 +473,11 @@ implementation_defects:
   owner: application maintainers
   out_of_scope_for_documentation_migration: true
   title: Clearing the final explicit pool assignment does not remove stale takeovers and surcharges
+  second_pass_review:
+    date: 2026-10-04
+    finding: Current assignment operation retains an empty valid-ID set and prunes out-of-scope takeovers and surcharges. The previous empty-set bypass is not the current implementation.
+    source_evidence: src/modules/invoice/poolOperations.ts; tests/integration/invoice-workflows.spec.ts
+    remaining_verification: Reviewed empty-allocation tests do not explicitly seed and assert removal of stale takeovers and adjustments; retain open status for that exact acceptance check.
   evidence:
   - src/modules/database/services/EventInvoiceService.ts updateAssignments replaces explicit assignment rows with the submitted registration IDs
   - when the submitted registration list is empty, the cleanup variable validIds falls back to every event registration instead of the empty effective assignment scope
@@ -770,6 +790,85 @@ implementation_defects:
   - rendered-view and route tests cover a requirements-only event editor
   resolved_on: 2026-09-16
   resolution: Entity settings derives its trigger, sections, and values from every editable field capability. Rendered-view and browser tests verify requirements-only event editors receive dietary controls on the ordinary view and can save without dashboard authority.
+- id: IMP-034
+  status: open
+  severity: low
+  owner: help maintainers
+  out_of_scope_for_documentation_migration: true
+  title: Help pages omit the browser document title
+  evidence:
+  - src/views/layout.pug supplies block meta inside head without a default title
+  - src/views/help.pug supplies the visible body title but does not override block meta with an HTML title element
+  - The frontend baseline capture on 2026-10-04 records an empty document.title for /help at desktop and mobile sizes
+  impact: Help pages have no meaningful browser-tab or history title despite a visible page heading.
+  documentation_contract: Help pages identify their current topic in the browser title as well as the visible heading.
+  closes_when:
+  - help renders an HTML title using the current help page title and application name
+  - a runtime rendering assertion using synthetic help data verifies the document title
+- id: IMP-035
+  status: open
+  severity: medium
+  owner: event feature maintainers
+  out_of_scope_for_documentation_migration: true
+  title: Automatic copying of a newly created registration link reads the wrong response field
+  evidence:
+  - src/routes/api/event.ts POST /:id/links responds through respondWithSuccessDataJson with data containing id and token
+  - src/public/js/core/http.ts returns the complete response envelope without unwrapping data
+  - src/public/js/modules/reg-links.ts handleCreate reads data.token from that envelope when constructing the automatic clipboard URL
+  - The refreshed row Copy action instead reads the actual row token and constructs the correct regToken URL
+  impact: A newly created link can be automatically copied with regToken=undefined even though the token was persisted successfully.
+  documentation_contract: Creation and the subsequent Copy action both provide the actual authorized registration URL.
+  closes_when:
+  - creation validates the success envelope and reads its token from the shared response contract
+  - a browser-module assertion checks the automatic clipboard URL against the returned token and the refreshed row Copy URL
+- id: IMP-036
+  status: open
+  severity: high
+  owner: authentication maintainers
+  out_of_scope_for_documentation_migration: true
+  title: Account and guest return targets can redirect outside the application
+  evidence:
+  - src/routes/users.ts POST /login redirects directly to any string query.next after successful authentication
+  - src/routes/guests.ts GET /:id/login/:token redirects directly to any string query.next after successful guest authentication
+  - src/middleware/referrerUpdater.ts accepts a next value starting with slash, including protocol-relative external destinations
+  - src/routes/users.ts GET /logout uses that weaker next validation before redirecting
+  impact: An attacker-controlled return target can send a person to an external destination after an otherwise legitimate account or guest action.
+  documentation_contract: Internal return navigation preserves the requested application destination; external provider redirects remain separately controlled by the OIDC flow.
+  closes_when:
+  - one shared return-target validation policy rejects external and protocol-relative destinations at every consuming boundary
+  - legitimate application path, query and fragment return values remain intact through login, guest login and logout
+  - route assertions cover malicious targets and encoded or malformed variants without contacting an external site
+- id: IMP-037
+  status: open
+  severity: high
+  owner: event feature maintainers
+  out_of_scope_for_documentation_migration: true
+  title: New event registration checks capacity before the write transaction
+  evidence:
+  - src/controller/eventController.ts registerAttendance checks isEventFull before entering withEventTransaction
+  - The transaction rechecks and locks a deadline-bypass token when applicable, but does not lock and recheck current event capacity
+  - src/modules/database/services/EventService.ts register locks event pools and persists registration without a capacity policy callback
+  - The second-pass frontend migration review established this ordering from source; no concurrent database reproduction was run
+  impact: Concurrent new participants can pass the same remaining-capacity check before either registration is committed.
+  documentation_contract: New registrations respect the event capacity, while an existing registration can still be updated when the event is full.
+  closes_when:
+  - the controller evaluates current membership and remaining capacity inside the service-managed locked registration transaction
+  - a disposable-database concurrency assertion verifies two new participants competing for the final place and preserves existing-registration updates
+- id: IMP-038
+  status: open
+  severity: medium
+  owner: event feature maintainers
+  out_of_scope_for_documentation_migration: true
+  title: Blank absent dietary notes can make an unchanged registration appear changed
+  evidence:
+  - src/controller/eventController.ts isDietaryEqual initializes localAllergy and localComment as undefined when the corresponding dietary choices are absent
+  - The same function compares these values directly with submitted allergyNotes and dietComment strings before later note normalization
+  - An unchanged meal selection with empty-string note fields therefore fails equality when post-deadline dietary changes are disabled
+  impact: A participant can be rejected for a dietary change they did not make, including while attempting a separately permitted date update.
+  documentation_contract: Post-deadline restrictions compare meaningful dietary values, allowing unchanged dietary information and independently permitted date changes.
+  closes_when:
+  - absent dietary notes are normalized consistently before equality checks without erasing a real note or meal-choice change
+  - controller assertions cover absent versus blank notes, unchanged selections and actual forbidden changes after the deadline
 findings:
 - id: DOC-ENTITY-PROPERTIES-VISUAL
   severity: low
