@@ -17,14 +17,14 @@
 import express, {Request, Response} from 'express';
 import {getEntityPropertyPresentation} from '../controller/entityAdminController';
 import controller from '../controller/eventController';
+import invoiceController from '../controller/eventPoolController';
 import {createGuestFlowRouter} from '../middleware/guestFlowFactory';
 import {queryHandler} from "../middleware/paramHandler";
 import {isLoggedIn, requirePermission} from "../middleware/permissionMiddleware";
 import * as eventService from '../modules/database/services/EventService';
-import * as invoiceService from '../modules/database/services/EventInvoiceService';
 import {asyncHandler} from "../modules/lib/asyncHandler";
-import {createInvoiceSharesPdf, createParticipantsPdf} from "../modules/lib/pdf";
-import {ExpectedError} from "../modules/lib/errors";
+import { createParticipantsPdf} from "../modules/lib/pdf";
+import {createInvoiceSharesPdf} from '../modules/invoice/exports';
 import {PERM} from "../modules/lib/permissions";
 import {ENTITIES, getResource} from "../modules/lib/util";
 import renderer from "../modules/renderer";
@@ -75,18 +75,12 @@ app.get("/:id/export/participants", requirePermission(permFct, PERM.DATA_EXPORT 
 }));
 
 app.get('/:id/export/invoice-pools/:poolId/shares', isLoggedIn, requirePermission(permFct, PERM.MANAGE_ASSIGNMENTS), asyncHandler(async (req: Request, res: Response) => {
-    const event = resFct(req);
-    const pool = await invoiceService.getPoolWithInvoices(String(req.params.poolId));
-    if (!pool || pool.eventId !== event.id) throw new ExpectedError('Invoice pool not found', 'error', 404);
-    if (pool.status !== 'CLOSED') throw new ExpectedError('Calculate and close this pool before exporting shares', 'warning', 409);
-    const participants = await eventService.getEventParticipants(event.id);
-    const names = new Map(participants.map((participant) => [participant.id, participant.name]));
-    const shares = pool.shares.map((share) => ({
-        ...share, name: names.get(share.registrationId) ?? `Participant #${share.registrationId}`,
-    })).sort((left, right) => left.name.localeCompare(right.name) || left.registrationId - right.registrationId);
-    const pdf = createInvoiceSharesPdf({event, pool, shares, generatedAt: new Date().toISOString()});
+    // The invoice controller orchestrates saved data and export policy; the route handles HTTP transport only.
+    const data = await invoiceController.getInvoiceSharesPdfData(resFct(req), String(req.params.poolId), req.query);
+    // Both downloads use the same authorized snapshot; only the optional example's visibility differs.
+    const pdf = createInvoiceSharesPdf(data, data.pdfOptions);
     res.set('Cache-Control', 'no-store');
-    res.attachment(`invoice-pool-${pool.id}-shares.pdf`);
+    res.attachment(`invoice-pool-${data.pool.id}-shares.pdf`);
     res.send(await pdf.getBuffer());
 }));
 

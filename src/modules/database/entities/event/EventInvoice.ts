@@ -31,7 +31,8 @@ export class EventInvoice extends NumericBase {
     @RelationId((invoice: EventInvoice) => invoice.pool)
     poolId!: string;
 
-    // Organizer-recorded pool costs have no participant reimbursement or attendance record.
+    // Organizer entry may name the participant who paid, reusing their credit and own-history relationship.
+    // Shared organizer costs leave this relation null; the independent recordedBy fields retain their creator audit.
     @ManyToOne(() => EventRegistration, {nullable: true, onDelete: "CASCADE", onUpdate: "CASCADE"})
     @JoinColumn([{name: "registration_id", referencedColumnName: "id"}])
     registration!: EventRegistration | null;

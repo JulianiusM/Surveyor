@@ -1,0 +1,26 @@
+{
+  "advisory": true,
+  "mode": "help",
+  "reviewNeeded": true,
+  "checks": [
+    {
+      "name": "help-authoring",
+      "command": [
+        "node",
+        "scripts/check-help-documentation.mjs"
+      ],
+      "status": "findings",
+      "childExitCode": 0,
+      "signal": null,
+      "findingCount": 1,
+      "errors": [
+        {
+          "file": "docs/user-guide/assets/participant-and-organizer-controls.png",
+          "message": "Help asset is not referenced by any maintained user guide"
+        }
+      ],
+      "toolingError": null,
+      "log": "help-help-authoring.log"
+    }
+  ]
+}

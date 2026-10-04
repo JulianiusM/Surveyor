@@ -5,10 +5,10 @@ documentation-metadata
 audience: operators; site reliability engineers; database administrators; maintainers
 owner: application operators
 status: current
-last-verified: 2026-09-16
+last-verified: 2026-10-04
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: archival first-start behavior, migration ordering, durable restoration, and rollback guard source review; no deployment rehearsal claimed here; invoice correction and retraction lifecycles, refreshed submission history, and takeover overview dialogs; organizer-expense migration ordering, preserved financial records, and downgrade guard; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factor and settlement migrations, preserved paid markers, payment-credit and rollback-snapshot initialization; D04 accepted from source review and deployment-practice confirmation for release packaging, versioned deployment, dependency installation, migration ordering, persistent-state backup, validation, and rollback; controlled execution tracked separately in D04V
-source-anchors: src/migrations/1789862400000-AddEntityArchival.ts; src/modules/entityArchival.ts; src/modules/database/services/EntityLifecycleService.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; scripts/runMigration.ts; migrationDataSource.ts; src/server.ts; src/modules/settings.ts; src/modules/invoiceRetention.ts; docs/DATABASE.md; docs/OPERATIONS.md
+verification-scope: optional participant attribution for organizer invoices and pre-reversal recorder-audit preservation; archival first-start behavior, migration ordering, durable restoration, and rollback guard source review; no deployment rehearsal claimed here; invoice correction and retraction lifecycles, refreshed submission history, and takeover overview dialogs; organizer-expense migration ordering, preserved financial records, and downgrade guard; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factor and settlement migrations, preserved paid markers, payment-credit and rollback-snapshot initialization; D04 accepted from source review and deployment-practice confirmation for release packaging, versioned deployment, dependency installation, migration ordering, persistent-state backup, validation, and rollback; controlled execution tracked separately in D04V
+source-anchors: src/modules/invoice/invoiceOperations.ts; src/modules/invoice/requests.ts; src/modules/database/entities/event/EventInvoice.ts; src/migrations/1789862400000-AddEntityArchival.ts; src/modules/entityArchival.ts; src/modules/database/services/EntityLifecycleService.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; scripts/runMigration.ts; migrationDataSource.ts; src/server.ts; src/modules/settings.ts; src/modules/invoice/retention.ts; docs/DATABASE.md; docs/OPERATIONS.md
 next-review: D04V
 -->
 
@@ -206,6 +206,9 @@ The organizer-expense migration adds recorder attribution while allowing costs w
 Existing invoice amounts, shares, and payment markers are preserved. Validate **Add invoice / amount** with an
 authorized organizer in a controlled pool: the expense is accepted without requiring event registration or proof,
 and a closed pool requires recalculation without immediately changing its saved payments.
+Optional **Paid by participant (optional)** attribution uses the existing registration relation and requires no
+additional schema migration. Validate that an attributed cost appears in the selected participant's invoice history
+and follows the pool's invoice-credit setting, while retaining the organizer's separate recorder attribution.
 
 The retraction migration adds RETRACTED to the invoice status enum while preserving existing status values. Validate
 that an owner can retract an unreviewed invoice and still see its history, and that confirmed corrections or rejections
@@ -258,10 +261,21 @@ Do not assume that switching the release symlink alone is safe after migrations 
 application may not understand the new schema or data.
 
 `AddOrganizerInvoices` refuses reversal while any invoice has a null registration, including organizer expenses. The
-guard runs before removing audit fields and prevents orphaning or discarding these costs. Do not delete financial rows
-or invent participant attribution to force a downgrade. Keep the new release and use a reviewed correction, or follow
-the full backup restoration procedure. Preserve the failed-release state and account for writes since the backup in
-the rollback decision; restoring a pre-upgrade backup does not retain expenses entered afterward.
+guard does not cover organizer invoices attributed to a participant. Before reverting
+`AddOrganizerInvoices1789603200000`, inspect recorder attribution in all invoice rows, including those with a
+registration:
+
+```sql
+SELECT id, registration_id, recorded_by_profile_id, recorded_by_name
+FROM event_invoices
+WHERE recorded_by_profile_id IS NOT NULL OR recorded_by_name IS NOT NULL;
+```
+
+Reversal removes the recorder columns. Do not downgrade while that audit information must be preserved, even if the
+migration's null-registration guard would allow reversal. Do not delete financial rows or invent participant
+attribution to force a downgrade. Keep a compatible release and schema, use a reviewed correction, or follow the full
+backup restoration procedure. Preserve the failed-release state and account for writes since the backup in the
+rollback decision; restoring a pre-upgrade backup does not retain expenses entered afterward.
 
 `AddInvoiceRetraction` also refuses reversal while any Retracted invoice exists. Removing the enum value would lose or
 misrepresent retained history. Preserve those rows and use a compatible release or the reviewed full restoration path;

@@ -43,6 +43,88 @@ describe('transactional email rendering', () => {
         expect(rendered.html).toContain('Hello &lt;Taylor &amp; Casey&gt;,');
     });
 
+    it('renders escaped section metrics and signed formula terms equivalently in HTML and text', () => {
+        const note = 'Saved <img src=x onerror=alert(1)> & credit';
+        const rendered = renderEmail('Signed formula', createStructuredEmailContent({
+            sections: [{title: 'Calculation <payer>',
+                details: [{label: 'Attendance <units>', value: '3 & 4'}],
+                formula: {
+                    terms: [{label: 'Settled <payer> & credit', value: '15.00', operator: '−'},
+                        {label: 'Rebate <input>', value: '-2.00', operator: '−'}],
+                    result: {label: 'Balance <refund>', value: '-13.00'}, note,
+                },
+            }],
+        }), recipient);
+
+        // A credit-only calculation starts with subtraction; negative input values and results keep their sign.
+        expect(rendered.text).toContain('Attendance <units>: 3 & 4');
+        expect(rendered.text).toContain('− Settled <payer> & credit: 15.00 − Rebate <input>: (-2.00) = Balance <refund>: -13.00');
+        expect(rendered.text).toContain(note);
+        expect(rendered.html).toContain('Calculation &lt;payer&gt;');
+        expect(rendered.html).toContain('Attendance &lt;units&gt;');
+        expect(rendered.html).toContain('3 &amp; 4');
+        expect(rendered.html).toContain('Settled &lt;payer&gt; &amp; credit');
+        expect(rendered.html).toContain('Rebate &lt;input&gt;');
+        expect(rendered.html).toContain('Balance &lt;refund&gt;');
+        expect(rendered.html).toContain('&lt;img src=x onerror=alert(1)&gt; &amp; credit');
+        expect(rendered.html).not.toContain('<img src=x onerror=alert(1)>');
+        expect(rendered.html.indexOf('>−</span>')).toBeLessThan(rendered.html.indexOf('15.00'));
+        expect(rendered.html).toContain('-2.00');
+        expect(rendered.html).toContain('-13.00');
+    });
+
+    it.each([undefined, 'afterSections', 'beforeSections'] as const)('places the main action using the optional %s position', (actionPosition) => {
+        const rendered = renderEmail('Event details', createStructuredEmailContent({actionPosition}), recipient);
+        const buttonHtml = rendered.html.indexOf('>View event</a>');
+        const sectionHtml = rendered.html.indexOf('>Next steps</h2>');
+        const buttonText = rendered.text.indexOf('View event:');
+        const sectionText = rendered.text.indexOf('Next steps');
+        if (actionPosition === 'beforeSections') {
+            expect(buttonHtml).toBeLessThan(sectionHtml);
+            expect(buttonText).toBeLessThan(sectionText);
+        } else {
+            // Unchanged callers retain their established action order in both MIME alternatives.
+            expect(buttonHtml).toBeGreaterThan(sectionHtml);
+            expect(buttonText).toBeGreaterThan(sectionText);
+        }
+        expect(rendered.text.match(/View event:/gu)).toHaveLength(1);
+    });
+
+    it('keeps a native disclosure complete and escaped without author-level hiding', () => {
+        const rendered = renderEmail('Calculation', createStructuredEmailContent({
+            sections: [{title: 'Saved facts', items: ['Actual <payer> & saved fact']}],
+            sectionGroups: [{title: 'Explanation <payer> & detail', disclosure: true, sections: [{
+                title: 'Signed balance', details: [{label: 'Nights', value: '3'}],
+                formula: {terms: [{label: 'Earlier <credit>', value: '15.00', operator: '−'}],
+                    result: {label: 'Refund <balance>', value: '-15.00'}, note: 'Saved <rounding> & explanation'},
+            }]}],
+        }), recipient);
+        const start = rendered.html.indexOf('<details');
+        const disclosure = rendered.html.slice(start, rendered.html.indexOf('</details>', start) + '</details>'.length);
+        expect(start).toBeGreaterThan(rendered.html.indexOf('Saved facts'));
+        expect(disclosure).toMatch(/<summary[^>]*>Explanation &lt;payer&gt; &amp; detail<\/summary>/u);
+        expect(disclosure).toContain('Earlier &lt;credit&gt;');
+        expect(disclosure).toContain('Refund &lt;balance&gt;');
+        expect(disclosure).toContain('-15.00');
+        expect(disclosure).toContain('Saved &lt;rounding&gt; &amp; explanation');
+        // Unsupported readers can ignore the native tags and retain visible content; no separate hiding mechanism is emitted.
+        expect(disclosure).not.toMatch(/<details\b[^>]*\sopen(?:=|\s|>)|<[^>]+\shidden(?:=|\s|>)|display\s*:\s*none|visibility\s*:\s*hidden|max-height|<script|<input/iu);
+        expect(rendered.text).toContain('Explanation <payer> & detail');
+        expect(rendered.text).toContain('Nights: 3');
+        expect(rendered.text).toContain('− Earlier <credit>: 15.00 = Refund <balance>: -15.00');
+        expect(rendered.text).toContain('Saved <rounding> & explanation');
+    });
+
+    it('renders an opted-in section group visibly when disclosure is disabled', () => {
+        const rendered = renderEmail('Details', createStructuredEmailContent({
+            sectionGroups: [{title: 'Grouped facts', sections: [{title: 'Actual result', items: ['Saved amount']}]}],
+        }), recipient);
+        expect(rendered.html).toContain('Grouped facts</h2>');
+        expect(rendered.html).toContain('Actual result</h2>');
+        expect(rendered.html).not.toContain('<details');
+        expect(rendered.text).toContain('Grouped facts\n\nActual result\n- Saved amount');
+    });
+
     it('wraps legacy text notifications in the same polished email shell', () => {
         const rendered = renderEmail('Simple notification', 'The first paragraph.\n\nThe second paragraph.', recipient);
 

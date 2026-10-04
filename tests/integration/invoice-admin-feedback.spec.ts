@@ -1,3 +1,4 @@
+import * as invoiceOperations from '../../src/modules/invoice/invoiceOperations';
 import type {Request} from 'express';
 import {afterAll, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import eventPoolController from '../../src/controller/eventPoolController';
@@ -29,14 +30,14 @@ async function context() {
     const event = (await eventService.getEventById(eventId))!;
     const registration = (await eventService.getRegistrationFor(participant.id, eventId))!;
     const poolId = await invoiceService.createPool(eventId, 'Feedback pool', '', 'EQUAL', false, true, false, [], false);
-    const invoiceId = await invoiceService.submitInvoice(poolId, registration.id, 100, 'Shared travel');
+    const invoiceId = await invoiceOperations.persistSubmittedInvoice(poolId, registration.id, 100, 'Shared travel');
     return {event, poolId, invoiceId, session: {profile: participant} as Request['session']};
 }
 
 describe('invoice administration feedback and committed decisions', () => {
     it.each(['accept', 'reject', 'close'] as const)('acknowledges a committed %s without waiting for SMTP delivery', async (action) => {
         const {event, poolId, invoiceId, session} = await context();
-        if (action === 'close') await invoiceService.approveInvoice(poolId, invoiceId);
+        if (action === 'close') await invoiceOperations.acceptSavedInvoice(poolId, invoiceId);
         let releaseDelivery!: () => void;
         const delivery = new Promise<void>(resolve => { releaseDelivery = resolve; });
         sendEmail.mockReturnValueOnce(delivery);
@@ -99,7 +100,7 @@ describe('invoice administration feedback and committed decisions', () => {
 
     it('confirms repeated concurrent closure without duplicate notifications', async () => {
         const {event, poolId, invoiceId, session} = await context();
-        await invoiceService.approveInvoice(poolId, invoiceId);
+        await invoiceOperations.acceptSavedInvoice(poolId, invoiceId);
         await Promise.all([1, 2].map(() => eventPoolController.closeInvoice(event, poolId, String(invoiceId), session)));
         expect((await invoiceService.getInvoiceWithRegistration(poolId, invoiceId))!.status).toBe('CLOSED');
         expect(sendEmail).toHaveBeenCalledOnce();

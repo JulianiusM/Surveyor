@@ -1,5 +1,7 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {initShareLedgers, invoiceChangePayload, postOrganizerExpense, restoreInvoicePaidState, runInvoiceAdminAction} from '../../src/public/js/events';
+import {initInvoiceAdmin, initInvoiceCommandConfirmation, initShareLedgers, invoiceChangePayload, postOrganizerExpense, protectInvoiceNumberFromScroll, requestInvoiceConfirmation, restoreInvoicePaidState, runInvoiceAdminAction} from '../../src/public/js/events';
+import {invoiceLabels} from '../../src/modules/invoice/wording';
+import {invoicePresentation} from '../../src/modules/invoice/presentation';
 
 class ElementStub {
     tagName = 'DIV';
@@ -29,10 +31,19 @@ class ElementStub {
     setAttribute(name: string, value: string) { this.attributes.set(name, value); }
     removeAttribute(name: string) { this.attributes.delete(name); }
     replaceChildren(...children: ElementStub[]) { this.text = ''; this.childNodes = children; }
-    append(child: ElementStub) { this.childNodes = this.childNodes.filter(existing => existing !== child); this.childNodes.push(child); child.parentElement = this; }
+    append(...children: ElementStub[]) {
+        for (const child of children) {
+            this.childNodes = this.childNodes.filter(existing => existing !== child);
+            this.childNodes.push(child);
+            child.parentElement = this;
+        }
+    }
     appendChild(child: ElementStub) { this.append(child); return child; }
     remove() { if (this.parentElement) this.parentElement.childNodes = this.parentElement.childNodes.filter(child => child !== this); }
     addEventListener(name: string, listener: () => void) { this.listeners.set(name, listener); }
+    removeEventListener(name: string, listener: () => void) {
+        if (this.listeners.get(name) === listener) this.listeners.delete(name);
+    }
     trigger(name: string) { this.listeners.get(name)?.(); }
 }
 
@@ -244,30 +255,135 @@ describe('invoice administrator action feedback', () => {
     });
 });
 
+/** Bind the real delegated click handler with an explicit modal and HTTP boundary, without a browser or database. */
+function notificationFixture(action: 'notify' | 'rollback' = 'notify') {
+    const {scope: modal, trigger, status} = actionFixture();
+    const clicks: ((event: Event) => Promise<void>)[] = [];
+    trigger.dataset.id = 'pool-1';
+    Object.assign(trigger.classList, {contains: (name: string) => name === `pool-${action}`});
+    trigger.closest = selector => selector === 'button' ? trigger : selector === '.modal' ? modal : null;
+    modal.closest = selector => selector === '.modal' ? modal : null;
+    const hide = vi.fn(function hideNotificationModal() {
+        // Bootstrap would reject dismissal while the shared request guard is still installed.
+        expect(modal.listeners.has('hide.bs.modal')).toBe(false);
+        modal.hidden = true;
+    });
+    const getOrCreateInstance = vi.fn(() => ({hide}));
+    vi.stubGlobal('window', {...window, addEventListener: vi.fn(),
+        Surveyor: {eventId: 'event-1', permissions: {entity: {has: () => true}}},
+        bootstrap: {Modal: {getOrCreateInstance}},
+    });
+    vi.stubGlobal('document', {...document, querySelectorAll: () => [],
+        addEventListener(name: string, listener: (event: Event) => Promise<void>) {
+            if (name === 'click') clicks.push(listener);
+        },
+    });
+    // The production initializer owns command selection and permission checks; tests never call a private submit helper.
+    initInvoiceAdmin();
+    /** Dispatch the selected button through each production document click listener and await its completion. */
+    async function clickNotification(): Promise<void> {
+        const event = {target: trigger} as unknown as Event;
+        for (const listener of clicks) await listener(event);
+    }
+    return {modal, trigger, status, hide, getOrCreateInstance, click: clickNotification};
+}
+
+describe('settlement email modal completion', () => {
+    it('closes only after the send is confirmed and the pending dismissal guard is released', async () => {
+        const {modal, trigger, status, hide, getOrCreateInstance, click} = notificationFixture();
+        let finish!: (response: Response) => void;
+        const request = vi.fn(() => new Promise<Response>(resolve => { finish = resolve; }));
+        vi.stubGlobal('fetch', request);
+        const pending = click();
+        expect(trigger.disabled).toBe(true);
+        expect(modal.listeners.has('hide.bs.modal')).toBe(true);
+        expect(modal.hidden).toBe(false);
+        expect(hide).not.toHaveBeenCalled();
+        // A slow response retains the modal and progress rather than treating elapsed time as success.
+        await vi.advanceTimersByTimeAsync(6000);
+        expect(status.textContent).toContain('server has not confirmed');
+        expect(hide).not.toHaveBeenCalled();
+        finish(new Response(JSON.stringify({status: 'success', message: 'Settlement emails requested.'}),
+            {status: 200, headers: {'Content-Type': 'application/json'}}));
+        await pending;
+        expect(request).toHaveBeenCalledWith('/api/event/event-1/invoice-pools/pool-1/notify', expect.objectContaining({method: 'POST'}));
+        expect(getOrCreateInstance).toHaveBeenCalledWith(modal);
+        expect(hide).toHaveBeenCalledOnce();
+        expect(modal.hidden).toBe(true);
+        expect(status.textContent).toBe('Settlement emails requested.');
+        // Closing still locks duplicate clicks; a subsequent explicit opening can request another update.
+        expect(trigger.disabled).toBe(true);
+        modal.trigger('hidden.bs.modal');
+        expect(trigger.disabled).toBe(false);
+    });
+
+    it.each(['rejected', 'network failure', 'unconfirmed response'])('retains the dialog and feedback after %s', async outcome => {
+        const {modal, trigger, status, hide, click} = notificationFixture();
+        const request = outcome === 'network failure'
+            ? vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+            : vi.fn().mockResolvedValue(new Response(JSON.stringify(outcome === 'rejected'
+                ? {status: 'error', message: 'Emails could not be requested.'} : {status: 'unknown'}),
+                {status: outcome === 'rejected' ? 500 : 200, headers: {'Content-Type': 'application/json'}}));
+        vi.stubGlobal('fetch', request);
+        await click();
+        expect(hide).not.toHaveBeenCalled();
+        expect(modal.hidden).toBe(false);
+        expect(status.textContent).not.toBe('');
+        expect(status.childNodes[0].classList.add).toHaveBeenCalledWith('alert', 'alert-danger', 'alert-dismissible', 'fade', 'show');
+        expect(trigger.disabled).toBe(false);
+        expect(modal.dataset.saving).toBeUndefined();
+    });
+
+    it('keeps a successful rollback result visible for its separate return workflow', async () => {
+        const {modal, status, hide, click} = notificationFixture('rollback');
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({status: 'success', message: 'Pool changes restored.'}),
+            {status: 200, headers: {'Content-Type': 'application/json'}})));
+        await click();
+        expect(hide).not.toHaveBeenCalled();
+        expect(modal.hidden).toBe(false);
+        expect(status.textContent).toBe('Pool changes restored.');
+        expect(modal.listeners.has('hidden.bs.modal')).toBe(true);
+    });
+});
+
 describe('persisted share list', () => {
-    it('restores switches from server payment data instead of browser-restored checked values', () => {
-        const input = element();
-        input.dataset = {paid: 'false'};
-        input.checked = true;
-        input.defaultChecked = true;
+    it('restores the saved balance and action while keeping the saved-detail status synchronized', () => {
+        const button = element();
+        button.dataset = {paid: 'false', amount: '25'};
         const row = element();
         row.dataset = {shareAmount: '25', shareStatus: 'settled'};
         row.matches['[data-share-state]'] = element();
+        row.matches['[data-share-balance]'] = element();
         row.matches['[data-share-balance-note]'] = element();
-        input.closest = () => row;
-        vi.stubGlobal('document', {querySelectorAll: () => [input]});
+        const details = element();
+        details.matches['[data-share-details-status]'] = element();
+        row.matches['template[data-share-details]'] = Object.assign(element(), {content: details});
+        row.matches['.share-settlement'] = button;
+        button.closest = () => row;
+        vi.stubGlobal('document', {
+            querySelectorAll: () => [button],
+            getElementById: () => ({textContent: JSON.stringify(invoiceLabels)}),
+        });
         restoreInvoicePaidState();
-        expect(input.checked).toBe(false);
-        expect(input.defaultChecked).toBe(false);
         expect(row.dataset.shareStatus).toBe('due');
-        expect(row.matches['[data-share-state]'].textContent).toBe('Due');
-        row.dataset.shareAmount = '-5';
+        expect(row.matches['[data-share-state]'].textContent).toBe('Payment due');
+        expect(row.matches['[data-share-balance-note]'].textContent).toBe('Amount to collect');
+        expect(details.matches['[data-share-details-status]'].textContent).toBe('Payment due');
+        expect(button.textContent).toBe('Record payment');
+        button.dataset.amount = '-5';
         restoreInvoicePaidState();
         expect(row.dataset.shareStatus).toBe('refund');
-        input.dataset.paid = 'true';
+        expect(row.matches['[data-share-balance]'].textContent).toBe('-5.00');
+        expect(row.matches['[data-share-balance-note]'].textContent).toBe('Amount to pay out');
+        button.dataset.paid = 'true';
         restoreInvoicePaidState();
         expect(row.dataset.shareStatus).toBe('settled');
-        expect(input.checked).toBe(true);
+        expect(row.matches['[data-share-balance]'].textContent).toBe('-5.00');
+        expect(row.matches['[data-share-state]'].textContent).toBe('Refunded');
+        expect(row.matches['[data-share-balance-note]'].textContent).toBe('Already settled');
+        expect(details.matches['[data-share-details-status]'].textContent).toBe('Refunded');
+        expect(button.dataset.amount).toBe('-5');
+        expect(button.textContent).toBe('Undo refund');
     });
 
     it('combines search, status, amount sorting and paging without dropping hidden shares', () => {
@@ -318,5 +434,183 @@ describe('persisted share list', () => {
         ledger.matches['[data-share-refresh]'].trigger('click');
         expect(feedback.textContent).toContain('List refreshed. 0–0 of 0 shares');
         expect(feedback.childNodes[0]).not.toBe(firstAlert);
+    });
+
+    it('renders only the selected personal row in one reusable dialog using text nodes', () => {
+        const ledger = element();
+        const row = element();
+        const button = element();
+        const modal = element();
+        const content = element();
+        const heading = element();
+        const saved = {registrationId: 1, payerName: '<img src=x onerror=alert(1)>',
+            baseShareAmount: 75, extraAmount: 0, invoiceCreditAmount: 0, paymentCreditAmount: 0, shareAmount: 75};
+        const payload = {components: invoicePresentation.components(saved),
+            calculation: invoicePresentation.payerCalculation(undefined, saved),
+            notes: ['<script>alert(1)</script>'], statusLabel: 'Payment due'};
+        row.dataset = {shareName: 'Travel pool', shareAmount: '75', shareStatus: 'due', shareBreakdown: JSON.stringify(payload)};
+        button.dataset.bsTarget = '#personal-breakdown';
+        button.closest = selector => selector === '.share-details-open' ? button : row;
+        ledger.querySelectorAll = () => [row];
+        modal.matches['[data-share-details-content]'] = content;
+        modal.matches['[data-share-details-payer]'] = heading;
+        vi.stubGlobal('document', {querySelectorAll: () => [ledger], querySelector: () => modal,
+            createElement: element, getElementById: () => null});
+        initShareLedgers();
+        expect(content.childNodes).toHaveLength(0);
+        const open = ledger.listeners.get('click') as unknown as (event: Event) => void;
+        open({target: button} as unknown as Event);
+        expect(heading.textContent).toBe('Travel pool');
+        expect(content.textContent).toContain(saved.payerName);
+        expect(content.textContent).toContain('<script>alert(1)</script>');
+        expect(content.textContent).toContain('Calculated balance');
+        expect(content.textContent).toContain('75.00');
+        expect(row.querySelector('template[data-share-details]')).toBeNull();
+
+        // A second selection replaces the dialog's complete presentation instead of retaining the previous payer's notes.
+        const next = {...saved, payerName: 'Second payer', invoiceCreditAmount: 100, shareAmount: -25};
+        row.dataset.shareName = 'Rail pool';
+        row.dataset.shareBreakdown = JSON.stringify({components: invoicePresentation.components(next),
+            calculation: invoicePresentation.payerCalculation(undefined, next), notes: [], statusLabel: 'Refund due'});
+        open({target: button} as unknown as Event);
+        expect(heading.textContent).toBe('Rail pool');
+        expect(content.textContent).toContain('Second payer');
+        expect(content.textContent).toContain('-25.00');
+        expect(content.textContent).not.toContain('onerror');
+        expect(content.textContent).not.toContain('<script>');
+    });
+
+    it('reveals the first recorded payment, hides it after undo, and retains negative recorded refunds and saved rounding', () => {
+        const pool = element();
+        const group = element();
+        const values = element();
+        group.hidden = true;
+        group.dataset.poolSavedRounding = 'null';
+        group.matches['[data-pool-saved-settlement-values]'] = values;
+        pool.matches['[data-pool-saved-settlement]'] = group;
+        const row = element();
+        const button = element();
+        const saved = {registrationId: 1, baseShareAmount: 75, extraAmount: 0, invoiceCreditAmount: 0,
+            paymentCreditAmount: 0, shareAmount: 75, isPaid: false};
+        row.dataset.shareFinancial = JSON.stringify(saved);
+        row.matches['.share-settlement'] = button;
+        button.dataset = {paid: 'false', amount: '75'};
+        button.closest = selector => selector === '.invoice-pool' ? pool : row;
+        pool.querySelectorAll = () => [row];
+        vi.stubGlobal('document', {querySelectorAll: () => [button], createElement: element,
+            getElementById: () => ({textContent: JSON.stringify(invoiceLabels)})});
+        restoreInvoicePaidState();
+        expect(group.hidden).toBe(true);
+        button.dataset.paid = 'true';
+        restoreInvoicePaidState();
+        expect(group.hidden).toBe(false);
+        expect(values.textContent).toBe('Payments received75.00');
+        button.dataset.paid = 'false';
+        restoreInvoicePaidState();
+        expect(group.hidden).toBe(true);
+        expect(values.textContent).toBe('');
+
+        // Refunds keep their signed amount; recording their transfer does not change the original saved allocation evidence.
+        row.dataset.shareFinancial = JSON.stringify({...saved, shareAmount: -25});
+        button.dataset = {paid: 'true', amount: '-25'};
+        group.dataset.poolSavedRounding = JSON.stringify({key: 'roundingDifference', label: 'Rounding difference', amount: 0.01});
+        restoreInvoicePaidState();
+        expect(values.textContent).toBe('Refunds paid-25.00Rounding difference0.01');
+        button.dataset.paid = 'false';
+        restoreInvoicePaidState();
+        expect(values.textContent).toBe('Rounding difference0.01');
+        expect(group.hidden).toBe(false);
+    });
+});
+
+// Real EventTarget ordering protects the modal hand-off: shown/hidden listeners from both the
+// shared dialog helper and the confirmation gate must run, including their one-time listeners.
+class ConfirmationElement extends EventTarget {
+    dataset: Record<string, string> = {};
+    textContent = '';
+    disabled = false;
+    isConnected = true;
+    source: ConfirmationElement | null = null;
+    matches: Record<string, ConfirmationElement> = {};
+    classes = new Set<string>();
+    classList = {contains: (name: string) => this.classes.has(name)};
+    focus = vi.fn();
+    querySelector(selector: string) { return this.matches[selector] || null; }
+    closest(selector: string) { return selector === '.modal' ? this.source : this.matches[selector] || null; }
+}
+
+function confirmationFixture() {
+    const modal = new ConfirmationElement();
+    const subject = new ConfirmationElement();
+    const description = new ConfirmationElement();
+    const cancel = new ConfirmationElement();
+    const confirm = new ConfirmationElement();
+    const opener = new ConfirmationElement();
+    modal.matches = {
+        '[data-invoice-command-subject]': subject, '[data-invoice-command-description]': description,
+        '[data-invoice-command-cancel]': cancel, '[data-invoice-command-confirm]': confirm,
+    };
+    confirm.matches['[data-invoice-command-confirm]'] = confirm;
+    function getOrCreateInstance(node: ConfirmationElement) {
+        return {
+            show() { node.classes.add('show'); node.dispatchEvent(new Event('shown.bs.modal')); },
+            hide() { node.classes.delete('show'); node.dispatchEvent(new Event('hidden.bs.modal')); },
+        };
+    }
+    vi.stubGlobal('window', {bootstrap: {Modal: {getOrCreateInstance}}});
+    vi.stubGlobal('document', {getElementById: () => modal});
+    initInvoiceCommandConfirmation();
+    return {modal, subject, description, cancel, confirm, opener, getOrCreateInstance};
+}
+
+describe('invoice state confirmation', () => {
+    it('defaults dismissal to cancellation and restores focus without authorizing a request', async () => {
+        const {modal, cancel, opener, getOrCreateInstance} = confirmationFixture();
+        const review = requestInvoiceConfirmation('Payer', 'Calculated balance: -25.00.', 'Record payment', opener as unknown as HTMLButtonElement);
+        expect(cancel.focus).toHaveBeenCalled();
+        getOrCreateInstance(modal).hide();
+        expect(await review).toBe(false);
+        expect(opener.focus).toHaveBeenCalled();
+    });
+
+    it('requires the explicit action and restores the source dialog with its draft intact', async () => {
+        const {modal, subject, description, confirm, opener} = confirmationFixture();
+        const source = new ConfirmationElement();
+        source.classes.add('show');
+        source.dataset.draft = '25.50';
+        opener.source = source;
+        const review = requestInvoiceConfirmation('Invoice #12', 'Close accepted invoice: 25.50.', 'Close', opener as unknown as HTMLButtonElement);
+        expect(source.classes.has('show')).toBe(false);
+        expect(subject.textContent).toBe('Invoice #12');
+        expect(description.textContent).toContain('25.50');
+        expect(await requestInvoiceConfirmation('Duplicate', '', '', opener as unknown as HTMLButtonElement)).toBe(false);
+        const click = new Event('click');
+        Object.defineProperty(click, 'target', {value: confirm});
+        modal.dispatchEvent(click);
+        expect(await review).toBe(true);
+        expect(source.classes.has('show')).toBe(true);
+        expect(source.dataset.draft).toBe('25.50');
+        expect(opener.focus).toHaveBeenCalled();
+    });
+
+    it('prevents native wheel stepping in focused invoice number fields without cancelling page scrolling', () => {
+        class NumberField {
+            type = 'number';
+            value = '25.50';
+            blur = vi.fn();
+            closest = vi.fn(() => ({}));
+        }
+        const input = new NumberField();
+        const preventDefault = vi.fn();
+        vi.stubGlobal('HTMLInputElement', NumberField);
+        vi.stubGlobal('document', {activeElement: input});
+        protectInvoiceNumberFromScroll({target: input, preventDefault} as unknown as WheelEvent);
+        expect(input.blur).toHaveBeenCalledOnce();
+        expect(input.value).toBe('25.50');
+        expect(preventDefault).not.toHaveBeenCalled();
+        input.closest.mockReturnValue(null as unknown as object);
+        input.blur.mockClear();
+        protectInvoiceNumberFromScroll({target: input} as unknown as WheelEvent);
+        expect(input.blur).not.toHaveBeenCalled();
     });
 });

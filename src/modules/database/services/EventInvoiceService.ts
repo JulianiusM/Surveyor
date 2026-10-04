@@ -14,19 +14,12 @@
  * limitations under the License.
  */
 
-import fs from "node:fs";
-import path from "node:path";
-import {createHash} from "node:crypto";
-import {format, subMonths} from "date-fns";
-import {EntityManager} from "typeorm";
-import type {InvoicePoolCalculationSnapshot, InvoicePoolDistribution, InvoicePoolStatus} from "../../../types/InvoicePoolTypes";
-import {APIError} from "../../lib/errors";
-import {validateInvoiceFactor} from "../../lib/invoiceDistribution";
+import {EntityManager, type DeepPartial} from "typeorm";
+import type {InvoicePoolDistribution, InvoicePoolSubmissionState, ProjectedInvoiceShare} from "../../../types/InvoicePoolTypes";
 import {formatAmount, resolveInvoiceAmount, toAmount} from "../../lib/util";
-import settings from "../../settings";
 import {AppDataSource} from "../dataSource";
 import {Event} from "../entities/event/Event";
-import {EventInvoice, InvoiceStatus} from "../entities/event/EventInvoice";
+import {EventInvoice} from "../entities/event/EventInvoice";
 import {EventInvoicePool} from "../entities/event/EventInvoicePool";
 import {EventInvoiceShare} from "../entities/event/EventInvoiceShare";
 import {EventInvoiceSurcharge} from "../entities/event/EventInvoiceSurcharge";
@@ -35,293 +28,218 @@ import {EventPoolTakeover} from "../entities/event/EventPoolTakeover";
 import {EventRegistration} from "../entities/event/EventRegistration";
 import {Profile} from "../entities/user/Profile";
 
-// Separate relation queries avoid multiplying all child collections into one large join.
-// A repeatable-read transaction keeps the revision, settings, and saved shares in one snapshot.
+/** Load the pool and its relation collections from one repeatable-read database snapshot. */
 async function loadPool(poolId: string) {
-    return AppDataSource.transaction("REPEATABLE READ", (manager) => manager.getRepository(EventInvoicePool).findOne({
-        where: {id: poolId},
-        relationLoadStrategy: "query",
-        relations: {
-            event: true,
-            assignments: {registration: true},
-            invoices: {registration: true, recordedByProfile: true},
-            shares: {registration: true},
-            takeovers: {payerRegistration: true, beneficiaryRegistration: true},
-            surcharges: {registration: true},
-        },
-    }));
-}
-
-export interface InvoiceCorrections {
-    correctedAmount?: number | null;
-    correctedDescription?: string | null;
-}
-
-export interface ConfirmedInvoiceChange {
-    confirmed: boolean;
-    expectedRevision: number;
-}
-
-export interface InvoiceRevision {
-    correctedAmount: number | null;
-    correctedDescription: string | null;
-}
-
-export interface InvoiceSharePayload {
-    registrationId: number;
-    baseShareAmount: number;
-    extraAmount: number;
-    invoiceCreditAmount: number;
-    shareAmount: number;
-    note?: string | null;
-}
-
-export interface ProjectedInvoiceShare extends InvoiceSharePayload {
-    paymentCreditAmount: number;
-    isPaid: boolean;
-    paidAt: Date | null;
-}
-
-type PreviousInvoiceShare = Pick<EventInvoiceShare, "registrationId" | "shareAmount" | "isPaid">
-    & Partial<Pick<EventInvoiceShare, "paymentCreditAmount" | "paidAt">>;
-
-function invoiceCents(amount: number): number {
-    const cents = Math.round(amount * 100);
-    if (!Number.isFinite(amount) || !Number.isSafeInteger(cents)) {
-        throw new APIError("Invoice amounts must be finite and within the supported range", {}, 400);
+    /** Read relation collections separately without mixing their revisions or multiplying joined rows. */
+    async function readSnapshot(manager: EntityManager) {
+        // Separate queries keep large invoice/share collections from multiplying one another in a join.
+        return manager.getRepository(EventInvoicePool).findOne({
+            where: {id: poolId},
+            relationLoadStrategy: "query",
+            relations: {
+                event: true,
+                assignments: {registration: true},
+                invoices: {registration: true, recordedByProfile: true},
+                shares: {registration: true},
+                takeovers: {payerRegistration: true, beneficiaryRegistration: true},
+                surcharges: {registration: true},
+            },
+        });
     }
-    return cents;
+    // All relation queries see the same revision, settings, and saved shares until this read finishes.
+    return AppDataSource.transaction("REPEATABLE READ", readSnapshot);
 }
 
-function assertPositiveInvoiceAmount(amount: number): void {
-    const cents = invoiceCents(amount);
-    const centTolerance = Number.EPSILON * Math.max(1, Math.abs(amount * 100)) * 4;
-    if (cents <= 0 || amount > 99999999.99 || Math.abs(amount * 100 - cents) > centTolerance) {
-        throw new APIError("Enter a positive amount with at most two decimal places", {}, 400);
+/**
+ * Own the transaction and root lock without interpreting missing rows or deciding business policy.
+ * The named controller-layer operation reads and writes through this module using the same manager.
+ */
+export async function withLockedPool<T>(
+    poolId: string,
+    operation: (manager: EntityManager, pool: EventInvoicePool | null) => Promise<T>,
+): Promise<T> {
+    /** Retain the root lock throughout the caller's checks and writes. */
+    async function runLocked(manager: EntityManager): Promise<T> {
+        // Missing rows remain raw data: only the owning feature operation decides the context-specific error.
+        const pool = await lockPool(manager, poolId);
+        return operation(manager, pool);
     }
+    // Commit or roll back the complete operation; never release the lock between its checks and persistence.
+    return AppDataSource.transaction("READ COMMITTED", runLocked);
 }
 
-function assertConfirmedInvoiceChange(pool: EventInvoicePool, confirmation: ConfirmedInvoiceChange): void {
-    if (confirmation?.confirmed !== true) throw new APIError("Confirm this invoice change before continuing", {}, 400);
-    if (!Number.isSafeInteger(confirmation.expectedRevision) || confirmation.expectedRevision < 0) {
-        throw new APIError("A current pool revision is required", {}, 400);
-    }
-    if (pool.calculationRevision !== confirmation.expectedRevision) {
-        throw new APIError("The pool changed. Reload and review the invoice again before confirming.", {}, 409);
-    }
-}
-
-/** Project the remaining balance while keeping settled money with its actual payer. */
-export function projectInvoiceShares(
-    previousShares: readonly PreviousInvoiceShare[],
-    newGrossPayloads: readonly InvoiceSharePayload[],
-    existingRegistrationIds?: readonly number[],
-): ProjectedInvoiceShare[] {
-    const payments = new Map<number, number>();
-    const paidDates = new Map<number, Date | null>();
-    for (const share of previousShares) {
-        const previousPayment = invoiceCents(share.paymentCreditAmount ?? 0)
-            + (share.isPaid ? invoiceCents(share.shareAmount) : 0);
-        payments.set(share.registrationId, (payments.get(share.registrationId) ?? 0) + previousPayment);
-        if (share.paidAt) paidDates.set(share.registrationId, share.paidAt);
-    }
-    const remainingPayments = new Map(payments);
-    const validIds = existingRegistrationIds ? new Set(existingRegistrationIds) : null;
-    const seenIds = new Set<number>();
-    const projected: ProjectedInvoiceShare[] = [];
-    const project = (payload: InvoiceSharePayload): ProjectedInvoiceShare => {
-        const paymentCents = payments.get(payload.registrationId) ?? 0;
-        const remainderCents = invoiceCents(payload.baseShareAmount) + invoiceCents(payload.extraAmount)
-            - invoiceCents(payload.invoiceCreditAmount) - paymentCents;
-        return {
-            ...payload,
-            paymentCreditAmount: paymentCents / 100,
-            shareAmount: remainderCents / 100,
-            isPaid: remainderCents === 0,
-            paidAt: remainderCents === 0 ? paidDates.get(payload.registrationId) ?? null : null,
-        };
-    };
-    for (const payload of newGrossPayloads) {
-        if (seenIds.has(payload.registrationId)) throw new APIError("Duplicate payer in invoice calculation", {}, 400);
-        if (validIds && !validIds.has(payload.registrationId)) throw new APIError("Calculation participant no longer belongs to this event", {}, 409);
-        seenIds.add(payload.registrationId);
-        remainingPayments.delete(payload.registrationId);
-        projected.push(project(payload));
-    }
-    for (const [registrationId, paymentCents] of remainingPayments) {
-        if (paymentCents === 0 || (validIds && !validIds.has(registrationId))) continue;
-        projected.push(project({
-            registrationId,
-            baseShareAmount: 0,
-            extraAmount: 0,
-            invoiceCreditAmount: 0,
-            shareAmount: 0,
-            note: "No current allocated costs. Previous payments remain with this participant.",
-        }));
-    }
-    return projected;
-}
-
-async function lockPool(manager: EntityManager, poolId: string): Promise<EventInvoicePool> {
-    const pool = await manager.getRepository(EventInvoicePool).findOne({
+async function lockPool(manager: EntityManager, poolId: string): Promise<EventInvoicePool | null> {
+    return manager.getRepository(EventInvoicePool).findOne({
         where: {id: poolId}, lock: {mode: "pessimistic_write"},
     });
-    if (!pool) throw new APIError("Pool not found", {}, 404);
-    return pool;
 }
 
-async function invalidatePool(manager: EntityManager, pool: EventInvoicePool): Promise<void> {
-    pool.calculationRevision++;
-    pool.needsRecalculation = pool.status === "CLOSED";
+export async function savePool(pool: EventInvoicePool, manager: EntityManager): Promise<void> {
     await manager.getRepository(EventInvoicePool).save(pool);
 }
 
-async function assertPoolParticipant(manager: EntityManager, pool: EventInvoicePool, registrationId: number): Promise<void> {
-    const registration = await manager.getRepository(EventRegistration).findOneBy({id: registrationId, event: {id: pool.eventId}});
-    const assignment = pool.assignAll || await manager.getRepository(EventPoolAssignment).findOneBy({pool: {id: pool.id}, registration: {id: registrationId}});
-    if (!registration || !assignment) throw new APIError("Participant not assigned to this pool", {}, 400);
+export async function saveInvoice(values: DeepPartial<EventInvoice>, manager: EntityManager): Promise<EventInvoice> {
+    const repo = manager.getRepository(EventInvoice);
+    return repo.save(repo.create(values));
 }
 
-function externalCalculationFingerprint(registrations: EventRegistration[], invoices: EventInvoice[]): string {
-    const inputs = {
-        registrations: [...registrations].sort((left, right) => left.id - right.id)
-            .map((registration) => [registration.id, registration.arrivalDate, registration.departureDate]),
-        invoices: invoices.filter((invoice) => invoice.status === "APPROVED" || invoice.status === "CLOSED")
-            .sort((left, right) => left.id - right.id)
-            .map((invoice) => [invoice.id, invoice.registrationId, invoiceCents(resolveInvoiceAmount(invoice.amount, invoice.correctedAmount))]),
-    };
-    return createHash("sha256").update(JSON.stringify(inputs)).digest("hex");
+export async function saveShare(share: EventInvoiceShare, manager: EntityManager): Promise<void> {
+    await manager.getRepository(EventInvoiceShare).save(share);
 }
 
-async function captureCalculationSnapshot(manager: EntityManager, pool: EventInvoicePool): Promise<InvoicePoolCalculationSnapshot> {
-    const [assignments, surcharges, takeovers, registrations, invoices] = await Promise.all([
+/** Load calculation/rollback records under the caller's root lock; repository details stay here. */
+export async function getCalculationRows(manager: EntityManager, pool: EventInvoicePool) {
+    // Every collection uses the supplied transaction manager, retaining the caller's locked view of inputs.
+    const [assignments, surcharges, takeovers, registrations, invoices, shares] = await Promise.all([
         manager.getRepository(EventPoolAssignment).find({where: {pool: {id: pool.id}}, order: {id: "ASC"}}),
         manager.getRepository(EventInvoiceSurcharge).find({where: {pool: {id: pool.id}}, order: {id: "ASC"}}),
         manager.getRepository(EventPoolTakeover).find({where: {pool: {id: pool.id}}, order: {id: "ASC"}}),
         manager.getRepository(EventRegistration).findBy({event: {id: pool.eventId}}),
         manager.getRepository(EventInvoice).findBy({pool: {id: pool.id}}),
+        manager.getRepository(EventInvoiceShare).find({where: {pool: {id: pool.id}}, order: {id: "ASC"}}),
     ]);
-    return {
-        version: 1,
-        settings: {
-            distributionMethod: pool.distributionMethod,
-            description: pool.description ?? null,
-            isDefault: Boolean(pool.isDefault),
-            assignAll: Boolean(pool.assignAll),
-            subtractPersonalInvoices: Boolean(pool.subtractPersonalInvoices),
-            sendCalculationEmails: Boolean(pool.sendCalculationEmails),
-            roundUpShares: pool.roundUpShares === undefined ? true : Boolean(pool.roundUpShares),
-        },
-        assignments: assignments.map((assignment) => ({
-            registrationId: assignment.registrationId, factor: assignment.factor, isExempt: Boolean(assignment.isExempt),
-        })),
-        surcharges: surcharges.map((surcharge) => ({
-            registrationId: surcharge.registrationId,
-            amount: toAmount(surcharge.amount),
-            note: surcharge.note,
-            subtractFromPool: Boolean(surcharge.subtractFromPool),
-        })),
-        takeovers: takeovers.map((takeover) => ({
-            payerRegistrationId: takeover.payerRegistrationId, beneficiaryRegistrationId: takeover.beneficiaryRegistrationId,
-        })),
-        externalFingerprint: externalCalculationFingerprint(registrations, invoices),
-        externalRegistrationIds: registrations.map((registration) => registration.id),
-    };
+    return {assignments, surcharges, takeovers, registrations, invoices, shares};
 }
 
-async function changePool<T>(poolId: string, change: (manager: EntityManager, pool: EventInvoicePool) => Promise<T>): Promise<T> {
-    return AppDataSource.transaction("READ COMMITTED", async (manager) => {
-        const pool = await lockPool(manager, poolId);
-        const result = await change(manager, pool);
-        // A review that lost a race to approval or retraction did not change calculation inputs.
-        if (result === false) return result;
-        await invalidatePool(manager, pool);
-        await refreshPoolTotals(manager, poolId);
-        return result;
-    });
+/** Return raw membership records; the corresponding feature operation decides whether they authorize an action. */
+export async function getPoolMembership(manager: EntityManager, pool: EventInvoicePool, registrationId: number) {
+    const registration = await manager.getRepository(EventRegistration).findOneBy({id: registrationId, event: {id: pool.eventId}});
+    const assignment = await manager.getRepository(EventPoolAssignment).findOneBy({pool: {id: pool.id}, registration: {id: registrationId}});
+    return {registration, assignment};
 }
 
-// Lock pools before their registrations so registration edits and calculations use the same order.
+export async function getProfile(profileId: string, manager: EntityManager): Promise<Profile | null> {
+    return manager.getRepository(Profile).findOne({where: {id: profileId}, relations: {user: true, guest: true}});
+}
+
+export async function replaceAssignments(poolId: string, values: {registrationId: number; isExempt: boolean; factor: number}[], manager: EntityManager): Promise<void> {
+    const repo = manager.getRepository(EventPoolAssignment);
+    await repo.delete({pool: {id: poolId}});
+    const rows = values.map(value => repo.create({
+        pool: {id: poolId}, registration: {id: value.registrationId}, isExempt: value.isExempt, factor: value.factor,
+    }));
+    if (rows.length) await repo.save(rows);
+}
+
+export async function replaceSurcharges(poolId: string, values: {registrationId: number; amount: number; note: string; subtractFromPool: boolean}[], manager: EntityManager): Promise<void> {
+    const repo = manager.getRepository(EventInvoiceSurcharge);
+    await repo.delete({pool: {id: poolId}});
+    const rows = values.map(value => repo.create({
+        pool: {id: poolId}, registration: {id: value.registrationId},
+        amount: formatAmount(value.amount), note: value.note, subtractFromPool: value.subtractFromPool,
+    }));
+    if (rows.length) await repo.save(rows);
+}
+
+export async function deleteTakeovers(ids: number[], manager: EntityManager): Promise<void> {
+    if (ids.length) await manager.getRepository(EventPoolTakeover).delete(ids);
+}
+
+export async function insertTakeovers(poolId: string, values: {payerId: number; beneficiaryId: number}[], manager: EntityManager): Promise<void> {
+    const repo = manager.getRepository(EventPoolTakeover);
+    const rows = values.map(value => repo.create({
+        pool: {id: poolId}, payerRegistration: {id: value.payerId}, beneficiaryRegistration: {id: value.beneficiaryId},
+    }));
+    if (rows.length) await repo.save(rows);
+}
+
+export async function replaceTakeovers(poolId: string, values: {payerRegistrationId: number; beneficiaryRegistrationId: number}[], manager: EntityManager): Promise<void> {
+    await manager.getRepository(EventPoolTakeover).delete({pool: {id: poolId}});
+    const rows = values.map(value => ({payerId: value.payerRegistrationId, beneficiaryId: value.beneficiaryRegistrationId}));
+    await insertTakeovers(poolId, rows, manager);
+}
+
+export async function saveSurcharge(poolId: string, registrationId: number, amount: number, note: string, subtractFromPool: boolean, manager: EntityManager) {
+    const repo = manager.getRepository(EventInvoiceSurcharge);
+    return repo.save(repo.create({pool: {id: poolId}, registration: {id: registrationId}, amount: formatAmount(amount), note, subtractFromPool}));
+}
+
+export async function deleteSurcharges(ids: number[], manager: EntityManager): Promise<void> {
+    if (ids.length) await manager.getRepository(EventInvoiceSurcharge).delete(ids);
+}
+
+export async function getSurcharge(poolId: string, surchargeId: number, manager: EntityManager) {
+    return manager.getRepository(EventInvoiceSurcharge).findOneBy({id: surchargeId, pool: {id: poolId}});
+}
+
+export async function deleteSurcharge(poolId: string, surchargeId: number, manager: EntityManager): Promise<void> {
+    await manager.getRepository(EventInvoiceSurcharge).delete({id: surchargeId, pool: {id: poolId}});
+}
+
+/** Replace a feature-projected share collection within the caller's existing transaction. */
+export async function replaceShares(poolId: string, values: ProjectedInvoiceShare[], manager: EntityManager): Promise<EventInvoiceShare[]> {
+    const repo = manager.getRepository(EventInvoiceShare);
+    // Projection and settlement carry-forward are already complete; this method only replaces their rows.
+    await repo.delete({pool: {id: poolId}});
+    const rows = values.map(value => repo.create({
+        ...value, pool: {id: poolId}, registration: {id: value.registrationId}, note: value.note || null,
+    }));
+    if (rows.length) await repo.save(rows);
+    // Reload generated identifiers for post-commit consumers without exposing repository objects.
+    return repo.find({where: {pool: {id: poolId}}, order: {id: "ASC"}});
+}
+
+/** Select by the retention module's cutoff; file policy and scheduling stay outside DBAL. */
+export async function getExpiredInvoices(cutoffDate: string): Promise<EventInvoice[]> {
+    return AppDataSource.getRepository(EventInvoice).createQueryBuilder('invoice')
+        .innerJoinAndSelect('invoice.pool', 'pool')
+        .innerJoinAndSelect('pool.event', 'event')
+        .where('event.endDate <= :cutoffDate', {cutoffDate}).getMany();
+}
+
+export async function deleteInvoices(ids: number[], manager: EntityManager): Promise<void> {
+    if (ids.length) await manager.getRepository(EventInvoice).delete(ids);
+}
+
+/** Lock event pools in a stable order shared with registration writes and invoice calculations. */
 export async function lockEventPools(manager: EntityManager, eventId: string): Promise<EventInvoicePool[]> {
+    // Stable ordering prevents two registration/calculation transactions from taking opposite root locks.
     const pools = await manager.getRepository(EventInvoicePool).find({
         where: {event: {id: eventId}}, order: {id: "ASC"},
     });
     const lockedPools: EventInvoicePool[] = [];
-    for (const pool of pools) lockedPools.push(await lockPool(manager, pool.id));
+    for (const pool of pools) {
+        const locked = await lockPool(manager, pool.id);
+        if (locked) lockedPools.push(locked);
+    }
     return lockedPools;
 }
 
-// Attendance and registration changes also affect dynamic pool membership and distribution weights.
+/** Invalidate cached calculation revisions after persisted registration or attendance inputs change. */
 export async function invalidateEventPools(manager: EntityManager, eventId: string): Promise<void> {
+    // These materialized revisions and totals describe persisted inputs; no share is recalculated here.
     const pools = await lockEventPools(manager, eventId);
     for (const pool of pools) {
-        await invalidatePool(manager, pool);
+        pool.calculationRevision++;
+        pool.needsRecalculation = pool.status === "CLOSED";
+        await savePool(pool, manager);
         await refreshPoolTotals(manager, pool.id);
     }
 }
 
-// Best-effort cleanup to avoid orphaned uploads when retained invoice records expire.
-async function deleteProofFile(proofPath?: string | null): Promise<void> {
-    if (!proofPath) return;
-    const invoiceRoot = path.resolve(process.cwd(), settings.value.invoiceDir);
-    const normalized = path.resolve(process.cwd(), proofPath);
-    const relativePath = path.relative(invoiceRoot, normalized);
-    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-        console.warn(`[invoice-retention] Skipped proof outside configured invoice directory: ${proofPath}`);
-        return;
-    }
-    await fs.promises.unlink(normalized).catch(() => undefined);
-}
-
-/**
- * Permanently remove invoices after their event's configured retention window.
- * This query is event-wide so cleanup does not depend on somebody opening a pool.
- */
-export async function purgeExpiredInvoices(retentionMonths: number, now: Date = new Date()): Promise<number> {
-    if (!Number.isInteger(retentionMonths) || retentionMonths < 0) {
-        throw new Error('Invoice retention months must be a non-negative integer');
-    }
-
-    const cutoffDate = format(subMonths(now, retentionMonths), 'yyyy-MM-dd');
-    const repo = AppDataSource.getRepository(EventInvoice);
-    const expiredInvoices = await repo.createQueryBuilder('invoice')
-        .innerJoinAndSelect('invoice.pool', 'pool')
-        .innerJoinAndSelect('pool.event', 'event')
-        .where('event.endDate <= :cutoffDate', {cutoffDate})
-        .getMany();
-
-    if (!expiredInvoices.length) return 0;
-
-    await Promise.all(expiredInvoices.map((invoice) => deleteProofFile(invoice.proofPath)));
-    const poolIds = Array.from(new Set(expiredInvoices.map((invoice) => invoice.pool.id)));
-    for (const poolId of poolIds) {
-        await AppDataSource.transaction("READ COMMITTED", async (manager) => {
-            const pool = await lockPool(manager, poolId);
-            await manager.getRepository(EventInvoice).delete(expiredInvoices.filter((invoice) => invoice.pool.id === poolId).map((invoice) => invoice.id));
-            // Retention preserves the settlement snapshot, but must invalidate in-flight calculations.
-            pool.calculationRevision++;
-            await manager.getRepository(EventInvoicePool).save(pool);
-            await refreshPoolTotals(manager, poolId);
+/** Load an event's invoice pools and their collections from one repeatable-read snapshot. */
+export async function listPools(eventId: string) {
+    /** Hydrate the existing list contract without multiplying independent child collections. */
+    async function readSnapshot(manager: EntityManager) {
+        // Query-loaded collections retain the creation ordering while avoiding a large multi-collection join.
+        return manager.getRepository(EventInvoicePool).find({
+            where: {event: {id: eventId}},
+            relationLoadStrategy: "query",
+            relations: {
+                assignments: {registration: true},
+                invoices: {registration: true, recordedByProfile: true},
+                shares: {registration: true},
+                takeovers: {payerRegistration: true, beneficiaryRegistration: true},
+                surcharges: {registration: true},
+            },
+            order: {track: {createdAt: "ASC"}},
         });
     }
-    return expiredInvoices.length;
+    // Hold one database snapshot for the complete list, including every pool's cached totals and shares.
+    return AppDataSource.transaction("REPEATABLE READ", readSnapshot);
 }
 
-export async function listPools(eventId: string) {
-    return AppDataSource.transaction("REPEATABLE READ", (manager) => manager.getRepository(EventInvoicePool).find({
-        where: {event: {id: eventId}},
-        relationLoadStrategy: "query",
-        relations: {
-            assignments: {registration: true},
-            invoices: {registration: true, recordedByProfile: true},
-            shares: {registration: true},
-            takeovers: {payerRegistration: true, beneficiaryRegistration: true},
-            surcharges: {registration: true},
-        },
-        order: {track: {createdAt: "ASC"}},
-    }));
-}
-
+/** Persist validated pool settings and optional explicit assignments as one creation transaction. */
 export async function createPool(
     eventId: string,
     name: string,
@@ -333,10 +251,13 @@ export async function createPool(
     registrationIds: number[] = [],
     sendCalculationEmails = true,
     roundUpShares = true,
+    status: InvoicePoolSubmissionState = 'OPEN',
 ) {
-    return AppDataSource.transaction("READ COMMITTED", async (manager) => {
+    /** Insert the root before its explicit assignment rows; either both are saved or neither is. */
+    async function persistCreation(manager: EntityManager) {
         const poolRepo = manager.getRepository(EventInvoicePool);
         const assignmentRepo = manager.getRepository(EventPoolAssignment);
+        // Business validation and checkbox normalization have already happened in the request module.
         const pool = poolRepo.create({
             event: {id: eventId} as Event,
             name,
@@ -347,7 +268,8 @@ export async function createPool(
             subtractPersonalInvoices,
             sendCalculationEmails,
             roundUpShares,
-            status: "OPEN" as InvoicePoolStatus,
+            // Persist the requested initial state in this transaction; organizer-only pools never need an OPEN interval.
+            status,
             totalAmount: 0,
             openAmount: 0,
             outstandingAmount: 0,
@@ -357,6 +279,7 @@ export async function createPool(
             payableAmount: 0,
         });
         const saved = await poolRepo.save(pool);
+        // Assign-all membership is dynamic; only explicitly selected membership needs stored assignment rows.
         if (!assignAll && registrationIds.length) {
             const rows = registrationIds.map((id) => assignmentRepo.create({
                 pool: saved,
@@ -365,574 +288,36 @@ export async function createPool(
             await assignmentRepo.save(rows);
         }
         return saved.id;
-    });
+    }
+    // The returned identifier belongs to a fully committed creation, including its assignment collection.
+    return AppDataSource.transaction("READ COMMITTED", persistCreation);
 }
 
-export async function updatePoolSettings(poolId: string, distribution: InvoicePoolDistribution, description?: string, sendCalculationEmails?: boolean, roundUpShares?: boolean) {
-    await AppDataSource.transaction("READ COMMITTED", async (manager) => {
-        const pool = await lockPool(manager, poolId);
-        const inputsChanged = pool.distributionMethod !== distribution
-            || (description !== undefined && (pool.description ?? "") !== description)
-            || (roundUpShares !== undefined && Boolean(pool.roundUpShares) !== roundUpShares);
-        pool.distributionMethod = distribution;
-        if (description !== undefined) pool.description = description;
-        if (sendCalculationEmails !== undefined) pool.sendCalculationEmails = sendCalculationEmails;
-        if (roundUpShares !== undefined) pool.roundUpShares = roundUpShares;
-        pool.calculationRevision++;
-        if (inputsChanged && pool.status === "CLOSED") pool.needsRecalculation = true;
-        await manager.getRepository(EventInvoicePool).save(pool);
-    });
-}
-
-export async function getTakeovers(poolId: string) {
-    return AppDataSource.getRepository(EventPoolTakeover).find({
+export async function getTakeovers(poolId: string, manager: EntityManager = AppDataSource.manager) {
+    return manager.getRepository(EventPoolTakeover).find({
         where: {pool: {id: poolId}},
         relations: {payerRegistration: true, beneficiaryRegistration: true},
         order: {id: "ASC"},
     });
 }
 
-// Allow a payer to declare which participants they will cover. Admins may reassign; participants cannot override others.
-export async function updateTakeovers(
-    poolId: string,
-    payerRegistrationId: number,
-    beneficiaryIds: number[],
-    allowReassign: boolean,
-) {
-    return AppDataSource.transaction("READ COMMITTED", async (manager) => {
-        const takeoverRepo = manager.getRepository(EventPoolTakeover);
-
-        const pool = await lockPool(manager, poolId);
-        if (!allowReassign && pool.status === "CLOSED") {
-            throw new APIError("Pool is closed. Contact an organizer to change payment coverage.", {}, 409);
-        }
-
-        // Fetch current takeovers so we can diff them; the controller owns validation of who may edit.
-        const existing = await takeoverRepo.find({where: {pool: {id: poolId}}});
-
-        // Keep track of current mappings after applying removals so conflict checks stay accurate.
-        const normalizedBeneficiaries = Array.from(new Set(beneficiaryIds.map(Number)));
-        await assertPoolParticipant(manager, pool, payerRegistrationId);
-        for (const beneficiaryId of normalizedBeneficiaries) {
-            if (beneficiaryId === payerRegistrationId) throw new APIError("Participants cannot cover themselves", {}, 400);
-            await assertPoolParticipant(manager, pool, beneficiaryId);
-        }
-        if (normalizedBeneficiaries.length && existing.some((takeover) => takeover.beneficiaryRegistrationId === payerRegistrationId)) {
-            throw new APIError("Participants whose share is taken over cannot cover others", {}, 400);
-        }
-        if (existing.some((takeover) => normalizedBeneficiaries.includes(takeover.payerRegistrationId))) {
-            throw new APIError("Clear a participant's existing takeovers before covering their share", {}, 400);
-        }
-        if (!allowReassign && existing.some((takeover) => normalizedBeneficiaries.includes(takeover.beneficiaryRegistrationId)
-            && takeover.payerRegistrationId !== payerRegistrationId)) {
-            throw new APIError("One or more participants are already covered by someone else", {}, 409);
-        }
-        const removed: { payerId: number; beneficiaryId: number }[] = [];
-        const added: { payerId: number; beneficiaryId: number }[] = [];
-        const toDelete = new Set<number>();
-
-        for (const takeover of existing) {
-            const isPayer = takeover.payerRegistrationId === payerRegistrationId;
-            const beneficiaryDesired = normalizedBeneficiaries.includes(takeover.beneficiaryRegistrationId);
-            const conflictingClaim = allowReassign && beneficiaryDesired && takeover.payerRegistrationId !== payerRegistrationId;
-            if ((isPayer && !beneficiaryDesired) || conflictingClaim) {
-                removed.push({
-                    payerId: takeover.payerRegistrationId,
-                    beneficiaryId: takeover.beneficiaryRegistrationId
-                });
-                toDelete.add(takeover.id);
-            }
-        }
-
-        // Drop removed/conflicting rows once before inserting replacements to avoid duplicates.
-        if (toDelete.size) {
-            await takeoverRepo.delete(Array.from(toDelete));
-        }
-
-        const remaining = existing.filter((t) => !toDelete.has(t.id));
-        toDelete.clear();
-
-        // Ensure uniqueness per beneficiary by removing conflicting rows before inserting the new mapping when allowed.
-        // First pass: identify conflicting rows and prepare new takeovers
-        const takeoversToBeSaved: Array<{ payerId: number; beneficiaryId: number }> = [];
-        for (const beneficiaryId of normalizedBeneficiaries) {
-            const conflicting = remaining.find(
-                (t) => t.beneficiaryRegistrationId === beneficiaryId && t.payerRegistrationId !== payerRegistrationId,
-            );
-            if (conflicting && allowReassign) {
-                removed.push({
-                    payerId: conflicting.payerRegistrationId,
-                    beneficiaryId: conflicting.beneficiaryRegistrationId
-                });
-                toDelete.add(conflicting.id);
-            }
-
-            const alreadyCoveredByPayer = remaining.some(
-                (t) => t.payerRegistrationId === payerRegistrationId && t.beneficiaryRegistrationId === beneficiaryId,
-            );
-            if (!alreadyCoveredByPayer) {
-                added.push({payerId: payerRegistrationId, beneficiaryId});
-                takeoversToBeSaved.push({payerId: payerRegistrationId, beneficiaryId});
-            }
-        }
-
-        // Delete conflicting rows first to prevent unique constraint violations
-        if (toDelete.size) {
-            await takeoverRepo.delete(Array.from(toDelete));
-        }
-
-        // Then insert new takeovers in a batch for better performance
-        if (takeoversToBeSaved.length > 0) {
-            const newTakeovers = takeoversToBeSaved.map(takeover =>
-                takeoverRepo.create({
-                    pool: {id: poolId} as EventInvoicePool,
-                    payerRegistration: {id: takeover.payerId} as EventRegistration,
-                    beneficiaryRegistration: {id: takeover.beneficiaryId} as EventRegistration,
-                })
-            );
-            await takeoverRepo.save(newTakeovers);
-        }
-
-        if (added.length || removed.length) await invalidatePool(manager, pool);
-        return {added, removed};
-    });
-}
-
-export async function submitInvoice(
-    poolId: string,
-    registrationId: number,
-    amount: number,
-    description: string | null,
-    proof: { path: string; originalName: string; mimeType: string } | null,
-) {
-    return changePool(poolId, async (manager, pool) => {
-        if (pool.status !== "OPEN") throw new APIError("Pool is closed for invoice submissions", {}, 409);
-        await assertPoolParticipant(manager, pool, registrationId);
-        const invoiceRepo = manager.getRepository(EventInvoice);
-        const invoice = invoiceRepo.create({
-            pool: {id: poolId} as EventInvoicePool,
-            registration: {id: registrationId} as EventRegistration,
-            amount: formatAmount(amount),
-            description: description || null,
-            status: "NEW" as InvoiceStatus,
-            correctedAmount: null,
-            correctedDescription: null,
-            rejectionReason: null,
-            proofPath: proof?.path || null,
-            proofOriginalName: proof?.originalName || null,
-            proofMimeType: proof?.mimeType || null,
-        });
-        await invoiceRepo.save(invoice);
-        return invoice.id;
-    });
-}
-
-/** Record an approved shared expense without inventing attendance or a personal reimbursement. */
-export async function addOrganizerInvoice(
-    poolId: string,
-    profileId: string,
-    amount: number,
-    description: string,
-    proof: {path: string; originalName: string; mimeType: string} | null = null,
-): Promise<number> {
-    if (typeof profileId !== "string" || !profileId.trim()) throw new APIError("Organizer profile not found", {}, 401);
-    assertPositiveInvoiceAmount(amount);
-    if (typeof description !== "string" || !description.trim() || description.trim().length > 4000) {
-        throw new APIError("Enter a description of up to 4000 characters", {}, 400);
+/** Rebuild persisted aggregate columns; the corresponding feature operation chooses when to refresh them. */
+export async function recalcPoolTotals(poolId: string): Promise<void> {
+    /** Refresh only a still-existing locked root; absence is intentionally an idempotent database no-op. */
+    async function refreshLocked(manager: EntityManager, pool: EventInvoicePool | null): Promise<void> {
+        if (pool) await refreshPoolTotals(manager, poolId);
     }
-    return changePool(poolId, async (manager) => {
-        const profile = await manager.getRepository(Profile).findOne({
-            where: {id: profileId}, relations: {user: true, guest: true},
-        });
-        if (!profile) throw new APIError("Organizer profile not found", {}, 401);
-        const recordedByName = [profile.name, profile.user?.name, profile.user?.username, profile.guest?.username]
-            .map((name) => name?.replace(/\s+/g, " ").trim()).find(Boolean) || "Organizer";
-        const repo = manager.getRepository(EventInvoice);
-        const invoice = repo.create({
-            pool: {id: poolId} as EventInvoicePool,
-            registration: null,
-            recordedByProfile: profile,
-            recordedByName: recordedByName.slice(0, 50),
-            amount: formatAmount(amount),
-            description: description.trim(),
-            status: "APPROVED",
-            correctedAmount: null,
-            correctedDescription: null,
-            rejectionReason: null,
-            proofPath: proof?.path || null,
-            proofOriginalName: proof?.originalName || null,
-            proofMimeType: proof?.mimeType || null,
-        });
-        await repo.save(invoice);
-        return invoice.id;
-    });
+    await withLockedPool(poolId, refreshLocked);
 }
 
-export async function approveInvoice(poolId: string, invoiceId: number, corrections: InvoiceCorrections = {}) {
-    return changePool(poolId, async (manager) => {
-        const repo = manager.getRepository(EventInvoice);
-        const invoice = await repo.findOne({where: {id: invoiceId, pool: {id: poolId}}});
-        if (!invoice) throw new Error("Invoice not found");
-        if (invoice.status !== "NEW") return false;
-        invoice.status = "APPROVED";
-        invoice.correctedAmount = corrections.correctedAmount === null || corrections.correctedAmount === undefined
-            ? null
-            : formatAmount(corrections.correctedAmount);
-        invoice.correctedDescription = corrections.correctedDescription || null;
-        invoice.rejectionReason = null;
-        await repo.save(invoice);
-        return true;
-    });
-}
-
-export async function closeInvoice(poolId: string, invoiceId: number) {
-    // Invoice reimbursement does not change the approved amount or participant credit.
-    return AppDataSource.transaction("READ COMMITTED", async (manager) => {
-        await lockPool(manager, poolId);
-        const repo = manager.getRepository(EventInvoice);
-        const invoice = await repo.findOne({where: {id: invoiceId, pool: {id: poolId}}});
-        if (!invoice) throw new Error("Invoice not found");
-        if (invoice.status === "CLOSED") return false;
-        if (invoice.status !== "APPROVED") throw new APIError("Only approved invoices can be marked paid", {}, 400);
-        invoice.status = "CLOSED";
-        await repo.save(invoice);
-        await refreshPoolTotals(manager, poolId);
-        return true;
-    });
-}
-
-export async function declineInvoice(poolId: string, invoiceId: number, rejectionReason: string) {
-    return changePool(poolId, async (manager) => {
-        const repo = manager.getRepository(EventInvoice);
-        const invoice = await repo.findOne({where: {id: invoiceId, pool: {id: poolId}}});
-        if (!invoice) throw new Error("Invoice not found");
-        if (invoice.status !== "NEW") return false;
-        invoice.status = "REJECTED";
-        invoice.rejectionReason = rejectionReason;
-        invoice.correctedAmount = null;
-        invoice.correctedDescription = null;
-        await repo.save(invoice);
-        return true;
-    });
-}
-
-/** Revise counted costs while preserving the original submission and its current accepted/closed state. */
-export async function reviseInvoice(poolId: string, invoiceId: number, corrections: InvoiceRevision, confirmation: ConfirmedInvoiceChange): Promise<EventInvoice> {
-    if (corrections?.correctedAmount !== null) assertPositiveInvoiceAmount(corrections?.correctedAmount);
-    if (corrections?.correctedDescription !== null && (typeof corrections?.correctedDescription !== "string" || corrections.correctedDescription.trim().length > 4000)) {
-        throw new APIError("Enter a correction description of up to 4000 characters or null to restore the original", {}, 400);
-    }
-    return changePool(poolId, async (manager, pool) => {
-        assertConfirmedInvoiceChange(pool, confirmation);
-        const repo = manager.getRepository(EventInvoice);
-        const invoice = await repo.findOneBy({id: invoiceId, pool: {id: poolId}});
-        if (!invoice) throw new APIError("Invoice not found", {}, 404);
-        if (invoice.status !== "APPROVED" && invoice.status !== "CLOSED") {
-            throw new APIError("Only accepted or closed invoices can be corrected", {}, 409);
-        }
-        invoice.correctedAmount = corrections.correctedAmount === null ? null : formatAmount(corrections.correctedAmount);
-        invoice.correctedDescription = corrections.correctedDescription?.trim() || null;
-        await repo.save(invoice);
-        return invoice;
-    });
-}
-
-/** Remove a counted invoice from future calculations without deleting its history or recorded settlements. */
-export async function rejectAcceptedInvoice(poolId: string, invoiceId: number, reason: string, confirmation: ConfirmedInvoiceChange): Promise<EventInvoice> {
-    if (typeof reason !== "string" || !reason.trim() || reason.trim().length > 4000) {
-        throw new APIError("A rejection reason of up to 4000 characters is required", {}, 400);
-    }
-    return changePool(poolId, async (manager, pool) => {
-        assertConfirmedInvoiceChange(pool, confirmation);
-        const repo = manager.getRepository(EventInvoice);
-        const invoice = await repo.findOneBy({id: invoiceId, pool: {id: poolId}});
-        if (!invoice) throw new APIError("Invoice not found", {}, 404);
-        if (invoice.status !== "APPROVED" && invoice.status !== "CLOSED") {
-            throw new APIError("Only accepted or closed invoices can be removed from the calculation", {}, 409);
-        }
-        invoice.status = "REJECTED";
-        invoice.rejectionReason = reason.trim();
-        await repo.save(invoice);
-        return invoice;
-    });
-}
-
-/** Participants can withdraw only their own unreviewed invoice, even after pool closure. */
-export async function retractInvoice(poolId: string, invoiceId: number, profileId: string, confirmation: ConfirmedInvoiceChange): Promise<EventInvoice> {
-    if (!profileId) throw new APIError("Log in to retract your invoice", {}, 401);
-    return AppDataSource.transaction("READ COMMITTED", async (manager) => {
-        const pool = await lockPool(manager, poolId);
-        assertConfirmedInvoiceChange(pool, confirmation);
-        const repo = manager.getRepository(EventInvoice);
-        const invoice = await repo.findOneBy({id: invoiceId, pool: {id: poolId}});
-        if (!invoice) throw new APIError("Invoice not found", {}, 404);
-        const registration = invoice.registrationId == null ? null
-            : await manager.getRepository(EventRegistration).findOneBy({id: invoice.registrationId, event: {id: pool.eventId}, profile: {id: profileId}});
-        if (!registration) throw new APIError("You can only retract your own invoice", {}, 403);
-        if (invoice.status !== "NEW") throw new APIError("Only invoices awaiting review can be retracted", {}, 409);
-        invoice.status = "RETRACTED";
-        await repo.save(invoice);
-        // Unreviewed invoices were never included in shares; retain the existing recalculation state.
-        pool.calculationRevision++;
-        await manager.getRepository(EventInvoicePool).save(pool);
-        await refreshPoolTotals(manager, poolId);
-        return invoice;
-    });
-}
-
-// Controller provides selected invoices and calculated shares; service keeps the transaction atomic
-export async function closePool(
-    poolId: string,
-    approvedInvoiceIds: number[],
-    sharePayloads: InvoiceSharePayload[],
-    recalculate = false,
-    expectedRevision?: number,
-): Promise<EventInvoiceShare[]> {
-    return AppDataSource.transaction("READ COMMITTED", async (manager) => {
-        const poolRepo = manager.getRepository(EventInvoicePool);
-        const shareRepo = manager.getRepository(EventInvoiceShare);
-
-        const pool = await lockPool(manager, poolId);
-        if (expectedRevision !== undefined && pool.calculationRevision !== expectedRevision) {
-            throw new APIError("Pool inputs changed during calculation. Reload and calculate again.", {}, 409);
-        }
-        if (recalculate && pool.status !== "CLOSED") throw new APIError("Only closed pools can be recalculated", {}, 409);
-        if (!recalculate && pool.status === "CLOSED") throw new APIError("Pool is already closed", {}, 409);
-
-        const [previousShares, registrations] = await Promise.all([
-            shareRepo.find({where: {pool: {id: poolId}}}),
-            manager.getRepository(EventRegistration).findBy({event: {id: pool.eventId}}),
-        ]);
-        const projectedShares = projectInvoiceShares(previousShares, sharePayloads, registrations.map((registration) => registration.id));
-        await shareRepo.delete({pool: {id: poolId}});
-        if (projectedShares.length) {
-            const rows = projectedShares.map((payload) => shareRepo.create({
-                pool: {id: poolId} as EventInvoicePool,
-                registration: {id: payload.registrationId} as EventRegistration,
-                baseShareAmount: payload.baseShareAmount,
-                extraAmount: payload.extraAmount,
-                invoiceCreditAmount: payload.invoiceCreditAmount,
-                paymentCreditAmount: payload.paymentCreditAmount,
-                shareAmount: payload.shareAmount,
-                note: payload.note || null,
-                isPaid: payload.isPaid,
-                paidAt: payload.paidAt,
-            }));
-            await shareRepo.save(rows);
-        }
-
-        pool.status = "CLOSED";
-        pool.closedAt = new Date();
-        pool.needsRecalculation = false;
-        pool.calculationRevision++;
-        pool.calculationSnapshot = await captureCalculationSnapshot(manager, pool);
-        await poolRepo.save(pool);
-        await refreshPoolTotals(manager, poolId);
-        return shareRepo.find({where: {pool: {id: poolId}}, order: {id: "ASC"}});
-    });
-}
-
-export async function rollbackPoolChanges(poolId: string, expectedRevision?: number): Promise<{needsRecalculation: boolean; externalChanges: boolean}> {
-    return AppDataSource.transaction("READ COMMITTED", async (manager) => {
-        const pool = await lockPool(manager, poolId);
-        if (pool.status !== "CLOSED") throw new APIError("Only calculated pools have saved inputs to restore", {}, 409);
-        if (expectedRevision !== undefined && pool.calculationRevision !== expectedRevision) {
-            throw new APIError("Pool changed before rollback. Reload and try again.", {}, 409);
-        }
-        const snapshot = pool.calculationSnapshot;
-        if (!snapshot || snapshot.version !== 1) {
-            throw new APIError("No previous input snapshot is available. Calculate the pool first.", {}, 409);
-        }
-        const [registrations, invoices] = await Promise.all([
-            manager.getRepository(EventRegistration).findBy({event: {id: pool.eventId}}),
-            manager.getRepository(EventInvoice).findBy({pool: {id: poolId}}),
-        ]);
-        const validIds = new Set(registrations.map((registration) => registration.id));
-        const externalChanges = externalCalculationFingerprint(registrations, invoices) !== snapshot.externalFingerprint;
-        const assignmentRepo = manager.getRepository(EventPoolAssignment);
-        const surchargeRepo = manager.getRepository(EventInvoiceSurcharge);
-        const takeoverRepo = manager.getRepository(EventPoolTakeover);
-
-        await assignmentRepo.delete({pool: {id: poolId}});
-        const assignments = snapshot.assignments.filter((assignment) => validIds.has(assignment.registrationId));
-        // New event participants remain automatically assigned to pools that were already defaults.
-        if (snapshot.settings.isDefault) {
-            const previousIds = new Set(snapshot.externalRegistrationIds);
-            for (const registration of registrations) {
-                if (!previousIds.has(registration.id)) assignments.push({registrationId: registration.id, factor: 1, isExempt: false});
-            }
-        }
-        if (assignments.length) {
-            await assignmentRepo.save(assignments.map((assignment) => assignmentRepo.create({
-                pool: {id: poolId} as EventInvoicePool,
-                registration: {id: assignment.registrationId} as EventRegistration,
-                factor: assignment.factor,
-                isExempt: assignment.isExempt,
-            })));
-        }
-        const assignedIds = snapshot.settings.assignAll ? validIds : new Set(assignments.map((assignment) => assignment.registrationId));
-
-        await surchargeRepo.delete({pool: {id: poolId}});
-        const surcharges = snapshot.surcharges.filter((surcharge) => assignedIds.has(surcharge.registrationId));
-        if (surcharges.length) {
-            await surchargeRepo.save(surcharges.map((surcharge) => surchargeRepo.create({
-                pool: {id: poolId} as EventInvoicePool,
-                registration: {id: surcharge.registrationId} as EventRegistration,
-                amount: formatAmount(surcharge.amount),
-                note: surcharge.note,
-                subtractFromPool: surcharge.subtractFromPool,
-            })));
-        }
-        await takeoverRepo.delete({pool: {id: poolId}});
-        const takeovers = snapshot.takeovers.filter((takeover) => assignedIds.has(takeover.payerRegistrationId)
-            && assignedIds.has(takeover.beneficiaryRegistrationId));
-        if (takeovers.length) {
-            await takeoverRepo.save(takeovers.map((takeover) => takeoverRepo.create({
-                pool: {id: poolId} as EventInvoicePool,
-                payerRegistration: {id: takeover.payerRegistrationId} as EventRegistration,
-                beneficiaryRegistration: {id: takeover.beneficiaryRegistrationId} as EventRegistration,
-            })));
-        }
-        Object.assign(pool, snapshot.settings);
-        pool.roundUpShares = snapshot.settings.roundUpShares ?? true;
-        const needsRecalculation = externalChanges || snapshot.settings.roundUpShares === undefined;
-        pool.needsRecalculation = needsRecalculation;
-        pool.calculationRevision++;
-        await manager.getRepository(EventInvoicePool).save(pool);
-        await refreshPoolTotals(manager, poolId);
-        return {needsRecalculation, externalChanges};
-    });
-}
-
-export async function updateAssignments(
-    poolId: string,
-    isDefault: boolean,
-    assignAll: boolean,
-    subtractPersonalInvoices: boolean,
-    allowedRegistrationIds: number[],
-    exemptRegistrationIds: number[],
-    participantFactors: Record<number, number> = {},
-) {
-    await AppDataSource.transaction("READ COMMITTED", async (manager) => {
-        const assignmentRepo = manager.getRepository(EventPoolAssignment);
-        const takeoverRepo = manager.getRepository(EventPoolTakeover);
-        const surchargeRepo = manager.getRepository(EventInvoiceSurcharge);
-
-        const pool = await lockPool(manager, poolId);
-
-        pool.isDefault = isDefault;
-        pool.assignAll = assignAll;
-        pool.subtractPersonalInvoices = subtractPersonalInvoices;
-        const eventIds = (await manager.getRepository(EventRegistration).find({where: {event: {id: pool.eventId}}})).map((r) => r.id);
-        const validIds = Array.from(new Set(assignAll ? eventIds : allowedRegistrationIds));
-        if (validIds.some((id) => !eventIds.includes(id))) throw new APIError("Participant does not belong to this event", {}, 400);
-        for (const [id, factor] of Object.entries(participantFactors)) {
-            if (!validIds.includes(Number(id))) throw new APIError("Factor participant is not assigned to this pool", {}, 400);
-            validateInvoiceFactor(factor);
-        }
-        const existingAssignments = await assignmentRepo.find({where: {pool: {id: poolId}}});
-        const existingFactors = new Map(existingAssignments.map((assignment) => [assignment.registrationId, assignment.factor]));
-        await assignmentRepo.delete({pool: {id: poolId}});
-        const effectiveIds = validIds;
-        if (effectiveIds.length) {
-            const rows = effectiveIds.map((id) => assignmentRepo.create({
-                pool: {id: poolId} as EventInvoicePool,
-                registration: {id} as EventRegistration,
-                isExempt: exemptRegistrationIds.includes(id),
-                factor: participantFactors[id] ?? existingFactors.get(id) ?? 1,
-            }));
-            await assignmentRepo.save(rows);
-        }
-
-        // Keep takeover mappings consistent with the new assignment scope.
-        const invalidTakeovers = await takeoverRepo.find({where: {pool: {id: poolId}}});
-        const toDrop = invalidTakeovers.filter(
-            (t) => !validIds.includes(t.payerRegistrationId) || !validIds.includes(t.beneficiaryRegistrationId),
-        );
-        if (toDrop.length) {
-            await takeoverRepo.delete(toDrop.map((t) => t.id));
-        }
-
-        // Drop surcharges for participants that are no longer assigned so the UI stays consistent.
-        const invalidSurcharges = await surchargeRepo.find({where: {pool: {id: poolId}}});
-        const surchargeDropIds = invalidSurcharges
-            .filter((s) => !validIds.includes(s.registrationId))
-            .map((s) => s.id);
-        if (surchargeDropIds.length) {
-            await surchargeRepo.delete(surchargeDropIds);
-        }
-        await invalidatePool(manager, pool);
-        await refreshPoolTotals(manager, poolId);
-    });
-}
-
-// Signed adjustments remain editable after closure and invalidate the saved calculation.
-export async function addSurcharge(
-    poolId: string,
-    registrationId: number,
-    amount: number,
-    note: string,
-    subtractFromPool: boolean,
-) {
-    if (!Number.isFinite(amount) || amount === 0 || Math.abs(amount) > 99999999.99) {
-        throw new APIError("Enter a non-zero surcharge or rebate within the supported amount range", {}, 400);
-    }
-    return changePool(poolId, async (manager, pool) => {
-        await assertPoolParticipant(manager, pool, registrationId);
-        const repo = manager.getRepository(EventInvoiceSurcharge);
-        const row = repo.create({
-            pool: {id: poolId} as EventInvoicePool,
-            registration: {id: registrationId} as EventRegistration,
-            amount: formatAmount(amount),
-            note,
-            subtractFromPool,
-        });
-        await repo.save(row);
-        return row;
-    });
-}
-
-// Remove a surcharge that was added earlier so the pool can be recalculated cleanly.
-export async function removeSurcharge(poolId: string, surchargeId: number) {
-    return changePool(poolId, async (manager) => {
-        const repo = manager.getRepository(EventInvoiceSurcharge);
-        const existing = await repo.findOne({where: {id: surchargeId, pool: {id: poolId}}});
-        if (!existing) return;
-        await repo.remove(existing);
-    });
-}
-
-export async function setSharePaid(poolId: string, shareId: number, isPaid: boolean) {
-    await AppDataSource.transaction("READ COMMITTED", async (manager) => {
-        const pool = await lockPool(manager, poolId);
-        if (pool.status !== "CLOSED") {
-            throw new APIError("Calculate the pool before recording share payments", {}, 409);
-        }
-        const repo = manager.getRepository(EventInvoiceShare);
-        const share = await repo.findOne({where: {id: shareId, pool: {id: poolId}}});
-        if (!share) throw new Error("Share not found");
-        share.isPaid = isPaid;
-        share.paidAt = isPaid ? new Date() : null;
-        await repo.save(share);
-        pool.calculationRevision++;
-        await manager.getRepository(EventInvoicePool).save(pool);
-        await refreshPoolTotals(manager, poolId);
-    });
-}
-
-export async function recalcPoolTotals(poolId: string) {
-    await AppDataSource.transaction("READ COMMITTED", async (manager) => {
-        await lockPool(manager, poolId);
-        await refreshPoolTotals(manager, poolId);
-    });
-}
-
-async function refreshPoolTotals(manager: EntityManager, poolId: string) {
+/** Rebuild the pool's materialized aggregate columns from its persisted invoice, adjustment, and share rows. */
+export async function refreshPoolTotals(manager: EntityManager, poolId: string) {
     const poolRepo = manager.getRepository(EventInvoicePool);
     const invoiceRepo = manager.getRepository(EventInvoice);
     const shareRepo = manager.getRepository(EventInvoiceShare);
     const surchargeRepo = manager.getRepository(EventInvoiceSurcharge);
 
+    // Read all aggregate sources through the caller's manager so a transaction never mixes committed versions.
     const [invoices, shares, pool, surcharges] = await Promise.all([
         invoiceRepo.find({where: {pool: {id: poolId}}}),
         shareRepo.find({where: {pool: {id: poolId}}}),
@@ -941,6 +326,7 @@ async function refreshPoolTotals(manager: EntityManager, poolId: string) {
     ]);
     if (!pool) return;
 
+    // Invoice totals retain accepted/closed costs and distinguish additional from redistributed adjustments.
     const invoiceTotal = invoices.filter(inv => inv.status === "APPROVED" || inv.status === "CLOSED")
         .reduce((sum, inv) => sum + resolveInvoiceAmount(inv.amount, inv.correctedAmount), 0);
     const openAmount = invoices
@@ -952,6 +338,8 @@ async function refreshPoolTotals(manager: EntityManager, poolId: string) {
     const subtractiveAmount = surcharges
         .filter((s) => s.subtractFromPool)
         .reduce((sum, s) => sum + toAmount(s.amount), 0);
+    // Transfer totals include unsettled rows only. The legacy credit column stores a refund magnitude;
+    // signed presentation is owned by the invoice presenter and never changes the saved share amount.
     const outstandingAmount = shares
         .filter((s) => !s.isPaid)
         .reduce((sum, s) => sum + Math.max(toAmount(s.shareAmount), 0), 0);
@@ -959,6 +347,7 @@ async function refreshPoolTotals(manager: EntityManager, poolId: string) {
         .filter((s) => !s.isPaid)
         .reduce((sum, s) => sum + Math.abs(Math.min(toAmount(s.shareAmount), 0)), 0);
 
+    // Persist derived columns together; no lifecycle, authorization, or request-specific decision happens here.
     pool.invoiceAmount = toAmount(invoiceTotal);
     pool.additionalAmount = toAmount(extraAmount);
     pool.surchargeOffsetAmount = toAmount(subtractiveAmount);
@@ -967,7 +356,7 @@ async function refreshPoolTotals(manager: EntityManager, poolId: string) {
     pool.openAmount = toAmount(openAmount);
     pool.outstandingAmount = toAmount(outstandingAmount);
     pool.creditAmount = toAmount(creditAmount);
-    pool.totalAmount = pool.invoiceAmount + pool.additionalAmount
+    pool.totalAmount = pool.invoiceAmount + pool.additionalAmount;
     await poolRepo.save(pool);
 }
 
@@ -984,15 +373,15 @@ export async function getApprovedInvoices(poolId: string) {
     return AppDataSource.getRepository(EventInvoice).find({where: {pool: {id: poolId}, status: "APPROVED"}});
 }
 
-export async function getInvoiceWithRegistration(poolId: string, invoiceId: number) {
-    return AppDataSource.getRepository(EventInvoice).findOne({
+export async function getInvoiceWithRegistration(poolId: string, invoiceId: number, manager: EntityManager = AppDataSource.manager) {
+    return manager.getRepository(EventInvoice).findOne({
         where: {id: invoiceId, pool: {id: poolId}},
         relations: {registration: {profile: {user: true, guest: true}}, recordedByProfile: {user: true, guest: true}},
     });
 }
 
-export async function getShareWithRegistration(poolId: string, shareId: number) {
-    return AppDataSource.getRepository(EventInvoiceShare).findOne({
+export async function getShareWithRegistration(poolId: string, shareId: number, manager: EntityManager = AppDataSource.manager) {
+    return manager.getRepository(EventInvoiceShare).findOne({
         where: {id: shareId, pool: {id: poolId}},
         relations: {registration: {profile: {user: true, guest: true}}},
     });

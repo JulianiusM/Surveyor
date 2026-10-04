@@ -148,7 +148,7 @@ block content
 
     if permData.entity.has('MANAGE_ASSIGNMENTS')
         +invoiceManagementTabs(ev, data)
-        +takeoverModal('takeoverModal')
+        +takeoverModal('takeoverModal', data.invoiceUi)
 
     if permData.entity.has("DATA_EXPORT")
         hr
@@ -168,3 +168,6 @@ block scripts
     script.
         window.Surveyor.eventId = "#{ev.id}";
     script#participantsData(type="application/json")!= JSON.stringify(data.participants || []).replace(/<\/script>/g, '<\\/script>')
+
+    //- Shared invoice vocabulary for browser-rendered previews and confirmed settlement commands.
+    script#invoiceLabelsData(type="application/json")!= JSON.stringify(data.invoiceUi.labels)

@@ -16,7 +16,7 @@
 
 import http from 'node:http';
 import {initDataSource} from "./modules/database/dataSource";
-import {startInvoiceRetentionJob} from './modules/invoiceRetention';
+import {startInvoiceRetentionJob} from './modules/invoice/retention';
 import {startEntityArchivalJob} from './modules/entityArchival';
 import settings from './modules/settings';
 

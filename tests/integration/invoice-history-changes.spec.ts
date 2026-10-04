@@ -1,3 +1,5 @@
+import * as invoiceOperations from '../../src/modules/invoice/invoiceOperations';
+import * as poolOperations from '../../src/modules/invoice/poolOperations';
 import type {Request} from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -47,7 +49,7 @@ async function context() {
     await fs.promises.mkdir(path.dirname(proofPath), {recursive: true});
     await fs.promises.writeFile(proofPath, '%PDF-1.4 retained history proof');
     proofs.add(proofPath);
-    const invoiceId = await invoiceService.submitInvoice(poolId, firstId, 100, 'Original participant purchase', {
+    const invoiceId = await invoiceOperations.persistSubmittedInvoice(poolId, firstId, 100, 'Original participant purchase', {
         path: path.relative(process.cwd(), proofPath), originalName: 'original.pdf', mimeType: 'application/pdf',
     });
     return {event, poolId, invoiceId, firstId, secondId, proofPath};
@@ -60,10 +62,10 @@ async function confirmation(poolId: string) {
 describe('confirmed invoice revisions, rejection, and retraction', () => {
     it('upgrades the status enum and safely downgrades before any invoices have been retracted', async () => {
         const {event, poolId, invoiceId} = await context();
-        await invoiceService.approveInvoice(poolId, invoiceId);
+        await invoiceOperations.acceptSavedInvoice(poolId, invoiceId);
         await eventPoolController.closePool(event, poolId, {sendEmails: false});
         const initial = (await invoiceService.getPoolWithInvoices(poolId))!;
-        await invoiceService.setSharePaid(poolId, initial.shares[0].id, true);
+        await poolOperations.recordShareSettlement(poolId, initial.shares[0].id, true);
         const before = (await invoiceService.getPoolWithInvoices(poolId))!;
         const runner = AppDataSource.createQueryRunner();
         const migration = new AddInvoiceRetraction1789689600000();
@@ -83,8 +85,8 @@ describe('confirmed invoice revisions, rejection, and retraction', () => {
 
     it.each(['APPROVED', 'CLOSED'] as const)('corrects and rejects %s organizer costs in an open pool while retaining originals', async (status) => {
         const {event, poolId} = await context();
-        const invoiceId = await invoiceService.addOrganizerInvoice(poolId, organizer.id, 50, 'Original rental');
-        if (status === 'CLOSED') await invoiceService.closeInvoice(poolId, invoiceId);
+        const invoiceId = await invoiceOperations.persistOrganizerInvoice(poolId, organizer.id, 50, 'Original rental');
+        if (status === 'CLOSED') await invoiceOperations.closeSavedInvoice(poolId, invoiceId);
         await eventPoolController.reviseInvoice(event, poolId, String(invoiceId), {
             ...await confirmation(poolId), correctedAmount: 30, correctedDescription: 'Corrected rental',
         }, sessionFor(organizer));
@@ -104,10 +106,10 @@ describe('confirmed invoice revisions, rejection, and retraction', () => {
 
     it('keeps signed paid credits through closed-invoice correction, rollback, rejection, and recalculation', async () => {
         const {event, poolId, invoiceId, firstId, secondId, proofPath} = await context();
-        await invoiceService.approveInvoice(poolId, invoiceId);
-        await invoiceService.closeInvoice(poolId, invoiceId);
+        await invoiceOperations.acceptSavedInvoice(poolId, invoiceId);
+        await invoiceOperations.closeSavedInvoice(poolId, invoiceId);
         await eventPoolController.closePool(event, poolId, {sendEmails: false});
-        for (const share of (await invoiceService.getPoolWithInvoices(poolId))!.shares) await invoiceService.setSharePaid(poolId, share.id, true);
+        for (const share of (await invoiceService.getPoolWithInvoices(poolId))!.shares) await poolOperations.recordShareSettlement(poolId, share.id, true);
         const before = (await invoiceService.getPoolWithInvoices(poolId))!;
         await eventPoolController.reviseInvoice(event, poolId, String(invoiceId), {
             ...await confirmation(poolId), correctedAmount: 60, correctedDescription: 'Corrected receipt',
@@ -122,7 +124,7 @@ describe('confirmed invoice revisions, rejection, and retraction', () => {
         const corrected = (await invoiceService.getPoolWithInvoices(poolId))!;
         expect(corrected.shares.find((share) => share.registrationId === firstId)).toMatchObject({paymentCreditAmount: -50, shareAmount: 20, invoiceCreditAmount: 60});
         expect(corrected.shares.find((share) => share.registrationId === secondId)).toMatchObject({paymentCreditAmount: 50, shareAmount: -20});
-        await invoiceService.setSharePaid(poolId, corrected.shares.find((share) => share.registrationId === firstId)!.id, true);
+        await poolOperations.recordShareSettlement(poolId, corrected.shares.find((share) => share.registrationId === firstId)!.id, true);
         const beforeRejection = (await invoiceService.getPoolWithInvoices(poolId))!;
         await eventPoolController.rejectAcceptedInvoice(event, poolId, String(invoiceId), {
             ...await confirmation(poolId), rejectionReason: 'Receipt was refunded by the supplier',
@@ -141,14 +143,14 @@ describe('confirmed invoice revisions, rejection, and retraction', () => {
         const {event, poolId, invoiceId} = await context();
         const correction = {correctedAmount: 80, correctedDescription: 'New accepted details'};
         await expect(eventPoolController.reviseInvoice(event, poolId, String(invoiceId), {...await confirmation(poolId), ...correction}, sessionFor(organizer))).rejects.toMatchObject({status: 409});
-        await invoiceService.approveInvoice(poolId, invoiceId);
+        await invoiceOperations.acceptSavedInvoice(poolId, invoiceId);
         const confirm = await confirmation(poolId);
         for (const body of [correction, {...confirm, ...correction, confirmed: false}, {...confirm, ...correction, confirmed: 'true'}, {...confirm, correctedAmount: 80}]) {
             await expect(eventPoolController.reviseInvoice(event, poolId, String(invoiceId), body, sessionFor(organizer))).rejects.toMatchObject({status: 400});
         }
         await expect(eventPoolController.rejectAcceptedInvoice(event, poolId, String(invoiceId), {...confirm, rejectionReason: ' '}, sessionFor(organizer))).rejects.toMatchObject({status: 400});
         for (const correctedAmount of [0, -1, 1.005, Number.NaN, 100000000]) {
-            await expect(invoiceService.reviseInvoice(poolId, invoiceId, {correctedAmount, correctedDescription: null}, confirm)).rejects.toMatchObject({status: 400});
+            await expect(invoiceOperations.reviseSavedInvoice(poolId, invoiceId, {correctedAmount, correctedDescription: null}, confirm)).rejects.toMatchObject({status: 400});
         }
         await eventPoolController.reviseInvoice(event, poolId, String(invoiceId), {...confirm, ...correction}, sessionFor(organizer));
         await expect(eventPoolController.reviseInvoice(event, poolId, String(invoiceId), {...confirm, ...correction}, sessionFor(organizer))).rejects.toMatchObject({status: 409});
@@ -159,7 +161,7 @@ describe('confirmed invoice revisions, rejection, and retraction', () => {
 
     it('commits only one concurrent correction or retroactive rejection and notifies only that saved decision', async () => {
         const {event, poolId, invoiceId} = await context();
-        await invoiceService.approveInvoice(poolId, invoiceId);
+        await invoiceOperations.acceptSavedInvoice(poolId, invoiceId);
         const confirm = await confirmation(poolId);
         const outcomes = await Promise.allSettled([
             eventPoolController.reviseInvoice(event, poolId, String(invoiceId), {...confirm, correctedAmount: 80, correctedDescription: null}, sessionFor(organizer)),
@@ -174,9 +176,9 @@ describe('confirmed invoice revisions, rejection, and retraction', () => {
     it.each(['OPEN', 'CLOSED'] as const)('retracts only the submitter\'s NEW invoice in a %s pool and preserves history and settlement', async (status) => {
         const {event, poolId, invoiceId, proofPath} = await context();
         if (status === 'CLOSED') {
-            await invoiceService.addOrganizerInvoice(poolId, organizer.id, 40, 'Counted shared costs');
+            await invoiceOperations.persistOrganizerInvoice(poolId, organizer.id, 40, 'Counted shared costs');
             await eventPoolController.closePool(event, poolId, {sendEmails: false});
-            await invoiceService.setSharePaid(poolId, (await invoiceService.getPoolWithInvoices(poolId))!.shares[0].id, true);
+            await poolOperations.recordShareSettlement(poolId, (await invoiceService.getPoolWithInvoices(poolId))!.shares[0].id, true);
         }
         const before = (await invoiceService.getPoolWithInvoices(poolId))!;
         const confirm = await confirmation(poolId);
@@ -191,14 +193,14 @@ describe('confirmed invoice revisions, rejection, and retraction', () => {
         expect(after.invoices.find((invoice) => invoice.id === invoiceId)).toMatchObject({status: 'RETRACTED', amount: '100.00', description: 'Original participant purchase'});
         await expect(eventPoolController.serveInvoiceProof(event, poolId, String(invoiceId), sessionFor(participant))).resolves.toBe(proofPath);
         await expect(eventPoolController.retractInvoice(event, poolId, String(invoiceId), await confirmation(poolId), sessionFor(participant))).rejects.toMatchObject({status: 409});
-        expect(await invoiceService.approveInvoice(poolId, invoiceId)).toBe(false);
-        expect(await invoiceService.declineInvoice(poolId, invoiceId, 'Already retracted')).toBe(false);
+        expect(await invoiceOperations.acceptSavedInvoice(poolId, invoiceId)).toBe(false);
+        expect(await invoiceOperations.rejectSavedInvoice(poolId, invoiceId, 'Already retracted')).toBe(false);
         expect((await invoiceService.getPoolWithInvoices(poolId))!.calculationRevision).toBe(after.calculationRevision);
     });
 
     it('resolves an approval-versus-retraction race without an invoice becoming both accepted and withdrawn', async () => {
         const {event, poolId, invoiceId} = await context();
-        await invoiceService.addOrganizerInvoice(poolId, organizer.id, 10, 'Counted shared costs');
+        await invoiceOperations.persistOrganizerInvoice(poolId, organizer.id, 10, 'Counted shared costs');
         await eventPoolController.closePool(event, poolId, {sendEmails: false});
         const confirm = await confirmation(poolId);
         const outcomes = await Promise.allSettled([

@@ -1,0 +1,27 @@
+{
+  "advisory": true,
+  "ok": false,
+  "helpRoot": "docs/user-guide",
+  "markdownFiles": 10,
+  "linksChecked": 195,
+  "imagesChecked": 3,
+  "rawHtmlChecks": 10,
+  "assets": [
+    "navigation-at-a-glance.png",
+    "packing-shared-vs-local.png",
+    "participant-and-organizer-controls.png",
+    "survey-recurring-pattern.png"
+  ],
+  "referencedAssets": {
+    "navigation-at-a-glance.png": 1,
+    "packing-shared-vs-local.png": 1,
+    "survey-recurring-pattern.png": 1
+  },
+  "warnings": [],
+  "errors": [
+    {
+      "file": "docs/user-guide/assets/participant-and-organizer-controls.png",
+      "message": "Help asset is not referenced by any maintained user guide"
+    }
+  ]
+}

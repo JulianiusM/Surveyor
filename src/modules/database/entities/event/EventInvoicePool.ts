@@ -43,7 +43,9 @@ export class EventInvoicePool extends UuidBase {
     @Column("text", {name: "description", nullable: true})
     description?: string | null;
 
-    @Column("enum", {name: "status", enum: ["OPEN", "CLOSED"], default: "OPEN"})
+    // ORGANIZER_ONLY accepts organizer costs while participant submissions are disabled. Both
+    // uncalculated states may be created directly and closed without a submission-access transition.
+    @Column("enum", {name: "status", enum: ["OPEN", "CLOSED", "ORGANIZER_ONLY"], default: "OPEN"})
     status!: InvoicePoolStatus;
 
     @Column("tinyint", {name: "needs_recalculation", default: 0})

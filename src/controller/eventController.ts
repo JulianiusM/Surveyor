@@ -25,6 +25,7 @@ import {Event} from "../modules/database/entities/event/Event";
 import {EventRegistration} from "../modules/database/entities/event/EventRegistration";
 import {ALLOWED_DIETARY} from "../modules/database/entities/event/EventRegistrationDietary";
 import * as invoiceService from "../modules/database/services/EventInvoiceService";
+import {invoicePresentation} from '../modules/invoice/presentation';
 
 import * as eventService from '../modules/database/services/EventService';
 import {APIError, ValidationError} from '../modules/lib/errors';
@@ -273,6 +274,7 @@ async function fetchForView(event: Event, req: Request) {
         packingLists,
         driverLists,
         invoicePools,
+        invoiceUi: invoicePresentation,
         participantPools,
         participantInvoices,
         isFull,

@@ -238,14 +238,14 @@ block content
                         h2.accordion-header
                             button.accordion-button.collapsed.text-white(type="button" data-bs-toggle="collapse" data-bs-target="#participantInvoiceCollapse" aria-expanded="false" aria-controls="participantInvoiceCollapse")
                                 i.bi.bi-cash-coin.me-2
-                                | Invoice pools & payments
+                                = data.invoiceUi.text('invoicePoolsAndPayments')
                         #participantInvoiceCollapse.accordion-collapse.collapse
                             .accordion-body
-                                +invoiceSubmission(ev.id, data.participantPools, 'participant', data.participantInvoices, data.invoicePools)
+                                +invoiceSubmission(ev.id, data.participantPools, 'participant', data.participantInvoices, data.invoicePools, data.invoiceUi)
                                 if data.participantPools && data.participantPools.length
                                     .mt-4
-                                        +participantTakeoverList(data.participantPools, data.participants)
-                                +participantShareSummary(data.registration.id, data.invoicePools)
+                                        +participantTakeoverList(data.participantPools, data.participants, data.invoiceUi, data.registration.id)
+                                +participantShareSummary(data.registration.id, data.invoicePools, data.invoiceUi, data.participants)
 
             if permData.entity.has("ACCESS_PARTICIPANTS")
                 +eventParticipants({
@@ -268,7 +268,8 @@ block content
 
     // ─── Associated content within this event ────────────────
 
-    +takeoverModal('takeoverModal')
+    +takeoverModal('takeoverModal', data.invoiceUi)
+    +invoiceCommandConfirmation(data.invoiceUi)
 
 
 block scripts
@@ -280,3 +281,6 @@ block scripts
     script#participantsData(type="application/json")!= JSON.stringify(data.participants || []).replace(/<\/script>/g, '<\\/script>')
     if reg
         script#registrationData(type="application/json")!= JSON.stringify({id: reg.id})
+
+    //- Only the vocabulary is serialized; personal financial explanations stay in authorized markup.
+    script#invoiceLabelsData(type="application/json")!= JSON.stringify(data.invoiceUi.labels)

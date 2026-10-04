@@ -277,7 +277,8 @@
   overscroll-behavior: contain
 
   table
-    min-width: 42rem
+    width: 100%
+    table-layout: fixed
     border-collapse: separate
     border-spacing: 0
 
@@ -295,11 +296,12 @@
   td, th
     padding: .6rem
 
-  td:first-child
-    min-width: 10rem
+  // Header widths constrain desktop columns only; mobile payer cells span the entire stacked card.
+  thead th:first-child
+    width: 22%
 
   details
-    min-width: 10rem
+    overflow-wrap: anywhere
 
 .share-ledger
   min-width: 0
@@ -321,7 +323,7 @@
   scrollbar-gutter: stable
 
   table
-    min-width: 48rem
+    width: 100%
     table-layout: fixed
     border-collapse: separate
     border-spacing: 0
@@ -335,19 +337,19 @@
     background: #212529
 
     &:first-child
-      width: 32%
+      width: 26%
 
     &:nth-child(2)
-      width: 22%
+      width: 28%
 
     &:nth-child(3)
-      width: 13%
+      width: 12%
 
     &:nth-child(4)
-      width: 23%
+      width: 16%
 
     &:last-child
-      width: 10%
+      width: 18%
 
   td
     max-width: 24rem
@@ -359,7 +361,94 @@
   tr[hidden]
     display: none
 
+  // The personal ledger uses the same table/card component with four columns and no transfer action.
+  &[data-share-personal-table]
+    th:first-child
+      width: 36%
+    th:nth-child(2)
+      width: 28%
+    th:nth-child(3)
+      width: 16%
+    th:last-child
+      width: 20%
+
 [data-share-details-content]
+  overflow-wrap: anywhere
+
+.share-ledger-controls > *, .pool-preview-summary > *
+  min-width: 0
+  overflow-wrap: anywhere
+
+// Collapsed headers retain useful totals. Long pool names and translated labels can wrap within
+// the existing accordion without widening its button or changing the icon's reserved space.
+.pool-header-summary, .pool-header-summary > *
+  min-width: 0
+  max-width: 100%
+  overflow-wrap: anywhere
+
+.invoice-share-breakdown
+  display: grid
+  grid-template-columns: minmax(0, 1fr) auto
+  column-gap: 1rem
+  row-gap: .5rem
+
+  dt, dd
+    margin: 0
+    overflow-wrap: anywhere
+
+  dd
+    text-align: right
+
+// Concrete arithmetic and pool examples share labeled terms instead of a dense plaintext paragraph.
+// Each term stays readable independently when long names, large amounts, or small viewports force wrapping.
+.invoice-calculation, .invoice-calculation-formula, .invoice-calculation-section
+  min-width: 0
+  max-width: 100%
+  overflow-wrap: anywhere
+
+.invoice-calculation-term
+  min-width: 0
+  max-width: 100%
+  flex: 0 1 auto
+
+  strong
+    font-size: 1.1rem
+    font-variant-numeric: tabular-nums
+
+.invoice-calculation-operator
+  color: #adb5bd
+  font-size: 1.2rem
+
+.invoice-calculation-result
+  border-left: 2px solid var(--bs-info)
+  padding-left: .5rem
+
+.share-settlement
+  white-space: normal
+
+  // Overlay the existing icon without changing the compact button's label, width, or alignment while saving.
+  [data-share-settlement-icon].is-pending
+    position: relative
+
+    &::before
+      visibility: hidden
+
+    .invoice-settlement-progress
+      position: absolute
+      top: 0
+      left: 0
+      width: 1em
+      height: 1em
+      border-width: .12em
+
+// Explicit payment/refund wording must wrap like the surrounding table content at every width.
+.share-ledger [data-share-state], .pool-preview-table .badge
+  max-width: 100%
+  white-space: normal
+  text-align: left
+  line-height: 1.35
+
+.pool-preview-table td
   overflow-wrap: anywhere
 
 @media (max-width: 991.98px)
@@ -400,7 +489,9 @@
     .form-switch
       display: inline-block
 
-@media (max-width: 767.98px)
+// Bootstrap's large dialog is still only 500px wide on tablets; use cards before its table
+// could overflow. This matches the saved-share layout instead of leaving a tablet-width gap.
+@media (max-width: 991.98px)
   .pool-preview-frame
     padding-top: 0
 
@@ -446,6 +537,21 @@
 
     details
       min-width: 0
+
+@media (max-width: 575.98px)
+  .share-ledger-table tr, .pool-preview-table tr
+    grid-template-columns: minmax(0, 1fr)
+
+  .pool-preview-summary > .col-6, .pool-totals .col-6
+    width: 100%
+
+  .invoice-share-breakdown
+    grid-template-columns: minmax(0, 1fr)
+    row-gap: .15rem
+
+    dd
+      text-align: left
+      margin-bottom: .5rem
 
 @media (max-width: 575.98px)
   .pool-takeover-table

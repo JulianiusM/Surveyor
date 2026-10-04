@@ -15,51 +15,14 @@
  */
 
 import nodemailer, {Transporter} from 'nodemailer';
-import type {Address} from 'nodemailer/lib/mailer';
 import {MailOptions} from 'nodemailer/lib/smtp-pool';
 import type {GuestLinkData} from '../types/UserTypes';
+import type {EmailAction, EmailContent, EmailDetail, EmailFormula, EmailRecipient, EmailSection,
+    EmailSectionGroup, RenderedEmail, StructuredEmailContent} from '../types/EmailTypes';
 import {Guest} from './database/entities/user/Guest';
 import {Profile} from './database/entities/user/Profile';
 import {User} from './database/entities/user/User';
 import settings from './settings';
-
-export interface EmailAction {
-    label: string;
-    url: string;
-}
-
-export interface EmailDetail {
-    label: string;
-    value: string;
-}
-
-export interface EmailSection {
-    title?: string;
-    paragraphs?: string[];
-    items?: string[];
-    actions?: EmailAction[];
-}
-
-export interface StructuredEmailContent {
-    heading: string;
-    preheader?: string;
-    eyebrow?: string;
-    greeting?: string;
-    paragraphs?: string[];
-    details?: EmailDetail[];
-    sections?: EmailSection[];
-    action?: EmailAction;
-    notice?: string;
-    closing?: string;
-}
-
-export type EmailContent = string | StructuredEmailContent;
-export type EmailRecipient = Address;
-
-export interface RenderedEmail {
-    text: string;
-    html: string;
-}
 
 let transporter: Transporter | undefined;
 
@@ -169,22 +132,80 @@ function renderDetails(details: EmailDetail[]): string {
     return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 22px 0; border: 1px solid #e2e8f0; border-radius: 10px; border-collapse: separate; overflow: hidden;">${rows}</table>`;
 }
 
+/** Present named operands and a distinct result without fixing the number of columns on narrow email screens. */
+function renderFormula(formula: EmailFormula): string {
+    const parts: string[] = [];
+    // Terms wrap as small blocks; escaping applies equally to saved names, labels, and numerical values.
+    for (const term of formula.terms) {
+        if (term.operator || parts.length) parts.push(`<span style="display: inline-block; padding: 6px; vertical-align: middle; font-size: 18px;">${escapeHtml(term.operator || '+')}</span>`);
+        const value = term.value.startsWith('-') ? `(${term.value})` : term.value;
+        parts.push(`<span style="display: inline-block; max-width: 100%; padding: 8px 10px; vertical-align: middle; overflow-wrap: anywhere;"><strong style="display: block; color: #0f172a; font-size: 15px;">${escapeHtml(value)}</strong><span style="display: block; color: #64748b; font-size: 12px; line-height: 18px;">${escapeHtml(term.label)}</span></span>`);
+    }
+    // A separated result remains recognizable when the preceding operands wrap onto several lines.
+    if (parts.length) parts.push('<span style="display: inline-block; padding: 6px; vertical-align: middle; font-size: 18px;">=</span>');
+    parts.push(`<span style="display: inline-block; max-width: 100%; padding: 8px 10px; vertical-align: middle; border: 1px solid #cbd5e1; border-radius: 6px; overflow-wrap: anywhere;"><strong style="display: block; color: #0f172a; font-size: 16px;">${escapeHtml(formula.result.value)}</strong><span style="display: block; color: #475569; font-size: 12px; line-height: 18px;">${escapeHtml(formula.result.label)}</span></span>`);
+    const note = formula.note ? `<p style="margin: 8px 0 0; color: #64748b; font-size: 12px; line-height: 18px;">${renderMultiline(formula.note)}</p>` : '';
+    return `<div style="margin: 10px 0; line-height: 22px;">${parts.join('')}</div>${note}`;
+}
+
+/** Keep the text alternative equivalent to the labeled HTML formula, including subtraction of signed credits. */
+function formulaText(formula: EmailFormula): string {
+    const parts: string[] = [];
+    // Parentheses keep a negative amount distinguishable from the operator that precedes it.
+    for (const term of formula.terms) {
+        if (term.operator || parts.length) parts.push(term.operator || '+');
+        const value = term.value.startsWith('-') ? `(${term.value})` : term.value;
+        parts.push(`${term.label}: ${value}`);
+    }
+    // A zero-term formula still describes the saved result rather than inventing unavailable inputs.
+    if (parts.length) parts.push('=');
+    parts.push(`${formula.result.label}: ${formula.result.value}`);
+    return parts.join(' ');
+}
+
+/** Render optional feature-supplied metrics and arithmetic within the existing section card layout. */
 function renderSections(sections: EmailSection[], accentColor: string, accentTextColor: string): string {
-    return sections.map((section) => {
+    const rendered: string[] = [];
+    for (const section of sections) {
+        // Keep prose, saved facts, and arithmetic distinct while sharing the same escaped section boundary.
         const title = section.title
             ? `<h2 style="margin: 0 0 10px; color: #0f172a; font-size: 16px; line-height: 23px;">${escapeHtml(section.title)}</h2>`
             : '';
-        const paragraphs = (section.paragraphs ?? [])
-            .map((paragraph) => `<p style="margin: 0 0 10px; color: #475569; font-size: 14px; line-height: 22px;">${renderMultiline(paragraph)}</p>`)
-            .join('');
-        const items = section.items?.length
-            ? `<ul style="margin: 8px 0 0; padding-left: 20px; color: #475569; font-size: 14px; line-height: 22px;">${section.items.map((item) => `<li style="margin: 5px 0;">${renderMultiline(item)}</li>`).join('')}</ul>`
+        const paragraphs: string[] = [];
+        for (const paragraph of section.paragraphs || []) paragraphs.push(`<p style="margin: 0 0 10px; color: #475569; font-size: 14px; line-height: 22px;">${renderMultiline(paragraph)}</p>`);
+        const listItems: string[] = [];
+        for (const item of section.items || []) listItems.push(`<li style="margin: 5px 0;">${renderMultiline(item)}</li>`);
+        const items = listItems.length
+            ? `<ul style="margin: 8px 0 0; padding-left: 20px; color: #475569; font-size: 14px; line-height: 22px;">${listItems.join('')}</ul>`
             : '';
-        const actions = (section.actions ?? [])
-            .map((action) => renderAction(action, accentColor, accentTextColor))
-            .join('');
-        return `<div style="margin: 18px 0 0; padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;">${title}${paragraphs}${items}${actions}</div>`;
-    }).join('');
+        // Feature arithmetic is optional; the original paragraph/list/action sections retain their existing markup.
+        const details = renderDetails(section.details || []);
+        const formula = section.formula ? renderFormula(section.formula) : '';
+        const actions: string[] = [];
+        for (const action of section.actions || []) actions.push(renderAction(action, accentColor, accentTextColor));
+        rendered.push(`<div style="margin: 18px 0 0; padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;">${title}${paragraphs.join('')}${details}${formula}${items}${actions.join('')}</div>`);
+    }
+    return rendered.join('');
+}
+
+/** Group optional detail sections with native disclosure semantics and an always-present readable fallback. */
+function renderSectionGroups(groups: EmailSectionGroup[], accentColor: string, accentTextColor: string): string {
+    const rendered: string[] = [];
+    // Reuse ordinary section rendering so grouped formulas, names, notes, and links share the same escaping boundary.
+    for (const group of groups) {
+        const title = escapeHtml(group.title);
+        const sections = renderSections(group.sections, accentColor, accentTextColor);
+        if (group.disclosure) {
+            // Supporting clients provide click/keyboard expansion. No author CSS or hidden attribute conceals
+            // the children, so clients that ignore or unwrap these elements can still display the full contents.
+            // Email sanitizers vary; the plain-text alternative always preserves the same complete calculation.
+            rendered.push(`<details style="margin: 18px 0 0; padding: 16px; border: 1px solid #e2e8f0; border-radius: 10px;"><summary style="color: #0f172a; font-size: 16px; font-weight: 700; line-height: 23px; cursor: pointer;">${title}</summary>${sections}</details>`);
+        } else {
+            // A non-disclosure group is an ordinary visible heading followed by the same section cards.
+            rendered.push(`<div style="margin: 18px 0 0;"><h2 style="margin: 0; color: #0f172a; font-size: 16px; line-height: 23px;">${title}</h2>${sections}</div>`);
+        }
+    }
+    return rendered.join('');
 }
 
 function renderFooterLink(label: string, value: string, accentColor: string): string {
@@ -193,25 +214,50 @@ function renderFooterLink(label: string, value: string, accentColor: string): st
     return `<a href="${escapeHtml(url)}" style="color: ${accentColor}; text-decoration: none;">${escapeHtml(label)}</a>`;
 }
 
-function renderText(content: StructuredEmailContent): string {
-    const lines: string[] = [];
-    if (content.greeting) lines.push(content.greeting, '');
-    lines.push(content.heading, '');
-    for (const paragraph of content.paragraphs ?? []) lines.push(paragraph, '');
-    for (const detail of content.details ?? []) lines.push(`${detail.label}: ${detail.value}`);
-    if (content.details?.length) lines.push('');
-    for (const section of content.sections ?? []) {
+/** Append readable sections independently of whether HTML wraps them in a disclosure. */
+function appendTextSections(lines: string[], sections: EmailSection[]): void {
+    // Preserve the existing prose, metric, equation, note, and action order in every ordinary or grouped section.
+    for (const section of sections) {
         if (section.title) lines.push(section.title);
         for (const paragraph of section.paragraphs ?? []) lines.push(paragraph);
+        for (const detail of section.details ?? []) lines.push(`${detail.label}: ${detail.value}`);
+        if (section.formula) {
+            lines.push(formulaText(section.formula));
+            if (section.formula.note) lines.push(section.formula.note);
+        }
         for (const item of section.items ?? []) lines.push(`- ${item}`);
+        // Grouping must not relax the established action-link protocol check in the text alternative.
         for (const action of section.actions ?? []) {
             if (safeHttpUrl(action.url)) lines.push(`${action.label}: ${action.url}`);
         }
         lines.push('');
     }
-    if (content.action && safeHttpUrl(content.action.url)) {
-        lines.push(`${content.action.label}: ${content.action.url}`, '');
+}
+
+/** Append a primary action at its selected position using the same URL boundary as the HTML renderer. */
+function appendTextAction(lines: string[], action?: EmailAction): void {
+    if (action && safeHttpUrl(action.url)) lines.push(`${action.label}: ${action.url}`, '');
+}
+
+/** Render the same escaped HTML email content as readable text for clients without HTML support. */
+function renderText(content: StructuredEmailContent): string {
+    const lines: string[] = [];
+    // Lead with the recipient, heading, and shared message facts in the same order as the HTML body.
+    if (content.greeting) lines.push(content.greeting, '');
+    lines.push(content.heading, '');
+    for (const paragraph of content.paragraphs ?? []) lines.push(paragraph, '');
+    for (const detail of content.details ?? []) lines.push(`${detail.label}: ${detail.value}`);
+    if (content.details?.length) lines.push('');
+    // A message can put its main action before secondary material; callers without the option retain their order.
+    if (content.actionPosition === 'beforeSections') appendTextAction(lines, content.action);
+    appendTextSections(lines, content.sections ?? []);
+    // Plain text never collapses a disclosure. Include its group heading and every nested saved fact and equation.
+    for (const group of content.sectionGroups ?? []) {
+        lines.push(group.title, '');
+        appendTextSections(lines, group.sections);
     }
+    if (content.actionPosition !== 'beforeSections') appendTextAction(lines, content.action);
+    // Notice and footer behavior remain shared infrastructure, after the complete message body.
     if (content.notice) lines.push(`Note: ${content.notice}`, '');
     lines.push(content.closing ?? `Kind regards,\nThe ${settings.value.appName} team`);
 
@@ -224,7 +270,9 @@ function renderText(content: StructuredEmailContent): string {
     return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+/** Render both representations from one normalized message while preserving optional feature-specific ordering. */
 export function renderEmail(subject: string, rawContent: EmailContent, recipient: EmailRecipient): RenderedEmail {
+    // Normalize the recipient and legacy greeting before any visible text or metadata is constructed.
     const content = normalizeContent(subject, rawContent, normalizeRecipient(recipient));
     const appName = escapeHtml(settings.value.appName);
     const appInitial = escapeHtml(settings.value.appName.trim().charAt(0).toUpperCase() || 'S');
@@ -245,11 +293,17 @@ export function renderEmail(subject: string, rawContent: EmailContent, recipient
         .map((paragraph) => `<p style="margin: 0 0 16px; color: #475569; font-size: 15px; line-height: 24px;">${renderMultiline(paragraph)}</p>`)
         .join('');
     const action = content.action ? renderAction(content.action, accentColor, accentTextColor) : '';
+    // An early action is opt-in. Existing messages still place their primary button after all ordinary sections.
+    const earlyAction = content.actionPosition === 'beforeSections' ? action : '';
+    const finalAction = content.actionPosition === 'beforeSections' ? '' : action;
+    const sections = renderSections(content.sections ?? [], accentColor, accentTextColor);
+    const sectionGroups = renderSectionGroups(content.sectionGroups ?? [], accentColor, accentTextColor);
     const notice = content.notice
         ? `<div style="margin: 22px 0 0; padding: 13px 15px; background: #f8fafc; border-left: 4px solid ${accentColor}; border-radius: 6px;"><p style="margin: 0; color: #475569; font-size: 13px; line-height: 20px;"><strong style="color: #0f172a;">Please note:</strong> ${renderMultiline(content.notice)}</p></div>`
         : '';
     const closing = renderMultiline(content.closing ?? `Kind regards,\nThe ${settings.value.appName} team`);
 
+    // Keep the branded shell and its responsive rules unchanged; disclosure behavior belongs to native HTML only.
     const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -285,7 +339,7 @@ export function renderEmail(subject: string, rawContent: EmailContent, recipient
                             ${greeting}
                             ${eyebrow}
                             <h1 style="margin: 0 0 22px; color: #0f172a; font-size: 27px; line-height: 34px; letter-spacing: -.02em;">${escapeHtml(content.heading)}</h1>
-                            ${paragraphs}${renderDetails(content.details ?? [])}${renderSections(content.sections ?? [], accentColor, accentTextColor)}${action}${notice}
+                            ${paragraphs}${renderDetails(content.details ?? [])}${earlyAction}${sections}${sectionGroups}${finalAction}${notice}
                             <p style="margin: 26px 0 0; color: #475569; font-size: 14px; line-height: 22px;">${closing}</p>
                         </td>
                     </tr>
