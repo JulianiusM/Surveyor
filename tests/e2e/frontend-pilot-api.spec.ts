@@ -1,0 +1,291 @@
+import {expect, test, type APIRequestContext, type APIResponse} from '@playwright/test';
+import {randomUUID} from 'node:crypto';
+import type {components} from '../../src/types/api/v1';
+import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
+import {createResourceViaForm, loginForE2E} from '../keywords/e2eCoreKeywords';
+
+/** Exercise cookie/session admission through the built application, without a test-only identity shortcut. */
+async function bootstrap(request: APIRequestContext): Promise<components['schemas']['SessionView']> {
+    const response = await request.get('/api/v1/session');
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toContain('application/json');
+    expect(response.headers()['cache-control']).toContain('no-store');
+    const body = await response.json() as components['schemas']['SessionView'];
+    expect(body.context).toBeTruthy();
+    expect(body.csrfToken).toBeTruthy();
+    expect(response.headers()['x-surveyor-context']).toBe(body.context);
+    return body;
+}
+
+function headersFor(session: components['schemas']['SessionView']): Record<string, string> {
+    return {'X-Surveyor-Context': session.context, 'X-CSRF-Token': session.csrfToken};
+}
+
+/** Submit the same public view/assignment checkbox as the normal creation form. */
+async function createApiPackingList(request: APIRequestContext) {
+    const input = createE2EPackingList();
+    Object.assign(input.form, {'defaultPerms[public][0]': 'ACCESS_VIEW'});
+    return createResourceViaForm(request, input);
+}
+
+async function expectProblem(response: APIResponse, status: number, code: string): Promise<void> {
+    expect(response.status()).toBe(status);
+    expect(response.headers()['content-type']).toContain('application/problem+json');
+    expect(response.headers().location).toBeUndefined();
+    expect(response.headers()['cache-control']).toContain('no-store');
+    expect(await response.json()).toMatchObject({status, code, requestId: expect.any(String), messageKey: expect.any(String)});
+}
+
+test('bootstraps account and guest scopes while projecting only public session and packing fields', async ({page, browser, baseURL}) => {
+    await loginForE2E(page.request, createE2ELogin());
+    const list = await createApiPackingList(page.request);
+    const account = await bootstrap(page.request);
+    expect(account.kind).toBe('account');
+    expect(account.activeProfile).toEqual({id: expect.any(String), name: expect.any(String)});
+    expect(Object.keys(account).sort()).toEqual(['activeProfile', 'context', 'csrfToken', 'kind', 'locale', 'loginUrl', 'logoutUrl', 'profiles', 'shell']);
+    expect(Object.keys(account.shell).sort()).toEqual(['imprintUrl', 'localLoginEnabled', 'oidcEnabled', 'oidcName', 'privacyPolicyUrl', 'version']);
+    for (const profile of account.profiles) expect(Object.keys(profile).sort()).toEqual(['id', 'name']);
+    await expectProblem(await page.request.get(`/api/v1/packing-lists/${list.id}`), 400, 'CONTEXT_REQUIRED');
+
+    const guestContext = await browser.newContext({baseURL});
+    try {
+        const anonymous = await bootstrap(guestContext.request);
+        const guestName = `API guest ${randomUUID().slice(0, 8)}`;
+        expect((await guestContext.request.post(`${list.path}/guest`, {form: {username: guestName}, maxRedirects: 0})).status()).toBe(302);
+        const guest = await bootstrap(guestContext.request);
+        expect(guest).toMatchObject({kind: 'guest', activeProfile: {name: guestName}});
+        expect(guest.context).not.toBe(anonymous.context);
+        expect(guest.csrfToken).not.toBe(anonymous.csrfToken);
+        expect(guest.profiles).toEqual([guest.activeProfile]);
+        for (const hidden of ['email', 'username', 'password', 'token', 'userId', 'guestId']) {
+            expect(Object.hasOwn(guest, hidden)).toBe(false);
+            expect(Object.hasOwn(guest.activeProfile!, hidden)).toBe(false);
+        }
+        const response = await guestContext.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(guest)});
+        expect(response.status()).toBe(200);
+        expect(response.headers()['x-surveyor-context']).toBe(guest.context);
+        const body = await response.json();
+        expect(body).toMatchObject({id: list.id, capabilities: {editTitle: false, editDescription: false, selfAssign: true}});
+        expect(body.items).toHaveLength(1);
+        const serialized = JSON.stringify(body);
+        for (const hidden of ['ownerId', 'profileId', 'userId', 'guestId', 'metadataRevision', 'headerImg', 'email']) {
+            expect(serialized).not.toContain(`"${hidden}"`);
+        }
+        const metadata = await guestContext.request.get(`/api/v1/packing-lists/${list.id}/metadata`, {headers: headersFor(guest)});
+        expect(await metadata.json()).toMatchObject({values: {}, editableFields: []});
+        await expectProblem(await guestContext.request.patch(`/api/v1/packing-lists/${list.id}/metadata`, {
+            headers: {...headersFor(guest), 'If-Match': metadata.headers().etag}, data: {title: 'Forged title'},
+        }), 403, 'FORBIDDEN');
+    } finally {
+        await guestContext.close();
+    }
+});
+
+test('enforces CSRF, media types, UUIDs and closed payloads before a conditional metadata save', async ({page}) => {
+    await loginForE2E(page.request, createE2ELogin());
+    const list = await createApiPackingList(page.request);
+    const session = await bootstrap(page.request);
+    const headers = headersFor(session);
+    const path = `/api/v1/packing-lists/${list.id}/metadata`;
+    const baseline = await page.request.get(path, {headers});
+    expect(baseline.status()).toBe(200);
+    const tag = baseline.headers().etag;
+    expect(tag).toMatch(/^"packing-meta-.+"$/);
+    const patchHeaders = {...headers, 'If-Match': tag};
+    await expectProblem(await page.request.patch(path, {headers: {'X-Surveyor-Context': session.context}, data: {title: 'No CSRF'}}), 403, 'CSRF_INVALID');
+    await expectProblem(await page.request.patch(path, {headers: {...patchHeaders, Origin: 'https://other.example'}, data: {title: 'Foreign origin'}}), 403, 'CSRF_INVALID');
+    await expectProblem(await page.request.patch(path, {headers: {...patchHeaders, 'Sec-Fetch-Site': 'cross-site'}, data: {title: 'Cross site'}}), 403, 'CSRF_INVALID');
+    await expectProblem(await page.request.get('/api/v1/packing-lists/not-a-uuid', {headers}), 400, 'VALIDATION_FAILED');
+    await expectProblem(await page.request.patch(path, {headers: patchHeaders, data: {title: false}}), 400, 'VALIDATION_FAILED');
+    await expectProblem(await page.request.patch(path, {headers: patchHeaders, data: {title: 'Forged', profileId: session.activeProfile!.id}}), 400, 'VALIDATION_FAILED');
+    await expectProblem(await page.request.patch(path, {headers: patchHeaders, form: {title: 'Wrong media'}}), 415, 'UNSUPPORTED_MEDIA_TYPE');
+    await expectProblem(await page.request.patch(path, {headers: {...patchHeaders, 'Content-Type': 'application/json'}, data: '{invalid'}), 400, 'INVALID_JSON');
+    await expectProblem(await page.request.patch(path, {headers, data: {title: 'Missing review'}}), 428, 'PRECONDITION_REQUIRED');
+    await expectProblem(await page.request.patch(path, {headers: {...headers, 'If-Match': `W/${tag}`}, data: {title: 'Weak review'}}), 412, 'PRECONDITION_FAILED');
+
+    // Transport normalization must match native forms: surrounding spaces do not count
+    // toward the persisted title limit, and all failed requests above left this tag valid.
+    const title = 'T'.repeat(255);
+    const saved = await page.request.patch(path, {headers: patchHeaders, data: {title: `  ${title}  `}});
+    expect(saved.status()).toBe(200);
+    expect(await saved.json()).toMatchObject({values: {title, description: 'Shared equipment'}});
+    expect(saved.headers().etag).not.toBe(tag);
+    await expectProblem(await page.request.patch(path, {headers: patchHeaders, data: {description: 'Stale overwrite'}}), 412, 'PRECONDITION_FAILED');
+
+    const currentTag = saved.headers().etag;
+    expect((await page.request.post(`/api/packing/${list.id}/description`, {data: {description: 'Legacy tab edit'}})).ok()).toBe(true);
+    await expectProblem(await page.request.patch(path, {headers: {...headers, 'If-Match': currentTag}, data: {title: 'Would overwrite context'}}), 412, 'PRECONDITION_FAILED');
+    const latest = await page.request.get(path, {headers});
+    expect(await latest.json()).toMatchObject({values: {title, description: 'Legacy tab edit'}});
+});
+
+test('rejects old profile scopes and returns structured authentication loss after the cookie disappears', async ({page, context}) => {
+    await loginForE2E(page.request, createE2ELogin());
+    const list = await createApiPackingList(page.request);
+    const original = await bootstrap(page.request);
+    const profileName = `API alternate ${randomUUID()}`;
+    expect((await page.request.post('/users/profile/create', {form: {name: profileName}, maxRedirects: 0})).status()).toBe(302);
+    const withProfiles = await bootstrap(page.request);
+    const alternate = withProfiles.profiles.find(profile => profile.name === profileName)!;
+    expect(alternate).toBeTruthy();
+    expect((await page.request.get(`/users/profile/change/${alternate.id}`, {maxRedirects: 0})).status()).toBe(302);
+    await expectProblem(await page.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(original)}), 409, 'SESSION_CONTEXT_CHANGED');
+    await expectProblem(await page.request.patch(`/api/v1/packing-lists/${list.id}/metadata`, {
+        headers: {...headersFor(original), 'If-Match': '"old"'}, data: {title: 'Old profile command'},
+    }), 409, 'SESSION_CONTEXT_CHANGED');
+    const switched = await bootstrap(page.request);
+    expect(switched.activeProfile!.id).toBe(alternate.id);
+    expect(switched.context).not.toBe(original.context);
+    expect(switched.csrfToken).not.toBe(original.csrfToken);
+    expect((await page.request.get(`/users/profile/change/${original.activeProfile!.id}`, {maxRedirects: 0})).status()).toBe(302);
+    const restored = await bootstrap(page.request);
+    expect(restored.context).not.toBe(original.context);
+    await expectProblem(await page.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(original)}), 409, 'SESSION_CONTEXT_CHANGED');
+
+    // Expiry removes the cookie from subsequent requests. Preserve the old browser headers
+    // to verify that private endpoints return a Problem rather than a login redirect or HTML.
+    await context.clearCookies();
+    await expectProblem(await page.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(restored)}), 401, 'AUTH_REQUIRED');
+    const anonymous = await bootstrap(page.request);
+    expect(anonymous).toMatchObject({kind: 'anonymous', activeProfile: null, profiles: []});
+    await expectProblem(await page.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(anonymous)}), 401, 'AUTH_REQUIRED');
+});
+
+test('reauthorizes a conditional read before returning 304 or private content', async ({page, browser, baseURL}) => {
+    await loginForE2E(page.request, createE2ELogin());
+    const list = await createApiPackingList(page.request);
+    const event = await createResourceViaForm(page.request, createE2EEvent());
+    const guestContext = await browser.newContext({baseURL});
+    try {
+        expect((await guestContext.request.post(`${list.path}/guest`, {form: {username: `Cache guest ${randomUUID().slice(0, 8)}`}, maxRedirects: 0})).status()).toBe(302);
+        const guest = await bootstrap(guestContext.request);
+        expect((await page.request.post(`/api/packing/${list.id}/event`, {data: {eventId: event.id, expectedEventId: null}})).ok()).toBe(true);
+        expect((await page.request.post(`/api/packing/${list.id}/settings`, {data: {
+            defaultPerms: {public: [], guest: [], authenticated: [], participant: []},
+        }})).ok()).toBe(true);
+        expect((await page.request.post(`/api/packing/${list.id}/admins`, {data: {profileId: guest.activeProfile!.id, perms: ['ACCESS_VIEW']}})).ok()).toBe(true);
+        const path = `/api/v1/packing-lists/${list.id}`;
+        const initial = await guestContext.request.get(path, {headers: headersFor(guest)});
+        expect(initial.status()).toBe(200);
+        const conditionalHeaders = {...headersFor(guest), 'If-None-Match': initial.headers().etag};
+        const unchanged = await guestContext.request.get(path, {headers: conditionalHeaders});
+        expect(unchanged.status()).toBe(304);
+        expect(await unchanged.body()).toHaveLength(0);
+        expect(unchanged.headers()['x-surveyor-context']).toBe(guest.context);
+        expect((await page.request.delete(`/api/packing/${list.id}/admins/${guest.activeProfile!.id}`)).ok()).toBe(true);
+        const revoked = await guestContext.request.get(path, {headers: conditionalHeaders});
+        await expectProblem(revoked, 403, 'FORBIDDEN');
+        expect(await revoked.text()).not.toContain(list.title);
+    } finally {
+        await guestContext.close();
+    }
+});
+
+test('applies captured self-membership idempotently and reports capacity without accepting a body actor', async ({page, browser, baseURL}) => {
+    await loginForE2E(page.request, createE2ELogin());
+    const list = await createApiPackingList(page.request);
+    const owner = await bootstrap(page.request);
+    const listResponse = await page.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(owner)});
+    const item = (await listResponse.json()).items[0];
+    const path = `/api/v1/packing-lists/${list.id}/items/${item.id}/self-assignment`;
+    const guestContext = await browser.newContext({baseURL});
+    try {
+        expect((await guestContext.request.post(`${list.path}/guest`, {form: {username: `Assign guest ${randomUUID().slice(0, 8)}`}, maxRedirects: 0})).status()).toBe(302);
+        const guest = await bootstrap(guestContext.request);
+        await expectProblem(await page.request.put(path, {headers: headersFor(owner), data: {profileId: guest.activeProfile!.id}}), 400, 'VALIDATION_FAILED');
+        await expectProblem(await page.request.put(path, {headers: {...headersFor(owner), 'Content-Type': 'text/plain'}, data: 'unexpected'}), 400, 'VALIDATION_FAILED');
+        for (let retry = 0; retry < 2; retry++) {
+            const assigned = await guestContext.request.put(path, {headers: headersFor(guest)});
+            expect(assigned.status()).toBe(200);
+            expect(await assigned.json()).toEqual({listId: list.id, itemId: item.id, selfAssigned: true, assignedCount: 1, maxAssignees: 1});
+        }
+        await expectProblem(await page.request.put(path, {headers: headersFor(owner)}), 409, 'PACKING_ITEM_FULL');
+        const ownView = await page.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(owner)});
+        expect((await ownView.json()).items[0]).toMatchObject({selfAssigned: false, assignedCount: 1, assignees: [{name: guest.activeProfile!.name}]});
+        for (let retry = 0; retry < 2; retry++) {
+            const unassigned = await guestContext.request.delete(path, {headers: headersFor(guest)});
+            expect(unassigned.status()).toBe(200);
+            expect(await unassigned.json()).toMatchObject({selfAssigned: false, assignedCount: 0});
+        }
+    } finally {
+        await guestContext.close();
+    }
+});
+
+test('uses typed multipart, item/settings drafts and scoped binary transport for the complete packing workflow', async ({page}) => {
+    await loginForE2E(page.request, createE2ELogin());
+    const session = await bootstrap(page.request);
+    const headers = headersFor(session);
+    const creationContext = await page.request.get('/api/v1/packing-lists/create-context', {headers});
+    expect(creationContext.status()).toBe(200);
+    const creation = {title: `Typed packing ${randomUUID()}`, description: null, eventId: null,
+        defaultPermissions: (await creationContext.json()).defaults,
+        items: [{title: 'Tent', description: null, maxAssignees: 2, requiredByAll: false},
+            {title: 'Water', description: 'Drink bottle', maxAssignees: 1, requiredByAll: true}]};
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX2kAAAAASUVORK5CYII=', 'base64');
+    await expectProblem(await page.request.post('/api/v1/packing-lists', {headers, data: creation}), 415, 'UNSUPPORTED_MEDIA_TYPE');
+    await expectProblem(await page.request.post('/api/v1/packing-lists', {headers, multipart: {data: '{bad-json'}}), 400, 'VALIDATION_FAILED');
+    await expectProblem(await page.request.post('/api/v1/packing-lists', {headers, multipart: {
+        data: JSON.stringify({...creation, items: [{...creation.items[0], maxAssignees: false}]}),
+    }}), 400, 'VALIDATION_FAILED');
+    const created = await page.request.post('/api/v1/packing-lists', {headers, multipart: {
+        data: JSON.stringify(creation), image: {name: 'header.png', mimeType: 'image/png', buffer: png},
+    }});
+    expect(created.status()).toBe(200);
+    const id = (await created.json()).id as string;
+    const root = `/api/v1/packing-lists/${id}`;
+    async function view(): Promise<components['schemas']['PackingListView']> {
+        const response = await page.request.get(root, {headers});
+        expect(response.status()).toBe(200);
+        return response.json();
+    }
+    async function settings(): Promise<components['schemas']['PackingSettings']> {
+        const response = await page.request.get(`${root}/settings`, {headers});
+        expect(response.status()).toBe(200);
+        return response.json();
+    }
+    let current = await view();
+    expect(current.items.map(item => item.position)).toEqual([0, 1]);
+    expect(current.headerUrl).toBe(`${root}/header`);
+    const binary = await page.request.get(current.headerUrl!, {headers});
+    expect(binary.status()).toBe(200);
+    expect(binary.headers()['x-surveyor-context']).toBe(session.context);
+    expect(await binary.body()).toEqual(png);
+    await expectProblem(await page.request.get(current.headerUrl!), 400, 'CONTEXT_REQUIRED');
+    const first = current.items[0];
+    await expectProblem(await page.request.patch(`${root}/items/${first.id}`, {headers, data: {title: 'No token'}}), 428, 'PRECONDITION_REQUIRED');
+    expect((await page.request.patch(`${root}/items/${first.id}`, {headers: {...headers, 'If-Match': first.editToken}, data: {title: 'Updated tent'}})).status()).toBe(200);
+    await expectProblem(await page.request.patch(`${root}/items/${first.id}`, {headers: {...headers, 'If-Match': first.editToken}, data: {title: 'Stale'}}), 412, 'PRECONDITION_FAILED');
+    expect((await page.request.post(`${root}/items`, {headers, data: {title: 'Towels', description: null, maxAssignees: 1, requiredByAll: false}})).status()).toBe(200);
+    current = await view();
+    const reversed = current.items.map(item => item.id).reverse();
+    expect((await page.request.put(`${root}/item-order`, {headers: {...headers, 'If-Match': current.orderToken}, data: {itemIds: reversed}})).status()).toBe(200);
+    expect((await view()).items.map(item => item.id)).toEqual(reversed);
+    const beforeHeader = await settings();
+    expect((await page.request.put(`${root}/header`, {headers: {...headers, 'If-Match': beforeHeader.settingsToken}, multipart: {
+        image: {name: 'replacement.png', mimeType: 'image/png', buffer: png},
+    }})).status()).toBe(200);
+    const afterHeader = await settings();
+    expect(afterHeader.headerVersion).not.toBe(beforeHeader.headerVersion);
+    await expectProblem(await page.request.put(`${root}/default-permissions`, {headers: {...headers, 'If-Match': beforeHeader.settingsToken}, data: creation.defaultPermissions}), 412, 'PRECONDITION_FAILED');
+    expect((await page.request.delete(`${root}/header`, {headers: {...headers, 'If-Match': afterHeader.settingsToken}})).status()).toBe(200);
+    await expectProblem(await page.request.get(`${root}/header`, {headers}), 404, 'NOT_FOUND');
+    expect((await page.request.post(`${root}/archive`, {headers})).status()).toBe(200);
+    expect((await view()).archived).toBe(true);
+    expect((await page.request.post(`${root}/restore`, {headers})).status()).toBe(200);
+    const duplicate = await page.request.get(`${root}/duplicate`, {headers});
+    expect(duplicate.status()).toBe(200);
+    expect(await duplicate.json()).toMatchObject({eventId: null, title: creation.title, items: expect.any(Array)});
+    const overviewQuery = {collection: 'owner', region: 'main', q: creation.title};
+    const overview = await page.request.get('/api/v1/packing-lists/overview', {headers, params: overviewQuery});
+    expect(overview.status()).toBe(200);
+    expect((await overview.json()).items.map((card: {id: string}) => card.id)).toEqual([id]);
+    await expectProblem(await page.request.get('/api/v1/packing-lists/overview', {headers, params: {...overviewQuery, profileId: session.activeProfile!.id}}), 400, 'VALIDATION_FAILED');
+    const visibilityPath = `/api/v1/packing-lists/overview/packing/${id}/visibility`;
+    expect((await page.request.put(visibilityPath, {headers, data: {visibility: 'hidden'}})).status()).toBe(200);
+    const hidden = await page.request.get('/api/v1/packing-lists/overview', {headers, params: {...overviewQuery, region: 'hidden'}});
+    expect((await hidden.json()).items.map((card: {id: string}) => card.id)).toEqual([id]);
+    expect((await view()).archived).toBe(false);
+    expect((await page.request.delete(root, {headers})).status()).toBe(200);
+    await expectProblem(await page.request.get(root, {headers}), 404, 'NOT_FOUND');
+});

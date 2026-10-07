@@ -357,8 +357,8 @@ export async function getEventRegistrationCount(eventId: string): Promise<number
     return AppDataSource.getRepository(EventRegistration).countBy({event: {id: eventId}});
 }
 
-export async function isRegisteredForEvent(profileId: string, eventId: string) {
-    const repo = AppDataSource.getRepository(EventRegistration);
+export async function isRegisteredForEvent(profileId: string, eventId: string, manager: EntityManager = AppDataSource.manager) {
+    const repo = manager.getRepository(EventRegistration);
 
     // Check if profile is registered (use separate queries for clarity)
     let isRegistered = await repo.exists({
@@ -367,7 +367,7 @@ export async function isRegisteredForEvent(profileId: string, eventId: string) {
 
     // Also check if profile is the event owner
     if (!isRegistered) {
-        isRegistered = await AppDataSource.getRepository(Event).exists({
+        isRegistered = await manager.getRepository(Event).exists({
             where: {id: eventId, owner: {id: profileId}}
         });
     }

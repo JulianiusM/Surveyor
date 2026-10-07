@@ -5,9 +5,9 @@ documentation-metadata
 audience: maintainers; documentation contributors; AI agents
 owner: documentation maintainers
 status: current
-last-verified: 2026-09-06
+last-verified: 2026-10-07
 verification-baseline: docs-baseline-2026-09-06-ci-repair
-verification-scope: non-blocking documentation policy, optional report exits, application/content-test separation, and advisory release packaging; runtime trust boundary retained
+verification-scope: explicit prohibition of implementation information in user-facing documentation and illustrations across all languages; non-blocking documentation policy, optional report exits, application/content-test separation, and advisory release packaging; runtime trust boundary retained
 source-anchors: scripts/check-documentation.mjs; scripts/tests/documentation-check.test.mjs; repository-tree; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; .github/workflows/release.yml; docs/decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md; docs/documentation-check.json; docs/documentation-remediation.yml; scripts/check-documentation.mjs; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts
 next-review: documentation-pipeline-or-help-trust-boundary-change
 -->
@@ -45,6 +45,26 @@ The runtime rejection of unsafe help content is unchanged by the advisory report
 
 Do not introduce an alias directory for end-user help. Code, links, release packaging, and contributor instructions must
 all use `docs/user-guide/`.
+
+## User-facing content boundary
+
+End-user documentation explains tasks, observable application behavior, and exact visible UI labels. Implementation
+information is strictly forbidden in user-facing content in every language. This applies equally to rendered prose,
+captions, alt text, diagrams, screenshots, and other release-shipped help pictures.
+
+Do not expose framework names, architecture, internal APIs, source paths, storage keys, permission identifiers, or
+explanations of how the application or illustration was implemented, rendered, generated, or verified. Descriptions of
+access must use the roles and actions users can recognize in the interface. An accurate screenshot or diagram does not
+need a user-facing claim about the code or rendering method that produced it.
+
+Keep implementation references, authoring procedures, generation details, verification evidence, and provenance in
+maintainer documentation or ignored authoring evidence. The required hidden `documentation-metadata` comment may retain
+source anchors for maintainers; the help renderer must not expose that comment, its source anchors, or other internal
+authoring information. Do not bake those details into release-shipped pictures, where they cannot be hidden by the
+renderer.
+
+Review both the authored text and the rendered pictures when changing user help. Apply this boundary to each language
+independently, including existing English content, rather than assuming a translation inherits a suitable original.
 
 ## In-app help trust boundary
 

@@ -4,7 +4,7 @@ documentation-metadata
 audience: event participants; event organizers
 owner: event invoice-pool maintainers
 status: current
-last-verified: 2026-10-04
+last-verified: 2026-10-07
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: optional organizer participant attribution with independent recorder audit and existing credit/history/proof ownership; unchanged original saved notes before the email calculation disclosure; figures-only typed global calculation breakdown, total/base and optional anonymous payer steps inside a separate example, explanation-free compact PDF, success-only settlement-email dialog closure, and fresh-summary source deduplication; completed correcting-transfer cleanup, direct participant email wording, shared PDF pool-cost explanation, independent overview example disclosure and consistent exemption captions; active paid/refunded payer identity and applied responsibility notices; restored role-specific balance captions; explicit pending-coverage indicators; contextual full pool totals and shares export labels; pure shared coverage evidence owner, unknown legacy baselines and direct-import boundaries; established visual-component reuse and shared PDF sectionTitle; deterministic positive anonymous example selection, honest covering introductions and missing-evidence fallbacks; abbreviated exempt and zero-weight personal explanations; applied versus pending closed takeovers, post-recalculation delta notices and silent rollback; independent OPEN and ORGANIZER_ONLY initial states, default OPEN creation with Invoice submissions choice, reversible participant submission access with confirmation and revision checks, permanent financial closure, and guarded organizer-only migration; notes-first settlement emails with client-dependent native calculation disclosure, complete plain-text content, and opt-in leading actions; covered-participant count/name summaries; Payment due wording; structured anonymous pool examples in preview, organizer details and PDF; concrete complete payer explanations in dialogs and emails, separated from factual notes; cross-pool personal share ledger with one reusable read-only dialog; contextual current-source and saved-settlement totals; explicitly named attendance/factor/weight inputs; adaptive signed adjustment-category provenance and component displays; retained collect/refund totals; compact settlement statuses, nonrepeated PDF row details, and required PDF visual verification; invoice feature-folder orchestration, mandatory JSDoc plus internal step comments, catalog-owned localization-ready messages, prohibition of imported re-exports, calculated-balance-first settlement presentation, and compact payment/refund actions; responsive shares, saved numeric calculation provenance, signed settlement trace, frontend confirmation gates, and controller-owned invoice business operations; invoice correction and retraction lifecycles, refreshed submission history, and searchable payer rows with beneficiary chips; organizer-entered shared costs, repeat invoice submissions, visible payment feedback, and share breakdown dialogs; searchable saved-share ledger, portrait A4 export, compact takeovers, confirmed admin feedback, and named email recipients; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice submission progress and recovery; pool administration dialogs and takeover groups; weighted participant factors and signed adjustments; calculation previews, payment carry-forward, rollback, configurable calculation emails and saved-state notifications; existing review, proof, settlement, and retention workflows
 source-anchors: tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; src/public/js/modules/invoice-submission.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; src/routes/api/eventInvoices.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/database/entities/event/EventInvoice.ts; src/modules/database/entities/event/EventInvoicePool.ts; src/modules/database/entities/event/EventInvoiceShare.ts; src/modules/database/entities/event/EventInvoiceSurcharge.ts; src/modules/database/entities/event/EventPoolAssignment.ts; src/modules/database/entities/event/EventPoolTakeover.ts; src/views/modules/module_invoice_pool.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/public/js/events.ts; src/modules/invoice/retention.ts; src/modules/lib/fileCommons.ts; tests/integration/invoice-workflows.spec.ts; tests/frontend/ui-behaviors.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
@@ -114,7 +114,7 @@ Use this task when you paid an expense that should be considered in an event cos
 
 The form immediately shows submission status and prevents another submission while this one is running. When upload progress is available, the percentage measures the proof transfer; it does not mean the invoice has been saved yet. After transfer, wait for the saving confirmation. A longer request displays further status messages.
 
-Keep the page open until success is confirmed. If the connection fails and Surveyor cannot confirm the result, use **Check invoice history** before trying again. The server may already have saved the invoice. A validation error lets you correct the form and submit again. Email delivery does not delay the successful upload response.
+Keep the page open until success is confirmed. If the connection fails and Surveyor cannot confirm the result, use **Check invoice history** before trying again. Your invoice may already have been saved. If a field is invalid, correct the form and submit again. You can receive an upload confirmation before the email arrives.
 
 The proof is required. Surveyor accepts JPEG, PNG, GIF, or PDF files up to 10 MiB. Use a clear receipt, invoice, or payment record, but include only the personal and financial information needed for the organizer to verify the cost.
 
@@ -254,7 +254,7 @@ recipient by name in both the greeting and the To field.
 
 ## Organizer tasks
 
-Pool actions show a spinner and status immediately, and prevent duplicate clicks while the request is pending. After five seconds, a further message explains that the server has not yet confirmed the change. Keep the page open and wait for the result. Success and error notices disappear after ten seconds; active progress and **Recalculation required** stay visible while relevant. A change is shown as saved only after the server confirms it.
+Pool actions show a spinner and status immediately, and prevent duplicate clicks while the change is in progress. After five seconds, a further message explains that the change is still awaiting confirmation. Keep the page open and wait for the result. Success and error notices disappear after ten seconds; active progress and **Recalculation required** stay visible while relevant. Wait for the saved confirmation before leaving the page.
 
 ### Create an invoice pool
 
@@ -621,14 +621,12 @@ At least one participant must be assigned. Surveyor then:
 - Marks the pool **Closed**.
 - Emails payers with an email address if **Email participants after this calculation** is selected.
 
-The preview uses the same **Example calculation** as the organizer pool view and PDF. It first explains the pool totals
-and base using the saved values, then chooses a positive payer who pays their own nonexempt share, preferring someone who covers nobody else and then
-an example with applicable factors, adjustments, or credits. The choice stays consistent for the same saved data.
-If only a covering payer qualifies, the introduction states how many other participants that example payer covers.
-Names are fictional. Refunds, exempt payers, and zero balances are not presented as ordinary payment examples; when
-no payer qualifies, available cost calculations remain as an example of the pool totals without an invented person.
-If an older calculation has no numeric explanation data, contextual figures remain where available and no empty
-example heading is shown. Missing historical inputs are never guessed from current settings.
+The preview uses the same **Example calculation** as the organizer pool view and PDF. It explains the saved pool totals
+and base, then shows an anonymous example of a person who owes a payment, including any applicable factors, adjustments
+or credits. If the example payer covers other participants, the introduction states how many. Refunds, exempt payers
+and zero balances are not shown as ordinary payment examples. When no suitable payment example is available, the
+explanation can show the pool totals alone. Older calculations keep their available amounts and notes; some explanation
+values may be unavailable. Current settings do not replace missing information from an earlier calculation.
 Applicable adjustments, invoice credits, and previously settled amounts explain the calculated balance. **Payments due**
 and signed **Refunds due** show how much must be collected or paid out; they are retained alongside applicable cost details.
 
@@ -659,7 +657,7 @@ replace them. The participant receives a **Your payment responsibility changed**
 recalculation applies the exemption or changed coverage, even when general calculation emails are disabled.
 Previously settled credits remain signed net amounts, rather than a complete chronological transfer ledger.
 
-The pool stays closed and invoice review records are unchanged. A failed calculation preserves the old shares and payments. A changed input or payment revision requires a fresh preview. Save or **Discard edits** in open dialogs before calculating.
+The pool stays closed and invoice reviews are unchanged. A failed calculation preserves the old shares and payments. If the inputs or payments have changed, refresh the preview before applying it. Save or **Discard edits** in open dialogs before calculating.
 
 ### Roll back pool changes
 
@@ -671,11 +669,13 @@ Use **Roll back pool changes** when you want to keep the last calculation instea
 
 Rollback restores the pool's description, distribution settings, rounding direction, email preference, assignments, factors, exemptions, surcharges/rebates, and takeovers from its last successful calculation. Existing shares and recorded payments are preserved. No calculation, settlement, or takeover email is sent.
 
-Event registrations, attendance dates, invoice reviews, and organizer expenses are separate records. Rollback does not undo those changes, erase a saved organizer expense, or recreate deleted participants. If they changed since the last calculation, the pool may still require recalculation after its local settings are restored. Review the result message.
+Rollback does not undo changes to event registrations, attendance dates, invoice reviews or organizer expenses. It does not erase a saved organizer expense or recreate deleted participants. If those details changed since the last calculation, the pool may still require recalculation after its settings are restored. Review the result message.
 
-Rollback needs a saved calculation snapshot. Older closed pools without one gain it when they are next successfully recalculated. A snapshot from before the rounding setting was introduced restores with rounding up enabled and still requires recalculation. **Discard edits** only resets unsaved form fields; **Roll back pool changes** restores saved pool inputs. Rollback does not undo an already applied recalculation.
-If an older snapshot has no saved coverage evidence, Surveyor leaves inputs and settlements unchanged and asks for a
-successful calculation before rollback becomes available. It never guesses previous takeovers from current edits.
+For some older closed pools, the last calculated settings are unavailable. Recalculate successfully before using
+rollback. If an older calculation predates the rounding choice, restoring its settings enables rounding up and still
+requires recalculation. **Discard edits** only resets unsaved form fields; **Roll back pool changes** restores saved
+pool settings. Rollback does not undo an already applied recalculation. If earlier takeover details are unavailable,
+Surveyor leaves inputs and settlements unchanged and asks you to recalculate before rollback becomes available.
 
 ### Send settlement emails
 
@@ -743,16 +743,13 @@ figures. It contains no formulas or explanatory paragraphs. These figures remain
 Ordinary pools without adjustments use one cost figure instead of repeating equal cost scopes.
 
 **Export shares PDF with example** adds the same **Example calculation** as the organizer pool view and preview.
-It explains the full total and shared base using actual saved numbers and only the adjustment modes used. A qualifying
-anonymous payer then demonstrates applicable attendance, share factor, total weight, the rounded base share, and
-balance components. It prefers an ordinary payer with no beneficiaries.
-Within that group it prefers a payer with a redistributed surcharge, which shows how the surcharge reduces the shared
-base and is then added to the affected share without increasing the full pool total.
-If a covering payer is needed, the introduction gives the number of other participants covered before explaining the
-combined base share. The example is distinct from the concrete personal explanation in **View breakdown** and emails.
-Older calculations retain saved amounts and notes without guessing unavailable inputs. When no positive payer with
-saved contribution evidence qualifies, usable saved cost arithmetic can still explain the pool totals without
-introducing a person. Entirely missing numeric explanation data produces no example heading.
+It explains the full total and shared base using the saved amounts and applicable adjustments. An anonymous payment
+example can show attendance, share factor, total weight, the rounded base share and balance components. A redistributed
+surcharge lowers the shared base and is then added to the affected share without increasing the full pool total.
+If the example payer covers other participants, the introduction gives their number before explaining the combined
+base share. The example is separate from your personal explanation in **View breakdown** and emails.
+Older calculations retain available amounts and notes. When no suitable payment example is available, the export can
+explain the pool totals alone. If the earlier calculation has no explanation available, no example section appears.
 
 **Export shares PDF without example** contains contextual figures, shares, original factual notes, settlement status
 and dates, and transfer totals. It includes no calculation explanations or formulas. Applicable attendance and
@@ -784,14 +781,14 @@ Invoice data is sensitive. A proof file may contain personal addresses, bank or 
 - Do not grant invoice-pool administration merely to let somebody view the event dashboard.
 - Download proofs only when operationally necessary, store copies securely, and remove local copies according to the group’s privacy policy.
 
-Surveyor stores proof files outside the database in the configured invoice directory and stores the corresponding invoice records in the database. Operators back up both as one state set. JPEG, PNG, GIF, and PDF proofs are limited to 10 MiB.
+JPEG, PNG, GIF and PDF proofs are limited to 10 MiB.
 
-Automatic invoice retention runs when the application starts and then hourly. When an event’s end date reaches the configured month-based cutoff, Surveyor permanently removes its invoice records and proof files and recalculates affected pool totals. The invoice history and proof are then no longer available in the application. Backup copies have their own retention lifecycle.
+Invoices and proofs are kept for the period set by your Surveyor operator, measured from the event's end date. After that period, they are permanently removed and affected pool totals are updated. The invoice history and proofs are then no longer available in Surveyor. Backup copies may be kept under a separate retention policy.
 
 Automatic retention preserves previously calculated settlement shares and does not itself require recalculation.
-Recalculating later uses only retained invoice records, so complete corrections before the relevant invoices expire.
+Recalculating later uses only retained invoices, so complete corrections before the relevant invoices expire.
 
-Operators should use Production Operations — Persistent files and Invoice retention. The setting is defined in Configuration — Persistent files and retention.
+Ask your organizer or Surveyor operator how long invoices are kept. Complete any corrections and retain permitted copies before that period ends.
 
 ## Troubleshooting
 

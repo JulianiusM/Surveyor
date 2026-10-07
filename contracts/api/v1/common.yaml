@@ -1,0 +1,440 @@
+schemas:
+  Uuid:
+    type: string
+    format: uuid
+  NullableUuid:
+    type:
+      - string
+      - "null"
+    format: uuid
+  LocaleTag:
+    type: string
+    minLength: 2
+    maxLength: 64
+    pattern: ^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$
+  LocaleUpdate:
+    type: object
+    additionalProperties: false
+    required:
+      - locale
+    properties:
+      locale:
+        $ref: "#/schemas/LocaleTag"
+  FieldError:
+    type: object
+    additionalProperties: false
+    required:
+      - pointer
+      - code
+    properties:
+      pointer:
+        type: string
+        maxLength: 512
+      code:
+        type: string
+        enum:
+          - required
+          - type
+          - format
+          - range
+          - unknown
+          - invalid
+  SafeProblemDetails:
+    description: Display-only fallback for a newer error; it never grants a known code or parameter type.
+    type: object
+    additionalProperties: true
+    required:
+      - type
+      - title
+      - status
+      - detail
+      - requestId
+    properties:
+      type:
+        type: string
+        format: uri-reference
+      title:
+        type: string
+      status:
+        type: integer
+        minimum: 400
+        maximum: 599
+      detail:
+        type: string
+      requestId:
+        type: string
+        minLength: 1
+        maxLength: 256
+  Problem:
+    type: object
+    additionalProperties: false
+    required:
+      - type
+      - title
+      - status
+      - detail
+      - requestId
+      - code
+      - messageKey
+      - params
+    properties:
+      type:
+        type: string
+        format: uri-reference
+      title:
+        type: string
+      status:
+        type: integer
+      detail:
+        type: string
+      requestId:
+        type: string
+        minLength: 1
+        maxLength: 256
+      code:
+        type: string
+      messageKey:
+        type: string
+      params:
+        type: object
+        additionalProperties: true
+      fieldErrors:
+        type: array
+        maxItems: 20
+        items:
+          $ref: "#/schemas/FieldError"
+    oneOf:
+      - properties:
+          code: {const: INVALID_CREDENTIALS}
+          messageKey: {const: 'api:errors.INVALID_CREDENTIALS'}
+          status: {const: 401}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACCOUNT_INACTIVE}
+          messageKey: {const: 'api:errors.ACCOUNT_INACTIVE'}
+          status: {const: 403}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVATION_RESENT}
+          messageKey: {const: 'api:errors.ACTIVATION_RESENT'}
+          status: {const: 403}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: USERNAME_TAKEN}
+          messageKey: {const: 'api:errors.USERNAME_TAKEN'}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: PASSWORD_MISMATCH}
+          messageKey: {const: 'api:errors.PASSWORD_MISMATCH'}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: TOKEN_INVALID}
+          messageKey: {const: 'api:errors.TOKEN_INVALID'}
+          status: {const: 401}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: LOCAL_LOGIN_DISABLED}
+          messageKey: {const: 'api:errors.LOCAL_LOGIN_DISABLED'}
+          status: {const: 403}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code:
+            const: PAYLOAD_TOO_LARGE
+          messageKey:
+            const: api:errors.PAYLOAD_TOO_LARGE
+          status:
+            const: 413
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
+            const: AUTH_REQUIRED
+          messageKey:
+            const: api:errors.AUTH_REQUIRED
+          status:
+            const: 401
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
+            const: FORBIDDEN
+          messageKey:
+            const: api:errors.FORBIDDEN
+          status:
+            const: 403
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
+            const: CSRF_INVALID
+          messageKey:
+            const: api:errors.CSRF_INVALID
+          status:
+            const: 403
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
+            const: NOT_FOUND
+          messageKey:
+            const: api:errors.NOT_FOUND
+          status:
+            const: 404
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
+            const: CONTEXT_REQUIRED
+          messageKey:
+            const: api:errors.CONTEXT_REQUIRED
+          status:
+            const: 400
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
+            const: SESSION_CONTEXT_CHANGED
+          messageKey:
+            const: api:errors.SESSION_CONTEXT_CHANGED
+          status:
+            const: 409
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
+            const: VALIDATION_FAILED
+          messageKey:
+            const: api:errors.VALIDATION_FAILED
+          status:
+            const: 400
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
+            const: PRECONDITION_REQUIRED
+          messageKey:
+            const: api:errors.PRECONDITION_REQUIRED
+          status:
+            const: 428
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
+            const: PRECONDITION_FAILED
+          messageKey:
+            const: api:errors.PRECONDITION_FAILED
+          status:
+            const: 412
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
+            const: PACKING_ITEM_FULL
+          messageKey:
+            const: api:errors.PACKING_ITEM_FULL
+          status:
+            const: 409
+          params:
+            type: object
+            additionalProperties: false
+            required:
+              - itemId
+            properties:
+              itemId:
+                $ref: "#/schemas/Uuid"
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
+            const: ENTITY_CONTEXT_CHANGED
+          messageKey:
+            const: api:errors.ENTITY_CONTEXT_CHANGED
+          status:
+            const: 409
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
+            const: UNSUPPORTED_MEDIA_TYPE
+          messageKey:
+            const: api:errors.UNSUPPORTED_MEDIA_TYPE
+          status:
+            const: 415
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
+            const: INVALID_JSON
+          messageKey:
+            const: api:errors.INVALID_JSON
+          status:
+            const: 400
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
+            const: INTERNAL_ERROR
+          messageKey:
+            const: api:errors.INTERNAL_ERROR
+          status:
+            const: 500
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
+            const: RESOURCE_CONFLICT
+          messageKey:
+            const: api:errors.RESOURCE_CONFLICT
+          status:
+            const: 409
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
+            const: ARCHIVE_INHERITED
+          messageKey:
+            const: api:errors.ARCHIVE_INHERITED
+          status:
+            const: 409
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
+            const: UPLOAD_INVALID
+          messageKey:
+            const: api:errors.UPLOAD_INVALID
+          status:
+            const: 400
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required:
+          - code
+          - messageKey
+          - status
+          - params

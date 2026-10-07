@@ -282,5 +282,9 @@ src.zip
 /playwright.config.js
 /scripts/e2e.db.init.js
 /src/modules/database/__index__.ts
+/.generated/
+/src/types/api/
+/src/types/LocalizationTypes.d.ts
+/src/modules/localization/generated/
 /uploads/
 test_output.txt

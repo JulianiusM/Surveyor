@@ -4,7 +4,7 @@ documentation-metadata
 audience: organizers; advanced administrators
 owner: permission-system maintainers
 status: current
-last-verified: 2026-10-03
+last-verified: 2026-10-07
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; source-reviewed Entity settings dialog labels, per-action permissions, root property changes, image/actions, minimal archival hints, and event selection/reassociation boundaries; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D03 cumulative grants, overlapping audiences, sharing recipes, presets, complete permission labels, page admission, item fallback, administration, and explicit survey exclusion; D14 rendered help navigation, semantic checks, and trusted-content integration
 source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/modules/permissionEngine.ts; src/modules/lib/permissions.ts; src/middleware/permissionMiddleware.ts; src/middleware/guestFlowFactory.ts; src/middleware/adminApiFactory.ts; src/controller/entityAdminController.ts; src/modules/database/services/EntityAdminService.ts; src/views/modules/module_perm_matrix.pug; src/views/modules/module_admin_matrix.pug; src/views/modules/module_admin_options.pug; src/public/js/modules/perm-matrix.ts; src/public/js/modules/admin-matrix.ts; src/routes/event.ts; src/routes/api/event.ts; src/routes/api/activity.ts; src/routes/api/packing.ts; src/routes/api/drivers.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
@@ -45,11 +45,11 @@ Clearing **Item Delete** from Alex’s individual entry would not remove it if A
 
 | Grant source | Who receives it |
 |---|---|
-| **Public** | Every request receives the Public grant. It is therefore part of every guest, full-account, participant, and individual administrator’s effective permissions. |
+| **Public** | Everyone, including guests, full-account profiles, participants and individual administrators. These permissions also apply alongside their other permissions. |
 | **Guest** | Any active profile receives the Guest grant, including a guest profile **and a profile belonging to a full account**. Think of this as the broad “has entered with a profile” grant rather than a guest-only deny boundary. |
 | **Authenticated** | An active profile belonging to a full account. A guest-only profile does not receive it. |
 | **Participant** | An active profile registered for the relevant event. For an event-linked activity plan, packing list, or drivers list, registration is checked against the linked event. |
-| **Individual administrator** | The selected profile receives its stored individual grant in addition to all matching audience grants. The administrator picker searches profiles attached to full accounts. |
+| **Individual administrator** | The selected profile receives the chosen permissions in addition to those from every matching audience. The administrator picker searches profiles attached to full accounts. |
 | **Owner** | The active owner profile receives every permission automatically. |
 
 The **active profile** matters. A full account with several profiles can receive a different result after switching profiles because ownership, event registration, and individual administrator grants belong to profiles rather than to the account as a whole.
@@ -173,35 +173,35 @@ After a link change, event-participant grants are evaluated against the new even
 
 ### Delegate complete control
 
-Select **Admin** for the named administrator. This grants every permission bit, but it does not transfer ownership. Owner-only lifecycle actions, such as deleting the item from its owner context, remain distinct from an administrator grant.
+Select **Admin** for the named administrator. This grants every available permission, but it does not transfer ownership. Actions reserved for the owner, such as permanently deleting the item, remain owner-only.
 
 ## Permission-label reference
 
-The interface generates these labels from the current permission definition. Feature guides explain where each capability appears.
+Use these labels to choose the actions a person may perform. Feature guides explain where each action appears.
 
-| UI label | Internal key | What it allows |
-|---|---|---|
-| **Edit Title** | `EDIT_TITLE` | Change the top-level title. |
-| **Edit Desc** | `EDIT_DESC` | Change the top-level description. |
-| **Edit Capacity** | `EDIT_CAPACITY` | Change the event capacity or a supported item capacity. |
-| **Edit Meta** | `EDIT_META` | Change other top-level settings such as dates, location, the header image, or a plan/list's event link. Selecting a destination also needs Manage Assignments there. |
-| **Item Add** | `ITEM_ADD` | Add child entries such as activity slots, packing items, or driver rows. |
-| **Item Edit** | `ITEM_EDIT` | Reorder child entries and provide the broad parent-level fallback used by many child-edit actions. |
-| **Item Edit Desc** | `ITEM_EDIT_DESC` | Edit child-entry descriptions without granting the broader Item Edit permission. |
-| **Item Edit Meta** | `ITEM_EDIT_META` | Edit supported child metadata without granting the broader Item Edit permission; currently used for activity-slot metadata. |
-| **Item Delete** | `ITEM_DELETE` | Delete child entries. |
-| **Manage Assignments** | `MANAGE_ASSIGNMENTS` | Manage other people’s assignments or roles and the feature actions that use assignment-management authority. Ordinary self-service actions may need only Access View. |
-| **Manage Requirements** | `MANAGE_REQUIREMENTS` | Manage event requirement settings and activity-plan requirements, rules, and shared-field definitions. |
-| **Manage Registrations** | `MANAGE_REGISTRATIONS` | Manage event registration links and participant registrations. |
-| **Manage Permissions** | `MANAGE_PERMISSIONS` | Open and change Group Permissions and Administrators. |
-| **Data Export** | `DATA_EXPORT` | Export supported data. Event participant export also requires Access Participants. |
-| **Data Duplicate** | `DATA_DUPLICATE` | Open the duplicate flow. Completing creation still requires a full account. |
-| **Access Registration** | `ACCESS_REGISTRATION` | Register for an event. |
-| **Access View** | `ACCESS_VIEW` | Enter an event-linked resource as a nonparticipant and use collaborative actions that are guarded by view access. |
-| **Access Create** | `ACCESS_CREATE` | Stored in the standard access presets. It does not replace the full-account and feature-specific checks for creating a top-level item. |
-| **Access Admin** | `ACCESS_ADMIN` | Open the Event administration dashboard. It is not a synonym for every management permission. |
-| **Access Participants** | `ACCESS_PARTICIPANTS` | See participant or assignee names and lists where the feature exposes them. |
-| **Access Items** | `ACCESS_ITEMS` | See an event’s related activity plans, packing lists, and drivers lists. |
+| UI label | What it allows |
+|---|---|
+| **Edit Title** | Change the title of an event, plan or list. |
+| **Edit Desc** | Change the description of an event, plan or list. |
+| **Edit Capacity** | Change the event capacity or a supported item capacity. |
+| **Edit Meta** | Change other settings such as dates, location, the header image, or a plan/list's event link. Selecting a destination also needs Manage Assignments there. |
+| **Item Add** | Add activity slots, packing items or driver rows. |
+| **Item Edit** | Reorder slots or list items and allow supported edits to those entries. |
+| **Item Edit Desc** | Edit slot or list-item descriptions without granting the broader Item Edit permission. |
+| **Item Edit Meta** | Edit supported settings of individual entries, currently activity slots, without granting the broader Item Edit permission. |
+| **Item Delete** | Delete slots or list items. |
+| **Manage Assignments** | Manage other people’s assignments or roles. Ordinary self-service actions may need only Access View. |
+| **Manage Requirements** | Manage event requirement settings and activity-plan requirements, rules, and shared-field definitions. |
+| **Manage Registrations** | Manage event registration links and participant registrations. |
+| **Manage Permissions** | Open and change Group Permissions and Administrators. |
+| **Data Export** | Export supported data. Event participant export also requires Access Participants. |
+| **Data Duplicate** | Open the duplicate form. Completing creation still requires a full account. |
+| **Access Registration** | Register for an event. |
+| **Access View** | Enter an event-linked plan or list as a nonparticipant and use the collaborative actions allowed by its sharing rules. |
+| **Access Create** | Included in the standard access presets. Creating an event, plan or list still requires a full account and the permissions described in its guide. |
+| **Access Admin** | Open the Event administration dashboard. It does not grant every management permission. |
+| **Access Participants** | See participant or assignee names and lists where available. |
+| **Access Items** | See an event’s related activity plans, packing lists, and drivers lists. |
 
 ## Preset reference
 
@@ -231,17 +231,17 @@ Selecting a preset replaces the current checkboxes in that one audience or admin
 
 ## Parent and child permissions
 
-Activity slots, packing items, and driver rows are child items. The application evaluates the child and the parent separately. A route can accept a child permission, a parent permission, or either.
+Activity slots, packing items and driver rows belong to a plan or list. Permissions on the plan or list can allow actions on its entries. An individual entry may also have additional permissions.
 
 Common parent-wide behavior is:
 
-- **Item Edit** is the broad fallback for several child edits and for reordering.
-- **Item Edit Desc** is a narrower fallback for child descriptions.
-- **Item Edit Meta** is a narrower fallback for supported child metadata, currently activity-slot metadata.
+- **Item Edit** allows several supported edits and reordering.
+- **Item Edit Desc** allows editing descriptions.
+- **Item Edit Meta** allows editing supported settings, currently those of activity slots.
 - **Item Delete** can authorize deleting child entries.
 - **Manage Assignments** can authorize managing child assignments.
 
-This fallback is action-specific; child permissions do not automatically inherit every parent permission. Use the feature guide and visible controls to confirm the effect of a narrowly delegated role.
+The available actions depend on the feature and the entry's permissions. A permission on the plan or list does not always allow the same action on every entry. Use the feature guide and visible controls to confirm the effect of a narrowly delegated role.
 
 ## Page access is not the same as an action permission
 
@@ -253,7 +253,7 @@ For an event-linked Activity plan, Packing list, or Drivers list:
 - A nonparticipant needs effective **Access View**.
 - Otherwise Surveyor reports that event registration is required.
 
-For an unlinked resource, an active profile can generally open the page even when no **Access View** bit is selected. Individual buttons and API actions still use their specific permissions. Therefore, do not describe **None** as a guaranteed deny rule for the page itself.
+For an unlinked plan or list, an active profile can generally open the page even when **Access View** is not selected. Individual actions still require their specific permissions. Choosing **None** therefore does not guarantee that the page is inaccessible.
 
 ## Troubleshooting
 
@@ -283,7 +283,7 @@ Property and permission changes can instead be made through **Entity settings** 
 
 ### An administrator appears but cannot do anything
 
-The entry may have been added with **None**, or its selected bits may not cover the action. Expand the administrator, choose the needed labels, and select **Save**.
+The entry may have been added with **None**, or its selected permissions may not cover the action. Expand the administrator, choose the needed labels, and select **Save**.
 
 ### I cannot find a guest in Add administrator
 

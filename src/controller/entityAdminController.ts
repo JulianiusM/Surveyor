@@ -102,6 +102,11 @@ export async function requireEntityPropertyUpdate(type: EntityType, entity: Enti
     assertEditableEntityFields(type, body, permissions, session.profile?.id === entity.ownerId);
 }
 
+/** A known parent relationship or assignment-management grant alone does not authorize navigation. */
+export function getAuthorizedEventUrl(eventId: string, permissions: PermView): string | null {
+    return permissions.has('ACCESS_VIEW') ? `/event/${encodeURIComponent(eventId)}` : null;
+}
+
 /** Only editable values enter renderer data; action flags reflect their existing API guards. */
 export async function getEntityPropertyPresentation(type: EntityType, entity: EntityBase, session: SessionLike): Promise<EntityPropertyPresentation> {
     const permissions = await evaluateSubject({kind: 'entity', entity: {
@@ -132,7 +137,8 @@ export async function getEntityPropertyPresentation(type: EntityType, entity: En
             }}, session);
             if (parentPermissions.has('ACCESS_VIEW') || parentPermissions.has('MANAGE_ASSIGNMENTS')) {
                 currentEvent = {id: event.id, title: event.title, startDate: event.startDate, endDate: event.endDate};
-                if (parentPermissions.has('ACCESS_VIEW')) currentEvent.url = `/event/${event.id}`;
+                const url = getAuthorizedEventUrl(event.id, parentPermissions);
+                if (url) currentEvent.url = url;
             }
         }
     }
@@ -166,7 +172,7 @@ export function requireLockedArchiveRoot(context: LockedArchiveContext): Archive
 }
 
 /** Explicit association command; old-parent authority is checked inside the locking transaction. */
-export async function changeEntityEvent(type: EntityType, entity: EntityBase, body: unknown, session: SessionLike, invalidateContext?: (id: string) => void) {
+export async function changeEntityEvent(type: EntityType, entity: EntityBase, body: unknown, session: SessionLike, invalidateContext?: (id: string) => void, validateReviewedContext?: (manager: EntityManager) => Promise<void>) {
     requireSessionProfileId(session);
     if (!['activity', 'packing', 'drivers'].includes(type)) throw new APIError('This entity cannot be linked to an event.', {}, 400);
     const schema = Joi.object({eventId: Joi.string().uuid().lowercase().allow(null).required(), expectedEventId: Joi.string().uuid().lowercase().allow(null).required()}).unknown(false).required();
@@ -185,6 +191,8 @@ export async function changeEntityEvent(type: EntityType, entity: EntityBase, bo
         // Retrying a committed choice is harmless but still requires current authority.
         if (root.eventId === value.eventId) return {changed: false, root};
         if (root.eventId !== value.expectedEventId) throw new APIError('The linked event changed. Reload and try again.', {}, 409);
+        // Versioned adapters can require a reviewed settings token inside these same locks.
+        await validateReviewedContext?.(manager);
         // Invalidating under the plan lock prevents an old job from surviving A-to-B-to-A.
         // If persistence later rolls back, conservative cancellation cannot corrupt saved work.
         invalidateContext?.(root.id);

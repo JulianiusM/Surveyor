@@ -1,0 +1,60 @@
+# Preserve the fixed-source help controller's existing presentation contract.
+schemas:
+  HelpDocumentSummary:
+    type: object
+    additionalProperties: false
+    required: [name, title, path, url]
+    properties:
+      name: {type: string}
+      title: {type: string}
+      path: {type: string}
+      url: {type: string}
+  HelpNavigationGroup:
+    type: object
+    additionalProperties: false
+    required: [title, docs]
+    properties:
+      title: {type: string}
+      docs:
+        type: array
+        items: {$ref: '#/schemas/HelpDocumentSummary'}
+  HelpTocEntry:
+    type: object
+    additionalProperties: false
+    required: [id, title, level]
+    properties:
+      id: {type: string}
+      title: {type: string}
+      level: {type: integer}
+  HelpSearchResult:
+    type: object
+    additionalProperties: false
+    required: [title, url, excerpt]
+    properties:
+      title: {type: string}
+      url: {type: string}
+      sectionTitle: {type: string}
+      excerpt: {type: string}
+  HelpPageData:
+    type: object
+    additionalProperties: false
+    required: [locale, title, content, docsList, docsGroups, currentDoc, toc]
+    properties:
+      locale: {type: string}
+      title: {type: string}
+      # HTML is trusted only because the existing fixed-release-source help renderer validated it.
+      content: {type: string}
+      docsList:
+        type: array
+        items: {$ref: '#/schemas/HelpDocumentSummary'}
+      docsGroups:
+        type: array
+        items: {$ref: '#/schemas/HelpNavigationGroup'}
+      currentDoc: {type: string}
+      toc:
+        type: array
+        items: {$ref: '#/schemas/HelpTocEntry'}
+      searchQuery: {type: string}
+      searchResults:
+        type: array
+        items: {$ref: '#/schemas/HelpSearchResult'}

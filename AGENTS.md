@@ -4,9 +4,9 @@ documentation-metadata
 audience: AI coding agents; maintainers
 owner: project maintainers
 status: current
-last-verified: 2026-10-03
+last-verified: 2026-10-07
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit controller-owned checks and pure DBAL/no context-specific service errors; explicit maintainer requirements for human readability, purposeful comments, existing formatting and module reuse, declaration-file contracts, renderer data, and deletion boundaries; non-blocking documentation policy and optional report/test routing; D13 repository-wide agent contract, source precedence, change boundaries, test selection, database safety, documentation rules, and canonical-reference routing; D14 implemented fixed-source in-app help validation and maintained visual-asset rules
+verification-scope: explicit prohibition of implementation information in user-facing documentation and illustrations across all languages; explicit controller-owned checks and pure DBAL/no context-specific service errors; explicit maintainer requirements for human readability, purposeful comments, existing formatting and module reuse, declaration-file contracts, renderer data, and deletion boundaries; non-blocking documentation policy and optional report/test routing; D13 repository-wide agent contract, source precedence, change boundaries, test selection, database safety, documentation rules, and canonical-reference routing; D14 implemented fixed-source in-app help validation and maintained visual-asset rules
 source-anchors: docs/DOCUMENTATION_POLICY.md; README.md; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; docs/PERMISSIONS_REFERENCE.md; docs/DOCUMENTATION_MIGRATION_STATUS.md; package.json; repository-tree; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
 next-review: AI-instruction-or-help-trust-boundary-change
 -->
@@ -140,6 +140,12 @@ and credentials with no privileges beyond those schemas.
   follow-up; documentation work must never block application review, CI, merge, release, or deployment.
 - In-app help is task-first: use exact visible labels, give novices a successful shortest path, then include recovery,
   privacy, role, and advanced details without forcing them into the first-use procedure.
+- User-facing documentation and pictures must contain only user tasks, observable behavior, and exact visible UI
+  labels. Implementation information is strictly forbidden in every language, including prose, captions, alt text,
+  diagrams, and screenshots: do not expose frameworks, architecture, internal APIs, source paths, storage keys,
+  permission identifiers, or how content was implemented, rendered, generated, or verified. Keep authoring and
+  provenance details in maintainer documentation or ignored review evidence. Required hidden metadata and source
+  anchors remain maintainer evidence and must never appear in rendered help or release-shipped pictures.
 - Verify labels and available actions against rendered Pug output and browser code rather than copying old prose.
 - The files under `docs/user-guide/` are trusted, release-shipped application content. Use Markdown, keep the required
   metadata comment, and do not introduce active raw HTML, executable attributes, unsafe URI schemes, or unreviewed

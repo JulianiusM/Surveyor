@@ -4,14 +4,16 @@ documentation-metadata
 audience: users; developers; operators
 owner: project maintainers
 status: current
-last-verified: 2026-09-06
+last-verified: 2026-10-04
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: non-blocking documentation policy and optional report/test routing; D12 product summary, clean-clone development start, current scripts, test layers, CI branches, release entry points, and repository map; operator execution remains tracked in D04V; D14 help validation and focused command surface
-source-anchors: package.json; package-lock.json; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/oidc.ts; migrationDataSource.ts; scripts/runMigration.ts; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts
+verification-scope: source review of the implemented Vue pilot entry points and normal generation/build/watch workflow; non-blocking documentation policy and optional report/test routing; D12 product summary, clean-clone development start, current scripts, test layers, CI branches, release entry points, and repository map; operator execution remains tracked in D04V; D14 help validation and focused command surface
+source-anchors: src/routes/frontendPilot.ts; src/routes/api/v1.ts; src/frontend/; contracts/api/v1/; src/locales/; vite.config.mts; package.json; package-lock.json; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/oidc.ts; migrationDataSource.ts; scripts/runMigration.ts; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts
 next-review: repository-command-or-help-tooling-change
 -->
 
 Surveyor is a server-rendered collaboration application for recurring-date surveys, events, activity schedules, packing lists, rides, and event cost sharing. It is written in TypeScript and runs as an Express application backed by MariaDB.
+
+An opt-in Vue frontend pilot adds packing-list interactions and help under `/frontend-pilot`, backed by a versioned API. The existing pages remain available for the complete workflows. See [Frontend Pilot](docs/FRONTEND_PILOT.md) for its current scope and entry points.
 
 ## Features
 
@@ -121,7 +123,7 @@ Do not run schema synchronization or destructive TypeORM commands against a prod
 npm run server
 ```
 
-This performs a full build, starts the TypeScript server under Nodemon, and starts the client-side esbuild watcher. Confirm startup with:
+This performs a full build, starts the TypeScript server under Nodemon, and starts the legacy esbuild and Vue client/server build watchers. Confirm startup with:
 
 ```bash
 curl http://localhost:3000/healthz
@@ -139,10 +141,12 @@ With local login enabled, register an account, open the activation message deliv
 |---|---|
 | `npm run server` | Build once, then run the server and browser-code watchers together. |
 | `npm run server:dev` | Run only the server watcher; existing generated and built assets must already be present. |
-| `npm run server:client` | Run only the browser-code watcher. |
-| `npm run build` | Generate the TypeORM index, compile server and browser TypeScript, compile Sass, and copy views/assets into `dist/`. |
+| `npm run server:client` | Run only the legacy browser-code watcher. |
+| `npm run server:frontend` | Generate frontend contracts/catalogs, then watch the Vue client and server-rendering bundles. |
+| `npm run build` | Generate database/API/catalog outputs, compile the server, legacy browser code, Vue bundles and Sass, and package runtime assets in `dist/`. |
 | `npm run run` | Start the compiled application from `dist/server.js`. |
-| `npm run generate` | Regenerate `src/modules/database/__index__.ts`. |
+| `npm run generate` | Regenerate the TypeORM index, API declarations/validators, and localization outputs. |
+| `npm run prepare:frontend` | Regenerate API and locale outputs after editing contract or catalog sources. |
 | `npm run typeorm:migrate` | Run pending migrations through Surveyor's settings-aware wrapper. |
 | `npm run docs:check` | Produce an optional advisory report on documentation; never fail application delivery. |
 | `npm run test:quick` | Run database-free unit and frontend Vitest suites. |
@@ -150,6 +154,8 @@ With local login enabled, register an account, open the activation message deliv
 | `npm run test:all` | Run Vitest, build the application, and run the Playwright suite. |
 
 The [Development Guide](docs/DEVELOPMENT.md) contains database safety, generated-file behavior, change recipes, and troubleshooting. The [Testing Guide](docs/TESTING_GUIDE.md) contains the exact environment and runner contracts.
+
+The frontend watchers rebuild code; they do not rerun contract/catalog generation when source definitions change. Run `npm run prepare:frontend` after those edits, or restart `npm run server`.
 
 ## Repository map
 
@@ -166,6 +172,9 @@ src/migrations/                       TypeORM migrations
 src/public/js/                        browser TypeScript
 src/public/style/                     Sass sources
 src/views/                            Pug templates
+src/frontend/                         Vue pilot app, shared components, and feature views
+contracts/api/v1/                      authored HTTP contract and wire schemas
+src/locales/                          shared pilot UI/API language catalogs
 tests/unit/                            isolated production logic
 tests/frontend/                        browser-helper behavior under Vitest
 tests/integration/                     MariaDB-backed production-service workflows

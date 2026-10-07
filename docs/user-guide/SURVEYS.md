@@ -4,7 +4,7 @@ documentation-metadata
 audience: survey participants; survey organizers
 owner: survey feature maintainers
 status: current
-last-verified: 2026-10-03
+last-verified: 2026-10-07
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; source-reviewed Entity settings dialog labels, per-action permissions, root property changes, image/actions, minimal archival hints, and event selection/reassociation boundaries; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D09 survey workflow plus D14 rendered-label assertions, recurring-use visual aid, per-page navigation, and trusted-help integration; D14 rendered help navigation, semantic checks, and trusted-content integration; D14 visual correction: measured and individually inspected recurring-pattern diagram with current option text
 source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; docs/user-guide/assets/survey-recurring-pattern.png; docs/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; src/views/surveyor/survey-create.pug; src/views/surveyor/survey-vote.pug; src/public/js/survey-create.ts; src/routes/survey.ts; src/routes/api/survey.ts; src/controller/surveyController.ts; src/middleware/guestFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/surveys/Survey.ts; src/modules/database/entities/surveys/SurveyCombination.ts; src/modules/database/entities/surveys/SurveyResponse.ts; src/modules/database/services/SurveyService.ts; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/survey-workflows.spec.ts; tests/e2e/core-workflows.spec.ts; docs/decisions/DEC-001-SURVEY-COMBINATION-AUTHORIZATION.md; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md; src/controller/helpController.ts
@@ -15,9 +15,9 @@ Surveys are designed primarily for organizing **recurring monthly dates**, such 
 
 A survey can also compare options within one named month as a secondary use case. Put that month and year in the title or description, because the survey stores weekday positions rather than concrete calendar dates. When the decision is mainly about several exact dates, a date-specific polling service may offer a more direct experience; use Surveyor when the recurring monthly pattern is the important part.
 
-![Annotated survey controls showing Weekday, Day in month, Add, and a recurring first-Monday result with Yes, Maybe, and No choices.](assets/survey-recurring-pattern.png)
+![Survey controls showing Weekday, Day in month, Add, and the first Monday of every month with Yes, Maybe and No choices.](assets/survey-recurring-pattern.png)
 
-*This explanatory diagram uses the current field labels and the example values Monday and 1. day in month. The recurring first-Monday result is a pattern, not a concrete calendar date.*
+*Choose **Monday** and **1. day in month**, then **Add**, to propose the first Monday of every month. The actual calendar date changes from month to month.*
 
 [View the recurring-pattern image at full size](/help/assets/survey-recurring-pattern.png).
 
@@ -94,7 +94,7 @@ When that link is unavailable:
 1. On the survey join page, select **Recover guest account**; or open **Login** and use the guest-recovery option.
 2. Enter the email address used for the guest profile.
 3. Open the recovery email and choose the correct guest account when several are associated with that address.
-4. Return to the survey link or open it from **Your overview** after the guest session is restored.
+4. After recovering guest access, return to the survey link or open it from **Your overview**.
 
 See [Getting Started — Recover guest access by email](GETTING_STARTED.md#recover-guest-access-by-email) for the complete recovery procedure.
 
@@ -334,7 +334,7 @@ Check whether the same weekday-and-position combination is already present. A su
 
 ### Permission or event controls cannot be found
 
-They are not part of surveys. Share the standalone survey link with the intended group. Use [Permissions and Sharing](PERMISSIONS.md) only for the other feature types that implement the general permission system.
+They are not part of surveys. Share the standalone survey link with the intended group. [Permissions and Sharing](PERMISSIONS.md) explains the sharing controls available for other features.
 
 ### Entity settings or an expected action is missing
 

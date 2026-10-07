@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "rootDir": ".",
+    "noEmit": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "experimentalDecorators": false,
+    "emitDecoratorMetadata": false
+  },
+  "include": ["src/frontend/**/*.ts", "src/frontend/**/*.vue", "src/types/FrontendPilotTypes.d.ts"],
+  "exclude": ["node_modules", "dist", "src/frontend/app/entry-server.ts"]
+}

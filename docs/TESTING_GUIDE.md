@@ -4,10 +4,10 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: test maintainers
 status: current
-last-verified: 2026-09-16
+last-verified: 2026-10-04
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: archival test routing and explicit E2E automation configuration reviewed from source; execution evidence reported separately; non-blocking documentation policy and optional report/test routing; D12 Vitest and Playwright discovery, layer contracts, environment loading, MariaDB guardrails, E2E lifecycle, current factories/keywords/support paths, commands, coverage, and CI behavior; D14 help authoring, rendered semantic, contextual navigation, and release packaging coverage
-source-anchors: tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs
+verification-scope: source review of generated-input package hooks and focused frontend pilot contract, localization, browser, HTTP, persistence and migration test routing; archival test routing and explicit E2E automation configuration reviewed from source; execution evidence reported separately; non-blocking documentation policy and optional report/test routing; D12 Vitest and Playwright discovery, layer contracts, environment loading, MariaDB guardrails, E2E lifecycle, current factories/keywords/support paths, commands, coverage, and CI behavior; D14 help authoring, rendered semantic, contextual navigation, and release packaging coverage
+source-anchors: tests/unit/frontend-contracts.spec.ts; tests/unit/frontend-localization.spec.ts; tests/unit/frontend-api-problems.spec.ts; tests/frontend/frontend-pilot.spec.ts; tests/integration/packing-api.spec.ts; tests/integration/packing-metadata-migration.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-pilot.spec.ts; tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs
 next-review: test-layout-command-or-help-validation-change
 -->
 
@@ -91,7 +91,7 @@ npm test
 
 `npm test` runs every Vitest layer, including MariaDB integration tests. It is not a database-free shortcut. `npm run test:quick` is the database-free unit-plus-frontend command.
 
-The package `pretest`, `pretest:integration`, and `pretest:ci` hooks regenerate `src/modules/database/__index__.ts` before their corresponding commands. The layer-specific unit and frontend scripts do not have dedicated pre-hooks, but those suites do not initialize the database.
+The package pre-hooks for `test`, `test:unit`, `test:frontend`, `test:quick`, `test:integration`, and `test:ci` run `npm run generate` first. This regenerates the TypeORM index, API declarations/validators and localization artifacts without connecting to a database. Unit and frontend test layers remain database-free. Direct `npx vitest` invocations bypass these hooks, so run `npm run generate` first after a clean checkout or source-definition change.
 
 ## Vitest configuration
 
@@ -103,7 +103,7 @@ tests/frontend/**/*.spec.ts
 tests/integration/**/*.spec.ts
 ```
 
-The configuration uses the Node environment, loads `tests/support/env.ts`, and keeps file-level parallelism disabled. Sequential test files are required because integration suites independently rebuild the same disposable schema.
+The configuration defaults to the Node environment, loads `tests/support/env.ts`, and keeps file-level parallelism disabled. The Vue plugin transforms SFCs; the packing editor regression opts into happy-dom and restores its mounted app/query state. Sequential test files are required because integration suites independently rebuild the same disposable schema.
 
 Coverage uses V8 and includes `src/**/*.ts`, excluding migrations, generated database metadata, and declaration-only type files. The CI command writes text, LCOV, JSON, and JUnit outputs.
 
@@ -307,6 +307,36 @@ does not validate migration SQL: separately rehearse `AddEntityArchival178986240
 and the supported fresh-schema bootstrap. Follow [Database and Migrations](DATABASE.md) and prove the disposable target
 before either rehearsal. Documentation reports remain advisory and are not substitutes for these application checks.
 
+## Frontend pilot coverage
+
+The implemented scope and entry points are in [Frontend Pilot](FRONTEND_PILOT.md). Use the boundary that changed:
+
+| Boundary | Focused files |
+|---|---|
+| Generated contract parity, typed parameters and safe additive browser responses | `tests/unit/frontend-contracts.spec.ts` |
+| Shared catalogs and structured API errors | `tests/unit/frontend-localization.spec.ts`, `tests/unit/frontend-api-problems.spec.ts` |
+| Refresh, identity isolation, draft/conflict and browser-local packing state | `tests/frontend/frontend-pilot.spec.ts` |
+| Rendered editor, packing special states, shell navigation and native locale selection | `tests/frontend/frontend-pilot-editor.spec.ts`, `tests/frontend/frontend-pilot-shell.spec.ts` |
+| Packing projections, grants, stale edits, legacy writers and assignment locking | `tests/integration/packing-api.spec.ts` |
+| Populated upgrade/downgrade rehearsal and entity/migration column parity | `tests/integration/packing-metadata-migration.spec.ts` |
+| Real cookie sessions, context/CSRF admission, conditional reads and v1 HTTP errors | `tests/e2e/frontend-pilot-api.spec.ts` |
+| Rendered desktop/mobile pilot behavior and native help fallback | `tests/e2e/frontend-pilot.spec.ts` |
+
+Run `npm run typecheck:frontend` for Vue client/server type checks and `npm run build` before Playwright. The ordinary
+build includes both Vue bundles and packaged API artifacts. Contract/catalog source edits need
+`npm run prepare:frontend`; a code watcher alone does not regenerate those definitions. A focused direct runner command
+still uses the integration or E2E database setup described above, including its destructive reset behavior.
+
+Packing fixtures that call `createEntity` directly do not receive form permission defaults automatically. When a test
+needs public assignment access, persist that intended grant through the creation/settings hook; native forms submit
+`defaultPerms[public][0]=ACCESS_VIEW`. Do not weaken the API permission check to compensate for an incomplete fixture.
+
+Frontend completion also requires the [paired visual and behavior review](FRONTEND_PILOT.md#visual-and-behavior-review)
+against the current application. The optional baseline capture adds HTTP fixtures to a guarded, existing disposable
+schema; it does not initialize or reset it. Its capture manifest is evidence for manual inspection, not automatic
+visual approval or a required documentation check. Use a separate Playwright `--output` directory when retaining
+baseline images under `test-results`, since the runner cleans its selected output directory.
+
 ## Assertions and isolation
 
 - Assert user-visible output, returned domain data, persisted state, emitted email contract, or permission result.
@@ -368,9 +398,9 @@ Confirm that `E2E_DB_NAME` contains `e2e`. Do not weaken the guard or reuse anot
 
 Run `npm run build`, verify `.env.e2e`, confirm MariaDB is reachable, and check that the configured port is free. The managed server waits for `/healthz`.
 
-### A unit/frontend-only command cannot import generated database metadata
+### A unit/frontend-only command cannot import generated metadata or contracts
 
-Prefer importing the production module actually under test without crossing the database bootstrap boundary. When a test legitimately needs entity metadata or the full package pre-hook, run `npm run generate` first or use `npm test`.
+Prefer importing the production module actually under test without crossing the database bootstrap boundary. The normal unit/frontend/quick package scripts regenerate their inputs. For a direct runner invocation, run `npm run generate` first; do not switch to database-backed `npm test` merely to obtain generated files.
 
 ### CI passes a layer that fails locally
 

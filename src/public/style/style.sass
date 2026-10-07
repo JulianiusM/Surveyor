@@ -1,9 +1,37 @@
 @import "accordion"
 @import "timezone-select"
 
+// A missing settings button must not push a participant's title to one side. Equal desktop
+// control tracks center every entity title; the single mobile column preserves reading order.
+.entity-header-layout
+  display: grid
+  grid-template-columns: minmax(0, 1fr)
+
+  > h1
+    min-width: 0
+    overflow-wrap: anywhere
+
+  @media (min-width: 768px)
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr)
+    align-items: center
+
+    > h1
+      grid-column: 2
+      grid-row: 1
+
+    > .entity-header-parent
+      grid-column: 1
+      grid-row: 1
+      justify-self: start
+
+    > button
+      grid-column: 3
+      grid-row: 1
+      justify-self: end
+
 // Settings keep navigation outside the scrolling body. Wrapping the four short tabs avoids a
 // horizontally scrolling strip on phones; each property family opens independently below it.
-#entityPropertiesModal
+#entityPropertiesModal, .pilot-dialog
   .entity-settings-nav .nav-item
     flex: 1 1 auto
 

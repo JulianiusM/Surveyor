@@ -22,6 +22,7 @@ import type {Profile} from "../modules/database/entities/user/Profile";
 import type {User} from "../modules/database/entities/user/User";
 import type {Settings} from "../modules/settings";
 import type {PermBundle, PermMetaBundle} from "./PermissionTypes";
+import type {ApiActor} from './ApiTypes';
 
 declare module "express" {
     // Inject additional properties on express.Request
@@ -32,6 +33,9 @@ declare module "express" {
 }
 
 declare module "express-serve-static-core" {
+    interface Request {
+        apiActor?: ApiActor;
+    }
     interface Locals {
         data?: any,
         auth?: {
@@ -56,6 +60,9 @@ declare module "express-session" {
         profile?: Profile | null,
         tokens?: TokenEndpointResponse;
         oidc?: { code_verifier: string; state: string; nonce?: string };
+        frontendContext?: string;
+        frontendCsrfToken?: string;
+        frontendAuthReturn?: string;
     }
 }
 

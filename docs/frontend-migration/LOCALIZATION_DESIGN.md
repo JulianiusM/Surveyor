@@ -4,18 +4,63 @@ documentation-metadata
 audience: maintainers; frontend and backend developers; translators; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-04
+last-verified: 2026-10-07
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: source-reviewed invoice wording, renderer and email/export boundaries; proposed shared catalog, typed-message generation, locale resolution and migration design; official i18next, i18next-vue and Vite documentation reviewed; no localization runtime, dependencies, schema migrations or tests implemented or executed
-source-anchors: src/modules/invoice/locales/en.ts; src/modules/invoice/wording.ts; src/modules/invoice/presentation.ts; src/modules/invoice/settlementEmail.ts; src/modules/invoice/exports.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/modules/email.ts; src/modules/lib/pdf.ts; src/modules/renderer.ts; src/controller/helpController.ts; src/modules/database/entities/user/User.ts; src/modules/database/entities/user/Guest.ts; tests/unit/invoice-presentation.spec.ts; docs/DOCUMENTATION_POLICY.md; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md
-next-review: localization-foundation-spike-or-first-localized-route-cutover
+verification-scope: step-three shared English/German UI/API catalogs and independent help articles and figures, locale-owned stable fragments without cross-corpus reads, generated message contracts, request-fixed translation, native help and Vue SSR/SPA; focused synthetic help and locale tests; invoice, other Pug, email, PDF, principal preference persistence and full-application localization remain planned
+source-anchors: src/locales/en.json; src/locales/de.json; scripts/generate-locales.mjs; src/modules/localization/translator.ts; src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/routes/api/v1.ts; src/modules/api/problem.ts; tests/unit/frontend-localization.spec.ts; tests/unit/frontend-generation.spec.ts; tests/fixtures/frontend-contracts.mts; src/modules/invoice/locales/en.ts; src/modules/invoice/wording.ts; src/modules/invoice/presentation.ts; src/modules/invoice/settlementEmail.ts; src/modules/invoice/exports.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/modules/email.ts; src/modules/lib/pdf.ts; src/modules/renderer.ts; src/controller/helpController.ts; src/modules/database/entities/user/User.ts; src/modules/database/entities/user/Guest.ts; tests/unit/invoice-presentation.spec.ts; docs/DOCUMENTATION_POLICY.md
+next-review: invoice-catalog-migration-or-localization-scope-expansion
 -->
 
 Use one application catalog per language, consumed by the Vue application, scoped Vue server rendering, Express
 responses, transitional Pug views, email and PDF presentation. Select **i18next** as the common formatting and message
-lookup engine, with **i18next-vue** as the proposed Vue binding. Keep domain logic, API machine values and recorded
-user content independent of translated wording. This is a design for implementation; the application does not yet
-provide this complete localization system.
+lookup engine. The pilot uses a small Vue provide/inject adapter over the shared core; **i18next-vue** remains an
+option for future rich component messages. Keep domain logic, API machine values and recorded user content independent
+of translated wording. The bounded implementation below does not yet provide application-wide localization.
+
+## Implemented pilot boundary
+
+[English](../../src/locales/en.json) and [German](../../src/locales/de.json) now each own the pilot's UI and API problem
+text. [Generation](../../scripts/generate-locales.mjs) discovers complete language files, checks text/placeholder and
+cardinal-plural consistency, derives API parameter types from OpenAPI, and emits ignored declarations under
+`src/types/LocalizationTypes.d.ts` plus shared runtime resources/manifest under
+`src/modules/localization/generated/`. No hand-maintained locale registry or second backend catalog is needed.
+
+[createTranslator(locale)](../../src/modules/localization/translator.ts) returns an immutable `{locale, t}` context
+with generated key/parameter types, runtime argument checks and plain-text output. Each call owns an initialized
+i18next instance. The [Vue context](../../src/frontend/app/context.ts) exposes it through the
+[application provider](../../src/frontend/app/createApp.ts); [API problems](../../src/modules/api/problem.ts) use the
+same catalogs. The pilot implements plain text and cardinal plurals. Rich slots, grammatical context/ordinal forms,
+shared regional/date formatters and additional script/font support remain work for later slices.
+
+The [locale command](../../src/routes/api/v1.ts), `PUT /api/v1/locale`, issues a browser-scoped HttpOnly preference
+cookie and returns the resolved session view. It does not persist a User/Guest preference or change the active
+profile. Principal-owned preferences below remain the target for a later entity/migration change. Native pilot
+language selection affects that response's presentation. The same generated locale manifest selects the complete
+help corpus for the API, native help and both Vue entries. Invoice wording, other transitional Pug, email and PDF
+have not moved to the new catalog.
+
+English keeps the ten articles under `docs/user-guide/`; German supplies all ten under `docs/user-guide/de/`.
+Each catalog declares `help.directory` relative to the trusted guide root. A new language adds a complete catalog
+and its translated corpus, then runs generation; it does not require a language branch in either frontend or backend.
+Large help documents remain maintained Markdown rather than JSON string literals. The centralized locale definition
+binds these resources together so API results, native help and SPA cannot independently select different languages.
+
+Document lookup retains the existing fixed source allowlist and Markdown trust validation. Each article owns its body,
+headings and stable fragment IDs; translated articles declare those IDs in a `heading-anchors` metadata line such as
+`1:guide; 2:first-task`. The loader checks levels and unique safe IDs against that article and never reads another
+language's article to derive its anchors. Titles, TOC labels, related links, search matches and snippets come from the
+selected corpus. Each corpus also owns its figures under its own `assets/` directory. Image and full-size URLs carry
+the selected locale, and missing local assets fail instead of borrowing another language's image. Authored help links
+retain the article's language even if their source URL contains a different locale query. UI language selection remains
+an explicit user action. Vue discards article data belonging to an earlier locale. No-JavaScript GET links/forms preserve
+the selected locale. These rules keep recovery and advanced sections available within every complete language corpus.
+
+The focused [translation](../../tests/unit/frontend-localization.spec.ts),
+[contract](../../tests/unit/frontend-contracts.spec.ts) and [generation](../../tests/unit/frontend-generation.spec.ts)
+checks passed: concurrent fixed locales, typed parameters, literal untrusted interpolation, clean deterministic
+generation, complete synthetic-language discovery and rejection of malformed catalogs. The
+[compile fixture](../../tests/fixtures/frontend-contracts.mts) checks actual generated declarations with the installed
+TypeScript compiler. These checks establish the shared core, not full UI, email/PDF, font or accessibility parity.
 
 ## Existing foundation and remaining work
 
@@ -56,6 +101,7 @@ must be explicit input with a neutral default; never infer a person's gender fro
 | Responsibility | Single owner in the target implementation |
 |---|---|
 | Human-facing wording, locale name and direction | `src/locales/<locale>.json`, one maintained file per locale |
+| Full help articles | Fixed trusted corpus selected by the same catalog's `help.directory`; matching article IDs and canonical anchors |
 | API error codes, literal message keys and typed wire parameters | The canonical OpenAPI 3.1 contract; generated API declarations and validators are consumers |
 | UI-only message parameter shapes | English catalog metadata, once; generated declaration types are consumers |
 | Locale negotiation, catalog loading and plain-text translation | A small framework-neutral module under `src/modules/localization/` |
@@ -64,10 +110,10 @@ must be explicit input with a neutral default; never infer a person's gender fro
 | HTML, email and PDF structure | Existing owning renderers and shared components, supplied with localized text |
 | Currency, attendance, permissions and financial rules | Existing domain/controller modules and versioned API contracts |
 
-Keep the wrappers small: a typed `text(key, parameters)` interface, shared value formatters, locale loading and
+Keep the wrappers small: the typed `createTranslator(locale).t(key, parameters)` interface, shared value formatters, locale loading and
 the Vue bridge. Features should not initialize i18next, negotiate languages or implement replacement regexes.
-Select and lock compatible package versions during the foundation work; browsing documentation does not establish
-compatibility with this repository's installed TypeScript, build and SSR configuration.
+The installed toolchain is owned by [package.json](../../package.json) and its lockfile. Browsing documentation alone
+does not establish compatibility with this repository's TypeScript, build and SSR configuration.
 
 ### Scoped SSR and hydration
 
@@ -119,7 +165,8 @@ translations. A representative fragment is:
 }
 ```
 
-This fragment illustrates the future format, not a file added by this task. Simple messages without parameters need
+This fragment illustrates a future feature namespace; the pilot uses default `ui` and explicit `api` namespaces.
+Simple messages without parameters need
 no contract metadata. Parameterized UI messages declare their parameters once in English; translated files supply
 their text forms but do not repeat `uiContracts`. Context values, and any allowed rich slot names, are also declared
 once there. API-owned messages obtain their parameter shapes from OpenAPI instead and must not redeclare them here.
@@ -131,14 +178,14 @@ logical key with a numeric `count`, not a manually chosen `_one` key. Require th
 forms, including `other`; `_zero` can supply deliberate zero wording. Different languages need different forms, so
 completeness is not a raw equality comparison with English's physical suffix keys.
 
-The future locale build step discovers `src/locales/*.json` in a deterministic order, validates them, and produces
-one manifest for both builds. It contains supported tags, native names, direction, content hashes and load locations.
-Node consumes the generated manifest; Vite consumes its generated literal imports or a fixed source glob. Vite's
+The locale build step discovers `src/locales/*.json` in a deterministic order, validates them, and produces
+one manifest for both builds. The pilot bundles all discovered resources and records supported tags, native names,
+direction and a catalog build hash. Future lazy loading can add generated load locations to this owner. Vite's
 [glob import facility](https://vite.dev/guide/features#glob-import) can discover matching files without a hand-maintained
 import registry. Discovery is limited to release sources, never to a client-provided path. Generated outputs follow
 the repository's existing rule: regenerate them, do not hand-edit or commit ignored build products.
 
-Adding `de.json` with complete messages and metadata is sufficient to make German available after the normal build
+Adding another complete language file with messages and metadata makes its pilot labels available after the normal build
 and deployment. It requires no route, enum, language menu or backend registry edit. The application language menu
 comes from the same manifest. Catalogs are release artifacts; adding a file to a running installation is not a supported
 runtime hot-loading mechanism. A language outside the deployed font/script capabilities may additionally require
@@ -209,7 +256,9 @@ and content-hashed: catalogs contain application text, never user records or sec
 
 The versioned OpenAPI contract owns each error variant's stable `code`, literal `messageKey`, typed `params` and
 localized problem `detail`. Model variants together so a capacity error cannot carry another error's parameter shape.
-The locale build checks that every contracted key exists and uses only the corresponding parameters. UI-only metadata
+The locale build checks that every contracted key exists and uses only the corresponding parameters. Machine context
+such as an item UUID may remain a required API parameter without appearing in the sentence; locale files must agree
+on the placeholders they actually display. UI-only metadata
 must not independently define those same wire shapes. Parameters exposed by the API are deliberate, bounded public
 values; omit validator internals, submitted secrets and inaccessible foreign-record titles.
 
@@ -232,7 +281,7 @@ permission bits and invoice state codes are never translated in storage or wire 
 
 ## Safe text, rich content and value formatting
 
-The shared `text` helper returns **plain Unicode text**, not HTML. Configure its private i18next instance with
+The shared `t` helper returns **plain Unicode text**, not HTML. Configure its private i18next instance with
 interpolation escaping disabled only because every output sink owns escaping exactly once. This differs from
 i18next's default HTML-oriented interpolation escaping; see its
 [interpolation documentation](https://www.i18next.com/translation-function/interpolation).
@@ -327,7 +376,7 @@ mapping so a language switch does not break a contextual deep link.
 5. Ship the first complete additional language through one catalog file, then verify its UI, errors, email and exports.
    Add broader script/font support where the selected language requires it, without creating another message owner.
 
-The future catalog/compiler checks protect executable resources and generated contracts. They can be required
+Catalog/compiler checks protect executable resources and generated contracts. They can be required
 application build/CI checks; this is separate from the repository's **advisory documentation reports**, which remain
 non-blocking. Do not add assertions against this prose or maintained guide wording to application suites.
 
@@ -341,6 +390,6 @@ non-blocking. Do not add assertions against this prose or maintained guide wordi
 | Output parity | Existing English invoice sentences, signed balances, notes, all email sections and export labels retained; a complete second catalog produces consistent output across the browser and backend. |
 | Dates and layout | Civil dates near zone boundaries, DST deadline displays, region-specific formatting, long text, native form fallback, RTL when supported, and PDF font/shaping/page-break inspection. |
 
-Source review established the current invoice catalog seam and the library capabilities above. It did not install
-the proposed packages, exercise the binding with scoped SSR, create preferences, translate another language, test fonts
-or run application suites. Those implementation checks remain necessary before claiming localization support.
+The implemented pilot evidence is listed above. The remaining table entries describe acceptance evidence for later
+scope: invoice/output migration, persistent principal preferences, rich messages, fonts and full rendering parity
+must be verified when introduced. Passing the core tests does not establish those capabilities.

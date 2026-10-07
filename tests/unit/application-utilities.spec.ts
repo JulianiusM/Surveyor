@@ -115,16 +115,16 @@ describe('backend application behavior suite', () => {
         // Canary: protects a high-value production behavior while avoiding private implementation details.
         it('combines dashboard modules into the production card order', () => {
             expect(convertToSingleList({surveys: [survey], activityPlans: [activity], events: [event]} as Partial<DashboardEntities>)).toEqual([
-                createExpectedEntity('survey', survey),
-                createExpectedEntity('activity', activity),
-                createExpectedEntity('event', event),
+                {...createExpectedEntity('survey', survey), imageVersion: expect.any(String)},
+                {...createExpectedEntity('activity', activity), imageVersion: null},
+                {...createExpectedEntity('event', event), imageVersion: null},
             ]);
         });
 
         // Canary: protects a high-value production behavior while avoiding private implementation details.
         it('preserves parent event ids for child-module cards', () => {
             expect(convertToSingleList({activityPlans: [activity]} as Partial<DashboardEntities>)).toEqual([
-                createExpectedEntity('activity', activity),
+                {...createExpectedEntity('activity', activity), imageVersion: null},
             ]);
         });
 
@@ -139,9 +139,26 @@ describe('backend application behavior suite', () => {
             const drivers = createEntityBase({id: 'drivers-1', title: 'Airport Drivers', eventId: 'event-1'});
 
             expect(convertToSingleList({packingLists: [packing], driversLists: [drivers]} as Partial<DashboardEntities>)).toEqual([
-                createExpectedEntity('packing', packing),
-                createExpectedEntity('drivers', drivers),
+                {...createExpectedEntity('packing', packing), imageVersion: null},
+                {...createExpectedEntity('drivers', drivers), imageVersion: null},
             ]);
+        });
+
+        it('changes an opaque header version on replacement without exposing the storage path', () => {
+            const firstPath = 'private-storage/first-image.png';
+            const secondPath = 'private-storage/replacement-image.png';
+            const card = (headerImg: string | null) => convertToSingleList({packingLists: [
+                createEntityBase({id: 'packing-1', headerImg}),
+            ]} as Partial<DashboardEntities>)[0];
+            const first = card(firstPath);
+            const replacement = card(secondPath);
+            expect(first.imageVersion).toEqual(expect.any(String));
+            expect(card(firstPath).imageVersion).toBe(first.imageVersion);
+            expect(replacement.imageUrl).toBe(first.imageUrl);
+            expect(replacement.imageVersion).not.toBe(first.imageVersion);
+            expect(JSON.stringify(first)).not.toContain(firstPath);
+            expect(JSON.stringify(replacement)).not.toContain(secondPath);
+            expect(card(null)).toMatchObject({imageUrl: undefined, imageVersion: null});
         });
     });
 

@@ -4,21 +4,50 @@ documentation-metadata
 audience: frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-04
+last-verified: 2026-10-07
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: proposed SPA refresh, identity isolation, draft reconciliation and command recovery policy grounded in existing edge cases and TanStack Query documentation; no query layer or new concurrency mechanism implemented in this step
-source-anchors: docs/frontend-migration/EDGE_CASES.md; docs/frontend-migration/IDENTITY_LIFECYCLE_EDGE_CASES.md; docs/frontend-migration/PARTICIPATION_EDGE_CASES.md; docs/frontend-migration/INVOICE_EDGE_CASES.md; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-select.ts; src/public/js/modules/entity-properties.ts; src/public/js/modules/invoice-submission.ts; src/modules/activity/recommendationJobs.ts; src/modules/invoice/poolOperations.ts; src/controller/entityAdminController.ts
-next-review: query-and-conditional-write-proof-slice
+verification-scope: source review of expanded packing metadata/item/order/settings tokens, overview refresh, identity transitions and command recovery; distinguishes implemented behavior from remaining cross-feature targets; no application, database or browser checks run for this documentation update
+source-anchors: docs/frontend-migration/EDGE_CASES.md; docs/frontend-migration/IDENTITY_LIFECYCLE_EDGE_CASES.md; docs/frontend-migration/PARTICIPATION_EDGE_CASES.md; docs/frontend-migration/INVOICE_EDGE_CASES.md; src/frontend/app/context.ts; src/frontend/app/api.ts; src/frontend/app/queryCache.ts; src/frontend/composables/command.ts; src/frontend/components/InlineCell.vue; src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/PackingSettings.vue; src/frontend/features/packing/OverviewRegion.vue; src/frontend/features/packing/PackingHome.vue; src/modules/packing/api.ts; src/routes/api/v1/auth.ts; tests/frontend/frontend-pilot.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/frontend/packing-management-ui.spec.ts; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-select.ts; src/public/js/modules/entity-properties.ts; src/public/js/modules/invoice-submission.ts; src/modules/activity/recommendationJobs.ts; src/modules/invoice/poolOperations.ts; src/controller/entityAdminController.ts
+next-review: packing-invalidation-or-next-feature-migration
 -->
 
 Use TanStack Vue Query for authoritative server snapshots and small explicit draft objects for edits. Refreshing
 server data must not mutate an open form, silently accept a new financial preview or turn an unconfirmed write into
-a retry. This is the proposed behavior for the [foundation](../FRONTEND_FOUNDATION_DESIGN.md), not a claim about the
-current reload-based frontend.
+a retry. This remains the cross-feature direction for the [foundation](../FRONTEND_FOUNDATION_DESIGN.md), not a claim
+about the complete legacy frontend. The [opt-in implementation](../FRONTEND_PILOT.md) now covers packing management,
+creation, settings, overview and necessary identity entry through v1. Its refresh/draft policies extend beyond the
+original metadata/self-assignment proof. Financial, activity and other feature policies below remain future work.
 
 The [API design](API_CONTRACT_DESIGN.md) owns wire preconditions and status codes; the
 [edge-case records](EDGE_CASES.md) own existing product exceptions. The policies below connect those boundaries to
-the browser and supply scenarios for the first implementation.
+the browser and supply scenarios for implementation and review.
+
+## Implemented packing boundary
+
+[The app context](../../src/frontend/app/context.ts) owns session bootstrap, identity epochs, a request-local query
+client, visible-tab focus/reconnect checks, read retries and locale changes. [The transport](../../src/frontend/app/api.ts)
+checks generated DTOs, captured identity and confirmed command responses; it never retries a mutation automatically.
+[PackingPage](../../src/frontend/features/packing/PackingPage.vue) polls the scoped detail representation;
+[PackingSettings](../../src/frontend/features/packing/PackingSettings.vue) keeps independent metadata, ACL, event and
+file draft state; [OverviewRegion](../../src/frontend/features/packing/OverviewRegion.vue) owns one bounded region.
+The four participant/owner × main/hidden regions retain independent query parameters. Hidden regions open on matching
+deep links through [PackingHome](../../src/frontend/features/packing/PackingHome.vue).
+
+| Reviewed state | Implemented comparison and recovery |
+|---|---|
+| Root title/description | Separate metadata ETag backed by the persisted metadata revision; original/draft/remote values support explicit field review after 412 |
+| Inline item fields/Everyone | Item `editToken` hashes current values, effective field authority, actor and root context; the shared inline editor preserves its dirty value during refresh |
+| Item order | Captured `orderToken` includes current item membership/positions; additions, removals or changed order require a fresh review before resubmitting |
+| Defaults/admin masks | Independent drafts retain their original shared `settingsToken`; polling does not replace dirty values, and stale saves require review |
+| Event association | Desired and original event remain separate; actual relink checks `expectedEventId` and the reviewed settings token under existing controller locks |
+| Header replacement | Selected file retains the reviewed settings token; scoped blob reads use opaque header versions and revoke obsolete object URLs |
+| Creation/duplication | Explicit local draft; no creation replay after response loss and no generic idempotency key |
+| Self-assignment/visibility | Explicit desired state with the existing server no-op policy; commands still require confirmation and subsequent authoritative reads |
+
+These are different tokens. Only the packing root metadata/context revision is a new monotonic persisted counter;
+item/order/ACL hashes do not promise to detect every change-away-and-back. Relinks and relevant direct/inherited
+lifecycle changes advance the root counter; assignments do not. [The API owner](../../src/modules/packing/api.ts)
+and [API design](API_CONTRACT_DESIGN.md) define the exact coverage and 428/412 versus semantic 409 outcomes.
 
 ## State ownership
 
@@ -37,7 +66,9 @@ silently prefetch every item, participant, proof, historical ledger or linked fe
 
 ## Initial refresh policy
 
-These are starting application settings to measure in the pilot, not library defaults or a freshness SLA:
+These are the target starting policies, not library defaults or a freshness SLA. Current packing detail uses
+30-second polling with per-page jitter; overview/settings use 30 seconds without jitter. Picker queries follow
+reactive input and do not yet have a shared debounce. Keep those implementation details separate from the wider target:
 
 | Read | Initial policy |
 |---|---|
@@ -80,7 +111,7 @@ and request generation. [Query cancellation](https://tanstack.com/query/latest/d
 | Network/temporary 5xx | At most two read retries with jittered backoff; then suspend the regular interval for that failure cycle and use increasing retry delay capped at two minutes |
 | 429 or retryable 503 | Honor Retry-After before another scheduled/manual automatic request; keep the draft and display retry timing |
 | 400 validation/input rejection | Show query or validation issue; no automatic retry loop; legacy statuses retain their own adapter mapping |
-| 401 | Stop private queries, clear private cached display, retain only permitted recovery context and begin structured reauthentication |
+| Expired/auth-required 401 | Stop private queries, clear private cached display, retain only permitted recovery context and begin structured reauthentication; known invalid login/token credentials are ordinary confirmed rejections |
 | Context mismatch | Clear the obsolete identity scope and bootstrap the current one; never replay the failed command as the new profile |
 | Confirmed read denial or resource disappearance | Remove protected resource projections and their cached appearances; explain unavailable access without exposing private names or stale authorized DTOs |
 | Navigation/cancelled read | Ignore its completion; do not show a network-error toast for intentional cancellation |
@@ -94,6 +125,13 @@ parent/detail appearances in the current scope. Cancel their obsolete reads and 
 data cannot reappear. Do not merely mark those copies stale until the next interval. A rejected edit or foreign child
 ID does not by itself establish loss of read access to the whole parent: keep that narrower outcome distinct and
 revalidate the affected capabilities. Preserve each endpoint's disclosure policy.
+
+The current [packing eviction helper](../../src/frontend/app/queryCache.ts) cancels/removes that list's scoped detail,
+metadata, settings, profile-search and guest-entry keys, plus the current actor's complete packing overview and event
+picker query families. Removing these bounded collections avoids manufacturing partially redacted DTOs. Other lists'
+detail entries, other features and other actor scopes are retained. The transport/context tests exercise a delayed
+overview read so its earlier result cannot restore the evicted card. Future features need their own dependency owners.
+Current HTTP responses are private/no-store; application query caching is separate from browser-cache policy.
 
 Mutation retries default to zero even where a query library offers retry options. A command may expose a deliberate
 retry only through its endpoint-specific contract. Transport abort is not server transaction rollback.
@@ -119,6 +157,15 @@ original actor; its late result must never populate the new actor's screen. New 
 mismatch rather than silently acting as the cookie's new profile. Focus/periodic session checks cover missed or
 unsupported cross-tab signals. This design does not claim instantaneous removal from a disconnected tab or revocation
 of bytes already delivered to a browser; current server authorization always controls subsequent reads/writes.
+
+The current context owner broadcasts a data-free identity hint after confirming a successful SPA transition and
+listens without rebroadcasting received hints. Native/external identity changes still rely on focus/periodic checks;
+there is no instantaneous cross-protocol notification guarantee. A successful identity command retires the old local generation, drains any older
+in-flight bootstrap and obtains a fresh authoritative session before accepting a private guest link. Its new response
+context must match that session. Form reuse resets completed/register/reset state, while cancelled or rejected
+profile switches restore the visible selection to the active profile. These boundaries have focused source-linked
+[transport/context](../../tests/frontend/frontend-pilot.spec.ts) and
+[mounted navigation](../../tests/frontend/frontend-pilot-identity.spec.ts) assertions.
 
 Recheck the session-audience hydration discrepancy in EC-ID-11 through real routes before trusting capability DTOs.
 Do not infer authenticated/guest audiences from whatever optional ORM relations happen to be present in a cached
@@ -151,7 +198,7 @@ must be reviewed and reapplied together; combining one editor's deadline with an
 intended instant despite each field looking independently conflict-free. An unrelated save preserves the original
 deadline/zone pair and existing fallback semantics (EC-UI-02/06 and EC-ID-34).
 
-Metadata conditional writes require a new persisted metadata revision and all writer paths to maintain it.
+Packing metadata conditional writes now use a persisted metadata revision and the relevant shared writer paths maintain it.
 Assignment-only changes should not invalidate a description edit. The API design defines a separate metadata ETag
 and full-view ETag, current authorization checks, and explicit 428/412 handling. Existing ordinary property locks
 alone do not meet this requirement (EC-ID-35).
@@ -162,7 +209,7 @@ alone do not meet this requirement (EC-ID-35).
 |---|---|
 | Packing/driver self-assignment | Existing locked idempotence; repeat desired membership rather than an ambiguous toggle; 409 for a genuinely new assignment that loses capacity |
 | Event attendance | Existing updates at full capacity and independent deadline rules; repair the documented capacity check/write gap before claiming atomic final-place protection |
-| Event association | Review changed authority/archive context; explicit expected relationship plus monotonic context protection against change-away-and-back; reauthorize even a no-op retry |
+| Event association | Packing uses expected event plus a settings-token check for an actual move; relinks advance the root revision. An authorized already-achieved target remains a no-op before token comparison; other feature migrations retain their own contracts |
 | Invoice submission | Unknown result leads to authoritative history reconciliation; no automatic retry or manufactured server idempotency guarantee |
 | Invoice close/recalculate/review | Preserve each command's revision and confirmation rules, saved-versus-pending amounts and stale rejection; obtain a fresh preview/review where the command requires it |
 | Invoice payment/refund | Preserve existing payment rules; payments advance the pool calculation revision and invalidate earlier previews, but the current payment request does not itself require an expectedRevision precondition |
@@ -200,7 +247,7 @@ ledger's deferred reordering/status filtering, query search focus/caret, selecte
 An identity or permission change takes precedence over keeping stale private content visible. Refresh does not
 annihilate modal focus, hide persistent status or reset local Packed colors.
 
-## Proof-slice scenarios
+## Implementation and subsequent-slice scenarios
 
 Use deterministic fake clocks/deferred reads at the frontend boundary and actual transactions only where needed:
 
@@ -219,5 +266,9 @@ Use deterministic fake clocks/deferred reads at the frontend boundary and actual
 - When an event editor is migrated, concurrent deadline/timezone changes are reconciled as a pair; an unrelated
   metadata edit cannot reinterpret the saved deadline.
 
-These are implementation acceptance scenarios, not tests run in this design step. Reuse the existing assertion
-evidence linked from the baseline instead of requiring every case at unit, integration and browser layers.
+These remain acceptance scenarios, not a blanket claim of coverage. The source-linked packing
+[management component](../../tests/frontend/packing-management-ui.spec.ts),
+[controller/DBAL integration](../../tests/integration/packing-management-api.spec.ts), and
+[HTTP](../../tests/e2e/frontend-pilot-api.spec.ts) suites now cover selected implemented boundaries. Current run and
+visual-review evidence belongs to the [pilot record](../FRONTEND_PILOT.md). No application tests or database commands
+were run for this documentation update; use the cheapest meaningful layer for each remaining scenario.

@@ -4,7 +4,7 @@ documentation-metadata
 audience: novice users; guests; registered users
 owner: identity feature maintainers
 status: current
-last-verified: 2026-09-14
+last-verified: 2026-10-07
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: named email greetings and To headers; ten-second transient feedback and persistent progress; D01 identity, onboarding, guest recovery, profile, migration, and account-lifecycle behavior; D14 rendered help navigation, semantic checks, and trusted-content integration
 source-anchors: src/public/js/shared/alerts.ts; src/public/js/notifications.ts; tests/unit/email-rendering.spec.ts; tests/frontend/alerts.spec.ts; src/routes/users.ts; src/routes/guests.ts; src/controller/userController.ts; src/middleware/guestFlowFactory.ts; src/middleware/permissionMiddleware.ts; src/modules/database/services/UserService.ts; src/modules/database/entities/user/; src/modules/oidc.ts; src/modules/settings.ts; src/modules/email.ts; src/modules/lib/guestRegistrationNags.ts; src/public/js/core/password-validation.ts; src/views/users/; src/views/layout.pug; tests/integration/authentication-workflows.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
@@ -167,7 +167,7 @@ An **account** is how you sign in. A **profile** is the participant identity tha
 - Each profile has its own display name, participation, and ownership relationships.
 - Changing the active profile changes which items appear in **Your overview** and which identity is used for new actions.
 
-The local-account username is not the same as the profile name. Renaming a profile changes the displayed participant name but does not change the username used for local login. For a guest, the account identifier remains the name originally used to create the guest, even after the profile name is changed.
+The local-account username is not the same as the profile name. Renaming a profile changes the displayed participant name but does not change the username used for local login. In guest-recovery emails, the guest account keeps its original name even after the profile is renamed.
 
 ## Edit the active profile
 

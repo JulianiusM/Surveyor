@@ -1,0 +1,48 @@
+{
+  "fictionalProfile": "Beispielprofil",
+  "navigation": {
+    "title": "Orientierung in Surveyor",
+    "intro": "Mit {{new}} anlegen, mit {{overview}} zurückkehren, mit {{help}} nachlesen.",
+    "rows": [
+      {
+        "title": "Etwas erstellen",
+        "body": ["Planen: {{survey}}, {{activity}}, {{event}}.", "Organisieren: {{packing}}, {{drivers}}."]
+      },
+      {
+        "title": "Zur Arbeit zurückkehren",
+        "body": ["Deine Übersicht zeigt die Teilnahmen und", "verwaltbaren Einträge des aktiven Profils."]
+      },
+      {
+        "title": "Die passende Anleitung finden",
+        "body": ["Hilfe zur aktuellen Seite oder Funktion öffnen.", "Nach Aufgaben oder sichtbaren Begriffen suchen."]
+      }
+    ]
+  },
+  "survey": {
+    "title": "Ein Muster wählen, das sich monatlich wiederholt",
+    "intro": "Umfragen stimmen wiederkehrende Wochentagspositionen ab.",
+    "firstHeading": "Neue Kombination hinzufügen",
+    "fields": [
+      {"label": "Wochentag — Feld „Weekday“", "value": "Monday", "meaning": "Montag"},
+      {"label": "Monatsposition — Feld „Day in month“", "value": "1. day in month", "meaning": "Erstes Vorkommen im Monat"}
+    ],
+    "instruction": "Die Werte auswählen und Add (Hinzufügen) wählen.",
+    "recurrenceHeading": "Erster Montag in jedem Monat",
+    "recurrenceBody": "Die Wochentagsposition bleibt gleich; das Kalenderdatum ändert sich.",
+    "months": ["Monat 1 → erster Montag", "Monat 2 → erster Montag", "Monat 3 → erster Montag"],
+    "answer": "Jedes Muster mit Yes (Ja), Maybe (Vielleicht) oder No (Nein) beantworten.",
+    "foot": ["Ein einzelner benannter Monat ist ein zusätzlicher Anwendungsfall.", "Die Umfrage speichert ein Muster, kein bestimmtes Kalenderdatum."]
+  },
+  "packing": {
+    "title": "Packen: gemeinsam oder nur auf diesem Gerät?",
+    "intro": "Zusagen sind gemeinsam. Deine Checkliste „{{packed}}“ bleibt lokal.",
+    "fictionalItem": "Campingkocher",
+    "personalHeading": "Persönliche Checkliste",
+    "personalBody": ["Nur in diesem Browser gespeichert.", "Keine Übertragung auf andere Geräte.", "Ändert keine Zusagen."],
+    "personalFoot": ["Beim Löschen von Browserdaten", "können die Häkchen verloren gehen."],
+    "sharedHeading": "Gemeinsame Zusagen",
+    "sharedBody": ["Wer den Gegenstand mitbringt,", "wird mit der Gruppe geteilt.", "Namen und Zahlen aktualisieren sich", "für alle mit Zugriff auf die Liste."],
+    "sharedFoot": ["Ein Häkchen bei „{{packed}}“", "übernimmt keinen Gegenstand."],
+    "foot": "Zeilen für {{everyone}} erzeugen keine individuellen Zusagen."
+  }
+}

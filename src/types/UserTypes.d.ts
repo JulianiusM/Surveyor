@@ -86,6 +86,8 @@ export type Entity = EntityBase & {
     url: string;
     type: EntityType;
     imageUrl?: string | null;
+    /** Opaque image identity for clients that refresh an unchanged image URL. */
+    imageVersion?: string | null;
     /**
      * Shared server-derived lifecycle and permitted actions for an entity card.
      * Optional because the card contract is also used on pages without archival controls;

@@ -27,6 +27,29 @@ describe('help renderer and source boundaries (synthetic fixtures)', () => {
         expect(result.toc).toContainEqual({id: 'first-task', title: 'First task', level: 2});
     });
 
+    it('keeps translated bodies and headings while preserving language-independent deep links', () => {
+        const result = renderTrustedHelpMarkdown('# Anleitung\n<!--\ndocumentation-metadata\nheading-anchors: 1:guide; 2:bring-water\n-->\n\n## Wasser mitbringen\n\nFülle deine Flasche auf. [Weiter](#bring-water)',
+            'synthetic translation', 'de');
+        expect(result.title).toBe('Anleitung');
+        expect(result.content).toContain('<h2 id="bring-water">Wasser mitbringen</h2>');
+        expect(result.content).toContain('Fülle deine Flasche auf.');
+        expect(result.content).not.toContain('Fill your bottle');
+        expect(result.toc).toEqual([{id: 'bring-water', title: 'Wasser mitbringen', level: 2}]);
+        expect(resolveContextualHelpUrl('/users/profile', 'de')).toBe('/help/getting_started?locale=de#understand-accounts-and-profiles');
+        expect(getHelpDocsBasePath('de')).toBe(path.join(getHelpDocsBasePath(), 'de'));
+        expect(getHelpDocsBasePath('../../uploads')).toBe(getHelpDocsBasePath());
+    });
+
+    it.each([
+        '1:guide',
+        '1:guide; 3:bring-water',
+        '1:guide; 2:guide',
+        '1:guide; 2:bad"onclick="run',
+    ])('rejects unsafe or mismatched authored heading anchors: %s', anchors => {
+        expect(() => renderTrustedHelpMarkdown(`# Anleitung\n<!--\ndocumentation-metadata\nheading-anchors: ${anchors}\n-->\n\n## Wasser mitbringen`,
+            'synthetic translation', 'de')).toThrow(/heading anchors/u);
+    });
+
     it.each([
         '<script>alert(1)</script>',
         '<details><summary>Open</summary></details>',

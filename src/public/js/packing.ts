@@ -29,7 +29,12 @@ function initInlineEdit(): void {
 
     document.querySelectorAll('td[data-edit]').forEach(td => {
         td.addEventListener('dblclick', () => {
-            startInlineEdit(td as HTMLElement, `/api/packing/${listId}/item`);
+            const cell = td as HTMLElement;
+            // Packing exposes separate title/capacity grants. Keep its browser gate aligned
+            // with the rendered cells and attribute route without changing other features.
+            const permission = cell.dataset.edit === 'title' ? 'EDIT_TITLE'
+                : cell.dataset.edit === 'maxAssignees' ? 'EDIT_CAPACITY' : undefined;
+            startInlineEdit(cell, `/api/packing/${listId}/item`, permission);
         });
     });
 

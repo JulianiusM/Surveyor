@@ -1,7 +1,9 @@
 import type {Request} from 'express';
 import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 import * as userController from '../../src/controller/userController';
+import {AppDataSource} from '../../src/modules/database/dataSource';
 import {Profile} from '../../src/modules/database/entities/user/Profile';
+import {User} from '../../src/modules/database/entities/user/User';
 import * as userService from '../../src/modules/database/services/UserService';
 import email from "../../src/modules/email";
 import {persistIntegrationProfile, registerLocalAccount,} from '../keywords/coreDomainKeywords';
@@ -23,6 +25,55 @@ afterAll(async () => {
 });
 
 describe('authentication user stories', () => {
+    it('rechecks transport admission after credential verification before replacing an identity', async () => {
+        const {id, username} = await registerLocalAccount('frontend-stale-login');
+        await userService.activateUser(id);
+        const session = {frontendContext: 'old-context', frontendCsrfToken: 'old-csrf'} as Request['session'];
+        const rejected = new Error('identity changed during verification');
+        const beforeTransition = vi.fn(async () => { throw rejected; });
+        await expect(userController.loginUser({username, password: 'initial-secret'}, session, {beforeTransition})).rejects.toBe(rejected);
+        expect(beforeTransition).toHaveBeenCalledOnce();
+        expect(session.auth).toBeUndefined();
+        expect(session.profile).toBeUndefined();
+        expect(session.frontendContext).toBe('old-context');
+        expect(session.frontendCsrfToken).toBe('old-csrf');
+    });
+
+    it('uses one controller workflow for frontend account and guest email links with bounded return destinations', async () => {
+        const activation = vi.spyOn(email, 'sendActivationEmail').mockResolvedValue(undefined);
+        const reset = vi.spyOn(email, 'sendPasswordResetEmail').mockResolvedValue(undefined);
+        const guestMail = vi.spyOn(email, 'sendLinkEmail').mockResolvedValue(undefined);
+        const recovery = vi.spyOn(email, 'sendGuestRecoveryEmail').mockResolvedValue(undefined);
+        try {
+            const next = '/frontend-pilot/packing/example?locale=de#items';
+            await userController.registerUser({username: 'frontend-link-account', displayname: 'Frontend Name',
+                email: 'frontend-links@example.test', password: 'initial-secret', password_repeat: 'initial-secret'},
+                undefined, {frontend: true, next});
+            const activateUrl = new URL(activation.mock.calls[0][1]);
+            expect(activateUrl.pathname).toMatch(/^\/frontend-pilot\/users\/activate\/[^/]+$/);
+            expect(activateUrl.searchParams.get('next')).toBe(next);
+            await userController.sendPasswordForgotMail('frontend-link-account', {frontend: true, next: '//outside.invalid'});
+            const resetUrl = new URL(reset.mock.calls[0][1]);
+            expect(resetUrl.pathname).toMatch(/^\/frontend-pilot\/users\/reset-password\/[^/]+$/);
+            expect(resetUrl.searchParams.get('next')).toBe('/frontend-pilot');
+
+            const session = {} as Request['session'];
+            const link = await userController.registerGuest('Frontend Guest', '  FRONTEND-GUEST@example.test  ', session,
+                {frontend: true, next});
+            expect(session.auth?.guest?.username).toBe('Frontend Guest');
+            expect(session.profile?.guestId).toBe(session.auth?.guest?.id);
+            expect(session.frontendContext).toBeTruthy();
+            expect(guestMail).toHaveBeenCalledWith({name: 'Frontend Guest', address: 'frontend-guest@example.test'}, link);
+            expect(new URL(link).searchParams.get('next')).toBe(next);
+            await userController.recoverGuestAccount('frontend-guest@example.test', {frontend: true, next});
+            const recovered = recovery.mock.calls[0][1];
+            expect(recovered).toHaveLength(1);
+            expect(recovered[0].link).toBe(link);
+        } finally {
+            activation.mockRestore(); reset.mockRestore(); guestMail.mockRestore(); recovery.mockRestore();
+        }
+    });
+
     it.each([
         ['blank-name-account', '   ', 'blank-name-account'],
         ['spaced-name-account', '  Morgan\r\n  Example  ', 'Morgan Example'],
@@ -159,6 +210,9 @@ describe('authentication user stories', () => {
 
         const token = await userService.generatePasswordResetToken(username);
         expect((await userService.verifyPasswordResetToken(token))?.id).toBe(userId);
+        // Both native GET and v1 preflight call this non-consuming controller admission.
+        await expect(userController.checkPasswordForgotToken(token)).resolves.toBeUndefined();
+        await expect(userController.checkPasswordForgotToken(token)).resolves.toBeUndefined();
         await userController.resetPassword(token, {
             password: 'replacement-secret',
             confirmPassword: 'replacement-secret'
@@ -175,6 +229,18 @@ describe('authentication user stories', () => {
             confirmPassword: 'replacement-secret'
         });
         expect(await userService.verifyPasswordResetToken(token)).toBeNull();
+        await expect(userController.checkPasswordForgotToken(token)).rejects.toMatchObject({status: 401, cause: 'TOKEN_INVALID'});
+    });
+
+    it('rejects unknown and expired reset links before presenting the password form', async () => {
+        await expect(userController.checkPasswordForgotToken('unknown-reset-token'))
+            .rejects.toMatchObject({status: 401, cause: 'TOKEN_INVALID'});
+        const {id, username} = await registerLocalAccount('reset-expiry');
+        const token = await userService.generatePasswordResetToken(username);
+        await AppDataSource.getRepository(User).update(id, {resetTokenExpiration: new Date('2000-01-01T00:00:00Z')});
+        await expect(userController.checkPasswordForgotToken(token)).rejects.toMatchObject({status: 401, cause: 'TOKEN_INVALID'});
+        // Rejection leaves the existing password unchanged; only a successful reset consumes it.
+        await expect(userService.verifyPassword(id, 'initial-secret')).resolves.toBe(true);
     });
 
     it('creates a guest identity with a linked profile', async () => {

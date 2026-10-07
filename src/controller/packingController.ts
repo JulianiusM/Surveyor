@@ -15,7 +15,8 @@
  */
 
 import {Request} from "express";
-import {assertEntityPropertyContext, normalizeBasicProperties} from './entityAdminController';
+import {assertEntityPropertyContext} from './entityAdminController';
+import {preparePackingMetadataPatch} from '../modules/packing/api';
 import type {BasicEntityPropertyPatch} from '../types/EntityPropertyTypes';
 import Joi from 'joi';
 import {PackingItem} from "../modules/database/entities/packing/PackingItem";
@@ -91,7 +92,7 @@ async function createEntity(
             description: it.description || '',
             maxAssignees: Number(it.maxAssignees) || 1,
             requiredByAll: Boolean(it.requiredByAll),
-            position: i
+            pos: i
         })),
         listData.eventId,
         listData.headerImg,
@@ -153,7 +154,7 @@ async function deleteEntity(list: PackingList, session: Request['session']) {
 // ---------- API ----------
 // API-specific controllers
 async function updateDescription(id: string, body: any, expectedEventId?: string | null) {
-    await saveProperties(id, normalizeBasicProperties({description: body.description}), expectedEventId);
+    await saveProperties(id, preparePackingMetadataPatch({description: body.description}), expectedEventId);
     return 'Description updated';
 }
 
@@ -172,7 +173,7 @@ async function quickAddItem(list: PackingList, body: any, session: SessionLike) 
         title,
         description,
         maxAssignees: Number(maxAssignees) || 1,
-        position: last + 1
+        pos: last + 1
     };
 
     await packingService.addPackingItems(list.id, [item], session.profile!.id);
@@ -232,7 +233,7 @@ async function deleteHeaderImg(entity: EntityBase) {
 function getAssignmentAccessMapping() {
     return {
         assign: (body: any, profileId: string) => assignItem(body.itemId, profileId),
-        unassign: (body: any, profileId: string) => packingService.unassignPackingItem(body.itemId, profileId),
+        unassign: async (body: any, profileId: string) => { await packingService.unassignPackingItem(body.itemId, profileId); },
     };
 }
 
@@ -266,7 +267,7 @@ async function saveProperties(id: string, patch: BasicEntityPropertyPatch, expec
 
 /** Normalize all submitted fields before acquiring a lock; omitted fields remain unchanged. */
 async function updateProperties(entity: EntityBase, body: unknown) {
-    await saveProperties(entity.id, normalizeBasicProperties(body), entity.eventId ?? null);
+    await saveProperties(entity.id, preparePackingMetadataPatch(body), entity.eventId ?? null);
     return 'Properties updated';
 }
 

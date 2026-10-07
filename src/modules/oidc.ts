@@ -20,6 +20,7 @@ import {getDefaultProfile} from "../controller/userController";
 import {findOrCreateUserFromOidc} from "./database/services/UserService";
 import {ExpectedError} from "./lib/errors";
 import {persistSession} from "./lib/session";
+import {rotateFrontendSessionContext} from './lib/frontendSession';
 import settings from "./settings";
 
 let config: oidc.Configuration;
@@ -120,6 +121,7 @@ export async function callback(req: Request) {
     });
     req.session.auth = {user};
     req.session.profile = getDefaultProfile(user.profiles);
+    rotateFrontendSessionContext(req.session);
 
     // Optionally keep tokens for logout/API calls
     req.session.tokens = {
@@ -144,6 +146,7 @@ export async function logout(session: Request['session']) {
     session.auth = undefined;
     session.profile = undefined;
     session.tokens = undefined;
+    rotateFrontendSessionContext(session);
 
     await persistSession(session);
 

@@ -142,8 +142,9 @@ export function startInlineEditArea(
  * Start inline editing for a single-line field
  * @param elem Element to edit
  * @param baseUrl Base API URL for saving
+ * @param permissionKey Feature-specific field grant; omitted callers retain their existing metadata guard
  */
-export function startInlineEdit(elem: HTMLElement, baseUrl: string): void {
+export function startInlineEdit(elem: HTMLElement, baseUrl: string, permissionKey?: PermType): void {
     if (!elem || elem.querySelector('input')) return;
 
     disableDnD();
@@ -170,7 +171,7 @@ export function startInlineEdit(elem: HTMLElement, baseUrl: string): void {
     try {
         const guard = fieldGuard[field || ''] ?? fieldGuard.default;
         if (guard.scope === 'item') {
-            requireItemPerm(guard.itemId || '', guard.key, guard.action, guard.parentKey);
+            requireItemPerm(guard.itemId || '', permissionKey ?? guard.key, guard.action, guard.parentKey);
         } else {
             requireEntityPerm(guard.key, guard.action);
         }

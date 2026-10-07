@@ -479,8 +479,8 @@ export async function getUserById(id: number): Promise<User | null> {
     return await AppDataSource.getRepository(User).findOne({where: {id}, relations: {profiles: true}});
 }
 
-export async function getProfileById(id: string) {
-    return await AppDataSource.getRepository(Profile).findOneBy({id});
+export async function getProfileById(id: string, manager: EntityManager = AppDataSource.manager) {
+    return await manager.getRepository(Profile).findOneBy({id});
 }
 
 export async function getProfilesByIds(ids: string[], manager: EntityManager = AppDataSource.manager): Promise<Pick<Profile, 'id' | 'name'>[]> {

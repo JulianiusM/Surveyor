@@ -21,14 +21,13 @@ import {canAccessEntityView, getArchivePresentations, getEntityPropertyPresentat
 import {authorizeEventLink, projectEventLinkOption} from "../controller/eventController";
 import {archiveKey} from "../modules/archive/policy";
 import * as userService from "../modules/database/services/UserService";
-import mailer, {resolveEmailRecipientName} from '../modules/email';
+import {registerGuest as registerGuestIdentity} from '../controller/userController';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {APIError, ExpectedError, ValidationError} from '../modules/lib/errors';
 import {checkNewImage, prepareFileUploader, removeImage} from "../modules/lib/fileCommons";
 import {getGuestRegistrationNags} from "../modules/lib/guestRegistrationNags";
 import {PERM} from "../modules/lib/permissions";
-import {persistSession} from "../modules/lib/session";
-import {buildGuestLink, getItemFromEntityPermFct, getResource} from "../modules/lib/util";
+import {getItemFromEntityPermFct, getResource} from "../modules/lib/util";
 
 import renderer from '../modules/renderer';
 import settings from "../modules/settings";
@@ -249,12 +248,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
                     email
                 });
             }
-            const newGuest = await registerGuest(username, normEmail);
-            req.session.auth = {guest: newGuest};
-            req.session.profile = newGuest.profile;
-            await persistSession(req.session);
-            const link = buildGuestLink(newGuest.id, newGuest.token);
-            if (normEmail) await mailer.sendLinkEmail({name: resolveEmailRecipientName(newGuest.username, newGuest.profile?.name), address: normEmail}, link);
+            const link = await registerGuestIdentity(username, normEmail, req.session, undefined, registerGuest);
             req.flash('success', `Login successful. Use ${link} to edit later.`);
             res.redirect(buildRedirect(entityId));
         }));

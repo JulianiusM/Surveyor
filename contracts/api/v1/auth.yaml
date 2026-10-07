@@ -1,0 +1,533 @@
+# Identity transitions deliberately return their new captured context. All commands require
+# the prior context and CSRF token; account controllers retain credential and ownership checks.
+schemas:
+  FrontendReturn:
+    type: string
+    maxLength: 2048
+  LoginInput:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "username"
+      - "password"
+    properties:
+      next:
+        "$ref": "./openapi.yaml#/components/schemas/FrontendReturn"
+      username:
+        type: "string"
+        minLength: 1
+        maxLength: 100
+      password:
+        type: "string"
+        minLength: 1
+        maxLength: 1000
+  RegistrationInput:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "username"
+      - "displayname"
+      - "email"
+      - "password"
+      - "password_repeat"
+    properties:
+      next:
+        "$ref": "./openapi.yaml#/components/schemas/FrontendReturn"
+      username:
+        type: "string"
+        minLength: 1
+        maxLength: 100
+      displayname:
+        type: "string"
+        minLength: 1
+        maxLength: 100
+      email:
+        type: "string"
+        format: "email"
+        maxLength: 100
+      password:
+        type: "string"
+        minLength: 8
+        maxLength: 1000
+      password_repeat:
+        type: "string"
+        minLength: 8
+        maxLength: 1000
+  UsernameInput:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "username"
+    properties:
+      next:
+        "$ref": "./openapi.yaml#/components/schemas/FrontendReturn"
+      username:
+        type: "string"
+        minLength: 1
+        maxLength: 100
+  EmailInput:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "email"
+    properties:
+      next:
+        "$ref": "./openapi.yaml#/components/schemas/FrontendReturn"
+      email:
+        type: "string"
+        format: "email"
+        maxLength: 100
+  PasswordResetCheck:
+    type: object
+    additionalProperties: false
+    required: [valid]
+    properties:
+      valid: {type: boolean, const: true}
+  ResetInput:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "token"
+      - "password"
+      - "confirmPassword"
+    properties:
+      token:
+        type: "string"
+        minLength: 1
+        maxLength: 256
+      password:
+        type: "string"
+        minLength: 8
+        maxLength: 1000
+      confirmPassword:
+        type: "string"
+        minLength: 8
+        maxLength: 1000
+  TokenInput:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "token"
+    properties:
+      token:
+        type: "string"
+        minLength: 1
+        maxLength: 256
+  GuestLoginInput:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "guestId"
+      - "token"
+    properties:
+      guestId:
+        "$ref": "./common.yaml#/schemas/Uuid"
+      token:
+        type: "string"
+        minLength: 1
+        maxLength: 256
+  ProfileSwitchInput:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "profileId"
+    properties:
+      profileId:
+        "$ref": "./common.yaml#/schemas/Uuid"
+  GuestRegistrationInput:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "username"
+      - "email"
+    properties:
+      username:
+        type: "string"
+        minLength: 1
+        maxLength: 100
+      email:
+        type:
+          - "string"
+          - "null"
+        format: "email"
+        maxLength: 100
+  GuestEntry:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "id"
+      - "title"
+    properties:
+      id:
+        "$ref": "./common.yaml#/schemas/Uuid"
+      title:
+        type: "string"
+  GuestEmailExists:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "exists"
+    properties:
+      exists:
+        type: "boolean"
+  IdentityResult:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "session"
+      - "personalLink"
+      - "redirect"
+    properties:
+      session:
+        "$ref": "./openapi.yaml#/components/schemas/SessionView"
+      personalLink:
+        type:
+          - "string"
+          - "null"
+      redirect:
+        type:
+          - "string"
+          - "null"
+paths:
+  "/auth/login":
+    post:
+      operationId: "loginIdentity"
+      summary: "login Identity"
+      security: []
+      parameters:
+        - {"$ref":"./openapi.yaml#/components/parameters/Context"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Locale"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Csrf"}
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "./openapi.yaml#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: "Confirmed operation result"
+          headers:
+            "X-Surveyor-Context":
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/IdentityResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/auth/logout":
+    post:
+      operationId: "logoutIdentity"
+      summary: "logout Identity"
+      security: []
+      parameters:
+        - {"$ref":"./openapi.yaml#/components/parameters/Context"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Locale"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Csrf"}
+      responses:
+        "200":
+          description: "Confirmed operation result"
+          headers:
+            "X-Surveyor-Context":
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/IdentityResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/auth/register":
+    post:
+      operationId: "registerAccount"
+      summary: "register Account"
+      security: []
+      parameters:
+        - {"$ref":"./openapi.yaml#/components/parameters/Context"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Locale"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Csrf"}
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "./openapi.yaml#/components/schemas/RegistrationInput"
+      responses:
+        "200":
+          description: "Confirmed operation result"
+          headers:
+            "X-Surveyor-Context":
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/auth/forgot-password":
+    post:
+      operationId: "requestPasswordReset"
+      summary: "request Password Reset"
+      security: []
+      parameters:
+        - {"$ref":"./openapi.yaml#/components/parameters/Context"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Locale"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Csrf"}
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "./openapi.yaml#/components/schemas/UsernameInput"
+      responses:
+        "200":
+          description: "Confirmed operation result"
+          headers:
+            "X-Surveyor-Context":
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/auth/reset-password":
+    get:
+      operationId: checkPasswordReset
+      summary: Check a recovery token before presenting the password form
+      security: []
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - name: token
+          in: query
+          required: true
+          schema: {$ref: '#/schemas/TokenInput/properties/token'}
+      responses:
+        '200':
+          description: The token is currently valid; submitting the new password checks it again.
+          content:
+            application/json:
+              schema: {$ref: '#/schemas/PasswordResetCheck'}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+    post:
+      operationId: "resetAccountPassword"
+      summary: "reset Account Password"
+      security: []
+      parameters:
+        - {"$ref":"./openapi.yaml#/components/parameters/Context"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Locale"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Csrf"}
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "./openapi.yaml#/components/schemas/ResetInput"
+      responses:
+        "200":
+          description: "Confirmed operation result"
+          headers:
+            "X-Surveyor-Context":
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/auth/activate":
+    post:
+      operationId: "activateIdentity"
+      summary: "activate Identity"
+      security: []
+      parameters:
+        - {"$ref":"./openapi.yaml#/components/parameters/Context"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Locale"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Csrf"}
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "./openapi.yaml#/components/schemas/TokenInput"
+      responses:
+        "200":
+          description: "Confirmed operation result"
+          headers:
+            "X-Surveyor-Context":
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/auth/guest-login":
+    post:
+      operationId: "loginGuestIdentity"
+      summary: "login Guest Identity"
+      security: []
+      parameters:
+        - {"$ref":"./openapi.yaml#/components/parameters/Context"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Locale"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Csrf"}
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "./openapi.yaml#/components/schemas/GuestLoginInput"
+      responses:
+        "200":
+          description: "Confirmed operation result"
+          headers:
+            "X-Surveyor-Context":
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/IdentityResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/auth/guest-recovery":
+    post:
+      operationId: "recoverGuestIdentity"
+      summary: "recover Guest Identity"
+      security: []
+      parameters:
+        - {"$ref":"./openapi.yaml#/components/parameters/Context"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Locale"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Csrf"}
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "./openapi.yaml#/components/schemas/EmailInput"
+      responses:
+        "200":
+          description: "Confirmed operation result"
+          headers:
+            "X-Surveyor-Context":
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/auth/guest-email-exists":
+    post:
+      operationId: "findGuestEmail"
+      summary: "find Guest Email"
+      security: []
+      parameters:
+        - {"$ref":"./openapi.yaml#/components/parameters/Context"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Locale"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Csrf"}
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "./openapi.yaml#/components/schemas/EmailInput"
+      responses:
+        "200":
+          description: "Confirmed operation result"
+          headers:
+            "X-Surveyor-Context":
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/GuestEmailExists"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/auth/profile":
+    put:
+      operationId: "switchIdentityProfile"
+      summary: "switch Identity Profile"
+      security: []
+      parameters:
+        - {"$ref":"./openapi.yaml#/components/parameters/Context"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Locale"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Csrf"}
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "./openapi.yaml#/components/schemas/ProfileSwitchInput"
+      responses:
+        "200":
+          description: "Confirmed operation result"
+          headers:
+            "X-Surveyor-Context":
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/IdentityResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/packing-lists/{listId}/guest":
+    get:
+      operationId: "getPackingGuestEntry"
+      summary: "get Packing Guest Entry"
+      security: []
+      parameters:
+        - {"$ref":"./openapi.yaml#/components/parameters/Context"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Locale"}
+        - {"$ref":"./openapi.yaml#/components/parameters/ListId"}
+      responses:
+        "200":
+          description: "Confirmed operation result"
+          headers:
+            "X-Surveyor-Context":
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/GuestEntry"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+    post:
+      operationId: "registerPackingGuest"
+      summary: "register Packing Guest"
+      security: []
+      parameters:
+        - {"$ref":"./openapi.yaml#/components/parameters/Context"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Locale"}
+        - {"$ref":"./openapi.yaml#/components/parameters/Csrf"}
+        - {"$ref":"./openapi.yaml#/components/parameters/ListId"}
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "./openapi.yaml#/components/schemas/GuestRegistrationInput"
+      responses:
+        "200":
+          description: "Confirmed operation result"
+          headers:
+            "X-Surveyor-Context":
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/IdentityResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"

@@ -595,6 +595,10 @@ implementation_defects:
   - src/views/packing/packing-view.pug renders title editing for EDIT_TITLE or ITEM_EDIT and capacity editing for EDIT_CAPACITY or ITEM_EDIT
   - src/routes/api/packing.ts protects the shared item-attribute mutation route with EDIT_META or ITEM_EDIT
   - src/public/js/packing.ts sends both title and maxAssignees changes through that shared route
+  implementation_review_2026_10_07:
+  - Native packing rendering and the attribute route now use EDIT_TITLE and EDIT_CAPACITY with ITEM_EDIT fallback; the packing browser initializer supplies these field grants to the shared inline editor.
+  - The shared editor keeps its existing metadata guard for drivers and activity callers; tests/frontend/packing-inline-edit.spec.ts covers packing granular grants, ITEM_EDIT, EDIT_META-only denial, and unchanged peer behavior.
+  - Focused browser DOM and packing rendering checks passed; status remains open until the closing native-route positive/negative matrix is verified. The evidence above records the original defect rather than the corrected current guard.
   impact: A profile granted only the field-specific title or capacity permission can see an edit control but have the save rejected.
   documentation_contract: D10 documents the coherent working contract in which the field-specific edit grants shown by the page authorize the corresponding save operation.
   closes_when:
@@ -869,6 +873,36 @@ implementation_defects:
   closes_when:
   - absent dietary notes are normalized consistently before equality checks without erasing a real note or meal-choice change
   - controller assertions cover absent versus blank notes, unchanged selections and actual forbidden changes after the deadline
+- id: IMP-039
+  status: open
+  severity: low
+  owner: frontend maintainers
+  out_of_scope_for_documentation_migration: true
+  title: Contextual Help links can be highlighted as the current business page
+  evidence:
+  - src/public/js/core/navigation.ts selects the first navbar href containing the business route fragment
+  - On a packing page, the contextual /help/packing_lists navbar link also matches the /packing fragment
+  - The paired packing capture on 2026-10-07 shows native Help highlighted while the independently routed pilot correctly leaves it inactive
+  impact: The native navbar can indicate Help as the current page while a business page is open.
+  documentation_contract: Navigation highlights the current destination rather than a related help topic.
+  closes_when:
+  - navigation matching distinguishes business routes from contextual help URLs
+  - a browser-module assertion covers a business page with its contextual Help link and the actual Help page
+- id: IMP-040
+  status: closed
+  closed_on: '2026-10-07'
+  severity: medium
+  owner: authentication maintainers
+  out_of_scope_for_documentation_migration: true
+  title: Native activation can redirect before its success flash is persisted
+  evidence:
+  - src/routes/users.ts previously queued the activation success flash and immediately redirected to the login page
+  - express-session begins its deferred store save in res.end but can flush redirect headers before that save completes
+  - The explicitly disposable 2026-10-07T14-36-07-881Z capture server log records the followed login response before the activation response finishes, with the success alert absent
+  impact: Account activation succeeds, but the immediately followed login page can omit its one-time success confirmation.
+  documentation_contract: A successful activation redirects to login with its success confirmation available on that first page.
+  resolution: The activation route awaits the existing persistSession helper after queuing the flash and before sending either redirect.
+  validation: The guarded disposable 2026-10-07T15-21-55-963Z built-application capture completed the real registration/email-link activation workflow at desktop and mobile widths; both native activation-success screenshots show Account successfully activated above the first login form. The capture manifest records both scenes as captured, all 15 behavior checks passed, and no browser errors or failed requests.
 findings:
 - id: DOC-ENTITY-PROPERTIES-VISUAL
   severity: low

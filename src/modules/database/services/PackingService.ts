@@ -22,6 +22,8 @@ import {AppDataSource} from '../dataSource';
 import {PackingAssignment} from '../entities/packing/PackingAssignment';
 import {PackingItem} from '../entities/packing/PackingItem';
 import {PackingList} from '../entities/packing/PackingList';
+import {EventRegistration} from '../entities/event/EventRegistration';
+import {Event} from '../entities/event/Event';
 import * as entityAdminService from "./EntityAdminService";
 
 // Packing Lists
@@ -38,8 +40,8 @@ export async function createPackingList(listId: string, ownerId: string, title: 
     await repo.save(list);
 }
 
-export async function createPackingListTx(ownerId: string, title: string, desc: string, items: Partial<PackingItem>[], eventId?: string, headerImg?: string | null,) {
-    return await AppDataSource.transaction(async (manager) => {
+export async function createPackingListTx(ownerId: string, title: string, desc: string | null, items: Partial<PackingItem>[], eventId?: string, headerImg?: string | null, manager?: EntityManager) {
+    async function persist(manager: EntityManager) {
         const listId = generateUniqueId();
         const listRepo = manager.getRepository(PackingList);
         const itemRepo = manager.getRepository(PackingItem);
@@ -68,15 +70,16 @@ export async function createPackingListTx(ownerId: string, title: string, desc: 
         }
 
         return listId;
-    });
+    }
+    return manager ? persist(manager) : AppDataSource.transaction(persist);
 }
 
 export async function updatePackingListTitle(listId: string, title: string) {
-    await AppDataSource.getRepository(PackingList).update(listId, {title});
+    await updatePackingListProperties(listId, {title}, AppDataSource.manager);
 }
 
-export async function deletePackingList(listId: string) {
-    await AppDataSource.getRepository(PackingList).delete(listId);
+export async function deletePackingList(listId: string, manager: EntityManager = AppDataSource.manager) {
+    await manager.getRepository(PackingList).delete(listId);
 }
 
 export async function getPackingListById(listId: string) {
@@ -92,11 +95,14 @@ export async function getPackingListByProfileId(profileId: string) {
 }
 
 export async function updatePackingListDescription(listId: string, description: string) {
-    await AppDataSource.getRepository(PackingList).update(listId, {description});
+    await updatePackingListProperties(listId, {description}, AppDataSource.manager);
 }
 
-export async function updateHeaderImage(listId: string, headerImg?: string | null) {
-    await AppDataSource.getRepository(PackingList).update(listId, {headerImg});
+export async function updateHeaderImage(listId: string, headerImg?: string | null, manager: EntityManager = AppDataSource.manager): Promise<void> {
+    if (!manager.queryRunner?.isTransactionActive) {
+        return withPackingListLock(listId, transaction => updateHeaderImage(listId, headerImg, transaction));
+    }
+    await manager.getRepository(PackingList).update(listId, {headerImg});
 }
 
 export async function getManagedLists(profileId: string) {
@@ -123,8 +129,11 @@ export function getPackingParticipationQuery(profileId: string, manager: EntityM
 }
 
 // Packing Items
-export async function createPackingItem(listId: string, item: Partial<PackingItem>, profileId: string) {
-    const repo = AppDataSource.getRepository(PackingItem);
+export async function createPackingItem(listId: string, item: Partial<PackingItem>, profileId: string, manager: EntityManager = AppDataSource.manager): Promise<void> {
+    if (!manager.queryRunner?.isTransactionActive) {
+        return withPackingListLock(listId, transaction => createPackingItem(listId, item, profileId, transaction));
+    }
+    const repo = manager.getRepository(PackingItem);
     const entity = repo.create({
         id: item.id,
         entity: {id: listId},
@@ -132,14 +141,18 @@ export async function createPackingItem(listId: string, item: Partial<PackingIte
         description: item.description,
         maxAssignees: item.maxAssignees,
         pos: item.pos,
+        requiredByAll: item.requiredByAll,
         profile: {id: profileId},
     });
     await repo.save(entity);
 }
 
-export async function addPackingItems(listId: string, items: Partial<PackingItem>[], profileId: string) {
+export async function addPackingItems(listId: string, items: Partial<PackingItem>[], profileId: string, manager: EntityManager = AppDataSource.manager): Promise<void> {
+    if (!manager.queryRunner?.isTransactionActive) {
+        return withPackingListLock(listId, transaction => addPackingItems(listId, items, profileId, transaction));
+    }
     if (!items.length) return;
-    const repo = AppDataSource.getRepository(PackingItem);
+    const repo = manager.getRepository(PackingItem);
     const entities = items.map(it => repo.create({
         id: it.id,
         entity: {id: listId},
@@ -152,12 +165,12 @@ export async function addPackingItems(listId: string, items: Partial<PackingItem
     await repo.save(entities);
 }
 
-export async function getPackingItemById(itemId: string) {
-    return await AppDataSource.getRepository(PackingItem).findOneBy({id: itemId});
+export async function getPackingItemById(itemId: string, manager: EntityManager = AppDataSource.manager) {
+    return await manager.getRepository(PackingItem).findOneBy({id: itemId});
 }
 
-export async function updatePackingItem(itemId: string, fields: Partial<PackingItem>) {
-    const repo = AppDataSource.getRepository(PackingItem);
+export async function updatePackingItem(itemId: string, fields: Partial<PackingItem>, manager: EntityManager = AppDataSource.manager) {
+    const repo = manager.getRepository(PackingItem);
 
     // Only include fields that are not undefined
     const updateData: Partial<PackingItem> = {};
@@ -165,6 +178,7 @@ export async function updatePackingItem(itemId: string, fields: Partial<PackingI
     if (fields.description !== undefined) updateData.description = fields.description;
     if (fields.maxAssignees !== undefined) updateData.maxAssignees = fields.maxAssignees;
     if (fields.pos !== undefined) updateData.pos = fields.pos;
+    if (fields.requiredByAll !== undefined) updateData.requiredByAll = fields.requiredByAll;
 
     if (Object.keys(updateData).length === 0) return;
 
@@ -173,12 +187,15 @@ export async function updatePackingItem(itemId: string, fields: Partial<PackingI
 }
 
 
-export async function deletePackingItem(itemId: string) {
-    await AppDataSource.getRepository(PackingItem).delete(itemId);
+export async function deletePackingItem(itemId: string, manager: EntityManager = AppDataSource.manager) {
+    await manager.getRepository(PackingItem).delete(itemId);
 }
 
-export async function reorderPackingItems(listId: string, orders: any[]) {
-    const repo = AppDataSource.getRepository(PackingItem);
+export async function reorderPackingItems(listId: string, orders: any[], manager: EntityManager = AppDataSource.manager): Promise<void> {
+    if (!manager.queryRunner?.isTransactionActive) {
+        return withPackingListLock(listId, transaction => reorderPackingItems(listId, orders, transaction));
+    }
+    const repo = manager.getRepository(PackingItem);
     for (const order of orders) {
         await repo.update({id: order.itemId, entity: {id: listId}}, {pos: order.position});
     }
@@ -245,8 +262,9 @@ export async function assignPackingItem(itemId: string, profileId: string, manag
     await repo.save(repo.create({item: {id: itemId}, profile: {id: profileId}, entity: {id: item.entityId}}));
 }
 
-export async function unassignPackingItem(itemId: string, profileId: string) {
-    await AppDataSource.getRepository(PackingAssignment).delete({item: {id: itemId}, profile: {id: profileId}});
+export async function unassignPackingItem(itemId: string, profileId: string, manager: EntityManager = AppDataSource.manager) {
+    const result = await manager.getRepository(PackingAssignment).delete({item: {id: itemId}, profile: {id: profileId}});
+    return result.affected ?? 0;
 }
 
 export async function getPackingAssignments(listId: string, profileId: string) {
@@ -277,8 +295,8 @@ export async function getPackingItemAssignees(listId: string) {
     return map;
 }
 
-export async function getPackingAssignmentById(assignId: number) {
-    return await AppDataSource.getRepository(PackingAssignment).findOne({
+export async function getPackingAssignmentById(assignId: number, manager: EntityManager = AppDataSource.manager) {
+    return await manager.getRepository(PackingAssignment).findOne({
         where: {id: assignId},
         relations: {
             item: true
@@ -286,8 +304,8 @@ export async function getPackingAssignmentById(assignId: number) {
     });
 }
 
-export async function deletePackingAssignment(assignId: string) {
-    await AppDataSource.getRepository(PackingAssignment).delete(assignId);
+export async function deletePackingAssignment(assignId: string, manager: EntityManager = AppDataSource.manager) {
+    await manager.getRepository(PackingAssignment).delete(assignId);
 }
 
 export async function togglePackingItemRequiredByAll(itemId: string, flag: boolean) {
@@ -310,5 +328,54 @@ export async function withPackingListLock<T>(id: string, action: (manager: Entit
 
 /** Persist only the normalized fields supplied by the controller in its existing transaction. */
 export async function updatePackingListProperties(id: string, patch: BasicEntityPropertyPatch, manager: EntityManager): Promise<void> {
-    await manager.getRepository(PackingList).update(id, patch);
+    // The single UPDATE advances the revision atomically for v1 and every legacy title/description writer.
+    // Context-only changes are advanced by the lifecycle DBAL in its existing root transaction.
+    await manager.getRepository(PackingList).update(id, {...patch, metadataRevision: () => 'metadata_revision + 1'});
+}
+
+/** Read the root and parent through the caller's snapshot/transaction, without choosing an access policy. */
+export async function getPackingSnapshotRoot(manager: EntityManager, id: string): Promise<PackingList | null> {
+    return manager.getRepository(PackingList).findOne({where: {id}, relations: {event: true}});
+}
+
+/** Keep root, membership, ACL evaluation, items and assignment counts in one repeatable read snapshot. */
+export async function withPackingReadSnapshot<T>(id: string, read: (manager: EntityManager, list: PackingList | null) => Promise<T>): Promise<T> {
+    async function readSnapshot(manager: EntityManager): Promise<T> {
+        return read(manager, await getPackingSnapshotRoot(manager, id));
+    }
+    return AppDataSource.transaction('REPEATABLE READ', readSnapshot);
+}
+
+/** Return only persistence evidence used by the controller's admission decision. */
+export async function getPackingEventRegistration(manager: EntityManager, eventId: string, profileId: string): Promise<EventRegistration | null> {
+    return manager.getRepository(EventRegistration).findOne({
+        where: {event: {id: eventId}, profile: {id: profileId}}, select: {id: true},
+    });
+}
+
+/** Load ordered items and their assignments without exposing the repositories to a DTO projector. */
+export async function getPackingSnapshotRows(manager: EntityManager, listId: string) {
+    const items = await manager.getRepository(PackingItem).find({where: {entity: {id: listId}}, order: {pos: 'ASC', id: 'ASC'}});
+    const assignments = await manager.getRepository(PackingAssignment).find({
+        where: {entity: {id: listId}}, relations: {profile: true}, order: {id: 'ASC'},
+    });
+    return {items, assignments};
+}
+
+/** Acquire the item after the owning root/parent locks, then return assignment evidence to the controller. */
+export async function getLockedPackingAssignment(manager: EntityManager, itemId: string, profileId: string) {
+    const item = await manager.getRepository(PackingItem).findOne({where: {id: itemId}, lock: {mode: 'pessimistic_write'}});
+    const repository = manager.getRepository(PackingAssignment);
+    const existing = await repository.findOneBy({item: {id: itemId}, profile: {id: profileId}});
+    const count = await repository.countBy({item: {id: itemId}});
+    return {item, existing, count};
+}
+
+/** Lock a selected parent before creation; the controller evaluates eligibility within this transaction. */
+export async function withPackingCreationTransaction<T>(eventId: string | null, action: (manager: EntityManager, event: Event | null) => Promise<T>): Promise<T> {
+    async function createLocked(manager: EntityManager): Promise<T> {
+        const event = eventId ? await manager.getRepository(Event).findOne({where: {id: eventId}, lock: {mode: 'pessimistic_write'}}) : null;
+        return action(manager, event);
+    }
+    return AppDataSource.transaction('READ COMMITTED', createLocked);
 }

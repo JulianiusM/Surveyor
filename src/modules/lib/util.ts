@@ -437,6 +437,11 @@ export function convertToSingleList(entities: Partial<DashboardEntities>) {
     return list;
 }
 
+/** Stable opaque image identity, shared by card and detail projections without disclosing storage paths. */
+export function getHeaderImageVersion(storagePath?: string | null): string | null {
+    return storagePath ? crypto.createHash('sha256').update(storagePath).digest('base64url') : null;
+}
+
 export function convertEntity(entity: EntityBase, entityType: EntityType) {
     const entityUrl = `/${entityType}/${entity.id}`
     return {
@@ -444,6 +449,7 @@ export function convertEntity(entity: EntityBase, entityType: EntityType) {
         title: entity.title,
         description: entity.description,
         imageUrl: entity.headerImg ? `${entityUrl}/header` : undefined,
+        imageVersion: getHeaderImageVersion(entity.headerImg),
         type: entityType,
         ownerId: entity.ownerId,
         url: entityUrl,

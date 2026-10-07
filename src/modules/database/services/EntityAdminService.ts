@@ -23,6 +23,7 @@ import {EntityAdminAssignment as ACL} from '../entities/permissions/EntityAdminA
 import {EntityPermissions} from "../entities/permissions/EntityPermissions";
 import {EventRegistration} from "../entities/event/EventRegistration";
 import {Event} from "../entities/event/Event";
+import {PackingList} from "../entities/packing/PackingList";
 
 /**
  * Share overview membership between full discovery and a single-target visibility write.
@@ -145,26 +146,35 @@ export function addEntityPermissionCandidates<T extends ObjectLiteral>(query: Se
         permissionProfileId: scope.profileId, permissionMask: scope.requiredMask, permissionAudiences: scope.audiences});
 }
 
-export async function addAdmin(entityType: CombEntityType, entityId: string, profileId: string, perms: number, createdBy?: number) {
-    const repo = AppDataSource.getRepository(ACL);
+export async function addAdmin(entityType: CombEntityType, entityId: string, profileId: string, perms: number, createdBy?: number, manager: EntityManager = AppDataSource.manager): Promise<void> {
+    if (entityType === 'packing' && !manager.queryRunner?.isTransactionActive) {
+        return withPackingAclWrite(entityId, transaction => addAdmin(entityType, entityId, profileId, perms, createdBy, transaction));
+    }
+    const repo = manager.getRepository(ACL);
     await repo.save(repo.create({entityType, entityId, profile: {id: profileId}, perms, createdBy: createdBy ?? null}));
 }
 
-export async function upsertAdmin(entityType: CombEntityType, entityId: string, profileId: string, perms: number) {
-    const repo = AppDataSource.getRepository(ACL);
+export async function upsertAdmin(entityType: CombEntityType, entityId: string, profileId: string, perms: number, manager: EntityManager = AppDataSource.manager): Promise<void> {
+    if (entityType === 'packing' && !manager.queryRunner?.isTransactionActive) {
+        return withPackingAclWrite(entityId, transaction => upsertAdmin(entityType, entityId, profileId, perms, transaction));
+    }
+    const repo = manager.getRepository(ACL);
     await repo.upsert(
         repo.create({entityType, entityId, profile: {id: profileId}, perms}),
         ['entityType', 'entityId', 'profile']
     );
 }
 
-export async function removeAdmin(entityType: CombEntityType, entityId: string, profileId: string) {
-    const repo = AppDataSource.getRepository(ACL);
+export async function removeAdmin(entityType: CombEntityType, entityId: string, profileId: string, manager: EntityManager = AppDataSource.manager): Promise<void> {
+    if (entityType === 'packing' && !manager.queryRunner?.isTransactionActive) {
+        return withPackingAclWrite(entityId, transaction => removeAdmin(entityType, entityId, profileId, transaction));
+    }
+    const repo = manager.getRepository(ACL);
     await repo.delete({entityType, entityId, profile: {id: profileId}});
 }
 
-export async function listAdmins(entityType: CombEntityType, entityId: string) {
-    const repo = AppDataSource.getRepository(ACL);
+export async function listAdmins(entityType: CombEntityType, entityId: string, manager: EntityManager = AppDataSource.manager) {
+    const repo = manager.getRepository(ACL);
     // join users if you want to render names/emails
     return await repo.find({
         where: {entityType, entityId}, relations: {
@@ -176,8 +186,11 @@ export async function listAdmins(entityType: CombEntityType, entityId: string) {
     });
 }
 
-export async function updateAdminPerms(entityType: CombEntityType, entityId: string, profileId: string, perms: number) {
-    await AppDataSource.getRepository(ACL).update({entityType, entityId, profile: {id: profileId}}, {perms});
+export async function updateAdminPerms(entityType: CombEntityType, entityId: string, profileId: string, perms: number, manager: EntityManager = AppDataSource.manager): Promise<void> {
+    if (entityType === 'packing' && !manager.queryRunner?.isTransactionActive) {
+        return withPackingAclWrite(entityId, transaction => updateAdminPerms(entityType, entityId, profileId, perms, transaction));
+    }
+    await manager.getRepository(ACL).update({entityType, entityId, profile: {id: profileId}}, {perms});
 }
 
 export async function isAdmin(entityType: CombEntityType, entityId: string, profileId: string) {
@@ -185,8 +198,8 @@ export async function isAdmin(entityType: CombEntityType, entityId: string, prof
     return await repo.exists({where: {entityType, entityId, profile: {id: profileId}}});
 }
 
-export async function getProfilePerms(entityType: CombEntityType, entityId: string, profileId: string): Promise<number> {
-    const row = await AppDataSource.getRepository(ACL).findOne({
+export async function getProfilePerms(entityType: CombEntityType, entityId: string, profileId: string, manager: EntityManager = AppDataSource.manager): Promise<number> {
+    const row = await manager.getRepository(ACL).findOne({
         where: {
             entityType,
             entityId,
@@ -196,8 +209,8 @@ export async function getProfilePerms(entityType: CombEntityType, entityId: stri
     return row?.perms ?? 0;
 }
 
-export async function getDefaultPerms(entityType: CombEntityType, entityId: string): Promise<PermData> {
-    const rows = await AppDataSource.getRepository(EntityPermissions).find({where: {entityType, entityId}});
+export async function getDefaultPerms(entityType: CombEntityType, entityId: string, manager: EntityManager = AppDataSource.manager): Promise<PermData> {
+    const rows = await manager.getRepository(EntityPermissions).find({where: {entityType, entityId}});
     const out: Partial<Record<Audience, number>> = {};
     for (const r of rows) out[r.audience] = r.perms;
     return out; // keys: participant, guest, authenticated, public
@@ -216,9 +229,13 @@ export async function updatePerms(
         participant?: number;
         authenticated?: number;
         public?: number;
-    }
+    },
+    manager: EntityManager = AppDataSource.manager,
 ): Promise<void> {
-    const repo = AppDataSource.getRepository(EntityPermissions);
+    if (entityType === 'packing' && !manager.queryRunner?.isTransactionActive) {
+        return withPackingAclWrite(entityId, transaction => updatePerms(entityType, entityId, opts, transaction));
+    }
+    const repo = manager.getRepository(EntityPermissions);
 
     const rows: Array<{ entityType: CombEntityType; entityId: string; audience: Audience; perms: number }> = [];
 
@@ -234,7 +251,7 @@ export async function updatePerms(
 
     if (!rows.length) return;
 
-    const current = await getDefaultPerms(entityType, entityId);
+    const current = await getDefaultPerms(entityType, entityId, manager);
     const changedRows = rows.filter((row) => current[row.audience] !== row.perms);
     if (!changedRows.length) return;
 
@@ -253,4 +270,12 @@ export async function getIds(entityType: CombEntityType, profileId: string, mask
         .andWhere('e.entity_type = :entityType', {entityType})
         .select("e.entity_id").getRawMany();
     return (ids ?? []).map(i => i.entity_id);
+}
+
+/** Packing ACL writers share the root lock with reviewed v1 settings updates, including legacy routes. */
+async function withPackingAclWrite<T>(id: string, write: (manager: EntityManager) => Promise<T>): Promise<T> {
+    return AppDataSource.transaction(async function persistAcl(manager) {
+        await manager.getRepository(PackingList).findOne({where: {id}, lock: {mode: 'pessimistic_write'}});
+        return write(manager);
+    });
 }

@@ -4,7 +4,7 @@ documentation-metadata
 audience: end users
 owner: product documentation maintainers
 status: current
-last-verified: 2026-10-03
+last-verified: 2026-10-07
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; current Entity settings guidance replaces obsolete embedded controls illustration; D14 task-grouped navigation, contextual help entry, server-side search, per-page tables of contents, maintained visual aids, rendered semantic checks, and trusted-content guardrails; D14 rendered help navigation, semantic checks, and trusted-content integration; D14 visual correction: source-derived header, individually inspected layouts, accurate captions and full-size image links
 source-anchors: docs/user-guide/; docs/user-guide/assets/; docs/HELP_VISUALS.md; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; src/views/layout.pug; src/public/style/help.sass; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; .github/workflows/release.yml
@@ -17,9 +17,9 @@ Surveyor helps groups choose dates, organize events, coordinate packing and tran
 
 The Help page groups guides by task instead of alphabetically. Use **Search help** when you know the task or a visible control label but not the feature name. On an application page, the navbar **Help** link opens the most relevant guide for that area. Inside a guide, use **On this page** to jump to a procedure or troubleshooting section.
 
-![Source-rendered Surveyor header with the original logo, Home link, New, Overview, Help and a fictional profile menu; numbered notes explain the three navigation tasks.](assets/navigation-at-a-glance.png)
+![Surveyor navigation with Home, New, Overview, Help and a profile menu; numbered notes explain creating items, returning to work and finding help.](assets/navigation-at-a-glance.png)
 
-*The header is rendered from the application source with a fictional signed-in profile; the numbered explanations are outside the screenshot. On a small screen, open the full-size image to inspect the header.*
+*Use **New** to create an item, **Overview** to return to your work and **Help** to find the relevant guide. On a small screen, open the navigation menu. Open the full-size image for a closer look.*
 
 [View the navigation image at full size](/help/assets/navigation-at-a-glance.png).
 
@@ -59,7 +59,7 @@ See [Understand accounts and profiles](GETTING_STARTED.md#understand-accounts-an
 - **[Invoice Pools and Payments](INVOICE_POOLS.md)** — Submit and review receipts, allocate shared costs, manage takeovers and surcharges, calculate shares, and record settlement.
 - **[Packing Lists](PACKING_LISTS.md)** — Coordinate ordinary item assignments and **Everyone** requirements, then use **Packed?** as a browser-local personal checklist.
 - **[Activity Plans](ACTIVITY_PLANS.md)** — Join or leave slots, take named roles, create schedules, configure required participation, check coverage, review assignment suggestions, and export a print-friendly plan.
-- **[Drivers Lists](DRIVERS_LISTS.md)** — Offer profile-owned rides, take passenger places, read deduplicated participant counters, and manage event-linked transport with explicit privacy boundaries.
+- **[Drivers Lists](DRIVERS_LISTS.md)** — Offer rides, take passenger places, understand participant counts without counting anyone twice, and manage event-linked transport while protecting participant privacy.
 
 ## Permissions and sharing
 
@@ -90,5 +90,5 @@ Open **Entity settings** for the properties and actions your active profile may 
 5. **[Events](EVENTS.md)** — Event registration, deadlines, dietary data, administration, linked resources, export, and privacy.
 6. **[Invoice Pools and Payments](INVOICE_POOLS.md)** — Event costs, invoice proof, review, shares, settlement, and retention.
 7. **[Packing Lists](PACKING_LISTS.md)** — Shared assignments, Everyone/All requirements, event linkage, permissions, and a browser-local Packed checklist.
-8. **[Activity Plans](ACTIVITY_PLANS.md)** — Participation, slot and role management, event gating, requirements, coverage, assignment recommendations, warnings, and schedule export.
+8. **[Activity Plans](ACTIVITY_PLANS.md)** — Participation, slot and role management, event registration requirements, coverage, assignment recommendations, warnings, and schedule export.
 9. **[Drivers Lists](DRIVERS_LISTS.md)** — Driver and passenger workflows, capacity, counters, event linkage, permissions, privacy, images, duplication, and deletion.

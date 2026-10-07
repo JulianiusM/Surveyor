@@ -25,6 +25,9 @@ import * as userService from "../modules/database/services/UserService";
 import mailer, {resolveEmailRecipientName} from "../modules/email";
 import {APIError, ExpectedError, ValidationError} from "../modules/lib/errors";
 import {persistSession, requireSessionProfileId} from "../modules/lib/session";
+import {rotateFrontendSessionContext} from '../modules/lib/frontendSession';
+import {safeFrontendReturn} from '../modules/lib/frontendIdentity';
+import type {IdentityLinkOptions, IdentityTransitionOptions} from '../types/IdentityTypes';
 import {buildGuestLink, ENTITIES} from "../modules/lib/util";
 import * as oidc from "../modules/oidc";
 import settings from "../modules/settings";
@@ -38,7 +41,14 @@ import {evaluateEntities} from "../modules/permissionEngine";
 const CREATE_TEMPLATE = 'users/register';
 const LOGIN_TEMPLATE = 'users/login';
 
-export async function registerUser(body: any, next?: string) {
+/** Native and SPA mail use the same controller; only the trusted application route differs. */
+function identityLink(path: string, options?: IdentityLinkOptions): string {
+    const prefix = options?.frontend ? '/frontend-pilot' : '';
+    const next = options?.next ? (options.frontend ? safeFrontendReturn(options.next) : options.next) : undefined;
+    return `${settings.value.rootUrl}${prefix}${path}${next ? `?next=${encodeURIComponent(next)}` : ''}`;
+}
+
+export async function registerUser(body: any, next?: string, options?: IdentityLinkOptions) {
     const {username, displayname, password, password_repeat, email} = body;
     const name = resolveEmailRecipientName(typeof displayname === 'string' ? displayname : undefined, typeof username === 'string' ? username : undefined);
     const returnInfo = {username, email};
@@ -48,12 +58,12 @@ export async function registerUser(body: any, next?: string) {
     }
 
     if (password !== password_repeat) {
-        throw new ValidationError(CREATE_TEMPLATE, 'Passwords do not match.', returnInfo);
+        throw new ValidationError(CREATE_TEMPLATE, 'Passwords do not match.', returnInfo, {cause: 'PASSWORD_MISMATCH'});
     }
 
     const existingUser = await userService.getUserByUsername(username);
     if (existingUser) {
-        throw new ValidationError(CREATE_TEMPLATE, 'This username is already taken.', returnInfo);
+        throw new ValidationError(CREATE_TEMPLATE, 'This username is already taken.', returnInfo, {cause: 'USERNAME_TAKEN'});
     }
 
     // Benutzer registrieren
@@ -61,45 +71,50 @@ export async function registerUser(body: any, next?: string) {
 
     // Generiere den Aktivierungs-Token und sende ihn per E-Mail
     const token = await userService.generateActivationToken(userId);
-    const nextLink = next ? `?next=${next}` : "";
-    const activationLink = `${settings.value.rootUrl}/users/activate/${token}${nextLink}`;
+    const activationLink = identityLink(`/users/activate/${encodeURIComponent(token)}`, {...options, next: options?.next ?? next});
 
     await mailer.sendActivationEmail({name, address: email}, activationLink);
 }
 
-export async function loginUser(body: any, session: Request["session"]) {
+export async function loginUser(body: any, session: Request["session"], options?: IdentityTransitionOptions) {
     const {username, password} = body;
     const returnInfo = {username};
 
     if (!username || !password) {
-        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo);
+        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo, {cause: 'INVALID_CREDENTIALS'});
     }
 
     const user = (await userService.getUserByUsername(username)) ?? (await userService.getUserByEmail(username));
     if (!user) {
-        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo);
+        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo, {cause: 'INVALID_CREDENTIALS'});
     }
 
     const isValidPassword = await userService.verifyPassword(user.id, password);
     if (!isValidPassword) {
-        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo);
+        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo, {cause: 'INVALID_CREDENTIALS'});
     }
 
     if (!user.isActive) {
         let errorMsg = "User not activated.";
+        let cause = 'ACCOUNT_INACTIVE';
         if ((user.activationTokenExpiration ?? new Date(0)) < new Date()) {
             // Generiere den Aktivierungs-Token und sende ihn per E-Mail
             const token = await userService.generateActivationToken(user.id);
-            const activationLink = `${settings.value.rootUrl}/users/activate/${token}`;
+            const activationLink = identityLink(`/users/activate/${encodeURIComponent(token)}`, options);
 
             await mailer.sendActivationEmail({name: resolveEmailRecipientName(user.name, user.username), address: user.email}, activationLink);
             errorMsg += " The activation link has expired. A new one has been sent to your email account.";
+            cause = 'ACTIVATION_RESENT';
         }
-        throw new ValidationError(LOGIN_TEMPLATE, errorMsg, returnInfo);
+        throw new ValidationError(LOGIN_TEMPLATE, errorMsg, returnInfo, {cause});
     }
 
+    // Credential verification may have waited while another tab changed identity. The API
+    // supplies a fresh admission check; native callers retain their existing controller path.
+    await options?.beforeTransition?.();
     session.auth = {user};
     session.profile = getDefaultProfile(user.profiles);
+    rotateFrontendSessionContext(session);
     await persistSession(session);
 }
 
@@ -406,7 +421,7 @@ export async function setPersonalVisibility(entityType: string, id: string, body
     };
 }
 
-export async function sendPasswordForgotMail(username: string) {
+export async function sendPasswordForgotMail(username: string, options?: IdentityLinkOptions) {
     const user = (await userService.getUserByUsername(username)) || (await userService.getUserByEmail(username));
     if (!user) {
         return;
@@ -414,7 +429,7 @@ export async function sendPasswordForgotMail(username: string) {
 
     // Generiere ein Passwort-Zurücksetzungs-Token und speichere es in der Datenbank
     const token = await userService.generatePasswordResetToken(user.username);
-    const resetLink = `${settings.value.rootUrl}/users/reset-password/${token}`;
+    const resetLink = identityLink(`/users/reset-password/${encodeURIComponent(token)}`, options);
 
     // Sende eine E-Mail mit dem Zurücksetzungs-Link
     await mailer.sendPasswordResetEmail({name: resolveEmailRecipientName(user.name, user.username), address: user.email}, resetLink);
@@ -424,7 +439,7 @@ export async function checkPasswordForgotToken(token: string) {
     // Überprüfe, ob der Token gültig ist
     const user = await userService.verifyPasswordResetToken(token);
     if (!user) {
-        throw new ExpectedError('Invalid or expired token', 'error', 401);
+        throw new ExpectedError('Invalid or expired token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
     }
 }
 
@@ -432,13 +447,13 @@ export async function resetPassword(token: string, body: any) {
     const {password, confirmPassword} = body;
 
     if (password !== confirmPassword) {
-        throw new ValidationError('users/reset-password', 'Passwords do not match!', {token})
+        throw new ValidationError('users/reset-password', 'Passwords do not match!', {token}, {cause: 'PASSWORD_MISMATCH'})
     }
 
     // Überprüfe den Token und setze das Passwort zurück
     const user = await userService.verifyPasswordResetToken(token);
     if (!user) {
-        throw new ExpectedError('Invalid or expired token', 'error', 401);
+        throw new ExpectedError('Invalid or expired token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
     }
 
     // Setze das Passwort zurück
@@ -449,7 +464,7 @@ export async function activateAccount(token: string) {
     // Überprüfe, ob der Aktivierungs-Token gültig ist
     const user = await userService.verifyActivationToken(token);
     if (!user) {
-        throw new ExpectedError('Invalid or expired token', 'error', 401);
+        throw new ExpectedError('Invalid or expired token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
     }
 
     // Aktiviere den Benutzer
@@ -476,26 +491,51 @@ export async function loginUserWithOidcCallback(req: Request) {
 
 // POST /auth/logout → clears local session and (if available) does RP-initiated logout
 export async function logoutUserOidc(session: Request['session']) {
+    session.frontendAuthReturn = undefined;
     return oidc.logout(session);
 }
 
 // Guests
-export async function loginGuest(guestId: string, token: string, session: Request["session"]) {
+export async function loginGuest(guestId: string, token: string, session: Request["session"], options?: IdentityTransitionOptions) {
     const guest = await userService.getGuestByToken(token, guestId);
     if (!guest) {
-        throw new ExpectedError('Invalid or mismatched token', 'error', 401);
+        throw new ExpectedError('Invalid or mismatched token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
     }
     // switch to guest session
+    await options?.beforeTransition?.();
     session.auth = {guest};
     session.profile = guest.profile;
+    rotateFrontendSessionContext(session);
     await persistSession(session);
 }
 
-export async function recoverGuestAccount(email: string) {
+/** Registration is shared by all native feature entry pages and the versioned API. */
+export async function registerGuest(username: string, email: string | undefined, session: Request['session'],
+    options?: IdentityTransitionOptions, createGuest: typeof userService.createGuest = userService.createGuest): Promise<string> {
+    if (!username) throw new ValidationError('users/register-guest', 'Username required', {username, email});
+    const normalizedEmail = email?.trim().toLowerCase();
+    await options?.beforeTransition?.();
+    const guest = await createGuest(username, normalizedEmail);
+    await options?.beforeTransition?.();
+    session.auth = {guest};
+    session.profile = guest.profile;
+    rotateFrontendSessionContext(session);
+    await persistSession(session);
+    const link = options?.frontend
+        ? identityLink(`/guest/${encodeURIComponent(guest.id)}/login/${encodeURIComponent(guest.token)}`, options)
+        : buildGuestLink(guest.id, guest.token);
+    if (normalizedEmail) await mailer.sendLinkEmail({name: resolveEmailRecipientName(guest.username, guest.profile?.name), address: normalizedEmail}, link);
+    return link;
+}
+
+export async function recoverGuestAccount(email: string, options?: IdentityLinkOptions) {
     const guests = await userService.getGuestByEmail(email);
     const guestLinkData: GuestLinkData[] = [];
     for (let guest of guests) {
-        guestLinkData.push({...guest, link: buildGuestLink(guest.id, guest.token)});
+        const link = options?.frontend
+            ? identityLink(`/guest/${encodeURIComponent(guest.id)}/login/${encodeURIComponent(guest.token)}`, options)
+            : buildGuestLink(guest.id, guest.token);
+        guestLinkData.push({...guest, link});
     }
 
     if (guestLinkData.length > 0) {
@@ -603,7 +643,7 @@ export async function deactivateProfile(body: any, session: Request['session']) 
     return `Profile successfully deactivated. ${handleAnswer}`;
 }
 
-export async function changeActiveProfile(session: Request['session'], profileId?: string) {
+export async function changeActiveProfile(session: Request['session'], profileId?: string, beforeTransition?: () => Promise<void>) {
     if (!session.auth?.user) {
         throw new ExpectedError("Not logged in as user!", "error", 401);
     }
@@ -623,7 +663,9 @@ export async function changeActiveProfile(session: Request['session'], profileId
         }
     }
 
+    await beforeTransition?.();
     session.profile = profile;
+    rotateFrontendSessionContext(session);
     await persistSession(session);
 }
 

@@ -1,0 +1,39 @@
+/* Keep the rendered Bootstrap theme while giving Vue exclusive ownership of interactive state. */
+.pilot-app { color: var(--bs-body-color); }
+.pilot-nav-dropdown > summary { list-style: none; cursor: pointer; }
+.pilot-nav-dropdown > summary::-webkit-details-marker { display: none; }
+.pilot-nav-dropdown > .dropdown-menu { top: 100%; left: 0; margin-top: var(--bs-dropdown-spacer); }
+.pilot-nav-dropdown[open] > .dropdown-menu { display: block; }
+.pilot-nav-dropdown .dropdown-menu-end { right: 0; left: auto; }
+.pilot-locale { width: auto; }
+.pilot-app .nav-link:focus-visible, .pilot-app a:focus-visible { outline: 2px solid var(--bs-info); outline-offset: 3px; }
+.pilot-dialog-backdrop { position: fixed; inset: 0; z-index: 1050; background: rgb(0 0 0 / 50%); }
+.pilot-dialog { position: fixed; z-index: 1055; inset: 1.75rem auto auto 50%; transform: translateX(-50%);
+    --bs-modal-header-padding-x: 1rem; --bs-modal-header-padding-y: 1rem; --bs-modal-title-line-height: 1.5;
+    --bs-modal-inner-border-radius: calc(var(--bs-border-radius-lg) - var(--bs-border-width));
+    width: min(500px, calc(100vw - 1rem)); max-height: calc(100dvh - 3.5rem); overflow: hidden;
+    border: 1px solid var(--bs-border-color-translucent); border-radius: var(--bs-border-radius-lg); }
+.pilot-dialog .modal-header, .pilot-dialog .modal-body, .pilot-dialog .modal-footer { padding: 1rem; }
+.pilot-dialog .modal-header, .pilot-dialog .modal-footer { display: flex; align-items: center; gap: .75rem; }
+.pilot-dialog .modal-header { justify-content: space-between; border-bottom: 1px solid var(--bs-border-color); }
+.pilot-dialog .modal-body { overflow-y: auto; }
+.pilot-dialog .modal-header, .pilot-dialog .modal-footer { flex-shrink: 0; }
+.pilot-dialog .modal-footer { justify-content: flex-end; padding: .75rem; gap: 0; border-top: 1px solid var(--bs-border-color); }
+.pilot-dialog .modal-footer > * { margin: .25rem; }
+.pilot-description { white-space: pre-wrap; }
+.pilot-app h1 { overflow-wrap: anywhere; }
+.pilot-conflict-values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+.pilot-conflict-values dd { overflow-wrap: anywhere; white-space: pre-wrap; }
+/* Only an active conflict needs reading room; the table's existing horizontal scroll
+   keeps mobile review usable without widening ordinary cells or their inputs. */
+.pilot-inline-conflict { min-width: 14rem; }
+@media (min-width: 992px) { .pilot-dialog { width: 800px; } }
+@media (max-width: 575.98px) {
+    .pilot-conflict-values { grid-template-columns: 1fr; }
+    .pilot-dialog { inset: .5rem auto auto 50%; max-height: calc(100dvh - 1rem); }
+    .pilot-dialog.pilot-dialog-fullscreen { inset: 0; transform: none; width: 100%; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
+}
+/* Guest identity choices use the native centered default modal, not the wide settings layout. */
+.pilot-dialog.pilot-dialog-compact { inset: 50% auto auto 50%; transform: translate(-50%, -50%);
+    width: min(500px, calc(100vw - 1rem)); height: auto; max-height: calc(100dvh - 1rem);
+    border: 1px solid var(--bs-border-color-translucent); border-radius: var(--bs-border-radius-lg); }

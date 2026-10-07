@@ -18,6 +18,9 @@ import {marked} from 'marked';
 import fs from 'node:fs';
 import path from 'node:path';
 import {ExpectedError} from '../modules/lib/errors';
+import {createTranslator, helpSourceDirectory, resolveLocale} from '../modules/localization/translator';
+import type {Locale} from '../types/LocalizationTypes';
+import type {HelpDocumentSummary, HelpNavigationGroup, HelpTocEntry, HelpSearchResult, HelpPageData} from '../types/HelpTypes';
 
 const DOCUMENTATION_METADATA_RE = /<!--\s*documentation-metadata\s*\r?\n[\s\S]*?-->\s*/iu;
 const HELP_DOC_SLUG_RE = /^[a-z0-9_-]+$/iu;
@@ -27,52 +30,17 @@ const SAFE_EXTERNAL_URI_SCHEMES = new Set(['http', 'https', 'mailto', 'tel']);
 const MAX_SEARCH_QUERY_LENGTH = 100;
 
 const HELP_NAVIGATION = [
-    {title: 'Start here', paths: ['readme', 'getting_started', 'dashboard']},
-    {title: 'Plan and decide', paths: ['surveys', 'events', 'activity_plans']},
-    {title: 'Organize and share', paths: ['invoice_pools', 'packing_lists', 'drivers_lists']},
-    {title: 'Advanced', paths: ['permissions']},
+    {title: 'help.startHere', paths: ['readme', 'getting_started', 'dashboard']},
+    {title: 'help.planDecide', paths: ['surveys', 'events', 'activity_plans']},
+    {title: 'help.organizeShare', paths: ['invoice_pools', 'packing_lists', 'drivers_lists']},
+    {title: 'help.advanced', paths: ['permissions']},
 ] as const;
-
-export interface HelpDocumentSummary {
-    name: string;
-    title: string;
-    path: string;
-    url: string;
-}
-
-export interface HelpNavigationGroup {
-    title: string;
-    docs: HelpDocumentSummary[];
-}
-
-export interface HelpTocEntry {
-    id: string;
-    title: string;
-    level: number;
-}
-
-export interface HelpSearchResult {
-    title: string;
-    url: string;
-    sectionTitle?: string;
-    excerpt: string;
-}
-
-export interface HelpPageData {
-    title: string;
-    content: string;
-    docsList: HelpDocumentSummary[];
-    docsGroups: HelpNavigationGroup[];
-    currentDoc: string;
-    toc: HelpTocEntry[];
-    searchQuery?: string;
-    searchResults?: HelpSearchResult[];
-}
 
 interface ParsedHelpDocument {
     content: string;
     title: string;
     toc: HelpTocEntry[];
+    headings: HelpTocEntry[];
 }
 
 interface HeadingInfo extends HelpTocEntry {
@@ -84,12 +52,12 @@ interface HeadingInfo extends HelpTocEntry {
  * application content under DEC-004; it is not configurable from requests,
  * settings, a database, or a remote source.
  */
-export function getHelpDocsBasePath(): string {
-    return path.join(__dirname, '..', '..', 'docs', 'user-guide');
+export function getHelpDocsBasePath(requestedLocale = 'en'): string {
+    return path.join(__dirname, '..', '..', 'docs', 'user-guide', helpSourceDirectory(requestedLocale));
 }
 
-export function getHelpAssetsBasePath(): string {
-    return path.join(getHelpDocsBasePath(), 'assets');
+export function getHelpAssetsBasePath(requestedLocale = 'en'): string {
+    return path.join(getHelpDocsBasePath(requestedLocale), 'assets');
 }
 
 function isPathInside(basePath: string, candidatePath: string): boolean {
@@ -108,21 +76,21 @@ function resolveRegularFile(basePath: string, relativePath: string): string | nu
     return resolvedPath;
 }
 
-function resolveDocPath(fileName: string): string | null {
+function resolveDocPath(fileName: string, locale = 'en'): string | null {
     if (path.basename(fileName) !== fileName || !fileName.toLowerCase().endsWith('.md')) {
         return null;
     }
-    return resolveRegularFile(getHelpDocsBasePath(), fileName);
+    return resolveRegularFile(getHelpDocsBasePath(locale), fileName);
 }
 
-export function resolveHelpAssetPath(assetName: string): string | null {
+export function resolveHelpAssetPath(assetName: string, locale = 'en'): string | null {
     if (!HELP_ASSET_NAME_RE.test(assetName) || path.basename(assetName) !== assetName) {
         return null;
     }
     if (!HELP_ASSET_EXTENSIONS.has(path.extname(assetName).toLowerCase())) {
         return null;
     }
-    return resolveRegularFile(getHelpAssetsBasePath(), assetName);
+    return resolveRegularFile(getHelpAssetsBasePath(locale), assetName);
 }
 
 function stripDocumentationMetadata(markdown: string): string {
@@ -171,23 +139,23 @@ function splitUriSuffix(href: string): { base: string; suffix: string } {
         : {base: href.slice(0, cutIndex), suffix: href.slice(cutIndex)};
 }
 
-function managedAssetName(href: string): string | null {
+function managedAssetName(href: string, locale: string): string | null {
     const {base} = splitUriSuffix(href);
-    const normalized = base.replaceAll('\\', '/');
+    const normalized = base.replaceAll('\\', '/').replace(/^\/help\//u, '');
     if (!normalized.startsWith('assets/') || normalized.slice('assets/'.length).includes('/')) {
         return null;
     }
     const assetName = normalized.slice('assets/'.length);
-    return resolveHelpAssetPath(assetName) ? assetName : null;
+    return resolveHelpAssetPath(assetName, locale) ? assetName : null;
 }
 
-function managedHelpDocName(href: string): string | null {
+function managedHelpDocName(href: string, locale = 'en'): string | null {
     const {base} = splitUriSuffix(href);
     const normalized = base.replaceAll('\\', '/');
     if (normalized.includes('/') || !normalized.toLowerCase().endsWith('.md')) {
         return null;
     }
-    return resolveDocPath(normalized) ? normalized : null;
+    return resolveDocPath(normalized, locale) ? normalized : null;
 }
 
 function visitTokenTree(value: unknown, visitor: (token: Record<string, any>) => void, seen = new WeakSet<object>()): void {
@@ -220,7 +188,7 @@ function visitTokenTree(value: unknown, visitor: (token: Record<string, any>) =>
  * inserted into the application page. This is a rejection guard, not a claim
  * that arbitrary Markdown has been sanitized.
  */
-export function validateTrustedHelpMarkdown(markdown: string, sourceName = 'Help document'): void {
+export function validateTrustedHelpMarkdown(markdown: string, sourceName = 'Help document', locale = 'en'): void {
     const authoredMarkdown = stripDocumentationMetadata(markdown);
     const tokens = marked.lexer(authoredMarkdown, {gfm: true});
 
@@ -233,20 +201,29 @@ export function validateTrustedHelpMarkdown(markdown: string, sourceName = 'Help
         }
         if (token.type === 'link' && typeof token.href === 'string') {
             const {base} = splitUriSuffix(token.href);
-            if (base.toLowerCase().endsWith('.md') && !managedHelpDocName(token.href)) {
-                throw new Error(`${sourceName} links may reference only maintained Markdown files in docs/user-guide`);
+            if (base.toLowerCase().endsWith('.md') && !managedHelpDocName(token.href, locale)) {
+                throw new Error(`${sourceName} links may reference only maintained Markdown files in the selected help language`);
+            }
+            if ((base.startsWith('assets/') || base.startsWith('/help/assets/')) && !managedAssetName(token.href, locale)) {
+                throw new Error(`${sourceName} asset links must reference a packaged file in the selected help language`);
             }
         }
-        if (token.type === 'image' && typeof token.href === 'string' && !managedAssetName(token.href)) {
-            throw new Error(`${sourceName} images must reference a packaged file under docs/user-guide/assets`);
+        if (token.type === 'image' && typeof token.href === 'string' && !managedAssetName(token.href, locale)) {
+            throw new Error(`${sourceName} images must reference a packaged file in the selected help language's assets directory`);
         }
     });
 }
 
 /** Rewrite links to maintained Markdown documents into their in-app routes. */
-export function rewriteDocHrefToHelpRoute(href: string): string {
-    if (!href || href.startsWith('#') || href === '/help' || href.startsWith('/help/')) {
+export function rewriteDocHrefToHelpRoute(href: string, locale = 'en'): string {
+    if (!href || href.startsWith('#')) {
         return href;
+    }
+    const {base, suffix} = splitUriSuffix(href);
+    // Authored article links belong to their selected corpus. An explicit query in the
+    // source must not send a reader to another language; UI language selection is separate.
+    if (base === '/help' || base.startsWith('/help/')) {
+        return localizedHelpUrl(href, locale);
     }
 
     const lower = href.toLowerCase();
@@ -254,24 +231,34 @@ export function rewriteDocHrefToHelpRoute(href: string): string {
         return href;
     }
 
-    const {base, suffix} = splitUriSuffix(href);
+    const assetName = managedAssetName(href, locale);
+    if (assetName) {
+        return localizedHelpUrl(`/help/assets/${encodeURIComponent(assetName)}${suffix}`, locale);
+    }
     if (!base.toLowerCase().endsWith('.md')) {
         return href;
     }
 
-    const docName = managedHelpDocName(href);
+    const docName = managedHelpDocName(href, locale);
     if (!docName) {
         return href;
     }
     const extension = path.posix.extname(docName);
     const fileName = path.posix.basename(docName, extension);
-    return `/help/${fileName.toLowerCase()}${suffix}`;
+    return localizedHelpUrl(`/help/${fileName.toLowerCase()}${suffix}`, locale);
 }
 
-function rewriteHelpAssetHref(href: string): string {
+/** Query state precedes fragments, so copied links and native GET navigation retain their language. */
+function localizedHelpUrl(href: string, locale: string): string {
+    const url = new URL(href, 'https://help.invalid');
+    url.searchParams.set('locale', resolveLocale(locale));
+    return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function rewriteHelpAssetHref(href: string, locale: string): string {
     const {suffix} = splitUriSuffix(href);
-    const assetName = managedAssetName(href);
-    return assetName ? `/help/assets/${encodeURIComponent(assetName)}${suffix}` : href;
+    const assetName = managedAssetName(href, locale);
+    return assetName ? localizedHelpUrl(`/help/assets/${encodeURIComponent(assetName)}${suffix}`, locale) : href;
 }
 
 function tokenPlainText(token: any): string {
@@ -318,6 +305,33 @@ function extractHeadings(markdown: string): HeadingInfo[] {
     return headings;
 }
 
+/**
+ * A translated article owns its stable fragment contract in the permitted metadata
+ * comment. Keeping IDs alongside that article makes it usable without another language's
+ * files, while copied and contextual links continue to reach the same task after translation.
+ * Levels and unique safe IDs protect against silently assigning a link to the wrong heading.
+ */
+function applyAuthoredHeadingAnchors(markdown: string, headings: HeadingInfo[], sourceName: string): void {
+    const metadata = DOCUMENTATION_METADATA_RE.exec(markdown)?.[0];
+    const anchors = metadata && /^heading-anchors:\s*(.+)$/mu.exec(metadata)?.[1];
+    if (!anchors) {
+        return;
+    }
+    const entries = anchors.trim().split(/\s*;\s*/u);
+    const ids = new Set<string>();
+    if (entries.length !== headings.length) {
+        throw new Error(`${sourceName} heading anchors must match the article's headings`);
+    }
+    entries.forEach((entry, index) => {
+        const match = /^([1-6]):([a-z0-9][a-z0-9_-]*)$/u.exec(entry);
+        if (!match || Number(match[1]) !== headings[index].level || ids.has(match[2])) {
+            throw new Error(`${sourceName} contains invalid or mismatched heading anchors`);
+        }
+        ids.add(match[2]);
+        headings[index].id = match[2];
+    });
+}
+
 function addHeadingIds(html: string, headings: HeadingInfo[]): string {
     let headingIndex = 0;
     return html.replace(/<h([1-6])>([\s\S]*?)<\/h\1>/gu, (match, level: string, body: string) => {
@@ -330,48 +344,50 @@ function addHeadingIds(html: string, headings: HeadingInfo[]): string {
     });
 }
 
-export function renderTrustedHelpMarkdown(markdown: string, sourceName = 'Help document'): ParsedHelpDocument {
-    validateTrustedHelpMarkdown(markdown, sourceName);
+export function renderTrustedHelpMarkdown(markdown: string, sourceName = 'Help document', locale = 'en'): ParsedHelpDocument {
+    validateTrustedHelpMarkdown(markdown, sourceName, locale);
     const authoredMarkdown = stripDocumentationMetadata(markdown);
     const headings = extractHeadings(authoredMarkdown);
+    applyAuthoredHeadingAnchors(markdown, headings, sourceName);
     const rendered = marked.parse(authoredMarkdown, {
         gfm: true,
         breaks: false,
         walkTokens(token: any) {
             if (token?.type === 'link' && typeof token.href === 'string') {
-                token.href = rewriteDocHrefToHelpRoute(token.href);
+                token.href = rewriteDocHrefToHelpRoute(token.href, locale);
             }
             if (token?.type === 'image' && typeof token.href === 'string') {
-                token.href = rewriteHelpAssetHref(token.href);
+                token.href = rewriteHelpAssetHref(token.href, locale);
             }
         },
     }) as string;
 
     return {
         content: addHeadingIds(rendered, headings),
-        title: headings.find(heading => heading.level === 1)?.title || 'Help',
+        title: headings.find(heading => heading.level === 1)?.title || createTranslator(locale).t('help.title'),
+        headings: headings.map(({id, title, level}) => ({id, title, level})),
         toc: headings
             .filter(heading => heading.level === 2 || heading.level === 3)
             .map(({id, title, level}) => ({id, title, level})),
     };
 }
 
-function readMarkdownFile(filePath: string): ParsedHelpDocument | null {
+function readMarkdownFile(filePath: string, locale: string): ParsedHelpDocument | null {
     try {
         const markdown = fs.readFileSync(filePath, 'utf-8');
-        return renderTrustedHelpMarkdown(markdown, path.basename(filePath));
+        return renderTrustedHelpMarkdown(markdown, path.basename(filePath), locale);
     } catch (error) {
         console.error('Error reading trusted help document:', error);
         return null;
     }
 }
 
-function helpDocUrl(docPath: string): string {
-    return docPath === 'readme' ? '/help' : `/help/${docPath}`;
+function helpDocUrl(docPath: string, locale: string): string {
+    return localizedHelpUrl(docPath === 'readme' ? '/help' : `/help/${docPath}`, locale);
 }
 
-function getDocsCatalog(): HelpDocumentSummary[] {
-    const docsBasePath = getHelpDocsBasePath();
+function getDocsCatalog(locale: string): HelpDocumentSummary[] {
+    const docsBasePath = getHelpDocsBasePath(locale);
     try {
         return fs.readdirSync(docsBasePath, {withFileTypes: true})
             .filter(entry => entry.isFile() && entry.name.toLowerCase().endsWith('.md'))
@@ -382,7 +398,7 @@ function getDocsCatalog(): HelpDocumentSummary[] {
                 const title = extractHeadings(authoredMarkdown).find(heading => heading.level === 1)?.title
                     || entry.name.replace(/\.md$/iu, '');
                 const docPath = entry.name.replace(/\.md$/iu, '').toLowerCase();
-                return {name: entry.name, title, path: docPath, url: helpDocUrl(docPath)};
+                return {name: entry.name, title, path: docPath, url: helpDocUrl(docPath, locale)};
             });
     } catch (error) {
         console.error('Error listing trusted help documents:', error);
@@ -390,13 +406,14 @@ function getDocsCatalog(): HelpDocumentSummary[] {
     }
 }
 
-function buildNavigation(catalog: HelpDocumentSummary[]): {
+function buildNavigation(catalog: HelpDocumentSummary[], locale: string): {
     docsList: HelpDocumentSummary[];
     docsGroups: HelpNavigationGroup[]
 } {
     const byPath = new Map(catalog.map(doc => [doc.path, doc]));
     const included = new Set<string>();
     const docsGroups: HelpNavigationGroup[] = [];
+    const {t} = createTranslator(locale);
 
     for (const group of HELP_NAVIGATION) {
         const docs = group.paths
@@ -404,7 +421,7 @@ function buildNavigation(catalog: HelpDocumentSummary[]): {
             .filter((doc): doc is HelpDocumentSummary => Boolean(doc));
         docs.forEach(doc => included.add(doc.path));
         if (docs.length > 0) {
-            docsGroups.push({title: group.title, docs});
+            docsGroups.push({title: t(group.title), docs});
         }
     }
 
@@ -412,15 +429,15 @@ function buildNavigation(catalog: HelpDocumentSummary[]): {
         .filter(doc => !included.has(doc.path))
         .sort((left, right) => left.title.localeCompare(right.title));
     if (otherDocs.length > 0) {
-        docsGroups.push({title: 'More help', docs: otherDocs});
+        docsGroups.push({title: t('help.more'), docs: otherDocs});
     }
 
     return {docsGroups, docsList: docsGroups.flatMap(group => group.docs)};
 }
 
-function commonPageData(currentDoc: string): Pick<HelpPageData, 'docsList' | 'docsGroups' | 'currentDoc'> {
-    const {docsList, docsGroups} = buildNavigation(getDocsCatalog());
-    return {docsList, docsGroups, currentDoc};
+function commonPageData(currentDoc: string, locale: Locale): Pick<HelpPageData, 'locale' | 'docsList' | 'docsGroups' | 'currentDoc'> {
+    const {docsList, docsGroups} = buildNavigation(getDocsCatalog(locale), locale);
+    return {locale, docsList, docsGroups, currentDoc};
 }
 
 function markdownSearchText(markdown: string): string {
@@ -442,31 +459,33 @@ function createSearchExcerpt(text: string, firstMatch: number): string {
     return `${prefix}${text.slice(start, end).trim()}${suffix}`;
 }
 
-export function searchHelpDocuments(rawQuery: string): HelpSearchResult[] {
+export function searchHelpDocuments(rawQuery: string, requestedLocale = 'en'): HelpSearchResult[] {
+    const locale = resolveLocale(requestedLocale);
     const query = rawQuery.trim().replace(/\s+/gu, ' ').slice(0, MAX_SEARCH_QUERY_LENGTH);
     if (!query) {
         return [];
     }
-    const terms = query.toLocaleLowerCase().split(' ').filter(Boolean);
+    const terms = query.toLocaleLowerCase(locale).split(' ').filter(Boolean);
     const results: Array<HelpSearchResult & { score: number }> = [];
 
-    for (const doc of getDocsCatalog()) {
-        const filePath = resolveDocPath(doc.name);
+    for (const doc of getDocsCatalog(locale)) {
+        const filePath = resolveDocPath(doc.name, locale);
         if (!filePath) {
             continue;
         }
         const markdown = fs.readFileSync(filePath, 'utf-8');
         const searchText = markdownSearchText(markdown);
-        const lowerText = searchText.toLocaleLowerCase();
+        const lowerText = searchText.toLocaleLowerCase(locale);
         if (!terms.every(term => lowerText.includes(term))) {
             continue;
         }
 
-        const lowerTitle = doc.title.toLocaleLowerCase();
+        const lowerTitle = doc.title.toLocaleLowerCase(locale);
         const matchIndexes = terms.map(term => lowerText.indexOf(term)).filter(index => index >= 0);
         const firstMatch = matchIndexes.length > 0 ? Math.min(...matchIndexes) : 0;
-        const headings = extractHeadings(stripDocumentationMetadata(markdown));
-        const matchingHeading = headings.find(heading => terms.some(term => heading.title.toLocaleLowerCase().includes(term)));
+        const parsed = readMarkdownFile(filePath, locale);
+        if (!parsed) continue;
+        const matchingHeading = parsed.headings.find(heading => terms.some(term => heading.title.toLocaleLowerCase(locale).includes(term)));
         const score = terms.reduce((total, term) => total + (lowerTitle.includes(term) ? 20 : 1), 0)
             + (matchingHeading ? 8 : 0);
         results.push({
@@ -485,7 +504,7 @@ export function searchHelpDocuments(rawQuery: string): HelpSearchResult[] {
 }
 
 /** Map an application page to the most relevant maintained help guide. */
-export function resolveContextualHelpUrl(requestPath: string): string {
+export function resolveContextualHelpUrl(requestPath: string, locale?: string): string {
     const pathname = requestPath.split(/[?#]/u, 1)[0].toLowerCase();
     const rules: Array<[RegExp, string]> = [
         [/^\/users\/dashboard(?:\/|$)/u, '/help/dashboard'],
@@ -498,51 +517,56 @@ export function resolveContextualHelpUrl(requestPath: string): string {
         [/^\/activity(?:\/|$)/u, '/help/activity_plans'],
         [/^\/drivers(?:\/|$)/u, '/help/drivers_lists'],
     ];
-    return rules.find(([pattern]) => pattern.test(pathname))?.[1] ?? '/help';
+    const destination = rules.find(([pattern]) => pattern.test(pathname))?.[1] ?? '/help';
+    return locale ? localizedHelpUrl(destination, locale) : destination;
 }
 
-export function fetchHelpIndex(): HelpPageData {
-    const common = commonPageData('readme');
-    const readmePath = resolveDocPath('README.md');
-    const parsed = readmePath ? readMarkdownFile(readmePath) : null;
+export function fetchHelpIndex(requestedLocale = 'en'): HelpPageData {
+    const locale = resolveLocale(requestedLocale);
+    const common = commonPageData('readme', locale);
+    const readmePath = resolveDocPath('README.md', locale);
+    const parsed = readmePath ? readMarkdownFile(readmePath, locale) : null;
     return {
         ...common,
-        title: parsed?.title ?? 'Help Center',
+        title: parsed?.title ?? createTranslator(locale).t('help.title'),
         content: parsed?.content ?? '',
         toc: parsed?.toc ?? [],
     };
 }
 
-export function fetchHelpSearch(rawQuery: string): HelpPageData {
+export function fetchHelpSearch(rawQuery: string, requestedLocale = 'en'): HelpPageData {
+    const locale = resolveLocale(requestedLocale);
     const searchQuery = rawQuery.trim().replace(/\s+/gu, ' ').slice(0, MAX_SEARCH_QUERY_LENGTH);
     return {
-        ...commonPageData('search'),
-        title: 'Search help',
+        ...commonPageData('search', locale),
+        title: createTranslator(locale).t('help.searchTitle'),
         content: '',
         toc: [],
         searchQuery,
-        searchResults: searchHelpDocuments(searchQuery),
+        searchResults: searchHelpDocuments(searchQuery, locale),
     };
 }
 
-export function fetchHelpDoc(docName: string): HelpPageData {
+export function fetchHelpDoc(docName: string, requestedLocale = 'en'): HelpPageData {
+    const locale = resolveLocale(requestedLocale);
+    const {t} = createTranslator(locale);
     if (!HELP_DOC_SLUG_RE.test(docName)) {
-        throw new ExpectedError('Documentation not found', 'error', 404);
+        throw new ExpectedError(t('help.notFound'), 'error', 404);
     }
 
     const fileName = `${docName.toUpperCase()}.md`;
-    const filePath = resolveDocPath(fileName);
+    const filePath = resolveDocPath(fileName, locale);
     if (!filePath) {
-        throw new ExpectedError('Documentation not found', 'error', 404);
+        throw new ExpectedError(t('help.notFound'), 'error', 404);
     }
 
-    const parsed = readMarkdownFile(filePath);
+    const parsed = readMarkdownFile(filePath, locale);
     if (!parsed) {
-        throw new ExpectedError('Error loading documentation', 'error', 500);
+        throw new ExpectedError(t('help.loadError'), 'error', 500);
     }
 
     return {
-        ...commonPageData(docName.toLowerCase()),
+        ...commonPageData(docName.toLowerCase(), locale),
         title: parsed.title,
         content: parsed.content,
         toc: parsed.toc,

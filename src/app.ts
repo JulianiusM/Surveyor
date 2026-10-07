@@ -33,6 +33,9 @@ import settings from './modules/settings';
 import indexRouter from './routes';
 import activityRouter from './routes/activity';
 import apiRouter from './routes/api';
+import apiV1Router from './routes/api/v1';
+import frontendPilotRouter from './routes/frontendPilot';
+import {handleApiProblem} from './modules/api/problem';
 import driversRouter from './routes/drivers';
 import eventRouter from './routes/event';
 import guestsRouter from './routes/guests';
@@ -54,6 +57,8 @@ app.use(express.json({limit: '1mb'}));
 app.use(express.urlencoded({extended: true, limit: '1mb'}));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
+// The development server runs source TS, while both pilot builds share their normal dist outputs.
+app.use('/app', express.static(path.resolve(__dirname, '../dist/public/app')));
 
 // ensure dataSource is initialized before this
 const sessionRepository = AppDataSource.getRepository(Session);
@@ -81,6 +86,10 @@ app.use(
 );
 
 app.use(flash());
+
+// v1 owns structured expiry/errors before the legacy HTML/OIDC redirect can intercept it.
+app.use('/api/v1', apiV1Router);
+app.use('/frontend-pilot', frontendPilotRouter);
 
 // Validate session on each request
 app.use(asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
@@ -131,6 +140,11 @@ app.use(function (req: Request, res: Response, next: NextFunction) {
 });
 
 // error handler
+// JSON parsing can fail before a request reaches the router or even the session middleware.
+app.use(function routeApiParsingError(error: unknown, req: Request, res: Response, next: NextFunction) {
+    if (req.path === '/api/v1' || req.path.startsWith('/api/v1/')) return handleApiProblem(error, req, res, next);
+    next(error);
+});
 app.use(handleGenericError);
 
 export default app;

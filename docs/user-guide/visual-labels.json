@@ -1,0 +1,48 @@
+{
+  "fictionalProfile": "Example profile",
+  "navigation": {
+    "title": "Find your way around Surveyor",
+    "intro": "Use {{new}} to create, {{overview}} to return, and {{help}} for guidance.",
+    "rows": [
+      {
+        "title": "Create something",
+        "body": ["Plan & decide: {{survey}}, {{activity}}, {{event}}.", "Organize & share: {{packing}}, {{drivers}}."]
+      },
+      {
+        "title": "Return to your work",
+        "body": ["Choose Your overview. It shows participation", "and administrable items for the active profile."]
+      },
+      {
+        "title": "Find the right guide",
+        "body": ["Open help for the current page or feature.", "Search by a task or a visible control label."]
+      }
+    ]
+  },
+  "survey": {
+    "title": "Choose a pattern that repeats monthly",
+    "intro": "Surveyor surveys are designed for recurring weekday patterns.",
+    "firstHeading": "Add new combination",
+    "fields": [
+      {"label": "Weekday:", "value": "Monday", "meaning": ""},
+      {"label": "Day in month:", "value": "1. day in month", "meaning": ""}
+    ],
+    "instruction": "Choose the values above, then select Add.",
+    "recurrenceHeading": "First Monday of every month",
+    "recurrenceBody": "The same weekday position repeats; the calendar date changes.",
+    "months": ["Month 1 → First Monday", "Month 2 → First Monday", "Month 3 → First Monday"],
+    "answer": "Vote Yes, Maybe or No for each proposed pattern.",
+    "foot": ["A single named month is a secondary use. The survey stores a pattern,", "not a specific calendar date."]
+  },
+  "packing": {
+    "title": "Packing: shared or just on this device?",
+    "intro": "Taking responsibility is shared. Your {{packed}} checklist is not.",
+    "fictionalItem": "Camping stove",
+    "personalHeading": "Personal checklist",
+    "personalBody": ["Saved only in this browser.", "Not synced to other devices.", "Does not change assignments."],
+    "personalFoot": ["Clearing browser data may erase it."],
+    "sharedHeading": "Shared assignments",
+    "sharedBody": ["Who brings the item is shared.", "Names and counts update for", "people who can open the list."],
+    "sharedFoot": ["Checking {{packed}} does not take an item."],
+    "foot": "{{everyone}} / All rows do not create individual assignments."
+  }
+}

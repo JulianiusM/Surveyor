@@ -4,10 +4,10 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: developer-experience maintainers
 status: current
-last-verified: 2026-10-04
+last-verified: 2026-10-07
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: optional organizer participant attribution with independent recorder audit and existing credit/history/proof ownership; unchanged original saved notes before the email calculation disclosure; figures-only typed global calculation breakdown, total/base and optional anonymous payer steps inside a separate example, explanation-free compact PDF, success-only settlement-email dialog closure, and fresh-summary source deduplication; completed correcting-transfer cleanup, direct participant email wording, shared PDF pool-cost explanation, independent overview example disclosure and consistent exemption captions; active paid/refunded payer identity and applied responsibility notices; restored role-specific balance captions; explicit pending-coverage indicators; contextual full pool totals and shares export labels; pure shared coverage evidence owner, unknown legacy baselines and direct-import boundaries; established visual-component reuse and shared PDF sectionTitle; deterministic positive anonymous example selection, honest covering introductions and missing-evidence fallbacks; abbreviated exempt and zero-weight personal explanations; applied versus pending closed takeovers, post-recalculation delta notices and silent rollback; independent OPEN and ORGANIZER_ONLY initial states, default OPEN creation with Invoice submissions choice, reversible participant submission access with confirmation and revision checks, permanent financial closure, and guarded organizer-only migration; notes-first settlement emails with client-dependent native calculation disclosure, complete plain-text content, and opt-in leading actions; covered-participant count/name summaries; Payment due wording; structured anonymous pool examples in preview, organizer details and PDF; concrete complete payer explanations in dialogs and emails, separated from factual notes; cross-pool personal share ledger with one reusable read-only dialog; contextual current-source and saved-settlement totals; explicitly named attendance/factor/weight inputs; adaptive signed adjustment-category provenance and component displays; retained collect/refund totals; compact settlement statuses, nonrepeated PDF row details, and required PDF visual verification; invoice feature-folder orchestration, mandatory JSDoc plus internal step comments, catalog-owned localization-ready messages, prohibition of imported re-exports, calculated-balance-first settlement presentation, and compact payment/refund actions; responsive shares, saved numeric calculation provenance, signed settlement trace, frontend confirmation gates, and controller-owned invoice business operations; explicit controller-owned checks and pure DBAL/no context-specific service errors; implemented permission-filtered entity settings, atomic property updates, authorized event discovery/reassociation, and activity context preservation; source review of bounded mixed-card overview queries, event sub-views, shared membership and lifecycle projections, and fragment navigation; explicit maintainer readability, comments, formatting, declaration-file, module-reuse, renderer-data, and deletion-boundary requirements; archival API, presentation, persistence, and extension-boundary source review; invoice correction and retraction lifecycles, refreshed submission history, and searchable payer rows with beneficiary chips; organizer-entered shared costs, repeat invoice submissions, visible payment feedback, and share breakdown dialogs; named recipient mailer contract, transient alert lifecycle, snapshot relation loading, post-commit invoice review notifications, saved share ledger and PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, signed adjustments, revision-checked previews, payment carry-forward, rollback snapshots, configurable settlement notifications, and upload feedback; non-blocking documentation policy and optional report/test routing; D12 clean-clone setup, current scripts, settings and schema bootstrap, generated files, observed repository patterns, route registration, test selection, CI branches, and troubleshooting; D14 focused in-app help validation workflow
-source-anchors: tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/views/modules/module_entity_archive.pug; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
+verification-scope: catalog-selected full help translation corpora, canonical fragments and shared locale resolution; source review of normal API/catalog generation, Vue client/server builds and watchers, declaration ownership and pilot contribution workflow; optional organizer participant attribution with independent recorder audit and existing credit/history/proof ownership; unchanged original saved notes before the email calculation disclosure; figures-only typed global calculation breakdown, total/base and optional anonymous payer steps inside a separate example, explanation-free compact PDF, success-only settlement-email dialog closure, and fresh-summary source deduplication; completed correcting-transfer cleanup, direct participant email wording, shared PDF pool-cost explanation, independent overview example disclosure and consistent exemption captions; active paid/refunded payer identity and applied responsibility notices; restored role-specific balance captions; explicit pending-coverage indicators; contextual full pool totals and shares export labels; pure shared coverage evidence owner, unknown legacy baselines and direct-import boundaries; established visual-component reuse and shared PDF sectionTitle; deterministic positive anonymous example selection, honest covering introductions and missing-evidence fallbacks; abbreviated exempt and zero-weight personal explanations; applied versus pending closed takeovers, post-recalculation delta notices and silent rollback; independent OPEN and ORGANIZER_ONLY initial states, default OPEN creation with Invoice submissions choice, reversible participant submission access with confirmation and revision checks, permanent financial closure, and guarded organizer-only migration; notes-first settlement emails with client-dependent native calculation disclosure, complete plain-text content, and opt-in leading actions; covered-participant count/name summaries; Payment due wording; structured anonymous pool examples in preview, organizer details and PDF; concrete complete payer explanations in dialogs and emails, separated from factual notes; cross-pool personal share ledger with one reusable read-only dialog; contextual current-source and saved-settlement totals; explicitly named attendance/factor/weight inputs; adaptive signed adjustment-category provenance and component displays; retained collect/refund totals; compact settlement statuses, nonrepeated PDF row details, and required PDF visual verification; invoice feature-folder orchestration, mandatory JSDoc plus internal step comments, catalog-owned localization-ready messages, prohibition of imported re-exports, calculated-balance-first settlement presentation, and compact payment/refund actions; responsive shares, saved numeric calculation provenance, signed settlement trace, frontend confirmation gates, and controller-owned invoice business operations; explicit controller-owned checks and pure DBAL/no context-specific service errors; implemented permission-filtered entity settings, atomic property updates, authorized event discovery/reassociation, and activity context preservation; source review of bounded mixed-card overview queries, event sub-views, shared membership and lifecycle projections, and fragment navigation; explicit maintainer readability, comments, formatting, declaration-file, module-reuse, renderer-data, and deletion-boundary requirements; archival API, presentation, persistence, and extension-boundary source review; invoice correction and retraction lifecycles, refreshed submission history, and searchable payer rows with beneficiary chips; organizer-entered shared costs, repeat invoice submissions, visible payment feedback, and share breakdown dialogs; named recipient mailer contract, transient alert lifecycle, snapshot relation loading, post-commit invoice review notifications, saved share ledger and PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, signed adjustments, revision-checked previews, payment carry-forward, rollback snapshots, configurable settlement notifications, and upload feedback; non-blocking documentation policy and optional report/test routing; D12 clean-clone setup, current scripts, settings and schema bootstrap, generated files, observed repository patterns, route registration, test selection, CI branches, and troubleshooting; D14 focused in-app help validation workflow
+source-anchors: src/controller/helpController.ts; docs/user-guide/de/; tests/unit/help-localization.spec.ts; contracts/api/v1/; src/locales/; src/frontend/; src/routes/frontendPilot.ts; src/routes/api/v1.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; vite.config.mts; tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/views/modules/module_entity_archive.pug; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
 next-review: development-workflow-or-help-tooling-change
 -->
 
@@ -118,8 +118,11 @@ npm run server
 
 `npm run server` performs a full build and then runs:
 
-- the server under Nodemon through `npm run server:dev`; and
-- browser TypeScript under the esbuild watcher through `npm run server:client`.
+- the server under Nodemon through `npm run server:dev`;
+- legacy browser TypeScript under the esbuild watcher through `npm run server:client`; and
+- Vue client and server-rendering build watchers through `npm run server:frontend`.
+
+The Vue watchers rebuild code into the existing Express application's assets; they do not start a separate Vite development server. Contract or catalog edits require `npm run prepare:frontend` to regenerate their outputs, or a restart of `npm run server`.
 
 Check the instance:
 
@@ -146,6 +149,9 @@ src/modules/lib/                   cross-feature utilities and contracts
 src/public/js/                     browser TypeScript
 src/public/style/                  Sass sources
 src/views/                         Pug templates
+src/frontend/                      Vue pilot app, components, feature views and styles
+contracts/api/v1/                   authored OpenAPI operations and wire schemas
+src/locales/                       shared pilot UI/API language catalogs
 tests/unit/                        isolated production logic
 tests/frontend/                    browser-helper behavior under Vitest
 tests/integration/                 MariaDB-backed workflows
@@ -157,28 +163,36 @@ docs/user-guide/                   canonical in-app help
 docs/                              maintainer and operator documentation
 ```
 
-`dist/`, generated browser modules, compiled CSS, uploads, local environment files, `settings.csv`, reports, and `src/modules/database/__index__.ts` are ignored build/runtime outputs.
+`dist/`, generated browser modules, compiled CSS, uploads, local environment files, `settings.csv`, reports, and the generated outputs listed below are ignored build/runtime files.
 
 ## Build and run commands
 
 | Command | Behavior |
 |---|---|
-| `npm run server` | Full build, then server and browser-code watchers. |
-| `npm run server:dev` | Nodemon + ts-node server only. It assumes generated database metadata and required assets already exist. |
-| `npm run server:client` | Browser-code watch build only. |
-| `npm run build` | Sass, generated database index, server compile, browser compile, then views/assets copy. |
+| `npm run server` | Full build, then server, legacy browser and Vue client/server build watchers. |
+| `npm run server:dev` | Nodemon + ts-node server only. It assumes generated database/API/catalog outputs and required assets already exist. |
+| `npm run server:client` | Legacy browser-code watch build only. |
+| `npm run server:frontend` | Generate frontend outputs, then watch both Vue bundles. |
+| `npm run build` | Sass, generated database/API/catalog artifacts, server and both frontend builds, then views/assets copy. |
 | `npm run build:sass` | Compile Sass into ignored CSS under `src/public/style/`. |
-| `npm run build:server` | Generate the database index and compile server TypeScript into `dist/`. |
-| `npm run build:client` | Compile browser TypeScript into `dist/public/js/`. |
+| `npm run build:server` | Run all generation, compile server TypeScript into `dist/`, and copy runtime API contract artifacts. |
+| `npm run build:client` | Compile legacy browser TypeScript into `dist/public/js/`, then build the Vue pilot. |
+| `npm run build:frontend` | Typecheck Vue code and build client assets plus the server renderer. |
+| `npm run typecheck:frontend` | Prepare frontend outputs and typecheck client/server Vue projects. |
 | `npm run copy` | Copy current image/style assets and Pug views into `dist/`. |
 | `npm run run` | Start `dist/server.js`; it does not build first. |
-| `npm run generate` | Rebuild the ignored TypeORM entity/migration/subscriber index. |
+| `npm run generate` | Rebuild the TypeORM index, API declarations/validators, and locale outputs. |
+| `npm run prepare:frontend` | Regenerate API and locale outputs without database index generation or asset builds. |
 
 ### Generated files
 
 Do not hand-edit or commit these generated outputs:
 
 - `src/modules/database/__index__.ts`
+- `src/types/api/`
+- `.generated/api/v1/`
+- `src/types/LocalizationTypes.d.ts`
+- `src/modules/localization/generated/`
 - `src/public/js/**/*.gen.js`
 - `src/public/js/**/*.gen.js.map`
 - `src/public/style/**/*.css`
@@ -186,6 +200,34 @@ Do not hand-edit or commit these generated outputs:
 - `dist/`
 
 `esbuild.client.js` recursively discovers browser `.ts` files and emits one `.gen.js` module per source file. In development it writes beside the source; in production it writes into `dist/public/js/`. Extensionless relative imports are rewritten to the generated module names.
+
+### Frontend pilot contributions
+
+The [Frontend Pilot](FRONTEND_PILOT.md) describes the implemented packing/help slice and its explicit `/frontend-pilot` entry points. Author API shapes and operation IDs in `contracts/api/v1/`; import generated declarations directly from their owning `.d.ts` file and use the generated validators at request/response boundaries. Avoid a second handwritten DTO or validation schema. Keep business authorization in the feature controller/module and persistence/locks in its database service.
+
+Add pilot UI/API translations through `src/locales/<locale>.json`, following the English catalog's complete keys and parameters. `npm run prepare:frontend` discovers catalogs and checks them against the authored API message contract. Reuse `src/frontend/components/` and feature modules for Vue changes; the existing Pug routes remain available for workflows outside this pilot. Generation and packaging are part of the normal build, and generated output must not be edited or committed.
+
+Each language catalog also owns a `help.directory` entry selecting its release-shipped Markdown corpus beneath
+`docs/user-guide/`. English uses `"."`, so the maintained English guides remain their only authored source; German
+uses `"de"`. Add a language by adding its complete catalog and corresponding guide directory, then regenerate the
+catalog manifest. The same resolver selects article bodies, navigation titles, search results and API messages for
+the Express renderer and Vue application. Translate every article, including procedures, caveats, tables and figure
+explanations; translating only navigation labels or result snippets is insufficient.
+
+Keep the translated documents' heading levels and order aligned with the English counterparts. The renderer uses
+those canonical headings for stable fragments, so contextual links and existing bookmarks work in every language.
+Relative guide links retain the selected locale, and Vue rewrites them to its own help route for both server-rendered
+HTML and client navigation. Missing translated articles produce a localized error rather than an English article
+under translated navigation. A locale directory is fixed release content, never an upload path or remote source;
+the existing trusted-Markdown validation and metadata rules still apply. Use synthetic fixtures for runtime tests;
+maintained-corpus completeness and link reviews remain advisory documentation work.
+
+Before calling a frontend slice complete, visually inspect every implemented screen and significant state against
+the current application using the same records, actors and desktop/mobile sizes, and compare their behavior. Include
+permission restrictions, empty and archived data, dialogs, navigation and any native fallback. Passing builds,
+component tests or screenshots viewed in isolation do not establish parity. Correct unexplained differences and
+record deliberate SPA behavior changes and deferred controls explicitly. The [pilot review](FRONTEND_PILOT.md#visual-and-behavior-review)
+describes the paired capture workflow; default route cutover requires the complete feature baseline.
 
 ## Current code patterns
 
@@ -236,6 +278,7 @@ inside the module that owns them instead of exporting them merely to connect new
 - Use `express.Router()` in a feature route module.
 - Mount a page router explicitly in `src/app.ts`.
 - Mount a feature API router in `src/routes/api.ts`.
+- Mount a versioned pilot API router in `src/routes/api/v1.ts`; keep pilot page routes explicitly allowlisted in `src/routes/frontendPilot.ts`.
 - Keep middleware order visible in the route definition.
 - Wrap asynchronous request and parameter handlers with `asyncHandler` or `asyncParamHandler`.
 - Reuse `createGuestFlowRouter` where the entity follows its common create/view/duplicate/delete/guest model; do not force a feature into that model when its behavior differs.
@@ -898,7 +941,7 @@ Then repeat the settings-aware `npm run typeorm -- ...` command. Confirm `SETTIN
 
 ### Browser changes do not appear
 
-For development, ensure `npm run server:client` is running. Remove no source files; regenerate the ignored `.gen.js` output by restarting the watcher. For a compiled run, execute `npm run build` before `npm run run`.
+For legacy browser code, ensure `npm run server:client` is running. For Vue pilot code, use `npm run server:frontend`. After editing authored API contracts or language catalogs, run `npm run prepare:frontend` or restart `npm run server`; code watchers do not rerun those generators. Remove no source files. For a compiled run, execute `npm run build` before `npm run run`.
 
 ### Secure login loops behind a proxy
 

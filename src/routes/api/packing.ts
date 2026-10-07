@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import express, {Request, Response} from 'express';
+import express, {Request, Response, type NextFunction} from 'express';
 
 import controller from "../../controller/packingController";
 import {createEntityAdminApiRouter, createEntityArchiveApiRouter, createEntityPropertyApiRouter} from "../../middleware/adminApiFactory";
@@ -37,6 +37,7 @@ import {
     getResource
 } from "../../modules/lib/util";
 import renderer from '../../modules/renderer';
+import {APIError} from '../../modules/lib/errors';
 import type {ItemGetter} from "../../types/PermissionTypes";
 import type {EntityItemType, EntityType} from "../../types/UtilTypes";
 
@@ -99,7 +100,15 @@ app.post('/:id/item/:itemId/description', requireItemPermissionApi(permFctItems,
 }));
 
 /* ---------- PATCH einzelnes Attribut -------------------------------- */
-app.post('/:id/item/:itemId/attr', requireItemPermissionApi(permFctItems, PERM.EDIT_META, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
+// The inline title/capacity controls use their field grants, as the separate description route does.
+function requireAttributePermission(req: Request, res: Response, next: NextFunction) {
+    const field = req.body?.field;
+    if (!['title', 'description', 'maxAssignees'].includes(field)) return next(new APIError('Invalid field', {}, 400));
+    const permission = field === 'title' ? PERM.EDIT_TITLE : field === 'description' ? PERM.EDIT_DESC : PERM.EDIT_CAPACITY;
+    const parent = field === 'description' ? [PERM.ITEM_EDIT, PERM.ITEM_EDIT_DESC] : PERM.ITEM_EDIT;
+    return requireItemPermissionApi(permFctItems, permission, parent)(req, res, next);
+}
+app.post('/:id/item/:itemId/attr', requireAttributePermission, asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.updateItemAttr(req.params.itemId as string, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));

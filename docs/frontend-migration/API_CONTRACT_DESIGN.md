@@ -5,23 +5,49 @@ documentation-metadata
 audience: maintainers; frontend and backend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-04
+last-verified: 2026-10-07
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: step-two design from application commit 0a3662ae0a6e99e0df0a38f603831d3ac9ff4b61, source-reviewed controller/DBAL/HTTP/type boundaries and existing assertion evidence; official OpenAPI, Ajv, openapi-typescript, openapi-fetch, Redocly and HTTP documentation reviewed; no API, generator, dependency, migration, runtime validator, or test implemented or executed
-source-anchors: docs/FRONTEND_MIGRATION_BASELINE.md; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; src/app.ts; src/routes/api.ts; src/routes/api/packing.ts; src/controller/packingController.ts; src/controller/entityAdminController.ts; src/controller/eventPoolController.ts; src/middleware/assignFlowFactory.ts; src/middleware/genericErrorHandler.ts; src/modules/database/services/PackingService.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/invoice/; src/modules/lib/fileCommons.ts; src/public/js/core/http.ts; src/types/; package.json; tsconfig.server.json; esbuild.client.js; tests/integration/packing-workflows.spec.ts; tests/integration/entity-properties.spec.ts; tests/integration/invoice-workflows.spec.ts
-next-review: first-packing-contract-foundation-implementation
+verification-scope: source review of expanded packing management, overview, identity, multipart/binary and generated contract boundaries; original step-two cross-feature design retained and distinguished from implemented scope; this documentation update runs no application, database or browser checks and makes no complete-parity claim
+source-anchors: contracts/api/v1/openapi.yaml; contracts/api/v1/common.yaml; contracts/api/v1/packing.yaml; contracts/api/v1/overview.yaml; contracts/api/v1/auth.yaml; scripts/generate-api.mjs; src/modules/api/contracts.ts; src/modules/api/session.ts; src/modules/api/transport.ts; src/modules/api/problem.ts; src/types/ApiTypes.d.ts; src/routes/api/v1.ts; src/routes/api/v1/packing.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; src/modules/packing/api.ts; tests/unit/frontend-contracts.spec.ts; tests/unit/frontend-generation.spec.ts; tests/integration/packing-management-api.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; tests/fixtures/frontend-contracts.mts; docs/FRONTEND_MIGRATION_BASELINE.md; docs/ARCHITECTURE.md; src/controller/packingController.ts; src/modules/database/services/PackingService.ts; src/modules/database/services/EntityLifecycleService.ts; package.json
+next-review: pilot-contract-expansion-or-transport-subset-change
 -->
 
 Adopt authored OpenAPI 3.1 YAML as the single source of wire shapes, generate declaration files and runtime
 validators from it, and expose `/api/v1` alongside the current routes. Keep business decisions in the existing
-controllers and their feature modules, with transactions and persistence in the existing DBAL. The first
-implementation slice proves packing reads, metadata edits, and self-assignment before extending the pattern.
+controllers and their feature modules, with transactions and persistence in the existing DBAL. The original first
+slice covered reads, metadata edits and self-assignment; the implementation now extends to the packing management,
+overview and identity operations described below.
 
-This is a design, not an implemented or validated API. Proposed paths, headers, status mappings, revisions, and
-build commands below do not exist yet. The [baseline](../FRONTEND_MIGRATION_BASELINE.md),
-[route inventory](ROUTE_INVENTORY.md), and [edge-case records](EDGE_CASES.md) remain the feature-parity evidence.
-No executable OpenAPI document is introduced in this step: the examples specify the first implementation slice
-without creating a second, incomplete contract that could be mistaken for production truth.
+The packing contract and generation/runtime foundation now exist. The
+[authored OpenAPI entry point](../../contracts/api/v1/openapi.yaml) is authoritative for actual operation names,
+shapes, headers and statuses. Invoice, activity and other feature examples remain future v1 scope. The
+[baseline](../FRONTEND_MIGRATION_BASELINE.md), [route inventory](ROUTE_INVENTORY.md), and
+[edge-case records](EDGE_CASES.md) remain the feature-parity evidence.
+
+## Implemented foundation boundary
+
+The mounted implementation covers packing creation/duplication, item editing/order/assignment management,
+properties, audience/admin permissions, event selection/relinking, header files, archive/restore/hard deletion,
+the bounded packing overview and personal visibility. It also covers session bootstrap, browser-cookie locale
+selection, help, local and guest identity entry/recovery, registration/activation/reset, logout and profile switching.
+Packing Vue screens use these v1 operations without delegating packing workflows to the Pug frontend. Authorized
+event navigation and other unmigrated modules remain separate application destinations. The
+[pilot guide](../FRONTEND_PILOT.md) owns current verification and rollout limits.
+
+[Generation](../../scripts/generate-api.mjs) produces the bundled contract, declarations,
+operation/problem metadata, strict server validators and additive browser response validators.
+[Contract loading](../../src/modules/api/contracts.ts), [transport](../../src/modules/api/transport.ts),
+[session admission](../../src/modules/api/session.ts) and [problem formatting](../../src/modules/api/problem.ts)
+consume those generated owners. The [API operation type](../../src/types/ApiTypes.d.ts) is `keyof operations` from
+the generated declaration; transport calls therefore cannot silently introduce a differently spelled operation ID.
+
+The [validator](../../tests/unit/frontend-contracts.spec.ts) and
+[generation](../../tests/unit/frontend-generation.spec.ts) suites cover strict requests/server output, nested additive
+client fields, closed known-problem parameters, deterministic generation, standalone loading without dynamic function
+compilation, and [TypeScript consumer fixtures](../../tests/fixtures/frontend-contracts.mts). The multipart fixture
+also checks that nested create data stays strict when a referenced shape is additive in a browser response. These
+are executable evidence locations, not a claim that every suite was rerun for this document update. Other feature
+families and conditional native-form adapters remain planned.
 
 ## Contract authority and toolchain
 
@@ -34,7 +60,7 @@ This is an interoperability choice, not a claim that 3.1.1 is the newest OpenAPI
 | Owner/artifact | Proposed location | Responsibility |
 |---|---|---|
 | Authored contract entry point | `contracts/api/v1/openapi.yaml` | Version, paths, security scheme, operation IDs, shared responses; references feature files |
-| Authored feature contracts | `contracts/api/v1/packing.yaml`, then identity/activity/invoice peers | Request/response schemas, parameters, declared content types and statuses, command policy |
+| Authored feature contracts | `contracts/api/v1/packing.yaml`, `overview.yaml`, `auth.yaml`, `help.yaml`; later activity/invoice peers | Request/response schemas, parameters, declared content types and statuses |
 | Authored common schemas | `contracts/api/v1/common.yaml` | IDs, dates, problem variants, pagination and other truly shared shapes |
 | Generated bundled description | `.generated/api/v1/openapi.json` | One resolved local contract consumed by both generators; published with matching release |
 | Generated type-only owner | `src/types/api/v1.d.ts` | `paths`, `operations`, and `components` declarations from openapi-typescript |
@@ -43,7 +69,8 @@ This is an interoperability choice, not a claim that 3.1.1 is the newest OpenAPI
 | Authored runtime adapters | Existing/new owning `.ts` modules under server middleware and frontend API infrastructure | HTTP binding, session context, error translation, content-type handling, and invoking generated validators |
 
 Generated files are ignored, regenerated, and shipped as build artifacts; never hand-edit or commit them.
-All authored executable source remains `.ts`; generated JavaScript is build output. Import generated declarations
+Authored application executable source remains `.ts`; generation scripts follow the existing `.mjs` tooling pattern,
+and validator JavaScript is generated build output. Import generated declarations
 directly from their owner, for example `import type {components} from '../../types/api/v1'`.
 Use `components['schemas']['PackingListView']` in controller projection signatures and frontend code. Do not add
 barrel re-exports, ORM imports, runtime enums, or a second handwritten `PackingListDto` interface. This follows the
@@ -72,7 +99,7 @@ The generation pipeline is:
    request/response inference and exposes the original `Response`; those types alone cannot confirm received JSON.
    ([openapi-fetch](https://openapi-ts.dev/openapi-fetch/))
 
-Pin and verify the selected package versions during implementation. No new package is installed by this design.
+Selected package versions and their TypeScript override are recorded in [package.json](../../package.json) and its lockfile.
 Express OpenAPI Validator was considered: it supports Express 5 and OpenAPI 3.1, with JSON response validation.
 Selecting it in addition to browser Ajv compilation would introduce two runtime validation configurations to keep
 aligned. The chosen shared Ajv path trades that duplication for a small owned HTTP adapter; it must stay a finite
@@ -96,8 +123,11 @@ as UUID, date and date-time; timezone existence and cross-field date policy rema
 ([Ajv schema versions](https://ajv.js.org/json-schema.html),
 [options](https://ajv.js.org/options.html), [formats](https://ajv.js.org/guide/formats.html))
 
-The HTTP binding supports path scalars, ordinary single query values, explicitly declared repeated query arrays,
-JSON bodies, selected multipart operations, and declared binary/text outputs. Unsupported serialization styles
+The HTTP binding supports path scalars, ordinary single query/header values, JSON bodies, the declared packing
+multipart forms and the scoped `application/octet-stream` header response. Packing creation decodes the `data`
+JSON part once and validates it against the authored nested schema; `image` is a separately handled file part.
+Repeated query arrays and arbitrary text/binary transports are not general capabilities of the adapter.
+Unsupported serialization styles
 fail generation. Query/header decoding is a deterministic transport step derived from the declared parameter;
 JSON bodies are not coerced. Distinguish absent, empty, repeated and malformed values before validation. Do not
 make every feature author write another parameter schema or route-specific serialization framework.
@@ -169,17 +199,26 @@ entity type, ID and relevant query/locale in cache keys; clear old identity quer
 This prevents a request made with a newly changed shared cookie from filling an old tab's cache. A command admitted
 before a switch can finish under its captured original actor; aborting its request does not roll back the database.
 Do not automatically replay it under the new identity. Implement session-transition/admission ordering explicitly
-and test it; the current application has no such general context protocol.
+and test it; the pilot implements this boundary, while legacy routes retain their established session flows.
 
-For v1, expired-session handling must branch before the current global HTML/OIDC redirect in
-[app.ts](../../src/app.ts). Return JSON 401 and a safe reauthentication action. Actual OIDC provider login/logout,
-activation/reset links, guest-token login, and other external/native identity flows remain browser navigations.
-Validate return destinations with the existing owner; do not expose an arbitrary redirect input. Bootstrap can
-establish anonymous state for public entry without turning private resource failures into anonymous success.
+The v1 mount precedes the global HTML/OIDC redirect in [app.ts](../../src/app.ts). Expiry returns a structured
+401; a known `INVALID_CREDENTIALS` rejection also uses 401 but does not invalidate an otherwise current identity.
+[Identity routes](../../src/routes/api/v1/auth.ts) reuse the existing controller checks, admit the old context/CSRF
+before transitions and bind successful `IdentityResult` responses to their **new** context. Slow credential/profile
+work checks the stored context again before changing the session; a final comparison prevents attaching a private
+guest link to an intervening actor's session projection. This is not an atomic session-store compare-and-swap.
+
+Local login, registration, recovery, activation/reset and profile selection now have v1 commands and Vue pages.
+Emailed activation/reset URLs enter those pages. Guest capability links retain native GET authentication through
+[the pilot entry adapter](../../src/routes/frontendPilot.ts) and redirect to a validated pilot destination; OIDC
+provider login/logout remains document navigation. [Safe return normalization](../../src/modules/lib/frontendIdentity.ts)
+is shared with the browser. Bootstrap establishes anonymous entry state without turning private read failures into
+anonymous success. The existing session/profile persistence and account-management pages are not all migrated.
 
 Cookie-authenticated mutations also need an explicit CSRF boundary: validate a session-bound token and same-origin
 request metadata for the new API, including multipart. Do not treat a custom header, CORS settings, or SameSite alone
-as the entire policy. This is foundation work, not an assertion that the existing code supplies it. Native adapters
+as the entire policy. The pilot's [context admission](../../src/modules/api/session.ts) supplies this boundary for
+its mutations. Native adapters
 must retain their existing flows while equivalent protection is introduced coherently.
 ([OWASP CSRF guidance](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html))
 
@@ -194,7 +233,7 @@ context checks run before returning 304. A cache tag is never an authorization t
 | Value | Contract rule |
 |---|---|
 | Entity/item/profile UUIDs | Strings with UUID format where the real identifier is a UUID; never an entity object |
-| Legacy numeric record IDs | Canonical positive decimal strings in v1, converted only at the owning server boundary with range checks; old routes retain their current number shapes |
+| Numeric assignment handles | Authorized packing assignee projections use positive integer handles or null; the DELETE path uses a positive decimal string, converted with a safe-integer check. Other future numeric IDs need an explicit endpoint contract |
 | Revisions | Opaque ETag for ordinary edits; the established nonnegative safe-integer invoice calculation revision for reviewed finance commands; reject unsafe numeric conversion |
 | Money | Signed fixed two-decimal strings for v1 financial amounts, with endpoint-specific allowed sign/range; no localized separators, binary floats, or unrequested currency field |
 | Factors | Canonical decimal strings allowing the existing 0–1000 range and four decimal places; preserve zero; conversion must retain current exact arithmetic |
@@ -234,13 +273,13 @@ specific members are Surveyor's contract design.
 | Status | v1 meaning |
 |---|---|
 | 400 | Malformed JSON/parameters, schema validation, unsupported fields, or invalid domain input with no competing state |
-| 401 | Authentication/session no longer valid for the operation; API response remains JSON |
+| 401 | Authentication failure; distinguish expired identity from known invalid credentials/token by code; response remains JSON |
 | 403 | Current identity lacks the required action or field authority |
 | 404 | Missing resource or child outside the route's parent scope; preserve feature-specific disclosure policy |
 | 409 | State conflict such as capacity full, relationship context changed, stale reviewed calculation, or session-context mismatch; distinct stable codes |
-| 412 | Supplied metadata `If-Match` does not match the currently authorized edit representation |
+| 412 | Supplied metadata/item/order/settings `If-Match` does not match its currently authorized edit token |
 | 413 / 415 | Oversized payload/file or unsupported request media type/file type, with command-specific details |
-| 428 | Required metadata edit precondition was omitted |
+| 428 | A required metadata/item/order/settings edit precondition was omitted |
 | 429 / 503 | Rate limit or temporarily unavailable work; preserve bounded `Retry-After` semantics |
 | 500 | Unexpected server error with safe fallback message and correlation ID |
 
@@ -250,7 +289,7 @@ explicitly rather than altering the global error handler for every caller. Exist
 internal while the owning operation acquires stable error codes; translated text must never be parsed into a code.
 
 OpenAPI owns each API error's literal `code`/`messageKey` pair and parameter shape, using a tagged `oneOf` union.
-The common catalog at proposed `src/locales/en.json` and sibling language files owns message text. For example:
+The common catalog at [src/locales/en.json](../../src/locales/en.json) and sibling language files owns message text. For example:
 
 ```json
 {
@@ -276,14 +315,16 @@ unknown params into a known error variant. This compatibility fallback cannot re
 Use separate tokens for separate meanings. `updatedAt` is not an aggregate revision, a transaction lock is not an
 old-form detector, and a full-page cache ETag is not a financial confirmation token.
 
-| Boundary | Existing protection | Proposed v1 contract and implementation work |
+| Boundary | Implemented protection | Remaining scope/limits |
 |---|---|---|
-| Packing metadata | Root lock plus expected event context obtained during request handling; no general same-field stale-form detection | Dedicated metadata resource, monotonic metadata revision, strong ETag, required `If-Match` |
-| Event relationship | Explicit `expectedEventId`, locked roots/parents and reauthorization; an already achieved target can be a harmless retry | Require the expected relationship and a token backed by a monotonic relationship revision for an actual move; preserve the already-achieved target no-op after current authorization |
-| Assignment capacity | Item lock, existing-assignment check before capacity, transactional insertion | Retain natural idempotency and locked checks; do not require the list metadata ETag |
-| Item metadata/order/permission matrices | Feature-specific checks with uneven general stale-write protection | Define the appropriate item/collection edit token per slice; do not label every write protected by the packing root revision |
-| Invoice preview/apply | `calculationRevision` and root lock, including payment-triggered revision changes | Keep reviewed `expectedRevision`, stale conflict 409 and current command-specific confirmation rules; separate from cache ETags |
-| Activity recommendation apply | Existing contexts/fingerprints and coordinated locks | Preserve reviewed-result checks; a new transport token cannot replace their cross-plan scope |
+| Packing metadata | Scoped metadata resource, monotonic root revision, strong ETag and required `If-Match`, checked under parent/root coordination | Legacy forms advance the revision but do not submit conditional edit tokens |
+| Packing event relationship | Existing `expectedEventId` plus `If-Match: settingsToken` for an actual move, locked parents/root and reauthorization; relinking advances the root revision | Already-achieved target retains the shared controller's authorized no-op before edit-token validation; no separately persisted relationship revision |
+| Packing assignment capacity | Parent/root/item locks, existing-assignment check before capacity, transactional insertion | Natural idempotence for the captured actor; no metadata precondition and no generic command retry |
+| Packing item metadata | Per-item `editToken`, field authority and route-parent scope under the locked operation | Token hashes current editable values/authority/root context; it is not a separate monotonic item history counter |
+| Packing order | `orderToken` covers current item IDs/positions and root context; exact membership and `ITEM_EDIT` checks | Concurrent additions/removals/reorders invalidate the reviewed order; no separate persisted order revision |
+| Packing settings | `settingsToken` covers defaults/admin masks/header identity/event/root revision/actor permissions; required for ACL/header changes and actual relinking | Shared settings token can conflict across panels; ACL/item/order changes away and back are not a general monotonic-history guarantee |
+| Invoice preview/apply | Existing `calculationRevision` and root lock, including payment-triggered revision changes | Future v1 work must preserve command-specific `expectedRevision`/409 semantics; not implemented by packing tokens |
+| Activity recommendation apply | Existing contexts/fingerprints and coordinated locks | Future v1 work must retain their cross-plan scope |
 
 Create `GET/PATCH /api/v1/packing-lists/{listId}/metadata` as the edit representation. It contains only the current
 actor's editable metadata values and relevant capability/parent context. Its strong ETag covers canonical serialized
@@ -304,18 +345,19 @@ conflicts when another participant simply assigns an item.
 ([HTTP strong comparison and If-Match](https://www.rfc-editor.org/rfc/rfc9110.html#name-if-match),
 [428 Precondition Required](https://www.rfc-editor.org/rfc/rfc6585.html#section-3))
 
-The metadata revision is a new persisted field requiring entity changes and a reviewed migration. Every writer of
-covered fields, including legacy description/property commands and relevant native/controller paths, must advance
-it under the same root transaction. Parent reassociation must invalidate the edit context; grant/lifecycle changes
-must change the current capability/context projection or its owning revision. Assignment-only writes must not
-advance metadata revision. Build an explicit writer inventory and tests before enabling `If-Match`; otherwise old
-routes could silently bypass the protection. No revision column or protection has been added by this design.
+The persisted metadata revision exists in the [packing entity](../../src/modules/database/entities/packing/PackingList.ts)
+and [reviewed migration](../../src/migrations/1791072000000-AddPackingMetadataRevision.ts).
+[Packing writers](../../src/modules/database/services/PackingService.ts) advance it with title/description writes;
+[lifecycle writers](../../src/modules/database/services/EntityLifecycleService.ts) advance it for packing relinking,
+direct archival and affected parent archival/deletion contexts. Assignment-only writes do not advance it. Current
+permission masks are recomputed for token comparison. [ACL DBAL operations](../../src/modules/database/services/EntityAdminService.ts)
+serialize packing changes on the root lock, but do not provide a new persisted ACL-history counter.
 
-The separate relationship command carries `eventId`, `expectedEventId`, and `expectedRelationshipToken`.
-Reauthorize against the locked current source and target. An already-achieved desired association remains a no-op;
-an actual move requires both the expected parent and current monotonic relationship token, otherwise 409. Increment
-the relationship revision through every legacy/v1 association writer, including moves away and back, and invalidate
-the affected metadata context. This is additional migration work, not an existing `expectedEventId` guarantee.
+The implemented relationship body is `{eventId, expectedEventId}`; its reviewed token is the `If-Match` header,
+not the originally proposed `expectedRelationshipToken` field. The shared controller checks current source/target
+authority and expected parent, then invokes the settings-token check inside the same transaction for an actual move.
+A conflicting parent returns 409; a stale settings token returns 412. Relinking away and back still advances the
+root revision. Other feature relationships remain outside this packing implementation.
 
 For a 412, preserve the draft and load a fresh authorized baseline. Compare original, local draft and current
 server values; offer review/reapply or discard. Never silently merge a conflicting field or refresh a draft's
@@ -325,13 +367,17 @@ a fresh preview and explicit review of its effects, not ordinary field merging.
 Reads may use `If-None-Match` to avoid retransmitting unchanged authorized data. Their ETag covers the exact DTO
 projection including capabilities and any localized content, not just the root timestamp. For packing, obtain
 items/assignments/counts/capabilities from a consistent read snapshot or explicitly proven equivalent revision
-scheme; the current `fetchForView` performs several reads and does not itself establish one aggregate snapshot.
+scheme. The v1 packing reader uses the DBAL's `REPEATABLE READ` snapshot for its permission, parent, item and
+assignment projection; legacy `fetchForView` remains a separate multi-read renderer owner.
 
 ## Idempotency and retry policy
 
-Declare per-operation policy in the authored contract, for example an `x-surveyor-command` extension with
+For future generated retry policy, declare per-operation policy in the authored contract, for example an `x-surveyor-command` extension with
 `retryPolicy: read | natural-idempotent | reconcile-only` and its precondition kind. Generate the client policy
-registry from those declarations; do not infer retry safety from POST/PUT names or from a disabled button.
+registry from those declarations; do not infer retry safety from POST/PUT names or from a disabled button. That
+extension/registry is not implemented. The current [command owner](../../src/frontend/composables/command.ts) disables
+automatic retries, distinguishes confirmed failure from uncertain outcome, and offers read reconciliation where the
+feature provides it. The owning server operation establishes the endpoint-specific no-op behavior.
 
 | Operation family | Policy |
 |---|---|
@@ -342,7 +388,7 @@ registry from those declarations; do not infer retry safety from POST/PUT names 
 | Invoice upload, organizer expense, token consumption, arbitrary creation | Reconcile-only by default; no automatic repeat after response loss |
 | Reviewed financial/recommendation commands | Retain revision/fingerprint rejection; inspect current state and obtain a new preview before a new command |
 
-No generic server idempotency-key store is introduced in the first packing slice. If later needed for an expense
+No generic server idempotency-key store exists in the packing implementation. If later needed for an expense
 or another creation endpoint, design its key scope, request fingerprint (including file identity), transactionally
 stored result, retention, concurrent in-progress behavior, and same-key/different-body rejection as a feature.
 Such a contract needs persistence and integration evidence; it cannot be promised by a frontend retry plugin.
@@ -378,24 +424,56 @@ attachment filename and no-store policy. Proof access remains authorized on ever
 capabilities. Preserve native links/downloads/new tabs, draft retention, and saved-calculation export semantics.
 ([Event outputs](../../src/routes/event.ts), [activity print output](../../src/routes/activity.ts))
 
-## Worked first slice: packing
+## Implemented packing contract and worked scenarios
 
-These are proposed v1 operations, not replacements already mounted in Express. They supplement the current
-[packing API](../../src/routes/api/packing.ts) and reuse its controller/DBAL behavior. The frontend still uses
-`/packing/{id}` as its bookmarkable page route.
+These pilot operations are declared in [OpenAPI](../../contracts/api/v1/openapi.yaml) and mounted by the
+[v1 router](../../src/routes/api/v1.ts) and [packing router](../../src/routes/api/v1/packing.ts). They supplement the
+existing [packing API](../../src/routes/api/packing.ts). The opt-in application has its own packing landing,
+create/duplicate/detail/settings and identity pages. `/packing/{id}` remains a compatible parallel native page;
+the new packing interface does not use it to finish deferred packing actions.
 
 | Method and path | Operation ID | Result and ownership |
 |---|---|---|
+| `GET /api/v1/session` | `getSession` | Anonymous/account/guest `SessionView`; bootstrap context, CSRF material and resolved locale |
+| `PUT /api/v1/locale` | `setLocale` | Validated browser-cookie preference and refreshed `SessionView`; no account preference migration |
+| `GET /api/v1/help` | `getHelpPage` | Existing trusted help document/index/search projection |
 | `GET /api/v1/packing-lists/{listId}` | `getPackingList` | 200 `PackingListView`, full-view ETag; same read authority as the existing detail page |
 | `GET /api/v1/packing-lists/{listId}/metadata` | `getPackingMetadata` | 200 `PackingMetadata`, metadata ETag; only fields the current actor may edit |
-| `PATCH /api/v1/packing-lists/{listId}/metadata` | `patchPackingMetadata` | 200 fresh `PackingMetadata`; field authority, context and required If-Match checks |
-| `PUT /api/v1/packing-lists/{listId}/items/{itemId}/self-assignment` | `putPackingSelfAssignment` | 200 authoritative current item-assignment result, whether newly inserted or already present |
-| `DELETE /api/v1/packing-lists/{listId}/items/{itemId}/self-assignment` | `deletePackingSelfAssignment` | 200 authoritative unassigned result; removing an absent self-assignment remains harmless |
+| `PATCH /api/v1/packing-lists/{listId}/metadata` | `updatePackingMetadata` | 200 fresh `PackingMetadata`; field authority, context and required If-Match checks |
+| `PUT /api/v1/packing-lists/{listId}/items/{itemId}/self-assignment` | `assignPackingItem` | 200 authoritative current item-assignment result, whether newly inserted or already present |
+| `DELETE /api/v1/packing-lists/{listId}/items/{itemId}/self-assignment` | `unassignPackingItem` | 200 authoritative unassigned result; removing an absent self-assignment remains harmless |
+
+The original read/metadata/self-assignment proof has expanded through the following authored families. Paths in this
+table are relative to `/api/v1`; [OpenAPI](../../contracts/api/v1/openapi.yaml) owns every exact operation ID and schema.
+
+| Methods and paths | Result and policy owner |
+|---|---|
+| `GET /packing-lists/create-context`; `POST /packing-lists` | Initial permission definitions/defaults; full-account multipart creation with `data` JSON and optional `image`, saving root/items/defaults in one DB transaction |
+| `GET /packing-lists/{listId}/duplicate` | Authorized copy draft including item order/Everyone/default permissions; no assignments, file, event, admins or archival copied; submission uses the same creation command |
+| `POST /packing-lists/{listId}/items`; `PATCH`/`DELETE /packing-lists/{listId}/items/{itemId}` | Quick add, field-specific conditional edit, scoped removal; retain direct item grants and creator ownership |
+| `PUT /packing-lists/{listId}/item-order` | Complete reviewed item order with `If-Match: orderToken` and exact current membership |
+| `DELETE /packing-lists/{listId}/assignments/{assignmentId}` | Authorized removal of another assignment; numeric handle is disclosed only to actors with the removal capability |
+| `GET /packing-lists/{listId}/settings` | Separate allowed properties/event/access/lifecycle projection with `settingsToken`; administrator matrix omitted without permission |
+| `PUT /packing-lists/{listId}/default-permissions`; `POST /packing-lists/{listId}/admins`; `PATCH`/`DELETE /packing-lists/{listId}/admins/{profileId}` | Audience and administrator changes use the reviewed settings token and owning permission checks |
+| `GET /packing-lists/{listId}/profiles`; `GET /packing-lists/events` | Authorized profile/event selection through existing discovery owners; event query retains its declared filters/cursor/selected reference |
+| `PUT /packing-lists/{listId}/event` | Expected-parent and reviewed settings checks; preserve independent parent disclosure and current admission after relinking |
+| `PUT`/`DELETE`/`GET /packing-lists/{listId}/header` | Conditional multipart replacement/removal; context-authorized binary read, opaque version and safe file cleanup |
+| `POST /packing-lists/{listId}/archive`; `POST /packing-lists/{listId}/restore`; `DELETE /packing-lists/{listId}` | Shared archive owner and inherited restrictions; separate full-account owner-only permanent deletion |
+| `GET /packing-lists/overview`; `PUT /packing-lists/overview/{entityType}/{entityId}/visibility` | Existing bounded overview reader forced to packing; four participant/owner × main/hidden regions, eligible event containers, private desired visibility |
+| `POST /auth/login`, `/auth/logout`, `/auth/register`, `/auth/forgot-password`, `/auth/reset-password`, `/auth/activate`, `/auth/guest-login`, `/auth/guest-recovery`, `/auth/guest-email-exists`; `PUT /auth/profile` | Generated identity shapes mapped onto the owning account/guest checks; session-changing results explicitly confirm their new context |
+| `GET`/`POST /packing-lists/{listId}/guest` | Public guest-entry title projection and scoped guest registration, including the deliberately private personal access link in the transition result |
+
+The overview wraps [the existing user controller](../../src/controller/userController.ts); it does not replace its
+membership/grouping queries with raw ORM reads. Region totals retain their existing pre-type-filter meanings,
+while `matchingEntities` is the packing/search total. Packing cards use v1 images and Vue destinations; event
+containers disclose only the references allowed by the existing owner. Event pages and account administration
+outside these identity-entry commands remain unmigrated destinations. Packing has no native export feature to add.
 
 `PackingListView` has `entityType: packing`, ID, title, nullable description, allowed header URL, disclosed event
 reference, lifecycle presentation, root capabilities, counters, and ordered items. Each item has ID, title,
 description, position, `requiredByAll`, nullable maximum, current count, `selfAssigned`, visible assignee names,
-and its permitted action flags. Project only authorized assignment-removal identifiers. Keep current counter
+item capabilities and `editToken`. Assignee removal handles are nullable when authority is absent. Root capabilities
+include `selfAssign`, `addItem`, `reorder` and `manageSettings`; list order has its own `orderToken`. Keep current counter
 semantics: Everyone items do not contribute to participant/open/empty counters. The current UI sorts Everyone
 items ahead of normal position. `Packed?` remains browser-local `packed_{listId}_{itemId}` state; it is not a shared
 assignment field or a new server preference.
@@ -407,8 +485,15 @@ assignment field or a new server preference.
 values. In the authored schema, `PackingMetadataPatch` is an object with `minProperties: 1`,
 `additionalProperties: false`, optional nonblank trimmed title up to 255 characters, and optional description
 up to 16000 characters or null. Empty description keeps the current normalization to null. The concrete structural
-schema belongs only in the eventual YAML; these limits match the current
-[normalization owner](../../src/controller/entityAdminController.ts).
+schema belongs only in [packing.yaml](../../contracts/api/v1/packing.yaml); the pilot
+[normalization owner](../../src/modules/packing/api.ts) preserves existing trim/clear behavior before validation.
+Create/duplicate and item description schemas retain the database TEXT range up to 65535 characters, distinct from
+the existing 16000-character root metadata editor policy; the database's byte limit still applies. Read/duplicate
+schemas preserve historical null/negative capacities. New editable input uses its own validated shape rather than
+silently rewriting historical rows.
+Item title clearing retains the native inline behavior: `PackingItemPatch` accepts `title: ""`, while root metadata
+and newly submitted items still require a title. Duplicate read drafts accept those persisted blank titles so the
+creation form can present them for correction instead of failing its read projection.
 
 ### Scenario A — Fresh read and periodic refresh
 
@@ -420,9 +505,9 @@ schema belongs only in the eventual YAML; these limits match the current
 4. A profile switch makes an old request obsolete even if it resolves later. A context mismatch returns only
    its problem, not the new profile's packing data under the old cache key.
 
-**Missing current protection:** there is no v1 read projection, scoped request protocol, conditional polling,
-or proved consistent packing aggregate read yet. Current `fetchForView` can be reused as behavioral evidence but
-must not be serialized wholesale as the contract.
+The pilot [read projection](../../src/modules/packing/api.ts) and
+[snapshot DBAL](../../src/modules/database/services/PackingService.ts) now implement this API read boundary.
+Existing `fetchForView` remains behavioral evidence and is not serialized wholesale as the contract.
 
 ### Scenario B — Two editors change metadata
 
@@ -446,10 +531,10 @@ fresh baseline. Missing If-Match yields 428. Forged `ownerId` is a shape error; 
 field gives 403. A concurrent assignment alone does not invalidate the metadata tag. No guessed default overwrites
 an omitted description or event link.
 
-**Missing current protection:** [saveProperties](../../src/controller/packingController.ts) locks the root and
-checks request-time event context, but accepts a later stale title from another browser. There is no metadata
-revision today. Add the revision/writer coverage and reauthorization-at-write boundary before claiming this
-scenario; preserve existing relink/root lock coordination rather than introducing an independent transaction.
+The pilot [metadata command](../../src/modules/packing/api.ts) implements the conditional write through existing
+root/relink coordination. Its [revision migration](../../src/migrations/1791072000000-AddPackingMetadataRevision.ts)
+and legacy-writer invalidation are part of the implementation slice. Legacy forms still do not submit an edit
+precondition; advancing the revision protects v1 review tokens without making those forms conditional.
 
 ### Scenario C — Full item and a lost assignment response
 
@@ -463,19 +548,22 @@ Return a small authoritative item-assignment projection and invalidate/reload de
 Do not pretend an optimistic button state establishes the final count, and do not use a metadata revision for
 this command. Preserve Everyone-row presentation without inventing a new backend prohibition as part of this slice.
 
-**Existing evidence:** [controller assignment ordering](../../src/controller/packingController.ts),
+**Evidence locations:** [controller assignment ordering](../../src/controller/packingController.ts),
 [item lock/insertion](../../src/modules/database/services/PackingService.ts), and
 [assignment scope middleware](../../src/middleware/assignFlowFactory.ts) establish current checks;
-[packing integration assertions](../../tests/integration/packing-workflows.spec.ts) check duplicate assignment
-and sequential capacity rejection. They do not prove a browser lost-response recovery or simultaneous final-place
-race. Audit authorization/root-context changes during the operation and concurrent capacity-edit writers before
-claiming a broader aggregate concurrency guarantee.
+[packing integration assertions](../../tests/integration/packing-workflows.spec.ts) protect the established flow.
+[The v1 integration suite](../../tests/integration/packing-api.spec.ts),
+[management suite](../../tests/integration/packing-management-api.spec.ts) and
+[HTTP suite](../../tests/e2e/frontend-pilot-api.spec.ts) cover the added scope/capacity/token and transport boundaries.
+Read their actual assertions and the pilot verification record before claiming a simultaneous race or browser
+response-loss case; the existence of an idempotent server operation does not authorize automatic browser replay.
 
 ## Coexistence, rollout, and verification
 
 Mount `/api/v1` before the legacy `/api` catch-all and before an HTML-only invalid-session redirect can intercept
 it. Keep legacy `/api/packing/...` and native form/page/token/export routes working until their consumers migrate.
-Both versions call the same named feature operations; adapters translate legacy field/checkbox/envelope shapes.
+Both versions reuse the existing feature/controller/DBAL owners; adapters translate legacy field/checkbox/envelope
+shapes. Some named v1 projections are new within that owner rather than a forced replacement of every native route.
 Do not redirect a legacy mutation to v1 or make an SSR/native adapter call its own HTTP server. Server rendering
 and native fallback actions reuse the controller operations and projections directly while retaining the existing
 redirect/flash workflow where promised.
@@ -505,14 +593,13 @@ runs an older browser validator against a newer server response containing both 
 then rejects malformed known fields in the same response. Requests and server-emitted projections remain strict.
 Do not enable this compatibility mode without that fixture, or treat a changed enum/discriminant as an additive field.
 
-At implementation, add one `generate:api` owner to the existing generation/build flow. It produces the bundled
+The `generate:api` owner is part of the existing generation/build flow. It produces the bundled
 contract, types, runtime validators and a deterministic source hash manifest before either server/client type
 checking or bundling. Direct client build/development/test entry points that import these outputs must also prepare
-them; existing `generate` currently only prepares the DB entity/migration index. Package validators and the matching
-contract into production output; keep generator tooling out of runtime startup. No command above is currently a
-package script, and no test result is claimed here.
+them; [package scripts](../../package.json) prepare the API and locales after the DB entity/migration index and copy
+the server validator/manifest/contract into production output. Generator tooling stays outside runtime startup.
 
-The first implementation's meaningful checks are:
+The implementation's meaningful checks include:
 
 - A database-free clean-generation fixture compiles valid/invalid examples through both runtime targets and
   type-checks server/client consumers. It proves the chosen schema subset, references, error unions, ignored output
@@ -526,9 +613,13 @@ The first implementation's meaningful checks are:
   only where those new protections are implemented. Database tests still use guarded disposable schemas.
 - A narrow browser journey proves initial read, dirty-form refresh, 412 draft retention/review, identity-context
   change, and idempotent assignment recovery. Reuse prior visual/behavior IDs instead of replacing their semantics.
-- Once the pilot passes, expand contract/read/write coverage feature by feature, retaining invoice and activity
-  concurrency owners and native fallback boundaries. Do not publish unimplemented routes as available features.
+- [Management integration](../../tests/integration/packing-management-api.spec.ts) protects item grants/order,
+  settings conflicts, guest/account ownership, relinking/lifecycle and scoped overview behavior. The
+  [packing HTTP](../../tests/e2e/frontend-pilot-api.spec.ts) and [identity HTTP](../../tests/e2e/frontend-identity-api.spec.ts)
+  suites exercise built-route/session/multipart boundaries. These source links do not replace the separate execution record.
+- Expand remaining feature coverage with its invoice/activity concurrency and verified native fallback boundaries.
+  Do not publish unimplemented routes as available features.
 
 These are application contract/build checks, not documentation assertions or a new prose approval gate. The
-design remains advisory. It is ready for a bounded packing proof slice; its generator, runtime/type parity,
-revision migration, context protocol, and route adapters still require implementation and verification.
+design remains advisory. The bounded foundation evidence is recorded above; extending the protocol to each remaining
+feature and claiming complete route parity still requires that feature's implementation and verification.

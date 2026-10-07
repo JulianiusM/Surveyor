@@ -75,7 +75,8 @@ async function computeMaskFor(
     ownerId: string | null | undefined,
     eventId: string | null | undefined,
     session: SessionLike,
-    caches?: PermEngineCaches
+    caches?: PermEngineCaches,
+    manager?: EntityManager,
 ): Promise<number> {
     // 0) Owner ⇒ full mask
     if (isOwner(session, ownerId)) return ALL_MASK;
@@ -84,7 +85,7 @@ async function computeMaskFor(
 
     // The effective ACL including all inheritances
     let eff = 0;
-    eff |= await loadUserPerms(t, id, profileId, caches);
+    eff |= await loadUserPerms(t, id, profileId, caches, manager);
 
     // Load Default ACLs
     let defaults: Record<string, number> | undefined;
@@ -92,25 +93,25 @@ async function computeMaskFor(
     if (caches?.defaults?.has(kd)) {
         defaults = caches.defaults.get(kd)!;
     } else {
-        defaults = await getDefaultPerms(t, id);
+        defaults = await getDefaultPerms(t, id, manager);
         caches?.defaults?.set?.(kd, defaults);
     }
 
     for (const audience of activeAudiences(session)) eff |= defaults?.[audience] ?? 0;
 
     // Participant audience
-    eff |= await loadEventParticipantPerms(eventId, profileId, defaults, caches);
+    eff |= await loadEventParticipantPerms(eventId, profileId, defaults, caches, manager);
 
     return eff;
 }
 
-async function loadUserPerms(t: CombEntityType, id: string, profileId: string | null, caches?: PermEngineCaches) {
+async function loadUserPerms(t: CombEntityType, id: string, profileId: string | null, caches?: PermEngineCaches, manager?: EntityManager) {
     if (profileId) {
         const k = keyUser(t, id, profileId);
         if (caches?.userPerms?.has(k)) {
             return caches.userPerms.get(k)!;
         } else {
-            const u = await getProfilePerms(t, id, profileId);
+            const u = await getProfilePerms(t, id, profileId, manager);
             caches?.userPerms?.set?.(k, u);
             return u;
         }
@@ -118,11 +119,11 @@ async function loadUserPerms(t: CombEntityType, id: string, profileId: string | 
     return 0;
 }
 
-async function loadEventParticipantPerms(eventId: string | null | undefined, profileId: string | null, defaults?: Record<string, number>, caches?: PermEngineCaches) {
+async function loadEventParticipantPerms(eventId: string | null | undefined, profileId: string | null, defaults?: Record<string, number>, caches?: PermEngineCaches, manager?: EntityManager) {
     if (eventId) {
         let isPart: boolean | undefined = caches?.participant?.get(eventId);
         if (isPart === undefined) {
-            isPart = await isRegisteredForEvent(profileId || '', eventId);
+            isPart = await isRegisteredForEvent(profileId || '', eventId, manager);
             caches?.participant?.set?.(eventId, isPart);
         }
         if (isPart && defaults?.participant) return defaults.participant;
@@ -153,7 +154,8 @@ function makePermView(mask: number, parentMask: number): PermView {
 export async function evaluateSubject(
     subject: Subject,
     session: SessionLike,
-    caches?: PermEngineCaches
+    caches?: PermEngineCaches,
+    manager?: EntityManager,
 ): Promise<PermView> {
     if (subject.kind === 'entity') {
         const m = await computeMaskFor(
@@ -162,7 +164,7 @@ export async function evaluateSubject(
             subject.entity.ownerId ?? null,
             subject.entity.eventId ?? null,
             session,
-            caches
+            caches, manager
         );
         return makePermView(m, 0);
     } else {
@@ -172,7 +174,7 @@ export async function evaluateSubject(
             subject.parent.ownerId ?? null,
             subject.parent.eventId ?? null,
             session,
-            caches
+            caches, manager
         );
         const selfMask = await computeMaskFor(
             subject.item.entityType,
@@ -180,7 +182,7 @@ export async function evaluateSubject(
             subject.item.ownerId ?? null,
             (subject.item.eventId ?? subject.parent.eventId ?? null),
             session,
-            caches
+            caches, manager
         );
         return makePermView(selfMask, parentMask);
     }
@@ -317,9 +319,9 @@ export async function can(
 }
 
 // Load current defaultPerms (bitmasks per audience) from DB
-export async function getDefaultPerms(entityType: CombEntityType, entityId?: string) {
+export async function getDefaultPerms(entityType: CombEntityType, entityId?: string, manager?: EntityManager) {
     if (!entityId) return getInitialPerms(entityType);
-    return await entityAdminService.getDefaultPerms(entityType, entityId);
+    return await entityAdminService.getDefaultPerms(entityType, entityId, manager);
 }
 
 /**

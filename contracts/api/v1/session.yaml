@@ -1,0 +1,50 @@
+schemas:
+  ApplicationShell:
+    description: Public presentation settings used by the existing navigation and footer; never the settings store.
+    type: object
+    additionalProperties: false
+    required: [version, imprintUrl, privacyPolicyUrl, localLoginEnabled, oidcEnabled, oidcName]
+    properties:
+      version: {type: string, minLength: 1}
+      imprintUrl: {type: string}
+      privacyPolicyUrl: {type: string}
+      localLoginEnabled: {type: boolean}
+      oidcEnabled: {type: boolean}
+      oidcName: {type: string}
+  SessionProfile:
+    type: object
+    additionalProperties: false
+    required: [id, name]
+    properties:
+      id: {$ref: './common.yaml#/schemas/Uuid'}
+      name: {type: string}
+  SessionView:
+    type: object
+    additionalProperties: false
+    required: [kind, context, csrfToken, locale, activeProfile, profiles, loginUrl, logoutUrl, shell]
+    properties:
+      kind: {type: string, enum: [anonymous, account, guest]}
+      context: {type: string, minLength: 1, maxLength: 256}
+      csrfToken: {type: string, minLength: 1, maxLength: 256}
+      # Supported locales come from catalog discovery; adding a catalog never changes this contract.
+      locale: {$ref: './common.yaml#/schemas/LocaleTag'}
+      activeProfile:
+        oneOf:
+          - {$ref: '#/schemas/SessionProfile'}
+          - {type: 'null'}
+      profiles:
+        type: array
+        items: {$ref: '#/schemas/SessionProfile'}
+      loginUrl: {type: string, minLength: 1}
+      logoutUrl: {type: [string, 'null']}
+      shell: {$ref: '#/schemas/ApplicationShell'}
+    oneOf:
+      - properties:
+          kind: {const: anonymous}
+          activeProfile: {type: 'null'}
+          profiles: {type: array, maxItems: 0}
+          logoutUrl: {type: 'null'}
+        required: [kind]
+      - properties:
+          kind: {enum: [account, guest]}
+        required: [kind]

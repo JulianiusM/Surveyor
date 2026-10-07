@@ -4,11 +4,11 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-04
+last-verified: 2026-10-07
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: foundation design based on repository source review and current official framework documentation; no dependency installation, prototype, benchmark, build or test execution in this design pass
+verification-scope: framework selection from step two, with the Vue/Vite packing and help SSR proof now implemented in step three; benchmarks and broader route cutover remain pending
 source-anchors: package.json; esbuild.client.js; tsconfig.json; tsconfig.server.json; tsconfig.test.json; vitest.config.mts; playwright.config.ts; .github/workflows/ci.yml; .github/workflows/release.yml; src/app.ts; src/views/layout.pug; src/public/style/; src/public/js/; docs/frontend-migration/EDGE_CASES.md; docs/frontend-migration/BEHAVIOR_INVENTORY.md
-next-review: frontend-foundation-implementation-and-pilot
+next-review: broader-feature-migration-or-measured-framework-limitation
 -->
 
 ## Decision and scope
@@ -16,7 +16,7 @@ next-review: frontend-foundation-implementation-and-pilot
 Choose **Vue 3 with TypeScript single-file components, Vite, Vue Router and TanStack Vue Query**. Keep Express as
 the HTTP, authentication and backend owner. Build a small Surveyor component library using the existing Bootstrap
 appearance, native HTML controls and selected Reka UI primitives for complex interaction. Use shared i18next
-resources with the i18next-vue binding behind an application-owned translation adapter, as defined in the
+resources with an application-owned Vue provide/inject adapter, as defined in the
 [localization design](LOCALIZATION_DESIGN.md).
 
 The normal interactive experience is an SPA: client navigation, data reads, periodic refresh and mutations update
@@ -25,9 +25,10 @@ components**, followed by hydration when JavaScript is available. This supersede
 overview native search/filter/hidden links, survey voting and help search cannot disappear to simplify the stack.
 The final frontend has one component owner for each screen; duplicated Pug and Vue feature views are transitional.
 
-This is a design decision, not an implemented or measured result. The packages are not installed by this work.
-Exact mutually compatible versions, peer requirements and browser targets must be pinned and verified when
-implementing the foundation. The [foundation design](../FRONTEND_FOUNDATION_DESIGN.md) owns the overall architecture,
+This record owns the framework selection. The [step-three pilot](../FRONTEND_PILOT.md) now implements Vue packing
+and same-component help SSR, with installed versions pinned in the root package/lockfile and executable compiler,
+build and browser evidence. Broader feature parity and measured performance remain future work.
+The [foundation design](../FRONTEND_FOUNDATION_DESIGN.md) owns the overall architecture,
 contract, rollout and pilot. The [baseline](../FRONTEND_MIGRATION_BASELINE.md) and its 121 recorded
 [edge cases](EDGE_CASES.md) govern parity; framework convenience does not override them.
 
@@ -205,6 +206,8 @@ The i18next-vue SSR guidance describes its advice as largely theoretical and exc
 registration and server rerender events. Preload central resources before rendering and prove request isolation and
 hydration with the selected versions. If that binding does not satisfy the proof, replace only the thin Vue adapter
 with provide/inject around the same i18next core; do not fork catalogs or switch the backend's translation meaning.
+The pilot takes this thinner provide/inject option directly, retaining the typed shared translator and proving
+request isolation and hydration without adding the separate binding dependency.
 [i18next-vue SSR guidance](https://i18next.github.io/i18next-vue/guide/ssr.html)
 
 ## Build and deployment integration
@@ -214,7 +217,7 @@ application with a generated starter repository. Vite documents backend manifest
 SSR production builds and Express middleware during development.
 [Vite backend integration](https://vite.dev/guide/backend-integration), [Vite SSR integration](https://vite.dev/guide/ssr)
 
-The implementation should give each emitter a separate output directory: proposed browser assets under
+The pilot gives each emitter a separate output directory: browser assets under
 `dist/public/app/` and a nonpublic Vue renderer under `dist/frontend-server/`. Existing esbuild continues to own
 `dist/public/js/` until its callers migrate. Build cleanup must never erase another emitter's files. The client
 manifest identifies hashed browser assets; an SSR manifest can identify preload dependencies. Express loads the
@@ -226,8 +229,9 @@ and existing declaration-file contracts. `vite build` does not replace SFC type 
 verification. Confirm the chosen Vue tooling against the repository's actual TypeScript and Node versions during
 implementation; reading compatibility guidance is not an executed compatibility check.
 
-In development, integrate Vite's middleware/HMR through an explicit development path while Express retains request
-ownership, or use a controlled development proxy with equivalent cookie behavior. Production runs the existing Node
+The implemented development workflow runs separate Vite client/SSR watch builds beside the existing server and
+legacy browser watchers; Vue changes require a browser refresh. Middleware/HMR remains an optional later improvement
+while Express retains request ownership and cookie behavior. Production runs the existing Node
 application with built assets and the built Vue renderer, not a Vite development server. Packages externalized by
 the SSR build must be production dependencies; release packaging currently removes development dependencies. Keep
 browser bundles free of database entities, server settings, secrets and Node-only imports. Any changed browser
@@ -266,7 +270,7 @@ semantics, keyboard operation, focus restoration, headings and route-change anno
 localized text and small screens. Vue's guide explicitly covers semantic forms and focus after navigation.
 [Vue accessibility guide](https://vuejs.org/guide/best-practices/accessibility.html)
 
-No implementation check listed above has been run for this decision. Official documentation and repository sources
-were reviewed; there is no prototype evidence, bundle-size comparison or performance benchmark. The next step is
-the foundation implementation and narrow pilot described in the main design, with measured findings used to confirm
-or revise these integration choices before broader route replacement.
+The original step-two decision used official documentation and repository review. The implemented step-three
+[pilot](../FRONTEND_PILOT.md) now provides actual build, type, application-test and
+[paired visual evidence](PILOT_PARITY_REVIEW.md). There is no framework bundle-size comparison or performance
+benchmark. Broader route replacement still requires each feature's complete permission, behavior and visual review.

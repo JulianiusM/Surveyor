@@ -1,0 +1,144 @@
+schemas:
+  PackingOverviewCard:
+    type: object
+    additionalProperties: false
+    required: [id, type, title, description, url, headerUrl, headerVersion, eventContext, visibility, overviewHidden, archived, inheritedArchived, capabilities, children]
+    properties:
+      id: {type: string, format: uuid}
+      type: {type: string, enum: [activity, drivers, event, packing, survey]}
+      title: {type: string}
+      description: {type: [string, 'null']}
+      url: {type: string}
+      headerUrl: {type: [string, 'null']}
+      headerVersion: {type: [string, 'null']}
+      eventContext:
+        anyOf:
+          - type: object
+            additionalProperties: false
+            required: [title, url]
+            properties:
+              title: {type: string}
+              url: {type: string}
+          - type: 'null'
+      visibility: {type: string, enum: [default, hidden, shown]}
+      overviewHidden: {type: boolean}
+      archived: {type: boolean}
+      inheritedArchived: {type: boolean}
+      capabilities:
+        type: object
+        additionalProperties: false
+        required: [archive, restore, duplicate, remove]
+        properties:
+          archive: {type: boolean}
+          restore: {type: boolean}
+          duplicate: {type: boolean}
+          remove: {type: boolean}
+      children:
+        description: Eligible children in this collection/region; matching applies the selected type and search.
+        anyOf:
+          - type: object
+            additionalProperties: false
+            required: [total, matching]
+            properties:
+              total: {type: integer, minimum: 0}
+              matching: {type: integer, minimum: 0}
+          - type: 'null'
+  PackingOverviewRegion:
+    type: object
+    additionalProperties: false
+    required: [collection, region, q, type, availableTypes, page, childPage, eventId, pageSize, totalEntities, hiddenEntities, regionEntities, matchingEntities, totalCards, totalChildren, hasPrevious, hasNext, parent, items]
+    properties:
+      collection: {type: string, enum: [participant, owner]}
+      region: {type: string, enum: [main, hidden]}
+      q: {type: string}
+      type: {type: string, enum: [all, activity, drivers, event, packing, survey]}
+      availableTypes:
+        type: array
+        uniqueItems: true
+        items: {type: string, enum: [activity, drivers, event, packing, survey]}
+      page: {type: integer, minimum: 1}
+      childPage: {type: integer, minimum: 1}
+      eventId: {type: [string, 'null'], format: uuid}
+      pageSize: {type: integer, minimum: 1}
+      totalEntities:
+        type: integer
+        minimum: 0
+        description: Overview collection total across all entity types before search and type selection.
+      hiddenEntities:
+        type: integer
+        minimum: 0
+        description: Hidden collection total across all entity types before search and type selection.
+      regionEntities:
+        type: integer
+        minimum: 0
+        description: Visibility-region total across all entity types before search and type selection.
+      matchingEntities: {type: integer, minimum: 0, description: 'Authorized roots matching this region, selected type and search.'}
+      totalCards: {type: integer, minimum: 0, description: Matching cards after eligible event grouping.}
+      totalChildren: {type: integer, minimum: 0}
+      hasPrevious: {type: boolean}
+      hasNext: {type: boolean}
+      parent:
+        anyOf:
+          - {$ref: '#/schemas/PackingOverviewCard'}
+          - {type: 'null'}
+      items:
+        type: array
+        items: {$ref: '#/schemas/PackingOverviewCard'}
+  PackingVisibilityInput:
+    type: object
+    additionalProperties: false
+    required: [visibility]
+    properties:
+      visibility: {type: string, enum: [default, hidden, shown]}
+  PackingVisibilityResult:
+    type: object
+    additionalProperties: false
+    required: [visibility, overviewHidden, archived]
+    properties:
+      visibility: {type: string, enum: [default, hidden, shown]}
+      overviewHidden: {type: boolean}
+      archived: {type: boolean}
+paths:
+  overview:
+    get:
+      operationId: getPackingOverview
+      summary: Read one bounded mixed overview region for the admitted profile
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {name: collection, in: query, required: true, schema: {type: string, enum: [participant, owner]}}
+        - {name: region, in: query, required: true, schema: {type: string, enum: [main, hidden]}}
+        - {name: q, in: query, required: false, schema: {type: string, maxLength: 200}}
+        - {name: type, in: query, required: false, schema: {type: string, enum: [all, activity, drivers, event, packing, survey]}}
+        - {name: page, in: query, required: false, schema: {type: string, pattern: '^(?:[1-9]\d{0,5}|1000000)$'}}
+        - {name: childPage, in: query, required: false, schema: {type: string, pattern: '^(?:[1-9]\d{0,5}|1000000)$'}}
+        - {name: eventId, in: query, required: false, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Authorized entity cards and eligible event containers; no account or persistence objects.
+          content:
+            application/json:
+              schema: {$ref: '#/schemas/PackingOverviewRegion'}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  visibility:
+    put:
+      operationId: setPackingVisibility
+      summary: Set only the admitted profile's overview visibility preference
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {name: entityType, in: path, required: true, schema: {type: string, enum: [activity, drivers, event, packing, survey]}}
+        - {name: entityId, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/schemas/PackingVisibilityInput'}
+      responses:
+        '200':
+          description: The saved personal preference and current shared archival state remain separate.
+          content:
+            application/json:
+              schema: {$ref: '#/schemas/PackingVisibilityResult'}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}

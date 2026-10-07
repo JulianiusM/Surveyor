@@ -5,10 +5,10 @@ documentation-metadata
 audience: database administrators; operators; site reliability engineers; maintainers
 owner: application operators
 status: current
-last-verified: 2026-09-16
+last-verified: 2026-10-04
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: archival entity fields, preference constraints, locking, migration compatibility, and downgrade-guard source review; no migration rehearsal claimed here; free-text column sizes and migration rollback protection; D04 accepted from source review and deployment-practice confirmation for runtime datasource, migration wrapper, schema bootstrap, sessions, backup targeting, and migration commands; controlled execution tracked separately in D04V
-source-anchors: src/migrations/1789862400000-AddEntityArchival.ts; src/modules/database/entities/archive/EntityVisibilityPreference.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; src/modules/database/entities/session/Session.ts; src/migrations; package.json; .github/workflows/ci.yml
+verification-scope: source review of packing metadata revision migration, atomic legacy/context writers, and application-downgrade writer boundary; archival entity fields, preference constraints, locking, migration compatibility, and downgrade-guard source review; no migration rehearsal claimed here; free-text column sizes and migration rollback protection; D04 accepted from source review and deployment-practice confirmation for runtime datasource, migration wrapper, schema bootstrap, sessions, backup targeting, and migration commands; controlled execution tracked separately in D04V
+source-anchors: src/migrations/1791072000000-AddPackingMetadataRevision.ts; src/modules/database/entities/packing/PackingList.ts; src/modules/database/services/PackingService.ts; src/modules/packing/api.ts; tests/integration/packing-metadata-migration.spec.ts; src/migrations/1789862400000-AddEntityArchival.ts; src/modules/database/entities/archive/EntityVisibilityPreference.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; src/modules/database/entities/session/Session.ts; src/migrations; package.json; .github/workflows/ci.yml
 next-review: D04V
 -->
 
@@ -62,7 +62,8 @@ npm run generate
 ```
 
 `npm run generate` rebuilds `src/modules/database/__index__.ts`, the entity/migration/subscriber index consumed by the
-migration datasource. Run it before every schema command in a fresh checkout.
+migration datasource, along with API and localization artifacts. `npm run generate:db-index` regenerates only the
+database index. Generate the index before every schema command in a fresh checkout; neither generator changes a database.
 
 Use the service's protected settings file for every command:
 
@@ -181,7 +182,8 @@ The complete maintenance-window and rollback sequence is in [Upgrading Surveyor]
 
 | Command | Appropriate use | Production rule |
 |---|---|---|
-| `npm run generate` | Rebuild the generated TypeORM index in a source checkout. | Safe and required before schema commands. |
+| `npm run generate` | Rebuild the TypeORM index and API/localization artifacts in a source checkout. | No database changes; prepares generated inputs for schema commands. |
+| `npm run generate:db-index` | Rebuild only the TypeORM entity/migration/subscriber index. | No database changes; sufficient when only migration tooling is needed. |
 | `npm run typeorm -- migration:show migrationDataSource.ts` | List applied and pending migrations. | Run before and after every upgrade. |
 | `npm run typeorm:migrate` | Apply pending migrations. | Supported existing-database upgrade command; back up first. |
 | `npm run typeorm:sync` | Create the current schema from entities. | Empty-database bootstrap only. Never use as an upgrade. |
@@ -245,6 +247,26 @@ to bypass the guard. A retained personal preference after membership loss cannot
 that membership is restored. Preferences for deleted entities are also retained; use the reviewed full rollback when
 an explicit empty-state reversal is unavailable or inappropriate. Migration SQL must
 be rehearsed separately from tests that only synchronize entity metadata.
+
+## Packing metadata edit revisions
+
+`AddPackingMetadataRevision1791072000000` adds the unsigned, non-null `packing_lists.metadata_revision` integer with
+default `0`. Existing rows retain their content and assignments. Apply the reviewed migration before running this
+release against an existing database, using the target verification and upgrade procedure above. The entity includes
+the same column for fresh schemas; the migration tolerates a column already created during empty-schema bootstrap.
+
+The [frontend pilot](FRONTEND_PILOT.md) uses this counter in its actor-scoped metadata ETag. Title/description saves,
+including the legacy writers in this release, advance it atomically. Relinking and direct or inherited archival
+changes also advance it under the existing transaction; an automatic event archive updates its packing children in
+the same commit. Ordinary assignments remain outside the metadata edit revision. This counter is not a replacement
+for invoice financial revisions, session context or permission checks.
+
+Older application versions do not advance this counter. Do not run old writers alongside the conditional v1 API and
+assume stale edits remain protected. Before an application downgrade, stop serving the pilot/v1 writes and stop the
+new-version processes. The down migration drops only this column and cannot enforce that writer shutdown for you;
+retain the column unless the reviewed rollback explicitly requires its removal. Follow the paired application/database
+rollback procedure in [Upgrading Surveyor](UPGRADING.md#full-rollback-procedure), and discard pre-downgrade edit tokens
+before re-enabling the pilot. The focused migration rehearsal is `tests/integration/packing-metadata-migration.spec.ts`.
 
 ## Sessions are database data
 

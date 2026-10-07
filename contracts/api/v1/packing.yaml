@@ -1,0 +1,779 @@
+schemas:
+  PackingAssignee:
+    type: object
+    additionalProperties: false
+    required:
+      - name
+      - assignmentId
+    properties:
+      name:
+        type: string
+      assignmentId:
+        type:
+          - integer
+          - "null"
+        minimum: 1
+  PackingItemView:
+    type: object
+    additionalProperties: false
+    required:
+      - id
+      - title
+      - description
+      - position
+      - requiredByAll
+      - maxAssignees
+      - assignedCount
+      - selfAssigned
+      - assignees
+      - capabilities
+      - editToken
+    properties:
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      title:
+        type: string
+      description:
+        type:
+          - string
+          - "null"
+      position:
+        type: integer
+      requiredByAll:
+        type: boolean
+      maxAssignees:
+        type:
+          - integer
+          - "null"
+      assignedCount:
+        type: integer
+        minimum: 0
+      selfAssigned:
+        type: boolean
+      assignees:
+        type: array
+        items:
+          $ref: "#/schemas/PackingAssignee"
+      capabilities:
+        type: object
+        additionalProperties: false
+        required:
+          - editTitle
+          - editDescription
+          - editCapacity
+          - editRequired
+          - removeItem
+          - removeAssignments
+        properties:
+          editTitle:
+            type: boolean
+          editDescription:
+            type: boolean
+          editCapacity:
+            type: boolean
+          editRequired:
+            type: boolean
+          removeItem:
+            type: boolean
+          removeAssignments:
+            type: boolean
+      editToken:
+        type: string
+  PackingListView:
+    type: object
+    additionalProperties: false
+    required:
+      - entityType
+      - id
+      - title
+      - description
+      - headerUrl
+      - currentEventId
+      - currentEventUrl
+      - archived
+      - inheritedArchived
+      - capabilities
+      - counters
+      - items
+      - orderToken
+      - headerVersion
+    properties:
+      entityType:
+        type: string
+        const: packing
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      title:
+        type: string
+      description:
+        type:
+          - string
+          - "null"
+      headerUrl:
+        type:
+          - string
+          - "null"
+      currentEventId:
+        $ref: ./common.yaml#/schemas/NullableUuid
+      currentEventUrl:
+        type:
+          - string
+          - "null"
+      archived:
+        type: boolean
+      inheritedArchived:
+        type: boolean
+      capabilities:
+        type: object
+        additionalProperties: false
+        required:
+          - editTitle
+          - editDescription
+          - selfAssign
+          - addItem
+          - reorder
+          - manageSettings
+        properties:
+          editTitle:
+            type: boolean
+          editDescription:
+            type: boolean
+          selfAssign:
+            type: boolean
+          addItem:
+            type: boolean
+          reorder:
+            type: boolean
+          manageSettings:
+            type: boolean
+      counters:
+        type: object
+        additionalProperties: false
+        required:
+          - participants
+          - open
+          - empty
+        properties:
+          participants:
+            type: integer
+            minimum: 0
+          open:
+            type: integer
+            minimum: 0
+          empty:
+            type: integer
+            minimum: 0
+      items:
+        type: array
+        items:
+          $ref: "#/schemas/PackingItemView"
+      orderToken:
+        type: string
+      headerVersion:
+        type:
+          - string
+          - "null"
+        description: Opaque image version; changes when the image is replaced without exposing its storage path.
+  PackingMetadata:
+    type: object
+    additionalProperties: false
+    required:
+      - entityType
+      - id
+      - values
+      - editableFields
+      - currentEventId
+      - archived
+      - inheritedArchived
+    properties:
+      entityType:
+        type: string
+        const: packing
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      values:
+        type: object
+        additionalProperties: false
+        properties:
+          title:
+            type: string
+          description:
+            type:
+              - string
+              - "null"
+      editableFields:
+        type: array
+        uniqueItems: true
+        items:
+          type: string
+          enum:
+            - title
+            - description
+      currentEventId:
+        $ref: ./common.yaml#/schemas/NullableUuid
+      archived:
+        type: boolean
+      inheritedArchived:
+        type: boolean
+  PackingMetadataPatch:
+    type: object
+    additionalProperties: false
+    minProperties: 1
+    properties:
+      title:
+        type: string
+        minLength: 1
+        maxLength: 255
+        pattern: \S
+      description:
+        type:
+          - string
+          - "null"
+        maxLength: 16000
+  PackingAssignmentResult:
+    type: object
+    additionalProperties: false
+    required:
+      - listId
+      - itemId
+      - selfAssigned
+      - assignedCount
+      - maxAssignees
+    properties:
+      listId:
+        $ref: ./common.yaml#/schemas/Uuid
+      itemId:
+        $ref: ./common.yaml#/schemas/Uuid
+      selfAssigned:
+        type: boolean
+      assignedCount:
+        type: integer
+        minimum: 0
+      maxAssignees:
+        type:
+          - integer
+          - "null"
+  PermissionDefaults:
+    type: object
+    additionalProperties: false
+    required:
+      - public
+      - guest
+      - authenticated
+      - participant
+    properties:
+      public:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+      guest:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+      authenticated:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+      participant:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+  PermissionDefinition:
+    type: object
+    additionalProperties: false
+    required:
+      - key
+      - bit
+    properties:
+      key:
+        type: string
+      bit:
+        type: integer
+        minimum: 1
+  PermissionPreset:
+    type: object
+    additionalProperties: false
+    required:
+      - key
+      - mask
+    properties:
+      key:
+        type: string
+      mask:
+        type: integer
+        minimum: 0
+  PackingCreateContext:
+    type: object
+    additionalProperties: false
+    required:
+      - defaults
+      - permissions
+      - presets
+    properties:
+      defaults:
+        $ref: "#/schemas/PermissionDefaults"
+      permissions:
+        type: array
+        items:
+          $ref: "#/schemas/PermissionDefinition"
+      presets:
+        type: array
+        items:
+          $ref: "#/schemas/PermissionPreset"
+  PackingNewItem:
+    type: object
+    additionalProperties: false
+    required:
+      - title
+      - description
+      - maxAssignees
+      - requiredByAll
+    properties:
+      title:
+        type: string
+        minLength: 1
+        maxLength: 255
+      description:
+        type:
+          - string
+          - "null"
+        maxLength: 65535
+      maxAssignees:
+        type: integer
+        minimum: 1
+        maximum: 2147483647
+      requiredByAll:
+        type: boolean
+  PackingCreateInput:
+    type: object
+    additionalProperties: false
+    required:
+      - title
+      - description
+      - eventId
+      - items
+      - defaultPermissions
+    properties:
+      title:
+        type: string
+        minLength: 1
+        maxLength: 255
+      description:
+        type:
+          - string
+          - "null"
+        maxLength: 65535
+      eventId:
+        $ref: ./common.yaml#/schemas/NullableUuid
+      items:
+        type: array
+        items:
+          $ref: "#/schemas/PackingNewItem"
+        minItems: 1
+      defaultPermissions:
+        $ref: "#/schemas/PermissionDefaults"
+  PackingCreated:
+    type: object
+    additionalProperties: false
+    required:
+      - id
+    properties:
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+  MutationResult:
+    type: object
+    additionalProperties: false
+    required:
+      - changed
+    properties:
+      changed:
+        type: boolean
+  PackingItemPatch:
+    type: object
+    additionalProperties: false
+    required: []
+    properties:
+      title:
+        type: string
+        maxLength: 255
+      description:
+        type:
+          - string
+          - "null"
+        maxLength: 65535
+      maxAssignees:
+        type: integer
+        minimum: 1
+        maximum: 2147483647
+      requiredByAll:
+        type: boolean
+    minProperties: 1
+  PackingItemOrder:
+    type: object
+    additionalProperties: false
+    required:
+      - itemIds
+    properties:
+      itemIds:
+        type: array
+        items:
+          $ref: ./common.yaml#/schemas/Uuid
+        uniqueItems: true
+  PackingEventChange:
+    type: object
+    additionalProperties: false
+    required:
+      - eventId
+      - expectedEventId
+    properties:
+      eventId:
+        $ref: ./common.yaml#/schemas/NullableUuid
+      expectedEventId:
+        $ref: ./common.yaml#/schemas/NullableUuid
+  PackingEventChanged:
+    type: object
+    additionalProperties: false
+    required:
+      - changed
+      - canView
+    properties:
+      changed:
+        type: boolean
+      canView:
+        type: boolean
+  PackingEventOption:
+    type: object
+    additionalProperties: false
+    required:
+      - id
+      - title
+      - startDate
+      - endDate
+      - archived
+      - description
+      - deadlinePassed
+    properties:
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      title:
+        type: string
+      startDate:
+        type: string
+      endDate:
+        type: string
+      archived:
+        type: boolean
+      description:
+        type:
+          - string
+          - "null"
+      deadlinePassed:
+        type: boolean
+  PackingEventOptions:
+    type: object
+    additionalProperties: false
+    required:
+      - items
+      - selected
+      - nextCursor
+    properties:
+      items:
+        type: array
+        items:
+          $ref: "#/schemas/PackingEventOption"
+      selected:
+        anyOf:
+          - $ref: "#/schemas/PackingEventOption"
+          - type: "null"
+      nextCursor:
+        type:
+          - string
+          - "null"
+  PackingProfileOption:
+    type: object
+    additionalProperties: false
+    required:
+      - profileId
+      - name
+      - isGuest
+      - username
+    properties:
+      profileId:
+        $ref: ./common.yaml#/schemas/Uuid
+      name:
+        type: string
+      isGuest:
+        type: boolean
+      username:
+        type: string
+  PackingProfileOptions:
+    type: array
+    items:
+      $ref: "#/schemas/PackingProfileOption"
+  PackingAdmin:
+    type: object
+    additionalProperties: false
+    required:
+      - profileId
+      - name
+      - isGuest
+      - mask
+    properties:
+      profileId:
+        $ref: ./common.yaml#/schemas/Uuid
+      name:
+        type: string
+      isGuest:
+        type: boolean
+      mask:
+        type: integer
+        minimum: 0
+  PackingAdminInput:
+    type: object
+    additionalProperties: false
+    required:
+      - profileId
+      - mask
+    properties:
+      profileId:
+        $ref: ./common.yaml#/schemas/Uuid
+      mask:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+  PackingAdminPatch:
+    type: object
+    additionalProperties: false
+    required:
+      - mask
+    properties:
+      mask:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+  PackingCurrentEvent:
+    type: object
+    additionalProperties: false
+    required:
+      - id
+      - title
+      - startDate
+      - endDate
+      - url
+    properties:
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      title:
+        type:
+          - string
+          - "null"
+      startDate:
+        type:
+          - string
+          - "null"
+      endDate:
+        type:
+          - string
+          - "null"
+      url:
+        type:
+          - string
+          - "null"
+  PackingArchive:
+    type: object
+    additionalProperties: false
+    required:
+      - direct
+      - inherited
+      - archivedAt
+      - autoArchivePaused
+      - eventUrl
+    properties:
+      direct:
+        type: boolean
+      inherited:
+        type: boolean
+      archivedAt:
+        type:
+          - string
+          - "null"
+      autoArchivePaused:
+        type: boolean
+      eventUrl:
+        type:
+          - string
+          - "null"
+  PackingAccess:
+    type: object
+    additionalProperties: false
+    required:
+      - defaults
+      - admins
+      - permissions
+      - presets
+    properties:
+      defaults:
+        $ref: "#/schemas/PermissionDefaults"
+      admins:
+        type: array
+        items:
+          $ref: "#/schemas/PackingAdmin"
+      permissions:
+        type: array
+        items:
+          $ref: "#/schemas/PermissionDefinition"
+      presets:
+        type: array
+        items:
+          $ref: "#/schemas/PermissionPreset"
+  PackingSettings:
+    type: object
+    additionalProperties: false
+    required:
+      - id
+      - title
+      - headerUrl
+      - editableFields
+      - capabilities
+      - currentEvent
+      - archive
+      - access
+      - headerVersion
+      - settingsToken
+    properties:
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      title:
+        type: string
+      headerUrl:
+        type:
+          - string
+          - "null"
+      editableFields:
+        type: array
+        uniqueItems: true
+        items:
+          type: string
+          enum:
+            - title
+            - description
+      capabilities:
+        type: object
+        additionalProperties: false
+        required:
+          - editHeader
+          - linkEvent
+          - managePermissions
+          - duplicate
+          - remove
+          - archive
+          - restore
+          - manageArchive
+        properties:
+          editHeader:
+            type: boolean
+          linkEvent:
+            type: boolean
+          managePermissions:
+            type: boolean
+          duplicate:
+            type: boolean
+          remove:
+            type: boolean
+          archive:
+            type: boolean
+          restore:
+            type: boolean
+          manageArchive:
+            type: boolean
+      currentEvent:
+        anyOf:
+          - $ref: "#/schemas/PackingCurrentEvent"
+          - type: "null"
+      archive:
+        $ref: "#/schemas/PackingArchive"
+      access:
+        anyOf:
+          - $ref: "#/schemas/PackingAccess"
+          - type: "null"
+      headerVersion:
+        type:
+          - string
+          - "null"
+        description: Opaque image version; changes when the image is replaced without exposing its storage path.
+      settingsToken:
+        type: string
+  PackingHeaderUpload:
+    type: object
+    additionalProperties: false
+    required:
+      - image
+    properties:
+      image:
+        type: string
+        format: binary
+  PackingHeaderBinary:
+    type: string
+    format: binary
+  PackingCreateForm:
+    type: object
+    additionalProperties: false
+    required:
+      - data
+    properties:
+      data:
+        $ref: "#/schemas/PackingCreateInput"
+      image:
+        type: string
+        format: binary
+  PackingDuplicate:
+    type: object
+    additionalProperties: false
+    required:
+      - title
+      - description
+      - eventId
+      - items
+      - defaultPermissions
+    properties:
+      title:
+        type: string
+        maxLength: 255
+      description:
+        type:
+          - string
+          - "null"
+        maxLength: 65535
+      eventId:
+        $ref: ./common.yaml#/schemas/NullableUuid
+      items:
+        type: array
+        items:
+          $ref: "#/schemas/PackingDuplicateItem"
+      defaultPermissions:
+        $ref: "#/schemas/PermissionDefaults"
+    description: Draft copied from persisted rows, including cleared titles and historical invalid capacity. Creation validates the edited
+      draft independently.
+  PackingDuplicateItem:
+    type: object
+    additionalProperties: false
+    required:
+      - title
+      - description
+      - maxAssignees
+      - requiredByAll
+    properties:
+      title:
+        type: string
+        maxLength: 255
+      description:
+        type:
+          - string
+          - "null"
+        maxLength: 65535
+      maxAssignees:
+        type:
+          - integer
+          - "null"
+      requiredByAll:
+        type: boolean

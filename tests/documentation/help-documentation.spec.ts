@@ -146,7 +146,7 @@ describe('in-app help source and trust boundary', () => {
             '',
             '![Navigation map](assets/navigation-at-a-glance.png)',
         ].join('\n'));
-        expect(rendered.content).toContain('src="/help/assets/navigation-at-a-glance.png"');
+        expect(rendered.content).toContain('src="/help/assets/navigation-at-a-glance.png?locale=en"');
         expect(() => validateTrustedHelpMarkdown('# Bad\n\n![Remote](https://example.org/image.png)')).toThrow(/packaged file/iu);
         expect(() => validateTrustedHelpMarkdown('# Bad\n\n![Missing](assets/missing.png)')).toThrow(/packaged file/iu);
     });
