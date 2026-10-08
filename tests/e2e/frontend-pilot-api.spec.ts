@@ -36,6 +36,138 @@ async function expectProblem(response: APIResponse, status: number, code: string
     expect(await response.json()).toMatchObject({status, code, requestId: expect.any(String), messageKey: expect.any(String)});
 }
 
+test('preserves native packing HTML 404s, standalone guest entry and public duplicate GET admission', async ({page, browser, baseURL}) => {
+    await loginForE2E(page.request, createE2ELogin());
+    const input = createE2EPackingList();
+    Object.assign(input.form, {'defaultPerms[public][0]': 'DATA_DUPLICATE'});
+    const list = await createResourceViaForm(page.request, input);
+    const anonymousContext = await browser.newContext({baseURL});
+    try {
+        const request = anonymousContext.request;
+        for (const id of ['not-a-uuid', randomUUID()]) {
+            for (const suffix of ['', '/guest', '/duplicate']) {
+                const native = await request.get(`/packing/${id}${suffix}`, {maxRedirects: 0});
+                const pilot = await request.get(`/frontend-pilot/packing/${id}${suffix}?locale=de`, {maxRedirects: 0});
+                expect(native.status()).toBe(404);
+                expect(pilot.status()).toBe(native.status());
+                expect(pilot.headers()['content-type']).toContain('text/html');
+                const html = await pilot.text();
+                expect(html).toContain('Packliste nicht gefunden.');
+                expect(html).toContain('class="card-header text-center bg-dark text-light"');
+                // Check the error card's actual Home action, rather than a shell
+                // navigation link that happens to reach the same overview URL.
+                expect(html).toMatch(/<a\b(?=[^>]*class="btn btn-primary")(?=[^>]*href="\/frontend-pilot")[^>]*>/);
+            }
+        }
+        const create = await request.get('/frontend-pilot/packing/create?locale=de', {maxRedirects: 0});
+        expect(create.status()).toBe(302);
+        expect(create.headers().location).toContain('/frontend-pilot/users/login?');
+        expect(create.headers().location).toContain('locale=de');
+        const nativeDetail = await request.get(list.path, {maxRedirects: 0});
+        const detail = await request.get(`/frontend-pilot/packing/${list.id}?locale=de`, {maxRedirects: 0});
+        expect(detail.status()).toBe(nativeDetail.status());
+        expect(detail.headers().location).toBe(`/frontend-pilot/packing/${list.id}/guest?locale=de`);
+        const guestPage = await request.get(detail.headers().location!);
+        const guestHtml = await guestPage.text();
+        expect(guestHtml).toContain(list.title);
+        expect(guestHtml).not.toContain('Two person tent');
+        expect(guestHtml).toContain('<noscript>');
+        expect(guestHtml).toContain('#surveyor-pilot{display:none!important}');
+
+        // DATA_DUPLICATE is a separate GET grant: public readers need neither a
+        // profile nor detail admission, while creation remains account-only.
+        const nativeDuplicate = await request.get(`${list.path}/duplicate`);
+        const duplicate = await request.get(`/frontend-pilot/packing/${list.id}/duplicate?locale=de`);
+        expect(duplicate.status()).toBe(nativeDuplicate.status());
+        expect(duplicate.status()).toBe(200);
+        const duplicateHtml = await duplicate.text();
+        expect(duplicateHtml).toContain('value="E2E Core Packing List"');
+        expect(duplicateHtml).toContain('Two person tent');
+        expect(duplicateHtml).toContain('Für diese Seite ist JavaScript erforderlich.');
+        expect(duplicateHtml.indexOf('</noscript>')).toBeLessThan(duplicateHtml.indexOf('<div id="surveyor-pilot">'));
+        const anonymous = await bootstrap(request);
+        expect((await request.get(`/api/v1/packing-lists/${list.id}/duplicate`, {headers: headersFor(anonymous)})).status()).toBe(200);
+        await expectProblem(await request.get('/api/v1/packing-lists/create-context', {headers: headersFor(anonymous)}), 401, 'AUTH_REQUIRED');
+        const ownerGuest = await page.request.get(`/frontend-pilot/packing/${list.id}/guest?locale=en`, {maxRedirects: 0});
+        expect(ownerGuest.status()).toBe(302);
+        expect(ownerGuest.headers().location).toBe(`/frontend-pilot/packing/${list.id}?locale=en`);
+        expect((await page.request.get('/frontend-pilot/packing/create')).status()).toBe(200);
+    } finally {
+        await anonymousContext.close();
+    }
+});
+
+test('preserves attached packing HTML membership and explicit view alternatives independently of duplicate grants', async ({page, browser, baseURL}) => {
+    await loginForE2E(page.request, createE2ELogin());
+    const list = await createApiPackingList(page.request);
+    const event = await createResourceViaForm(page.request, createE2EEvent());
+    const guestContext = await browser.newContext({baseURL});
+    try {
+        expect((await guestContext.request.post(`${list.path}/guest`, {
+            form: {username: `HTML guest ${randomUUID().slice(0, 8)}`}, maxRedirects: 0,
+        })).status()).toBe(302);
+        const guest = await bootstrap(guestContext.request);
+        expect((await page.request.post(`/api/packing/${list.id}/event`, {data: {eventId: event.id, expectedEventId: null}})).ok()).toBe(true);
+        expect((await page.request.post(`/api/packing/${list.id}/settings`, {data: {
+            defaultPerms: {public: [], guest: [], authenticated: [], participant: []},
+        }})).ok()).toBe(true);
+        const nativeDenied = await guestContext.request.get(list.path, {maxRedirects: 0});
+        const pilotDenied = await guestContext.request.get(`/frontend-pilot/packing/${list.id}?locale=de`, {maxRedirects: 0});
+        expect(nativeDenied.status()).toBe(400);
+        expect(pilotDenied.status()).toBe(nativeDenied.status());
+        const deniedHtml = await pilotDenied.text();
+        expect(deniedHtml).toContain('Du musst für die Veranstaltung angemeldet sein');
+        expect(deniedHtml).not.toContain(list.title);
+        expect(deniedHtml).not.toContain('Two person tent');
+        // The event owner counts as an event participant under the native admission owner.
+        expect((await page.request.get(`/frontend-pilot/packing/${list.id}`)).status()).toBe(200);
+        expect((await page.request.post(`/api/packing/${list.id}/admins`, {
+            data: {profileId: guest.activeProfile!.id, perms: ['ACCESS_VIEW']},
+        })).ok()).toBe(true);
+        expect((await guestContext.request.get(`/frontend-pilot/packing/${list.id}`)).status()).toBe(200);
+        expect((await page.request.patch(`/api/packing/${list.id}/admins/${guest.activeProfile!.id}`, {
+            data: {perms: ['DATA_DUPLICATE']},
+        })).ok()).toBe(true);
+        expect((await guestContext.request.get(`/frontend-pilot/packing/${list.id}`)).status()).toBe(400);
+        expect((await guestContext.request.get(`${list.path}/duplicate`)).status()).toBe(200);
+        expect((await guestContext.request.get(`/frontend-pilot/packing/${list.id}/duplicate`)).status()).toBe(200);
+        expect((await guestContext.request.get(`/api/v1/packing-lists/${list.id}/duplicate`, {headers: headersFor(guest)})).status()).toBe(200);
+        const create = await guestContext.request.get('/frontend-pilot/packing/create', {maxRedirects: 0});
+        expect(create.status()).toBe(302);
+        const creation = {title: 'Guest copy', description: null, eventId: null,
+            defaultPermissions: {public: 0, guest: 0, authenticated: 0, participant: 0},
+            items: [{title: 'Tent', description: null, maxAssignees: 1, requiredByAll: false}]};
+        await expectProblem(await guestContext.request.post('/api/v1/packing-lists', {
+            headers: {...headersFor(guest), 'X-Surveyor-Api-Compatibility': guest.deployment.apiCompatibility}, data: creation,
+        }), 403, 'FORBIDDEN');
+    } finally {
+        await guestContext.close();
+    }
+});
+
+test('shows the localized JavaScript fallback outside hidden interactive controls while keeping help readable', async ({browser, baseURL}) => {
+    const context = await browser.newContext({baseURL, javaScriptEnabled: false});
+    try {
+        await loginForE2E(context.request, createE2ELogin());
+        const page = await context.newPage();
+        for (const locale of ['en', 'de']) {
+            await page.goto(`/frontend-pilot/packing/create?locale=${locale}`);
+            await expect(page.locator('noscript [role="alert"]')).toContainText(locale === 'de'
+                ? 'Für diese Seite ist JavaScript erforderlich.' : 'JavaScript is required to use this page.');
+            await expect(page.locator('#surveyor-pilot')).toBeHidden();
+            await page.getByRole('link', {name: locale === 'de' ? 'Hilfe' : 'Help', exact: true}).click();
+            await expect(page.locator('#surveyor-pilot')).toBeVisible();
+            await expect(page.locator('.help-content')).toBeVisible();
+            await page.goto(`/frontend-pilot/users/login?locale=${locale}`);
+            await expect(page.locator('noscript [role="alert"]')).toBeVisible();
+            await expect(page.locator('#surveyor-pilot')).toBeHidden();
+            await expect(page.locator('#surveyor-pilot main form:visible')).toHaveCount(0);
+        }
+    } finally {
+        await context.close();
+    }
+});
+
 test('bootstraps account and guest scopes while projecting only public session and packing fields', async ({page, browser, baseURL}) => {
     await loginForE2E(page.request, createE2ELogin());
     const list = await createApiPackingList(page.request);

@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch} from 'vue';
-import {RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter} from 'vue-router';
+import {computed, onMounted, reactive, ref, shallowRef, watch} from 'vue';
+import {RouterLink, useRoute, useRouter} from 'vue-router';
+import type {WatchCallback} from 'vue';
+import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {problemMessage} from '../../composables/feedback';
@@ -10,6 +12,7 @@ import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import PageMessage from '../../components/PageMessage.vue';
 import NativeContextFields from '../../components/NativeContextFields.vue';
+import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import {ApiFailure, ObsoleteRequestError} from '../../app/transport';
 import type {components} from '../../../types/api/v1';
 import {safeFrontendReturn} from '../../../modules/lib/frontendIdentity';
@@ -25,8 +28,14 @@ const mode = computed(
 const next = computed(() => safeFrontendReturn(route.query.next));
 const nativeInitial = context.bootstrap.initialUrl === route.fullPath
     && context.bootstrap.session.context === context.session.value?.context ? context.bootstrap : undefined;
-const fields = reactive({username: nativeInitial?.identityFields?.username ?? '', password: '', passwordRepeat: '',
-    displayname: nativeInitial?.identityFields?.displayname ?? '', email: nativeInitial?.identityFields?.email ?? ''});
+// Passwords belong only to this mounted form; neither bootstrap nor persistent recovery stores them.
+const fields = reactive({
+    username: nativeInitial?.identityFields?.username ?? '',
+    password: '',
+    passwordRepeat: '',
+    displayname: nativeInitial?.identityFields?.displayname ?? '',
+    email: nativeInitial?.identityFields?.email ?? '',
+});
 const finished = ref(['auth.registered', 'auth.resetSent', 'auth.resetDone'].includes(nativeInitial?.identityFeedback ?? ''));
 const recoveryFinished = ref(nativeInitial?.identityFeedback === 'auth.recoverySent');
 const activationNotice = ref(nativeInitial?.identityFeedback === 'auth.activated');
@@ -37,23 +46,29 @@ const passwordState = computed(() => mode.value === 'register' && fields.passwor
     ? isRegistrationPasswordValid(fields.password) ? 'valid' as const : 'invalid' as const : undefined);
 const repeatState = computed(() => mode.value === 'register' && (fields.password || fields.passwordRepeat)
     ? fields.password === fields.passwordRepeat ? 'valid' as const : 'invalid' as const : undefined);
-watch(
-    () => [mode.value, route.params.token, route.params.guestId],
-    () => {
-        // Route guards have already accepted this new form. Release uncertainty only now:
-        // cancelling the leave confirmation must keep the original draft and command blocked.
-        command.acknowledge();
-        Object.assign(fields, {username: '', password: '', passwordRepeat: '', displayname: '', email: ''});
-        finished.value = false;
-        recoveryFinished.value = false;
-        activationNotice.value = false;
-        showPasswordCriteria.value = false;
-        if (mode.value === 'activate' && context.browser && !identityDenial.value) void submit();
-    },
-);
-const command = useCommand(async () => {
-    await context.refreshSession();
-}, true);
+const command = useCommand(context.refreshSession, true, {dirty: isDirty, unknownMessage: 'auth.leaveUnknown'});
+watch(() => [mode.value, route.params.token, route.params.guestId], resetForm);
+
+/** Every entered field participates in the same leave/reload policy, including password-only drafts. */
+function isDirty(): boolean {
+    return !finished.value && Object.values(fields).some(Boolean);
+}
+
+/** A committed route change releases the old draft; a cancelled guard never reaches this watcher. */
+function resetForm(): void {
+    command.acknowledge();
+    clearFields();
+    finished.value = false;
+    recoveryFinished.value = false;
+    activationNotice.value = false;
+    showPasswordCriteria.value = false;
+    if (mode.value === 'activate' && context.browser && !identityDenial.value) void submit();
+}
+
+/** Clear secrets and other form values together after committed departure or confirmed submission. */
+function clearFields(): void {
+    Object.assign(fields, {username: '', password: '', passwordRepeat: '', displayname: '', email: ''});
+}
 if (nativeInitial?.identityFormProblem) {
     command.setError(new ApiFailure(nativeInitial.identityFormProblem.status, nativeInitial.identityFormProblem));
 }
@@ -80,29 +95,40 @@ let usedInitialReset = false;
 // Only this exact initial route may consume the server admission. Reused Vue routes
 // must obtain their own read, and an obsolete token response cannot reveal a form.
 watch(() => [mode.value, route.params.token, context.epoch.value, context.ready.value, resetAttempt.value],
-    async (_value, _previous, onCleanup) => {
-        const abort = new AbortController();
-        let current = true;
-        onCleanup(() => { current = false; abort.abort(); });
-        resetAdmission.value = null;
-        resetReadFailure.value = false;
-        if (mode.value !== 'reset' || identityDenial.value) return;
-        if (!usedInitialReset && bootstrapMatchesRoute.value && context.bootstrap.passwordReset) {
-            usedInitialReset = true;
-            resetAdmission.value = context.bootstrap.passwordReset;
-            return;
-        }
-        if (!context.browser || !context.ready.value) return;
-        const scope = context.capture();
-        try {
-            const admission = await context.api.checkPasswordReset(String(route.params.token), scope, abort.signal);
-            if (current && context.isCurrent(scope)) resetAdmission.value = admission;
-        } catch (error) {
-            if (!current || error instanceof ObsoleteRequestError || !context.isCurrent(scope)) return;
-            if (error instanceof ApiFailure && error.problem && error.status < 500) resetAdmission.value = error.problem;
-            else resetReadFailure.value = true;
-        }
-    }, {immediate: true});
+    refreshResetAdmission, {immediate: true});
+
+/** A reused reset route gets fresh admission; cleanup prevents an old token read reopening its form. */
+async function refreshResetAdmission(_value: unknown, _previous: unknown, onCleanup: Parameters<WatchCallback>[2]): Promise<void> {
+    const abort = new AbortController();
+    let current = true;
+    function cancelRead(): void {
+        current = false;
+        abort.abort();
+    }
+    onCleanup(cancelRead);
+    resetAdmission.value = null;
+    resetReadFailure.value = false;
+
+    // Use bootstrap only for its own first route. Later tokens and retry attempts read again.
+    if (mode.value !== 'reset' || identityDenial.value) return;
+    if (!usedInitialReset && bootstrapMatchesRoute.value && context.bootstrap.passwordReset) {
+        usedInitialReset = true;
+        resetAdmission.value = context.bootstrap.passwordReset;
+        return;
+    }
+    if (!context.browser || !context.ready.value) return;
+
+    const scope = context.capture();
+    try {
+        const admission = await context.api.checkPasswordReset(String(route.params.token), scope, abort.signal);
+        if (current && context.isCurrent(scope)) resetAdmission.value = admission;
+    } catch (error) {
+        if (!current || error instanceof ObsoleteRequestError || !context.isCurrent(scope)) return;
+        if (error instanceof ApiFailure && error.problem && error.status < 500) resetAdmission.value = error.problem;
+        else resetReadFailure.value = true;
+    }
+}
+
 const resetAllowed = computed(() => !!resetAdmission.value && 'valid' in resetAdmission.value);
 const resetDenial = computed(() => {
     if (resetReadFailure.value) return messages.value.t('state.loadFailed');
@@ -111,15 +137,8 @@ const resetDenial = computed(() => {
     return problemMessage(messages.value, problem);
 });
 const blocked = computed(() => command.pending.value || command.uncertain.value);
-function mayLeave(): boolean {
-    if (command.uncertain.value) return !command.pending.value && window.confirm(messages.value.t('auth.leaveUnknown'));
-    return (
-        !blocked.value &&
-        (finished.value ||
-            (!fields.displayname && !fields.passwordRepeat) ||
-            window.confirm(messages.value.t('draft.discard')))
-    );
-}
+
+/** Check identity authority without replaying mail, registration or sign-in commands. */
 async function refreshIdentityState(): Promise<void> {
     if (reconciling.value) return;
     reconciling.value = true;
@@ -127,34 +146,35 @@ async function refreshIdentityState(): Promise<void> {
         // A changed identity remounts the application. An unchanged session cannot prove
         // registration or mail delivery failed, so retain uncertainty and never replay it.
         await context.refreshSession();
-    } catch { command.setError('state.loadFailed'); }
-    finally { reconciling.value = false; }
+    } catch {
+        command.setError('state.loadFailed');
+    } finally {
+        reconciling.value = false;
+    }
 }
-onBeforeRouteLeave(mayLeave);
-onBeforeRouteUpdate(mayLeave);
-const removeIdentityGuard = context.registerIdentityGuard(mayLeave);
-onBeforeUnmount(removeIdentityGuard);
-const removeUpdateGuard = context.updates.registerGuard(() => finished.value || !Object.values(fields).some(Boolean));
-onBeforeUnmount(removeUpdateGuard);
-const title = computed(() =>
-    mode.value === 'error' ? messages.value.t('common.errorTitle')
-        : mode.value === 'login' || mode.value === 'guest-login'
-        ? messages.value.t('app.login')
-        : mode.value === 'register'
-          ? messages.value.t('app.register')
-          : mode.value === 'forgot'
-            ? messages.value.t('auth.forgotTitle')
-            : mode.value === 'reset'
-              ? messages.value.t('auth.resetTitle')
-              : messages.value.t('auth.activationTitle'),
-);
+// Page and submit presentation share one definition per existing native identity form.
+// Keeping label/icon choices together makes later form migrations explicit and reviewable.
+const signInPresentation = {title: 'app.login', icon: 'bi-box-arrow-in-right',
+    submit: 'app.login', submitIcon: 'bi-box-arrow-in-right'} as const;
+const presentations = {
+    login: signInPresentation,
+    'guest-login': signInPresentation,
+    register: {title: 'app.register', icon: 'bi-person-plus-fill', submit: 'app.register', submitIcon: 'bi-check-lg'},
+    forgot: {title: 'auth.forgotTitle', icon: 'bi-lock-fill', submit: 'auth.sendReset', submitIcon: 'bi-send-check'},
+    reset: {title: 'auth.resetTitle', icon: 'bi-shield-lock-fill', submit: 'auth.changePassword', submitIcon: 'bi-check-lg'},
+    activate: {title: 'auth.activationTitle', icon: 'bi-box-arrow-in-right',
+        submit: 'auth.activationTitle', submitIcon: 'bi-box-arrow-in-right'},
+    error: {title: 'common.errorTitle', icon: 'bi-box-arrow-in-right',
+        submit: 'common.errorTitle', submitIcon: 'bi-box-arrow-in-right'},
+} as const;
+const presentation = computed(() => presentations[mode.value]);
+const title = computed(() => messages.value.t(presentation.value.title));
 usePageTitle(title);
-const titleIcon = computed(() => mode.value === 'register' ? 'bi-person-plus-fill'
-    : mode.value === 'forgot' ? 'bi-lock-fill' : mode.value === 'reset' ? 'bi-shield-lock-fill' : 'bi-box-arrow-in-right');
-const submitLabel = computed(() => mode.value === 'forgot' ? messages.value.t('auth.sendReset')
-    : mode.value === 'reset' ? messages.value.t('auth.changePassword') : title.value);
-const submitIcon = computed(() => mode.value === 'forgot' ? 'bi-send-check'
-    : ['register', 'reset'].includes(mode.value) ? 'bi-check-lg' : 'bi-box-arrow-in-right');
+const titleIcon = computed(() => presentation.value.icon);
+const submitLabel = computed(() => messages.value.t(presentation.value.submit));
+const submitIcon = computed(() => presentation.value.submitIcon);
+
+/** Dispatch the current form through one command owner after local, native-equivalent validation. */
 async function submit(): Promise<void> {
     if (identityDenial.value || needsOidc.value || mode.value === 'reset' && !resetAllowed.value) return;
     if (mode.value === 'register' && !isRegistrationPasswordValid(fields.password)) {
@@ -169,74 +189,76 @@ async function submit(): Promise<void> {
         }
     }
     if (mode.value === 'login' || mode.value === 'guest-login') {
-        const result = await command.run(
-            (scope) =>
-                mode.value === 'guest-login'
-                    ? context.api.guestLogin(
-                          {guestId: String(route.params.guestId), token: String(route.params.token)},
-                          scope,
-                      )
-                    : context.api.login(
-                          {username: fields.username, password: fields.password, next: next.value},
-                          scope,
-                      ),
-            false,
-        );
+        const result = await command.run(signIn, false);
         if (result) {
-            fields.password = '';
+            clearFields();
             await context.acceptIdentity(result);
             await router.push(next.value);
         }
         return;
     }
-    const result = await command.run(
-        async (scope) =>
-            mode.value === 'register'
-                ? context.api.register(
-                      {
-                          username: fields.username,
-                          displayname: fields.displayname,
-                          email: fields.email,
-                          password: fields.password,
-                          password_repeat: fields.passwordRepeat,
-                          next: next.value,
-                      },
-                      scope,
-                  )
-                : mode.value === 'forgot'
-                  ? context.api.forgotPassword({username: fields.username, next: next.value}, scope)
-                  : mode.value === 'reset'
-                    ? context.api.resetPassword({token: String(route.params.token), password: fields.password,
-                          confirmPassword: fields.passwordRepeat}, scope).catch(error => {
-                          // A different client may consume the token after admission. The
-                          // command remains authoritative and immediately closes this form.
-                          if (error instanceof ApiFailure && error.problem?.code === 'TOKEN_INVALID' && context.isCurrent(scope)) {
-                              resetAdmission.value = error.problem;
-                              fields.password = ''; fields.passwordRepeat = '';
-                          }
-                          throw error;
-                      })
-                    : context.api.activate({token: String(route.params.token)}, scope),
-        false,
-    );
+    const result = await command.run(submitIdentityForm, false);
     if (result) {
         finished.value = true;
-        fields.password = '';
-        fields.passwordRepeat = '';
+        clearFields();
         if (mode.value === 'activate') {
             await router.replace({path: '/frontend-pilot/users/login', query: {next: next.value}});
             activationNotice.value = true;
         }
     }
 }
+
+/** Sign-in commands keep the entered credentials within the captured request scope. */
+function signIn(scope: PilotRequestScope): Promise<components['schemas']['IdentityResult']> {
+    if (mode.value === 'guest-login') {
+        return context.api.guestLogin({guestId: String(route.params.guestId), token: String(route.params.token)}, scope);
+    }
+    return context.api.login({username: fields.username, password: fields.password, next: next.value}, scope);
+}
+
+/** Keep each identity operation readable rather than hiding policy in a nested conditional expression. */
+async function submitIdentityForm(scope: PilotRequestScope) {
+    if (mode.value === 'register') {
+        return context.api.register({
+            username: fields.username,
+            displayname: fields.displayname,
+            email: fields.email,
+            password: fields.password,
+            password_repeat: fields.passwordRepeat,
+            next: next.value,
+        }, scope);
+    }
+    if (mode.value === 'forgot') {
+        return context.api.forgotPassword({username: fields.username, next: next.value}, scope);
+    }
+    if (mode.value !== 'reset') return context.api.activate({token: String(route.params.token)}, scope);
+
+    // Another client may consume the token after admission. A known denial immediately
+    // closes this form, while transport failures keep the command's outcome unknown.
+    try {
+        return await context.api.resetPassword({token: String(route.params.token), password: fields.password,
+            confirmPassword: fields.passwordRepeat}, scope);
+    } catch (failure) {
+        if (failure instanceof ApiFailure && failure.problem?.code === 'TOKEN_INVALID' && context.isCurrent(scope)) {
+            resetAdmission.value = failure.problem;
+            fields.password = '';
+            fields.passwordRepeat = '';
+        }
+        throw failure;
+    }
+}
+
+/** A successful recovery clears only its submitted email, preserving unrelated login drafts. */
 async function recover(): Promise<void> {
     if (
         await command.run(
             (scope) => context.api.recoverGuest({email: fields.email, next: next.value}, scope),
             false,
         )
-    )
+    ) {
         recoveryFinished.value = true;
+        fields.email = '';
+    }
 }
 onMounted(() => {
     if (mode.value === 'activate' && !identityDenial.value) void submit();
@@ -259,7 +281,10 @@ onMounted(() => {
                 <i class="bi me-2" :class="titleIcon" aria-hidden="true"></i>{{ title }}
             </h1>
             <div class="card-body">
-                <StatusNotice v-if="needsOidc || mode === 'reset' && !resetAllowed" kind="info">{{ messages.t('common.loading') }}</StatusNotice>
+                <!-- Only admission-dependent fields wait. The known card title and ordinary
+                     identity forms render immediately; errors retain their existing owner. -->
+                <LoadingSkeleton v-if="needsOidc || mode === 'reset' && !resetAllowed"
+                    :variant="needsOidc ? 'lines' : 'form'" :rows="2" />
                 <StatusNotice v-if="command.uncertain.value" kind="warning"
                     >{{ messages.t('state.unknownOutcome')
                     }} {{ messages.t('auth.unconfirmedRequest') }}<ActionButton class="ms-2" variant="outline-light" :pending="reconciling" :disabled="reconciling" @click="refreshIdentityState">{{

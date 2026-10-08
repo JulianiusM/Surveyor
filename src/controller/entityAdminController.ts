@@ -54,6 +54,11 @@ function propertyPermissions(type: EntityType): Partial<Record<EntityPropertyFie
     return basicPropertyPermissions;
 }
 
+/** Read one established field declaration without exposing the mutable policy to adapters. */
+export function entityPropertyPermission(type: EntityType, field: EntityPropertyField): PermType | undefined {
+    return propertyPermissions(type)[field];
+}
+
 /** Render the stored instant as local wall time in the same zone used by the edit parser. */
 function deadlineInputValue(value: unknown, timezone: unknown): string | null {
     if (!value) return null;

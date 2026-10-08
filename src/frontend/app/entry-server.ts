@@ -12,6 +12,9 @@ export async function render(url: string, bootstrap: FrontendPilotBootstrap): Pr
         ...(bootstrap.identityFormProblem ? {identityFormProblem: bootstrap.identityFormProblem} : {}),
         ...(bootstrap.identityFeedback ? {identityFeedback: bootstrap.identityFeedback} : {}),
         ...(bootstrap.guestEntry ? {guestEntry: bootstrap.guestEntry} : {}),
+        ...(bootstrap.packingError ? {packingError: bootstrap.packingError} : {}),
+        ...(bootstrap.packingCreateContext ? {packingCreateContext: bootstrap.packingCreateContext} : {}),
+        ...(bootstrap.packingDuplicate ? {packingDuplicate: bootstrap.packingDuplicate} : {}),
         ...(bootstrap.personalLink ? {personalLink: bootstrap.personalLink} : {}),
         ...(bootstrap.overview ? {overview: bootstrap.overview} : {}),
         ...(bootstrap.passwordReset ? {passwordReset: bootstrap.passwordReset} : {})};
@@ -20,6 +23,10 @@ export async function render(url: string, bootstrap: FrontendPilotBootstrap): Pr
         await router.push(url);
         await router.isReady();
         const html = await renderToString(app);
-        return {html, title: context.pageTitle.value, state: serializeBootstrap(initial)};
+        // Admission notices remain readable. Interactive route metadata supplies
+        // the message-only fallback without modifying the hydrated tree.
+        const metadata = router.currentRoute.value.meta;
+        const javascriptRequired = !initial.packingError && !initial.identityProblem && metadata.javascriptRequired === true;
+        return {html, title: context.pageTitle.value, state: serializeBootstrap(initial), javascriptRequired};
     } finally { context.start()(); }
 }

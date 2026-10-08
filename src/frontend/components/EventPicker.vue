@@ -7,6 +7,7 @@ import {belongsToQueryFamily} from '../app/queryKeys';
 import {useDebouncedValue} from '../composables/debounced';
 import ActionButton from './ActionButton.vue';
 import AppDialog from './AppDialog.vue';
+import LoadingSkeleton from './LoadingSkeleton.vue';
 
 const props = defineProps<{
     modelValue: string | null;
@@ -72,19 +73,25 @@ const options = useQuery({
             props.source.filterKey(context.session.value?.context, context.locale.value, filterKey.value))
             ? previous : undefined,
 });
-watch(
-    options.data,
-    (result) => {
-        if (!result || options.isPlaceholderData.value) return;
-        shownPage.value = pageOffset.value + page.value + 1;
-        if (result.selected) selected.value = result.selected;
-    },
-    {immediate: true},
-);
+/** Discovery reauthorizes the selected ID independently of its result page. An explicit
+ * null revokes its display projection, not the user's selected draft ID. Observe completed
+ * fetches too: structural sharing and same-millisecond responses can retain the data/ref time. */
+function receiveOptions(): void {
+    const result = options.data.value;
+    if (!result || options.isPlaceholderData.value || options.isFetching.value || options.isError.value) return;
+    shownPage.value = pageOffset.value + page.value + 1;
+    selected.value = result.selected;
+}
+watch([options.data, options.dataUpdatedAt, options.isFetching], receiveOptions, {immediate: true});
 watch(
     () => props.current,
-    (value) => {
+    (value, previous) => {
         if (value?.id === props.modelValue) selected.value = value;
+        else if (previous?.id === props.modelValue && selected.value?.id === previous.id) {
+            // A closed picker consumes its owner's refreshed authority. Resolve this
+            // still-selected draft once through discovery instead of retaining an old label.
+            selected.value = null;
+        }
     },
 );
 const selection = computed(() =>
@@ -282,8 +289,11 @@ function details(event: PilotEventPickerOption): string {
                 <p v-if="invalidDates || options.error.value" class="small text-danger" role="alert">
                     {{ messages.t(invalidDates ? 'packing.invalidEventDates' : 'state.loadFailed') }}
                 </p>
-                <p v-if="options.isFetching.value" class="small text-secondary" role="status">
-                    {{ messages.t('common.loading') }}
+                <!-- Search/filter controls stay usable while the independently authorized
+                     options load. Background reads retain the known choices and selection. -->
+                <LoadingSkeleton v-if="!invalidDates && !options.data.value && !options.error.value" :rows="4" />
+                <p v-if="options.isFetching.value && options.data.value" class="small text-secondary" role="status">
+                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>{{ messages.t('common.loading') }}
                 </p>
                 <ul
                     :id="prefix + '-list'"

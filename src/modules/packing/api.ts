@@ -8,13 +8,13 @@
 import {createHash} from 'node:crypto';
 import type {EntityManager} from 'typeorm';
 import type {components} from '../../types/api/v1';
-import type {PermEngineCaches, PermView, SessionLike} from '../../types/PermissionTypes';
+import type {PermissionFieldRule, PermEngineCaches, PermView, SessionLike} from '../../types/PermissionTypes';
 import type {LockedArchiveContext} from '../../types/ArchiveTypes';
 import type {PackingList} from '../database/entities/packing/PackingList';
 import type {Event} from '../database/entities/event/Event';
 import type {PackingItem} from '../database/entities/packing/PackingItem';
 import type {PackingAssignment} from '../database/entities/packing/PackingAssignment';
-import {archiveEntity, restoreEntity, changeEntityEvent, getAuthorizedEventUrl} from '../../controller/entityAdminController';
+import {archiveEntity, restoreEntity, changeEntityEvent, entityPropertyPermission, getAuthorizedEventUrl} from '../../controller/entityAdminController';
 import {getEventLinkOptions} from '../../controller/eventController';
 import {ApiProblem} from '../api/problem';
 import {validateApiInput} from '../api/transport';
@@ -27,6 +27,31 @@ import {getInitialPerms, getPermMeta, getPresets} from '../lib/permissions';
 import {generateUniqueId, getHeaderImageVersion} from '../lib/util';
 import {checkNewImage, removeImage} from '../lib/fileCommons';
 import {APIError} from '../lib/errors';
+
+// This is the native packing field policy. Both API generations and capability
+// projection consume it; a UI capability is never a separate authorization rule.
+const itemFieldPermissions: Record<keyof components['schemas']['PackingItemPatch'], PermissionFieldRule> = {
+    title: {permission: 'EDIT_TITLE', parent: 'ITEM_EDIT'},
+    description: {permission: 'EDIT_DESC', parent: ['ITEM_EDIT', 'ITEM_EDIT_DESC']},
+    maxAssignees: {permission: 'EDIT_CAPACITY', parent: 'ITEM_EDIT'},
+    // ITEM_EDIT_META alone has never opened Everyone in packing.
+    requiredByAll: {permission: 'EDIT_META', parent: 'ITEM_EDIT'},
+};
+
+/** Return a detached declaration so route adapters cannot mutate the authoritative field policy. */
+export function packingItemFieldPermission(field: keyof components['schemas']['PackingItemPatch']): PermissionFieldRule {
+    const rule = itemFieldPermissions[field];
+    return {...rule, ...(Array.isArray(rule.parent) ? {parent: [...rule.parent]} : {})};
+}
+
+function mayEditItemField(permissions: PermView, field: keyof components['schemas']['PackingItemPatch']): boolean {
+    const rule = itemFieldPermissions[field];
+    return permissions.allow(rule.permission, rule.parent);
+}
+
+function mayEditMetadataField(permissions: PermView, field: keyof components['schemas']['PackingMetadataPatch']): boolean {
+    return permissions.has(entityPropertyPermission('packing', field)!);
+}
 
 /** Hash only canonical machine data; localized labels never invalidate a metadata edit token. */
 function entityTag(scope: string, value: unknown): string {
@@ -108,11 +133,11 @@ async function packingPermissions(manager: EntityManager, list: PackingList, ses
 function metadataProjection(list: PackingList, permissions: PermView): components['schemas']['PackingMetadata'] {
     const values: components['schemas']['PackingMetadata']['values'] = {};
     const editableFields: components['schemas']['PackingMetadata']['editableFields'] = [];
-    if (permissions.has('EDIT_TITLE')) {
+    if (mayEditMetadataField(permissions, 'title')) {
         editableFields.push('title');
         values.title = list.title;
     }
-    if (permissions.has('EDIT_DESC')) {
+    if (mayEditMetadataField(permissions, 'description')) {
         editableFields.push('description');
         values.description = list.description ?? null;
     }
@@ -144,6 +169,7 @@ export async function readPackingList(id: string, session: SessionLike) {
         // authorization evaluation after acquiring locks, never reusing a page's permission view.
         const caches: PermEngineCaches = {participant: new Map(), defaults: new Map(), userPerms: new Map()};
         const permissions = await authorizeRead(manager, list, session, caches);
+
         // Child admission never implies permission to open its parent. Reuse the native URL
         // policy, but evaluate the captured parent inside this projection's existing snapshot.
         let currentEventUrl: string | null = null;
@@ -153,6 +179,8 @@ export async function readPackingList(id: string, session: SessionLike) {
             }], session, manager);
             currentEventUrl = getAuthorizedEventUrl(list.event.id, parentViews.get(`event:${list.event.id}`)!);
         }
+
+        // Group persisted assignments once before building rows and native counters.
         const {items, assignments} = await packingService.getPackingSnapshotRows(manager, id);
         const assignmentsByItem = new Map<string, typeof assignments>();
         for (const assignment of assignments) {
@@ -160,6 +188,7 @@ export async function readPackingList(id: string, session: SessionLike) {
             rows.push(assignment);
             assignmentsByItem.set(assignment.itemId, rows);
         }
+
         const profileId = actorId(session);
         const participants = new Set<string>();
         let open = 0;
@@ -182,12 +211,13 @@ export async function readPackingList(id: string, session: SessionLike) {
                 capabilities, editToken: itemEditToken(list, item, session),
             });
         }
+
         const data: components['schemas']['PackingListView'] = {
             entityType: 'packing', id: list.id, title: list.title, description: list.description ?? null,
             ...headerProjection(list),
             currentEventId: list.eventId ?? null, currentEventUrl,
             archived: Boolean(list.archivedAt), inheritedArchived: Boolean(list.event?.archivedAt),
-            capabilities: {editTitle: permissions.has('EDIT_TITLE'), editDescription: permissions.has('EDIT_DESC'), selfAssign: permissions.has('ACCESS_VIEW'),
+            capabilities: {editTitle: mayEditMetadataField(permissions, 'title'), editDescription: mayEditMetadataField(permissions, 'description'), selfAssign: permissions.has('ACCESS_VIEW'),
                 addItem: permissions.has('ITEM_ADD'), reorder: permissions.has('ITEM_EDIT'), manageSettings: mayOpenSettings(list, permissions, session)},
             orderToken: orderEditToken(list, items, session),
             counters: {participants: participants.size, open, empty}, items: itemRows,
@@ -243,10 +273,16 @@ export async function patchPackingMetadata(id: string, body: unknown, ifMatch: s
         const list = requireList(await packingService.getPackingSnapshotRoot(manager, id));
         if (expectedEventId !== undefined && (list.eventId ?? null) !== expectedEventId) throw new ApiProblem('ENTITY_CONTEXT_CHANGED');
         const permissions = compare ? await authorizeRead(manager, list, session) : await packingPermissions(manager, list, session);
-        if (Object.hasOwn(patch, 'title') && !permissions.has('EDIT_TITLE')
-            || Object.hasOwn(patch, 'description') && !permissions.has('EDIT_DESC')) throw new ApiProblem('FORBIDDEN');
+        // Structural validation already closed the field set. Check every submitted
+        // grant before inspecting comparison evidence or performing persistence.
+        for (const field of Object.keys(patch) as (keyof typeof patch)[]) {
+            if (!mayEditMetadataField(permissions, field)) throw new ApiProblem('FORBIDDEN');
+        }
+
         if (expectedValues) requirePackingFieldValues(list, expectedValues);
         if (compare) requireFieldComparison(ifMatch, metadataResult(list, permissions, session).etag, Object.keys(patch));
+
+        // Persistence and the returned baseline use the same locked transaction.
         await packingService.updatePackingListProperties(id, patch, manager);
         const saved = requireList(await packingService.getPackingSnapshotRoot(manager, id));
         return metadataResult(saved, permissions, session);
@@ -324,11 +360,10 @@ async function packingItemPermissions(manager: EntityManager, list: PackingList,
 
 function itemCapabilities(permissions: PermView): components['schemas']['PackingItemView']['capabilities'] {
     return {
-        editTitle: permissions.allow('EDIT_TITLE', 'ITEM_EDIT'),
-        editDescription: permissions.allow('EDIT_DESC', ['ITEM_EDIT', 'ITEM_EDIT_DESC']),
-        editCapacity: permissions.allow('EDIT_CAPACITY', 'ITEM_EDIT'),
-        // ITEM_EDIT_META alone has never opened Everyone in packing; preserve that exception.
-        editRequired: permissions.allow('EDIT_META', 'ITEM_EDIT'),
+        editTitle: mayEditItemField(permissions, 'title'),
+        editDescription: mayEditItemField(permissions, 'description'),
+        editCapacity: mayEditItemField(permissions, 'maxAssignees'),
+        editRequired: mayEditItemField(permissions, 'requiredByAll'),
         removeItem: permissions.allow('ITEM_DELETE', 'ITEM_DELETE'),
         removeAssignments: permissions.allow('MANAGE_ASSIGNMENTS'),
     };
@@ -380,15 +415,20 @@ function permissionDefinitions() {
     return {permissions: getPermMeta().map(({key, bit}) => ({key, bit})), presets: getPresets().map(({key, mask}) => ({key, mask}))};
 }
 
-/** Only a full account may create/duplicate; an administrator guest retains all other granted actions. */
+/** Creation POST requires an account, including when a public/guest duplicate GET supplied its draft. */
 export function requirePackingCreation(session: SessionLike): void {
     actorId(session);
     if (!session.auth?.user) throw new ApiProblem('FORBIDDEN');
 }
 
+/** Public form definitions contain no resource data; native duplicate GET can use them without an account. */
+export function packingFormContext(): components['schemas']['PackingCreateContext'] {
+    return {defaults: completeDefaults(getInitialPerms('packing')), ...permissionDefinitions()};
+}
+
 export function readPackingCreateContext(session: SessionLike): components['schemas']['PackingCreateContext'] {
     requirePackingCreation(session);
-    return {defaults: completeDefaults(getInitialPerms('packing')), ...permissionDefinitions()};
+    return packingFormContext();
 }
 
 /** A multipart creation is one command: all rows/defaults commit together, never a half-created image step. */
@@ -409,16 +449,22 @@ export async function createPackingList(body: components['schemas']['PackingCrea
     return packingService.withPackingCreationTransaction(body.eventId, createLocked);
 }
 
+/** Native duplicate GET depends only on DATA_DUPLICATE, independently of detail admission and creation POST. */
 export async function readPackingDuplicate(id: string, session: SessionLike): Promise<components['schemas']['PackingDuplicate']> {
-    requirePackingCreation(session);
     return packingService.withPackingReadSnapshot(id, async function readDuplicate(manager, row) {
         const list = requireList(row);
-        const permissions = await authorizeRead(manager, list, session);
+        const permissions = await evaluateSubject({kind: 'entity', entity: {
+            entityType: 'packing', entityId: list.id, ownerId: list.ownerId, eventId: list.eventId,
+        }}, session, undefined, manager);
         if (!permissions.has('DATA_DUPLICATE')) throw new ApiProblem('FORBIDDEN');
+
+        // Copy the native form surface only. Assignments, administrators, header,
+        // archive state and event membership remain associated with the source.
         const {items} = await packingService.getPackingSnapshotRows(manager, id);
         return {title: list.title, description: list.description ?? null, eventId: null,
             items: items.map(item => ({title: item.title, description: item.description ?? null, maxAssignees: item.maxAssignees ?? null, requiredByAll: Boolean(item.requiredByAll)})),
-            defaultPermissions: completeDefaults(await adminService.getDefaultPerms('packing', id, manager))};
+            defaultPermissions: completeDefaults(await adminService.getDefaultPerms('packing', id, manager)),
+            formContext: packingFormContext()};
     });
 }
 
@@ -468,13 +514,16 @@ export async function updatePackingItem(id: string, itemId: string, body: compon
         const {item} = await packingService.getLockedPackingAssignment(manager, itemId, actorId(session));
         if (!item || item.entityId !== id) throw new ApiProblem('NOT_FOUND');
         const permissions = await packingItemPermissions(manager, list, item, session);
-        const capabilities = itemCapabilities(permissions);
-        if (Object.hasOwn(body, 'title') && !capabilities.editTitle || Object.hasOwn(body, 'description') && !capabilities.editDescription
-            || Object.hasOwn(body, 'maxAssignees') && !capabilities.editCapacity || Object.hasOwn(body, 'requiredByAll') && !capabilities.editRequired) throw new ApiProblem('FORBIDDEN');
+
+        for (const field of Object.keys(body) as (keyof typeof body)[]) {
+            if (!mayEditItemField(permissions, field)) throw new ApiProblem('FORBIDDEN');
+        }
+
         if (expectedValues) requirePackingFieldValues(item, expectedValues);
         // Native forms predate conditional API writes. Their adapter still uses these exact
         // locked scope, authorization and persistence checks, while v1 requires a reviewed baseline.
         if (compare) requireFieldComparison(token, itemEditToken(list, item, session), Object.keys(body));
+
         const changed = await applyPackingItemPatch(manager, item, body);
         return {changed};
     }, compare);

@@ -9,6 +9,12 @@ function copyMetadata(data: Metadata): Metadata {
     return {...data, values: {...data.values}, editableFields: [...data.editableFields]};
 }
 
+/** Empty optional text has the same wire meaning as null. Missing projected fields stay missing. */
+function sameValue(field: Field, left: string | null | undefined, right: string | null | undefined): boolean {
+    if (field !== 'description') return left === right;
+    return (left === '' ? null : left) === (right === '' ? null : right);
+}
+
 /**
  * An editor owns its baseline and local values independently of the read cache. Remote snapshots can
  * be offered for review without advancing the baseline token behind an unsaved form.
@@ -30,7 +36,7 @@ export class MetadataDraft {
     get patch(): Patch {
         const patch: Patch = {};
         for (const field of this.baseline.editableFields) {
-            if (this.values[field] === this.baseline.values[field]) continue;
+            if (sameValue(field, this.values[field], this.baseline.values[field])) continue;
             if (field === 'title' && this.values.title !== undefined) patch.title = this.values.title;
             if (field === 'description' && this.values.description !== undefined) {
                 patch.description = this.values.description === '' ? null : this.values.description;
@@ -45,21 +51,25 @@ export class MetadataDraft {
 
     get conflicts(): Field[] {
         if (!this.remote) return [];
-        return this.remote.data.editableFields.filter(field => {
+        const conflicts: Field[] = [];
+        for (const field of this.remote.data.editableFields) {
             const original = this.baseline.values[field];
             const mine = this.values[field];
-            const current = this.remote!.data.values[field];
-            return mine !== original && current !== original && mine !== current;
-        });
+            const current = this.remote.data.values[field];
+            if (!sameValue(field, mine, original) && !sameValue(field, current, original)
+                && !sameValue(field, mine, current)) conflicts.push(field);
+        }
+        return conflicts;
     }
 
+    /** Refresh untouched fields immediately; overlapping edits retain their original comparison baseline. */
     receive(data: Metadata, etag: string): void {
         if (!this.dirty) this.accept(data, etag);
         else if (etag !== this.etag) {
             const changed = Object.keys(this.patch) as Field[];
             const overlap = changed.some(field => !data.editableFields.includes(field)
-                || data.values[field] !== this.baseline.values[field]);
-            if (overlap) this.remote = {data: copyMetadata(data), etag};
+                || !sameValue(field, data.values[field], this.baseline.values[field]));
+            if (overlap) this.offerReview(data, etag);
             else {
                 // Another client changed only untouched fields. Adopt those current values and
                 // their token while preserving this sparse draft; no conflict ceremony is needed.
@@ -73,6 +83,13 @@ export class MetadataDraft {
         }
     }
 
+    /** An unknown write needs deliberate review even when the authoritative token has not changed. */
+    offerReview(data: Metadata, etag: string): void {
+        // Repeated reads of the same snapshot must not erase choices made in the open review.
+        if (this.remote?.etag !== etag) this.choices = {};
+        this.remote = {data: copyMetadata(data), etag};
+    }
+
     /** A caller invokes this only after deliberate review; it never issues a write or selects a conflict. */
     review(): boolean {
         if (!this.remote || this.conflicts.some(field => !this.choices[field])) return false;
@@ -81,7 +98,7 @@ export class MetadataDraft {
         for (const field of current.data.editableFields) {
             const mine = this.values[field];
             const original = this.baseline.values[field];
-            const retain = mine !== original && this.choices[field] !== 'current';
+            const retain = !sameValue(field, mine, original) && this.choices[field] !== 'current';
             if (field === 'title' && retain && mine !== undefined && mine !== null) merged.title = mine;
             if (field === 'description' && retain && mine !== undefined) merged.description = mine;
         }
@@ -90,6 +107,7 @@ export class MetadataDraft {
         return true;
     }
 
+    /** Only a clean draft, confirmed write, or explicit review may replace the editor's baseline. */
     accept(data: Metadata, etag: string): void {
         this.baseline = copyMetadata(data);
         this.values = {...data.values};

@@ -27,6 +27,10 @@ export const packingKeys = {
 /** Overview owns the mixed-feature projection, rather than placing five entity types in packing. */
 export const overviewKeys = {
     all: (context: string | undefined) => ['v1', context, 'overview'] as const,
+    // TanStack matches the partial parameter object, covering this region's older
+    // searches/pages without cancelling another region or reading tuple offsets.
+    regionFamily: (context: string | undefined, locale: string, collection: string, region: string) =>
+        [...overviewKeys.all(context), {locale}, {collection, region}] as const,
     region: (context: string | undefined, locale: string, parameters: unknown) =>
         [...overviewKeys.all(context), {locale}, parameters] as const,
 };

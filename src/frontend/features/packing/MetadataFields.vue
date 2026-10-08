@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue';
+import {computed, ref, watch} from 'vue';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
 import type {PilotRead} from '../../../types/FrontendPilotUiTypes';
@@ -11,6 +11,7 @@ import {useFeedbackError} from '../../composables/feedback';
 import {packingKeys} from '../../app/queryKeys';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 
 const props = withDefaults(defineProps<{listId: string; listTitle?: string; disabled?: boolean; active?: boolean}>(), {active: true});
 const emit = defineEmits<{close: []; saved: []; accessLost: []}>();
@@ -19,6 +20,7 @@ const api = usePackingApi(context);
 const {messages} = context;
 const draft = ref<MetadataDraft | null>(null);
 const pending = ref(false);
+const refreshing = ref(false);
 const {error, setError} = useFeedbackError();
 const unknown = ref(false);
 const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
@@ -44,7 +46,9 @@ watch(
     (result) => {
         if (!result?.etag) return;
         if (!draft.value) draft.value = new MetadataDraft(result.data, result.etag);
-        else draft.value.receive(result.data, result.etag);
+        // A background read updates the cache, but cannot decide what happened to a lost
+        // command response. Keep that editor's baseline until its explicit recovery read.
+        else if (!unknown.value) draft.value.receive(result.data, result.etag);
     },
     {immediate: true},
 );
@@ -69,28 +73,27 @@ const canReview = computed(
 // Selecting field choices is not acknowledgement. Only Review advances the draft's
 // baseline/token; prevent another stale write until that deliberate step completes.
 const requiresReview = computed(() => !!draft.value?.remote);
+const dirty = computed(() => !!draft.value?.dirty);
 
+/** The dialog calls this for operations that explicitly discard only the metadata draft. */
 function mayLeave(): boolean {
-    if (pending.value) return false;
-    return !draft.value?.dirty || window.confirm(messages.value.t('draft.discard'));
-}
-function close(): void {
-    if (mayLeave()) emit('close');
+    if (pending.value || refreshing.value) return false;
+    if (unknown.value) return window.confirm(messages.value.t('draft.leaveUnknown'));
+    return !dirty.value || window.confirm(messages.value.t('draft.discard'));
 }
 // PackingSettings owns navigation and identity decisions for the complete dialog and
-// calls mayLeave here once; registering another route guard would prompt twice.
-function beforeUnload(event: BeforeUnloadEvent): void {
-    if (!pending.value && !draft.value?.dirty) return;
-    event.preventDefault();
-    event.returnValue = '';
-}
-onMounted(() => window.addEventListener('beforeunload', beforeUnload));
-onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
-const removeUpdateGuard = context.updates.registerGuard(() => !pending.value && !unknown.value && !draft.value?.dirty);
-onBeforeUnmount(removeUpdateGuard);
+// reads the exposed draft state once; separate child guards would prompt twice.
 
+/** Offer the latest authority for review without replaying an uncertain PATCH. */
 async function refresh(discard = false): Promise<void> {
-    if (!canRetryRead(metadata.error.value)) return;
+    if (pending.value || refreshing.value || !canRetryRead(metadata.error.value)) return;
+    await readMetadata(discard);
+}
+
+/** Internal conflict recovery runs while the rejected command still owns its pending guard. */
+async function readMetadata(discard = false): Promise<void> {
+    if (refreshing.value || !canRetryRead(metadata.error.value)) return;
+    refreshing.value = true;
     setError(null);
     try {
         const result = await metadata.refetch({throwOnError: true});
@@ -102,10 +105,12 @@ async function refresh(discard = false): Promise<void> {
         }
         if (unknown.value && result.data?.etag && draft.value) {
             // An explicit read offers conditional reapply review. It does not claim the lost write failed.
-            draft.value.remote = {data: result.data.data, etag: result.data.etag};
+            draft.value.offerReview(result.data.data, result.data.etag);
         }
     } catch {
         setError('state.loadFailed');
+    } finally {
+        refreshing.value = false;
     }
 }
 
@@ -115,6 +120,7 @@ async function refreshAfterSettings(): Promise<void> {
     await metadata.refetch({throwOnError: true});
 }
 
+/** Acknowledgement advances the baseline; saving the retained draft remains a separate action. */
 function review(): void {
     if (draft.value?.review()) {
         unknown.value = false;
@@ -122,10 +128,12 @@ function review(): void {
     }
 }
 
+/** Send one sparse conditional command and classify a missing response as an unknown outcome. */
 async function save(): Promise<void> {
     if (
         !draft.value?.dirty ||
         pending.value ||
+        refreshing.value ||
         props.disabled ||
         lostAuthority.value ||
         fieldAccessChanged.value ||
@@ -134,6 +142,7 @@ async function save(): Promise<void> {
     )
         return;
     const scope = context.capture();
+    // The command guard covers both the write and a required conflict-reconciliation read.
     pending.value = true;
     setError(null);
     const finishUpdateCommand = context.updates.commandStarted();
@@ -145,6 +154,7 @@ async function save(): Promise<void> {
             scope,
         );
         if (!context.isCurrent(scope)) return;
+        // Only a confirmed response advances the local baseline and shared read cache together.
         draft.value.accept(result.data, result.etag!);
         context.queryClient.setQueryData(key.value, result);
         emit('saved');
@@ -154,7 +164,7 @@ async function save(): Promise<void> {
         if (failure instanceof InvalidInputError) {
             setError('api:errors.VALIDATION_FAILED');
         } else if (failure instanceof ApiFailure && failure.status === 412) {
-            await refresh();
+            await readMetadata();
             setError('draft.conflict');
         } else if (failure instanceof ApiFailure && failure.status < 500) {
             setError(failure);
@@ -167,20 +177,37 @@ async function save(): Promise<void> {
         finishUpdateCommand();
     }
 }
-defineExpose({mayLeave, pending, refresh, refreshAfterSettings});
+defineExpose({mayLeave, pending, refreshing, unknown, dirty, refresh, refreshAfterSettings});
 </script>
 
 <template>
     <StatusNotice v-if="error" kind="danger">{{ error }}</StatusNotice>
+    <!-- Recovery remains available while all mutation controls are blocked by uncertainty. -->
+    <div v-if="unknown" class="mb-3">
+        <ActionButton variant="outline-warning" :pending="refreshing"
+            :disabled="pending || refreshing || !canRetryRead(metadata.error.value)" @click="refresh()">
+            {{ messages.t('common.refresh') }}
+        </ActionButton>
+    </div>
     <StatusNotice v-if="lostAuthority || fieldAccessChanged" kind="warning">{{
         messages.t('state.forbidden')
     }}</StatusNotice>
-    <p v-if="!draft">{{ messages.t('common.loading') }}</p>
-    <form v-else id="packing-metadata-form" @submit.prevent="save">
+    <StatusNotice v-if="!draft && metadata.error.value && !lostAuthority" kind="warning">
+        <p class="mb-2">{{ messages.t('state.loadFailed') }}</p>
+        <ActionButton variant="outline-secondary" :pending="metadata.isFetching.value"
+            :disabled="pending || refreshing || !canRetryRead(metadata.error.value)" @click="refresh()">
+            {{ messages.t('common.refresh') }}
+        </ActionButton>
+    </StatusNotice>
+    <!-- A placeholder belongs to the first read only. Locale/background reads
+         retain the same form, focused input and original edit baseline. -->
+    <LoadingSkeleton v-if="!draft && metadata.isPending.value" variant="form" :rows="2" />
+    <form v-if="draft" id="packing-metadata-form" @submit.prevent="save">
         <!-- Metadata owns its baseline and focused draft while the settings dialog switches
                  panels. Other commands never discard or implicitly submit these fields. -->
         <h3 class="fs-5">{{ messages.t('packing.properties') }}</h3>
-        <fieldset :disabled="disabled || pending || lostAuthority" :aria-busy="pending">
+        <fieldset :disabled="disabled || pending || refreshing || unknown || lostAuthority"
+            :aria-busy="pending || refreshing || metadata.isFetching.value">
             <details class="entity-property-group mb-3" open>
                 <summary class="fw-semibold">{{ messages.t('packing.details') }}</summary>
                 <div class="row g-3 pt-3">
@@ -214,8 +241,10 @@ defineExpose({mayLeave, pending, refresh, refreshAfterSettings});
             </details>
         </fieldset>
         <section v-if="draft.remote && !lostAuthority" class="border border-warning rounded p-3 mb-3">
-            <h3 class="h6">{{ messages.t('draft.changed') }}</h3>
-            <p>{{ messages.t('draft.conflict') }}</p>
+            <!-- A lost response requires review even when authority is unchanged. Describe
+                 that uncertainty without claiming another client changed the list. -->
+            <h3 class="h6">{{ messages.t(unknown ? 'draft.review' : 'draft.changed') }}</h3>
+            <p>{{ messages.t(unknown ? 'draft.unknownReview' : 'draft.conflict') }}</p>
             <div v-for="field in draft.remote.data.editableFields" :key="field" class="mb-3">
                 <h4 class="h6">
                     {{ messages.t(field === 'title' ? 'packing.title' : 'packing.description') }}

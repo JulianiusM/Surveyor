@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; source review of expanded packing metadata/item/order/settings tokens, overview refresh, identity transitions and command recovery; distinguishes implemented behavior from remaining cross-feature targets; no application, database or browser checks run for this documentation update
+verification-scope: FPR-07 explicitly authorized 2026-10-08 scope/fallback/documentation amendments and staging; original choices/D1-D5 retained; no new runtime verification claimed; approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; source review of expanded packing metadata/item/order/settings tokens, overview refresh, identity transitions and command recovery; distinguishes implemented behavior from remaining cross-feature targets; no application, database or browser checks run for this documentation update
 source-anchors: docs/frontend-migration/EDGE_CASES.md; docs/frontend-migration/IDENTITY_LIFECYCLE_EDGE_CASES.md; docs/frontend-migration/PARTICIPATION_EDGE_CASES.md; docs/frontend-migration/INVOICE_EDGE_CASES.md; src/frontend/app/context.ts; src/frontend/app/api.ts; src/frontend/app/queryCache.ts; src/frontend/composables/command.ts; src/frontend/components/InlineCell.vue; src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/PackingSettings.vue; src/frontend/features/overview/OverviewRegion.vue; src/frontend/features/overview/OverviewPage.vue; src/modules/packing/api.ts; src/routes/api/v1/auth.ts; tests/frontend/frontend-pilot.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/frontend/packing-management-ui.spec.ts; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-select.ts; src/public/js/modules/entity-properties.ts; src/public/js/modules/invoice-submission.ts; src/modules/activity/recommendationJobs.ts; src/modules/invoice/poolOperations.ts; src/controller/entityAdminController.ts
 next-review: packing-invalidation-or-next-feature-migration
 -->
@@ -63,6 +63,20 @@ and [API design](API_CONTRACT_DESIGN.md) define the exact coverage and 428/412 v
 Use feature-owned query functions and keys, not fetch calls scattered through components. Multiple components reading
 the same key share one cached query. Do not mirror those DTOs into another global store. A detail query must not
 silently prefetch every item, participant, proof, historical ledger or linked feature behind an unopened section.
+
+## Authorized refresh clarification (2026-10-08)
+
+The rectification retains the healthy 30-second cadence and targets roughly one-minute convergence for active
+shared views under a responsive backend. Honor server cooldown, pause hidden/unmounted observers, and reuse one
+scheduler for interval, return/focus/reconnect and read recovery. Clear only the notice belonging to a recovered
+operation. Dirty forms still receive authoritative snapshots without replacing their input or original baselines.
+Closed selectors use current authority supplied by their owner and keep draft IDs separate; they do not poll
+hidden searches continuously. Late responses cannot restore an invalidated selection or obsolete navigation.
+
+This expressly supersedes the original generic failed-read delay capped at two minutes in the initial policy
+below. The old policy remains design history, not the rectification target. The amendment introduces no automatic
+write retry, arbitrary age-based command prohibition, new relationship history or backend hardening project.
+Actual implementation and focused verification belong in the pilot guide and paired review.
 
 ## Initial refresh policy
 

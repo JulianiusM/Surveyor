@@ -1,4 +1,4 @@
-import {expect, test, type APIRequestContext, type Locator, type Page, type TestInfo} from '@playwright/test';
+import {expect, test, type APIRequestContext, type Locator, type Page, type Route, type TestInfo} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
@@ -42,15 +42,30 @@ async function bootstrap(request: APIRequestContext): Promise<Session> {
 function headers(session: Session) {
     return {'X-Surveyor-Context': session.context, 'X-CSRF-Token': session.csrfToken, 'X-Surveyor-Locale': session.locale};
 }
-async function packing(page: Page, publicView = false) {
-    await loginForE2E(page.request, createE2ELogin());
+/** Fixture creation and browser delivery are separate so loading checks can hold a real read. */
+async function packingFixture(request: APIRequestContext, publicView = false) {
+    await loginForE2E(request, createE2ELogin());
     const input = createE2EPackingList();
     input.title = input.form.title = `Vue packing ${randomUUID()}`;
     if (publicView) Object.assign(input.form, {'defaultPerms[public][0]': 'ACCESS_VIEW'});
-    const list = await createResourceViaForm(page.request, input);
-    await page.goto(`/frontend-pilot/packing/${list.id}`);
+    return createResourceViaForm(request, input);
+}
+
+async function packing(page: Page, publicView = false) {
+    const list = await packingFixture(page.request, publicView);
+    // Readiness is proved by the real hydrated controls below; unrelated external
+    // assets must not keep an already usable application behind a full-load wait.
+    await page.goto(`/frontend-pilot/packing/${list.id}`, {waitUntil: 'domcontentloaded'});
     await expect(page.getByRole('heading', {name: list.title, exact: true})).toBeVisible();
     return list;
+}
+
+/** Delay only delivery at the HTTP boundary. Explicit release keeps checks deterministic
+ * without artificial product timers, invented snapshots or backend replacements. */
+function readGate() {
+    let release!: () => void;
+    const promise = new Promise<void>(function rememberRelease(resolve) { release = resolve; });
+    return {promise, release};
 }
 
 async function readPacking(request: APIRequestContext, id: string): Promise<components['schemas']['PackingListView']> {
@@ -117,40 +132,144 @@ test('pilot navigates without replacing the document and preserves the legacy Pa
     await captureState(page, testInfo, 'unsaved-navigation-discarded', quickTitle);
     await expect(row).toHaveAttribute('draggable', 'true');
     expect(errors).toEqual([]);
-    await page.goto(`/frontend-pilot/packing/${list.id.toUpperCase()}`);
+    await page.goto(`/frontend-pilot/packing/${list.id.toUpperCase()}`, {waitUntil: 'domcontentloaded'});
     await expect(page.locator('tr[data-item-id]').first().getByRole('checkbox')).toBeChecked();
     expect(await page.evaluate(key => localStorage.getItem(key), `packed_${list.id}_${itemId}`)).toBe('1');
 });
 
-test('native local login and body-free logout remain usable without JavaScript', async ({browser, baseURL}) => {
+test('loading overview regions renders the shell and faster authority independently', async ({page}, testInfo) => {
+    const list = await packingFixture(page.request);
+    const destination = '/frontend-pilot?locale=en&owner_main_q=' + encodeURIComponent(list.title);
+    const response = await page.request.get(destination);
+    expect(response.status()).toBe(200);
+    const html = await response.text();
+    const serialized = /<script id="surveyor-pilot-state" type="application\/json">([^<]+)<\/script>/u.exec(html);
+    expect(serialized).not.toBeNull();
+    // Initial HTML carries the authoritative session and actual region shells. It
+    // does not wait for all four overview projections before the browser can paint.
+    expect(JSON.parse(serialized![1]).overview).toBeUndefined();
+    expect(html).toContain('data-loading-skeleton="cards"');
+
+    const participantGate = readGate();
+    const pattern = '**/api/v1/overview?*';
+    async function delayParticipant(route: Route): Promise<void> {
+        const query = new URL(route.request().url()).searchParams;
+        if (query.get('collection') === 'participant' && query.get('region') === 'main') {
+            await participantGate.promise;
+        }
+        await route.continue();
+    }
+    await page.route(pattern, delayParticipant);
+    try {
+        await page.goto(destination, {waitUntil: 'domcontentloaded'});
+        const participant = page.locator('[data-collection="participant"][data-region="main"]');
+        const owner = page.locator('[data-collection="owner"][data-region="main"]');
+        await expect(participant.locator('[data-loading-skeleton="cards"]')).toBeVisible();
+        await expect(owner.locator(`[data-id="${list.id}"]`)).toBeVisible();
+        await expect(owner.locator('[data-loading-skeleton]')).toHaveCount(0);
+        await expect(page.locator('header nav')).toBeVisible();
+        await captureState(page, testInfo, 'loading-overview-independent-regions');
+
+        // Decorative placeholders stop moving under the browser's real media
+        // preference; loading still has a programmatically determined status.
+        await page.emulateMedia({reducedMotion: 'reduce'});
+        expect(await participant.locator('.pilot-skeleton-shapes').evaluate(node =>
+            getComputedStyle(node).animationName)).toBe('none');
+        await page.emulateMedia({reducedMotion: 'no-preference'});
+        participantGate.release();
+        await expect(participant.locator('[data-loading-skeleton]')).toHaveCount(0);
+        await expect(owner.locator(`[data-id="${list.id}"]`)).toBeVisible();
+    } finally {
+        participantGate.release();
+        await page.unroute(pattern, delayParticipant);
+    }
+});
+
+test('loading packing and settings reveals available sections without replacing a focused draft', async ({page}, testInfo) => {
+    const list = await packingFixture(page.request);
+    const listGate = readGate();
+    const settingsGate = readGate();
+    const listPattern = '**/api/v1/packing-lists/' + list.id;
+    const settingsPattern = listPattern + '/settings';
+    async function delayList(route: Route): Promise<void> {
+        await listGate.promise;
+        await route.continue();
+    }
+    async function delaySettings(route: Route): Promise<void> {
+        await settingsGate.promise;
+        await route.continue();
+    }
+    await page.route(listPattern, delayList);
+    await page.route(settingsPattern, delaySettings);
+    try {
+        await page.goto('/frontend-pilot/packing/' + list.id + '?locale=en', {waitUntil: 'domcontentloaded'});
+        await expect(page.locator('main [data-loading-skeleton="table"]')).toBeVisible();
+        await expect(page.locator('header nav')).toBeVisible();
+        await captureState(page, testInfo, 'loading-packing-table');
+        listGate.release();
+        await expect(page.getByRole('heading', {name: list.title, exact: true})).toBeVisible();
+        await expect(page.locator('tr[data-item-id]').first()).toBeVisible();
+        await expect(page.locator('main [data-loading-skeleton]')).toHaveCount(0);
+        await captureState(page, testInfo, 'loading-packing-loaded');
+
+        await page.getByRole('button', {name: 'Entity settings', exact: true}).click();
+        const dialog = page.getByRole('dialog');
+        const title = dialog.locator('[name="title"]');
+        // The genuine metadata read completes while the independent settings read
+        // is held. Its authorized form can already accept a local draft.
+        await expect(title).toBeVisible();
+        await expect(dialog.locator('[data-loading-skeleton]')).toBeVisible();
+        await title.fill('Draft entered before access and header arrive');
+        await expect(title).toBeFocused();
+        await captureState(page, testInfo, 'loading-settings-metadata-ready', dialog, {viewportOnly: true});
+        settingsGate.release();
+        await expect(dialog.locator('[data-loading-skeleton]')).toHaveCount(0);
+        await expect(title).toHaveValue('Draft entered before access and header arrive');
+        await expect(title).toBeFocused();
+        await captureState(page, testInfo, 'loading-settings-loaded-draft', dialog, {viewportOnly: true});
+    } finally {
+        listGate.release();
+        settingsGate.release();
+        await page.unroute(listPattern, delayList);
+        await page.unroute(settingsPattern, delaySettings);
+    }
+});
+
+test('JavaScript-disabled identity pages remain message-only while native login and body-free logout retain their HTTP admission', async ({browser, baseURL}) => {
     const context = await browser.newContext({baseURL, javaScriptEnabled: false});
     try {
         const page = await context.newPage();
         const credentials = createE2ELogin();
-        await page.goto('/frontend-pilot/users/login?locale=de');
-        await page.locator('input[name="username"]').fill(credentials.username);
-        await page.locator('input[name="password"]').fill('invalid-native-password');
-        const loginForm = page.locator('form[action="/frontend-pilot/users/login"]').filter({has: page.locator('input[name="password"]')});
-        await loginForm.locator('button[type="submit"]').click();
-        await expect(page.locator('main [role="alert"]')).toBeVisible();
-        await expect(page.locator('input[name="username"]')).toHaveValue(credentials.username);
-        await expect(page.locator('input[name="password"]')).toHaveValue('');
-        await page.locator('input[name="password"]').fill(credentials.password);
-        await loginForm.locator('button[type="submit"]').click();
-        await expect(page).toHaveURL(/\/frontend-pilot\?locale=de$/);
-        expect((await bootstrap(context.request)).kind).toBe('account');
-        const logout = page.locator('form[action="/frontend-pilot/users/logout"]');
-        await page.locator('header details').filter({has: logout}).locator('summary').click();
+        await page.goto('/frontend-pilot/users/login?locale=de', {waitUntil: 'domcontentloaded'});
+        await expect(page.locator('noscript [role="alert"]')).toBeVisible();
+        await expect(page.locator('#surveyor-pilot')).toBeHidden();
+        const anonymous = await bootstrap(context.request);
+        const controls = {_context: anonymous.context, _csrf: anonymous.csrfToken,
+            _compatibility: anonymous.deployment.apiCompatibility, locale: 'de', next: '/frontend-pilot'};
+        // The fallback changes presentation only. Exercise the established native
+        // POST directly, retaining transport controls and safe credential redisplay.
+        const rejected = await context.request.post('/frontend-pilot/users/login', {maxRedirects: 0,
+            form: {...controls, username: credentials.username, password: 'invalid-native-password'}});
+        expect(rejected.ok()).toBe(false);
+        expect(await rejected.text()).not.toContain('value="invalid-native-password"');
+        const accepted = await context.request.post('/frontend-pilot/users/login', {maxRedirects: 0,
+            form: {...controls, ...credentials}});
+        expect(accepted.status()).toBe(303);
+        expect(accepted.headers().location).toBe('/frontend-pilot?locale=de');
+        const account = await bootstrap(context.request);
+        expect(account.kind).toBe('account');
         // The declared operation has no request body. Native hidden context controls
         // must still be admitted without inventing an input schema for this command.
-        await logout.locator('button[type="submit"]').click();
-        await expect(page).toHaveURL(/\/frontend-pilot\?locale=de$/);
+        const logout = await context.request.post('/frontend-pilot/users/logout', {maxRedirects: 0,
+            form: {_context: account.context, _csrf: account.csrfToken,
+                _compatibility: account.deployment.apiCompatibility, locale: 'de', next: '/frontend-pilot'}});
+        expect(logout.status()).toBe(303);
+        expect(logout.headers().location).toBe('/frontend-pilot?locale=de');
         expect((await bootstrap(context.request)).kind).toBe('anonymous');
-        await expect(page.locator('main .status-notice.alert-success')).toBeVisible();
+        await page.goto('/frontend-pilot/users/login?locale=de', {waitUntil: 'domcontentloaded'});
+        await expect(page.locator('noscript [role="alert"]')).toBeVisible();
         await expect(page.locator('html')).toHaveAttribute('lang', 'de');
-        await page.goto('/frontend-pilot/users/login?locale=de');
-        await expect(page.locator('main .status-notice.alert-success')).toHaveCount(0);
-        await expect(page.locator('input[name="password"]')).toBeVisible();
+        await expect(page.locator('#surveyor-pilot')).toBeHidden();
     } finally { await context.close(); }
 });
 
@@ -192,7 +311,7 @@ test('pilot owner keyboard dialog and mobile guest assignment retain readable, r
     await expect(edit).toBeFocused();
     const native = await page.context().newPage();
     try {
-        await native.goto(list.path);
+        await native.goto(list.path, {waitUntil: 'domcontentloaded'});
         await native.locator('button[data-bs-target="#entityPropertiesModal"]').click();
         await expect(native.locator('#entityPropertiesModal')).toBeVisible();
         await checkTabs(native.locator('#entityPropertiesModal'));
@@ -209,7 +328,7 @@ test('pilot owner keyboard dialog and mobile guest assignment retain readable, r
         expect(readOnly.status()).toBe(200);
         expect(await readOnly.json()).toMatchObject({values: {}, editableFields: []});
         const mobile = await guestContext.newPage();
-        await mobile.goto(`/frontend-pilot/packing/${list.id}`);
+        await mobile.goto(`/frontend-pilot/packing/${list.id}`, {waitUntil: 'domcontentloaded'});
         await expect(mobile.getByRole('heading', {name: list.title, exact: true})).toBeVisible();
         await expect(mobile.getByRole('button', {name: 'Entity settings', exact: true})).toHaveCount(0);
         expect(await mobile.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
@@ -513,13 +632,13 @@ test('pilot settings manage delegated access, header images, event links and arc
 test('pilot creates and duplicates complete lists through the SPA forms with row and Everyone controls', async ({page}) => {
     test.setTimeout(60_000);
     await loginForE2E(page.request, createE2ELogin());
-    await page.goto('/frontend-pilot/packing/create');
+    await page.goto('/frontend-pilot/packing/create', {waitUntil: 'domcontentloaded'});
     await expect(page.getByRole('heading', {name: 'Create packing list', exact: true})).toBeVisible();
     await page.setViewportSize({width: 390, height: 844});
     const nativeCreation = await page.context().newPage();
     try {
         await nativeCreation.setViewportSize({width: 390, height: 844});
-        await nativeCreation.goto('/packing/create');
+        await nativeCreation.goto('/packing/create', {waitUntil: 'domcontentloaded'});
         for (const candidate of [nativeCreation, page]) {
             const trigger = candidate.getByLabel('Assign to event (optional)', {exact: true});
             await trigger.click();
@@ -610,7 +729,7 @@ test('pilot overview preserves personal visibility, shared archive state and lin
     expect((await page.request.put(`/api/v1/packing-lists/${standalone.id}/items/${standaloneView.items[0]!.id}/self-assignment`,
         {headers: headers(await bootstrap(page.request))})).status()).toBe(200);
 
-    await page.goto('/frontend-pilot');
+    await page.goto('/frontend-pilot', {waitUntil: 'domcontentloaded'});
     await page.evaluate(() => { document.documentElement.dataset.pilotDocument = 'overview'; });
     const owner = page.locator('[data-collection="owner"][data-region="main"]');
     const participant = page.locator('[data-collection="participant"][data-region="main"]');
@@ -699,8 +818,8 @@ test('pilot help supports native search and isolates SSR locale and hostile prof
         const englishPage = await english.newPage();
         const germanPage = await german.newPage();
         await Promise.all([
-            englishPage.goto('/frontend-pilot/help?locale=en'),
-            germanPage.goto('/frontend-pilot/help?locale=de'),
+            englishPage.goto('/frontend-pilot/help?locale=en', {waitUntil: 'domcontentloaded'}),
+            germanPage.goto('/frontend-pilot/help?locale=de', {waitUntil: 'domcontentloaded'}),
         ]);
         await expect(englishPage.locator('html')).toHaveAttribute('lang', 'en');
         await expect(germanPage.locator('html')).toHaveAttribute('lang', 'de');
@@ -718,7 +837,7 @@ test('pilot help supports native search and isolates SSR locale and hostile prof
         const profile = session.profiles.find(item => item.name === hostileName);
         expect(profile).toBeDefined();
         expect((await english.request.get(`/users/profile/change/${profile!.id}`, {maxRedirects: 0})).status()).toBe(302);
-        await englishPage.goto('/frontend-pilot/help?locale=en');
+        await englishPage.goto('/frontend-pilot/help?locale=en', {waitUntil: 'domcontentloaded'});
         await expect(englishPage.locator('header nav')).toContainText(hostileName);
         const state = await englishPage.locator('#surveyor-pilot-state').textContent();
         expect(state).not.toContain('</script>');

@@ -1,4 +1,5 @@
 import {nextTick, watch} from 'vue';
+import type {NavigationFailure, RouteLocationNormalized} from 'vue-router';
 import {validateSessionView} from '../../../.generated/api/v1/browser/validateSessionView.mjs';
 import {validateProblem} from '../../../.generated/api/v1/browser/validateProblem.mjs';
 import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
@@ -14,6 +15,7 @@ async function start(): Promise<void> {
     if (!value || typeof value !== 'object' || !('session' in value) || !validateSessionView(value.session)
         || ('identityProblem' in value && !validateProblem(value.identityProblem))
         || ('identityFormProblem' in value && !validateProblem(value.identityFormProblem))
+        || ('packingError' in value && !['packing.notFound', 'packing.eventRegistrationRequired', 'api:errors.FORBIDDEN'].includes(String(value.packingError)))
         || ('identityFeedback' in value && !frontendIdentityFeedback.includes(value.identityFeedback as typeof frontendIdentityFeedback[number]))
         || ('personalLink' in value && typeof value.personalLink !== 'string')
         || ('identityFields' in value && (!value.identityFields || typeof value.identityFields !== 'object'
@@ -34,6 +36,14 @@ async function start(): Promise<void> {
         const {validateGuestEntry} = await import('../../../.generated/api/v1/browser/validateGuestEntry.mjs');
         if (!validateGuestEntry(value.guestEntry)) throw new Error('Invalid pilot guest bootstrap.');
     }
+    if ('packingCreateContext' in value) {
+        const {validatePackingCreateContext} = await import('../../../.generated/api/v1/browser/validatePackingCreateContext.mjs');
+        if (!validatePackingCreateContext(value.packingCreateContext)) throw new Error('Invalid pilot packing form bootstrap.');
+    }
+    if ('packingDuplicate' in value) {
+        const {validatePackingDuplicate} = await import('../../../.generated/api/v1/browser/validatePackingDuplicate.mjs');
+        if (!validatePackingDuplicate(value.packingDuplicate)) throw new Error('Invalid pilot packing duplicate bootstrap.');
+    }
     if ('overview' in value) {
         const {validateOverviewRegion} = await import('../../../.generated/api/v1/browser/validateOverviewRegion.mjs');
         if (!Array.isArray(value.overview) || !value.overview.every(validateOverviewRegion)) throw new Error('Invalid pilot overview bootstrap.');
@@ -45,6 +55,9 @@ async function start(): Promise<void> {
         ...('identityFeedback' in value ? {identityFeedback: value.identityFeedback as FrontendPilotBootstrap['identityFeedback']} : {}),
         ...('identityFields' in value ? {identityFields: value.identityFields as FrontendPilotBootstrap['identityFields']} : {}),
         ...('guestEntry' in value ? {guestEntry: value.guestEntry as FrontendPilotBootstrap['guestEntry']} : {}),
+        ...('packingError' in value ? {packingError: value.packingError as FrontendPilotBootstrap['packingError']} : {}),
+        ...('packingCreateContext' in value ? {packingCreateContext: value.packingCreateContext as FrontendPilotBootstrap['packingCreateContext']} : {}),
+        ...('packingDuplicate' in value ? {packingDuplicate: value.packingDuplicate as FrontendPilotBootstrap['packingDuplicate']} : {}),
         ...('personalLink' in value ? {personalLink: value.personalLink as string} : {}),
         ...('overview' in value ? {overview: value.overview as FrontendPilotBootstrap['overview']} : {}),
         ...('passwordReset' in value ? {passwordReset: value.passwordReset as FrontendPilotBootstrap['passwordReset']} : {}),
@@ -65,11 +78,16 @@ async function start(): Promise<void> {
     window.addEventListener('pageshow', event => {
         if (event.persisted) window.dispatchEvent(new Event('focus'));
     });
-    router.afterEach(async (to, from) => {
-        if (to.path === from.path) return;
+    /** Loading feedback preserves the current draft/focus. Move focus only after a
+     * destination actually commits, never for cancellation or an obsolete completion. */
+    async function focusDestination(to: RouteLocationNormalized, from: RouteLocationNormalized,
+                                    failure?: NavigationFailure | void): Promise<void> {
+        if (failure || to.path === from.path) return;
         await nextTick();
+        if (router.currentRoute.value.fullPath !== to.fullPath) return;
         document.getElementById('pilot-main')?.focus({preventScroll: true});
-    });
+    }
+    router.afterEach(focusDestination);
 }
 
 void start();

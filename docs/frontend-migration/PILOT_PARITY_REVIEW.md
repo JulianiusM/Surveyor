@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: current
 last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: development entry/hydration/navigation repair, real source-browser and HMR/restart verification, separate production replacement proof; approved D1–D5 rectification; full 472-image paired role/state review and 15 built behavior checks; focused final identity, native and deployment smoke review; shared-contract, current-value concurrency and final built-browser checks; preceding accepted packing/help evidence retained separately
-source-anchors: src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/frontend/frontend-route-recovery.spec.ts; tests/e2e/frontend-development.spec.ts; scripts/watch-frontend-inputs.mjs; scripts/capture-frontend-baseline.cjs; src/frontend/; src/routes/frontendPilot.ts; src/routes/api/v1/; src/modules/packing/api.ts; src/controller/entityAdminController.ts; src/views/modules/module_entity_header.pug; src/views/packing/packing-view.pug; contracts/api/v1/; src/locales/; docs/user-guide/de/; tests/frontend/packing-management-ui.spec.ts; tests/frontend/packing-view.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/integration/packing-management-api.spec.ts; tests/e2e/frontend-pilot.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; docs/FRONTEND_PILOT.md
+verification-scope: progressive skeleton/loading implementation, 955 database-free cases, full build and final frontend build, 21 built HTTP/browser checks and final 26 shared/content cases plus two loading browser cases and ten individually inspected final originals; FPR-01–06 migration-only runtime rectification, final 919 database-free cases and full build, 17 guarded integration cases, 19 final built HTTP/browser journeys and 32 individually inspected focused captures followed by 12 inspected correction captures; two source-browser checks preceded the final title/presentation corrections; FPR-07 native documentation preservation, staged cutover guidance, bounded bilingual navigation correction and advisory multilingual report with synthetic tooling checks; development entry/hydration/navigation repair, real source-browser and HMR/restart verification, separate production replacement proof; approved D1–D5 rectification; full 472-image paired role/state review and 15 built behavior checks; focused final identity, native and deployment smoke review; preceding accepted packing/help evidence retained separately
+source-anchors: src/frontend/components/LoadingSkeleton.vue; src/frontend/styles/pilot.css; tests/frontend/frontend-loading-shell.spec.ts; tests/frontend/frontend-content-loading.spec.ts; src/frontend/composables/pageTitle.ts; tests/frontend/frontend-refresh-navigation.spec.ts; scripts/capture-frontend-rectification-readonly.cjs; docs/frontend-migration/staged/DEVELOPMENT.md; src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/frontend/frontend-route-recovery.spec.ts; tests/e2e/frontend-development.spec.ts; scripts/watch-frontend-inputs.mjs; scripts/capture-frontend-baseline.cjs; src/frontend/; src/routes/frontendPilot.ts; src/routes/api/v1/; src/modules/packing/api.ts; src/controller/entityAdminController.ts; src/views/modules/module_entity_header.pug; src/views/packing/packing-view.pug; contracts/api/v1/; src/locales/; docs/user-guide/de/; tests/frontend/packing-management-ui.spec.ts; tests/frontend/packing-view.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/integration/packing-management-api.spec.ts; tests/e2e/frontend-pilot.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; docs/FRONTEND_PILOT.md
 next-review: pilot-UI-behavior-change-or-feature-cutover
 -->
 
@@ -422,3 +422,238 @@ mail delivery was captured in memory. It ran no schema reset, deletion or busine
 No subsequent cleanup or other operation against that target was performed. Capture now requires an explicit
 environment file and schema acknowledgement, and rejects credentials granting access to another schema or a
 wildcard schema pattern. Passing evidence uses the restricted disposable database at port 33318.
+
+## Documentation rectification, 2026-10-08
+
+FPR-07 preserves native production descriptions while staging the prospective frontend replacement. The native
+reference is pre-pilot documentation at `2dfa257`, not proof of a site's deployed commit. README, Architecture,
+Development, Testing and Database retain that native contract, together with current non-pilot source-path
+corrections and an explicit link to the staged checkout instructions. Canonical Operations, Upgrading and
+Configuration keep their existing procedures. Frontend-specific architecture/development/testing/database
+replacements, the README and visual guide are temporary full copies under `docs/frontend-migration/staged/`;
+Operations and Upgrading are narrow merge supplements. Each draft identifies its canonical target and cutover
+boundary. The existing pilot guide owns the merge inventory; no new plan or control registry was introduced.
+
+The staged development recipe now consistently covers declaration-file/generated contract ownership, controller
+and pure DBAL boundaries, reuse of native permissions/admission, shared read/draft/departure/update owners,
+metadata empty/null equivalence, authoritative refresh without input loss, reachable uncertain-command recovery,
+scaffold TODOs, human-readable helpers/comments/spacing, JavaScript-required or read-only fallback, and focused
+verification. The watcher explanation now distinguishes authored-input regeneration from Express-owned Vite HMR.
+The staged architecture records generated Ajv validation and removes the abandoned persisted packing-revision
+claim. The assignment-ID table is corrected to the already-authored decimal-string/null representation rather
+than declaring a new wire-format choice.
+
+The foundation and detailed framework/contract/refresh/localization records retain the original choices and
+D1–D5, with explicit dated maintainer amendments for migration-only scope, current help/packing completeness,
+future Overview/other increments, JavaScript fallback, active-read recovery and production documentation staging.
+General authentication/session redesign, authorization-framework rework and broad legacy race/lock hardening
+remain independently deferred. One task-only global localization guide and its German counterpart are staged
+outside production help; they describe the actual browser-scoped preference and limited translated coverage,
+without account preference, universal translation or email/PDF localization claims.
+
+Prospective English/German localized header figures remain staged byte-for-byte with their original 2026-10-07
+acceptance history. Production navigation illustrations were rendered with the existing authoring composition
+and the actual canonical native Pug header, using fictional account data and no public implementation/provenance
+footer. German explanatory copy retains the actual native English menu labels; native navigation does not
+translate them. Only the German home image caption/description and hidden provenance were aligned with that
+picture; feature task procedures were not rewritten. Each final 1440 × 1065 export, separate 768px and 298px
+preview and actual 1344px header crop was opened individually. There is no clipping, collision or annotation over
+a control; the narrow preview retains written procedures and a full-size link. Final hashes are recorded in the
+canonical visual guide. The localized future caption remains staged. Authoring adaptations and fingerprints stay
+in ignored `.temp/frontend-docs-rectification/` evidence; no new illustration subsystem or committed runtime
+helper is required.
+
+The existing optional help report now discovers fixed corpus routing from authored locale catalogs. It reports
+20 articles, 390 links and six embedded images across the English and German corpora, with independent per-corpus
+references and no cross-language fallback. The three added synthetic tooling cases protect discovery, missing
+local articles/assets and invalid corpus routing. `node --test scripts/tests/documentation-check.test.mjs` passed
+33 cases; these fixtures do not read maintained prose. No CI, lifecycle, application-test or release gate was added.
+Exact optional-path occurrence allowances were updated for the expressly required staged copies; the explanatory
+reasons identify their removal at cutover. Historical source fingerprints were not rewritten.
+
+`npm run docs:check -- --output-dir test-results/frontend-pilot-rectification/documentation-final` completed as
+an advisory report with zero broken links, missing npm scripts or missing documented paths. Its remaining
+20 structural findings are the historical source-fingerprint mismatch and 19 ignored local report files without
+maintained-document metadata. The separate help finding is the intentionally retained controls illustration,
+whose refresh remains in the existing backlog. These findings are retained; an advisory exit zero is not a clean
+report. Completed archival, Overview and entity-properties design histories and prior pilot decision/review
+records remain because they contain unique behavioral and ownership evidence.
+
+This documentation/tooling increment started no application or database, performed no schema reset and claims
+no new runtime parity, browser, deployment, migration or authentication-provider evidence. The prior default-local
+`cgd_e2e` diagnostic at port 3306 remains excluded exactly as recorded above; valid earlier browser evidence used
+the restricted explicitly disposable schema at port 33318. This entry neither changes nor extends that evidence.
+
+## Frontend runtime rectification, 2026-10-08
+
+FPR-01–06 implement the known findings under the migration-only boundary in the
+[pilot implementation record](../FRONTEND_PILOT.md#rectification-implementation-2026-10-08). Existing business
+behavior, controller/DBAL responsibilities, native grants and D1–D5 remain the baseline. No authentication system,
+general permission framework, schema change or repository-wide lock protocol was introduced. The independent
+`BACKEND-HARDENING-01` backlog retains that work; Overview and other future increments retain source TODOs.
+
+Metadata drafts now use one empty/null comparison rule and retain their original baseline separately from current
+authority. Unknown PATCH recovery remains reachable even when values have been reverted or the current token is
+unchanged. Explicit Review releases uncertainty without replay; the settings dialog owns one departure decision.
+A rejected 412 uses the internal authoritative read while the command is still pending, whereas public Refresh
+remains blocked during an actual command. A confirmed save followed by a failed settings read remains saved.
+Identity/guest forms use complete dirty predicates and the shared command/departure/update owner. Selected-event
+display follows current authority independently of the draft ID; eligible recovery is bounded at 60 seconds, while
+healthy refresh, visibility and server cooldown rules remain. Overview search preserves native debounce, input
+focus, other regions and navigation/history semantics.
+
+Packing HTML uses native resource loading and page admission before rendering, including missing-resource 404s,
+standalone guest entry and attached event/view alternatives. Duplicate GET retains its native `DATA_DUPLICATE`
+grant independently of account-only creation POST. Its existing public form context is returned with the copy for
+initial and SPA navigation, avoiding an unrelated account-only read. Root/item field declarations serve both
+capabilities and submitted-field checks through their existing owners. Interactive pages have a localized
+JavaScript-required message outside the hidden hydration root; help and admission errors remain readable.
+
+The built browser check exposed a title-effect loop introduced by the admission wrapper: both it and the packing
+feature subscribed to the shared title they wrote. The existing `usePageTitle` helper now derives the document
+title from its local formatted value, and an undefined wrapper title leaves ownership with the feature. A real
+PackingEntry component regression checks browser title and locale transitions. Individual image inspection then
+found a bare admission notice instead of the native Error card/Home action, and review wording claiming a list
+change after an unchanged-authority read. Packing admission branches now reuse the existing `PageMessage`;
+unknown review describes uncertainty independently of actual changes. The staged implementation recipe records
+these ownership/presentation rules and requires hydrated behavior rather than treating successful SSR as proof.
+
+| Executed check | Result and boundary |
+|---|---|
+| `npx cross-env TZ=UTC npm run test:quick` | Final source passed 919 cases in 55 files. The focused 46 cases overlap this total. |
+| Final `npm run build` | Passed Sass, generated contracts/catalogs, server TypeScript, both Vue entry type checks, client/SSR compilation and asset/view copies. Existing Sass/Bootstrap deprecation warnings remain. |
+| Focused packing/fallback components | Final presentation correction passed 46 cases, including title/locale ownership, query-free admission cards and unknown-response recovery. |
+| Guarded `packing-management-api.spec.ts` | 17 cases passed through real persistence, transactions and controllers. The exercised controller/DBAL behavior was unchanged afterward. |
+| `frontend-development.spec.ts` | Two source-browser checks passed: source assets, lazy navigation/locales and early overview input retention. These preceded the title/presentation corrections and do not certify source PackingEntry execution. |
+| `frontend-pilot-api.spec.ts`; `frontend-pilot.spec.ts` | Final built run passed all 19 cases: nine HTTP/admission/API checks and ten browser journeys. |
+| `node --test scripts/tests/documentation-check.test.mjs` | 33 synthetic tooling cases passed; maintained prose is not an application-test dependency. |
+
+The final API identifier is `a2d67f9e5665` (45 operations, 71 schemas); the locale identifier is `a25f5659d7dd`
+(two locales, 422 messages). Final built journeys exercise native-equivalent admission and error-card/Home markup,
+CSRF/context/privacy, stale edits, unknown outcomes, mobile assignment, item edits/reordering, settings,
+creation/duplication, personal overview navigation and help. Evidence is under
+`.temp/frontend-foundation/fpr-corrections-final-evidence/`; the guarded runtime log is
+`.temp/frontend-foundation/fpr-parity-server-corrections.log`. The preceding 19-case result at
+`fpr-built-stable-evidence` preceded the final presentation correction and remains separate historical evidence.
+
+All 32 originals under `test-results/frontend-rectification-readonly/2026-10-08T09-27-36-677Z/` were opened
+individually: eight English/German native/pilot help scenes and 24 packing, settings, recovery, disabled-JavaScript
+and missing-resource scenes. Normal packing/settings layout matched native apart from established pilot controls;
+help layout/images matched within each language pair. Message-only fallback and readable help showed no clipping
+or page-wide overflow. The four affected pilot 404/review-top originals are superseded by the correction set.
+
+All 12 originals under `test-results/frontend-rectification-readonly/2026-10-08T09-41-55-975Z/` were then opened
+individually at 1440 × 1000 and 390 × 844. Native/pilot 404s share the Error card, icon and Home action while retaining
+404 and pilot localization. Unchanged-authority review no longer claims another edit. Scrolled Review controls fit
+above the fixed footer; clicking Review removes uncertainty, retains the unsent draft and enables Save. Both
+complete manifests report zero application/asset errors and horizontal overflow. Each run's two failed requests
+are exactly its two deliberately intercepted PATCHes. The correction run records two real GET304 recovery reads
+and exactly one intercepted PATCH per journey, with no replay after Review. The earlier capture also proves two
+hydrated packing Refresh interactions returning GET304.
+
+The tracked optional capture helper blocks browser mutations before dispatch. Its only session-establishment
+exception is one native login of an existing fictional account; credentials/cookies remain in memory. It creates
+no business fixtures, changes no schema and controls no server. Recovery images demonstrate simulated response
+loss against real unchanged read authority, not a backend write; component cases cover before/after-write loss,
+and the real browser journeys cover lost assignment responses and confirmed-save/read-failure behavior. Partial
+unbounded/font-phase attempts are excluded rather than counted as successful capture evidence.
+
+Database checks explicitly selected MariaDB at `127.0.0.1:33318` and proved credentials had only USAGE and grants
+on their exact escaped schema before execution. Integration used disposable `surveyor_frontend_test` through
+`node .temp/frontend-foundation/run-guarded-integration.cjs tests/integration/packing-management-api.spec.ts`;
+the integration runner rebuilt that selected disposable schema as designed. Built HTTP/browser/capture checks
+selected `surveyor_frontend_e2e` via `.temp/frontend-foundation/e2e.env` and the existing-server
+`fpr-admission.config.ts`, with one worker and no initializer/reset. Normal controller fixture writes remain part
+of the HTTP/browser tests. Source checks used `surveyor_rectification_e2e` through the config-binding development
+starter, also without an initializer/reset; their output is `.temp/frontend-foundation/fpr-development-final-evidence/`.
+No operation in this increment selected the default port-3306 target. The earlier excluded diagnostic remains
+recorded above and does not become passing evidence.
+
+An interrupted source attempt restarted during concurrent generation/build and is excluded. Earlier built attempts
+with an interrupted runtime, test-fixture/locator corrections or the diagnosed title loop are likewise excluded;
+only `fpr-corrections-final-evidence` is the final 19-case result. Owned source/built application process trees were
+stopped after testing/capture; ports 3106/3189 are closed and the pre-existing isolated MariaDB remains untouched.
+Source startup/HMR and deployment-replacement evidence from earlier increments remains historical. No full
+472-image comparison, other browser engine, live OIDC provider round trip, application-wide cutover or deployment
+was rerun or performed for this correction. The documented native/scaffold/backlog boundaries remain in force.
+
+The final optional `docs:check` report at
+`test-results/frontend-pilot-rectification/documentation-completion/` found zero broken links, missing npm scripts
+or missing documented paths. Its 53 structural findings are the retained historical source-fingerprint mismatch
+and 52 ignored local report/error-context Markdown files without maintained-document metadata. The separate help
+finding remains the intentionally retained controls illustration. These advisory findings were not hidden,
+rebaselined or turned into delivery gates; exit zero does not mean a clean report.
+
+## Progressive loading implementation, 2026-10-08
+
+The maintainer explicitly requested skeleton loading and independent, incremental delivery for slow pages. The
+[dated delivery amendment](../FRONTEND_FOUNDATION_DESIGN.md#authorized-progressive-delivery-amendment-2026-10-08)
+preserves the original decisions and D1–D5. This increment changes frontend delivery and presentation; existing
+domain rules, authentication, permission declarations, controller/DBAL owners and the iteration scope remain.
+
+The shared `LoadingSkeleton.vue` supplies short-line, field, table, card and article shapes, one localized status
+per loading region, responsive layout and reduced-motion CSS. Its decorative shapes carry no fabricated records,
+counts, actions or field authority. Initial status remains outside busy state; loaded projections report their
+background reads as busy. Confirmed empty results and terminal errors end initial placeholders.
+
+Interactive Overview HTML now returns the authoritative session and Vue shell without sequentially reading all
+four regions. Each open region uses its existing scoped API/controller and renders independently; an open hidden
+deep link need not wait for main counts. Read-only help retains complete SSR. Packing, creation/duplication,
+metadata, guest entry, identity admission, help navigation and event discovery use the shared loading owner.
+Packing settings schedules its metadata read alongside full settings when the known list capability permits,
+with permissions and tokens still supplied by each endpoint. Available content appears immediately; subsequent
+reads retain the mounted form and its draft. Same-resource locale failures retain known packing content with
+existing stale feedback, while confirmed denial or a different resource removes that projection. Lazy route
+delivery displays progress over the current view, and destination focus waits for an actual navigation commit.
+
+| Executed check | Result and boundary |
+|---|---|
+| `npm run build` | Passed server compilation, both Vue type checks, client/SSR builds and asset/view copies. Existing Sass/Bootstrap deprecation warnings remain. |
+| `npx cross-env TZ=UTC npm run test:quick` | Logic and component source passed 955 cases in 57 files, including the final initial/background busy assertions. The later decorative card-layout correction changes no query, command or draft logic. |
+| Shared loading/shell/hydration focus | 30 cases passed: five shared variants, valid parsed SSR markup, one status, delayed/cancelled/redirected/superseded lazy navigation and existing shell/hydration behavior. These overlap the quick total. |
+| Feature loading focus | Packing passed 48 cases; identity and selected-event/navigation passed 37; Help/Overview passed eight before the final busy assertions. The final quick run covers those assertions. These overlap the quick total. |
+| Final shared/component focus | After the card utility refinement, shared skeleton/navigation and Help/Overview passed all 26 focused cases. The same scenarios are included in the quick total above. |
+| Built `frontend-pilot-api.spec.ts`; `frontend-pilot.spec.ts` | All 21 cases passed: nine HTTP/admission/API checks and 12 browser journeys, including the two new held-read checks. This precedes the decorative card-layout correction. |
+| Initial loading-only browser capture | Both held-read cases passed with ten desktop/mobile original screenshots. Real media emulation confirmed stopped skeleton animation for reduced motion. |
+| Final `npm run build:frontend` | Passed both Vue type checks and matching client/SSR compilation after replacing duplicated card-layout CSS with existing Bootstrap utilities. |
+| Final loading-only browser capture | Both held-read cases passed again on the final build; all ten final desktop/mobile originals were individually inspected. |
+
+Built evidence is under `.temp/frontend-foundation/fpr-loading-built-evidence/`; initial loading captures are under
+`.temp/frontend-foundation/fpr-loading-visual-evidence/`. Both Playwright run records report passed with no failed
+tests. Capture uses the existing optional `E2E_PILOT_STATE_SCREENSHOTS=true` checkpoints and the bounded grep
+`loading (overview regions|packing and settings)`. The initial anchored grep selected no tests and is excluded
+from passing evidence. Network gates delay real API delivery only; fixtures, payloads, session admission and
+controller workflows remain real. No synthetic backend projection replaces the built workflows.
+
+All ten initial originals were opened individually at 1440 × 1000 and 390 × 844. The owner Overview region is
+already usable while the participant region remains skeletal. The missing packing table has visible muted shapes,
+and its completed title/counters/table/form return to the prior baseline. Settings metadata and a focused entered
+title are usable while the remaining settings skeleton is visible. Completed settings remove the skeleton and
+preserve that same focused draft, with native desktop/mobile dialog proportions and reachable Close/Save controls.
+The browser assertions verify draft value and focus after both actual responses complete. Inspection found the
+shared card skeleton used three desktop columns while real cards use four. Shared card shapes now reuse the
+existing Bootstrap row/column utilities and gutters, avoiding duplicated breakpoint/spacing rules and feature
+overrides.
+
+After that decorative correction, `npm run build:frontend` passed and the two loading journeys passed again under
+the same guarded setup. All ten originals under `.temp/frontend-foundation/fpr-loading-final-visual-evidence/`
+were opened individually and supersede the preliminary set. Desktop skeleton card widths now match the ready
+sibling cards at approximately 316 pixels within the 1440-pixel viewport, with the same native gutters. Mobile
+cards form one contained column. The pending participation region remains skeletal while the real owner card,
+actions and counts are usable. Packing and settings retain the confirmed loaded layout, focused title draft,
+reachable controls and ordinary mobile table scroll, with no remaining placeholder or page-wide overflow.
+The final run record reports passed with no failed tests. This is a bounded Chromium desktop/mobile inspection;
+intermediate tablet geometry and a live screen-reader session were not separately inspected. Reduced motion is
+covered by actual browser media emulation, rather than inferred from still screenshots.
+
+The guarded built runtime selected `127.0.0.1:33318/surveyor_frontend_e2e` through the existing isolated environment
+and config. Startup verified credentials restricted to that exact schema before application construction. It
+ran no initializer, schema reset or process-level retention jobs. Normal HTTP fixture writes remain part of
+these tests. The owned built server and its child were stopped afterward; ports 3189/3106 are closed and the
+pre-existing isolated MariaDB remains running. No default-port-3306 operation occurred in this increment.
+
+API/catalog identifiers remain `a2d67f9e5665` and `a25f5659d7dd`; no contract, locale, schema or DBAL change was
+needed for loading. This increment did not rerun database integration, the full 472-image comparison, source
+startup/HMR, deployment replacement, another browser engine or a live provider round trip. Prior evidence remains
+historical. Production user/operator/developer documentation is unchanged by this loading increment; reusable
+loading and test guidance is staged until cutover. The existing native/scaffold/backlog boundaries still apply.

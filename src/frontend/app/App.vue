@@ -1,15 +1,45 @@
 <script setup lang="ts">
-import {ref} from 'vue';
-import {RouterLink, RouterView} from 'vue-router';
+import {onBeforeUnmount, ref, shallowRef} from 'vue';
+import {RouterLink, RouterView, useRouter} from 'vue-router';
+import type {RouteLocationNormalized} from 'vue-router';
 import {usePilot} from './context';
 import StatusNotice from '../components/StatusNotice.vue';
 import ActionButton from '../components/ActionButton.vue';
 import AppHeader from '../components/AppHeader.vue';
 import AppFooter from '../components/AppFooter.vue';
+import LoadingSkeleton from '../components/LoadingSkeleton.vue';
 
 const context = usePilot();
 const {messages, session, epoch, ready, notice} = context;
 const localeError = ref(false);
+const router = useRouter();
+const pendingNavigation = shallowRef<RouteLocationNormalized>();
+// Lazy route modules resolve before currentRoute commits. Keep that current view
+// mounted, including its drafts and focused controls, while indicating delivery.
+// These guards are application-owned, never shared between server-rendered requests.
+const removeNavigationStart = router.beforeEach(beginNavigation);
+const removeNavigationFinish = router.afterEach(finishNavigation);
+const removeNavigationError = router.onError(failNavigation);
+onBeforeUnmount(() => {
+    removeNavigationStart();
+    removeNavigationFinish();
+    removeNavigationError();
+});
+
+function beginNavigation(to: RouteLocationNormalized, from: RouteLocationNormalized): void {
+    // Query/fragment updates have their own already mounted resource owners.
+    pendingNavigation.value = to.path !== from.path ? to : undefined;
+}
+
+function finishNavigation(to: RouteLocationNormalized): void {
+    // A cancelled older import must not clear the newer destination's indicator.
+    if (pendingNavigation.value === to) pendingNavigation.value = undefined;
+}
+
+function failNavigation(_error: unknown, to: RouteLocationNormalized): void {
+    finishNavigation(to);
+}
+
 async function retrySession(): Promise<void> {
     try { await context.refreshSession(); }
     catch { localeError.value = true; }
@@ -31,6 +61,9 @@ async function retrySession(): Promise<void> {
                     </ActionButton>
                 </StatusNotice>
             </div>
+            <!-- Delivery progress supplements the current route. Replacing RouterView here
+                 would discard mounted edits and turn navigation latency into input loss. -->
+            <LoadingSkeleton v-if="ready && pendingNavigation" class="pilot-navigation-loading mb-3" :rows="1" />
             <RouterView v-if="ready" :key="epoch" />
             <section v-else class="card bg-dark text-white p-4">
                 <p>{{ messages.t('state.sessionChanged') }}</p>

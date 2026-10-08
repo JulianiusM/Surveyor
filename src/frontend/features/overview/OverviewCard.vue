@@ -6,6 +6,10 @@ import {usePilot} from '../../app/context';
 import {usePackingHeader} from '../../composables/packingHeader';
 import {useDropdownPlacement} from '../../composables/dropdownPlacement';
 import ActionButton from '../../components/ActionButton.vue';
+
+// TODO (docs/FRONTEND_PILOT.md): Migrate non-packing detail/administration destinations
+// with their feature owners. These mixed Overview cards deliberately keep working native
+// links until then; their shared projection does not make those workflows complete.
 const props = defineProps<{
     card: components['schemas']['OverviewCard'];
     disabled?: boolean;

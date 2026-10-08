@@ -1,5 +1,5 @@
 import {Router} from 'express';
-import type {Request, Response} from 'express';
+import type {NextFunction, Request, Response} from 'express';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {captureApiActor, identityTransitionGuard, requireApiContext, sessionView} from '../modules/api/session';
 import {ApiProblem, classifyApiError, requestLocale, validatedProblemBody} from '../modules/api/problem';
@@ -13,12 +13,28 @@ import {persistSession} from '../modules/lib/session';
 import {ExpectedError} from '../modules/lib/errors';
 import settings from '../modules/settings';
 import {validateApiInput} from '../modules/api/transport';
-import {readOverview} from '../modules/overview/api';
 import * as packingService from '../modules/database/services/PackingService';
-import type {components, operations} from '../types/api/v1';
+import type {components} from '../types/api/v1';
 import type {ApiOperationId} from '../types/ApiTransportTypes';
+import {paramHandler} from '../middleware/paramHandler';
+import {requirePermission} from '../middleware/permissionMiddleware';
+import {canAccessEntityView} from '../controller/entityAdminController';
+import {getPermFct, getResource} from '../modules/lib/util';
+import {PERM} from '../modules/lib/permissions';
+import type {PackingList} from '../modules/database/entities/packing/PackingList';
+import {packingFormContext, readPackingDuplicate} from '../modules/packing/api';
 
 const router = Router();
+
+// Reuse the native resource loader: malformed and absent IDs are HTML 404s, and
+// every packing URL (including guest entry) resolves the same current parent.
+paramHandler('listId', router, packingService.getPackingListById, 'packing');
+
+function packingResource(req: Request): PackingList {
+    return getResource(req, 'packing') as PackingList;
+}
+
+const packingPermissionSubject = getPermFct(packingResource, 'packing');
 
 function applyNativePresentationLocale(req: Request): void {
     // Native GET language selection changes only presentation, never business state or authority.
@@ -41,41 +57,75 @@ async function bootstrap(req: Request): Promise<FrontendPilotBootstrap> {
 
 router.get('/', asyncHandler(async function renderOverviewPilot(req, res) {
     const state = await bootstrap(req);
-    if (state.session.activeProfile) {
-        const actor = await captureApiActor(req);
-        state.overview = [];
-        // Native links/search submit the same independent region parameters as the enhanced view.
-        // The existing overview controller owns normalization and authorization for every kind.
-        for (const collection of ['participant', 'owner'] as const) {
-            for (const region of ['main', 'hidden'] as const) {
-                const query: operations['getOverview']['parameters']['query'] = {collection, region};
-                const prefix = `${collection}_${region}_`;
-                for (const key of ['q', 'type', 'page', 'childPage', 'eventId'] as const) {
-                    const value = req.query[prefix + (key === 'eventId' ? 'event' : key)];
-                    if (typeof value === 'string') Object.assign(query, {[key]: value});
-                }
-                state.overview.push(await readOverview(query, actor));
+    // Interactive Overview sends its authoritative session and shared shell first.
+    // Mounted regions read their existing URL state independently through the same
+    // authorized API/controller; a slow region cannot delay its siblings or this HTML.
+    // Collapsed regions do not perform work until they are opened. Read-only Help
+    // retains its complete server projection and disabled-JavaScript contract.
+    await renderFrontendPilot(res, req.originalUrl, state);
+}));
+
+/** Refresh the ordinary session before native permission middleware reads it. */
+async function admitPackingSession(req: Request, _res: Response, next: NextFunction): Promise<void> {
+    await captureApiActor(req);
+    next();
+}
+
+router.get('/packing/create', asyncHandler(async function renderPackingCreatePilot(req, res) {
+    const state = await bootstrap(req);
+    // Native create GET requires an account; duplicate GET deliberately does not.
+    if (state.session.kind !== 'account' || !state.session.activeProfile) {
+        return res.redirect(nativeFrontendReturn(req, `/frontend-pilot/users/login?next=${encodeURIComponent(req.originalUrl)}`));
+    }
+    state.packingCreateContext = packingFormContext();
+    await renderFrontendPilot(res, req.originalUrl, state);
+}));
+
+router.get('/packing/:listId/duplicate', asyncHandler(admitPackingSession),
+    requirePermission(packingPermissionSubject, PERM.DATA_DUPLICATE),
+    asyncHandler(async function renderPackingDuplicatePilot(req, res) {
+        const state = await bootstrap(req);
+        try {
+            state.packingDuplicate = await readPackingDuplicate(packingResource(req).id, await captureApiActor(req));
+        } catch (error) {
+            // The snapshot repeats native duplication admission. If the source
+            // disappeared or its grant changed, preserve the same HTML outcome.
+            if (error instanceof ApiProblem && ['NOT_FOUND', 'FORBIDDEN'].includes(error.code)) {
+                throw new ExpectedError(error.code, 'error', error.status);
             }
+            throw error;
         }
+        await renderFrontendPilot(res, req.originalUrl, state);
+    }));
+
+router.get('/packing/:listId', asyncHandler(async function renderPackingPilot(req, res) {
+    const state = await bootstrap(req);
+    const list = packingResource(req);
+    // Attached-list admission precedes guest entry in the native route. A profile
+    // may enter through event membership or an explicit ACCESS_VIEW alternative.
+    if (list.eventId) {
+        if (!await canAccessEntityView('packing', list, req.session)) {
+            throw new ExpectedError('You must be registered for the event to access this resource');
+        }
+    } else if (!state.session.activeProfile) {
+        return res.redirect(nativeFrontendReturn(req, `/frontend-pilot/packing/${list.id}/guest`));
     }
     await renderFrontendPilot(res, req.originalUrl, state);
 }));
 
-router.get(['/packing/create', '/packing/:listId/duplicate', '/packing/:listId'], asyncHandler(async function renderPackingPilot(req, res) {
-    await captureApiActor(req);
-    await renderFrontendPilot(res, req.originalUrl, await bootstrap(req));
-}));
-
 async function guestBootstrap(req: Request): Promise<FrontendPilotBootstrap> {
     const state = await bootstrap(req);
-    const list = await packingService.getPackingListById(String(req.params.listId));
-    if (!list) throw new ApiProblem('NOT_FOUND');
+    const list = packingResource(req);
     // The native guest entry discloses its title before item/view permission, exactly like the API.
     state.guestEntry = {id: list.id, title: list.title};
     return state;
 }
 router.get('/packing/:listId/guest', asyncHandler(async function renderGuestPilot(req, res) {
-    await renderFrontendPilot(res, req.originalUrl, await guestBootstrap(req));
+    const state = await guestBootstrap(req);
+    if (state.session.activeProfile) {
+        return res.redirect(nativeFrontendReturn(req, `/frontend-pilot/packing/${packingResource(req).id}`));
+    }
+    await renderFrontendPilot(res, req.originalUrl, state);
 }));
 
 /** Native forms carry the same context/CSRF/compatibility values as fetch headers. Preserve
@@ -307,6 +357,23 @@ async function renderHelpPilot(req: Request, res: Response): Promise<void> {
 }
 router.get('/help', asyncHandler(renderHelpPilot));
 router.get('/help/:doc', asyncHandler(renderHelpPilot));
+
+/** Preserve native packing statuses while rendering only known, localized admission messages. */
+router.use(async function renderPackingAdmissionError(error: unknown, req: Request, res: Response, next: NextFunction) {
+    if (!req.path.startsWith('/packing/') || !(error instanceof ExpectedError)) return next(error);
+    const packingError = error.status === 404 ? 'packing.notFound'
+        : error.status === 403 ? 'api:errors.FORBIDDEN'
+            : error.message === 'You must be registered for the event to access this resource' ? 'packing.eventRegistrationRequired' : null;
+    if (!packingError) return next(error);
+    try {
+        const state = await bootstrap(req);
+        state.packingError = packingError;
+        res.status(error.status);
+        await renderFrontendPilot(res, req.originalUrl, state);
+    } catch (renderError) {
+        next(renderError);
+    }
+});
 router.use(function missingPilotRoute(_req, _res, next) {next(new ApiProblem('NOT_FOUND'));});
 
 export default router;

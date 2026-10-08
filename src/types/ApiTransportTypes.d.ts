@@ -25,4 +25,3 @@ export interface ApiOperationContract {
 
 export interface ApiProblemContract {code: string; status: number; messageKey: string; paramsSchema: unknown;}
 export interface ApiContractManifest {sourceHash: string; apiCompatibility: string; operations: ApiOperationContract[]; problems: ApiProblemContract[];}
-

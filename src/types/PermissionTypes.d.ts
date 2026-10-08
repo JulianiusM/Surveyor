@@ -23,6 +23,12 @@ import type {EntityItemType, EntityType, PartialRecord} from "./UtilTypes";
 
 export type PermType = keyof typeof PERM;
 
+/** A field's own grant and deliberate any-of parent fallback share one declaration. */
+export interface PermissionFieldRule {
+    permission: PermType;
+    parent?: PermType | PermType[];
+}
+
 export type GetResource = (req: Request) => any;
 export type GetAdditional = (req: Request) => any[];
 export type EntityGetter = (req: Request) => Promise<EntityDescriptor> | EntityDescriptor;

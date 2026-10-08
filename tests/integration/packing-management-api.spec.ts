@@ -261,7 +261,7 @@ describe('complete versioned packing management', () => {
         await expect(packingController.updateProperties(entity, {title: 'Revoked grant'}, actor(editor))).rejects.toMatchObject({status: 403});
     });
 
-    it('preserves guest administration but prohibits account-only create/duplicate and owner-only root deletion', async () => {
+    it('preserves guest administration and duplicate GET but prohibits account-only creation and owner-only root deletion', async () => {
         const id = await fixture();
         const guest = await userService.createGuest('Packing guest administrator');
         const session: SessionLike = {auth: {guest}, profile: guest.profile};
@@ -269,7 +269,9 @@ describe('complete versioned packing management', () => {
         const settings = await packing.readPackingSettings(id, session);
         expect(settings.capabilities).toMatchObject({duplicate: false, remove: false, managePermissions: true, editHeader: true});
         await expect(packing.createPackingList(creation(), undefined, session)).rejects.toMatchObject({status: 403});
-        await expect(packing.readPackingDuplicate(id, session)).rejects.toMatchObject({status: 403});
+        const duplicate = await packing.readPackingDuplicate(id, session);
+        expect(duplicate).toMatchObject({title: 'Complete packing', formContext: {permissions: expect.any(Array)}});
+        expect(contractValidator('PackingDuplicate')(duplicate)).toBe(true);
         await expect(packing.deletePackingList(id, session)).rejects.toMatchObject({status: 403});
         await adminService.addAdmin('packing', id, editor.id, DEFAULT_PERM.ADMIN);
         await expect(packing.deletePackingList(id, actor(editor))).rejects.toMatchObject({status: 403});

@@ -6,17 +6,74 @@ owner: frontend migration maintainers
 status: current
 last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: ordinary development loading, hydration, lazy navigation, HMR and serialized generator restart verification; approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; independent packing, management, mixed overview and identity workflows; prior permission-specific paired review; focused desktop/mobile overview and language-owned help-figure smoke checks; full English/German help corpus through API, SSR and SPA; generated contracts, conditional commands and build integration
-source-anchors: src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/e2e/frontend-development.spec.ts; contracts/api/v1/; scripts/generate-api.mjs; scripts/generate-locales.mjs; src/frontend/; src/routes/api/v1.ts; src/routes/frontendPilot.ts; src/modules/api/; src/modules/packing/api.ts; src/modules/frontendPilotRenderer.ts; src/modules/localization/translator.ts; package.json; vite.config.mts; tests/unit/frontend-contracts.spec.ts; tests/unit/frontend-generation.spec.ts; tests/unit/frontend-localization.spec.ts; tests/frontend/frontend-pilot.spec.ts; tests/integration/packing-api.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-pilot.spec.ts
+verification-scope: shared skeleton, progressive independent reads and preserved draft/focus loading boundaries; implemented frontend rectification under the maintainer-directed migration-only scope and independent deferral of backend hardening; actual execution evidence remains in the paired review record; ordinary development loading, hydration, lazy navigation, HMR and serialized generator restart verification; approved D1–D5 rectification source/ownership and documentation consistency review; independent packing, management, mixed overview and identity workflows; prior permission-specific paired review; focused desktop/mobile overview and language-owned help-figure smoke checks; full English/German help corpus through API, SSR and SPA; generated contracts, conditional commands and build integration
+source-anchors: src/frontend/components/LoadingSkeleton.vue; tests/frontend/frontend-loading-shell.spec.ts; tests/frontend/frontend-content-loading.spec.ts; docs/documentation-remediation.yml; src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/e2e/frontend-development.spec.ts; contracts/api/v1/; scripts/generate-api.mjs; scripts/generate-locales.mjs; src/frontend/; src/routes/api/v1.ts; src/routes/frontendPilot.ts; src/modules/api/; src/modules/packing/api.ts; src/modules/frontendPilotRenderer.ts; src/modules/localization/translator.ts; package.json; vite.config.mts; tests/unit/frontend-contracts.spec.ts; tests/unit/frontend-generation.spec.ts; tests/unit/frontend-localization.spec.ts; tests/frontend/frontend-pilot.spec.ts; tests/integration/packing-api.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-pilot.spec.ts
 next-review: frontend-pilot-scope-or-default-route-cutover
 -->
+
+## Migration boundary and current iteration (2026-10-08)
+
+The task is to migrate the existing frontend to the approved architecture while preserving the native application's
+business behavior and nearly identical UI/UX. Backend work is limited to the contract, projection and adapter support
+needed by that migration. Reuse existing controller operations, permission declarations, authentication flows and
+DBAL transactions; do not turn frontend migration into authentication redesign, broader authorization hardening,
+new domain validation or repository-wide locking changes. Preserve the already approved D1–D5 amendments.
+
+| Area | Current iteration obligation |
+|---|---|
+| Help and packing | Complete their frontend migration against the existing behavior and edge-case baseline. |
+| Shared frontend foundation and necessary identity/selectors | Complete the infrastructure and existing journeys needed to use help and packing. This does not complete broader account or event administration. |
+| Overview and other implemented feature scaffolds | Review their implemented parts for native behavior, modularity and readability; mark missing migration work with purposeful TODOs. |
+| Remaining native feature workflows and outputs | Retain their existing destinations and contracts until their migration increments. They remain in the eventual migration scope. |
+
+The pilot expands over successive iterations until it covers the approved native migration scope. A future feature
+is not permanently excluded, and its existing code is not exempt from review. Distinguish implementation presence,
+feature completeness and actual verification; missing future functionality is not the same as a behavioral regression.
+
+### Rectification implementation (2026-10-08)
+
+The completed review and the maintainer's migration-only scope supplied these corrections. Implementation did not
+repeat that review or add an authentication system, authorization framework, schema change or repository-wide
+locking protocol. The corrections preserve native business rules and the approved D1–D5 amendments; arbitrary
+cache age does not become a new write restriction.
+
+| Correction | Implemented ownership and behavior | Verification owner |
+|---|---|---|
+| FPR-01 Metadata/settings recovery | The existing metadata editor exposes Refresh and deliberate Review after an unknown PATCH, including an unchanged token. The dialog owns one departure decision for its drafts and uncertainty. Empty/null descriptions share dirty/conflict semantics. A confirmed save stays confirmed after a related read failure. | `tests/frontend/packing-management-ui.spec.ts`; existing draft and command cases |
+| FPR-02 Freshness and selected events | Ordinary eligible recovery is capped at 60 seconds; healthy 30-second refreshes, server cooldown and visibility rules remain. Corresponding session recovery clears its stale notice. Authoritative null clears a picker's display independently of the selected draft ID, with current-parent and obsolete-response handling. | `tests/frontend/frontend-refresh-navigation.spec.ts`; `frontend-pilot.spec.ts` |
+| FPR-03 Identity/guest drafts | The existing command owner composes dirty, pending and unknown state across route, identity, update and browser departures. Every entered field participates; cancellation retains input and committed navigation or confirmed submission releases it. Passwords remain mounted-form state only. | `tests/frontend/frontend-pilot-identity.spec.ts`; `frontend-command-recovery.spec.ts` |
+| FPR-04 Implemented overview scaffold | Search uses the shared 300 ms debounce and retires obsolete reads immediately. Filters/search replace history; navigation pushes it. Other regions, focused input and pending navigation are preserved. Source TODOs retain the remaining migration obligation. | `tests/frontend/frontend-refresh-navigation.spec.ts`; existing overview/hydration cases |
+| FPR-05 HTML admission and fallback | Packing HTML reuses native loaders, page admission and declared permissions before rendering. Duplicate GET retains its own native grant independently of account-only creation POST and supplies the existing public form context for initial/SPA copies. Hydrated pages expose the localized unsupported-JavaScript message outside the hydration tree; read-only help/admission content stays readable. | `tests/frontend/frontend-native-fallback.spec.ts`; selected pilot HTTP/browser cases |
+| FPR-06 Reuse and readability | Root/item field declarations serve packing capabilities and submitted-field checks without changing native grant timing or parent fallbacks. Named helpers, purposeful comments and logical spacing replace the identified nested/compacted code. Shared contracts remain `.d.ts`; unfinished header/card/route boundaries have TODOs. | Existing permission, command and component checks; server and frontend type checks |
+| FPR-07 Documentation staging | Production guidance describes native behavior. Necessary replacement guidance, prospective images and one global localization guide per language are staged with canonical merge targets and preserved native baselines. Original decisions and authorized amendments remain recorded. | Optional documentation reports and individually inspected maintained figures |
+| FPR-08 Verification | Focused observable regressions, database-free checks, builds and justified real HTTP/browser checks verify the changed boundaries. Exact execution outcomes and limitations belong to the paired review record. | [Paired review](frontend-migration/PILOT_PARITY_REVIEW.md) |
+
+The execution plan is retired into this implementation record. Actual execution evidence remains separate from
+source presence; the table does not certify an unrun database, browser, provider or deployment check. Use the
+cheapest stable test layer for each observable outcome. Documentation reports remain advisory and never gate
+application delivery.
+
+Migration guidance is maintained in [staged development guidance](frontend-migration/staged/DEVELOPMENT.md),
+with [architecture](frontend-migration/staged/ARCHITECTURE.md), [testing](frontend-migration/staged/TESTING_GUIDE.md),
+[database](frontend-migration/staged/DATABASE.md) and [README](frontend-migration/staged/README.md) replacements.
+The staged [OPERATIONS](frontend-migration/staged/OPERATIONS.md)/[UPGRADING](frontend-migration/staged/UPGRADING.md) supplements
+merge into their existing canonical sections. At production cutover, reconcile intervening native changes before
+merging the corresponding released guidance and removing its staging copy. Publish the single global localization
+guide in each supported language and use the staged navigation imagery with it; feature help remains about existing
+user tasks. This staging does not itself authorize production cutover.
+
+Authentication/session redesign, a general controller-method authorization framework, broader legacy race
+remediation and lock hardening are deferred as `BACKEND-HARDENING-01` in the
+[existing backlog](documentation-remediation.yml). They are a separately scoped follow-up, not a migration
+prerequisite. Deferral does not authorize weakening existing protections or introducing new migration defects.
 
 Step 3 of the [foundation design](FRONTEND_FOUNDATION_DESIGN.md) now implements an independent, opt-in packing
 frontend. Open `/frontend-pilot`, `/frontend-pilot/packing/<list UUID>` or `/frontend-pilot/help`. Packing routes,
 creation, duplication, overview placement, settings and required identity transitions use Vue and the versioned API.
 The pilot does not load legacy browser modules, consume Pug fragments or delegate packing controls to the old view.
-Anonymous packing links show the pilot's guest entry form; login, registration, recovery and emailed return links
-remain inside the pilot.
+Standalone packing links without an active profile redirect to the pilot's guest entry form. Attached lists retain
+native event/view admission before guest entry. Login, registration, recovery and emailed return links remain
+inside the pilot.
 
 The packing page retains inline item editing, quick add, drag ordering, Everyone switching, self-assignment and
 authorized removal of another assignment. Settings retain permission-filtered Details, Header image, Access,
@@ -83,6 +140,31 @@ Generated declarations, `.generated/`, bundled locale resources and all `dist/` 
 must recreate them through the package scripts. `npm run generate:api -- --check` and
 `npm run generate:locales -- --check` verify existing outputs against their authored sources.
 
+## Progressive loading (2026-10-08)
+
+The maintainer explicitly requested visible skeletons and independent delivery for slow pages. The shared
+`LoadingSkeleton.vue` supplies field, table, card, article and short-line shapes in the existing Bootstrap theme.
+Decorative shapes expose no invented records, counts or controls; one localized status announces each loading
+region. Responsive layouts and reduced-motion styling apply across migrated features.
+
+Initial interactive Overview HTML carries the authoritative session and region shells. Mounted regions read through
+their existing authorized endpoints independently; an open hidden region starts without waiting for main-region
+counts. Read-only help retains its complete server-rendered article. Packing, creation/duplication, metadata,
+identity admission, guest entry, help navigation and event discovery use skeletons only while their initial required
+projection is missing. Confirmed empty results and terminal errors retain their existing presentations.
+
+Packing settings can start metadata alongside the full settings read using the list's known metadata capability as
+a scheduling hint. Each response still owns its permissions and token. Available fields appear immediately, and
+the same metadata draft remains mounted as other settings arrive. Loaded projections and focused drafts remain
+visible during ordinary background reads, including a failed same-resource locale read; confirmed access loss
+clears protected content through the existing owner. A pending lazy navigation displays shared progress over the
+current view, with destination focus applied only after navigation commits.
+
+This changes loading delivery under the recorded [design amendment](FRONTEND_FOUNDATION_DESIGN.md), preserving
+domain behavior, command admission and the current iteration scope. Subsequent modules follow the
+[staged loading recipe](frontend-migration/staged/DEVELOPMENT.md). Actual execution and visual evidence belong in
+the [paired review record](frontend-migration/PILOT_PARITY_REVIEW.md).
+
 ## Identity, refresh and edits
 
 `GET /api/v1/session` projects the active profile, available profile names/IDs, login/logout links, locale,
@@ -144,14 +226,18 @@ changes article bodies, headings, topic labels, search snippets and navigation t
 stable through language-owned heading metadata, so translated articles retain existing deep links without reading
 another language's articles. Images and full-size links resolve within the selected language's asset directory;
 missing localized content never falls back to another corpus. Each language supplies equivalent instructional
-figures with its own text, captions and alt descriptions. See [Help Visual Assets](HELP_VISUALS.md) for authoring.
+figures with its own text, captions and alt descriptions. See the [staged Help Visual Assets](frontend-migration/staged/HELP_VISUALS.md) for prospective frontend authoring; the canonical visual guide retains native production guidance.
 
 Help GET links and search forms render the same Vue component tree on the server and hydrate into client navigation.
-They work with JavaScript disabled. The existing fixed-source help controller still owns document loading, validation
-and trusted rendered HTML. Each server render owns its session, locale, router and query state; bootstrap JSON escapes
-script delimiters. The mixed overview renders authorized regions and native GET navigation through the same components. Required
-identity and guest forms retain guarded native POST/redirect/GET adapters using the same controller operations.
-Packing inline/item/settings controls retain their existing JavaScript requirement and load through the API.
+Read-only help remains usable with JavaScript disabled, and admission/error content remains readable. The existing
+fixed-source help controller still owns document loading, validation and trusted rendered HTML. Each server render
+owns its session, locale, router and query state; bootstrap JSON escapes script delimiters.
+
+Interactive packing, overview, identity and guest pages require JavaScript. With JavaScript disabled, the shared
+localized message and help link replace the hydrated page, including any server-rendered forms or overview controls.
+Their rendered initial state does not promise an operative no-JavaScript workflow. Guarded native POST/redirect/GET
+adapters still reuse the existing controller operations for identity and guest admission; their presence does not
+make those forms available through the disabled-JavaScript presentation. Packing controls load through the API.
 
 ## Schema and verification boundaries
 
@@ -175,7 +261,7 @@ The focused application checks are:
   session/privacy/CSRF, stale writes, uncertain responses, mobile actions and JavaScript-disabled help.
 
 Use `npm run test:quick` for the database-free regression pass and `npm run typecheck:frontend` for both Vue entries.
-Before integration/E2E runs, follow the [Testing Guide](TESTING_GUIDE.md), prove that the selected schemas are disposable
+Before integration/E2E runs, follow the [staged Testing Guide](frontend-migration/staged/TESTING_GUIDE.md), prove that the selected schemas are disposable
 and credentials restricted to them, and build before Playwright. These are bounded proof checks, not full feature
 parity, a performance benchmark or an accessibility certification.
 
@@ -190,7 +276,7 @@ deliberate SPA additions and deferred controls; complete feature parity remains 
 
 The existing optional `scripts/capture-frontend-baseline.cjs` supports `FRONTEND_BASELINE_MODE=pilot`. Select an
 explicitly disposable local E2E environment through `E2E_DOTENV_FILE` and acknowledge its schema name through
-`FRONTEND_BASELINE_DISPOSABLE_DATABASE`, following the [Testing Guide](TESTING_GUIDE.md),
+`FRONTEND_BASELINE_DISPOSABLE_DATABASE`, following the [staged Testing Guide](frontend-migration/staged/TESTING_GUIDE.md),
 build first, then run the script. It requires credentials restricted to that single schema, adds synthetic fixtures through real HTTP
 routes and runs its own built server without resetting the schema or running process-level retention jobs. Set
 `FRONTEND_BASELINE_RUNTIME=development` to compare source Express, Vue SSR and the Vite browser graph instead.

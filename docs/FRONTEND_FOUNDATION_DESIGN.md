@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: ordinary development loading, hydration, lazy navigation, HMR and serialized generator restart verification; approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; source review of expanded opt-in packing management, overview, identity/help and shared foundation; retains original step-two proof-slice rationale as historical design; broader feature migration and benchmarks remain future work; approved rectification adds native overview/identity adapters and per-field comparisons
-source-anchors: src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/e2e/frontend-development.spec.ts; docs/FRONTEND_MIGRATION_BASELINE.md; docs/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/app.ts; src/routes/frontendPilot.ts; src/routes/api/v1/; src/frontend/app/; src/frontend/features/packing/; src/frontend/features/identity/; src/modules/frontendPilotRenderer.ts; src/modules/packing/api.ts; src/modules/renderer.ts; src/modules/invoice/; src/modules/database/services/; src/types/; src/public/js/; src/views/; package.json; tsconfig.json; tsconfig.server.json; esbuild.client.js; .github/workflows/ci.yml; .github/workflows/release.yml; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md
+verification-scope: explicitly authorized progressive delivery amendment and source ownership; FPR-07 explicitly authorized 2026-10-08 scope/fallback/documentation amendments and staging; original choices/D1-D5 retained; no new runtime verification claimed; ordinary development loading, hydration, lazy navigation, HMR and serialized generator restart verification; approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; source review of expanded opt-in packing management, overview, identity/help and shared foundation; retains original step-two proof-slice rationale as historical design; broader feature migration and benchmarks remain future work; approved rectification adds native overview/identity adapters and per-field comparisons
+source-anchors: src/frontend/components/LoadingSkeleton.vue; src/frontend/features/help/HelpPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/features/overview/OverviewRegion.vue; tests/frontend/frontend-content-loading.spec.ts; src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/e2e/frontend-development.spec.ts; docs/FRONTEND_MIGRATION_BASELINE.md; docs/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/app.ts; src/routes/frontendPilot.ts; src/routes/api/v1/; src/frontend/app/; src/frontend/features/packing/; src/frontend/features/identity/; src/modules/frontendPilotRenderer.ts; src/modules/packing/api.ts; src/modules/renderer.ts; src/modules/invoice/; src/modules/database/services/; src/types/; src/public/js/; src/views/; package.json; tsconfig.json; tsconfig.server.json; esbuild.client.js; .github/workflows/ci.yml; .github/workflows/release.yml; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md
 next-review: expanded-packing-parity-or-next-feature-slice
 -->
 
@@ -47,8 +47,63 @@ records actual builds, tests, complete paired comparison, focused supplements an
 Its [development-runtime correction](frontend-migration/PILOT_PARITY_REVIEW.md#development-runtime-correction-2026-10-08)
 records the subsequent source-entry failure and repairs to loading, hydration, pending navigation and watcher
 coordination. Built-runtime evidence alone did not establish the original normal-development requirement.
-The [development guide](DEVELOPMENT.md#implementing-the-next-feature-slice) owns the reusable contribution workflow.
+The [staged development guide](frontend-migration/staged/DEVELOPMENT.md#implementing-the-next-feature-slice) owns the reusable contribution workflow.
 Broader feature migration and default-route cutover remain pending.
+
+### Authorized migration amendments (2026-10-08)
+
+The maintainer finalized the following scope and acceptance amendments after the completed pilot review.
+These amendments supplement D1–D5; they do not authorize a new technology choice or backend redesign:
+
+- The objective is migration of the existing frontend with nearly identical UI/UX and unchanged native business
+  behavior. Backend adapters are limited to the contract, projection and existing controller/DBAL reuse needed
+  for that migration. General authentication/session, authorization-framework, legacy race and broad locking
+  improvements are deferred independently in the existing remediation backlog.
+- Help and packing, together with their necessary shared foundation and existing entry journeys, must be complete
+  in this iteration. The pilot continues expanding toward the approved full native scope. Overview and other
+  implemented scaffolds remain future increments with explicit TODOs; their implemented code must still preserve
+  native behavior and meet readability/modularity requirements. Presence is not feature-completeness evidence.
+- Interactive migrated pages require JavaScript. Disabled JavaScript receives a clear shared message or a genuinely
+  read-only result, and must not offer misleading controls or indefinite loading. Same-component SSR/hydration
+  remains permitted. The original mandatory interactive native no-JavaScript fallback is superseded, including
+  the old packing-card image acceptance; no new SSR image subsystem is required by that finding.
+- Production documentation continues to describe native production. Feature user guides retain their existing
+  tasks and labels. Prospective development, architecture, testing, operations and visual guidance is staged in
+  temporary copies under `docs/frontend-migration/staged/` and merged into the existing canonical owners at
+  production cutover, preserving intervening native changes. One global localization guide, with language
+  counterparts, owns language choice without duplicating implementation information in feature help.
+- Active responsive shared views target convergence within roughly one minute while retaining the healthy
+  30-second cadence, server cooldown, hidden-tab and observer disposal boundaries. This replaces the generic
+  two-minute failed-read delay; it adds no arbitrary age-based command prohibition or new live-editing service.
+
+The [pilot guide](FRONTEND_PILOT.md) owns the concrete rectification sequence and staged merge inventory.
+The [paired review](frontend-migration/PILOT_PARITY_REVIEW.md) owns execution evidence. The existing
+[staged contribution recipe](frontend-migration/staged/DEVELOPMENT.md#implementing-the-next-feature-slice)
+records reusable implementation lessons; a new plan or control registry is unnecessary.
+
+### Authorized progressive delivery amendment (2026-10-08)
+
+The maintainer explicitly requested shared loading skeletons and incremental, parallel loading for interactive
+pages. This adds a delivery amendment to the original server-projected Overview implementation; it does not replace
+Vue, same-component SSR/hydration, the approved D1–D5 choices or existing controller/DBAL ownership.
+
+Initial interactive Overview HTML waits for authoritative session bootstrap and renders the shared Vue shell.
+It no longer waits for sequential projections of all four collection/visibility regions. Each mounted active region
+reads its own existing URL filters through the existing scoped API/controller, and renders when its response arrives.
+A closed hidden region starts on opening; an explicitly opened hidden deep link can start before main-region counts
+arrive. Confirmed membership retains the native empty/count rules. A slow region cannot withhold a ready sibling.
+
+Read-only Help retains its complete authorized server projection and remains readable without JavaScript. The Vue
+renderer makes no self-HTTP requests. Missing interactive data uses the shared skeleton while its query is pending;
+complete scoped data and local drafts remain mounted during background reads. Initial failure renders the existing
+error, and unknown membership never claims zero or an empty result. Identity/resource transitions must not retain
+another scope's content, and language-owned bodies must match the selected language. User-authored values and
+machine state may remain visible during a same-resource locale read while interface labels translate reactively.
+
+The [staged loading guideline](frontend-migration/staged/DEVELOPMENT.md#progressive-loading-and-shared-placeholders)
+owns the reusable component/query rules. The [pilot guide](FRONTEND_PILOT.md) and
+[paired review](frontend-migration/PILOT_PARITY_REVIEW.md) own the implemented scope and execution evidence;
+this delivery amendment does not authorize production cutover or broader backend work.
 
 | Record | Decision it owns |
 |---|---|

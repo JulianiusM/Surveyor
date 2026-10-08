@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue';
+import {computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch} from 'vue';
 import {onBeforeRouteLeave, onBeforeRouteUpdate, useRoute} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
@@ -8,7 +8,7 @@ import {usePackingApi} from './api';
 import {usePilot, refreshInterval, canRetryRead} from '../../app/context';
 import {ApiFailure} from '../../app/transport';
 import {evictPackingResource} from '../../app/queryCache';
-import {packingKeys} from '../../app/queryKeys';
+import {belongsToQueryFamily, packingKeys} from '../../app/queryKeys';
 import {usePageTitle} from '../../composables/pageTitle';
 import {readPacked, writePacked} from '../../composables/packed';
 import {useCommand} from '../../composables/command';
@@ -16,9 +16,11 @@ import {usePackingHeader} from '../../composables/packingHeader';
 import ActionButton from '../../components/ActionButton.vue';
 import InlineCell from '../../components/InlineCell.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import PackingSettings from './PackingSettings.vue';
 
 type Item = components['schemas']['PackingItemView'];
+type ListRead = PilotRead<components['schemas']['PackingListView']>;
 const route = useRoute();
 const context = usePilot();
 const api = usePackingApi(context);
@@ -35,6 +37,12 @@ const quickAddDirty = computed(
     () => !!freshItem.title || !!freshItem.description || freshItem.maxAssignees !== 1,
 );
 const dragged = ref<{id: string; token: string; ids: string[]} | null>(null);
+// A locale read must not unmount this list's focused drafts. Keep the previously
+// authorized read only within its query family, including a failed locale read.
+const previousList = shallowRef<{
+    query: Parameters<typeof belongsToQueryFamily>[0];
+    result: ListRead;
+} | null>(null);
 const list = useQuery({
     queryKey: key,
     enabled: computed(
@@ -52,13 +60,31 @@ const list = useQuery({
             ? refreshInterval(query.state.error, query.state.fetchFailureCount, jitter)
             : false,
     refetchIntervalInBackground: false,
+    placeholderData(previous, previousQuery) {
+        if (!previous || !previousQuery || !belongsToQueryFamily(previousQuery,
+            packingKeys.resource(context.session.value?.context, listId.value))) {
+            previousList.value = null;
+            return undefined;
+        }
+        // TanStack drops a placeholder after a terminal read failure. Retain the
+        // same scoped response for the stale view; the failed read remains visible.
+        previousList.value = {query: previousQuery, result: previous};
+        return previous;
+    },
 });
 const denied = computed(
     () =>
         accessRevoked.value ||
         (list.error.value instanceof ApiFailure && [401, 403, 404].includes(list.error.value.status)),
 );
-const data = computed(() => (denied.value ? null : list.data.value?.data));
+const data = computed(() => {
+    if (denied.value) return null;
+    if (list.data.value) return list.data.value.data;
+    const previous = previousList.value;
+    return previous && belongsToQueryFamily(previous.query,
+        packingKeys.resource(context.session.value?.context, listId.value)) ? previous.result.data : undefined;
+});
+const initialLoading = computed(() => !denied.value && !data.value && list.isPending.value);
 usePageTitle(() => data.value?.title || messages.value.t('packing.items'));
 const items = computed(() =>
     [...(data.value?.items ?? [])].sort(
@@ -102,12 +128,14 @@ watch(listId, () => {
     command.acknowledge();
     editorOpen.value = false;
     accessRevoked.value = false;
+    previousList.value = null;
     dragged.value = null;
     Object.assign(freshItem, {title: '', description: '', maxAssignees: 1});
     loadPacked();
 });
 function revokeAccess(): void {
     accessRevoked.value = true;
+    previousList.value = null;
     editorOpen.value = false;
     void evictPackingResource(context.queryClient, context.capture().context, listId.value);
 }
@@ -264,7 +292,7 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
 </script>
 
 <template>
-    <section class="card bg-dark text-white mb-3">
+    <section class="card bg-dark text-white mb-3" :aria-busy="!!data && list.isFetching.value">
         <div class="card-header p-0">
             <img
                 v-if="header"
@@ -318,7 +346,9 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
             <StatusNotice v-else-if="list.error.value" kind="warning">{{
                 messages.t(data ? 'state.stale' : 'state.loadFailed')
             }}</StatusNotice>
-            <p v-if="!data && !list.error.value" role="status">{{ messages.t('common.loading') }}</p>
+            <!-- Shape the missing detail region without inventing items or capabilities.
+                 Loaded rows and drafts remain mounted throughout background reads. -->
+            <LoadingSkeleton v-if="initialLoading" variant="table" :rows="4" />
             <template v-if="data">
                 <StatusNotice v-if="data.archived || data.inheritedArchived" kind="info">{{
                     messages.t('packing.archived')
@@ -601,6 +631,7 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
         :key="listId"
         :list-id="listId"
         :list-title="data?.title"
+        :metadata-available="!!(data?.capabilities.editTitle || data?.capabilities.editDescription)"
         @close="editorOpen = false"
         @saved="refresh"
         @access-lost="settingsAccessLost"

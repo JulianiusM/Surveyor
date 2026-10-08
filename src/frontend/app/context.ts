@@ -107,6 +107,9 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
             locale.value = createTranslator(current.locale).locale;
             updates.observe(current.deployment);
             ready.value = true;
+            // This notice belongs to the session read, not any feature's resource read.
+            // Clear only that recovered failure; logout/identity feedback remains separate.
+            if (notice.value === 'state.stale') notice.value = null;
         }).finally(() => {
             bootstrapRequest = undefined;
             // An identity hint can obsolete an already pending bootstrap. Its result is ignored,
@@ -213,14 +216,15 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         changeLocale, invalidateIdentity, start};
 }
 
-/** Retry-After applies to interval retries too, rather than creating an independent hammering timer. */
+/** Keep ordinary visible read recovery within roughly one minute. Server-imposed Retry-After
+ * remains authoritative, including a longer delay; no independent timer may bypass it. */
 export function refreshInterval(error: Error | null, failures: number, jitter: number): number | false {
     if (error instanceof ObsoleteRequestError) return false;
     if (error instanceof ApiFailure) {
         if (error.retryAt !== null) return Math.max(error.retryAt - Date.now(), 30_000);
         if (error.status < 500 && error.status !== 429) return false;
     }
-    return error ? Math.min(30_000 * 2 ** Math.min(failures, 2), 120_000) : 30_000 + jitter;
+    return error ? Math.min(30_000 * 2 ** Math.min(failures, 1), 60_000) : 30_000 + jitter;
 }
 
 /** Focus and manual refresh share the same server-imposed backoff boundary as scheduled reads. */

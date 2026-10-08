@@ -274,3 +274,44 @@ test('unreferenced help assets remain visible findings', t => {
     assert.ok(report.errors.some(error => error.message.includes('not referenced')));
 });
 
+/** Catalog-shaped fixtures exercise reporting only; no maintained prose or application content is asserted. */
+function localizedHelpFixture(t, extra = '') {
+    const root = helpFixture(t);
+    write(root, 'src/locales/en.json', JSON.stringify({locale: 'en', help: {directory: '.'}}));
+    write(root, 'src/locales/de.json', JSON.stringify({locale: 'de', help: {directory: 'de'}}));
+    write(root, 'docs/user-guide/de/README.md', `# Hilfe\n${metadata}\n\n![Testbild](assets/test.png)\n${extra}\n`);
+    write(root, 'docs/user-guide/de/assets/test.png', Buffer.from('89504e470d0a1a0a', 'hex'));
+    return root;
+}
+
+test('help advisory discovers catalog-owned corpora and counts each language independently', t => {
+    const {result, report} = inspectHelp(localizedHelpFixture(t, '[Anleitung](README.md)'));
+    assert.equal(result.status, 0);
+    assert.equal(report.ok, true);
+    assert.equal(report.markdownFiles, 2);
+    assert.equal(report.imagesChecked, 2);
+    assert.deepEqual(report.corpora.map(corpus => corpus.helpRoot), ['docs/user-guide', 'docs/user-guide/de']);
+    assert.deepEqual(report.referencedAssets, {'de/test.png': 1, 'test.png': 1});
+});
+
+test('localized help findings cannot be satisfied by English articles or images', t => {
+    const root = localizedHelpFixture(t, '[Wrong language](../README.md)');
+    fs.rmSync(path.join(root, 'docs/user-guide/de/assets/test.png'));
+    const {result, report} = inspectHelp(root);
+    assert.equal(result.status, 0);
+    assert.equal(report.ok, false);
+    assert.ok(report.errors.some(error => error.file === 'docs/user-guide/de/README.md'
+        && error.message.includes('same language corpus')));
+    assert.ok(report.errors.some(error => error.file === 'docs/user-guide/de/README.md'
+        && error.message.includes('image does not exist')));
+});
+
+test('catalog corpus traversal remains a structured advisory finding', t => {
+    const root = localizedHelpFixture(t);
+    write(root, 'src/locales/de.json', JSON.stringify({locale: 'de', help: {directory: '../../outside'}}));
+    const {result, report} = inspectHelp(root);
+    assert.equal(result.status, 0);
+    assert.ok(report.errors.some(error => error.file === 'src/locales/de.json'
+        && error.message.includes('fixed relative help directory')));
+});
+

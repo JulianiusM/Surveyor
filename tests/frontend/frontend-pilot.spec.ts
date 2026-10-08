@@ -318,7 +318,7 @@ describe('identity, refresh and local state boundaries', () => {
         const rateLimited = new ApiFailure(429, null, 90_000);
         expect(refreshInterval(rateLimited, 0, 1000)).toBeGreaterThanOrEqual(89_900);
         expect(canRetryRead(rateLimited)).toBe(false);
-        expect(refreshInterval(new Error('offline'), 3, 1000)).toBe(120_000);
+        expect(refreshInterval(new Error('offline'), 3, 1000)).toBe(60_000);
     });
 
     it('serializes hostile text as inert bootstrap JSON without changing the decoded value', () => {

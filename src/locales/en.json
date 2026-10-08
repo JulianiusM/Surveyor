@@ -191,6 +191,8 @@
         "unlimited": "Unlimited"
       },
       "packing": {
+        "notFound": "Packing list not found.",
+        "eventRegistrationRequired": "You must be registered for the event to access this resource.",
         "chooseEvent": "Choose an event",
         "currentEvent": "Current event",
         "eventSearchPlaceholder": "Search by title or description…",
@@ -341,10 +343,12 @@
       "permissionGroups": {"ACCESS": "Access", "EDIT": "Entity details", "ITEM": "Items", "MANAGE": "Management", "DATA": "Data", "OTHER": "Other permissions"},
       "audiences": {"public": "Public", "guest": "Guest", "authenticated": "Authenticated", "participant": "Participant"},
       "draft": {
+        "leaveUnknown": "The change may already have been saved. Leave this editor and check the current values before trying again?",
         "unsaved": "You have unsaved changes.",
         "discard": "Discard changes?",
         "noChanges": "There are no changes to save.",
         "conflict": "This list changed while you were editing. Review the current values before saving again.",
+        "unknownReview": "The previous save may already have succeeded. Review the current values before deciding whether to save again.",
         "mine": "Your change",
         "original": "Original value",
         "current": "Current value",
@@ -355,6 +359,7 @@
         "changed": "Changes are available"
       },
       "state": {
+        "javascriptRequired": "JavaScript is required to use this page. Enable JavaScript in your browser, then reload the page. Help remains available below.",
         "loadFailed": "This page could not be loaded.",
         "stale": "The displayed data may be out of date.",
         "savedRefreshFailed": "Your change was saved, but the refreshed data could not be loaded.",

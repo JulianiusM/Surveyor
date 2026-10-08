@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; step-three shared English/German UI/API catalogs and independent help articles and figures, locale-owned stable fragments without cross-corpus reads, generated message contracts, request-fixed translation, native help and Vue SSR/SPA; focused synthetic help and locale tests; invoice, other Pug, email, PDF, principal preference persistence and full-application localization remain planned
+verification-scope: FPR-07 explicitly authorized 2026-10-08 scope/fallback/documentation amendments and staging; original choices/D1-D5 retained; no new runtime verification claimed; approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; step-three shared English/German UI/API catalogs and independent help articles and figures, locale-owned stable fragments without cross-corpus reads, generated message contracts, request-fixed translation, native help and Vue SSR/SPA; focused synthetic help and locale tests; invoice, other Pug, email, PDF, principal preference persistence and full-application localization remain planned
 source-anchors: src/locales/en.json; src/locales/de.json; scripts/generate-locales.mjs; src/modules/localization/translator.ts; src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/routes/api/v1.ts; src/modules/api/problem.ts; tests/unit/frontend-localization.spec.ts; tests/unit/frontend-generation.spec.ts; tests/fixtures/frontend-contracts.mts; src/modules/invoice/locales/en.ts; src/modules/invoice/wording.ts; src/modules/invoice/presentation.ts; src/modules/invoice/settlementEmail.ts; src/modules/invoice/exports.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/modules/email.ts; src/modules/lib/pdf.ts; src/modules/renderer.ts; src/controller/helpController.ts; src/modules/database/entities/user/User.ts; src/modules/database/entities/user/Guest.ts; tests/unit/invoice-presentation.spec.ts; docs/DOCUMENTATION_POLICY.md
 next-review: invoice-catalog-migration-or-localization-scope-expansion
 -->
@@ -16,6 +16,20 @@ responses, transitional Pug views, email and PDF presentation. Select **i18next*
 lookup engine with **i18next-vue** as the selected Vue binding. Approved D1 restores that primary choice while
 preserving the typed application interface; the initial provide/inject translation substitution was not authorized. Keep domain logic, API machine values and recorded user content independent
 of translated wording. The bounded implementation below does not yet provide application-wide localization.
+
+## Authorized documentation boundary (2026-10-08)
+
+Preserve native production feature guides and their tasks during the frontend migration. Language choice is a
+global feature documented once, with equivalent language counterparts, rather than repeated in each feature guide.
+The draft [English guide](staged/user-guide/LOCALIZATION.md) and [German guide](staged/user-guide/de/LOCALIZATION.md)
+are staged outside the trusted production help source and are merged into their existing user-help location at
+cutover. Their rendered text contains only tasks, exact labels and observable language preference behavior.
+
+The current choice is browser-scoped; it is not a persisted account/guest preference and does not imply that all
+native pages, emails or PDFs are already translated. Original recipient preference, email/PDF and full-application
+localization plans below remain future migration work. D1 and the selected i18next-vue integration remain unchanged.
+Prospective localized navigation imagery/guidance is staged with its original acceptance history; native production
+pictures must depict the actual native header in every language.
 
 ## Implemented pilot boundary
 

@@ -37,3 +37,31 @@
 .pilot-dialog.pilot-dialog-compact { inset: 50% auto auto 50%; transform: translate(-50%, -50%);
     width: min(500px, calc(100vw - 1rem)); height: auto; max-height: calc(100dvh - 1rem);
     border: 1px solid var(--bs-border-color-translucent); border-radius: var(--bs-border-radius-lg); }
+
+/* Loading geometry follows the existing field, table, card and article proportions.
+   It carries no content/actions and never covers a feature's already loaded projection. */
+.pilot-skeleton { display: block; min-width: 0; }
+.pilot-skeleton-shapes { display: grid; gap: .75rem; animation: pilot-skeleton-pulse 1.6s ease-in-out infinite; }
+.pilot-skeleton-bar { display: block; min-width: 0; height: 1rem; border-radius: var(--bs-border-radius-sm);
+    background: currentColor; opacity: .18; }
+.pilot-skeleton-lines > .pilot-skeleton-bar:last-child { width: 70%; }
+.pilot-skeleton-label { width: 30%; min-width: 4rem; margin-bottom: .5rem; }
+.pilot-skeleton-control { height: 2.375rem; border-radius: var(--bs-border-radius); }
+.pilot-skeleton-heading { width: 60%; height: 1.75rem; margin-bottom: .5rem; }
+.pilot-skeleton-short { width: 70%; }
+.pilot-skeleton-table { gap: 0; }
+.pilot-skeleton-table-heading, .pilot-skeleton-table-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 1rem; padding: 1rem .5rem; border-bottom: 1px solid var(--bs-border-color-translucent); }
+.pilot-skeleton-table-heading { padding-top: .5rem; }
+.pilot-skeleton-table-row { min-height: 3.5rem; }
+.pilot-skeleton-cards .card, .pilot-skeleton-paragraph { display: grid; gap: .75rem; }
+.pilot-skeleton-article { gap: 1.5rem; }
+@keyframes pilot-skeleton-pulse { 0%, 100% { opacity: .65; } 50% { opacity: 1; } }
+@media (max-width: 575.98px) {
+    .pilot-skeleton-table-heading, .pilot-skeleton-table-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .pilot-skeleton-table-heading > :nth-child(n + 4), .pilot-skeleton-table-row > :nth-child(n + 4) { display: none; }
+}
+/* Respect the same motion preference across every future migrated feature. */
+@media (prefers-reduced-motion: reduce) {
+    .pilot-skeleton-shapes, .pilot-app .spinner-border { animation: none; }
+}

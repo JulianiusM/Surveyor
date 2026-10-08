@@ -64,6 +64,60 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
 }
 
 describe('identity forms and packing overview navigation', () => {
+    it.each([
+        ['/frontend-pilot/users/login', '#username', 'account'],
+        ['/frontend-pilot/users/login', '#password', 'secret1'],
+        ['/frontend-pilot/users/login', '#recovery-email', 'guest@example.test'],
+        ['/frontend-pilot/users/forgot-password', '#username', 'account'],
+        ['/frontend-pilot/users/register', '#displayname', 'Display name'],
+        ['/frontend-pilot/users/register', '#email', 'account@example.test'],
+        ['/frontend-pilot/users/register', '#password-repeat', 'secret1'],
+        [`/frontend-pilot/packing/${eventId}/guest`, '#guest-name', 'Guest name'],
+        [`/frontend-pilot/packing/${eventId}/guest`, '#guest-email', 'guest@example.test'],
+    ])('protects a partial draft in %s (%s) across every departure channel', async (path, selector, value) => {
+        const {wrapper, context, router} = await mounted(path, async () => json({id: eventId, title: 'Guest fixture'}));
+        await wrapper.get(selector).setValue(value);
+        const confirm = vi.fn(() => false);
+        vi.stubGlobal('confirm', confirm);
+        expect(context.mayChangeIdentity()).toBe(false);
+        expect(confirm).toHaveBeenCalledTimes(1);
+        await router.push('/frontend-pilot/help');
+        expect(router.currentRoute.value.path).toBe(path);
+        expect(confirm).toHaveBeenCalledTimes(2);
+        expect(wrapper.get<HTMLInputElement>(selector).element.value).toBe(value);
+
+        const departure = new Event('beforeunload', {cancelable: true});
+        window.dispatchEvent(departure);
+        expect(departure.defaultPrevented).toBe(true);
+        context.updates.observe({...session.deployment, buildId: 'next-fixture'});
+        expect(context.updates.available.value).toBe(true);
+        expect(context.updates.requestReload()).toBe(false);
+        expect(confirm).toHaveBeenCalledTimes(2);
+
+        confirm.mockReturnValue(true);
+        await router.push('/frontend-pilot/help');
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/help');
+        const afterLeave = new Event('beforeunload', {cancelable: true});
+        window.dispatchEvent(afterLeave);
+        expect(afterLeave.defaultPrevented).toBe(false);
+    });
+
+    it('releases a submitted form after confirmed success without a discard prompt', async () => {
+        const {wrapper, context, router} = await mounted('/frontend-pilot/users/forgot-password', async () => json({changed: true}));
+        await wrapper.get('#username').setValue('account');
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        const confirm = vi.fn(() => false);
+        vi.stubGlobal('confirm', confirm);
+        expect(context.mayChangeIdentity()).toBe(true);
+        const departure = new Event('beforeunload', {cancelable: true});
+        window.dispatchEvent(departure);
+        expect(departure.defaultPrevented).toBe(false);
+        await router.push('/frontend-pilot/users/login');
+        expect(wrapper.get<HTMLInputElement>('#username').element.value).toBe('');
+        expect(confirm).not.toHaveBeenCalled();
+    });
+
     it('retranslates initial identity and non-token reset denials in their mounted message region', async () => {
         const problem: components['schemas']['Problem'] = {type: 'about:blank', title: 'Forbidden', status: 403,
             code: 'FORBIDDEN', messageKey: 'api:errors.FORBIDDEN', params: {},
@@ -352,6 +406,28 @@ describe('identity forms and packing overview navigation', () => {
         expect(wrapper.find('#password').exists()).toBe(true);
     });
 
+    it('renders guest choices and retains an editable draft while the independent entry read is pending', async () => {
+        let finishEntry!: (response: Response) => void;
+        const entry = new Promise<Response>(resolve => { finishEntry = resolve; });
+        const {wrapper} = await mounted(`/frontend-pilot/packing/${eventId}/guest`, async () => entry);
+
+        // Resource-dependent title feedback must not hide the known identity options
+        // or defer mounting the form until the slower title projection arrives.
+        expect(wrapper.find('[data-loading-skeleton]').exists()).toBe(true);
+        expect(wrapper.find('a[href^="/frontend-pilot/users/login"]').exists()).toBe(true);
+        const name = wrapper.get<HTMLInputElement>('#guest-name');
+        await name.setValue('Name entered during loading');
+        name.element.focus();
+
+        finishEntry(json({id: eventId, title: 'Loaded guest fixture'}));
+        await flushPromises();
+        expect(wrapper.find('[data-loading-skeleton]').exists()).toBe(false);
+        expect(wrapper.get('h1').text()).toContain('Loaded guest fixture');
+        expect(wrapper.get<HTMLInputElement>('#guest-name').element).toBe(name.element);
+        expect(name.element.value).toBe('Name entered during loading');
+        expect(document.activeElement).toBe(name.element);
+    });
+
     it('ignores a late positive reset check after the route changed to a denied token', async () => {
         let resolveFirst!: (response: Response) => void;
         const first = new Promise<Response>(resolve => { resolveFirst = resolve; });
@@ -362,9 +438,11 @@ describe('identity forms and packing overview navigation', () => {
                 messageKey: 'api:errors.TOKEN_INVALID', params: {}}, 401);
         });
         expect(wrapper.find('#password').exists()).toBe(false);
+        expect(wrapper.find('[data-loading-skeleton="form"]').exists()).toBe(true);
         await router.push('/frontend-pilot/users/reset-password/second-token');
         await flushPromises();
         expect(wrapper.get('h1').text()).toBe('Error');
+        expect(wrapper.find('[data-loading-skeleton]').exists()).toBe(false);
         resolveFirst(json({valid: true}));
         await flushPromises();
         expect(wrapper.find('#password').exists()).toBe(false);

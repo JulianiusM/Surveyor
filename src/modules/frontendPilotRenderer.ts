@@ -3,7 +3,7 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import type {Response} from 'express';
 import type {FrontendPilotBootstrap, FrontendPilotRenderResult} from '../types/FrontendPilotTypes';
-import {localeManifest} from './localization/translator';
+import {createTranslator, localeManifest} from './localization/translator';
 import {frontendDevelopmentServer} from './frontendDevelopment';
 
 interface AssetChunk {file: string; css?: string[]; imports?: string[]}
@@ -11,6 +11,21 @@ interface PilotRenderer {render(url: string, bootstrap: FrontendPilotBootstrap):
 
 const distribution = fs.existsSync(path.join(__dirname, '../frontend-server/entry-server.mjs'))
     ? path.resolve(__dirname, '..') : path.resolve(__dirname, '../../dist');
+
+/** Escape plain text for HTML; bootstrap JSON has its own script-element serializer. */
+function escapeHtml(value: string): string {
+    const entities: Record<string, string> = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'};
+    return value.replace(/[&<>"']/g, function replaceCharacter(character) {return entities[character]!;});
+}
+
+/** Keep unsupported interactive pages explicit, without changing Vue's hydration input. */
+function javascriptFallback(locale: string): string {
+    const messages = createTranslator(locale);
+    const helpUrl = `/frontend-pilot/help?locale=${encodeURIComponent(locale)}`;
+    return `<noscript><style>#surveyor-pilot{display:none!important}</style>
+<main class="container py-4"><div class="alert alert-warning" role="alert">${escapeHtml(messages.t('state.javascriptRequired'))}</div>
+<a class="btn btn-outline-light" href="${helpUrl}">${escapeHtml(messages.t('app.help'))}</a></main></noscript>`;
+}
 
 /** Resolve only build-authored manifest paths, without importing Vite into production startup. */
 function clientAssets(): {script: string; styles: string[]} {
@@ -47,14 +62,14 @@ export async function renderFrontendPilot(res: Response, url: string, bootstrap:
     const locale = bootstrap.session.locale;
     const direction = localeManifest.find(entry => entry.locale === locale)?.direction ?? 'ltr';
     res.set('Cache-Control', 'private, no-store').set('Content-Language', locale);
-    const title = rendered.title.replace(/[&<>"']/g, character => ({'&': '&amp;', '<': '&lt;', '>': '&gt;',
-        '"': '&quot;', "'": '&#39;'}[character]!));
+    const title = escapeHtml(rendered.title);
     const head = `<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title}</title><link rel="icon" href="/img/favicon-32x32.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 <link rel="stylesheet" href="/style/style.css"><link rel="stylesheet" href="/style/help.css">`;
-    const body = `<div id="surveyor-pilot">${rendered.html}</div>
+    const fallback = rendered.javascriptRequired ? javascriptFallback(locale) : '';
+    const body = `${fallback}<div id="surveyor-pilot">${rendered.html}</div>
 <script id="surveyor-pilot-state" type="application/json">${rendered.state}</script>`;
     // Express owns static assets, help content, and all rendered navigation. Vite must
     // see only its source assets: transforming the SSR tree would prefix /app onto

@@ -7,10 +7,18 @@ owner: application operators
 status: current
 last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; source review of removal of the unreleased packing revision migration, atomic native/v1 writers and current-value comparisons; archival entity fields, preference constraints, locking, migration compatibility, and downgrade-guard source review; no migration rehearsal claimed here; free-text column sizes and migration rollback protection; D04 accepted from source review and deployment-practice confirmation for runtime datasource, migration wrapper, schema bootstrap, sessions, backup targeting, and migration commands; controlled execution tracked separately in D04V
-source-anchors: src/modules/database/entities/packing/PackingList.ts; src/modules/database/services/PackingService.ts; src/modules/packing/api.ts; src/migrations/1789862400000-AddEntityArchival.ts; src/modules/database/entities/archive/EntityVisibilityPreference.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; src/modules/database/entities/session/Session.ts; src/migrations; package.json; .github/workflows/ci.yml
-next-review: D04V
+verification-scope: FPR-07 preservation of the pre-pilot native production documentation reference and current non-pilot source-path corrections; no deployment, command execution or runtime certification
+source-anchors: src/migrations/1789862400000-AddEntityArchival.ts; src/modules/database/entities/archive/EntityVisibilityPreference.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; src/modules/database/entities/session/Session.ts; src/migrations; package.json; .github/workflows/ci.yml
+next-review: native-production-change-or-frontend-cutover
+production-reference: 2dfa257 native frontend documentation; reference only, not evidence of an installed production commit
 -->
+
+This document describes the native frontend production reference. It preserves the existing production contract
+while the frontend migration is in progress; the reference is not evidence of the commit installed at a particular
+site. Developers working in the migration checkout must use the [staged replacement](frontend-migration/staged/DATABASE.md) and current
+`package.json` for the changed frontend commands. Merge the staged replacement into this canonical document at
+production cutover, retaining any intervening native changes.
+
 
 Surveyor uses TypeORM with MariaDB for application data and server-side sessions. The application opens the database
 before it starts listening for HTTP requests, but it does **not** apply schema migrations automatically.
@@ -62,8 +70,7 @@ npm run generate
 ```
 
 `npm run generate` rebuilds `src/modules/database/__index__.ts`, the entity/migration/subscriber index consumed by the
-migration datasource, along with API and localization artifacts. `npm run generate:db-index` regenerates only the
-database index. Generate the index before every schema command in a fresh checkout; neither generator changes a database.
+migration datasource. Run it before every schema command in a fresh checkout.
 
 Use the service's protected settings file for every command:
 
@@ -182,8 +189,7 @@ The complete maintenance-window and rollback sequence is in [Upgrading Surveyor]
 
 | Command | Appropriate use | Production rule |
 |---|---|---|
-| `npm run generate` | Rebuild the TypeORM index and API/localization artifacts in a source checkout. | No database changes; prepares generated inputs for schema commands. |
-| `npm run generate:db-index` | Rebuild only the TypeORM entity/migration/subscriber index. | No database changes; sufficient when only migration tooling is needed. |
+| `npm run generate` | Rebuild the generated TypeORM index in a source checkout. | Safe and required before schema commands. |
 | `npm run typeorm -- migration:show migrationDataSource.ts` | List applied and pending migrations. | Run before and after every upgrade. |
 | `npm run typeorm:migrate` | Apply pending migrations. | Supported existing-database upgrade command; back up first. |
 | `npm run typeorm:sync` | Create the current schema from entities. | Empty-database bootstrap only. Never use as an upgrade. |
@@ -247,17 +253,6 @@ to bypass the guard. A retained personal preference after membership loss cannot
 that membership is restored. Preferences for deleted entities are also retained; use the reviewed full rollback when
 an explicit empty-state reversal is unavailable or inappropriate. Migration SQL must
 be rehearsed separately from tests that only synchronize entity metadata.
-
-## Unreleased packing comparison change
-
-Approved D2 replaces the pilot-only packing metadata revision with lightweight current-value comparisons under
-existing controller/DBAL locks. The unreleased column, writer increments and migration were removed in place; no
-new persistent packing schema or replacement migration is required for the pilot. Existing invoice revisions and
-archival migrations retain their own contracts. See the [approved decision record](FRONTEND_FOUNDATION_DESIGN.md#authorized-rectification-2026-10-07).
-
-A developer who applied the abandoned pilot migration must inspect that local schema before changing it. Only a
-proven disposable test schema may be rebuilt through guarded test procedures; this note never authorizes dropping
-or synchronizing shared data. Production/shared schema changes still use the reviewed procedures above.
 
 ## Sessions are database data
 

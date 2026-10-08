@@ -16,6 +16,14 @@ export interface PilotRequestScope {
 
 export interface PilotRead<T> { data: T; etag: string | null; }
 
+/** Optional form state joins the command owner's route, identity, update and unload guards.
+ * The owner resets its draft only after successful navigation or a confirmed form result. */
+export interface PilotCommandDraft {
+    dirty(): boolean;
+    busy?(): boolean;
+    unknownMessage: MessageKey;
+}
+
 /** Reuse the authored wire shapes while the caller owns its discovery endpoint and cache family.
  * These aliases are UI contracts, not a second definition of the event response. */
 export type PilotEventPickerQuery = NonNullable<paths['/packing-lists/events']['get']['parameters']['query']>;

@@ -7,6 +7,7 @@ import {useHelpApi} from './api';
 import {usePageTitle} from '../../composables/pageTitle';
 import {helpKeys} from '../../app/queryKeys';
 import StatusNotice from '../../components/StatusNotice.vue';
+import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 
 const context = usePilot();
 const api = useHelpApi(context);
@@ -31,6 +32,9 @@ const help = useQuery({
 });
 // A language switch must never display an old translated body under the new interface language.
 const page = computed(() => help.data.value?.locale === locale.value ? help.data.value : undefined);
+// Skeletons describe missing authority only. Complete SSR/cached articles remain mounted
+// during reads, and a terminal read error must never be accompanied by indefinite loading.
+const initialLoading = computed(() => !page.value && help.isPending.value && !help.error.value);
 const listId = computed(() => typeof route.query.list === 'string' ? route.query.list.toLowerCase() : null);
 const pageTitle = computed(() => page.value?.searchResults !== undefined ? messages.value.t('help.searchTitle')
     : page.value?.title ?? messages.value.t('help.title'));
@@ -118,14 +122,22 @@ watch(() => [pageTitle.value, route.hash], async () => {
                             </div>
                         </div>
                     </nav>
+                    <!-- The article owns the accessible loading announcement. This companion
+                         shape reserves the topic column without duplicating its live status. -->
+                    <section v-else-if="initialLoading" class="card bg-dark text-white" aria-hidden="true">
+                        <div class="card-header"><h2 class="h5 mb-0">{{ messages.t('help.topics') }}</h2></div>
+                        <div class="card-body"><LoadingSkeleton :rows="6" /></div>
+                    </section>
                     <RouterLink v-if="listId" :to="`/frontend-pilot/packing/${listId}`" class="d-inline-block mt-3">
                         <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>{{ messages.t('app.returnToPacking') }}
                     </RouterLink>
                 </aside>
-                <div class="col-lg-9">
+                <!-- Initial skeleton status stays outside a busy subtree so its announcement
+                     is delivered while loading. Confirmed content may be busy during refresh. -->
+                <div class="col-lg-9" :aria-busy="!!page && help.isFetching.value">
                     <StatusNotice v-if="help.error.value" kind="danger">{{ messages.t('state.loadFailed') }}</StatusNotice>
-                    <p v-if="!page">{{ messages.t('common.loading') }}</p>
-                    <div v-else-if="page.searchResults !== undefined" class="card bg-dark text-white">
+                    <LoadingSkeleton v-if="initialLoading" variant="article" />
+                    <div v-else-if="page && page.searchResults !== undefined" class="card bg-dark text-white">
                         <div class="card-body help-search-results">
                             <h2>{{ messages.t('help.searchResults') }}</h2>
                             <p v-if="!page.searchQuery" class="mb-0">{{ messages.t('help.searchPrompt') }}</p>
@@ -145,7 +157,7 @@ watch(() => [pageTitle.value, route.hash], async () => {
                             </template>
                         </div>
                     </div>
-                    <div v-else class="row g-3">
+                    <div v-else-if="page" class="row g-3">
                         <article :class="page.toc.length ? 'col-xl-9' : 'col-12'">
                             <div class="card bg-dark text-white">
                                 <!-- This HTML is the existing server's validated, release-shipped Markdown. -->

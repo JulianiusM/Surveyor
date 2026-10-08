@@ -13,13 +13,16 @@ import {packingKeys} from '../../app/queryKeys';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import AppTabList from '../../components/AppTabList.vue';
 import MetadataFields from './MetadataFields.vue';
 import EventPicker from '../../components/EventPicker.vue';
 import AudiencePermissions from '../../components/permissions/AudiencePermissions.vue';
 import PermissionFields from '../../components/permissions/PermissionFields.vue';
 
-const props = defineProps<{listId: string; listTitle?: string}>();
+// The detail's metadata capability schedules its independent read early. It never
+// grants fields or commands; each metadata response supplies its own authority/token.
+const props = defineProps<{listId: string; listTitle?: string; metadataAvailable?: boolean}>();
 const emit = defineEmits<{close: []; saved: []; accessLost: []}>();
 const context = usePilot();
 const api = usePackingApi(context);
@@ -27,7 +30,7 @@ const {messages} = context;
 const router = useRouter();
 type Settings = components['schemas']['PackingSettings'];
 type Defaults = components['schemas']['PermissionDefaults'];
-const panel = ref('');
+const panel = ref(props.metadataAvailable === true ? 'general' : '');
 const accessPanel = ref('defaults');
 const fields = ref<InstanceType<typeof MetadataFields> | null>(null);
 const image = ref<File | null>(null);
@@ -55,65 +58,74 @@ const settings = useQuery({
 // Retain draft owners through locale-key reads, but remove authority immediately on a confirmed
 // denial. Each independently saved form keeps the token of the snapshot it actually edited.
 const last = ref<Settings | null>(null);
-watch(
-    settings.data,
-    (value) => {
-        if (!value) return;
-        last.value = value;
-        if (value.access) {
-            if (
-                !defaults.value ||
-                JSON.stringify(defaults.value.values) === JSON.stringify(defaults.value.original)
-            ) {
-                defaults.value = {
-                    original: {...value.access.defaults},
-                    values: {...value.access.defaults},
-                    token: value.settingsToken,
-                };
-            } else {
-                // A defaults save submits changed audiences only. Keep those local masks,
-                // while adopting another client's changes to every untouched audience.
-                let overlap = false;
-                for (const audience of ['participant', 'guest', 'authenticated', 'public'] as const) {
-                    const draft = defaults.value;
-                    const current = value.access.defaults[audience];
-                    if (draft.values[audience] === draft.original[audience]) {
-                        draft.values[audience] = current;
-                        draft.original[audience] = current;
-                    } else if (draft.values[audience] === current) draft.original[audience] = current;
-                    else if (draft.original[audience] !== current) overlap = true;
-                }
-                if (!overlap) defaults.value.token = value.settingsToken;
-            }
-            const active = new Set(value.access.admins.map((admin) => admin.profileId));
-            for (const id of Object.keys(admins.value)) {
-                const draft = admins.value[id]!;
-                // Removing a remote grant must not silently discard a local mask edit. Keep
-                // its row as a reviewable draft; only an explicit save may grant access again.
-                if (!active.has(id) && draft.value === draft.original && !draft.regrantReviewed) delete admins.value[id];
-            }
-            for (const admin of value.access.admins) {
-                const draft = admins.value[admin.profileId];
-                if (!draft || draft.value === draft.original)
-                    admins.value[admin.profileId] = {
-                        original: admin.mask,
-                        value: admin.mask,
-                        token: admin.editToken,
-                        name: admin.name,
-                        isGuest: admin.isGuest,
-                    };
-            }
+watch(settings.data, receiveSettings, {immediate: true});
+
+/** Reconcile each independent editor with authority without replacing another editor's dirty baseline. */
+function receiveSettings(value: Settings | undefined): void {
+    if (!value) return;
+    last.value = value;
+    receiveDefaults(value);
+    receiveAdmins(value);
+
+    // Event selection is a draft ID. Its current title/access projection can change independently.
+    const eventId = value.currentEvent?.id ?? null;
+    if (!event.value || event.value.value === event.value.original) {
+        event.value = {original: eventId, value: eventId, token: value.settingsToken};
+    }
+}
+
+/** A defaults PATCH contains changed audiences only; adopt remote changes to untouched masks. */
+function receiveDefaults(value: Settings): void {
+    if (!value.access) return;
+    const draft = defaults.value;
+    if (!draft || JSON.stringify(draft.values) === JSON.stringify(draft.original)) {
+        defaults.value = {
+            original: {...value.access.defaults},
+            values: {...value.access.defaults},
+            token: value.settingsToken,
+        };
+        return;
+    }
+
+    let overlap = false;
+    for (const audience of ['participant', 'guest', 'authenticated', 'public'] as const) {
+        const current = value.access.defaults[audience];
+        if (draft.values[audience] === draft.original[audience]) {
+            draft.values[audience] = current;
+            draft.original[audience] = current;
+        } else if (draft.values[audience] === current) draft.original[audience] = current;
+        else if (draft.original[audience] !== current) overlap = true;
+    }
+    if (!overlap) draft.token = value.settingsToken;
+}
+
+/** A removed grant with local edits stays reviewable; only a deliberate save may grant it again. */
+function receiveAdmins(value: Settings): void {
+    if (!value.access) return;
+    const active = new Set(value.access.admins.map((admin) => admin.profileId));
+    for (const id of Object.keys(admins.value)) {
+        const draft = admins.value[id]!;
+        if (!active.has(id) && draft.value === draft.original && !draft.regrantReviewed) delete admins.value[id];
+    }
+    for (const admin of value.access.admins) {
+        const draft = admins.value[admin.profileId];
+        if (!draft || draft.value === draft.original) {
+            admins.value[admin.profileId] = {
+                original: admin.mask,
+                value: admin.mask,
+                token: admin.editToken,
+                name: admin.name,
+                isGuest: admin.isGuest,
+            };
         }
-        const eventId = value.currentEvent?.id ?? null;
-        if (!event.value || event.value.value === event.value.original)
-            event.value = {original: eventId, value: eventId, token: value.settingsToken};
-    },
-    {immediate: true},
-);
+    }
+}
 watch(settings.error, (failure) => {
     if (failure instanceof ApiFailure && [401, 403, 404].includes(failure.status)) emit('accessLost');
 });
 const data = computed(() => settings.data.value ?? last.value);
+const initialLoading = computed(() => !data.value && settings.isPending.value);
+const showMetadata = computed(() => data.value ? !!data.value.editableFields.length : props.metadataAvailable === true);
 const panels = computed(() => {
     const state = data.value;
     if (!state) return [];
@@ -147,6 +159,7 @@ const panels = computed(() => {
 });
 const panelTabs = computed(() => panels.value.map(tab => ({...tab, label: messages.value.t(tab.label),
     id: 'pilot-settings-tab-' + tab.key, controls: 'pilot-settings-' + tab.key})));
+const showGeneral = computed(() => panels.value.some(tab => tab.key === 'general') || (!data.value && showMetadata.value));
 const accessTabs = computed(() => [
     {key: 'defaults', label: messages.value.t('packing.groupPermissions'), id: 'pilot-access-defaults-tab', controls: 'pilot-access-defaults'},
     {key: 'admins', label: messages.value.t('packing.administrators'), id: 'pilot-access-admins-tab', controls: 'pilot-access-admins'},
@@ -154,6 +167,9 @@ const accessTabs = computed(() => [
 watch(
     panels,
     (values) => {
+        // Keep the known metadata panel usable while unrelated settings are still
+        // loading. Actual settings authority controls all panels once it arrives.
+        if (!data.value) return;
         if (!values.some((value) => value.key === panel.value)) panel.value = values[0]?.key ?? '';
     },
     {immediate: true},
@@ -166,10 +182,14 @@ const command = useCommand(async () => {
     emit('saved');
 });
 const refreshingSettings = ref(false);
+// Only an in-flight operation prevents dismissal outright. An unknown metadata command
+// blocks mutations but keeps recovery and deliberate departure acknowledgement reachable.
+const busy = computed(() => refreshingSettings.value || command.pending.value
+    || fields.value?.pending || fields.value?.refreshing);
 const blocked = computed(
-    () =>
-        refreshingSettings.value || command.pending.value || command.uncertain.value || fields.value?.pending,
+    () => busy.value || command.uncertain.value || fields.value?.unknown,
 );
+/** A confirmed metadata save stays confirmed even if its related settings read fails. */
 async function metadataSaved(): Promise<void> {
     // Complete the current-value read before another panel sends a command.
     refreshingSettings.value = true;
@@ -177,7 +197,6 @@ async function metadataSaved(): Promise<void> {
         await settings.refetch({throwOnError: true});
     } catch {
         command.notice.value = 'state.savedRefreshFailed';
-        command.uncertain.value = true;
     } finally {
         refreshingSettings.value = false;
         emit('saved');
@@ -207,6 +226,20 @@ function adminConflict(id: string): boolean {
     const current = data.value?.access?.admins.find(admin => admin.profileId === id);
     const draft = admins.value[id];
     return !!draft && (current ? Boolean(draft.regrantReviewed) || draft.original !== current.mask : !draft.regrantReviewed);
+}
+
+/** Retry related reads explicitly; reconciliation never repeats the saved or uncertain write. */
+async function refreshSettings(): Promise<void> {
+    if (busy.value) return;
+    refreshingSettings.value = true;
+    try {
+        await command.reconcile();
+        command.notice.value = null;
+    } catch {
+        command.setError('state.loadFailed');
+    } finally {
+        refreshingSettings.value = false;
+    }
 }
 const displayedAdmins = computed(() => {
     const current = data.value?.access?.admins ?? [];
@@ -260,8 +293,9 @@ function cancelAddAdmin(): void {
     preset.value = '';
 }
 function mayLeave(): boolean {
-    if (blocked.value || !(fields.value?.mayLeave() ?? true)) return false;
-    return !dirty.value || window.confirm(messages.value.t('draft.discard'));
+    if (busy.value || command.uncertain.value) return false;
+    if (fields.value?.unknown) return window.confirm(messages.value.t('draft.leaveUnknown'));
+    return (!dirty.value && !fields.value?.dirty) || window.confirm(messages.value.t('draft.discard'));
 }
 function close(): void {
     if (mayLeave()) emit('close');
@@ -269,7 +303,7 @@ function close(): void {
 onBeforeRouteLeave(mayLeave);
 onBeforeRouteUpdate(mayLeave);
 function beforeUnload(event: BeforeUnloadEvent): void {
-    if (!dirty.value && !blocked.value) return;
+    if (!dirty.value && !fields.value?.dirty && !blocked.value) return;
     event.preventDefault();
     event.returnValue = '';
 }
@@ -282,7 +316,7 @@ onBeforeUnmount(() => {
     removeIdentityGuard?.();
     window.removeEventListener('beforeunload', beforeUnload);
 });
-const removeUpdateGuard = context.updates.registerGuard(() => !dirty.value);
+const removeUpdateGuard = context.updates.registerGuard(() => !blocked.value && !dirty.value && !fields.value?.dirty);
 onBeforeUnmount(removeUpdateGuard);
 function chooseImage(event: Event): void {
     image.value = (event.target as HTMLInputElement).files?.[0] ?? null;
@@ -450,7 +484,7 @@ function permissionLabel(key: string): string {
         :open="true"
         :title="messages.t('packing.edit')"
         :subtitle="data?.title ?? listTitle"
-        :pending="!!blocked"
+        :pending="!!busy || command.uncertain.value"
         @close="close"
     >
         <template #navigation
@@ -474,69 +508,73 @@ function permissionLabel(key: string): string {
         <StatusNotice v-if="settings.error.value" kind="warning">{{
             messages.t('state.loadFailed')
         }}</StatusNotice>
-        <p v-if="!data">{{ messages.t('common.loading') }}</p>
-        <template v-if="data">
-            <div
-                v-if="panels.some((tab) => tab.key === 'general')"
-                v-show="panel === 'general'"
-                id="pilot-settings-general"
-                role="tabpanel"
-                aria-labelledby="pilot-settings-tab-general"
-            >
-                <section v-if="data.editableFields.length" class="mb-4">
-                    <MetadataFields
-                        ref="fields"
-                        :list-id="listId"
-                        :list-title="data.title"
-                        :disabled="!!blocked"
-                        :active="panel === 'general'"
-                        @saved="metadataSaved"
-                        @access-lost="emit('accessLost')"
-                    />
-                </section>
-                <section v-if="data.capabilities.editHeader" class="mb-4">
-                    <details class="entity-property-group" :open="!data.editableFields.length">
-                        <summary class="fw-semibold">{{ messages.t('packing.headerImage') }}</summary>
-                        <div class="pt-3">
-                            <label class="form-label" for="pilot-header-image">{{
-                                messages.t('packing.chooseImage')
-                            }}</label
-                            ><input
-                                id="pilot-header-image"
-                                type="file"
-                                class="form-control"
-                                accept="image/jpeg,image/png,image/gif"
+        <!-- Metadata can finish before settings (or vice versa). Neither read waits
+             for the other's response, and each region keeps its own draft owner.
+             This remains plain content until the authoritative tab list exists;
+             changing its attributes preserves the same focused field nodes. -->
+        <div
+            v-if="showGeneral"
+            v-show="panel === 'general'"
+            id="pilot-settings-general"
+            :role="data ? 'tabpanel' : undefined"
+            :aria-labelledby="data ? 'pilot-settings-tab-general' : undefined"
+        >
+            <section v-if="showMetadata" class="mb-4">
+                <MetadataFields
+                    ref="fields"
+                    :list-id="listId"
+                    :list-title="data?.title ?? listTitle"
+                    :disabled="!!blocked"
+                    :active="panel === 'general'"
+                    @saved="metadataSaved"
+                    @access-lost="emit('accessLost')"
+                />
+            </section>
+            <section v-if="data?.capabilities.editHeader" class="mb-4" :aria-busy="settings.isFetching.value">
+                <details class="entity-property-group" :open="!data.editableFields.length">
+                    <summary class="fw-semibold">{{ messages.t('packing.headerImage') }}</summary>
+                    <div class="pt-3">
+                        <label class="form-label" for="pilot-header-image">{{
+                            messages.t('packing.chooseImage')
+                        }}</label
+                        ><input
+                            id="pilot-header-image"
+                            type="file"
+                            class="form-control"
+                            accept="image/jpeg,image/png,image/gif"
+                            :disabled="blocked"
+                            @change="chooseImage"
+                        />
+                        <p class="form-text">{{ messages.t('packing.imageHint') }}</p>
+                        <StatusNotice v-if="headerConflict" kind="warning"
+                            ><p>{{ messages.t('packing.readConflict') }}</p>
+                            <p>{{ messages.t('draft.mine') }}: {{ image?.name }}</p>
+                            <ActionButton
+                                variant="outline-warning"
                                 :disabled="blocked"
-                                @change="chooseImage"
-                            />
-                            <p class="form-text">{{ messages.t('packing.imageHint') }}</p>
-                            <StatusNotice v-if="headerConflict" kind="warning"
-                                ><p>{{ messages.t('packing.readConflict') }}</p>
-                                <p>{{ messages.t('draft.mine') }}: {{ image?.name }}</p>
-                                <ActionButton
-                                    variant="outline-warning"
-                                    :disabled="blocked"
-                                    @click="reviewHeader"
-                                    >{{ messages.t('draft.review') }}</ActionButton
-                                ></StatusNotice
+                                @click="reviewHeader"
+                                >{{ messages.t('draft.review') }}</ActionButton
+                            ></StatusNotice
+                        >
+                        <div class="d-flex flex-wrap gap-2">
+                            <ActionButton
+                                :disabled="blocked || !image || headerConflict"
+                                @click="upload"
+                                >{{ messages.t('packing.upload') }}</ActionButton
+                            ><ActionButton
+                                v-if="data.headerUrl"
+                                variant="outline-danger"
+                                :disabled="blocked"
+                                @click="removeImage"
+                                >{{ messages.t('packing.removeImage') }}</ActionButton
                             >
-                            <div class="d-flex flex-wrap gap-2">
-                                <ActionButton
-                                    :disabled="blocked || !image || headerConflict"
-                                    @click="upload"
-                                    >{{ messages.t('packing.upload') }}</ActionButton
-                                ><ActionButton
-                                    v-if="data.headerUrl"
-                                    variant="outline-danger"
-                                    :disabled="blocked"
-                                    @click="removeImage"
-                                    >{{ messages.t('packing.removeImage') }}</ActionButton
-                                >
-                            </div>
                         </div>
-                    </details>
-                </section>
-            </div>
+                    </div>
+                </details>
+            </section>
+        </div>
+        <LoadingSkeleton v-if="initialLoading" variant="form" :rows="3" />
+        <template v-if="data">
             <section
                 v-if="data.capabilities.linkEvent && event"
                 v-show="panel === 'event'"
@@ -871,11 +909,13 @@ function permissionLabel(key: string): string {
         </template>
         <template #footer
             ><ActionButton
-                v-if="command.uncertain.value"
+                v-if="settings.error.value || command.uncertain.value || command.notice.value === 'state.savedRefreshFailed'"
                 variant="outline-secondary"
-                @click="command.reconcile()"
+                :pending="refreshingSettings"
+                :disabled="busy"
+                @click="refreshSettings"
                 >{{ messages.t('common.refresh') }}</ActionButton
-            ><ActionButton variant="secondary" :disabled="blocked" @click="close">{{
+            ><ActionButton variant="secondary" :disabled="busy || command.uncertain.value" @click="close">{{
                 messages.t('common.close')
             }}</ActionButton></template
         >

@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import {computed, ref, watch} from 'vue';
+import {computed, onBeforeUnmount, ref, watch} from 'vue';
 import {useRoute, useRouter} from 'vue-router';
+import type {RouteLocationNormalized} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components, paths} from '../../../types/api/v1';
 import {useOverviewApi} from './api';
 import {usePackingApi} from '../packing/api';
 import {usePilot, refreshInterval} from '../../app/context';
 import {useCommand} from '../../composables/command';
+import {useDebouncedValue} from '../../composables/debounced';
+import {ObsoleteRequestError} from '../../app/transport';
 import {overviewKeys} from '../../app/queryKeys';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import OverviewCard from './OverviewCard.vue';
 import OverviewItems from './OverviewItems.vue';
 
@@ -26,6 +30,20 @@ const {messages} = context;
 const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
 const route = useRoute();
 const router = useRouter();
+// TODO (docs/FRONTEND_PILOT.md): Complete the remaining Overview migration before its
+// default-route cutover; non-packing administration stays with its native feature owner meanwhile.
+let pendingNavigation: RouteLocationNormalized | undefined;
+let readGeneration = 0;
+const searchPending = ref(false);
+const removeNavigationStart = router.beforeEach(rememberNavigation);
+const removeNavigationFinish = router.afterEach(finishNavigation);
+const removeNavigationError = router.onError((_error, to) => finishNavigation(to));
+onBeforeUnmount(() => {
+    readGeneration++;
+    removeNavigationStart();
+    removeNavigationFinish();
+    removeNavigationError();
+});
 const title = computed(() =>
     messages.value.t(props.collection === 'participant' ? 'overview.participation' : 'overview.managed'),
 );
@@ -45,16 +63,19 @@ const query = computed<Query>(() => ({
     eventId: parameter('event'),
 }));
 const search = ref(query.value.q ?? '');
+useDebouncedValue(search, 300, finishTypedSearch);
 watch(
     () => query.value.q,
     (value) => {
-        search.value = value ?? '';
+        // Back may commit while the next typed search is still debouncing. Preserve
+        // that input; its filter will apply to the settled/pending destination below.
+        if (!searchPending.value) search.value = value ?? '';
     },
 );
 const overview = useQuery({
     queryKey: computed(() => overviewKeys.region(context.session.value?.context, context.locale.value, query.value)),
     enabled: computed(() => props.active !== false && context.hydrated.value && context.ready.value && context.visible.value),
-    queryFn: ({signal}) => api.overview(query.value, context.capture(), signal),
+    queryFn: ({signal}) => loadOverview(signal),
     initialData: () => context.bootstrap.initialUrl === route.fullPath
         && context.bootstrap.session.context === context.session.value?.context
         && context.bootstrap.session.locale === context.locale.value
@@ -64,6 +85,10 @@ const overview = useQuery({
         props.active !== false && context.visible.value
             ? refreshInterval(value.state.error, value.state.fetchFailureCount, jitter) : false,
 });
+// Every mounted region resolves independently. Keep confirmed cards and focused filters
+// during background refreshes; only missing, pending authority receives card shapes.
+const initialLoading = computed(() => props.active !== false && !overview.data.value
+    && overview.isPending.value && !overview.error.value);
 const filterTypes = computed(() => {
     const types = overview.data.value?.availableTypes ?? [];
     const selected = overview.data.value?.type;
@@ -87,8 +112,65 @@ async function refresh(): Promise<void> {
 }
 const command = useCommand(refresh);
 const blocked = computed(() => command.pending.value || command.uncertain.value);
+
+/** Capture a read before awaiting its response. Input retires the generation immediately,
+ * so even a transport that finishes after cancellation cannot publish obsolete results. */
+async function loadOverview(signal: AbortSignal): Promise<components['schemas']['OverviewRegion']> {
+    const generation = readGeneration;
+    const requested = {...query.value};
+    const result = await api.overview(requested, context.capture(), signal);
+    if (generation !== readGeneration) throw new ObsoleteRequestError();
+    return result;
+}
+
+function rememberNavigation(to: RouteLocationNormalized): void {
+    pendingNavigation = to;
+    // Back/Forward can start outside this component. Only changed parameters for this
+    // region retire its requests; another region's navigation must leave them running.
+    const parameters = ['q', 'type', 'page', 'childPage', 'event'];
+    if (parameters.some(name => to.query[prefix.value + name] !== route.query[prefix.value + name])) {
+        retireReads();
+    }
+}
+
+function finishNavigation(to: RouteLocationNormalized): void {
+    if (pendingNavigation === to) pendingNavigation = undefined;
+}
+
+/** Cancel this region's previous reads before the native debounce expires. Other regions
+ * retain their independent requests, and the last confirmed cards stay readable. */
+function retireReads(): void {
+    readGeneration++;
+    void context.queryClient.cancelQueries({queryKey: overviewKeys.regionFamily(
+        context.session.value?.context, context.locale.value, props.collection, props.region,
+    )});
+}
+
+function editSearch(event: Event): void {
+    search.value = (event.target as HTMLInputElement).value;
+    if (blocked.value) return;
+    searchPending.value = true;
+    retireReads();
+}
+
+function submitSearch(): void {
+    if (blocked.value) return;
+    searchPending.value = false;
+    void navigate({q: search.value || undefined, page: undefined, childPage: undefined}, 'replace');
+}
+
+function finishTypedSearch(value: string): void {
+    if (searchPending.value && value === search.value) submitSearch();
+}
+watch(() => props.active, active => {
+    if (active !== false) return;
+    searchPending.value = false;
+    retireReads();
+});
 function navigationQuery(values: Record<string, string | undefined>) {
-    const next = {...route.query};
+    // Native typing during Back targets the requested destination rather than the
+    // still-rendered old event. Merge only this region into the latest whole-page URL.
+    const next = {...(pendingNavigation?.query ?? route.query)};
     for (const [key, value] of Object.entries(values)) {
         if (value === undefined) delete next[prefix.value + key];
         else next[prefix.value + key] = value;
@@ -98,8 +180,20 @@ function navigationQuery(values: Record<string, string | undefined>) {
 function navigationHref(values: Record<string, string | undefined>): string {
     return router.resolve({path: '/frontend-pilot', query: navigationQuery(values)}).href;
 }
-async function navigate(values: Record<string, string | undefined>): Promise<void> {
-    await router.push({path: '/frontend-pilot', query: navigationQuery(values)});
+/** Filters replace the current history entry; page/event navigation creates an entry.
+ * The shared command guard retains pending controls while Vue Router owns navigation. */
+async function navigate(values: Record<string, string | undefined>, history: 'push' | 'replace' = 'push'): Promise<void> {
+    if (blocked.value) return;
+    searchPending.value = false;
+    retireReads();
+    const destination = {path: '/frontend-pilot', query: navigationQuery(values)};
+    if (router.resolve(destination).fullPath === route.fullPath) {
+        // Enter/Search remains an explicit read even when the filter URL is unchanged.
+        await overview.refetch();
+        return;
+    }
+    if (history === 'replace') await router.replace(destination);
+    else await router.push(destination);
 }
 // GET search submits this region's controls, preserves other regions and the selected
 // event, and drops both old pagers. Navigation needs no server-held per-tab state.
@@ -116,7 +210,7 @@ function filterType(event: Event): void {
     // Native type buttons submit the search field's current draft as well. Preserve that
     // behavior and reset both pagers without disturbing the selected event or other regions.
     void navigate({q: search.value || undefined, type: type === 'all' ? undefined : type,
-        page: undefined, childPage: undefined});
+        page: undefined, childPage: undefined}, 'replace');
 }
 async function setVisibility(
     card: components['schemas']['OverviewCard'],
@@ -147,7 +241,10 @@ function page(next: number): void {
 }
 </script>
 <template>
-    <section class="js-overview-region" :data-collection="collection" :data-region="region">
+    <!-- Keep initial skeleton status unsuppressed; only confirmed content is busy
+         during background reads, which leave cards and focused controls mounted. -->
+    <section class="js-overview-region" :data-collection="collection" :data-region="region"
+        :aria-busy="!!overview.data.value && overview.isFetching.value">
         <StatusNotice v-if="command.error.value" kind="danger">{{ command.error.value }}</StatusNotice
         ><StatusNotice v-if="command.notice.value" kind="warning">{{
             messages.t(command.notice.value)
@@ -158,13 +255,14 @@ function page(next: number): void {
         <form
             class="d-flex flex-wrap gap-2 mb-3 align-items-center"
             method="get" action="/frontend-pilot"
-            @submit.prevent="navigate({q: search || undefined, page: undefined, childPage: undefined})"
+            @submit.prevent="submitSearch"
         >
             <input v-for="[name, value] in nativeSearchFields" :key="name" type="hidden" :name="name" :value="value" />
             <div class="input-group input-group-sm" style="max-width: 320px">
                 <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span
                 ><input
-                    v-model="search"
+                    :value="search"
+                    @input="editSearch"
                     :name="prefix + 'q'"
                     class="form-control"
                     type="search"
@@ -209,7 +307,7 @@ function page(next: number): void {
                 v-if="query.q || (query.type && query.type !== 'all')"
                 class="btn btn-sm btn-outline-secondary"
                 :href="navigationHref({q: undefined, type: undefined, page: undefined, childPage: undefined})"
-                @click.prevent="navigate({q: undefined, type: undefined, page: undefined, childPage: undefined})"
+                @click.prevent="navigate({q: undefined, type: undefined, page: undefined, childPage: undefined}, 'replace')"
                 >{{ messages.t('overview.clear') }}</a
             ><ActionButton
                 class="btn-sm ms-auto"
@@ -219,7 +317,7 @@ function page(next: number): void {
                 >{{ messages.t('common.refresh') }}</ActionButton
             >
         </form>
-        <p v-if="!overview.data.value && !overview.error.value">{{ messages.t('common.loading') }}</p>
+        <LoadingSkeleton v-if="initialLoading" variant="cards" />
         <template v-if="overview.data.value">
             <template v-if="overview.data.value.parent">
                 <a
@@ -249,7 +347,7 @@ function page(next: number): void {
                             v-if="query.q || (query.type && query.type !== 'all')"
                             class="btn btn-sm btn-outline-secondary"
                             :href="navigationHref({q: undefined, type: undefined, page: undefined, childPage: undefined})"
-                            @click.prevent="navigate({q: undefined, type: undefined, page: undefined, childPage: undefined})"
+                            @click.prevent="navigate({q: undefined, type: undefined, page: undefined, childPage: undefined}, 'replace')"
                             >{{ messages.t('overview.showAllLinked') }}</a
                         >
                     </div>

@@ -23,7 +23,12 @@ function sameToken(left: string | undefined, right: string | undefined): boolean
  */
 async function reloadSession(req: Request): Promise<void> {
     if (!req.session.auth && !req.session.frontendContext) return;
-    await new Promise<void>((resolve, reject) => req.session.reload(error => error ? reject(new ApiProblem('AUTH_REQUIRED')) : resolve()));
+    await new Promise<void>(function reloadStoredSession(resolve, reject) {
+        req.session.reload(function finishSessionReload(error) {
+            if (error) return reject(new ApiProblem('AUTH_REQUIRED'));
+            resolve();
+        });
+    });
 }
 
 async function clearInvalidIdentity(req: Request): Promise<never> {
@@ -38,32 +43,42 @@ async function clearInvalidIdentity(req: Request): Promise<never> {
 /** Hydrate audience relations explicitly, never infer identity from an optional serialized ORM relation. */
 export async function captureApiActor(req: Request): Promise<ApiActor> {
     if (req.apiActor) return req.apiActor;
+
+    // Refresh once, then keep this request's context and identity evidence fixed.
     await reloadSession(req);
     if (ensureFrontendSessionContext(req.session)) await persistSession(req.session);
     const context = req.session.frontendContext!;
     const auth = req.session.auth;
     if (auth?.user && auth?.guest) return clearInvalidIdentity(req);
+
+    // Load the explicit account/guest/profile relations before checking ownership.
+    // Their presence in a serialized session alone is not authoritative evidence.
     const user = auth?.user ? await userService.getUserById(auth.user.id) : null;
     const guest = auth?.guest ? await userService.getGuestInternal(auth.guest.id) : null;
     const profile = req.session.profile ? await userService.getProfileById(req.session.profile.id) : null;
     if ((auth?.user && !user) || (auth?.guest && !guest) || (req.session.profile && !profile)) return clearInvalidIdentity(req);
     if (profile && ((!user && !guest) || (user && profile.userId !== user.id) || (guest && profile.guestId !== guest.id))) return clearInvalidIdentity(req);
+
     if (profile) {
         profile.user = user;
         profile.guest = guest;
     }
+
     const actor: ApiActor = {context, auth: user || guest ? {user, guest} : undefined, profile};
     req.apiActor = actor;
     return actor;
 }
 
+/** Admit the operation's identity/context, then apply the existing mutation-only transport protections. */
 export async function requireApiContext(req: Request, res: Response, requireProfile = false): Promise<ApiActor> {
     const actor = await captureApiActor(req);
     res.set('X-Surveyor-Context', actor.context);
     if (requireProfile && (!actor.profile || !(actor.auth?.user || actor.auth?.guest))) throw new ApiProblem('AUTH_REQUIRED');
+
     const suppliedContext = req.get('X-Surveyor-Context');
     if (!suppliedContext) throw new ApiProblem('CONTEXT_REQUIRED');
     if (!sameToken(suppliedContext, actor.context)) throw new ApiProblem('SESSION_CONTEXT_CHANGED');
+
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
         // Reject an incompatible loaded client before controller admission or any side effect.
         if (!compatibleApiClient(req.get('X-Surveyor-Api-Compatibility'))) throw new ApiProblem('CLIENT_UPDATE_REQUIRED');
@@ -76,11 +91,13 @@ export async function requireApiContext(req: Request, res: Response, requireProf
     return actor;
 }
 
+/** Project the admitted actor into public identity choices and the established common shell. */
 export async function sessionView(req: Request): Promise<components['schemas']['SessionView']> {
     const actor = await captureApiActor(req);
     const kind = actor.auth?.user ? 'account' : actor.auth?.guest ? 'guest' : 'anonymous';
     const profiles = actor.auth?.user ? await userService.getProfilesForUser(actor.auth.user.id)
         : actor.profile ? [actor.profile] : [];
+
     return {
         kind, context: actor.context, csrfToken: req.session.frontendCsrfToken!, locale: requestLocale(req),
         activeProfile: actor.profile ? {id: actor.profile.id, name: actor.profile.name ?? ''} : null,
@@ -102,10 +119,12 @@ export async function sessionView(req: Request): Promise<components['schemas']['
 export function identityTransitionGuard(req: Request): () => Promise<void> {
     const admittedContext = req.apiActor!.context;
     return function requireUnchangedIdentity(): Promise<void> {
-        return new Promise((resolve, reject) => req.sessionStore.get(req.sessionID, (error, stored) => {
-            if (error) return reject(error);
-            if (!stored || stored.frontendContext !== admittedContext) return reject(new ApiProblem('SESSION_CONTEXT_CHANGED'));
-            resolve();
-        }));
+        return new Promise(function readStoredIdentity(resolve, reject) {
+            req.sessionStore.get(req.sessionID, function checkStoredIdentity(error, stored) {
+                if (error) return reject(error);
+                if (!stored || stored.frontendContext !== admittedContext) return reject(new ApiProblem('SESSION_CONTEXT_CHANGED'));
+                resolve();
+            });
+        });
     };
 }

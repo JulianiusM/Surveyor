@@ -40,6 +40,9 @@ import renderer from '../../modules/renderer';
 import {APIError} from '../../modules/lib/errors';
 import type {ItemGetter} from "../../types/PermissionTypes";
 import type {EntityItemType, EntityType} from "../../types/UtilTypes";
+import {packingItemFieldPermission} from '../../modules/packing/api';
+import {entityPropertyPermission} from '../../controller/entityAdminController';
+import type {components} from '../../types/api/v1';
 
 const app = express.Router();
 
@@ -65,7 +68,7 @@ createEntityAdminApiRouter(app, entityName, permFct)
 createEntityArchiveApiRouter(app, entityName, resFct);
 createEntityPropertyApiRouter(app, entityName, resFct, controller.updateProperties);
 
-app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/description', requirePermissionApi(permFct, PERM[entityPropertyPermission('packing', 'description')!]), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.updateDescription(resFct(req).id, req.body, resFct(req).eventId ?? null, req.session);
     renderer.respondWithSuccessJson(res, msg);
 }))
@@ -94,7 +97,15 @@ app.post('/:id/items', requirePermissionApi(permFct, PERM.ITEM_ADD), asyncHandle
     renderer.respondWithSuccessJson(res, msg);
 }));
 
-app.post('/:id/item/:itemId/description', requireItemPermissionApi(permFctItems, PERM.EDIT_DESC, [PERM.ITEM_EDIT, PERM.ITEM_EDIT_DESC]), asyncHandler(async (req: Request, res: Response) => {
+/** Translate the existing field declaration to the native middleware's numeric permission contract. */
+function requireItemFieldPermission(field: keyof components['schemas']['PackingItemPatch']) {
+    const rule = packingItemFieldPermission(field);
+    const parent = Array.isArray(rule.parent) ? rule.parent.map(key => PERM[key])
+        : rule.parent ? PERM[rule.parent] : undefined;
+    return requireItemPermissionApi(permFctItems, PERM[rule.permission], parent);
+}
+
+app.post('/:id/item/:itemId/description', requireItemFieldPermission('description'), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.updateItemDescription(req.params.itemId as string, req.body, resFct(req).id, req.session);
     renderer.respondWithSuccessJson(res, msg);
 }));
@@ -104,9 +115,7 @@ app.post('/:id/item/:itemId/description', requireItemPermissionApi(permFctItems,
 function requireAttributePermission(req: Request, res: Response, next: NextFunction) {
     const field = req.body?.field;
     if (!['title', 'description', 'maxAssignees'].includes(field)) return next(new APIError('Invalid field', {}, 400));
-    const permission = field === 'title' ? PERM.EDIT_TITLE : field === 'description' ? PERM.EDIT_DESC : PERM.EDIT_CAPACITY;
-    const parent = field === 'description' ? [PERM.ITEM_EDIT, PERM.ITEM_EDIT_DESC] : PERM.ITEM_EDIT;
-    return requireItemPermissionApi(permFctItems, permission, parent)(req, res, next);
+    return requireItemFieldPermission(field)(req, res, next);
 }
 app.post('/:id/item/:itemId/attr', requireAttributePermission, asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.updateItemAttr(req.params.itemId as string, req.body, resFct(req).id, req.session);
@@ -114,7 +123,7 @@ app.post('/:id/item/:itemId/attr', requireAttributePermission, asyncHandler(asyn
 }));
 
 /* ---------- Everyone flag -------------------------------- */
-app.post('/:id/item/:itemId/required', requireItemPermissionApi(permFctItems, PERM.EDIT_META, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/item/:itemId/required', requireItemFieldPermission('requiredByAll'), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.updateRequired(req.params.itemId as string, req.body, resFct(req).id, req.session);
     renderer.respondWithSuccessJson(res, msg);
 }));

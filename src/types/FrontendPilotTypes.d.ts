@@ -1,6 +1,9 @@
 import type {components} from './api/v1';
 import type {MessageKey} from './LocalizationTypes';
 
+/** Native packing admission has its own HTTP outcomes, independently of API problem statuses. */
+export type PackingPageError = 'packing.notFound' | 'packing.eventRegistrationRequired' | 'api:errors.FORBIDDEN';
+
 /** Request-safe renderer input. API payload shapes belong exclusively to the generated contract. */
 export interface FrontendPilotBootstrap {
     session: components['schemas']['SessionView'];
@@ -14,6 +17,10 @@ export interface FrontendPilotBootstrap {
     identityFormProblem?: components['schemas']['Problem'];
     identityFeedback?: MessageKey;
     guestEntry?: components['schemas']['GuestEntry'];
+    packingError?: PackingPageError;
+    /** Only admitted creation/duplication forms receive these public form definitions and copied values. */
+    packingCreateContext?: components['schemas']['PackingCreateContext'];
+    packingDuplicate?: components['schemas']['PackingDuplicate'];
     personalLink?: string;
     /** Controller-projected native regions hydrate under their ordinary identity-scoped query keys. */
     overview?: components['schemas']['OverviewRegion'][];
@@ -25,4 +32,6 @@ export interface FrontendPilotRenderResult {
     title: string;
     /** Escaped for the contents of an application/json script element. */
     state: string;
+    /** The renderer supplies an explicit fallback outside the tree that Vue hydrates. */
+    javascriptRequired: boolean;
 }

@@ -24,6 +24,47 @@ function region(collection: 'owner' | 'participant', visibility: 'main' | 'hidde
 afterEach(() => { vi.unstubAllGlobals(); document.body.innerHTML = ''; });
 
 describe('same-component native fallback', () => {
+    it('renders localized packing admission errors without private views or unsupported-page fallback', async () => {
+        const fetch = vi.fn(() => {throw new Error('An admission error must not request private packing data');});
+        vi.stubGlobal('fetch', fetch);
+        for (const locale of ['en', 'de']) {
+            for (const suffix of ['', '/guest', '/duplicate']) {
+                const result = await render(`/frontend-pilot/packing/${entityId}${suffix}`, {
+                    session: {...session, locale}, packingError: 'packing.notFound',
+                });
+                const document = new DOMParser().parseFromString(result.html, 'text/html');
+                expect(document.querySelector('main [role="alert"]')?.textContent).toContain(
+                    locale === 'de' ? 'Packliste nicht gefunden.' : 'Packing list not found.',
+                );
+                const card = document.querySelector('main section.card')!;
+                expect(card.querySelector('h1.card-header')?.textContent).toBe(locale === 'de' ? 'Fehler' : 'Error');
+                expect(card.querySelector('a.btn-primary')?.getAttribute('href')).toBe('/frontend-pilot');
+                expect(card.querySelector('a.btn-primary')?.textContent).toBe(locale === 'de' ? 'Startseite' : 'Home');
+                expect(document.querySelector('main form')).toBeNull();
+                expect(result.javascriptRequired).toBe(false);
+                expect(JSON.parse(result.state).packingError).toBe('packing.notFound');
+            }
+        }
+        expect(fetch).not.toHaveBeenCalled();
+    }, 20_000);
+
+    it('initializes an admitted public duplicate form without granting account creation or calling HTTP during SSR', async () => {
+        const fetch = vi.fn(() => {throw new Error('SSR must use its admitted copy projection');});
+        vi.stubGlobal('fetch', fetch);
+        const result = await render(`/frontend-pilot/packing/${entityId}/duplicate`, {session,
+            packingDuplicate: {title: 'Public copy', description: 'Copied description', eventId: null,
+                items: [{title: 'Camping stove', description: null, maxAssignees: null, requiredByAll: true}],
+                defaultPermissions: {public: 0, guest: 0, authenticated: 0, participant: 0},
+                formContext: {defaults: {public: 0, guest: 0, authenticated: 0, participant: 0}, permissions: [], presets: []}},
+        });
+        const document = new DOMParser().parseFromString(result.html, 'text/html');
+        expect(document.querySelector<HTMLInputElement>('#create-title')?.value).toBe('Public copy');
+        expect(document.querySelector<HTMLTextAreaElement>('#create-description')?.value).toBe('Copied description');
+        expect(document.querySelector('main form')).not.toBeNull();
+        expect(result.javascriptRequired).toBe(true);
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
     it('renders rejected native profile/logout transitions at their own URL without an identity form', async () => {
         for (const path of ['/frontend-pilot/users/profile', '/frontend-pilot/users/logout']) {
             const result = await render(path, {session, identityProblem: {type: 'urn:surveyor:problem:csrf-invalid',
@@ -53,6 +94,7 @@ describe('same-component native fallback', () => {
             expect(data.has('password_repeat')).toBe(true);
             expect(data.get('password')).toBe('');
             expect(JSON.parse(result.state).identityFields).not.toHaveProperty('password');
+            expect(result.javascriptRequired).toBe(true);
         }
     });
 
@@ -70,6 +112,7 @@ describe('same-component native fallback', () => {
         expect(form.querySelector('input[name="username"]')).not.toBeNull();
         expect(form.querySelector('input[name="email"]')).not.toBeNull();
         expect(form.querySelector('button[type="submit"]')?.hasAttribute('disabled')).toBe(false);
+        expect(guest.javascriptRequired).toBe(true);
     }, 20_000); // The first lazy packing route compiles its complete view graph under Vitest.
 
     it('renders authorized overview cards, badges and independent native search/hidden navigation without HTTP', async () => {

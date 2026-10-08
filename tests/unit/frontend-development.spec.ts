@@ -33,6 +33,15 @@ describe('Express-integrated frontend development', () => {
         app.get('/frontend-pilot/help', (req, res, next) => {
             void renderFrontendPilot(res, req.originalUrl, bootstrap).catch(next);
         });
+        app.get('/frontend-pilot/packing/create', (req, res, next) => {
+            const locale = req.query.locale === 'de' ? 'de' : 'en';
+            void renderFrontendPilot(res, req.originalUrl, {session: {...bootstrap.session, locale},
+                packingCreateContext: {defaults: {public: 0, guest: 0, authenticated: 0, participant: 0}, permissions: [], presets: []},
+            }).catch(next);
+        });
+        app.get('/frontend-pilot/users/login', (req, res, next) => {
+            void renderFrontendPilot(res, req.originalUrl, {session: bootstrap.session}).catch(next);
+        });
         app.get('/app/fallthrough-fixture', (req, res) => {
             res.json({url: req.url, originalUrl: req.originalUrl});
         });
@@ -83,6 +92,26 @@ describe('Express-integrated frontend development', () => {
             expect(html).not.toContain('/app/app/');
             expect(html).not.toMatch(/(?:src|href)="\/app\/(?:style|img|help|frontend-pilot)\//u);
             expect(html).not.toContain('file:///');
+            expect(html).not.toContain('<noscript>');
+            // The unsupported-page notice lives outside the hydrated tree. Its local
+            // help URL and source entry survive Vite's transform unchanged.
+            for (const locale of ['en', 'de']) {
+                const packing = await fetch(`${origin}/frontend-pilot/packing/create?locale=${locale}`);
+                expect(packing.status).toBe(200);
+                const packingHtml = await packing.text();
+                expect(packingHtml).toContain(locale === 'de'
+                    ? 'Für diese Seite ist JavaScript erforderlich.' : 'JavaScript is required to use this page.');
+                expect(packingHtml).toContain(`<a class="btn btn-outline-light" href="/frontend-pilot/help?locale=${locale}">`);
+                expect(packingHtml.indexOf('</noscript>')).toBeLessThan(packingHtml.indexOf('<div id="surveyor-pilot">'));
+                expect(packingHtml).toContain('#surveyor-pilot{display:none!important}');
+                expect(packingHtml).not.toContain('/app/app/');
+                expect(packingHtml).toContain(entryUrl);
+            }
+            const identityHtml = await (await fetch(`${origin}/frontend-pilot/users/login`)).text();
+            expect(identityHtml).toContain('<noscript>');
+            expect(identityHtml).toContain('JavaScript is required to use this page.');
+            expect(identityHtml).toContain('#surveyor-pilot{display:none!important}');
+            expect(identityHtml).toContain('action="/frontend-pilot/users/login"');
             const component = await fetch(`${origin}/app/src/frontend/features/help/HelpPage.vue`);
             expect(component.status).toBe(200);
             expect(await component.text()).toContain('__VUE_HMR_RUNTIME__');

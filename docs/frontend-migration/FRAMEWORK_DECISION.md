@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; framework selection from step two, with the Vue/Vite packing and help SSR proof now implemented in step three; benchmarks and broader route cutover remain pending
+verification-scope: FPR-07 explicitly authorized 2026-10-08 scope/fallback/documentation amendments and staging; original choices/D1-D5 retained; no new runtime verification claimed; approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; framework selection from step two, with the Vue/Vite packing and help SSR proof now implemented in step three; benchmarks and broader route cutover remain pending
 source-anchors: package.json; esbuild.client.js; tsconfig.json; tsconfig.server.json; tsconfig.test.json; vitest.config.mts; playwright.config.ts; .github/workflows/ci.yml; .github/workflows/release.yml; src/app.ts; src/views/layout.pug; src/public/style/; src/public/js/; docs/frontend-migration/EDGE_CASES.md; docs/frontend-migration/BEHAVIOR_INVENTORY.md
 next-review: broader-feature-migration-or-measured-framework-limitation
 -->
@@ -18,6 +18,10 @@ the HTTP, authentication and backend owner. Build a small Surveyor component lib
 appearance, native HTML controls and selected Reka UI primitives for complex interaction. Use shared i18next
 resources with **i18next-vue** and the typed shared translation interface, as defined in the
 [localization design](LOCALIZATION_DESIGN.md).
+
+The following paragraph preserves the original fallback decision. Its mandatory interactive no-JavaScript
+requirement is superseded by the expressly authorized 2026-10-08 amendment below; its selected stack and
+same-component rendering boundary remain intact.
 
 The normal interactive experience is an SPA: client navigation, data reads, periodic refresh and mutations update
 the existing document. Preserve deliberate native fallbacks through **selective Vue server rendering of the same
@@ -31,6 +35,20 @@ build and browser evidence. Broader feature parity and measured performance rema
 The [foundation design](../FRONTEND_FOUNDATION_DESIGN.md) owns the overall architecture,
 contract, rollout and pilot. The [baseline](../FRONTEND_MIGRATION_BASELINE.md) and its 121 recorded
 [edge cases](EDGE_CASES.md) govern parity; framework convenience does not override them.
+
+## Authorized fallback and scope amendment (2026-10-08)
+
+The maintainer now requires JavaScript for migrated interactive pages. A clear shared JavaScript-required message
+or a genuinely read-only result is the disabled-JavaScript contract; misleading controls and indefinite loading
+are unacceptable. This supersedes the original interactive native fallback obligation while preserving Vue,
+Vite, Vue Router, TanStack Vue Query, i18next-vue and the same-component SSR/hydration option. It does not authorize
+removing native JavaScript-enabled behavior or permanently excluding Overview and other future features.
+
+Current feature completeness is help and packing plus necessary shared infrastructure. Other implemented
+scaffolds have explicit remaining migration TODOs. The [foundation amendment](../FRONTEND_FOUNDATION_DESIGN.md#authorized-migration-amendments-2026-10-08)
+owns the migration-only boundary, documentation staging and eventual expansion; original design choices and D1–D5
+remain historical evidence. The original packing-card no-JavaScript image finding no longer requires a separate
+server-rendering image subsystem under this amended fallback.
 
 ## Why this fits the repository
 

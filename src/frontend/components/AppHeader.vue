@@ -8,6 +8,9 @@ import type {Locale} from '../../types/LocalizationTypes';
 import AppNavigationDropdown from './AppNavigationDropdown.vue';
 import NativeContextFields from './NativeContextFields.vue';
 
+// TODO (docs/FRONTEND_PILOT.md): Migrate the remaining creation, profile-management and
+// account-administration destinations in their feature increments. Keep their native links
+// until those workflows have pilot owners; the current help/packing iteration does not replace them.
 const emit = defineEmits<{localeError: []}>();
 const context = usePilot();
 const {messages, session, locale, ready} = context;

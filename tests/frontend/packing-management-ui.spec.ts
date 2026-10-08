@@ -8,6 +8,7 @@ import I18NextVue from 'i18next-vue';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
 import InlineCell from '../../src/frontend/components/InlineCell.vue';
 import PackingPage from '../../src/frontend/features/packing/PackingPage.vue';
+import PackingEntry from '../../src/frontend/features/packing/PackingEntry.vue';
 import PackingSettings from '../../src/frontend/features/packing/PackingSettings.vue';
 import MetadataFields from '../../src/frontend/features/packing/MetadataFields.vue';
 import PackingCreatePage from '../../src/frontend/features/packing/PackingCreatePage.vue';
@@ -59,9 +60,9 @@ afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(
 /** Only the HTTP boundary is replaced. Components, validators, commands and query state are real. */
 async function mounted(component: Component, props: Record<string, unknown> | ((context: PilotContext) => Record<string, unknown>) = {},
     handler: (request: Request) => Promise<Response> = async () => json(list),
-    path = '/frontend-pilot/packing/' + id) {
+    path = '/frontend-pilot/packing/' + id, initialSession = session) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
-    const context = createPilotContext({session}, true, request);
+    const context = createPilotContext({session: initialSession}, true, request);
     context.hydrated.value = true;
     const componentProps = reactive(typeof props === 'function' ? props(context) : {...props});
     const router = createRouter({history: createMemoryHistory(), routes: [
@@ -88,6 +89,192 @@ function button(wrapper: ReturnType<typeof mount>, label: string) {
     expect(result, label).toBeDefined();
     return result!;
 }
+
+/** Hold only the network response; production query, draft and component owners remain real. */
+function deferredResponse() {
+    let resolveResponse!: (response: Response) => void;
+    const response = new Promise<Response>(function captureResponse(resolve) { resolveResponse = resolve; });
+    return {response, resolve: resolveResponse};
+}
+
+describe('packing route title ownership', () => {
+    it('hydrates the admitted feature and retains its title through locale changes', async () => {
+        const {wrapper, context} = await mounted(PackingEntry);
+        expect(wrapper.get('h1').text()).toBe('Equipment');
+        expect(document.title).toBe('Equipment | Surveyor');
+
+        // The route wrapper owns admission errors only; the live feature keeps
+        // its resource title when shared locale state invalidates title effects.
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(wrapper.get('h1').text()).toBe('Equipment');
+        expect(document.title).toBe('Equipment | Surveyor');
+    });
+});
+
+describe('progressive packing loading', () => {
+    const metadata: components['schemas']['PackingMetadata'] = {entityType: 'packing', id,
+        values: {title: 'Original'}, editableFields: ['title'], currentEventId: null,
+        archived: false, inheritedArchived: false};
+    const projection: components['schemas']['PackingSettings'] = {...settings, title: 'Original',
+        editableFields: ['title'], capabilities: {...settings.capabilities, editHeader: true}};
+    const formContext: components['schemas']['PackingCreateContext'] = {defaults, permissions: [], presets: []};
+
+    it('replaces the missing table once and preserves a quick-add draft while its locale read is pending', async () => {
+        const first = deferredResponse();
+        const localized = deferredResponse();
+        const other = deferredResponse();
+        let reads = 0;
+        const {wrapper, context, router} = await mounted(PackingPage, {}, async function readList() {
+            reads++;
+            return reads === 1 ? first.response : reads === 2 ? localized.response : other.response;
+        });
+        expect(wrapper.get('[data-loading-skeleton="table"]').exists()).toBe(true);
+        expect(wrapper.find('table').exists()).toBe(false);
+        expect(wrapper.get('section.card').attributes('aria-busy')).toBe('false');
+
+        first.resolve(json(list));
+        await flushPromises();
+        expect(wrapper.find('[data-loading-skeleton]').exists()).toBe(false);
+        expect(wrapper.get('[data-item-id]').text()).toContain('Tent');
+        await wrapper.get('#quick-title').setValue('Local stove');
+        const input = wrapper.get<HTMLInputElement>('#quick-title').element;
+        input.focus();
+
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(reads).toBe(2);
+        expect(wrapper.get('section.card').attributes('aria-busy')).toBe('true');
+        expect(wrapper.find('[data-loading-skeleton]').exists()).toBe(false);
+        expect(wrapper.get<HTMLInputElement>('#quick-title').element).toBe(input);
+        expect(input.value).toBe('Local stove');
+        expect(document.activeElement).toBe(input);
+        localized.resolve(json(list));
+        await flushPromises();
+
+        // A different list cannot borrow this authorized projection. Navigation
+        // still uses the existing draft acknowledgement before clearing its form.
+        vi.stubGlobal('confirm', () => true);
+        await router.push('/frontend-pilot/packing/' + otherId);
+        await flushPromises();
+        expect(wrapper.get('[data-loading-skeleton="table"]').exists()).toBe(true);
+        expect(wrapper.find('[data-item-id]').exists()).toBe(false);
+        other.resolve(json({...list, id: otherId, title: 'Other list'}));
+        await flushPromises();
+    });
+
+    it('keeps same-list content after a failed locale read and removes it on confirmed denial', async () => {
+        let reads = 0;
+        let forbidden = false;
+        const {wrapper, context} = await mounted(PackingPage, {}, async function readList() {
+            reads++;
+            if (reads === 1) return json(list);
+            if (forbidden) return problem('FORBIDDEN', 403);
+            throw new TypeError('Read response unavailable');
+        });
+        await wrapper.get('#quick-title').setValue('Retained stove');
+        context.locale.value = 'de';
+        await vi.waitFor(() => expect(wrapper.text()).toContain(context.messages.value.t('state.stale')), {timeout: 5000});
+        expect(wrapper.find('[data-loading-skeleton]').exists()).toBe(false);
+        expect(wrapper.get('[data-item-id]').text()).toContain('Tent');
+        expect(wrapper.get<HTMLInputElement>('#quick-title').element.value).toBe('Retained stove');
+
+        forbidden = true;
+        await wrapper.get('button[aria-label="' + context.messages.value.t('common.refresh') + '"]').trigger('click');
+        await flushPromises();
+        expect(wrapper.text()).toContain(context.messages.value.t('state.forbidden'));
+        expect(wrapper.find('[data-item-id]').exists()).toBe(false);
+        expect(wrapper.find('#quick-title').exists()).toBe(false);
+        expect(wrapper.find('[data-loading-skeleton]').exists()).toBe(false);
+    }, 10_000);
+
+    it('renders authorized metadata before unrelated settings finish without replacing its local draft', async () => {
+        const delayed = deferredResponse();
+        const {wrapper, request} = await mounted(PackingSettings, {listId: id, metadataAvailable: true},
+            async function readEditor(request) {
+                return new URL(request.url).pathname.endsWith('/settings') ? delayed.response : json(metadata);
+            });
+        expect(request.mock.calls.map(([value]) => new URL((value as Request).url).pathname))
+            .toEqual(expect.arrayContaining([`/api/v1/packing-lists/${id}/settings`, `/api/v1/packing-lists/${id}/metadata`]));
+        expect(wrapper.get('[name="title"]').exists()).toBe(true);
+        expect(wrapper.get('[data-loading-skeleton="form"]').exists()).toBe(true);
+        expect(wrapper.get('#pilot-settings-general').attributes('role')).toBeUndefined();
+        await wrapper.get('[name="title"]').setValue('Local properties');
+        const input = wrapper.get<HTMLInputElement>('[name="title"]').element;
+
+        delayed.resolve(json(projection));
+        await flushPromises();
+        expect(wrapper.find('[data-loading-skeleton]').exists()).toBe(false);
+        expect(wrapper.get('#pilot-settings-general').attributes('role')).toBe('tabpanel');
+        expect(wrapper.get<HTMLInputElement>('[name="title"]').element).toBe(input);
+        expect(wrapper.get<HTMLInputElement>('[name="title"]').element.value).toBe('Local properties');
+        expect(wrapper.get('input[type="file"]').exists()).toBe(true);
+    });
+
+    it('renders available header controls while the independent metadata form is still loading', async () => {
+        const delayed = deferredResponse();
+        const {wrapper} = await mounted(PackingSettings, {listId: id, metadataAvailable: true},
+            async function readEditor(request) {
+                return new URL(request.url).pathname.endsWith('/metadata') ? delayed.response : json(projection);
+            });
+        expect(wrapper.get('input[type="file"]').attributes('disabled')).toBeUndefined();
+        expect(wrapper.get('[data-loading-skeleton="form"]').exists()).toBe(true);
+        expect(wrapper.find('[name="title"]').exists()).toBe(false);
+
+        delayed.resolve(json(metadata));
+        await flushPromises();
+        expect(wrapper.find('[data-loading-skeleton]').exists()).toBe(false);
+        expect(wrapper.get<HTMLInputElement>('[name="title"]').element.value).toBe('Original');
+    });
+
+    it('waits for the existing context and hydration gates before starting either editor read', async () => {
+        const {context, request} = await mounted(PackingSettings, function awaitContext(context) {
+            context.hydrated.value = false;
+            context.ready.value = false;
+            return {listId: id, metadataAvailable: true};
+        }, async function readEditor(request) {
+            return json(new URL(request.url).pathname.endsWith('/metadata') ? metadata : projection);
+        });
+        expect(request).not.toHaveBeenCalled();
+        context.hydrated.value = true;
+        await flushPromises();
+        expect(request).not.toHaveBeenCalled();
+        context.ready.value = true;
+        await flushPromises();
+        expect(request).toHaveBeenCalledTimes(2);
+        for (const [value] of request.mock.calls) expect((value as Request).headers.get('X-Surveyor-Context')).toBe(session.context);
+    });
+
+    it.each([false, true])('uses the admitted form skeleton without inventing copied rows (duplicate: %s)', async duplicate => {
+        const delayed = deferredResponse();
+        const path = duplicate ? `/frontend-pilot/packing/${id}/duplicate` : '/frontend-pilot/packing/create';
+        const {wrapper} = await mounted(PackingCreatePage, {}, async () => delayed.response, path);
+        const initialForm = 'section.card > .card-body > [data-loading-skeleton="form"]';
+        expect(wrapper.get(initialForm).exists()).toBe(true);
+        expect(wrapper.find('form').exists()).toBe(false);
+        delayed.resolve(json(duplicate ? {title: 'Empty source', description: null, eventId: null,
+            items: [], defaultPermissions: defaults, formContext} : formContext));
+        await flushPromises();
+        expect(wrapper.find(initialForm).exists()).toBe(false);
+        expect(wrapper.get('#create-title').exists()).toBe(true);
+        expect(wrapper.findAll('tbody tr')).toHaveLength(duplicate ? 0 : 1);
+    });
+
+    it('reports a failed first metadata read with reachable recovery rather than an endless placeholder', async () => {
+        let recovered = false;
+        const {wrapper} = await mounted(MetadataFields, {listId: id}, async function readMetadata() {
+            if (!recovered) throw new TypeError('Initial metadata response unavailable');
+            return json(metadata);
+        });
+        await vi.waitFor(() => expect(wrapper.text()).toContain('This page could not be loaded.'), {timeout: 5000});
+        expect(wrapper.find('[data-loading-skeleton]').exists()).toBe(false);
+        expect(wrapper.find('form').exists()).toBe(false);
+        recovered = true;
+        await button(wrapper, 'Refresh').trigger('click');
+        await flushPromises();
+        expect(wrapper.get('[name="title"]').exists()).toBe(true);
+    }, 10_000);
+});
 
 describe('inline packing drafts', () => {
     it('validates and commits numeric input through the string draft boundary', async () => {
@@ -149,6 +336,122 @@ describe('inline packing drafts', () => {
 });
 
 describe('metadata conflict acknowledgement', () => {
+    it('reads and offers review after a rejected conditional save while the command is still pending', async () => {
+        let title = 'Original';
+        const tokens: (string | null)[] = [];
+        const {wrapper} = await mounted(MetadataFields, {listId: id}, async request => {
+            if (request.method === 'PATCH') {
+                tokens.push(request.headers.get('If-Match'));
+                if (tokens.length === 1) {
+                    title = 'Remote title';
+                    return problem('PRECONDITION_FAILED', 412);
+                }
+                title = (await request.json()).title;
+            }
+            const result = json({entityType: 'packing', id, values: {title}, editableFields: ['title'],
+                currentEventId: null, archived: false, inheritedArchived: false});
+            result.headers.set('ETag', title === 'Original' ? '"original"' : '"remote"');
+            return result;
+        });
+        await wrapper.get('[name="title"]').setValue('Local title');
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(wrapper.text()).toContain('Remote title');
+        expect(button(wrapper, 'Save properties').attributes('disabled')).toBeDefined();
+        await wrapper.get('input[name="resolve-title"][value="mine"]').setValue(true);
+        await button(wrapper, 'Review changes').trigger('click');
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(tokens).toEqual(['"original"', '"remote"']);
+    });
+
+    it('treats a cleared nullable description as pristine rather than inventing a PATCH', async () => {
+        const baseline: components['schemas']['PackingMetadata'] = {entityType: 'packing', id,
+            values: {title: 'Original', description: null}, editableFields: ['title', 'description'],
+            currentEventId: null, archived: false, inheritedArchived: false};
+        const {wrapper, request} = await mounted(MetadataFields, {listId: id}, async () => json(baseline));
+        await wrapper.get('[name="description"]').setValue('Temporary text');
+        await wrapper.get('[name="description"]').setValue('');
+        expect(button(wrapper, 'Save properties').attributes('disabled')).toBeDefined();
+        await wrapper.get('form').trigger('submit');
+        expect(request.mock.calls.map(([value]) => (value as Request).method)).toEqual(['GET']);
+    });
+
+    it('uses empty/null equivalence during remote comparison without losing a description draft', async () => {
+        const baseline: components['schemas']['PackingMetadata'] = {entityType: 'packing', id,
+            values: {title: 'Original', description: null}, editableFields: ['title', 'description'],
+            currentEventId: null, archived: false, inheritedArchived: false};
+        const patches: unknown[] = [];
+        const {wrapper, context} = await mounted(MetadataFields, {listId: id}, async request => {
+            if (request.method === 'PATCH') patches.push(await request.json());
+            return json(baseline);
+        });
+        await wrapper.get('[name="description"]').setValue('Local note');
+        context.queryClient.setQueryData(packingKeys.metadata(session.context, id, 'en'), {
+            data: {...baseline, values: {...baseline.values, description: ''}}, etag: '"remote"',
+        });
+        await flushPromises();
+        expect(wrapper.text()).not.toContain('Review changes');
+        expect(wrapper.get<HTMLTextAreaElement>('[name="description"]').element.value).toBe('Local note');
+        expect(button(wrapper, 'Save properties').attributes('disabled')).toBeUndefined();
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(patches).toEqual([{description: 'Local note'}]);
+    });
+
+    it.each([false, true])('reviews a lost PATCH response without replay, including unchanged authority (saved: %s)', async saved => {
+        let title = 'Original';
+        let writes = 0;
+        const projection = {...settings, editableFields: ['title'] as const};
+        const {wrapper, router, context, request} = await mounted(PackingSettings, {listId: id}, async request => {
+            if (new URL(request.url).pathname.endsWith('/settings')) return json(projection);
+            if (request.method === 'PATCH') {
+                writes++;
+                if (saved) title = (await request.json()).title;
+                throw new TypeError('Response was lost');
+            }
+            return json({entityType: 'packing', id, values: {title}, editableFields: ['title'],
+                currentEventId: null, archived: false, inheritedArchived: false});
+        });
+        await wrapper.get('[name="title"]').setValue('Local title');
+        await wrapper.get('#packing-metadata-form').trigger('submit');
+        await flushPromises();
+        expect(writes).toBe(1);
+        expect(button(wrapper, 'Save properties').attributes('disabled')).toBeDefined();
+        expect(button(wrapper, 'Refresh').attributes('disabled')).toBeUndefined();
+
+        // Reverting a field cannot settle an unknown write. One dialog owner protects
+        // identity, route and browser departures without repeated discard prompts.
+        await wrapper.get('[name="title"]').setValue('Original');
+        const confirm = vi.fn(() => false);
+        vi.stubGlobal('confirm', confirm);
+        expect(context.mayChangeIdentity()).toBe(false);
+        expect(confirm).toHaveBeenCalledTimes(1);
+        await router.push('/away');
+        expect(router.currentRoute.value.path).not.toBe('/away');
+        expect(confirm).toHaveBeenCalledTimes(2);
+        const departure = new Event('beforeunload', {cancelable: true});
+        window.dispatchEvent(departure);
+        expect(departure.defaultPrevented).toBe(true);
+        await wrapper.get('#packing-metadata-form').trigger('submit');
+        expect(writes).toBe(1);
+
+        await button(wrapper, 'Refresh').trigger('click');
+        await flushPromises();
+        expect(button(wrapper, 'Review changes').attributes('disabled')).toBeUndefined();
+        expect(wrapper.text()).toContain('The previous save may already have succeeded.');
+        expect(wrapper.text()).not.toContain('This list changed while you were editing.');
+        expect(wrapper.text()).not.toContain('Changes are available');
+        expect(button(wrapper, 'Save properties').attributes('disabled')).toBeDefined();
+        await button(wrapper, 'Review changes').trigger('click');
+        await flushPromises();
+        expect(writes).toBe(1);
+        expect(request.mock.calls.map(([value]) => value as Request).filter(value =>
+            value.method === 'GET' && new URL(value.url).pathname.endsWith('/metadata'))).toHaveLength(2);
+        expect(wrapper.get<HTMLInputElement>('[name="title"]').element.value).toBe(title);
+        expect(context.mayChangeIdentity()).toBe(true);
+    });
+
     it('blocks overlapping writes until explicit Review', async () => {
         const baseline: components['schemas']['PackingMetadata'] = {entityType: 'packing', id,
             values: {title: 'Original title', description: 'Original description'}, editableFields: ['title', 'description'],
@@ -389,6 +692,46 @@ describe('packing overview presentation and navigation', () => {
 });
 
 describe('packing command forms', () => {
+    it('keeps a metadata save confirmed when its settings refresh fails and exposes a read retry', async () => {
+        let title = 'Original';
+        let writes = 0;
+        let failSettings = false;
+        const projection = {...settings, editableFields: ['title'] as const};
+        const {wrapper, router} = await mounted(PackingSettings, context => {
+            // A failed read is the case under test; retry timing is covered by the shared read-policy tests.
+            context.queryClient.setDefaultOptions({queries: {retry: false}});
+            return {listId: id};
+        }, async request => {
+            if (new URL(request.url).pathname.endsWith('/settings')) {
+                if (failSettings) throw new TypeError('Read unavailable');
+                return json(projection);
+            }
+            if (request.method === 'PATCH') {
+                writes++;
+                title = (await request.json()).title;
+                failSettings = true;
+            }
+            return json({entityType: 'packing', id, values: {title}, editableFields: ['title'],
+                currentEventId: null, archived: false, inheritedArchived: false});
+        });
+        await wrapper.get('[name="title"]').setValue('Saved title');
+        await wrapper.get('#packing-metadata-form').trigger('submit');
+        await flushPromises();
+        expect(wrapper.text()).toContain('saved');
+        expect(wrapper.text()).not.toContain('The result is uncertain');
+        expect(button(wrapper, 'Close').attributes('disabled')).toBeUndefined();
+        expect(button(wrapper, 'Refresh').attributes('disabled')).toBeUndefined();
+        failSettings = false;
+        await button(wrapper, 'Refresh').trigger('click');
+        await flushPromises();
+        expect(writes).toBe(1);
+        const confirm = vi.fn(() => false);
+        vi.stubGlobal('confirm', confirm);
+        await router.push('/away');
+        expect(router.currentRoute.value.path).toBe('/away');
+        expect(confirm).not.toHaveBeenCalled();
+    });
+
     it('closes revoked settings but retains the independently authorized list and self-assignment', async () => {
         let canManage = true;
         let listReads = 0;
@@ -719,7 +1062,8 @@ describe('packing command forms', () => {
         let submitted: unknown;
         const duplicate: components['schemas']['PackingDuplicate'] = {title: 'Copy equipment', description: 'Shared', eventId: null,
             items: [{title: 'Tent', description: null, maxAssignees: 2, requiredByAll: false},
-                {title: 'Bottle', description: 'Personal', maxAssignees: 1, requiredByAll: true}], defaultPermissions: defaults};
+                {title: 'Bottle', description: 'Personal', maxAssignees: 1, requiredByAll: true}], defaultPermissions: defaults,
+            formContext: {defaults, permissions: [], presets: []}};
         const {wrapper} = await mounted(PackingCreatePage, {}, async request => {
             const path = new URL(request.url).pathname;
             if (request.method === 'POST') {
@@ -739,9 +1083,29 @@ describe('packing command forms', () => {
             defaultPermissions: defaults, items: duplicate.items});
     });
 
+    it.each(['anonymous', 'guest'] as const)('loads a %s duplicate through SPA navigation without invoking account-only creation context', async kind => {
+        const actor = {...session, kind, ...(kind === 'anonymous' ? {activeProfile: null, profiles: [], logoutUrl: null} : {})};
+        const {wrapper, router, request} = await mounted(PackingCreatePage, {}, async req => {
+            const path = new URL(req.url).pathname;
+            if (!path.endsWith('/duplicate')) throw new Error('Duplicate navigation must use only its admitted read');
+            return json({title: path.includes(otherId) ? 'Second admitted copy' : 'First admitted copy',
+                description: null, eventId: null, defaultPermissions: defaults,
+                items: [{title: 'Bottle', description: null, maxAssignees: 1, requiredByAll: true}],
+                formContext: {defaults, permissions: [], presets: []}});
+        }, `/frontend-pilot/packing/${id}/duplicate`, actor);
+        expect(wrapper.get<HTMLInputElement>('#create-title').element.value).toBe('First admitted copy');
+        await router.push(`/frontend-pilot/packing/${otherId}/duplicate`);
+        await flushPromises();
+        expect(wrapper.get<HTMLInputElement>('#create-title').element.value).toBe('Second admitted copy');
+        expect(wrapper.get('tbody input[type="checkbox"]').element).toHaveProperty('checked', true);
+        expect(request.mock.calls.map(([req]) => new URL((req as Request).url).pathname))
+            .toEqual([`/api/v1/packing-lists/${id}/duplicate`, `/api/v1/packing-lists/${otherId}/duplicate`]);
+    });
+
     it('starts a usable duplicate only after unknown creation navigation is acknowledged, without replay', async () => {
         const duplicate: components['schemas']['PackingDuplicate'] = {title: 'Copy equipment', description: 'Shared', eventId: null,
-            items: [{title: 'Tent', description: null, maxAssignees: 2, requiredByAll: false}], defaultPermissions: defaults};
+            items: [{title: 'Tent', description: null, maxAssignees: 2, requiredByAll: false}], defaultPermissions: defaults,
+            formContext: {defaults, permissions: [], presets: []}};
         const {wrapper, router, request} = await mounted(PackingCreatePage, {}, async req => {
             if (req.method === 'POST') throw new TypeError('Response lost');
             const path = new URL(req.url).pathname;

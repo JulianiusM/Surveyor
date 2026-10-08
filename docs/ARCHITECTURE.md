@@ -6,14 +6,20 @@ owner: architecture maintainers
 status: current
 last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; source review of explicit Vue pilot routing, v1 session/error admission, authored API/catalog generation, scoped rendering and packing current-value comparisons; optional organizer participant attribution with independent recorder audit and existing credit/history/proof ownership; unchanged original saved notes before the email calculation disclosure; figures-only typed global calculation breakdown, total/base and optional anonymous payer steps inside a separate example, explanation-free compact PDF, success-only settlement-email dialog closure, and fresh-summary source deduplication; completed correcting-transfer cleanup, direct participant email wording, shared PDF pool-cost explanation, independent overview example disclosure and consistent exemption captions; active paid/refunded payer identity and applied responsibility notices; restored role-specific balance captions; explicit pending-coverage indicators; contextual full pool totals and shares export labels; pure shared coverage evidence owner, unknown legacy baselines and direct-import boundaries; established visual-component reuse and shared PDF sectionTitle; deterministic positive anonymous example selection, honest covering introductions and missing-evidence fallbacks; abbreviated exempt and zero-weight personal explanations; applied versus pending closed takeovers, post-recalculation delta notices and silent rollback; independent OPEN and ORGANIZER_ONLY initial states, default OPEN creation with Invoice submissions choice, reversible participant submission access with confirmation and revision checks, permanent financial closure, and guarded organizer-only migration; notes-first settlement emails with client-dependent native calculation disclosure, complete plain-text content, and opt-in leading actions; covered-participant count/name summaries; Payment due wording; structured anonymous pool examples in preview, organizer details and PDF; concrete complete payer explanations in dialogs and emails, separated from factual notes; cross-pool personal share ledger with one reusable read-only dialog; contextual current-source and saved-settlement totals; explicitly named attendance/factor/weight inputs; adaptive signed adjustment-category provenance and component displays; retained collect/refund totals; compact settlement statuses, nonrepeated PDF row details, and required PDF visual verification; invoice feature-folder orchestration, mandatory JSDoc plus internal step comments, catalog-owned localization-ready messages, prohibition of imported re-exports, calculated-balance-first settlement presentation, and compact payment/refund actions; responsive shares, saved numeric calculation provenance, signed settlement trace, frontend confirmation gates, and controller-owned invoice business operations; explicit controller-owned checks and pure DBAL/no context-specific service errors; implemented permission-filtered entity settings, atomic property updates, authorized event discovery/reassociation, and activity context preservation; source review of bounded mixed-card overview queries, event sub-views, shared membership and lifecycle projections, and fragment navigation; consolidated lifecycle and existing administration/user module boundaries; archival source-boundary, inheritance, overview-identity, and startup review; invoice correction and retraction lifecycles, refreshed submission history, and takeover overview dialogs; organizer-entered shared costs, repeat invoice submissions, visible payment feedback, and share breakdown dialogs; central named mail delivery and alert lifecycle, consistent pool relation snapshots, post-commit notifications, and saved-share PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factors, preview/commit calculation projection, cumulative settled credits, rollback snapshots, and settlement notification boundaries; non-blocking documentation policy and optional report/test routing; D12 runtime, layer, authentication, authorization, persistence, frontend, background-job, build, release, and testing architecture plus D08 advanced activity requirement, allocation, job, review, and persistence boundaries; help integration remains assigned to D14; D14 fixed-source help search, contextual routing, Markdown validation, local visual assets, and release boundary
-source-anchors: src/routes/frontendPilot.ts; src/routes/api/v1.ts; src/modules/api/; src/modules/packing/api.ts; src/modules/frontendPilotRenderer.ts; src/frontend/; contracts/api/v1/; src/locales/; vite.config.mts; tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/modules/archive/policy.ts; src/modules/entityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoice/retention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
-next-review: architecture-or-help-delivery-change
+verification-scope: FPR-07 preservation of the pre-pilot native production documentation reference and current non-pilot source-path corrections; no deployment, command execution or runtime certification
+source-anchors: tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/modules/archive/policy.ts; src/modules/entityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoice/retention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
+next-review: native-production-change-or-frontend-cutover
+production-reference: 2dfa257 native frontend documentation; reference only, not evidence of an installed production commit
 -->
 
-Surveyor is a TypeScript monolith that serves HTML and JSON from one Express process. MariaDB stores application records and sessions; the filesystem stores uploaded header images and invoice proofs. Pug renders the primary UI, with focused browser-side TypeScript enhancing interactive pages.
+This document describes the native frontend production reference. It preserves the existing production contract
+while the frontend migration is in progress; the reference is not evidence of the commit installed at a particular
+site. Developers working in the migration checkout must use the [staged replacement](frontend-migration/staged/ARCHITECTURE.md) and current
+`package.json` for the changed frontend commands. Merge the staged replacement into this canonical document at
+production cutover, retaining any intervening native changes.
 
-The opt-in [Frontend Pilot](FRONTEND_PILOT.md) uses Vue for packing, overview, identity entry and help under an explicit route allowlist. It shares the Express process, session, permission engine and database services with the existing UI.
+
+Surveyor is a TypeScript monolith that serves HTML and JSON from one Express process. MariaDB stores application records and sessions; the filesystem stores uploaded header images and invoice proofs. Pug renders the primary UI, with focused browser-side TypeScript enhancing interactive pages.
 
 This document defines the current technical shape of the repository. Configuration, database operation, production deployment, and recovery procedures are maintained separately in [Configuration](CONFIGURATION.md), [Database and Migrations](DATABASE.md), [Production Operations](OPERATIONS.md), and [Upgrading and Rolling Back](UPGRADING.md).
 
@@ -50,8 +56,8 @@ The lockfile is authoritative for exact installed dependency versions. The impor
 | Runtime | Node.js; CI and release workflows use 24.15.0 |
 | Language | TypeScript targeting ES2024 |
 | Web framework | Express 5.2.x |
-| Templates and UI | Pug 3, Bootstrap 5.3, Sass, browser TypeScript; Vue pilot with shared components |
-| Browser build | esbuild for legacy modules; Vite for Vue client/server bundles |
+| Templates and UI | Pug 3, Bootstrap 5.3, Sass, browser TypeScript |
+| Browser build | esbuild |
 | Persistence | TypeORM 1.1.x with MariaDB/MySQL driver support; MariaDB 10.11 is the tested workflow baseline |
 | Sessions | `express-session` with `connect-typeorm` and the `Session` entity |
 | Input validation | Joi and `express-validator`, according to the route or workflow |
@@ -94,19 +100,16 @@ The runtime `DataSource` reads the initialized settings store. TypeORM command-l
 4. Create a one-day database-backed session with secure cookies in production and `SameSite=Lax`.
 5. Enable one trusted proxy hop so secure cookies work behind the documented reverse proxy.
 6. Install flash messages.
-7. Mount `/api/v1` and `/frontend-pilot` before the legacy session redirect middleware. The v1 boundary owns structured authentication errors and captures the admitted actor for each operation.
-8. Validate stored user/guest/profile sessions for the legacy routes; invalid sessions are logged out.
-9. Populate common Pug locals, including the active profile, authentication state, version, selected public settings, and return URL.
-10. Mount the remaining page and API routers.
-11. Expose `GET /healthz`, then the 404 and error handlers, including v1 handling for parser failures that occur before session middleware.
+7. Validate the stored user/guest/profile session on every request; invalid sessions are logged out.
+8. Populate common Pug locals, including the active profile, authentication state, version, selected public settings, and return URL.
+9. Mount page and API routers.
+10. Expose `GET /healthz`, then the 404 and generic error handlers.
 
 Top-level mounts are explicit in `src/app.ts`:
 
 ```text
 /          home
 /api       JSON/API actions
-/api/v1    versioned session, identity, locale, help, overview and packing pilot API
-/frontend-pilot  explicitly allowed Vue overview/identity/packing/help routes
 /users     account, profile, dashboard, and OIDC routes
 /survey    surveys
 /packing   packing lists
@@ -117,7 +120,7 @@ Top-level mounts are explicit in `src/app.ts`:
 /guest     guest recovery and guest-account actions
 ```
 
-Feature routers are not auto-discovered. A new top-level router must be imported and mounted deliberately. Legacy API subrouters are mounted in `src/routes/api.ts`; versioned pilot operations are mounted in `src/routes/api/v1.ts`. The pilot page router explicitly admits overview, packing, help and necessary identity paths and has no catch-all application shell for legacy routes.
+Feature routers are not auto-discovered. A new top-level router must be imported and mounted deliberately. API subrouters are mounted separately in `src/routes/api.ts`.
 
 ## Application layers
 
@@ -419,14 +422,6 @@ without those options retain their established message layout.
 
 ## Frontend architecture
 
-### Versioned frontend pilot
-
-`src/frontend/` owns the Vue application, router, shared visual components, query refresh and feature views. Vite builds its browser assets and server-rendering bundle separately. Express renders the same Vue tree for initial HTML. Help and the mixed overview receive authorized server data; identity forms retain native guarded adapters. Packing item/settings data loads through v1 after hydration. Packing controls are independent of the legacy frontend. Each server render owns its query state and never performs an HTTP request to its own server.
-
-`contracts/api/v1/` is the authored OpenAPI source for wire shapes. Generation creates ignored declaration files under `src/types/api/` and Ajv standalone validators for server and browser use. Server request validation and safe DTO projection are strict; browser response validation permits additive fields. `src/locales/` supplies the shared pilot UI/API catalog, with generated typed keys and parameter checks. Existing feature catalogs retain their current scope.
-
-After session bootstrap, resource API requests capture session/profile context before admission and require a matching `X-Surveyor-Context`; mutations also require CSRF validation. Packing reads project only permitted metadata and public display fields. Metadata/item/setup writes compare touched current fields under locks, preserving unrelated changes. Native and v1 writers share controller operations; capacity-sensitive assignments and capacity edits use the same coordination, preserving captured self-membership and historical exceptions. Controller-owned checks remain inside DBAL-managed transactions. Feature API/query owners, shared components, i18next-vue and the typed shared catalog prevent repeated infrastructure. Lazy feature/validator chunks keep routing modular. Express-hosted Vite HMR and authored-input regeneration serve development; production requires only current release artifacts. Ordinary session checks allow compatible edits to finish before a clean view reloads after replacement. See [Frontend Pilot](FRONTEND_PILOT.md) for limits and refresh/conflict behavior.
-
 ### Server-rendered pages
 
 Pug templates under `src/views/` render the primary HTML. Shared layout and module templates provide navigation, entity headers, permissions, cards, forms, and administration controls.
@@ -501,7 +496,7 @@ Sass sources under `src/public/style/` compile to ignored CSS before production 
 
 ### Entity archival and personal visibility
 
-Archival organizes the five root entity types without changing their existing access or mutation rules. Direct archival is `BaseEntity.archivedAt`; linked activity plans, packing lists, and drivers lists also inherit their event's state. Nested records follow their enclosing root. Event archival remains stored on the event; its transaction also advances linked packing metadata revisions so reviewed edit tokens cannot survive an archive/restore round trip. Restoration preserves independently archived children and pauses independent automation on dated roots.
+Archival organizes the five root entity types without changing their existing access or mutation rules. Direct archival is `BaseEntity.archivedAt`; linked activity plans, packing lists, and drivers lists also inherit their event's state. Nested records follow their enclosing root. An event transition requires one event write, without copying state to every child. Restoration preserves independently archived children and pauses independent automation on dated roots.
 
 The implementation keeps these responsibilities separate:
 
@@ -547,8 +542,8 @@ The fixed help source is `docs/user-guide/`, packaged with each release. It is t
 `npm run build` performs four groups of work:
 
 1. Compile Sass.
-2. Generate the TypeORM index, API declarations/validators and localization artifacts; compile server TypeScript and package runtime contract artifacts in `dist/`.
-3. Compile legacy browser TypeScript to `dist/public/js/`, typecheck the Vue application, and build its client assets to `dist/public/app/` and server renderer to `dist/frontend-server/`.
+2. Generate the TypeORM index and compile server TypeScript to `dist/`.
+3. Compile browser TypeScript to `dist/public/js/`.
 4. Copy static image/style assets and Pug views into `dist/`.
 
 The manual release workflow first invokes full CI on the selected ref. It then validates and commits the requested version, creates a tag, builds, and produces a tar archive containing:

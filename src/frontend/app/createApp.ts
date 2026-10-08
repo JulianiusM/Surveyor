@@ -14,6 +14,10 @@ const PackingCreatePage = () => import('../features/packing/PackingCreatePage.vu
 const OverviewPage = () => import('../features/overview/OverviewPage.vue');
 const HelpPage = () => import('../features/help/HelpPage.vue');
 
+// One delivery declaration drives the message-only fallback for interactive
+// pages. Existing server POST contracts remain independent of that presentation.
+const javascriptPage = {javascriptRequired: true};
+
 /** Browsers report retired module URLs differently. Recognize their load failures
  * specifically, so an ordinary component bug does not suggest a release reload. */
 function isRouteModuleLoadFailure(error: unknown): boolean {
@@ -24,24 +28,27 @@ function isRouteModuleLoadFailure(error: unknown): boolean {
 export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boolean) {
     const context = createPilotContext(bootstrap, browser);
     const app = createSSRApp(App);
+    // TODO (docs/FRONTEND_PILOT.md): Add the remaining native feature/account routes in
+    // their migration increments before default-route cutover. This route table covers
+    // help, packing and their necessary existing identity journeys, not the complete app.
     const router = createRouter({
         history: browser ? createWebHistory() : createMemoryHistory(),
         routes: [
-            {path: '/frontend-pilot', component: OverviewPage},
-            {path: '/frontend-pilot/packing/create', component: PackingCreatePage},
-            {path: '/frontend-pilot/packing/:listId/duplicate', component: PackingCreatePage},
-            {path: '/frontend-pilot/packing/:listId/guest', component: PackingEntry},
-            {path: '/frontend-pilot/packing/:listId', component: PackingEntry},
-            {path: '/frontend-pilot/users/login', component: IdentityPage, meta: {identityMode: 'login'}},
+            {path: '/frontend-pilot', component: OverviewPage, meta: {javascriptRequired: true}},
+            {path: '/frontend-pilot/packing/create', component: PackingCreatePage, meta: {javascriptRequired: true}},
+            {path: '/frontend-pilot/packing/:listId/duplicate', component: PackingCreatePage, meta: {javascriptRequired: true}},
+            {path: '/frontend-pilot/packing/:listId/guest', component: PackingEntry, meta: {...javascriptPage}},
+            {path: '/frontend-pilot/packing/:listId', component: PackingEntry, meta: {javascriptRequired: true}},
+            {path: '/frontend-pilot/users/login', component: IdentityPage, meta: {...javascriptPage, identityMode: 'login'}},
             // Native transition failures render the same localized message component and
             // hydrate at their actual POST URL instead of falling through to a Pug error page.
             {path: '/frontend-pilot/users/profile', component: IdentityPage, meta: {identityMode: 'error'}},
             {path: '/frontend-pilot/users/logout', component: IdentityPage, meta: {identityMode: 'error'}},
-            {path: '/frontend-pilot/users/register', component: IdentityPage, meta: {identityMode: 'register'}},
-            {path: '/frontend-pilot/users/forgot-password', component: IdentityPage, meta: {identityMode: 'forgot'}},
-            {path: '/frontend-pilot/users/reset-password/:token', component: IdentityPage, meta: {identityMode: 'reset'}},
-            {path: '/frontend-pilot/users/activate/:token', component: IdentityPage, meta: {identityMode: 'activate'}},
-            {path: '/frontend-pilot/guest/:guestId/login/:token', component: IdentityPage, meta: {identityMode: 'guest-login'}},
+            {path: '/frontend-pilot/users/register', component: IdentityPage, meta: {...javascriptPage, identityMode: 'register'}},
+            {path: '/frontend-pilot/users/forgot-password', component: IdentityPage, meta: {...javascriptPage, identityMode: 'forgot'}},
+            {path: '/frontend-pilot/users/reset-password/:token', component: IdentityPage, meta: {...javascriptPage, identityMode: 'reset'}},
+            {path: '/frontend-pilot/users/activate/:token', component: IdentityPage, meta: {...javascriptPage, identityMode: 'activate'}},
+            {path: '/frontend-pilot/guest/:guestId/login/:token', component: IdentityPage, meta: {...javascriptPage, identityMode: 'guest-login'}},
             {path: '/frontend-pilot/help', component: HelpPage},
             {path: '/frontend-pilot/help/:doc', component: HelpPage},
         ],

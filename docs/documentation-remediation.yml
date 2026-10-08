@@ -3002,6 +3002,49 @@ work_packages:
   - activity help assertions preserve named-role protection, roleless reassignment, bounded-search limitations, last-resort overfill, and server-side revalidation of approved operations
   priority_note: DEC-004 is resolved; implement its narrow trust-boundary guardrails as P1 within D14 even if the broader UX work remains P2.
   execution_note: D01-D13 are complete and all behavior-documentation dependencies are satisfied. D14 is the exact next continuation for help navigation, contextual integration, visuals, rendered semantic checks, and the DEC-004 trust-boundary guardrails.
+- id: BACKEND-HARDENING-01
+  status: deferred
+  title: Independently review authentication, authorization and concurrency hardening
+  audiences:
+  - maintainer
+  - backend developer
+  dependencies: []
+  blocks: []
+  finding_ids: []
+  scope:
+  - Evaluate authentication and session-transition redesign independently of frontend migration.
+  - Evaluate a general controller-method permission declaration/enforcement framework beyond the existing middleware and engine.
+  - Investigate legacy authorization revocation, association and deletion races before proposing remedies.
+  - Review intersecting ACL, membership, assignment and deletion lock orders, including implicit database dependencies.
+  related_implementation_defects:
+  - IMP-036
+  - IMP-037
+  documents:
+  - docs/FRONTEND_PILOT.md
+  - docs/frontend-migration/API_CONTRACT_DESIGN.md
+  - docs/frontend-migration/REFRESH_CONFLICT_DESIGN.md
+  source_anchors:
+  - src/modules/api/session.ts
+  - src/controller/userController.ts
+  - src/controller/entityAdminController.ts
+  - src/controller/packingController.ts
+  - src/middleware/permissionMiddleware.ts
+  - src/modules/permissionEngine.ts
+  - src/modules/database/services/EntityAdminService.ts
+  - src/modules/database/services/EntityLifecycleService.ts
+  - src/modules/database/services/PackingService.ts
+  - src/modules/database/services/EventService.ts
+  deliverables:
+  - A separately scoped backend proposal distinguishing confirmed defects from optional architectural improvements.
+  - Explicit compatibility decisions for any proposed change to authentication, permissions, business behavior or transactions.
+  - Focused execution evidence for the approved follow-up, with concurrency checks against a guarded disposable database where required.
+  acceptance_criteria:
+  - Selected existing defects reference their register entries instead of creating duplicate findings.
+  - Source-level race and deadlock risks are reproduced or explicitly qualified before being described as confirmed defects.
+  - Any change to established behavior receives explicit maintainer authorization before implementation.
+  - Existing identity, ownership, audience and item-to-parent permission semantics are preserved unless separately amended.
+  - Frontend migration neither depends on this package nor implements its backend redesign as incidental cleanup.
+  execution_note: Deferred by explicit maintainer instruction on 2026-10-08. The active task is migration of the existing frontend. Retain existing authentication, authorization, context and CSRF protections and approved D1-D5 behavior; limit migration backend work to necessary contract, projection and adapter support. This record is not authorization to implement backend hardening and is not part of the documentation execution order.
 recommended_execution_order:
 - - D00
 - - DEC-001

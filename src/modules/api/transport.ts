@@ -42,6 +42,9 @@ export function validateApiInput(operationId: ApiOperationId, value: unknown): v
     if (!schema) throw new Error(`Operation has no request schema: ${operationId}`);
     const validator = contractValidator(schema);
     if (validator(value)) return;
+
+    // Bound structural diagnostics and expose machine pointers, never schema internals
+    // or user-supplied values. Localized presentation belongs to the problem adapter.
     const problem = new ApiProblem('VALIDATION_FAILED');
     problem.fieldErrors = (validator.errors ?? []).slice(0, 20).map(error => ({
         pointer: error.instancePath,
@@ -51,16 +54,23 @@ export function validateApiInput(operationId: ApiOperationId, value: unknown): v
     throw problem;
 }
 
+/** Decode declared parameters before validating the operation's media type and closed body shape. */
 export function validateOperationRequest(req: Request, operationId: ApiOperationId, normalizeBody?: (body: unknown) => unknown): void {
     const operation = operationContract(operationId);
     const header: Record<string, string> = {};
+    // Context/CSRF/preconditions have dedicated admission owners; the generated
+    // transport validator handles only the remaining declared scalar headers here.
     for (const parameter of operation.parameters) {
         if (parameter.in !== 'header' || ['X-Surveyor-Context', 'X-CSRF-Token', 'If-Match'].includes(parameter.name)) continue;
         const value = req.get(parameter.name);
         if (value !== undefined) header[parameter.name] = value;
     }
+
     const parameters = decodeApiParameters(operationId, {path: req.params, query: req.query, header});
     if (!contractValidator(operation.parametersValidator)(parameters)) throw new ApiProblem('VALIDATION_FAILED');
+
+    // Feature normalization runs only after media admission, preserving native
+    // trim/empty-value semantics while retaining the generated structural contract.
     if (operation.requestSchema) {
         if (!req.is(operation.requestMediaType ?? 'application/json')) throw new ApiProblem('UNSUPPORTED_MEDIA_TYPE');
         if (normalizeBody) req.body = normalizeBody(req.body as unknown);
@@ -70,6 +80,7 @@ export function validateOperationRequest(req: Request, operationId: ApiOperation
     }
 }
 
+/** All successful API representations share the same private cache and locale boundary. */
 function privateResponse(req: Request, res: Response): void {
     res.set('Cache-Control', 'private, no-store').set('Content-Language', requestLocale(req))
         .vary('Cookie').vary('X-Surveyor-Context').vary('X-Surveyor-Locale');

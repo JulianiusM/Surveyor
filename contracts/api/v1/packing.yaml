@@ -765,6 +765,7 @@ schemas:
       - eventId
       - items
       - defaultPermissions
+      - formContext
     properties:
       title:
         type: string
@@ -782,6 +783,8 @@ schemas:
           $ref: "#/schemas/PackingDuplicateItem"
       defaultPermissions:
         $ref: "#/schemas/PermissionDefaults"
+      formContext:
+        $ref: "#/schemas/PackingCreateContext"
     description: Draft copied from persisted rows, including cleared titles and historical invalid capacity. Creation validates the edited
       draft independently.
   PackingDuplicateItem:

@@ -77,14 +77,17 @@ describe('generated v1 contract boundaries', () => {
     it('retains native cleared item titles in edits and duplicate reads while creation and root metadata stay required', () => {
         const item = {title: '', description: null, maxAssignees: 1, requiredByAll: false};
         const duplicate = {title: '', description: null, eventId: null, items: [item],
-            defaultPermissions: {public: 0, guest: 0, authenticated: 0, participant: 0}};
+            defaultPermissions: {public: 0, guest: 0, authenticated: 0, participant: 0},
+            formContext: {defaults: {public: 0, guest: 0, authenticated: 0, participant: 0}, permissions: [], presets: []}};
         for (const validators of [server, browser]) {
             expect(validators.validatePackingItemPatch({title: ''})).toBe(true);
             expect(validators.validatePackingItemPatch({title: null})).toBe(false);
             expect(validators.validatePackingItemPatch({title: 'x'.repeat(256)})).toBe(false);
             expect(validators.validatePackingDuplicate(duplicate)).toBe(true);
+            expect(validators.validatePackingDuplicate({...duplicate, formContext: undefined})).toBe(false);
             expect(validators.validatePackingNewItem(item)).toBe(false);
-            expect(validators.validatePackingCreateInput({...duplicate, title: 'New list'})).toBe(false);
+            expect(validators.validatePackingCreateInput({title: 'New list', description: null, eventId: null,
+                items: [item], defaultPermissions: duplicate.defaultPermissions})).toBe(false);
             expect(validators.validatePackingMetadataPatch({title: ''})).toBe(false);
         }
     });

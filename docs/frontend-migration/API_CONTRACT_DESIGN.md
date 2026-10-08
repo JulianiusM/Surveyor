@@ -7,7 +7,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; source review of expanded packing management, overview, identity, multipart/binary and generated contract boundaries; original step-two cross-feature design retained and distinguished from implemented scope; this documentation update runs no application, database or browser checks and makes no complete-parity claim
+verification-scope: FPR-07 explicitly authorized 2026-10-08 scope/fallback/documentation amendments and staging; original choices/D1-D5 retained; no new runtime verification claimed; approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; source review of expanded packing management, overview, identity, multipart/binary and generated contract boundaries; original step-two cross-feature design retained and distinguished from implemented scope; this documentation update runs no application, database or browser checks and makes no complete-parity claim
 source-anchors: contracts/api/v1/openapi.yaml; contracts/api/v1/common.yaml; contracts/api/v1/packing.yaml; contracts/api/v1/overview.yaml; contracts/api/v1/auth.yaml; scripts/generate-api.mjs; src/modules/api/contracts.ts; src/modules/api/session.ts; src/modules/api/transport.ts; src/modules/api/problem.ts; src/types/ApiTypes.d.ts; src/routes/api/v1.ts; src/routes/api/v1/packing.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; src/modules/packing/api.ts; tests/unit/frontend-contracts.spec.ts; tests/unit/frontend-generation.spec.ts; tests/integration/packing-management-api.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; tests/fixtures/frontend-contracts.mts; docs/FRONTEND_MIGRATION_BASELINE.md; docs/ARCHITECTURE.md; src/controller/packingController.ts; src/modules/database/services/PackingService.ts; src/modules/database/services/EntityLifecycleService.ts; package.json
 next-review: pilot-contract-expansion-or-transport-subset-change
 -->
@@ -138,6 +138,19 @@ The initial fixture must prove type/runtime parity for this subset, including nu
 unknown properties, tagged errors, multipart metadata, and cross-file references.
 ([openapi-typescript schema guidance](https://openapi-ts.dev/advanced))
 
+## Migration-only clarification (2026-10-08)
+
+The existing [foundation amendment](../FRONTEND_FOUNDATION_DESIGN.md#authorized-migration-amendments-2026-10-08)
+limits backend work to the adapters needed to migrate the native frontend while preserving its business behavior.
+Reuse current authentication flows, declared permission middleware, resource admission and controller/DBAL owners.
+Existing v1 context, CSRF, request/response shape and privacy boundaries remain required. The migration does not
+become a general authentication/session rewrite, new authorization framework or repository-wide race/lock project.
+
+The wire-value table below corrects a prose inconsistency: authored `DecimalId`, generated declarations and packing
+projections already use decimal-string assignment IDs. It is not a contract change or newly approved integer
+representation. Generated strict Ajv validators own the v1 structural boundary; native validation remains in its
+existing owners until the relevant adapter is migrated. D3 keeps this unreleased contract in v1.
+
 ## Server boundaries and DTO projection
 
 The request flow remains explicit:
@@ -233,7 +246,7 @@ context checks run before returning 304. A cache tag is never an authorization t
 | Value | Contract rule |
 |---|---|
 | Entity/item/profile UUIDs | Strings with UUID format where the real identifier is a UUID; never an entity object |
-| Numeric assignment handles | Authorized packing assignee projections use positive integer handles or null; the DELETE path uses a positive decimal string, converted with a safe-integer check. Other future numeric IDs need an explicit endpoint contract |
+| Numeric assignment handles | Authorized packing assignee projections and the DELETE path use positive decimal strings; undisclosed read handles are null. Convert to a safe integer only at the existing internal persistence boundary. Other future numeric IDs need an explicit endpoint contract |
 | Revisions | Opaque ETag for ordinary edits; the established nonnegative safe-integer invoice calculation revision for reviewed finance commands; reject unsafe numeric conversion |
 | Money | Signed fixed two-decimal strings for v1 financial amounts, with endpoint-specific allowed sign/range; no localized separators, binary floats, or unrequested currency field |
 | Factors | Canonical decimal strings allowing the existing 0–1000 range and four decimal places; preserve zero; conversion must retain current exact arithmetic |

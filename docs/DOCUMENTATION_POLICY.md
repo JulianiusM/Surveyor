@@ -5,10 +5,10 @@ documentation-metadata
 audience: maintainers; documentation contributors; AI agents
 owner: documentation maintainers
 status: current
-last-verified: 2026-10-07
+last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-ci-repair
-verification-scope: explicit prohibition of implementation information in user-facing documentation and illustrations across all languages; non-blocking documentation policy, optional report exits, application/content-test separation, and advisory release packaging; runtime trust boundary retained
-source-anchors: scripts/check-documentation.mjs; scripts/tests/documentation-check.test.mjs; repository-tree; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; .github/workflows/release.yml; docs/decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md; docs/documentation-check.json; docs/documentation-remediation.yml; scripts/check-documentation.mjs; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts
+verification-scope: FPR-07 advisory multilingual corpus discovery and staged-help exclusion; synthetic tooling verification and no new delivery gate; explicit prohibition of implementation information in user-facing documentation and illustrations across all languages; non-blocking documentation policy, optional report exits, application/content-test separation, and advisory release packaging; runtime trust boundary retained
+source-anchors: src/locales/; scripts/check-documentation.mjs; scripts/tests/documentation-check.test.mjs; repository-tree; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; .github/workflows/release.yml; docs/decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md; docs/documentation-check.json; docs/documentation-remediation.yml; scripts/check-documentation.mjs; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts
 next-review: documentation-pipeline-or-help-trust-boundary-change
 -->
 
@@ -251,6 +251,13 @@ The application renders only the reviewed Markdown files under `docs/user-guide/
 - Images must use non-empty alt text and a reviewed raster file under `docs/user-guide/assets/`; remote images, data URIs, SVG, and nested asset sources are not accepted.
 - Unreferenced or unsupported help assets are reported for maintainer review.
 - `npm run docs:check:help` reports these rules without a database or application server. The normal and strict reports also include this advisory check.
+
+The help-authoring report discovers each fixed help corpus from the authored locale catalogs and checks its
+articles, local links and assets independently. Another language cannot satisfy a missing local article or image.
+Its JSON identifies each corpus and the aggregate totals. Temporary cutover drafts outside `docs/user-guide/`
+are not application help sources and are not counted as published articles; the structural report still checks
+their maintained Markdown metadata and links. All findings remain advisory, including a deliberately retained
+unreferenced authoring illustration.
 - The release workflow attempts the copy and byte comparison in a separate non-blocking step.
 
 These checks reject content outside the repository’s authoring contract; they are not a general-purpose sanitizer for arbitrary Markdown. Adding an editor, upload, database, tenant, plugin, or remote help source requires reopening DEC-004 and defining sanitization, URI allowlisting, provenance, and review before that source is enabled.

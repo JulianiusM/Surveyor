@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, reactive, ref, watch} from 'vue';
-import {useRoute, RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate} from 'vue-router';
+import {computed, reactive, ref, watch} from 'vue';
+import {useRoute, RouterLink} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import {usePilot} from '../../app/context';
 import {usePackingApi} from '../packing/api';
@@ -12,6 +12,7 @@ import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import NativeContextFields from '../../components/NativeContextFields.vue';
+import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import {ApiFailure} from '../../app/transport';
 
 const context = usePilot();
@@ -27,23 +28,27 @@ const choiceOpen = ref(false);
 const recovered = ref(false);
 const checkingEmail = ref(false);
 const reconciling = ref(false);
-function mayLeave(): boolean {
-    return !checkingEmail.value && !command.pending.value
-        && (!command.uncertain.value || window.confirm(messages.value.t('auth.leaveUnknown')));
-}
-const removeIdentityGuard = context.registerIdentityGuard(mayLeave);
-onBeforeUnmount(removeIdentityGuard);
-onBeforeRouteLeave(mayLeave);
-onBeforeRouteUpdate(mayLeave);
 const entry = useQuery({
     queryKey: computed(() => packingKeys.guest(context.session.value?.context, listId.value)),
     enabled: computed(() => context.ready.value && context.hydrated.value),
     queryFn: ({signal}) => api.guestEntry(listId.value, context.capture(), signal),
     initialData: () => nativeInitial?.guestEntry?.id === listId.value ? nativeInitial.guestEntry : undefined,
 });
-const command = useCommand(async () => {
-    await context.refreshSession();
-}, true);
+const command = useCommand(context.refreshSession, true, {
+    dirty: isDirty,
+    busy: isCheckingEmail,
+    unknownMessage: 'auth.leaveUnknown',
+});
+
+/** Name-only and email-only drafts receive the same protection as every other identity form. */
+function isDirty(): boolean {
+    return !!fields.name || !!fields.email;
+}
+
+/** The advisory lookup is still in flight and must finish before a form departure is accepted. */
+function isCheckingEmail(): boolean {
+    return checkingEmail.value;
+}
 watch(listId, () => {
     // Guards have accepted leaving the previous entity. Preserve its unknown outcome until
     // that commitment, then start a clean guest form for the newly selected entity.
@@ -56,9 +61,8 @@ if (nativeInitial?.identityFormProblem) {
     command.setError(new ApiFailure(nativeInitial.identityFormProblem.status, nativeInitial.identityFormProblem));
 }
 usePageTitle(() => entry.data.value?.title || messages.value.t('app.packing'));
-const removeUpdateGuard = context.updates.registerGuard(() => !checkingEmail.value && !fields.name && !fields.email);
-onBeforeUnmount(removeUpdateGuard);
 const blocked = computed(() => checkingEmail.value || command.pending.value || command.uncertain.value);
+/** Reconcile identity without assuming a successful title read proves guest creation failed. */
 async function refreshIdentityState(): Promise<void> {
     if (reconciling.value) return;
     reconciling.value = true;
@@ -68,9 +72,14 @@ async function refreshIdentityState(): Promise<void> {
         if (context.isCurrent(scope)) await entry.refetch({throwOnError: true});
         // The identity-bearing command may still be completing. Only a changed authoritative
         // session remounts this page; a title read does not prove guest creation failed.
-    } catch { command.setError('state.loadFailed'); }
-    finally { reconciling.value = false; }
+    } catch {
+        command.setError('state.loadFailed');
+    } finally {
+        reconciling.value = false;
+    }
 }
+
+/** Submit once and release the draft only after the server confirms the guest identity. */
 async function register(): Promise<void> {
     choiceOpen.value = false;
     const result = await command.run(
@@ -82,8 +91,13 @@ async function register(): Promise<void> {
             ),
         false,
     );
-    if (result) await context.acceptIdentity(result);
+    if (result) {
+        Object.assign(fields, {name: '', email: ''});
+        await context.acceptIdentity(result);
+    }
 }
+
+/** Preserve the native advisory email choice; a failed lookup does not block a new guest. */
 async function submit(): Promise<void> {
     if (blocked.value) return;
     if (fields.email.trim()) {
@@ -92,7 +106,10 @@ async function submit(): Promise<void> {
         try {
             const result = await context.api.guestEmailExists({email: fields.email.trim().toLowerCase()}, scope);
             if (!context.isCurrent(scope)) return;
-            if (result.exists) { choiceOpen.value = true; return; }
+            if (result.exists) {
+                choiceOpen.value = true;
+                return;
+            }
         } catch {
             // The native lookup is advisory. A failed read must not prevent creating a new
             // guest, but an obsolete identity must never carry the form into another actor.
@@ -103,6 +120,8 @@ async function submit(): Promise<void> {
     }
     await register();
 }
+
+/** Recovery confirms mail submission rather than creation; keep an unrelated name draft intact. */
 async function recover(): Promise<void> {
     choiceOpen.value = false;
     if (
@@ -111,8 +130,10 @@ async function recover(): Promise<void> {
                 context.api.recoverGuest({email: fields.email.trim().toLowerCase(), next: next.value}, scope),
             false,
         )
-    )
+    ) {
         recovered.value = true;
+        fields.email = '';
+    }
 }
 </script>
 
@@ -123,6 +144,9 @@ async function recover(): Promise<void> {
             >{{ messages.t('auth.join', {title: entry.data.value?.title ?? messages.t('app.packing')}) }}
         </h1>
         <div class="card-body">
+            <!-- The entry title loads independently of the generic identity choices and
+                 editable draft. Never replace those mounted fields during a title refresh. -->
+            <LoadingSkeleton v-if="!entry.data.value && !entry.error.value" :rows="1" />
             <StatusNotice v-if="command.error.value || entry.error.value" kind="danger">{{
                 command.error.value ?? messages.t('state.loadFailed')
             }}</StatusNotice>

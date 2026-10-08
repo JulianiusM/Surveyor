@@ -10,18 +10,37 @@ import {packingKeys} from '../../app/queryKeys';
 import {usePageTitle} from '../../composables/pageTitle';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import PageMessage from '../../components/PageMessage.vue';
+import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import EventPicker from '../../components/EventPicker.vue';
 import AudiencePermissions from '../../components/permissions/AudiencePermissions.vue';
 
 const context = usePilot();
 const api = usePackingApi(context);
 const {messages} = context;
-usePageTitle(() => messages.value.t('packing.create'));
 const route = useRoute();
 const router = useRouter();
 const sourceId = computed(() =>
     typeof route.params.listId === 'string' ? route.params.listId.toLowerCase() : null,
 );
+const admissionError = computed(() => context.bootstrap.initialUrl?.split('?')[0] === route.path
+    && context.bootstrap.session.context === context.session.value?.context
+    ? context.bootstrap.packingError : undefined);
+usePageTitle(() => messages.value.t(admissionError.value ? 'common.errorTitle' : 'packing.create'));
+
+/** SSR seeds only the admitted document and actor; later SPA routes use their own query admission. */
+function isInitialForm(): boolean {
+    return context.bootstrap.initialUrl === route.fullPath
+        && context.bootstrap.session.context === context.session.value?.context;
+}
+
+function initialCreationContext(): components['schemas']['PackingCreateContext'] | undefined {
+    return isInitialForm() ? context.bootstrap.packingCreateContext : undefined;
+}
+
+function initialDuplicate(): components['schemas']['PackingDuplicate'] | undefined {
+    return isInitialForm() ? context.bootstrap.packingDuplicate : undefined;
+}
 type Row = components['schemas']['PackingDuplicateItem'] & {key: number};
 const nextKey = ref(0);
 const title = ref('');
@@ -52,14 +71,25 @@ watch(
 );
 const creation = useQuery({
     queryKey: computed(() => packingKeys.creation(context.session.value?.context)),
-    enabled: computed(() => context.hydrated.value && context.ready.value),
+    initialData: initialCreationContext,
+    // Duplicate GET supplies its own admitted form definitions. The separate
+    // create-context endpoint retains the native account-only create GET policy.
+    enabled: computed(() => context.hydrated.value && context.ready.value && context.session.value?.kind === 'account'
+        && !sourceId.value && !admissionError.value),
     queryFn: ({signal}) => api.createContext(context.capture(), signal),
 });
 const duplicate = useQuery({
     queryKey: computed(() => packingKeys.duplicate(context.session.value?.context, sourceId.value)),
-    enabled: computed(() => context.hydrated.value && context.ready.value && !!sourceId.value),
+    initialData: initialDuplicate,
+    enabled: computed(() => context.hydrated.value && context.ready.value && !!sourceId.value && !admissionError.value),
     queryFn: ({signal}) => api.duplicate(sourceId.value!, context.capture(), signal),
 });
+const formContext = computed(() => sourceId.value ? duplicate.data.value?.formContext : creation.data.value);
+const loadError = computed(() => sourceId.value ? duplicate.error.value : creation.error.value);
+const initialLoading = computed(() => !formContext.value && !loadError.value
+    && (sourceId.value ? duplicate.isPending.value : creation.isPending.value));
+const reading = computed(() => sourceId.value ? duplicate.isFetching.value : creation.isFetching.value);
+
 function snapshot(): string {
     return JSON.stringify({
         title: title.value,
@@ -80,7 +110,7 @@ function newRow(value?: components['schemas']['PackingDuplicateItem']): Row {
     };
 }
 watch(
-    [creation.data, duplicate.data, baseline],
+    [formContext, duplicate.data, baseline],
     ([create, copy]) => {
         if (baseline.value !== null || !create || (sourceId.value && !copy)) return;
         title.value = copy?.title ?? '';
@@ -130,6 +160,12 @@ function chooseImage(event: Event): void {
 }
 async function create(): Promise<void> {
     if (!defaults.value) return;
+    // Preserve native creation POST admission even when a duplicate grant allowed
+    // this visitor to inspect the draft. Login remains an ordinary guarded navigation.
+    if (context.session.value?.kind !== 'account') {
+        await router.push({path: '/frontend-pilot/users/login', query: {next: route.fullPath}});
+        return;
+    }
     if (!rows.value.length) {
         command.setError('packing.fillAllFields');
         return;
@@ -162,7 +198,10 @@ async function create(): Promise<void> {
 </script>
 
 <template>
-    <section class="card bg-dark text-white mb-3">
+    <!-- Use the shared error card/Home action for initial route denials. These
+         denials mount no form, issue no resource queries and disclose no copy. -->
+    <PageMessage v-if="admissionError" kind="error" :message="messages.t(admissionError)" />
+    <section v-else class="card bg-dark text-white mb-3">
         <h1 class="card-header text-center">
             <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>{{ messages.t('packing.create') }}
         </h1>
@@ -171,13 +210,13 @@ async function create(): Promise<void> {
             <StatusNotice v-if="command.uncertain.value" kind="warning">{{
                 messages.t('packing.creationUnknown')
             }}</StatusNotice>
-            <StatusNotice v-if="creation.error.value || duplicate.error.value" kind="danger">{{
+            <StatusNotice v-if="loadError" kind="danger">{{
                 messages.t('state.loadFailed')
             }}</StatusNotice>
-            <p v-if="!defaults && !creation.error.value && !duplicate.error.value">
-                {{ messages.t('common.loading') }}
-            </p>
-            <form v-if="defaults && creation.data.value" @submit.prevent="create">
+            <!-- Both create and duplicate use one admitted initial projection. The
+                 event picker loads independently; a refresh never replaces this draft. -->
+            <LoadingSkeleton v-if="initialLoading" variant="form" :rows="5" />
+            <form v-if="defaults && formContext" :aria-busy="reading" @submit.prevent="create">
                 <fieldset :disabled="blocked">
                     <div class="mb-3">
                         <label class="form-label" for="create-title"
@@ -227,8 +266,8 @@ async function create(): Promise<void> {
                         <div class="col-md-12">
                             <AudiencePermissions
                                 v-model="defaults"
-                                :permissions="creation.data.value.permissions"
-                                :presets="creation.data.value.presets"
+                                :permissions="formContext.permissions"
+                                :presets="formContext.presets"
                                 prefix="create-defaults"
                                 :disabled="blocked"
                             />

@@ -191,6 +191,8 @@
         "unlimited": "Unbegrenzt"
       },
       "packing": {
+        "notFound": "Packliste nicht gefunden.",
+        "eventRegistrationRequired": "Du musst für die Veranstaltung angemeldet sein, um auf diesen Eintrag zuzugreifen.",
         "chooseEvent": "Eine Veranstaltung auswählen",
         "currentEvent": "Aktuelle Veranstaltung",
         "eventSearchPlaceholder": "Nach Titel oder Beschreibung suchen…",
@@ -341,10 +343,12 @@
       "permissionGroups": {"ACCESS": "Zugriff", "EDIT": "Eintragsdetails", "ITEM": "Gegenstände", "MANAGE": "Verwaltung", "DATA": "Daten", "OTHER": "Weitere Berechtigungen"},
       "audiences": {"public": "Öffentlich", "guest": "Gast", "authenticated": "Angemeldet", "participant": "Teilnehmer"},
       "draft": {
+        "leaveUnknown": "Die Änderung kann bereits gespeichert sein. Diesen Editor verlassen und zuerst die aktuellen Werte prüfen, bevor du es erneut versuchst?",
         "unsaved": "Du hast ungespeicherte Änderungen.",
         "discard": "Änderungen verwerfen?",
         "noChanges": "Es gibt keine Änderungen zu speichern.",
         "conflict": "Diese Liste wurde während deiner Bearbeitung geändert. Prüfe die aktuellen Werte, bevor du erneut speicherst.",
+        "unknownReview": "Das vorherige Speichern kann bereits erfolgreich gewesen sein. Prüfe die aktuellen Werte, bevor du entscheidest, ob du erneut speichern möchtest.",
         "mine": "Deine Änderung",
         "original": "Ursprünglicher Wert",
         "current": "Aktueller Wert",
@@ -355,6 +359,7 @@
         "changed": "Änderungen sind verfügbar"
       },
       "state": {
+        "javascriptRequired": "Für diese Seite ist JavaScript erforderlich. Aktiviere JavaScript in deinem Browser und lade die Seite dann neu. Die Hilfe bleibt unten verfügbar.",
         "loadFailed": "Diese Seite konnte nicht geladen werden.",
         "stale": "Die angezeigten Daten sind möglicherweise veraltet.",
         "savedRefreshFailed": "Deine Änderung wurde gespeichert, aber die aktualisierten Daten konnten nicht geladen werden.",

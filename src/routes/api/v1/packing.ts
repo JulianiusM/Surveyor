@@ -110,7 +110,8 @@ router.get('/:listId/settings', asyncHandler(async function getPackingSettings(r
 }));
 
 router.get('/:listId/duplicate', asyncHandler(async function getPackingDuplicate(req, res) {
-    const actor = await requireApiContext(req, res, true);
+    // Native duplicate GET can be granted publicly; only the later creation POST needs an account.
+    const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'getPackingDuplicate');
     sendValidatedJson(req, res, 'getPackingDuplicate', 200, await packingApi.readPackingDuplicate(String(req.params.listId), actor));
 }));

@@ -115,9 +115,12 @@ function hiddenHref(collection: string): string {
                                                 : 'overview.managed',
                                         )
                                     }}
-                                    <span class="badge bg-secondary ms-2">{{
-                                        counts[collection]?.total ?? 0
+                                    <span v-if="counts[collection]" class="badge bg-secondary ms-2">{{
+                                        counts[collection].total
                                     }}</span>
+                                    <!-- Unknown counts are not empty membership. The region announces
+                                         loading; keep this inline placeholder free of another live status. -->
+                                    <span v-else class="badge bg-secondary ms-2" aria-hidden="true">…</span>
                                 </button>
                             </h2>
                             <div
@@ -135,7 +138,9 @@ function hiddenHref(collection: string): string {
                                                 updateCounts(collection, total, hiddenCount)
                                         "
                                     />
-                                    <div v-if="counts[collection]?.total" class="mt-4">
+                                    <!-- An explicitly opened hidden region may start before main-region
+                                         counts arrive. Confirmed membership retains the native empty rule. -->
+                                    <div v-if="counts[collection]?.total || (!counts[collection] && hidden[collection])" class="mt-4">
                                         <h3 class="h5">
                                             <a
                                                 class="btn btn-outline-secondary"
@@ -146,9 +151,10 @@ function hiddenHref(collection: string): string {
                                             >
                                                 <i class="bi bi-archive me-2" aria-hidden="true"></i
                                                 >{{ messages.t('overview.hidden') }}
-                                                <span class="badge bg-secondary ms-2">{{
-                                                    counts[collection]?.hidden ?? 0
+                                                <span v-if="counts[collection]" class="badge bg-secondary ms-2">{{
+                                                    counts[collection].hidden
                                                 }}</span>
+                                                <span v-else class="badge bg-secondary ms-2" aria-hidden="true">…</span>
                                             </a>
                                         </h3>
                                         <div
