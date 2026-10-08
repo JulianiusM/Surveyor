@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import {computed, ref, watch} from 'vue';
+import {computed, onBeforeUnmount, ref, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
+import type {RouteLocationNormalized} from 'vue-router';
 import {usePilot} from '../app/context';
 import {localeManifest} from '../../modules/localization/translator';
 import type {Locale} from '../../types/LocalizationTypes';
 import AppNavigationDropdown from './AppNavigationDropdown.vue';
+import NativeContextFields from './NativeContextFields.vue';
 
 const emit = defineEmits<{localeError: []}>();
 const context = usePilot();
@@ -15,6 +17,23 @@ const identityPending = ref(false);
 const identityError = ref(false);
 const expanded = ref(false);
 const changingLocale = ref(false);
+let pendingNavigation: RouteLocationNormalized | undefined;
+let localeUrlNeedsSync = false;
+let active = true;
+const removeUpdateGuard = context.updates.registerGuard(() => !identityPending.value && !changingLocale.value);
+// currentRoute changes only after a lazy destination finishes loading. Observe the
+// earlier navigation phase so a late locale response cannot replace the old help
+// URL and cancel the user's pending destination. Each completion clears only itself.
+const removeNavigationStart = router.beforeEach(to => { pendingNavigation = to; });
+const removeNavigationFinish = router.afterEach(finishNavigation);
+const removeNavigationError = router.onError((_error, to) => { finishNavigation(to); });
+onBeforeUnmount(() => {
+    active = false;
+    removeUpdateGuard();
+    removeNavigationStart();
+    removeNavigationFinish();
+    removeNavigationError();
+});
 const listId = computed(() =>
     typeof route.params.listId === 'string'
         ? route.params.listId.toLowerCase()
@@ -43,19 +62,34 @@ watch(
     },
 );
 
+function finishNavigation(to: RouteLocationNormalized): void {
+    if (pendingNavigation === to) pendingNavigation = undefined;
+    // Let Vue Router finish notifying the destination before a query-only update.
+    if (localeUrlNeedsSync) queueMicrotask(synchronizeHelpLocale);
+}
+
+function synchronizeHelpLocale(): void {
+    if (!active || !localeUrlNeedsSync || changingLocale.value || pendingNavigation) return;
+    localeUrlNeedsSync = false;
+    const current = router.currentRoute.value;
+    if ((current.path !== '/frontend-pilot/help' && !current.path.startsWith('/frontend-pilot/help/'))
+        || current.query.locale === locale.value) return;
+    // Help also supports native locale-bearing links. Normalize the settled help
+    // destination, preserving its article/search/fragment for a later reload.
+    void router.replace({path: current.path, query: {...current.query, locale: locale.value}, hash: current.hash})
+        .catch(() => { if (active) emit('localeError'); });
+}
+
 async function selectLocale(event: Event): Promise<void> {
     changingLocale.value = true;
     try {
         await context.changeLocale((event.target as HTMLSelectElement).value as Locale);
-        // Help supports native locale-bearing GET links. Keep the current URL consistent
-        // with the confirmed preference so reload cannot restore its previous language.
-        if (route.path === '/frontend-pilot/help' || route.path.startsWith('/frontend-pilot/help/')) {
-            await router.replace({path: route.path, query: {...route.query, locale: locale.value}, hash: route.hash});
-        }
+        localeUrlNeedsSync = true;
     } catch {
         emit('localeError');
     } finally {
         changingLocale.value = false;
+        synchronizeHelpLocale();
     }
 }
 async function logout(): Promise<void> {
@@ -63,6 +97,7 @@ async function logout(): Promise<void> {
     identityPending.value = true;
     identityError.value = false;
     const scope = context.capture();
+    const finishUpdateCommand = context.updates.commandStarted();
     try {
         const result = await context.api.logout(scope);
         await context.acceptIdentity(result);
@@ -72,6 +107,7 @@ async function logout(): Promise<void> {
         identityError.value = true;
     } finally {
         identityPending.value = false;
+        finishUpdateCommand();
     }
 }
 async function switchProfile(event: Event): Promise<void> {
@@ -83,6 +119,7 @@ async function switchProfile(event: Event): Promise<void> {
         || !window.confirm(messages.value.t('auth.confirmSwitch'))) return;
     identityPending.value = true;
     identityError.value = false;
+    const finishUpdateCommand = context.updates.commandStarted();
     try {
         const result = await context.api.switchProfile(
             selectedProfile,
@@ -94,6 +131,7 @@ async function switchProfile(event: Event): Promise<void> {
     } finally {
         identityPending.value = false;
         select.value = session.value?.activeProfile?.id ?? '';
+        finishUpdateCommand();
     }
 }
 </script>
@@ -207,25 +245,33 @@ async function switchProfile(event: Event): Promise<void> {
                                     ><i class="bi bi-person-lines-fill me-1" aria-hidden="true"></i
                                     >{{ messages.t('app.yourProfiles') }}</a
                                 >
-                                <div v-if="session.profiles.length > 1" class="px-3 py-2">
+                                <form v-if="session.profiles.length > 1" class="px-3 py-2" method="post" action="/frontend-pilot/users/profile">
+                                    <NativeContextFields :next="next" />
                                     <label class="visually-hidden" for="pilot-profile">{{ messages.t('auth.selectProfile') }}</label>
-                                    <select id="pilot-profile" class="form-select form-select-sm"
+                                    <select id="pilot-profile" name="profileId" class="form-select form-select-sm"
                                             :value="session.activeProfile?.id" :disabled="identityPending" @change="switchProfile">
                                         <option v-for="profile in session.profiles" :key="profile.id" :value="profile.id">{{ profile.name }}</option>
                                     </select>
-                                </div>
+                                    <!-- Keep the same button vnode through SSR/hydration. A noscript
+                                         child is parsed as text when scripting is enabled, which
+                                         would mismatch Vue's tree; enhancement hides this submit. -->
+                                    <button v-show="!context.hydrated.value" type="submit" class="btn btn-sm btn-outline-light mt-2">{{ messages.t('auth.selectProfile') }}</button>
+                                </form>
                             </li>
                             <li><hr class="dropdown-divider" /></li>
                             <li>
+                                <form method="post" action="/frontend-pilot/users/logout" @submit.prevent="logout">
+                                <NativeContextFields :next="next" />
                                 <button
                                     class="dropdown-item text-danger"
-                                    type="button"
+                                    type="submit"
                                     :disabled="identityPending"
-                                    @click="logout"
+                                    @click.prevent="logout"
                                 >
                                     <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i
                                     >{{ messages.t('app.logout') }}
                                 </button>
+                                </form>
                             </li>
                             <li>
                                 <a class="dropdown-item text-danger" href="/users/account/delete"

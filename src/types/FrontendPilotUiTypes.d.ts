@@ -1,6 +1,7 @@
 import type {ComputedRef, Ref, ShallowRef} from 'vue';
 import type {QueryClient} from '@tanstack/vue-query';
-import type {components} from './api/v1';
+import type {i18n} from 'i18next';
+import type {components, paths} from './api/v1';
 import type {LocalizationContext, Locale, MessageKey} from './LocalizationTypes';
 import type {FrontendPilotBootstrap} from './FrontendPilotTypes';
 import type {PilotApi} from '../frontend/app/api';
@@ -14,6 +15,30 @@ export interface PilotRequestScope {
 }
 
 export interface PilotRead<T> { data: T; etag: string | null; }
+
+/** Reuse the authored wire shapes while the caller owns its discovery endpoint and cache family.
+ * These aliases are UI contracts, not a second definition of the event response. */
+export type PilotEventPickerQuery = NonNullable<paths['/packing-lists/events']['get']['parameters']['query']>;
+export type PilotEventPickerOption = components['schemas']['PackingEventOption'];
+export type PilotEventPickerSelection = Pick<components['schemas']['PackingCurrentEvent'], 'id' | 'title'>
+    & Partial<Pick<PilotEventPickerOption, 'archived'>>;
+export interface PilotEventPickerSource {
+    search(query: PilotEventPickerQuery, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['PackingEventOptions']>;
+    pageKey(context: string | undefined, locale: string, filters: string, parameters: PilotEventPickerQuery): readonly unknown[];
+    filterKey(context: string | undefined, locale: string, filters: string): readonly unknown[];
+}
+
+/** Guards describe mounted drafts only. No recovery data or old release assets are persisted. */
+export interface PilotUpdateCoordinator {
+    available: Ref<boolean>;
+    incompatible: Ref<boolean>;
+    registerGuard(guard: () => boolean): () => void;
+    commandStarted(): () => void;
+    observe(deployment: components['schemas']['DeploymentView']): void;
+    chunkFailed(): void;
+    requestReload(): boolean;
+    dispose(): void;
+}
 
 export interface PilotContext {
     api: PilotApi;
@@ -29,6 +54,9 @@ export interface PilotContext {
     notice: Ref<MessageKey | null>;
     personalLink: Ref<string | null>;
     messages: ComputedRef<LocalizationContext>;
+    i18next: i18n;
+    pageTitle: Ref<string>;
+    updates: PilotUpdateCoordinator;
     capture(): PilotRequestScope;
     isCurrent(scope: PilotRequestScope, checkLocale?: boolean): boolean;
     refreshSession(): Promise<void>;

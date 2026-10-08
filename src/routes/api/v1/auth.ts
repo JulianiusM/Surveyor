@@ -2,11 +2,11 @@ import {Router, type Request, type Response} from 'express';
 import * as userController from '../../../controller/userController';
 import * as packingService from '../../../modules/database/services/PackingService';
 import {ApiProblem} from '../../../modules/api/problem';
-import {requireApiContext, sessionView} from '../../../modules/api/session';
+import {identityTransitionGuard, requireApiContext, sessionView} from '../../../modules/api/session';
 import {sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import settings from '../../../modules/settings';
-import type {ApiOperationId} from '../../../types/ApiTypes';
+import type {ApiOperationId} from '../../../types/ApiTransportTypes';
 import type {components} from '../../../types/api/v1';
 
 const router = Router();
@@ -21,23 +21,9 @@ async function admit(req: Request, res: Response, operation: ApiOperationId): Pr
     validateOperationRequest(req, operation);
 }
 
-/**
- * Recheck admission after slow credential/DB work without replacing the controller's session
- * object. This is a last pre-write comparison, not a cross-process session-store transaction.
- */
-function transitionGuard(req: Request): () => Promise<void> {
-    const admittedContext = req.apiActor!.context;
-    return function requireUnchangedIdentity(): Promise<void> {
-        return new Promise((resolve, reject) => req.sessionStore.get(req.sessionID, (error, stored) => {
-            if (error) return reject(error);
-            if (!stored || stored.frontendContext !== admittedContext) return reject(new ApiProblem('SESSION_CONTEXT_CHANGED'));
-            resolve();
-        }));
-    };
-}
-
 /** Rehydrate after the controller persisted the transition; bind the reply to its NEW context. */
-async function sendIdentity(req: Request, res: Response, operation: ApiOperationId,
+async function sendIdentity(req: Request, res: Response, operation: 'loginIdentity' | 'logoutIdentity'
+    | 'loginGuestIdentity' | 'switchIdentityProfile' | 'registerPackingGuest',
     personalLink: string | null = null, redirect: string | null = null): Promise<void> {
     const committedContext = req.session.frontendContext;
     req.apiActor = undefined;
@@ -52,7 +38,7 @@ async function sendIdentity(req: Request, res: Response, operation: ApiOperation
 router.post('/auth/login', asyncHandler(async function loginIdentity(req, res) {
     await admit(req, res, 'loginIdentity');
     requireLocalLogin();
-    await userController.loginUser(req.body, req.session, {frontend: true, next: req.body.next, beforeTransition: transitionGuard(req)});
+    await userController.loginUser(req.body, req.session, {frontend: true, next: req.body.next, beforeTransition: identityTransitionGuard(req)});
     await sendIdentity(req, res, 'loginIdentity');
 }));
 
@@ -104,7 +90,7 @@ router.post('/auth/activate', asyncHandler(async function activateIdentity(req, 
 
 router.post('/auth/guest-login', asyncHandler(async function loginGuestIdentity(req, res) {
     await admit(req, res, 'loginGuestIdentity');
-    await userController.loginGuest(req.body.guestId, req.body.token, req.session, {beforeTransition: transitionGuard(req)});
+    await userController.loginGuest(req.body.guestId, req.body.token, req.session, {beforeTransition: identityTransitionGuard(req)});
     await sendIdentity(req, res, 'loginGuestIdentity');
 }));
 
@@ -121,7 +107,7 @@ router.post('/auth/guest-email-exists', asyncHandler(async function findGuestEma
 
 router.put('/auth/profile', asyncHandler(async function switchIdentityProfile(req, res) {
     await admit(req, res, 'switchIdentityProfile');
-    await userController.changeActiveProfile(req.session, req.body.profileId, transitionGuard(req));
+    await userController.changeActiveProfile(req.session, req.body.profileId, identityTransitionGuard(req));
     await sendIdentity(req, res, 'switchIdentityProfile');
 }));
 
@@ -143,7 +129,7 @@ router.post('/packing-lists/:listId/guest', asyncHandler(async function register
     const list = await packingGuestEntry(String(req.params.listId));
     const body = req.body as components['schemas']['GuestRegistrationInput'];
     const personalLink = await userController.registerGuest(body.username, body.email ?? undefined, req.session,
-        {frontend: true, next: `/frontend-pilot/packing/${list.id}`, beforeTransition: transitionGuard(req)});
+        {frontend: true, next: `/frontend-pilot/packing/${list.id}`, beforeTransition: identityTransitionGuard(req)});
     await sendIdentity(req, res, 'registerPackingGuest', personalLink);
 }));
 

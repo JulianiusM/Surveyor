@@ -1,4 +1,5 @@
 openapi: 3.1.1
+x-surveyor-api-compatibility: v1-pilot-2026-10-07
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
   title: Surveyor API
@@ -12,9 +13,9 @@ servers:
 security:
   - sessionCookie: []
 paths:
-  /packing-lists/overview:
+  /overview:
     $ref: ./overview.yaml#/paths/overview
-  /packing-lists/overview/{entityType}/{entityId}/visibility:
+  /overview/{entityType}/{entityId}/visibility:
     $ref: ./overview.yaml#/paths/visibility
   /auth/login:
     $ref: ./auth.yaml#/paths/~1auth~1login
@@ -41,6 +42,7 @@ paths:
   /session:
     get:
       operationId: getSession
+      x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read the current session without exposing credentials
       security: []
       parameters:
@@ -64,6 +66,7 @@ paths:
   /locale:
     put:
       operationId: setLocale
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: Choose a supported browser locale
       security: []
       parameters:
@@ -95,6 +98,7 @@ paths:
   /help:
     get:
       operationId: getHelpPage
+      x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read fixed-source help or search its contents
       security: []
       parameters:
@@ -121,6 +125,7 @@ paths:
   /packing-lists/{listId}:
     get:
       operationId: getPackingList
+      x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read an authorized packing list
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -150,6 +155,7 @@ paths:
           $ref: "#/components/responses/Problem"
     delete:
       operationId: deletePackingList
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: delete Packing List
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -168,6 +174,7 @@ paths:
   /packing-lists/{listId}/metadata:
     get:
       operationId: getPackingMetadata
+      x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read only editable packing metadata
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -197,6 +204,7 @@ paths:
           $ref: "#/components/responses/Problem"
     patch:
       operationId: updatePackingMetadata
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: metadata}
       summary: Update selected packing metadata with an exact edit precondition
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -232,6 +240,7 @@ paths:
   /packing-lists/{listId}/items/{itemId}/self-assignment:
     put:
       operationId: assignPackingItem
+      x-surveyor-command: {retryPolicy: natural-idempotent, precondition: none}
       summary: Idempotently take a packing item as the active profile
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -257,6 +266,7 @@ paths:
           $ref: "#/components/responses/Problem"
     delete:
       operationId: unassignPackingItem
+      x-surveyor-command: {retryPolicy: natural-idempotent, precondition: none}
       summary: Remove the active profile's packing commitment
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -283,6 +293,7 @@ paths:
   /packing-lists/create-context:
     get:
       operationId: getPackingCreateContext
+      x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: get Packing Create Context
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -299,13 +310,14 @@ paths:
   /packing-lists:
     post:
       operationId: createPackingList
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: create Packing List
       parameters:
         - $ref: "#/components/parameters/Context"
         - $ref: "#/components/parameters/Locale"
         - $ref: "#/components/parameters/Csrf"
       responses:
-        "200":
+        "201":
           description: Authorized operation result
           content:
             application/json:
@@ -325,6 +337,7 @@ paths:
   /packing-lists/events:
     get:
       operationId: searchPackingEvents
+      x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: search Packing Events
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -399,6 +412,7 @@ paths:
   /packing-lists/{listId}/duplicate:
     get:
       operationId: getPackingDuplicate
+      x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: get Packing Duplicate
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -416,6 +430,7 @@ paths:
   /packing-lists/{listId}/settings:
     get:
       operationId: getPackingSettings
+      x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: get Packing Settings
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -433,6 +448,7 @@ paths:
   /packing-lists/{listId}/items:
     post:
       operationId: createPackingItem
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: create Packing Item
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -440,7 +456,7 @@ paths:
         - $ref: "#/components/parameters/ListId"
         - $ref: "#/components/parameters/Csrf"
       responses:
-        "200":
+        "201":
           description: Authorized operation result
           content:
             application/json:
@@ -457,6 +473,7 @@ paths:
   /packing-lists/{listId}/items/{itemId}:
     patch:
       operationId: updatePackingItem
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: item}
       summary: update Packing Item
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -482,6 +499,7 @@ paths:
               $ref: "#/components/schemas/PackingItemPatch"
     delete:
       operationId: deletePackingItem
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: delete Packing Item
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -501,6 +519,7 @@ paths:
   /packing-lists/{listId}/item-order:
     put:
       operationId: reorderPackingItems
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: order}
       summary: reorder Packing Items
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -526,6 +545,7 @@ paths:
   /packing-lists/{listId}/assignments/{assignmentId}:
     delete:
       operationId: deletePackingAssignment
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: delete Packing Assignment
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -545,6 +565,7 @@ paths:
   /packing-lists/{listId}/event:
     put:
       operationId: changePackingEvent
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
       summary: change Packing Event
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -570,6 +591,7 @@ paths:
   /packing-lists/{listId}/default-permissions:
     put:
       operationId: updatePackingDefaults
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
       summary: update Packing Defaults
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -591,10 +613,11 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PermissionDefaults"
+              $ref: "#/components/schemas/PermissionDefaultsPatch"
   /packing-lists/{listId}/admins:
     post:
       operationId: addPackingAdmin
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
       summary: add Packing Admin
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -620,6 +643,7 @@ paths:
   /packing-lists/{listId}/admins/{profileId}:
     patch:
       operationId: updatePackingAdmin
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
       summary: update Packing Admin
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -645,6 +669,7 @@ paths:
               $ref: "#/components/schemas/PackingAdminPatch"
     delete:
       operationId: deletePackingAdmin
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
       summary: delete Packing Admin
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -665,6 +690,7 @@ paths:
   /packing-lists/{listId}/profiles:
     get:
       operationId: searchPackingProfiles
+      x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: search Packing Profiles
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -683,6 +709,7 @@ paths:
   /packing-lists/{listId}/header:
     put:
       operationId: uploadPackingHeader
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
       summary: upload Packing Header
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -707,6 +734,7 @@ paths:
               $ref: "#/components/schemas/PackingHeaderUpload"
     delete:
       operationId: deletePackingHeader
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
       summary: delete Packing Header
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -725,6 +753,7 @@ paths:
           $ref: "#/components/responses/Problem"
     get:
       operationId: getPackingHeader
+      x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read the authorized packing header image
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -742,6 +771,7 @@ paths:
   /packing-lists/{listId}/archive:
     post:
       operationId: archivePackingList
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: archive Packing List
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -760,6 +790,7 @@ paths:
   /packing-lists/{listId}/restore:
     post:
       operationId: restorePackingList
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: restore Packing List
       parameters:
         - $ref: "#/components/parameters/Context"
@@ -830,7 +861,7 @@ components:
       required: false
       schema:
         type: string
-        maxLength: 512
+        maxLength: 4096
     HelpDocument:
       in: query
       name: doc
@@ -858,8 +889,7 @@ components:
       name: assignmentId
       required: true
       schema:
-        type: string
-        pattern: ^[1-9][0-9]*$
+        $ref: "#/components/schemas/DecimalId"
     SearchQuery:
       in: query
       name: q
@@ -880,14 +910,14 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
   schemas:
-    PackingOverviewCard:
-      $ref: ./overview.yaml#/schemas/PackingOverviewCard
-    PackingOverviewRegion:
-      $ref: ./overview.yaml#/schemas/PackingOverviewRegion
-    PackingVisibilityInput:
-      $ref: ./overview.yaml#/schemas/PackingVisibilityInput
-    PackingVisibilityResult:
-      $ref: ./overview.yaml#/schemas/PackingVisibilityResult
+    OverviewCard:
+      $ref: ./overview.yaml#/schemas/OverviewCard
+    OverviewRegion:
+      $ref: ./overview.yaml#/schemas/OverviewRegion
+    OverviewVisibilityInput:
+      $ref: ./overview.yaml#/schemas/OverviewVisibilityInput
+    OverviewVisibilityResult:
+      $ref: ./overview.yaml#/schemas/OverviewVisibilityResult
     LoginInput:
       $ref: ./auth.yaml#/schemas/LoginInput
     FrontendReturn:
@@ -916,6 +946,10 @@ components:
       $ref: ./auth.yaml#/schemas/GuestEmailExists
     IdentityResult:
       $ref: ./auth.yaml#/schemas/IdentityResult
+    DecimalId:
+      $ref: ./common.yaml#/schemas/DecimalId
+    DeploymentView:
+      $ref: ./session.yaml#/schemas/DeploymentView
     Uuid:
       $ref: ./common.yaml#/schemas/Uuid
     NullableUuid:
@@ -958,6 +992,8 @@ components:
       $ref: ./help.yaml#/schemas/HelpSearchResult
     HelpPageData:
       $ref: ./help.yaml#/schemas/HelpPageData
+    PermissionDefaultsPatch:
+      $ref: ./packing.yaml#/schemas/PermissionDefaultsPatch
     PermissionDefaults:
       $ref: ./packing.yaml#/schemas/PermissionDefaults
     PermissionDefinition:

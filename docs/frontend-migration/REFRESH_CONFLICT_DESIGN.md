@@ -4,10 +4,10 @@ documentation-metadata
 audience: frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-07
+last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: source review of expanded packing metadata/item/order/settings tokens, overview refresh, identity transitions and command recovery; distinguishes implemented behavior from remaining cross-feature targets; no application, database or browser checks run for this documentation update
-source-anchors: docs/frontend-migration/EDGE_CASES.md; docs/frontend-migration/IDENTITY_LIFECYCLE_EDGE_CASES.md; docs/frontend-migration/PARTICIPATION_EDGE_CASES.md; docs/frontend-migration/INVOICE_EDGE_CASES.md; src/frontend/app/context.ts; src/frontend/app/api.ts; src/frontend/app/queryCache.ts; src/frontend/composables/command.ts; src/frontend/components/InlineCell.vue; src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/PackingSettings.vue; src/frontend/features/packing/OverviewRegion.vue; src/frontend/features/packing/PackingHome.vue; src/modules/packing/api.ts; src/routes/api/v1/auth.ts; tests/frontend/frontend-pilot.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/frontend/packing-management-ui.spec.ts; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-select.ts; src/public/js/modules/entity-properties.ts; src/public/js/modules/invoice-submission.ts; src/modules/activity/recommendationJobs.ts; src/modules/invoice/poolOperations.ts; src/controller/entityAdminController.ts
+verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; source review of expanded packing metadata/item/order/settings tokens, overview refresh, identity transitions and command recovery; distinguishes implemented behavior from remaining cross-feature targets; no application, database or browser checks run for this documentation update
+source-anchors: docs/frontend-migration/EDGE_CASES.md; docs/frontend-migration/IDENTITY_LIFECYCLE_EDGE_CASES.md; docs/frontend-migration/PARTICIPATION_EDGE_CASES.md; docs/frontend-migration/INVOICE_EDGE_CASES.md; src/frontend/app/context.ts; src/frontend/app/api.ts; src/frontend/app/queryCache.ts; src/frontend/composables/command.ts; src/frontend/components/InlineCell.vue; src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/PackingSettings.vue; src/frontend/features/overview/OverviewRegion.vue; src/frontend/features/overview/OverviewPage.vue; src/modules/packing/api.ts; src/routes/api/v1/auth.ts; tests/frontend/frontend-pilot.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/frontend/packing-management-ui.spec.ts; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-select.ts; src/public/js/modules/entity-properties.ts; src/public/js/modules/invoice-submission.ts; src/modules/activity/recommendationJobs.ts; src/modules/invoice/poolOperations.ts; src/controller/entityAdminController.ts
 next-review: packing-invalidation-or-next-feature-migration
 -->
 
@@ -25,28 +25,28 @@ the browser and supply scenarios for implementation and review.
 ## Implemented packing boundary
 
 [The app context](../../src/frontend/app/context.ts) owns session bootstrap, identity epochs, a request-local query
-client, visible-tab focus/reconnect checks, read retries and locale changes. [The transport](../../src/frontend/app/api.ts)
+client, visible-tab focus/reconnect checks, read retries and locale changes. [The transport](../../src/frontend/app/transport.ts)
 checks generated DTOs, captured identity and confirmed command responses; it never retries a mutation automatically.
 [PackingPage](../../src/frontend/features/packing/PackingPage.vue) polls the scoped detail representation;
 [PackingSettings](../../src/frontend/features/packing/PackingSettings.vue) keeps independent metadata, ACL, event and
-file draft state; [OverviewRegion](../../src/frontend/features/packing/OverviewRegion.vue) owns one bounded region.
+file draft state; [OverviewRegion](../../src/frontend/features/overview/OverviewRegion.vue) owns one bounded region.
 The four participant/owner × main/hidden regions retain independent query parameters. Hidden regions open on matching
-deep links through [PackingHome](../../src/frontend/features/packing/PackingHome.vue).
+deep links through [OverviewPage](../../src/frontend/features/overview/OverviewPage.vue).
 
 | Reviewed state | Implemented comparison and recovery |
 |---|---|
-| Root title/description | Separate metadata ETag backed by the persisted metadata revision; original/draft/remote values support explicit field review after 412 |
-| Inline item fields/Everyone | Item `editToken` hashes current values, effective field authority, actor and root context; the shared inline editor preserves its dirty value during refresh |
+| Root title/description | Opaque comparison hashes of current fields; sparse writes compare touched fields under locks, adopt disjoint refreshes and retain overlapping drafts for explicit review |
+| Inline item fields/Everyone | Item `editToken` hashes current values and actor/resource scope; fresh authority is checked under the item lock, and the shared editor compares its displayed field |
 | Item order | Captured `orderToken` includes current item membership/positions; additions, removals or changed order require a fresh review before resubmitting |
-| Defaults/admin masks | Independent drafts retain their original shared `settingsToken`; polling does not replace dirty values, and stale saves require review |
+| Defaults/admin masks | Sparse audience patches compare changed masks; each administrator has its own token. Unrelated setup edits do not block a draft; actual overlapping changes require review |
 | Event association | Desired and original event remain separate; actual relink checks `expectedEventId` and the reviewed settings token under existing controller locks |
 | Header replacement | Selected file retains the reviewed settings token; scoped blob reads use opaque header versions and revoke obsolete object URLs |
 | Creation/duplication | Explicit local draft; no creation replay after response loss and no generic idempotency key |
 | Self-assignment/visibility | Explicit desired state with the existing server no-op policy; commands still require confirmation and subsequent authoritative reads |
 
-These are different tokens. Only the packing root metadata/context revision is a new monotonic persisted counter;
-item/order/ACL hashes do not promise to detect every change-away-and-back. Relinks and relevant direct/inherited
-lifecycle changes advance the root counter; assignments do not. [The API owner](../../src/modules/packing/api.ts)
+Approved D2 replaces the earlier persisted packing metadata/context counter with current-value comparisons,
+including setup fields. No packing revision column or new relationship history is needed. These tokens do not
+promise change-away-and-back detection; fresh authorization and atomic capacity checks remain mandatory. [The API owner](../../src/modules/packing/api.ts)
 and [API design](API_CONTRACT_DESIGN.md) define the exact coverage and 428/412 versus semantic 409 outcomes.
 
 ## State ownership
@@ -66,16 +66,16 @@ silently prefetch every item, participant, proof, historical ledger or linked fe
 
 ## Initial refresh policy
 
-These are the target starting policies, not library defaults or a freshness SLA. Current packing detail uses
-30-second polling with per-page jitter; overview/settings use 30 seconds without jitter. Picker queries follow
-reactive input and do not yet have a shared debounce. Keep those implementation details separate from the wider target:
+These are the starting policies, not library defaults or a freshness SLA. Packing detail, open settings and
+visible overview regions use 30-second polling with per-client jitter; collapsed regions stop reading. Shared
+pickers debounce searches for 200 ms and read only when open or resolving an initial selected title:
 
 | Read | Initial policy |
 |---|---|
 | Active visible shared detail/overview region | Read on entry; stale after 15 seconds; poll at 30 seconds with per-client jitter |
 | Open participant/list section | Same policy while observed; stop its interval when closed/unmounted |
 | Identity bootstrap | Revalidate on app entry, focus/reconnect, identity signal and periodic visible activity; at most 30 seconds between visible checks initially |
-| Picker search | Debounced request on user input, current bounded page only; no timer polling |
+| Picker search | Debounced request on user input, current bounded page only; event choices may refresh while open, with no closed-picker polling |
 | Reviewed invoice preview | Explicit open/Refresh preview; polling may detect that it is stale but must not replace the reviewed values/token |
 | Activity job | Retain the job-specific status/backoff/expiry policy; stop when terminal or its scope is obsolete |
 | Static catalogs/help content | Versioned build/catalog assets; no shared-data polling |
@@ -127,7 +127,7 @@ ID does not by itself establish loss of read access to the whole parent: keep th
 revalidate the affected capabilities. Preserve each endpoint's disclosure policy.
 
 The current [packing eviction helper](../../src/frontend/app/queryCache.ts) cancels/removes that list's scoped detail,
-metadata, settings, profile-search and guest-entry keys, plus the current actor's complete packing overview and event
+metadata, settings, profile-search and guest-entry keys, plus the current actor's mixed overview and event
 picker query families. Removing these bounded collections avoids manufacturing partially redacted DTOs. Other lists'
 detail entries, other features and other actor scopes are retained. The transport/context tests exercise a delayed
 overview read so its earlier result cannot restore the evicted card. Future features need their own dependency owners.
@@ -175,7 +175,8 @@ session object. The versioned API's authority must be explicit and derived from 
 
 When a form is clean, a successful read may replace its saved values. When it is dirty, keep three separate values:
 the original snapshot **B**, local draft **D**, and latest authorized remote snapshot **R**. Background reads update R
-and clean display regions; they do not replace B, D or the edit token associated with B.
+and clean display regions. Disjoint changes may advance the baseline/token while retaining the sparse draft;
+overlapping changes keep the original baseline and require explicit review.
 
 | Field comparison | Suggested reconciliation after a rejected stale save |
 |---|---|
@@ -198,10 +199,10 @@ must be reviewed and reapplied together; combining one editor's deadline with an
 intended instant despite each field looking independently conflict-free. An unrelated save preserves the original
 deadline/zone pair and existing fallback semantics (EC-UI-02/06 and EC-ID-34).
 
-Packing metadata conditional writes now use a persisted metadata revision and the relevant shared writer paths maintain it.
-Assignment-only changes should not invalidate a description edit. The API design defines a separate metadata ETag
-and full-view ETag, current authorization checks, and explicit 428/412 handling. Existing ordinary property locks
-alone do not meet this requirement (EC-ID-35).
+Packing conditional writes compare current touched fields inside shared controller-owned operations used by
+native and v1 adapters. Assignment-only changes and unrelated setup fields do not invalidate a description edit.
+The API design separates comparison tokens from full-view read tags, rechecks authorization and retains 428/412.
+The unreleased metadata counter and migration were removed under approved D2; financial revisions remain unchanged.
 
 ## Commands whose conflict and retry rules differ
 
@@ -209,7 +210,7 @@ alone do not meet this requirement (EC-ID-35).
 |---|---|
 | Packing/driver self-assignment | Existing locked idempotence; repeat desired membership rather than an ambiguous toggle; 409 for a genuinely new assignment that loses capacity |
 | Event attendance | Existing updates at full capacity and independent deadline rules; repair the documented capacity check/write gap before claiming atomic final-place protection |
-| Event association | Packing uses expected event plus a settings-token check for an actual move; relinks advance the root revision. An authorized already-achieved target remains a no-op before token comparison; other feature migrations retain their own contracts |
+| Event association | Packing compares expected event plus its event field token under locks for an actual move. An authorized already-achieved target remains a no-op before token comparison; other feature migrations retain their own contracts |
 | Invoice submission | Unknown result leads to authoritative history reconciliation; no automatic retry or manufactured server idempotency guarantee |
 | Invoice close/recalculate/review | Preserve each command's revision and confirmation rules, saved-versus-pending amounts and stale rejection; obtain a fresh preview/review where the command requires it |
 | Invoice payment/refund | Preserve existing payment rules; payments advance the pool calculation revision and invalidate earlier previews, but the current payment request does not itself require an expectedRevision precondition |
@@ -218,7 +219,11 @@ alone do not meet this requirement (EC-ID-35).
 | Local Packed | Immediate local change under the existing key, without API write, server refresh or profile-specific migration |
 
 A timeout produces an **unknown** command outcome unless the server definitively rejected it. Keep its captured input
-and recovery route; do not label it “not saved.” Conversely, after a confirmed successful write, a failed refresh is
+and recovery route; do not label it “not saved.” A successful read cannot confirm which row an unknown creation
+produced or prove that a registration/email command failed. Those drafts remain blocked from resubmission until
+the user reviews the current state and explicitly acknowledges the uncertainty, or acknowledges leaving the draft.
+Desired-state updates may reconcile from an authoritative read without replaying their command.
+Conversely, after a confirmed successful write, a failed refresh is
 a stale-display problem, not a failed mutation. Show confirmation with retry-read recovery, without inviting a second
 invoice, duplicated token consumption or another financial action. The existing organizer response-loss browser
 journey is valuable evidence to port; the participant-upload and JIT-read variants still need focused coverage.
@@ -226,6 +231,11 @@ journey is valuable evidence to port; the participant-upload and JIT-read varian
 Optimistic updates are limited initially to local presentation and endpoints whose desired-state/idempotency policy
 has been established. Keep capacity-sensitive assignments and all financial effects pending until server confirmation.
 The point is a consistent command lifecycle, not identical optimism for every feature.
+
+An infrequent application release is detected through the existing session refresh. The coordinator reloads once
+when every active form is clean and no command is pending or uncertain. A compatible loaded form can finish first;
+an incompatible write is rejected before side effects. Feature owners register their draft guards with this shared
+coordinator rather than adding reload loops or requiring old release assets to remain served.
 
 ## Dependent refresh and presentation stability
 
@@ -251,8 +261,8 @@ annihilate modal focus, hide persistent status or reset local Packed colors.
 
 Use deterministic fake clocks/deferred reads at the frontend boundary and actual transactions only where needed:
 
-- A remote title changes while a local description is dirty; the refreshed display does not erase the draft, the
-  stale save rejects, and an explicitly reviewed retry preserves both changes.
+- A remote title changes while a local description is dirty; adopt the title and current baseline while keeping
+  the sparse description edit. A later overlapping description change rejects and requires explicit review.
 - Two clients change the same field; the loser sees a field conflict and no write occurs before a deliberate retry.
 - A legacy writer changes metadata while the Vue form is open; the same conditional-write protection applies.
 - An assignment-only change refreshes counts without causing an unrelated metadata conflict or clearing Packed.

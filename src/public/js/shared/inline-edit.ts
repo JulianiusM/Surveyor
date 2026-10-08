@@ -143,8 +143,9 @@ export function startInlineEditArea(
  * @param elem Element to edit
  * @param baseUrl Base API URL for saving
  * @param permissionKey Feature-specific field grant; omitted callers retain their existing metadata guard
+ * @param compareOriginal Submit the rendered packing baseline for a field comparison under the server's write lock
  */
-export function startInlineEdit(elem: HTMLElement, baseUrl: string, permissionKey?: PermType): void {
+export function startInlineEdit(elem: HTMLElement, baseUrl: string, permissionKey?: PermType, compareOriginal = false): void {
     if (!elem || elem.querySelector('input')) return;
 
     disableDnD();
@@ -162,6 +163,9 @@ export function startInlineEdit(elem: HTMLElement, baseUrl: string, permissionKe
     } else {
         old = elem.textContent?.trim();
     }
+    // Packing compares the complete rendered original, including surrounding whitespace.
+    // The editable display continues to trim as before; other features omit this adapter field.
+    const expectedValue = field === 'maxAssignees' ? old ? Number(old) : null : elem.textContent ?? '';
 
     const fieldGuard: Record<string, InlineEditPermission> = {
         description: {scope: 'item', key: 'EDIT_DESC', action: 'edit descriptions', itemId: id, parentKey: ['ITEM_EDIT', 'ITEM_EDIT_DESC']},
@@ -199,8 +203,8 @@ export function startInlineEdit(elem: HTMLElement, baseUrl: string, permissionKe
 
         try {
             await post(url,
-                field === 'description' ? {description: val}
-                    : {field, value: val});
+                {...(field === 'description' ? {description: val} : {field, value: val}),
+                    ...(compareOriginal ? {expectedValue} : {})});
             rollback(val);
             showInlineAlert('success', 'Updated');
             if (field === 'maxAssignees') {

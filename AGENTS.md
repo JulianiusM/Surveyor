@@ -4,9 +4,9 @@ documentation-metadata
 audience: AI coding agents; maintainers
 owner: project maintainers
 status: current
-last-verified: 2026-10-07
+last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit prohibition of implementation information in user-facing documentation and illustrations across all languages; explicit controller-owned checks and pure DBAL/no context-specific service errors; explicit maintainer requirements for human readability, purposeful comments, existing formatting and module reuse, declaration-file contracts, renderer data, and deletion boundaries; non-blocking documentation policy and optional report/test routing; D13 repository-wide agent contract, source precedence, change boundaries, test selection, database safety, documentation rules, and canonical-reference routing; D14 implemented fixed-source in-app help validation and maintained visual-asset rules
+verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; explicit active-user authorization for departures from primary design choices; explicit prohibition of implementation information in user-facing documentation and illustrations across all languages; explicit controller-owned checks and pure DBAL/no context-specific service errors; explicit maintainer requirements for human readability, purposeful comments, existing formatting and module reuse, declaration-file contracts, renderer data, and deletion boundaries; non-blocking documentation policy and optional report/test routing; D13 repository-wide agent contract, source precedence, change boundaries, test selection, database safety, documentation rules, and canonical-reference routing; D14 implemented fixed-source in-app help validation and maintained visual-asset rules
 source-anchors: docs/DOCUMENTATION_POLICY.md; README.md; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; docs/PERMISSIONS_REFERENCE.md; docs/DOCUMENTATION_MIGRATION_STATUS.md; package.json; repository-tree; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
 next-review: AI-instruction-or-help-trust-boundary-change
 -->
@@ -25,6 +25,10 @@ For repository facts, follow the order defined in the [documentation policy](doc
 3. References generated directly from implementation sources.
 4. Canonical maintained user, maintainer, and operator documentation.
 5. AI instruction files, including this one.
+
+Primary approved design choices require active, explicit user authorization before changing them. A listed
+alternative, implementation convenience, or later document edit does not authorize a departure. Preserve the
+original decision and record each approved amendment; never rewrite a design to legitimize an unapproved choice.
 
 The user-requested scope still governs the task. Do not use an AI summary to override current code, tests, an explicit
 decision, or a canonical document. When sources disagree, inspect the affected implementation and record the conflict

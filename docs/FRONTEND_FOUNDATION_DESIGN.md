@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-07
+last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: source review of expanded opt-in packing management, overview, identity/help and shared foundation; retains original step-two proof-slice rationale as historical design; broader feature migration, native fallback expansion and benchmarks remain future work; no application checks run for this documentation update
-source-anchors: docs/FRONTEND_MIGRATION_BASELINE.md; docs/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/app.ts; src/routes/frontendPilot.ts; src/routes/api/v1/; src/frontend/app/; src/frontend/features/packing/; src/frontend/features/identity/; src/modules/frontendPilotRenderer.ts; src/modules/packing/api.ts; src/modules/renderer.ts; src/modules/invoice/; src/modules/database/services/; src/types/; src/public/js/; src/views/; package.json; tsconfig.json; tsconfig.server.json; esbuild.client.js; .github/workflows/ci.yml; .github/workflows/release.yml; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md
+verification-scope: ordinary development loading, hydration, lazy navigation, HMR and serialized generator restart verification; approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; source review of expanded opt-in packing management, overview, identity/help and shared foundation; retains original step-two proof-slice rationale as historical design; broader feature migration and benchmarks remain future work; approved rectification adds native overview/identity adapters and per-field comparisons
+source-anchors: src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/e2e/frontend-development.spec.ts; docs/FRONTEND_MIGRATION_BASELINE.md; docs/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/app.ts; src/routes/frontendPilot.ts; src/routes/api/v1/; src/frontend/app/; src/frontend/features/packing/; src/frontend/features/identity/; src/modules/frontendPilotRenderer.ts; src/modules/packing/api.ts; src/modules/renderer.ts; src/modules/invoice/; src/modules/database/services/; src/types/; src/public/js/; src/views/; package.json; tsconfig.json; tsconfig.server.json; esbuild.client.js; .github/workflows/ci.yml; .github/workflows/release.yml; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md
 next-review: expanded-packing-parity-or-next-feature-slice
 -->
 
@@ -26,6 +26,29 @@ required before broader route cutover. No default route has moved. Source covera
 from completed visual, concurrency, accessibility or deployment acceptance; the pilot record owns that evidence.
 
 ## Design records
+
+### Authorized rectification (2026-10-07)
+
+The original primary choices remain binding. An alternative mentioned in a design record, an implementation
+spike, or a later documentation edit does not authorize a departure. The maintainer explicitly approved the
+following amendments and directed implementation after finalizing this plan:
+
+| Decision | Approved resolution |
+|---|---|
+| D1: translation integration | Restore **i18next-vue**, retaining the typed application translation interface and the shared i18next core. Prove request isolation, hydration and reactive locale changes. |
+| D2: concurrent changes | Replace persisted packing metadata revisions with lightweight comparisons of current values under the existing locks. Include every field that benefits, including setup fields. Compare touched fields, preserve unrelated changes and local drafts, and retain atomic item-capacity/assignment checks. No live-editing infrastructure or relationship revision history. |
+| D3: contract version | Correct the unreleased **v1 in place**. Do not create another version for pilot changes. |
+| D4: uncertain commands | Retain **reconcile-only** recovery without operation tracking. A read cannot confirm an unknown creation. Retain input and provide explicit review and acknowledged departure, without automatic replay. |
+| D5: replacing a release | Support replacement of the current binary folder without retained old assets or external operational requirements. Detect updates through ordinary session refresh, allow compatible pending edits to finish, and reload an idle clean view once. Preserve mounted drafts on missing chunks or incompatible commands. |
+
+The approved rectification is implemented; its completed work sequence has been retired. The
+[dated pilot review](frontend-migration/PILOT_PARITY_REVIEW.md#approved-foundation-rectification-2026-10-08)
+records actual builds, tests, complete paired comparison, focused supplements and remaining acceptance limits.
+Its [development-runtime correction](frontend-migration/PILOT_PARITY_REVIEW.md#development-runtime-correction-2026-10-08)
+records the subsequent source-entry failure and repairs to loading, hydration, pending navigation and watcher
+coordination. Built-runtime evidence alone did not establish the original normal-development requirement.
+The [development guide](DEVELOPMENT.md#implementing-the-next-feature-slice) owns the reusable contribution workflow.
+Broader feature migration and default-route cutover remain pending.
 
 | Record | Decision it owns |
 |---|---|
@@ -60,9 +83,9 @@ flowchart LR
 
 The normal JavaScript-enabled experience uses client routing and typed API reads/commands, with declared multipart
 for files. It does not exchange Pug fragments or create a second imperative DOM tree. Express renders the **same Vue
-components** for the initial shell and the browser hydrates them. Help GET/search is the implemented data-complete
-native rendering proof. Packing and its overview currently fetch their business DTOs after hydration; the broader
-same-component native form/search strategy remains a requirement when those established fallback surfaces migrate.
+components** for the initial shell and the browser hydrates them. Help GET/search and the mixed overview render
+authorized data on the server. Identity and guest forms preserve native post/redirect/get adapters through the
+same controller operations. Packing item/settings interactions load their DTOs after hydration and require JavaScript.
 Survey voting and other unmigrated native flows are not implemented by the packing renderer. External authentication,
 downloads, print documents and email deep links remain legitimate document boundaries.
 
@@ -72,8 +95,8 @@ HTTP/session owner; a second application server or Nuxt migration is unnecessary
 
 ## Module ownership
 
-The following layout describes the implemented foundation and its next feature boundaries. Packing's bounded
-overview stays in the packing feature owner; a general multi-feature overview folder is not needed for this slice:
+The following layout describes the implemented foundation and its next feature boundaries. The mixed overview
+owns its five-type projection independently of packing; reusable controls remain shared components:
 
 ```text
 contracts/api/v1/                 Authored OpenAPI paths and reusable wire schemas
@@ -88,7 +111,8 @@ src/frontend/
   components/                   Shared Surveyor controls and page structures
   composables/                  Named reusable draft/command/query behavior
   features/
-    packing/                    Detail/create/settings plus independent bounded overview regions
+    packing/                    Detail/create/settings and packing API owner
+    overview/                   Mixed membership/cards/regions and overview API owner
     identity/                   Login/register/recovery/reset and packing guest entry
     help/                       Fixed-source localized help and search
     ...                         Existing product feature boundaries
@@ -162,16 +186,20 @@ Only browser-safe imports may enter the client graph. No TypeORM, file, email, s
 may be pulled in through a convenient feature import.
 
 Serve application HTML and private API responses with suitable private/no-store policy; fingerprinted static assets
-can be cached. A client/server build identifier lets an old browser recognize an incompatible deployment. Keep old
-fingerprinted assets available across the deployment overlap. An update prompt must preserve dirty drafts; it must
-not force-reload a financial command whose outcome is unknown.
+can be cached. Separate deployment and API-compatibility identifiers let an old tab recognize a replacement.
+Only assets in the installed release are required. Existing session checks detect a change; a loaded compatible
+form may finish, while a clean idle view reloads once. Missing route chunks defer reload while a draft, pending
+write or unknown outcome needs attention. Incompatible commands reject before side effects and preserve mounted input.
+The D5 amendment above supersedes the original retained-assets proposal; folder replacement and fallback copying
+require no asset store, retained release directories or persistent draft recovery.
 
 History-mode routing needs server handling for direct URLs. Use an explicit migrated-route allowlist, not a wildcard
 that turns API errors, missing files or PDF paths into HTML. [Vue Router history modes](https://router.vuejs.org/guide/essentials/history-mode.html)
 
 The root [package scripts](../package.json) now prepare generated contracts/catalogs and both bundles through the
-normal build/server entry points. Code watch does not watch authored contract/catalog files: after changing those
-sources, run `npm run prepare:frontend` or restart the root development server. Generated outputs remain ignored and
+normal build/server entry points. Express hosts Vite middleware/HMR in development, and the authored-input watcher
+serializes contract/catalog regeneration before restarting the request owner. Normal source edits need no manual
+regeneration; `npm run prepare:frontend` remains available for standalone checks. Generated outputs remain ignored and
 are recreated for clean-checkout builds. Executable contract/type checks are application correctness checks; prose
 reports stay advisory.
 
@@ -182,7 +210,7 @@ For a new editable packing description, the expected workflow is:
 1. Change the authored request/response schema once if the wire shape needs a new field; regenerate declarations
    and validators through the normal build path, or `prepare:frontend` during an existing watch session.
 2. Add the controller policy/projection or reuse the existing operation; preserve omitted/null semantics and update
-   the metadata revision within the transaction. Keep query/persistence changes in the existing DBAL owner.
+   touched current-value comparisons inside the transaction. Keep query/persistence changes in the existing DBAL owner.
 3. Add complete catalog messages and bind a shared field in the feature component. Use the standard draft and
    conditional-command behavior rather than building request, spinner, alert and reload code again.
 4. Extend the affected behavior assertion at its cheapest meaningful boundary; update native rendering where that
@@ -227,7 +255,7 @@ The [authored contracts](../contracts/api/v1/openapi.yaml), [packing operation o
 and [Vue packing feature](../src/frontend/features/packing/) now cover the detail table, inline field permissions,
 Everyone/order, quick add/removal, self-assignment and manager removal, creation/duplication, properties, linked event
 discovery/relinking, audience/admin permissions, header upload/removal, archive/restore and owner-only permanent delete.
-The packing landing page preserves independent participant/owner and main/hidden regions by wrapping the existing
+The feature-owned mixed overview preserves independent participant/owner and main/hidden regions through the existing
 bounded overview controller; personal visibility remains separate from shared archival. No packing workflow requires
 an old packing page or browser module to complete it.
 
@@ -237,17 +265,16 @@ selection. Guest capability links still authenticate on their first GET, then en
 OIDC remains a provider navigation. Event pages and broader account/profile administration are outside the migrated
 packing graph and retain authorized navigation to their owning modules; this is not an entire-application SPA claim.
 
-Conditional protection now includes separate metadata, item, order and settings tokens. The persisted packing root
-revision and legacy writer coverage protect metadata/context round trips; other tokens hash their reviewed current
-state and do not imply a new revision table for every relationship. Multipart creation validates one typed JSON part
+Conditional protection includes separate metadata, item, order and setup-field comparisons. Under approved D2,
+all tokens compare reviewed current values; packing stores no revision counter or relationship history. Shared native
+and v1 operations reauthorize against locked state. Multipart creation validates one typed JSON part
 and optional header file; scoped binary image reads use an opaque version. The detailed [API](frontend-migration/API_CONTRACT_DESIGN.md)
 and [refresh](frontend-migration/REFRESH_CONFLICT_DESIGN.md) records own those exact limits.
 
 ### Subsequent feature slices
 
-After packing parity review, migrate the general overview, remaining account/profile administration,
-surveys/drivers/events, activity, and invoices/outputs in bounded feature slices. The packing overview and necessary
-identity entry now exist; do not count them again as unimplemented work.
+After packing parity review, migrate remaining account/profile administration, surveys/drivers/events, activity,
+and invoices/outputs in bounded feature slices. The mixed overview and necessary identity entry now exist; do not count them again as unimplemented work.
 The exact order can change with dependency evidence; each slice includes its reads, writes, lifecycle, permission,
 error, fallback and output behavior rather than migrating only the happy-path page.
 
@@ -256,10 +283,10 @@ Retain native URL compatibility and complete authorization. The normal JavaScrip
 and client navigation inside the migrated graph. Remove the old Pug/browser owner when that feature's parity is
 established; keep only explicit native-form/old-URL adapters that call the same controller operations.
 
-Rollout is route-scoped and reversible while schemas remain backward compatible. A rollback can restore the old
-rendering route without losing records. It cannot restore conflict protection if an old binary stops advancing new
-revision columns: either retain that compatibility patch or disable new conditional-write routes during rollback.
-This is an operational requirement for the revision migration, not a reason to delay ordinary read-only pilot work.
+Rollout remains route-scoped and reversible while schemas remain compatible. Current-value packing comparisons
+add no persisted counter, so the abandoned pilot revision imposes no rollback requirement. An operator can replace
+the installed binary folder and restore a fallback copy. The app coordinates rare old-tab updates itself; it does
+not require old assets to remain served. Future persistent changes still need their own reviewed migration/rollback.
 
 ## Completion and review limits
 

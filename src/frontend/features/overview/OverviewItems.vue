@@ -2,14 +2,14 @@
 import {computed} from 'vue';
 import type {components} from '../../../types/api/v1';
 import {usePilot} from '../../app/context';
-import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import OverviewCard from './OverviewCard.vue';
 
-type Card = components['schemas']['PackingOverviewCard'];
-const props = defineProps<{view: components['schemas']['PackingOverviewRegion']; disabled: boolean}>();
+type Card = components['schemas']['OverviewCard'];
+const props = defineProps<{view: components['schemas']['OverviewRegion']; disabled: boolean;
+    pageHref: (page: number) => string; expandHref: (card: Card) => string}>();
 const emit = defineEmits<{
-    visibility: [card: Card, value: components['schemas']['PackingVisibilityInput']['visibility']];
+    visibility: [card: Card, value: components['schemas']['OverviewVisibilityInput']['visibility']];
     archive: [card: Card, restore: boolean];
     remove: [card: Card];
     expand: [card: Card];
@@ -46,6 +46,7 @@ const range = computed(() => ({
                 :disabled="disabled"
                 :expansion="!view.parent"
                 :filtered="filtered"
+                :expansion-href="expandHref(card)"
                 @visibility="emit('visibility', card, $event)"
                 @archive="emit('archive', card, $event)"
                 @remove="emit('remove', card)"
@@ -67,19 +68,19 @@ const range = computed(() => ({
             class="d-flex gap-2"
             :aria-label="messages.t(view.parent ? 'overview.childNavigation' : 'overview.pageNavigation')"
         >
-            <ActionButton
-                class="btn-sm"
-                variant="outline-secondary"
-                :disabled="!view.hasPrevious || disabled"
-                @click="emit('page', currentPage - 1)"
-                >{{ messages.t('overview.previous') }}</ActionButton
+            <a
+                class="btn btn-sm btn-outline-secondary" :class="{disabled: !view.hasPrevious || disabled}"
+                :aria-disabled="!view.hasPrevious || disabled"
+                :href="view.hasPrevious && !disabled ? pageHref(currentPage - 1) : undefined"
+                @click.prevent="view.hasPrevious && !disabled && emit('page', currentPage - 1)"
+                >{{ messages.t('overview.previous') }}</a
             >
-            <ActionButton
-                class="btn-sm"
-                variant="outline-secondary"
-                :disabled="!view.hasNext || disabled"
-                @click="emit('page', currentPage + 1)"
-                >{{ messages.t('overview.next') }}</ActionButton
+            <a
+                class="btn btn-sm btn-outline-secondary" :class="{disabled: !view.hasNext || disabled}"
+                :aria-disabled="!view.hasNext || disabled"
+                :href="view.hasNext && !disabled ? pageHref(currentPage + 1) : undefined"
+                @click.prevent="view.hasNext && !disabled && emit('page', currentPage + 1)"
+                >{{ messages.t('overview.next') }}</a
             >
         </nav>
     </div>

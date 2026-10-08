@@ -95,6 +95,13 @@ export const handleApiProblem: ErrorRequestHandler = function handleApiProblem(e
         // projection entirely: neither its parameters nor field errors belong in the generic reply.
         body = validatedProblemBody(new ApiProblem('INTERNAL_ERROR'), locale, requestId);
     }
+    if (body.status >= 500) {
+        // Arbitrary exception messages/stacks can contain SQL parameters, email addresses or tokens.
+        // Keep correlation and a bounded exception category, never the request body/cookies/URL.
+        const category = error instanceof Error && /^[A-Za-z][A-Za-z0-9]{0,63}$/u.test(error.name)
+            ? error.name : 'UnexpectedError';
+        console.error('[api]', {requestId, method: req.method, code: body.code, category});
+    }
     if (req.apiActor?.context) res.set('X-Surveyor-Context', req.apiActor.context);
     res.status(body.status).type('application/problem+json').set('Cache-Control', 'private, no-store')
         .set('Content-Language', locale).json(body);

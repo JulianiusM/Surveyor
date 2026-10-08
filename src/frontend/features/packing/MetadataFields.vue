@@ -3,41 +3,38 @@ import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
 import type {PilotRead} from '../../../types/FrontendPilotUiTypes';
+import {usePackingApi} from './api';
 import {usePilot, refreshInterval, canRetryRead} from '../../app/context';
-import {ApiFailure, InvalidInputError, ObsoleteRequestError} from '../../app/api';
+import {ApiFailure, InvalidInputError, ObsoleteRequestError} from '../../app/transport';
 import {MetadataDraft} from '../../composables/metadataDraft';
+import {useFeedbackError} from '../../composables/feedback';
+import {packingKeys} from '../../app/queryKeys';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 
-const props = defineProps<{listId: string; listTitle?: string; disabled?: boolean}>();
+const props = withDefaults(defineProps<{listId: string; listTitle?: string; disabled?: boolean; active?: boolean}>(), {active: true});
 const emit = defineEmits<{close: []; saved: []; accessLost: []}>();
 const context = usePilot();
+const api = usePackingApi(context);
 const {messages} = context;
 const draft = ref<MetadataDraft | null>(null);
 const pending = ref(false);
-const error = ref<string | null>(null);
+const {error, setError} = useFeedbackError();
 const unknown = ref(false);
 const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
-const key = computed(() => [
-    'v1',
-    context.session.value?.context,
-    context.locale.value,
-    'packing',
-    props.listId,
-    'metadata',
-]);
+const key = computed(() => packingKeys.metadata(context.session.value?.context, props.listId, context.locale.value));
 const metadata = useQuery({
     queryKey: key,
-    enabled: computed(() => context.hydrated.value && context.ready.value && context.visible.value),
+    enabled: computed(() => props.active !== false && context.hydrated.value && context.ready.value && context.visible.value),
     queryFn: ({signal, queryKey}) =>
-        context.api.metadata(
+        api.metadata(
             props.listId,
             context.capture(),
             signal,
             context.queryClient.getQueryData<PilotRead<components['schemas']['PackingMetadata']>>(queryKey),
         ),
     refetchInterval: (query) =>
-        context.visible.value
+        props.active !== false && context.visible.value
             ? refreshInterval(query.state.error, query.state.fetchFailureCount, jitter)
             : false,
     refetchIntervalInBackground: false,
@@ -89,10 +86,12 @@ function beforeUnload(event: BeforeUnloadEvent): void {
 }
 onMounted(() => window.addEventListener('beforeunload', beforeUnload));
 onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
+const removeUpdateGuard = context.updates.registerGuard(() => !pending.value && !unknown.value && !draft.value?.dirty);
+onBeforeUnmount(removeUpdateGuard);
 
 async function refresh(discard = false): Promise<void> {
     if (!canRetryRead(metadata.error.value)) return;
-    error.value = null;
+    setError(null);
     try {
         const result = await metadata.refetch({throwOnError: true});
         if (discard && result.data?.etag && draft.value) {
@@ -106,7 +105,7 @@ async function refresh(discard = false): Promise<void> {
             draft.value.remote = {data: result.data.data, etag: result.data.etag};
         }
     } catch {
-        error.value = messages.value.t('state.loadFailed');
+        setError('state.loadFailed');
     }
 }
 
@@ -119,7 +118,7 @@ async function refreshAfterSettings(): Promise<void> {
 function review(): void {
     if (draft.value?.review()) {
         unknown.value = false;
-        error.value = null;
+        setError(null);
     }
 }
 
@@ -136,9 +135,10 @@ async function save(): Promise<void> {
         return;
     const scope = context.capture();
     pending.value = true;
-    error.value = null;
+    setError(null);
+    const finishUpdateCommand = context.updates.commandStarted();
     try {
-        const result = await context.api.saveMetadata(
+        const result = await api.saveMetadata(
             props.listId,
             draft.value.patch,
             draft.value.etag,
@@ -152,18 +152,19 @@ async function save(): Promise<void> {
     } catch (failure) {
         if (failure instanceof ObsoleteRequestError || !context.isCurrent(scope)) return;
         if (failure instanceof InvalidInputError) {
-            error.value = messages.value.t('api:errors.VALIDATION_FAILED');
+            setError('api:errors.VALIDATION_FAILED');
         } else if (failure instanceof ApiFailure && failure.status === 412) {
             await refresh();
-            error.value = messages.value.t('draft.conflict');
+            setError('draft.conflict');
         } else if (failure instanceof ApiFailure && failure.status < 500) {
-            error.value = failure.message;
+            setError(failure);
         } else {
             unknown.value = true;
-            error.value = messages.value.t('state.unknownOutcome');
+            setError('state.unknownOutcome');
         }
     } finally {
         pending.value = false;
+        finishUpdateCommand();
     }
 }
 defineExpose({mayLeave, pending, refresh, refreshAfterSettings});

@@ -26,8 +26,8 @@ import renderer from '../modules/renderer';
 import type {PermBundle} from "../types/PermissionTypes";
 
 interface AssignmentAccessMapping {
-    assign: (body: any, profileId: string) => Promise<void>,
-    unassign: (body: any, profileId: string) => Promise<void>
+    assign: (body: any, profileId: string, req?: Request) => Promise<void>,
+    unassign: (body: any, profileId: string, req?: Request) => Promise<void>
 }
 
 export type AssignmentOperation = 'assign' | 'unassign';
@@ -94,7 +94,9 @@ async function performSecuredAssignmentAction(
         await enforceAssignmentItemScope(req.params.id as string, itemId, security.resolveItemEntityId);
 
         await security.authorize?.(req, profileId, operation);
-        await action(body, profileId);
+        // Features may re-evaluate the captured request actor inside their write transaction.
+        // Older mappings ignore this optional context and retain their existing behavior.
+        await action(body, profileId, req);
     });
 }
 

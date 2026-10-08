@@ -4,10 +4,10 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: test maintainers
 status: current
-last-verified: 2026-10-04
+last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: source review of generated-input package hooks and focused frontend pilot contract, localization, browser, HTTP, persistence and migration test routing; archival test routing and explicit E2E automation configuration reviewed from source; execution evidence reported separately; non-blocking documentation policy and optional report/test routing; D12 Vitest and Playwright discovery, layer contracts, environment loading, MariaDB guardrails, E2E lifecycle, current factories/keywords/support paths, commands, coverage, and CI behavior; D14 help authoring, rendered semantic, contextual navigation, and release packaging coverage
-source-anchors: tests/unit/frontend-contracts.spec.ts; tests/unit/frontend-localization.spec.ts; tests/unit/frontend-api-problems.spec.ts; tests/frontend/frontend-pilot.spec.ts; tests/integration/packing-api.spec.ts; tests/integration/packing-metadata-migration.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-pilot.spec.ts; tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs
+verification-scope: ordinary development loading, hydration, lazy navigation, HMR and serialized generator restart verification; approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; source review of generated-input package hooks and focused frontend pilot contract, localization, browser, HTTP, persistence and migration test routing; archival test routing and explicit E2E automation configuration reviewed from source; execution evidence reported separately; non-blocking documentation policy and optional report/test routing; D12 Vitest and Playwright discovery, layer contracts, environment loading, MariaDB guardrails, E2E lifecycle, current factories/keywords/support paths, commands, coverage, and CI behavior; D14 help authoring, rendered semantic, contextual navigation, and release packaging coverage
+source-anchors: src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/e2e/frontend-development.spec.ts; tests/unit/frontend-contracts.spec.ts; tests/unit/frontend-localization.spec.ts; tests/unit/frontend-api-problems.spec.ts; tests/frontend/frontend-pilot.spec.ts; tests/integration/packing-api.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-pilot.spec.ts; tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs
 next-review: test-layout-command-or-help-validation-change
 -->
 
@@ -105,7 +105,7 @@ tests/integration/**/*.spec.ts
 
 The configuration defaults to the Node environment, loads `tests/support/env.ts`, and keeps file-level parallelism disabled. The Vue plugin transforms SFCs; the packing editor regression opts into happy-dom and restores its mounted app/query state. Sequential test files are required because integration suites independently rebuild the same disposable schema.
 
-Coverage uses V8 and includes `src/**/*.ts`, excluding migrations, generated database metadata, and declaration-only type files. The CI command writes text, LCOV, JSON, and JUnit outputs.
+Coverage uses V8 and includes TypeScript and Vue components under `src/`, excluding migrations, generated database metadata, and declaration-only type files. The CI command writes text, LCOV, JSON, and JUnit outputs.
 
 ## Layer contracts
 
@@ -318,13 +318,14 @@ The implemented scope and entry points are in [Frontend Pilot](FRONTEND_PILOT.md
 | Refresh, identity isolation, draft/conflict and browser-local packing state | `tests/frontend/frontend-pilot.spec.ts` |
 | Rendered editor, packing special states, shell navigation and native locale selection | `tests/frontend/frontend-pilot-editor.spec.ts`, `tests/frontend/frontend-pilot-shell.spec.ts` |
 | Packing projections, grants, stale edits, legacy writers and assignment locking | `tests/integration/packing-api.spec.ts` |
-| Populated upgrade/downgrade rehearsal and entity/migration column parity | `tests/integration/packing-metadata-migration.spec.ts` |
+| Unknown command recovery, reactive feedback and update coordination | `tests/frontend/frontend-command-recovery.spec.ts`, `tests/frontend/frontend-update-coordinator.spec.ts` |
 | Real cookie sessions, context/CSRF admission, conditional reads and v1 HTTP errors | `tests/e2e/frontend-pilot-api.spec.ts` |
 | Rendered desktop/mobile pilot behavior and native help fallback | `tests/e2e/frontend-pilot.spec.ts` |
 
 Run `npm run typecheck:frontend` for Vue client/server type checks and `npm run build` before Playwright. The ordinary
 build includes both Vue bundles and packaged API artifacts. Contract/catalog source edits need
-`npm run prepare:frontend`; a code watcher alone does not regenerate those definitions. A focused direct runner command
+`npm run prepare:frontend` for a standalone runner. The root development workflow watches authored inputs and
+regenerates them before restarting Express; a standalone source watcher does not supply that workflow. A focused direct runner command
 still uses the integration or E2E database setup described above, including its destructive reset behavior.
 
 Packing fixtures that call `createEntity` directly do not receive form permission defaults automatically. When a test
@@ -336,6 +337,20 @@ against the current application. The optional baseline capture adds HTTP fixture
 schema; it does not initialize or reset it. Its capture manifest is evidence for manual inspection, not automatic
 visual approval or a required documentation check. Use a separate Playwright `--output` directory when retaining
 baseline images under `test-results`, since the runner cleans its selected output directory.
+
+Built browser tests do not exercise Vite middleware or source-module hydration. For changes to frontend bootstrap,
+development integration or routing, run an actual `npm run server` against explicitly isolated development settings,
+then test document-emitted module/style URLs, same-document controls/navigation, HMR and generated-input restart.
+Development settings use ordinary `DB_*` names; an `E2E_DB_*` file alone does not select the source server's database.
+Never reuse the default reset hook to attach to an existing development server. A separate Playwright configuration
+with `webServer` disabled can target a verified disposable source server without initializing its schema.
+Set `E2E_FRONTEND_DEVELOPMENT=true` in that separately configured run to include
+`tests/e2e/frontend-development.spec.ts`. It exercises actual document-emitted modules and native asset URLs,
+locale changes during a held lazy navigation, and text typed before client hydration. It is skipped in ordinary
+built-release runs. Keep `TZ=UTC` for deterministic date fixtures, matching the documented archival checks below.
+`FRONTEND_BASELINE_RUNTIME=development` selects source Express/Vite for the optional paired capture, with the same
+explicit schema acknowledgment and restricted-grant checks. It records source fingerprints and omits startup jobs;
+it supplements, rather than substitutes for, checking the normal watcher/startup command and installed release.
 
 ## Assertions and isolation
 

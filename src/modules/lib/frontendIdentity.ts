@@ -1,3 +1,10 @@
+import type {MessageKey} from '../../types/LocalizationTypes';
+
+/** Native post/redirect/get feedback contains catalog keys only, never HTML or submitted values. */
+export const frontendIdentityFeedback: readonly MessageKey[] = [
+    'auth.registered', 'auth.resetSent', 'auth.resetDone', 'auth.activated', 'auth.recoverySent', 'auth.logoutDone',
+];
+
 /** Only application-owned relative destinations can complete a pilot identity transition. */
 export function safeFrontendReturn(input: unknown): string {
     const fallback = '/frontend-pilot';

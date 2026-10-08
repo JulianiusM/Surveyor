@@ -210,6 +210,11 @@ class EntityPropertyDialog implements EntityCommandHost {
                 showInlineAlert('info', 'There are no property changes to save.', this.feedback(button));
                 return;
             }
+            if (form.hasAttribute('data-compare-fields')) {
+                // Send originals only for changed packing fields. Independent edits to another
+                // field remain valid; the server compares this baseline inside its root lock.
+                payload.expectedValues = Object.fromEntries(Object.keys(payload).map(name => [name, this.propertyValues.get(name)]));
+            }
         }
         const command = this.begin(button);
         if (!command) return;

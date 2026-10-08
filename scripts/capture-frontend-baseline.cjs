@@ -4,7 +4,7 @@
  */
 
 /**
- * Optional migration evidence capture against the built application and an existing disposable E2E schema.
+ * Optional migration evidence capture against the selected application runtime and an existing disposable E2E schema.
  * This does not run the schema initializer, reset data, send mail, or install a CI prerequisite.
  * Each run adds synthetic fixtures through production HTTP routes and retains them for manual inspection.
  * Screenshots and the manifest stay under ignored test-results; no credentials or session state are written.
@@ -38,6 +38,9 @@ const captureEnv = {...process.env, ...(envFile ? dotenv.parse(fs.readFileSync(e
 const port = Number(process.env.FRONTEND_BASELINE_PORT || 3104);
 const baseURL = `http://127.0.0.1:${port}`;
 const pilotComparison = process.env.FRONTEND_BASELINE_MODE === 'pilot';
+// Production and development load different entrypoints. Capture the emitted Vite
+// graph explicitly rather than treating a successful built-page review as HMR evidence.
+const runtime = process.env.FRONTEND_BASELINE_RUNTIME || 'built';
 // Identity diagnosis uses the same guarded server/mail boundary without unrelated
 // packing fixtures. The default remains the complete comparison collection.
 const identityOnly = process.env.FRONTEND_BASELINE_SCOPE === 'identity';
@@ -45,7 +48,8 @@ const viewports = [{name: 'desktop', width: 1440, height: 1000}, {name: 'mobile'
 const manifest = galleryOnly ? JSON.parse(fs.readFileSync(path.join(output, 'manifest.json'), 'utf8'))
     : {runId, sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], {cwd: workspace, encoding: 'utf8'}).trim(),
     node: process.version, playwright: require('@playwright/test/package.json').version,
-    baseURL, viewports, fixtures: {}, captures: [], checks: [], browserErrors: [], failedRequests: [], status: 'incomplete'};
+    baseURL, runtime, viewports, fixtures: {}, captures: [], checks: [], browserErrors: [], failedRequests: [],
+    assetFailures: [], status: 'incomplete'};
 
 // Capability links are only carried in memory between the mail boundary and browser.
 // They must never become evidence URLs, logged errors or saved fixture properties.
@@ -82,10 +86,20 @@ function observeCapturePage(page) {
         }
     });
     page.on('requestfailed', request => manifest.failedRequests.push({url: redactCaptureText(request.url()), failure: request.failure()?.errorText}));
+    page.on('response', response => {
+        // A failed entry can leave usable-looking SSR without raising pageerror.
+        // Assert the actual module graph independently of rendered screenshot success.
+        if (new URL(response.url()).pathname.startsWith('/app/')
+            && (response.status() >= 400 || response.headers()['content-type']?.includes('text/html'))) {
+            manifest.assetFailures.push({url: redactCaptureText(response.url()), status: response.status(),
+                contentType: response.headers()['content-type'] ?? ''});
+        }
+    });
 }
 
 /** Verify the effective local target and grants before starting an application capable of writing sessions/fixtures. */
 async function verifyTarget() {
+    if (!['built', 'development'].includes(runtime)) throw new Error('Capture runtime must be built or development.');
     if (!envFile || !process.env.FRONTEND_BASELINE_DISPOSABLE_DATABASE
         || captureEnv.E2E_DB_NAME !== process.env.FRONTEND_BASELINE_DISPOSABLE_DATABASE) {
         throw new Error('Set E2E_DOTENV_FILE and FRONTEND_BASELINE_DISPOSABLE_DATABASE to the explicitly disposable capture schema.');
@@ -157,35 +171,56 @@ function buildFingerprint() {
     }
     const directories = ['dist/controller', 'dist/middleware', 'dist/modules', 'dist/routes', 'dist/views',
         'dist/public/js', 'docs/user-guide'];
-    return {clientEntry: client.file,
+    if (runtime === 'development') {
+        // Freeze source SSR, browser modules, native templates/assets, and generated
+        // inputs too. A live edit during this collection invalidates the comparison.
+        directories.push('src', '.generated/api', 'contracts/api/v1');
+        files.push('vite.config.mts', 'tsconfig.server.json');
+    }
+    return {mode: runtime, clientEntry: runtime === 'development' ? '/app/src/frontend/app/entry-client.ts' : client.file,
         runtime: Object.fromEntries(directories.map(directory => [directory, directoryFingerprint(directory)])),
         hashes: Object.fromEntries([...new Set(files)].map(file => [file,
             createHash('sha256').update(fs.readFileSync(path.join(workspace, file))).digest('hex')]))};
 }
 
-/** Start only the built HTTP application; archival/retention startup jobs are deliberately outside visual capture. */
+/** Start the selected HTTP application; startup jobs stay outside visual capture.
+ * Development uses source Express plus its real Vite/SSR integration, not a second asset server. */
 function startCaptureServer(log) {
-    const serverEnv = {...captureEnv, NODE_ENV: 'e2e', E2E_APP_PORT: String(port), E2E_ROOT_URL: baseURL,
+    const serverEnv = {...captureEnv, NODE_ENV: runtime === 'development' ? 'development' : 'e2e',
+        SURVEYOR_FRONTEND_DEV: runtime === 'development' ? '1' : '0',
+        E2E_APP_PORT: String(port), E2E_ROOT_URL: baseURL,
         E2E_LOCAL_LOGIN_ENABLED: '1', E2E_OIDC_ENABLED: '0', E2E_AUTO_ARCHIVE_ENABLED: 'false',
         E2E_SMTP_HOST: '127.0.0.1', E2E_SMTP_PORT: '9', E2E_SMTP_SECURE: 'false', E2E_SMTP_POOL: 'false',
         // The existing upload owner joins configured directories to cwd; use relative task-owned paths.
         E2E_HEADER_IMG_DIR: path.relative(workspace, path.join(output, 'uploads', 'headers')),
         E2E_INVOICE_DIR: path.relative(workspace, path.join(output, 'uploads', 'invoices')),
         SETTINGS_FILE: path.join(output, 'unused-settings.csv'), TZ: 'UTC'};
+    if (runtime === 'development') {
+        // Normal development settings read ordinary names, while E2E uses overrides.
+        // Map the already verified target before importing settings; never fall back
+        // to the operator's .env or silently use another database in source mode.
+        for (const [name, value] of Object.entries(serverEnv)) {
+            if (name.startsWith('E2E_')) serverEnv[name.slice(4)] = value;
+        }
+    }
+    const applicationDirectory = runtime === 'development' ? 'src' : 'dist';
     // The server imports the same app, middleware, views and services as production. Only process-level jobs differ.
     const bootstrap = `
         (async function start() {
-            await require('./dist/modules/settings').default.read();
-            await require('./dist/modules/database/dataSource').initDataSource();
+            ${runtime === 'development' ? "require('ts-node').register({project: 'tsconfig.server.json'});" : ''}
+            await require('./${applicationDirectory}/modules/settings').default.read();
+            await require('./${applicationDirectory}/modules/database/dataSource').initDataSource();
             // Replace only outbound delivery. Registration, token persistence, validation
             // and browser submissions still execute the real application workflows.
-            const mailer = require('./dist/modules/email').default;
+            const mailer = require('./${applicationDirectory}/modules/email').default;
             for (const [method, kind] of [['sendActivationEmail', 'activation'], ['sendPasswordResetEmail', 'reset']]) {
                 mailer[method] = async (recipient, link) => {
                     process.send({type: 'capture-identity-mail', kind, address: recipient.address, link});
                 };
             }
-            require('./dist/app').default.listen(${port}, '127.0.0.1', () => {
+            const server = require('node:http').createServer(require('./${applicationDirectory}/app').default);
+            await require('./${applicationDirectory}/modules/frontendDevelopment').initializeFrontendDevelopment(server);
+            server.listen(${port}, '127.0.0.1', () => {
                 process.send({type: 'capture-ready', pid: process.pid});
             });
         })().catch(error => { console.error(error); process.exit(1); });
@@ -1258,7 +1293,7 @@ async function main() {
         manifest.browser = browser.version();
         if (identityOnly) {
             await captureIdentityFeedback(browser, 'comparison');
-            expect(buildFingerprint(), 'Built assets stay frozen during identity capture').toEqual(manifest.build);
+            expect(buildFingerprint(), 'Selected runtime inputs stay frozen during identity capture').toEqual(manifest.build);
         } else {
             const organizer = await browser.newContext({baseURL, locale: 'en-GB', timezoneId: 'UTC'});
             const guest = await browser.newContext({baseURL, locale: 'en-GB', timezoneId: 'UTC'});
@@ -1275,7 +1310,7 @@ async function main() {
                     process.env.FRONTEND_BASELINE_TWO_PHASE === '1' ? 'before' : 'comparison');
                 await captureIdentityFeedback(browser, process.env.FRONTEND_BASELINE_TWO_PHASE === '1' ? 'before' : 'comparison');
                 await comparePilotBehavior(guest);
-                expect(buildFingerprint(), 'Built assets stay frozen during a comparison phase').toEqual(manifest.build);
+                expect(buildFingerprint(), 'Selected runtime inputs stay frozen during a comparison phase').toEqual(manifest.build);
                 fs.writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(manifest, null, 2));
                 writeGallery();
                 // The optional two-phase mode retains actors/data while the caller rebuilds source.
@@ -1297,7 +1332,7 @@ async function main() {
                     await capturePilotScenes(browser, organizer, guest, 'after');
                     await captureIdentityFeedback(browser, 'after');
                     await comparePilotBehavior(guest);
-                    expect(buildFingerprint(), 'Rebuilt assets stay frozen during the second phase').toEqual(manifest.afterBuild);
+                    expect(buildFingerprint(), 'Selected runtime inputs stay frozen during the second phase').toEqual(manifest.afterBuild);
                 }
             } else {
                 await seedFixtures(organizer, guest);
@@ -1305,6 +1340,7 @@ async function main() {
             }
         }
         expect(manifest.browserErrors, 'No JavaScript or caught framework rendering errors').toEqual([]);
+        expect(manifest.assetFailures, 'Document-emitted frontend assets load executable modules and styles').toEqual([]);
         manifest.checks.push({name: 'captured build fingerprints remain frozen; no browser rendering errors', passed: true});
         manifest.status = manifest.captures.every(entry => entry.status === 'captured')
             && manifest.checks.every(entry => entry.passed) ? 'captured-awaiting-visual-review' : 'partial';

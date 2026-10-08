@@ -140,11 +140,16 @@ for (const [route, unresolvedPathItem] of Object.entries(document.paths)) {
             const identity = `${parameter.in}:${parameter.name}`;
             if (names.has(identity)) throw new Error(`Duplicate parameter: ${identity}`);
             names.add(identity);
+            const parameterType = resolve(document, parameter.schema)?.type;
+            const repeatedQuery = parameterType === 'array' && parameter.in === 'query'
+                && parameter.explode !== false && ['string', 'integer', 'number', 'boolean'].includes(resolve(document, parameter.schema.items)?.type);
             if (!['path', 'query', 'header'].includes(parameter.in) || parameter.content
                 || (parameter.style && parameter.style !== (parameter.in === 'query' ? 'form' : 'simple'))
-                || resolve(document, parameter.schema)?.type === 'array') {
+                || parameterType === 'array' && !repeatedQuery) {
                 throw new Error(`Unsupported pilot parameter serialization: ${identity}`);
             }
+            // Runtime transport metadata must contain resolved shapes, not a second reference resolver.
+            parameter.schema = resolve(document, parameter.schema);
         }
         let requestSchema = null;
         let requestMediaType = null;
@@ -161,7 +166,7 @@ for (const [route, unresolvedPathItem] of Object.entries(document.paths)) {
             const response = resolve(document, unresolved);
             if (!response.content) { responseSchemas[status] = null; continue; }
             const entries = Object.entries(response.content);
-            if (entries.length !== 1 || !['application/json', 'application/problem+json', 'application/octet-stream'].includes(entries[0][0])) {
+            if (entries.length !== 1 || !['application/json', 'application/problem+json', 'application/octet-stream', 'text/plain'].includes(entries[0][0])) {
                 throw new Error('Unsupported pilot response media type');
             }
             responseMediaTypes[status] = entries[0][0];
@@ -170,8 +175,16 @@ for (const [route, unresolvedPathItem] of Object.entries(document.paths)) {
         const parametersName = `${upperFirst(operation.operationId)}Parameters`;
         derivedSchemas[parametersName] = parameterSchema(parameters);
         requestSchemas.add(parametersName);
+        const policy = operation['x-surveyor-command'];
+        if (!policy || !['read', 'natural-idempotent', 'reconcile-only'].includes(policy.retryPolicy)
+            || !['none', 'metadata', 'item', 'order', 'settings'].includes(policy.precondition)
+            || (method === 'get') !== (policy.retryPolicy === 'read')) {
+            throw new Error(`Missing or invalid authored command policy: ${operation.operationId}`);
+        }
+        const successStatuses = Object.keys(responseSchemas).map(Number).filter(status => status >= 200 && status < 300);
         operations.push({operationId: operation.operationId, method: method.toUpperCase(), path: route, parameters,
-            parametersValidator: `validate${parametersName}`, requestSchema, requestMediaType, responseSchemas, responseMediaTypes});
+            parametersValidator: `validate${parametersName}`, requestSchema, requestMediaType, responseSchemas, responseMediaTypes,
+            successStatuses, policy});
     }
 }
 
@@ -181,12 +194,20 @@ const problems = schemas.Problem.oneOf.map(variant => ({
     messageKey: variant.properties.messageKey.const,
     paramsSchema: variant.properties.params,
 }));
-const manifest = {sourceHash: sourceHash.digest('hex'), schemas: Object.keys(schemas), operations, problems};
+const apiCompatibility = document['x-surveyor-api-compatibility'];
+if (typeof apiCompatibility !== 'string' || !/^[a-zA-Z0-9-]{1,128}$/u.test(apiCompatibility)) throw new Error('Missing API compatibility family');
+const manifest = {sourceHash: sourceHash.digest('hex'), apiCompatibility, schemas: Object.keys(schemas), operations, problems};
 const allSchemas = {...schemas, ...derivedSchemas};
 const output = new Map();
 output.set(`${artifactDirectory}/openapi.json`, `${JSON.stringify(document, null, 2)}\n`);
 output.set(`${artifactDirectory}/operations.json`, `${JSON.stringify(manifest, null, 2)}\n`);
 output.set('src/types/api/v1.d.ts', banner + astToString(await openapiTS(document)));
+// Small policy metadata belongs in the shell; feature validators remain separate lazy modules below.
+output.set(`${artifactDirectory}/policy.mjs`, banner + `export const apiCompatibility = ${JSON.stringify(apiCompatibility)};\nexport const operationPolicies = ${JSON.stringify(Object.fromEntries(
+    operations.map(operation => [operation.operationId, {successStatuses: operation.successStatuses, ...operation.policy}])))};\n`);
+output.set(`${artifactDirectory}/policy.d.mts`, banner + "import type {operations} from '../../../src/types/api/v1.js';\n"
+    + `export const apiCompatibility: ${JSON.stringify(apiCompatibility)};\n`
+    + "export const operationPolicies: Record<keyof operations, {successStatuses: readonly number[]; retryPolicy: 'read' | 'natural-idempotent' | 'reconcile-only'; precondition: 'none' | 'metadata' | 'item' | 'order' | 'settings'}>;\n");
 
 let declarations = `${banner}import type {components, operations} from './v1';\nimport type {ErrorObject} from 'ajv';\n\n`;
 declarations += 'export interface GeneratedValidator<T> { (data: unknown): data is T; errors?: ErrorObject[] | null; }\n';
@@ -244,6 +265,19 @@ for (const browser of [false, true]) {
     let signatures = `${banner}import type {ValidatorSet} from '../../../src/types/api/validation-v1.js';\n`;
     for (const name of Object.keys(allSchemas)) signatures += `export const validate${name}: ValidatorSet['validate${name}'];\n`;
     output.set(`${artifactDirectory}/${basename}.d.${browser ? 'mts' : 'cts'}`, signatures);
+    if (browser) {
+        // A standalone module per schema lets Vite load only a route's validation graph. Each module
+        // bundles its referenced shapes and helpers, with no Ajv compiler in the application runtime.
+        await Promise.all(Object.entries(exportMap).map(async ([exportName, reference]) => {
+            const single = standaloneCode(ajv, {[exportName]: reference});
+            const result = await build({stdin: {contents: single, resolveDir: root, sourcefile: `${exportName}.mjs`},
+                bundle: true, write: false, platform: 'browser', format: 'esm', target: 'es2020', legalComments: 'none'});
+            output.set(`${artifactDirectory}/browser/${exportName}.mjs`, banner + result.outputFiles[0].text);
+            output.set(`${artifactDirectory}/browser/${exportName}.d.mts`, banner
+                + `import type {ValidatorSet} from '../../../../src/types/api/validation-v1.js';\n`
+                + `export const ${exportName}: ValidatorSet['${exportName}'];\n`);
+        }));
+    }
 }
 
 for (const [relative, content] of output) {

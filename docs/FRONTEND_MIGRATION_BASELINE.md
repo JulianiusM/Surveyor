@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: current
-last-verified: 2026-10-04
+last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: step-one source inventory and second-pass edge-case review of existing routes, behaviors, permissions, rendering, native fallbacks and test assertions; first-pass application build and controlled browser capture; implementation of the replacement frontend is not included
+verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; step-one source inventory and second-pass edge-case review of existing routes, behaviors, permissions, rendering, native fallbacks and test assertions; first-pass application build and controlled browser capture; implementation of the replacement frontend is not included
 source-anchors: src/app.ts; src/routes/; src/controller/; src/views/; src/public/js/; src/types/; src/modules/invoice/; src/modules/activity/; tests/; scripts/capture-frontend-baseline.cjs; package.json; esbuild.client.js; playwright.config.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/DOCUMENTATION_POLICY.md
 next-review: frontend-foundation-proof-slice-implementation
 -->
@@ -134,6 +134,7 @@ checks remain separate, as required by the [documentation policy](DOCUMENTATION_
   report configuration. Reports remain under `test-results/frontend-baseline/documentation-report/`.
 
 Step 2 is recorded in the [frontend foundation design](FRONTEND_FOUNDATION_DESIGN.md), including the framework,
-versioned contract, shared localization and refresh/conflict decisions. The next step is its bounded working proof
-slice. API implementation, database revision fields and production route cutover remain subsequent work; this
-baseline stays the historical behavior and evidence reference.
+versioned contract, shared localization and refresh/conflict decisions. The independent packing/overview/identity/help
+pilot and approved rectification now exist; see [Frontend Pilot](FRONTEND_PILOT.md) for source boundaries and actual
+verification. Other feature migration and default route cutover remain pending. This baseline remains the historical
+behavior/evidence reference; it does not approve any later build by itself.

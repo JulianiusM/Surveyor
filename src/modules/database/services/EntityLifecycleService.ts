@@ -132,20 +132,11 @@ export async function withLockedArchiveTarget<T>(
 /** Persist controller-normalized lifecycle columns on the caller's locked transaction. */
 export async function updateLifecycleMetadata(manager: EntityManager, ref: ArchiveReference, patch: ArchiveMetadataPatch): Promise<void> {
     await getRootRepository(manager, ref.type).update(ref.id, patch);
-    // Packing's edit context includes direct and inherited archival. Advance its metadata counter
-    // even on an archive/restore round trip, while keeping assignments outside that edit scope.
-    if (ref.type === 'packing') {
-        await manager.getRepository(PackingList).increment({id: ref.id}, 'metadataRevision', 1);
-    } else if (ref.type === 'event' && Object.hasOwn(patch, 'archivedAt')) {
-        await manager.getRepository(PackingList).increment({event: {id: ref.id}}, 'metadataRevision', 1);
-    }
 }
 
 /** Persist only the relationship. The controller coordinates any affected domain records. */
 export async function updateEventAssociation(manager: EntityManager, ref: ArchiveReference, eventId: string | null): Promise<void> {
     await manager.createQueryBuilder().relation(getRootDescriptor(ref.type).entity, 'event').of(ref.id).set(eventId);
-    // The caller holds the parent/root locks; changing away and back must still stale an old packing editor.
-    if (ref.type === 'packing') await manager.getRepository(PackingList).increment({id: ref.id}, 'metadataRevision', 1);
 }
 
 /**
@@ -263,11 +254,6 @@ export async function archiveExpiredEntities(cutoff: string, now: Date): Promise
                         .andWhere('end_date <= :cutoff', {cutoff});
                     if (type === 'activity') update.andWhere('event_id IS NULL');
                     const affected = (await update.execute()).affected ?? 0;
-                    // The event UPDATE locks the parent first. Its children's edit context
-                    // advances in that same commit, just as for an explicit archive command.
-                    if (type === 'event' && affected) {
-                        await manager.getRepository(PackingList).increment({event: {id: root.id}}, 'metadataRevision', 1);
-                    }
                     return affected;
                 }
                 // Count writes that still qualified, not earlier candidates; another

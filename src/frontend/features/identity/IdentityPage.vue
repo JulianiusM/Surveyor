@@ -3,11 +3,14 @@ import {computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch} 
 import {RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter} from 'vue-router';
 import {usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
+import {problemMessage} from '../../composables/feedback';
+import {usePageTitle} from '../../composables/pageTitle';
 import FormField from '../../components/FormField.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import PageMessage from '../../components/PageMessage.vue';
-import {ApiFailure, ObsoleteRequestError} from '../../app/api';
+import NativeContextFields from '../../components/NativeContextFields.vue';
+import {ApiFailure, ObsoleteRequestError} from '../../app/transport';
 import type {components} from '../../../types/api/v1';
 import {safeFrontendReturn} from '../../../modules/lib/frontendIdentity';
 import {isRegistrationPasswordValid, passwordCriteria} from '../../../public/js/core/password-policy';
@@ -17,13 +20,16 @@ const {messages} = context;
 const route = useRoute();
 const router = useRouter();
 const mode = computed(
-    () => route.meta.identityMode as 'login' | 'register' | 'forgot' | 'reset' | 'activate' | 'guest-login',
+    () => route.meta.identityMode as 'login' | 'register' | 'forgot' | 'reset' | 'activate' | 'guest-login' | 'error',
 );
 const next = computed(() => safeFrontendReturn(route.query.next));
-const fields = reactive({username: '', password: '', passwordRepeat: '', displayname: '', email: ''});
-const finished = ref(false);
-const recoveryFinished = ref(false);
-const activationNotice = ref(false);
+const nativeInitial = context.bootstrap.initialUrl === route.fullPath
+    && context.bootstrap.session.context === context.session.value?.context ? context.bootstrap : undefined;
+const fields = reactive({username: nativeInitial?.identityFields?.username ?? '', password: '', passwordRepeat: '',
+    displayname: nativeInitial?.identityFields?.displayname ?? '', email: nativeInitial?.identityFields?.email ?? ''});
+const finished = ref(['auth.registered', 'auth.resetSent', 'auth.resetDone'].includes(nativeInitial?.identityFeedback ?? ''));
+const recoveryFinished = ref(nativeInitial?.identityFeedback === 'auth.recoverySent');
+const activationNotice = ref(nativeInitial?.identityFeedback === 'auth.activated');
 const reconciling = ref(false);
 const showPasswordCriteria = ref(false);
 const criteria = computed(() => passwordCriteria(fields.password));
@@ -34,26 +40,30 @@ const repeatState = computed(() => mode.value === 'register' && (fields.password
 watch(
     () => [mode.value, route.params.token, route.params.guestId],
     () => {
+        // Route guards have already accepted this new form. Release uncertainty only now:
+        // cancelling the leave confirmation must keep the original draft and command blocked.
+        command.acknowledge();
         Object.assign(fields, {username: '', password: '', passwordRepeat: '', displayname: '', email: ''});
         finished.value = false;
         recoveryFinished.value = false;
         activationNotice.value = false;
         showPasswordCriteria.value = false;
-        command.error.value = null;
-        command.notice.value = null;
         if (mode.value === 'activate' && context.browser && !identityDenial.value) void submit();
     },
 );
 const command = useCommand(async () => {
     await context.refreshSession();
-});
+}, true);
+if (nativeInitial?.identityFormProblem) {
+    command.setError(new ApiFailure(nativeInitial.identityFormProblem.status, nativeInitial.identityFormProblem));
+}
 const bootstrapMatchesRoute = computed(() => context.bootstrap.initialUrl === route.fullPath);
 const needsOidc = computed(() => ['login', 'register'].includes(mode.value)
     && !context.session.value?.shell.localLoginEnabled && context.session.value?.shell.oidcEnabled);
 const identityDenial = computed(() => {
     const initial = bootstrapMatchesRoute.value ? context.bootstrap.identityProblem : undefined;
-    if (initial) return initial.code === 'LOCAL_LOGIN_DISABLED'
-        ? messages.value.t('api:errors.LOCAL_LOGIN_DISABLED') : initial.detail;
+    if (initial) return problemMessage(messages.value, initial);
+    if (mode.value === 'error') return messages.value.t('common.error');
     if (mode.value !== 'guest-login' && !context.session.value?.shell.localLoginEnabled && !needsOidc.value) {
         return messages.value.t('api:errors.LOCAL_LOGIN_DISABLED');
     }
@@ -98,7 +108,7 @@ const resetDenial = computed(() => {
     if (resetReadFailure.value) return messages.value.t('state.loadFailed');
     const problem = resetAdmission.value;
     if (!problem || !('code' in problem)) return null;
-    return problem.code === 'TOKEN_INVALID' ? messages.value.t('api:errors.TOKEN_INVALID') : problem.detail;
+    return problemMessage(messages.value, problem);
 });
 const blocked = computed(() => command.pending.value || command.uncertain.value);
 function mayLeave(): boolean {
@@ -117,15 +127,18 @@ async function refreshIdentityState(): Promise<void> {
         // A changed identity remounts the application. An unchanged session cannot prove
         // registration or mail delivery failed, so retain uncertainty and never replay it.
         await context.refreshSession();
-    } catch { command.error.value = messages.value.t('state.loadFailed'); }
+    } catch { command.setError('state.loadFailed'); }
     finally { reconciling.value = false; }
 }
 onBeforeRouteLeave(mayLeave);
 onBeforeRouteUpdate(mayLeave);
 const removeIdentityGuard = context.registerIdentityGuard(mayLeave);
 onBeforeUnmount(removeIdentityGuard);
+const removeUpdateGuard = context.updates.registerGuard(() => finished.value || !Object.values(fields).some(Boolean));
+onBeforeUnmount(removeUpdateGuard);
 const title = computed(() =>
-    mode.value === 'login' || mode.value === 'guest-login'
+    mode.value === 'error' ? messages.value.t('common.errorTitle')
+        : mode.value === 'login' || mode.value === 'guest-login'
         ? messages.value.t('app.login')
         : mode.value === 'register'
           ? messages.value.t('app.register')
@@ -135,6 +148,7 @@ const title = computed(() =>
               ? messages.value.t('auth.resetTitle')
               : messages.value.t('auth.activationTitle'),
 );
+usePageTitle(title);
 const titleIcon = computed(() => mode.value === 'register' ? 'bi-person-plus-fill'
     : mode.value === 'forgot' ? 'bi-lock-fill' : mode.value === 'reset' ? 'bi-shield-lock-fill' : 'bi-box-arrow-in-right');
 const submitLabel = computed(() => mode.value === 'forgot' ? messages.value.t('auth.sendReset')
@@ -145,12 +159,12 @@ async function submit(): Promise<void> {
     if (identityDenial.value || needsOidc.value || mode.value === 'reset' && !resetAllowed.value) return;
     if (mode.value === 'register' && !isRegistrationPasswordValid(fields.password)) {
         showPasswordCriteria.value = true;
-        command.error.value = messages.value.t('auth.invalidPassword');
+        command.setError('auth.invalidPassword');
         return;
     }
     if (mode.value === 'register' || mode.value === 'reset') {
         if (fields.password !== fields.passwordRepeat) {
-            command.error.value = messages.value.t('auth.passwordMismatch');
+            command.setError('auth.passwordMismatch');
             return;
         }
     }
@@ -257,14 +271,16 @@ onMounted(() => {
                     <p class="text-center">{{ messages.t('auth.loginIntro') }}</p></template
                 >
                 <p v-if="mode === 'forgot'" class="lead text-center mb-4"><i class="bi bi-envelope-at-fill me-1" aria-hidden="true"></i>{{ messages.t('auth.forgotIntro') }}</p>
-                <form v-if="!needsOidc && (mode !== 'reset' || resetAllowed)" class="row gy-3 justify-content-center" @submit.prevent="submit">
+                <form v-if="!needsOidc && (mode !== 'reset' || resetAllowed)" class="row gy-3 justify-content-center"
+                    method="post" :action="route.path" @submit.prevent="submit">
+                    <NativeContextFields :next="next" />
                     <template v-if="context.session.value?.shell.localLoginEnabled || mode === 'guest-login'">
                         <FormField
                             v-if="['login', 'register', 'forgot'].includes(mode)"
                             id="username"
                             v-model="fields.username"
                             class="col-md-6"
-                            :label="messages.t(mode === 'login' || mode === 'forgot' ? 'auth.usernameOrEmail' : 'auth.username')"
+                            :label="messages.t(mode === 'forgot' ? 'auth.recoveryUsernameOrEmail' : mode === 'login' ? 'auth.usernameOrEmail' : 'auth.username')"
                             label-icon="bi-person-circle"
                             :placeholder="messages.t(mode === 'register' ? 'auth.chooseUsername' : mode === 'forgot' ? 'auth.forgotUsernamePlaceholder' : 'auth.usernamePlaceholder')"
                             required
@@ -330,6 +346,7 @@ onMounted(() => {
                         <FormField
                             v-if="['register', 'reset'].includes(mode)"
                             id="password-repeat"
+                            :name="mode === 'reset' ? 'confirmPassword' : 'password_repeat'"
                             v-model="fields.passwordRepeat"
                             class="col-md-6"
                             :label="messages.t(mode === 'reset' ? 'auth.confirmPassword' : 'auth.repeatPassword')"
@@ -390,9 +407,11 @@ onMounted(() => {
                     <StatusNotice v-if="recoveryFinished" kind="success">{{
                         messages.t('auth.recoverySent')
                     }}</StatusNotice>
-                    <form class="row gy-3 justify-content-center" @submit.prevent="recover">
+                    <form class="row gy-3 justify-content-center" method="post" action="/frontend-pilot/users/login" @submit.prevent="recover">
+                        <NativeContextFields :next="next" /><input type="hidden" name="_recovery" value="1" />
                         <FormField
                             id="recovery-email"
+                            name="email"
                             v-model="fields.email"
                             class="col-md-6"
                             :label="messages.t('auth.email')"

@@ -1,17 +1,18 @@
-# Entity property modal concept and implementation plan
+# Entity property modal design and implementation record
 <!--
 documentation-metadata
 audience: product maintainers; developers; reviewers
 owner: entity feature maintainers
 status: current
-last-verified: 2026-10-03
+last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: implemented entity property dialogs, permission boundaries, event selection and reassociation, archival presentation, module reuse, and verification evidence recorded below
+verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; implemented entity property dialogs, permission boundaries, event selection and reassociation, archival presentation, module reuse, and verification evidence recorded below
 source-anchors: src/middleware/guestFlowFactory.ts; src/middleware/adminApiFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/controller/entityAdminController.ts; src/controller/eventController.ts; src/controller/activityController.ts; src/controller/packingController.ts; src/controller/driversController.ts; src/controller/surveyController.ts; src/modules/database/services/EventService.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/permissionEngine.ts; src/views/modules/module_entity_header.pug; src/views/modules/module_entity_archive.pug; src/views/modules/module_entity_select.pug; src/views/event/event-dashboard.pug; src/public/js/modules/activity/activity-slot-editor.ts; src/public/js/modules/entity-select.ts; src/public/js/modules/entity-header.ts; src/public/js/modules/entity-archive.ts; tests/e2e/archival.spec.ts; docs/documentation-remediation.yml; package.json
 next-review: entity-property-modal-contract-change
 -->
 
-This design has been implemented. The numbered sections retain the design constraints and implementation sequence;
+This completed design record retains unique property-dialog behavior and ownership contracts. It is not an active
+implementation plan. The numbered sections retain the original constraints and historical implementation sequence;
 the final section records delivered boundaries and verification evidence.
 The task covers the existing root entity views: events, activity plans, packing lists, drivers lists, and surveys.
 The central requirement is one dedicated, permission-aware **Entity settings** dialog on each applicable view.

@@ -16,7 +16,8 @@
 
 import {Request} from "express";
 import {assertEntityPropertyContext} from './entityAdminController';
-import {preparePackingMetadataPatch} from '../modules/packing/api';
+import {applyPackingItemPatch, applyPackingMembership, createPackingItem, createPackingList, deletePackingAssignment, deletePackingItem,
+    patchPackingMetadata, preparePackingMetadataPatch, reorderPackingItems, requirePackingFieldValues, setPackingHeader, setPackingSelfAssignment, updatePackingDefaults, updatePackingItem} from '../modules/packing/api';
 import type {BasicEntityPropertyPatch} from '../types/EntityPropertyTypes';
 import Joi from 'joi';
 import {PackingItem} from "../modules/database/entities/packing/PackingItem";
@@ -24,11 +25,13 @@ import {PackingList} from "../modules/database/entities/packing/PackingList";
 
 import * as packingService from '../modules/database/services/PackingService';
 import {APIError, ValidationError} from '../modules/lib/errors';
-import {performImageSwap} from "../modules/lib/fileCommons";
+import {performImageSwap, removeImage} from "../modules/lib/fileCommons";
 import {ENTITIES, generateUniqueId} from "../modules/lib/util";
 import {saveDefaultPermsFromBody} from "../modules/permissionEngine";
 import {SessionLike} from "../types/PermissionTypes";
 import type {EntityBase} from "../types/UserTypes";
+import type {components} from '../types/api/v1';
+import {PERM, toMaskFromBodyValue} from '../modules/lib/permissions';
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'packing/packing-create';
@@ -77,11 +80,32 @@ function preprocessCreate(body: any): Partial<PackingList> & { items: Partial<Pa
     };
 }
 
-/*  ---- NEU: alles in einer Transaktion ---- */
+/** Native form normalization stays at this adapter; runtime creation uses the shared locked operation. */
 async function createEntity(
     ownerId: string,
-    listData: Partial<PackingList> & { items: Partial<PackingItem>[] },
+    listData: Partial<PackingList> & {items: Partial<PackingItem>[]; _body?: unknown; _file?: Express.Multer.File},
+    session?: SessionLike,
 ) {
+    if (session) {
+        const defaults: components['schemas']['PermissionDefaults'] = {public: 0, guest: 0, authenticated: 0, participant: 0};
+        const form = listData._body as {defaultPerms?: Partial<Record<keyof typeof defaults, unknown>>} | undefined;
+        for (const audience of Object.keys(defaults) as (keyof typeof defaults)[]) {
+            defaults[audience] = toMaskFromBodyValue(form?.defaultPerms?.[audience], PERM) ?? 0;
+        }
+        const body: components['schemas']['PackingCreateInput'] = {title: listData.title!, description: listData.description ?? null,
+            eventId: listData.eventId ?? null, defaultPermissions: defaults,
+            items: listData.items.map(item => ({title: item.title!, description: item.description || '',
+                maxAssignees: Number(item.maxAssignees) || 1, requiredByAll: Boolean(item.requiredByAll)}))};
+        try { return (await createPackingList(body, listData._file, session)).id; }
+        catch (error) {
+            // Admission can change while an upload waits for its parent lock. A rejected
+            // command must discard its new file without touching another client's image.
+            if (listData._file) removeImage(listData._file.path);
+            throw error;
+        }
+    }
+    // Internal fixture/migration hooks have an explicit trusted owner and no request actor.
+    // They retain the same transaction-backed persistence rather than fabricating a session.
     return await packingService.createPackingListTx(
         ownerId,
         listData.title!,
@@ -99,8 +123,9 @@ async function createEntity(
     );
 }
 
-// No-op since slots handled in transaction
-async function afterCreateItems(id: string, data: any) {
+/** Runtime creation commits defaults atomically; actor-free internal hooks retain their separate initialization. */
+async function afterCreateItems(id: string, data: any, session?: SessionLike) {
+    if (session) return;
     await saveDefaultPermsFromBody(ENTITIES.PACKING, id, data._body);
 }
 
@@ -153,13 +178,28 @@ async function deleteEntity(list: PackingList, session: Request['session']) {
 
 // ---------- API ----------
 // API-specific controllers
-async function updateDescription(id: string, body: any, expectedEventId?: string | null) {
-    await saveProperties(id, preparePackingMetadataPatch({description: body.description}), expectedEventId);
+async function updateDescription(id: string, body: any, expectedEventId?: string | null, session?: SessionLike) {
+    const patch = preparePackingMetadataPatch({description: body.description});
+    const expectedValues = Object.hasOwn(body, 'expectedValue') ? {description: body.expectedValue} : undefined;
+    if (session) await patchPackingMetadata(id, patch, undefined, session, false, expectedEventId, expectedValues);
+    else await saveProperties(id, patch, expectedEventId, expectedValues);
     return 'Description updated';
 }
 
-async function reorderItems(id: string, order: any) {
-    await packingService.reorderPackingItems(id, order);
+/** Normalize the native full-table order while sharing locked authority and row-set checks with v1. */
+async function reorderItems(id: string, order: any, session?: SessionLike) {
+    if (session) {
+        if (!Array.isArray(order) || order.some(row => !row || typeof row.itemId !== 'string'
+            || !Number.isInteger(row.position) || row.position < 0)
+            || new Set(order.map(row => row.position)).size !== order.length) throw new APIError('Invalid packing item order', {}, 400);
+        // The browser sends dense positions for every rendered row. Its array is transport data;
+        // the common operation independently checks the current complete set under the root lock.
+        const itemIds = [...order].sort((left, right) => left.position - right.position).map(row => row.itemId);
+        await reorderPackingItems(id, {itemIds}, undefined, session, false);
+    } else {
+        // Trusted internal hooks preserve historical explicit/non-dense positions and have no actor.
+        await packingService.reorderPackingItems(id, order);
+    }
     return 'Order saved';
 }
 
@@ -167,73 +207,94 @@ async function quickAddItem(list: PackingList, body: any, session: SessionLike) 
     const {title = '', description = '', maxAssignees = '1'} = body;
     if (!title) throw new APIError('Title required', body, 400);
 
-    const last = await packingService.getLastPackingItemNumber(list.id,) || 0;
-    const item = {
-        id: generateUniqueId(),
+    // Keep native coercion at its transport adapter; the common operation determines creator,
+    // position, current authority and persistence while holding the same root lock as v1.
+    const item: components['schemas']['PackingNewItem'] = {
         title,
         description,
         maxAssignees: Number(maxAssignees) || 1,
-        pos: last + 1
+        requiredByAll: false,
     };
-
-    await packingService.addPackingItems(list.id, [item], session.profile!.id);
+    await createPackingItem(list.id, item, session, false);
     return 'Item added';
 }
 
-async function updateItemDescription(itemId: string, body: any) {
-    if (!(await packingService.updatePackingItem(itemId, {description: body.description}))) {
-        throw new APIError('Unknown error while saving', body, 500);
-    }
+async function updateItemDescription(itemId: string, body: any, listId?: string, session?: SessionLike) {
+    await saveNativeItem(itemId, {description: body.description}, listId, session,
+        Object.hasOwn(body, 'expectedValue') ? {description: body.expectedValue} : undefined);
     return 'Description updated';
 }
 
-async function updateItemAttr(itemId: string, body: any) {
+async function updateItemAttr(itemId: string, body: any, listId?: string, session?: SessionLike) {
     const {field, value} = body;
     const allowed: Record<string, boolean> = {title: true, description: true, maxAssignees: true};
 
     if (!allowed[field]) throw new APIError('Invalid field', body, 400);
 
-    if (!(await packingService.updatePackingItem(itemId, {[field]: value}))) {
-        throw new APIError('Unknown error while saving', body, 500);
-    }
+    await saveNativeItem(itemId, {[field]: value}, listId, session,
+        Object.hasOwn(body, 'expectedValue') ? {[field]: body.expectedValue} : undefined);
     return 'Item updated';
 }
 
-async function updateRequired(itemId: string, body: any) {
+async function updateRequired(itemId: string, body: any, listId?: string, session?: SessionLike) {
     const {flag} = body;
-    await packingService.togglePackingItemRequiredByAll(itemId, flag);
+    await saveNativeItem(itemId, {requiredByAll: Boolean(flag)}, listId, session,
+        Object.hasOwn(body, 'expectedValue') ? {requiredByAll: body.expectedValue} : undefined);
     return 'Requirement updated';
 }
 
-async function deleteAssignment(assignId: string) {
-    await packingService.deletePackingAssignment(assignId);
+async function deleteAssignment(assignId: string, listId?: string, session?: SessionLike) {
+    if (session && listId) await deletePackingAssignment(listId, assignId, session, false);
+    else await packingService.deletePackingAssignment(assignId);
     return 'Assignment removed';
 }
 
-async function updateSettings(id: string, body: any) {
-    await saveDefaultPermsFromBody(ENTITIES.PACKING, id, body);
+async function updateSettings(id: string, body: any, session?: SessionLike) {
+    if (session) {
+        const patch: components['schemas']['PermissionDefaultsPatch'] = {};
+        for (const audience of ['public', 'guest', 'authenticated', 'participant'] as const) {
+            const mask = toMaskFromBodyValue(body?.defaultPerms?.[audience], PERM);
+            if (mask !== undefined) patch[audience] = mask;
+        }
+        await updatePackingDefaults(id, patch, session, undefined, false);
+    } else await saveDefaultPermsFromBody(ENTITIES.PACKING, id, body);
     return 'Settings saved';
 }
 
-async function deleteItem(itemId: string) {
-    await packingService.deletePackingItem(itemId);
+async function deleteItem(itemId: string, listId?: string, session?: SessionLike) {
+    if (session && listId) await deletePackingItem(listId, itemId, session, false);
+    else await packingService.deletePackingItem(itemId);
     return 'Item deleted';
 }
 
-async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
-    await performImageSwap(entity, packingService.updateHeaderImage, file);
+async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File, session?: SessionLike) {
+    if (session) {
+        try { await setPackingHeader(entity.id, file, session, undefined, false); }
+        catch (error) {
+            if (file) removeImage(file.path);
+            throw error;
+        }
+    }
+    else await performImageSwap(entity, packingService.updateHeaderImage, file);
     return 'Image updated';
 }
 
-async function deleteHeaderImg(entity: EntityBase) {
-    await performImageSwap(entity, packingService.updateHeaderImage);
+async function deleteHeaderImg(entity: EntityBase, session?: SessionLike) {
+    if (session) await setPackingHeader(entity.id, undefined, session, undefined, false);
+    else await performImageSwap(entity, packingService.updateHeaderImage);
     return 'Image deleted';
 }
 
 function getAssignmentAccessMapping() {
     return {
-        assign: (body: any, profileId: string) => assignItem(body.itemId, profileId),
-        unassign: async (body: any, profileId: string) => { await packingService.unassignPackingItem(body.itemId, profileId); },
+        assign: async (body: any, profileId: string, req?: Request) => {
+            if (req) await setPackingSelfAssignment(String(req.params.id), body.itemId, true, req.session);
+            else await assignItem(body.itemId, profileId, true);
+        },
+        unassign: async (body: any, profileId: string, req?: Request) => {
+            if (req) await setPackingSelfAssignment(String(req.params.id), body.itemId, false, req.session);
+            else await assignItem(body.itemId, profileId, false);
+        },
     };
 }
 
@@ -242,14 +303,26 @@ function getAssignmentAccessMapping() {
  * absence is a 404, an existing assignment is an idempotent retry, then capacity constrains
  * a new assignment. The DBAL keeps the item lock until the approved insertion commits.
  */
-async function assignItem(itemId: string, profileId: string): Promise<void> {
+async function assignItem(itemId: string, profileId: string, assigned: boolean): Promise<void> {
     await packingService.withPackingAssignmentLock(itemId, profileId, async function assignLocked(manager, item, existing, count) {
         if (!item) throw new APIError('Packing item not found', {itemId}, 404);
-        if (existing) return;
-        if (typeof item.maxAssignees === 'number' && count >= item.maxAssignees) {
-            throw new APIError('This packing item is already fully assigned', {itemId}, 409);
-        }
-        await packingService.assignPackingItem(itemId, profileId, manager);
+        await applyPackingMembership(manager, item, existing, count, assigned, profileId);
+    });
+}
+
+/** Native adapters share sparse persistence and item locking with v1, retaining their route-specific messages. */
+async function saveNativeItem(itemId: string, patch: components['schemas']['PackingItemPatch'], listId?: string, session?: SessionLike,
+    expectedValues?: components['schemas']['PackingItemPatch']): Promise<void> {
+    if (session && listId) {
+        await updatePackingItem(listId, itemId, patch, undefined, session, false, expectedValues);
+        return;
+    }
+    // Internal native hooks have no request actor. They still use the common locked operation
+    // so a capacity change cannot race a membership insert or accidentally remove existing rows.
+    await packingService.withPackingAssignmentLock(itemId, '', async function saveLocked(manager, item) {
+        if (!item) throw new APIError('Unknown error while saving', {}, 500);
+        if (expectedValues) requirePackingFieldValues(item, expectedValues);
+        await applyPackingItemPatch(manager, item, patch);
     });
 }
 
@@ -258,16 +331,26 @@ async function assignItem(itemId: string, profileId: string): Promise<void> {
  * A parent change after route authorization must reject the whole patch, since permissions
  * might have come from registration in the old event. Keep that check under the root lock.
  */
-async function saveProperties(id: string, patch: BasicEntityPropertyPatch, expectedEventId?: string | null): Promise<void> {
+async function saveProperties(id: string, patch: BasicEntityPropertyPatch, expectedEventId?: string | null,
+    expectedValues?: components['schemas']['PackingMetadataPatch']): Promise<void> {
     await packingService.withPackingListLock(id, async function saveLocked(manager, current) {
         assertEntityPropertyContext(current, expectedEventId);
+        if (expectedValues) requirePackingFieldValues(current!, expectedValues);
         await packingService.updatePackingListProperties(id, patch, manager);
     });
 }
 
 /** Normalize all submitted fields before acquiring a lock; omitted fields remain unchanged. */
-async function updateProperties(entity: EntityBase, body: unknown) {
-    await saveProperties(entity.id, preparePackingMetadataPatch(body), entity.eventId ?? null);
+async function updateProperties(entity: EntityBase, body: unknown, session?: SessionLike) {
+    const fields = body && typeof body === 'object' && !Array.isArray(body) ? {...body} as Record<string, unknown> : null;
+    const expected = fields?.expectedValues;
+    if (fields) delete fields.expectedValues;
+    if (expected !== undefined && (!expected || typeof expected !== 'object' || Array.isArray(expected))) throw new APIError('Invalid original property values', {}, 400);
+    const patch = preparePackingMetadataPatch(fields ?? body);
+    const expectedValues = expected as components['schemas']['PackingMetadataPatch'] | undefined;
+    if (expectedValues && Object.keys(expectedValues).some(field => !Object.hasOwn(patch, field))) throw new APIError('Invalid original property fields', {}, 400);
+    if (session) await patchPackingMetadata(entity.id, patch, undefined, session, false, entity.eventId ?? null, expectedValues);
+    else await saveProperties(entity.id, patch, entity.eventId ?? null, expectedValues);
     return 'Properties updated';
 }
 

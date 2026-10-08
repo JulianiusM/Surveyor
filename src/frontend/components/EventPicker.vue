@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import {computed, reactive, ref, watch} from 'vue';
 import {useQuery} from '@tanstack/vue-query';
-import type {components, paths} from '../../../types/api/v1';
-import {usePilot} from '../../app/context';
-import ActionButton from '../../components/ActionButton.vue';
-import AppDialog from '../../components/AppDialog.vue';
+import type {PilotEventPickerOption, PilotEventPickerQuery, PilotEventPickerSelection, PilotEventPickerSource} from '../../types/FrontendPilotUiTypes';
+import {usePilot, refreshInterval} from '../app/context';
+import {belongsToQueryFamily} from '../app/queryKeys';
+import {useDebouncedValue} from '../composables/debounced';
+import ActionButton from './ActionButton.vue';
+import AppDialog from './AppDialog.vue';
 
 const props = defineProps<{
     modelValue: string | null;
-    current?: components['schemas']['PackingCurrentEvent'] | null;
+    current?: PilotEventPickerSelection | null;
+    source: PilotEventPickerSource;
     disabled?: boolean;
     prefix: string;
     inline?: boolean;
@@ -22,14 +25,16 @@ const page = ref(0);
 const pageOffset = ref(0);
 const shownPage = ref(1);
 const filters = reactive({q: '', from: '', to: '', period: 'all', archive: 'all', deadline: 'all'});
-const selected = ref<(components['schemas']['PackingCurrentEvent'] & {archived?: boolean}) | null>(
+const search = useDebouncedValue(computed(() => filters.q));
+const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
+const selected = ref<PilotEventPickerSelection | null>(
     props.current ?? null,
 );
-type Query = NonNullable<paths['/packing-lists/events']['get']['parameters']['query']>;
+type Query = PilotEventPickerQuery;
 const invalidDates = computed(() => !!filters.from && !!filters.to && filters.from > filters.to);
-const filterKey = computed(() => JSON.stringify(filters));
+const filterKey = computed(() => JSON.stringify({...filters, q: search.value}));
 const query = computed<Query>(() => ({
-    q: filters.q.trim() || undefined,
+    q: search.value.trim() || undefined,
     from: filters.from || undefined,
     to: filters.to || undefined,
     period: filters.period as Query['period'],
@@ -46,34 +51,33 @@ watch(filterKey, () => {
     pageOffset.value = 0;
 });
 const options = useQuery({
-    queryKey: computed(() => [
-        'v1',
-        context.session.value?.context,
-        context.locale.value,
-        'packing',
-        'events',
-        filterKey.value,
-        query.value,
-    ]),
+    queryKey: computed(() => props.source.pageKey(context.session.value?.context, context.locale.value, filterKey.value, query.value)),
     enabled: computed(
         () =>
             context.hydrated.value &&
             context.ready.value &&
+            context.visible.value &&
             !props.disabled &&
             !invalidDates.value &&
-            (!!props.inline || open.value || !!props.modelValue),
+            // A closed picker may resolve its initial selection once. It does not keep reading
+            // selection results after that title is known, or poll while the dialog is hidden.
+            (!!props.inline || open.value || (!!props.modelValue && selected.value?.id !== props.modelValue)),
     ),
-    queryFn: ({signal}) => context.api.events(query.value, context.capture(), signal),
+    queryFn: ({signal}) => props.source.search(query.value, context.capture(), signal),
     gcTime: 0,
+    refetchInterval: (state) => context.visible.value && (!!props.inline || open.value)
+        ? refreshInterval(state.state.error, state.state.fetchFailureCount, jitter) : false,
     placeholderData: (previous, previousQuery) =>
-        previousQuery?.queryKey[5] === filterKey.value ? previous : undefined,
+        previousQuery && belongsToQueryFamily(previousQuery,
+            props.source.filterKey(context.session.value?.context, context.locale.value, filterKey.value))
+            ? previous : undefined,
 });
 watch(
     options.data,
     (result) => {
         if (!result || options.isPlaceholderData.value) return;
         shownPage.value = pageOffset.value + page.value + 1;
-        if (result.selected) selected.value = {...result.selected, url: null};
+        if (result.selected) selected.value = result.selected;
     },
     {immediate: true},
 );
@@ -91,9 +95,9 @@ const selectionTitle = computed(() =>
         ? selection.value?.title || messages.value.t('packing.currentEvent')
         : messages.value.t('packing.noEvent'),
 );
-function choose(value: components['schemas']['PackingEventOption'] | null): void {
+function choose(value: PilotEventPickerOption | null): void {
     if (props.disabled) return;
-    selected.value = value ? {...value, url: null} : null;
+    selected.value = value;
     emit('update:modelValue', value?.id ?? null);
     open.value = false;
 }
@@ -112,7 +116,7 @@ function previous(): void {
 function reset(): void {
     Object.assign(filters, {q: '', from: '', to: '', period: 'all', archive: 'all', deadline: 'all'});
 }
-function details(event: components['schemas']['PackingEventOption']): string {
+function details(event: PilotEventPickerOption): string {
     const today = new Date().toISOString().slice(0, 10);
     const period =
         event.startDate > today

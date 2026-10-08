@@ -5,8 +5,6 @@ import type {components, operations} from './api/v1';
 export interface ApiActor extends SessionLike {
     context: string;
 }
-export type ApiOperationId = keyof operations;
-
 export type ApiProblemCode = components['schemas']['Problem']['code'];
 export type ApiProblemParameters<Code extends ApiProblemCode> = Extract<components['schemas']['Problem'], {code: Code}>['params'];
 export type ApiProblemArguments = {

@@ -8,6 +8,7 @@ import {ensureFrontendSessionContext, rotateFrontendSessionContext} from '../lib
 import {persistSession} from '../lib/session';
 import {ApiProblem, requestLocale} from './problem';
 import settings from '../settings';
+import {compatibleApiClient, deploymentView} from './deployment';
 
 function sameToken(left: string | undefined, right: string | undefined): boolean {
     if (!left || !right) return false;
@@ -64,6 +65,8 @@ export async function requireApiContext(req: Request, res: Response, requireProf
     if (!suppliedContext) throw new ApiProblem('CONTEXT_REQUIRED');
     if (!sameToken(suppliedContext, actor.context)) throw new ApiProblem('SESSION_CONTEXT_CHANGED');
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+        // Reject an incompatible loaded client before controller admission or any side effect.
+        if (!compatibleApiClient(req.get('X-Surveyor-Api-Compatibility'))) throw new ApiProblem('CLIENT_UPDATE_REQUIRED');
         const fetchSite = req.get('Sec-Fetch-Site');
         const origin = req.get('Origin');
         const expectedOrigin = `${req.protocol}://${req.get('host')}`;
@@ -83,6 +86,7 @@ export async function sessionView(req: Request): Promise<components['schemas']['
         activeProfile: actor.profile ? {id: actor.profile.id, name: actor.profile.name ?? ''} : null,
         profiles: profiles.map(profile => ({id: profile.id, name: profile.name ?? ''})),
         loginUrl: '/users/login', logoutUrl: kind === 'anonymous' ? null : '/users/logout',
+        deployment: deploymentView(),
         // Preserve the established public shell while keeping credentials, storage paths and
         // all other application settings out of the browser's bootstrap projection.
         shell: {
@@ -91,4 +95,17 @@ export async function sessionView(req: Request): Promise<components['schemas']['
             oidcName: settings.value.oidcName,
         },
     } as components['schemas']['SessionView'];
+}
+
+/** Credential work can be slow. Native and API identity commands recheck the originally
+ * admitted actor immediately before persisting a transition, without replacing its session object. */
+export function identityTransitionGuard(req: Request): () => Promise<void> {
+    const admittedContext = req.apiActor!.context;
+    return function requireUnchangedIdentity(): Promise<void> {
+        return new Promise((resolve, reject) => req.sessionStore.get(req.sessionID, (error, stored) => {
+            if (error) return reject(error);
+            if (!stored || stored.frontendContext !== admittedContext) return reject(new ApiProblem('SESSION_CONTEXT_CHANGED'));
+            resolve();
+        }));
+    };
 }

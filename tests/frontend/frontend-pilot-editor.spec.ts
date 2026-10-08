@@ -4,6 +4,7 @@ import {flushPromises, mount} from '@vue/test-utils';
 import {defineComponent, nextTick} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
+import I18NextVue from 'i18next-vue';
 import PackingPage from '../../src/frontend/features/packing/PackingPage.vue';
 import AppDialog from '../../src/frontend/components/AppDialog.vue';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
@@ -11,7 +12,7 @@ import type {components} from '../../src/types/api/v1';
 
 const listId = '11111111-1111-4111-8111-111111111111';
 const profileId = '22222222-2222-4222-8222-222222222222';
-const session: components['schemas']['SessionView'] = {kind: 'account', context: 'component-context-1234567890',
+const session: components['schemas']['SessionView'] = {kind: 'account', deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, context: 'component-context-1234567890',
     csrfToken: 'component-csrf-1234567890', locale: 'en', activeProfile: {id: profileId, name: 'Owner'},
     profiles: [{id: profileId, name: 'Owner'}], loginUrl: '/users/login', logoutUrl: '/users/logout',
     shell: {version: 'test', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy', localLoginEnabled: true,
@@ -25,7 +26,7 @@ const metadata: components['schemas']['PackingMetadata'] = {entityType: 'packing
     values: {title: list.title, description: list.description}, editableFields: ['title', 'description'],
     currentEventId: null, archived: false, inheritedArchived: false};
 const settings: components['schemas']['PackingSettings'] = {id: listId, title: list.title,
-    headerUrl: null, headerVersion: null, settingsToken: '"settings"', editableFields: ['title', 'description'],
+    headerUrl: null, headerVersion: null, settingsToken: '"edit-settings"', editableFields: ['title', 'description'],
     currentEvent: null, access: null,
     archive: {direct: false, inherited: false, archivedAt: null, autoArchivePaused: false, eventUrl: null},
     capabilities: {editHeader: false, linkEvent: false, managePermissions: false, duplicate: false,
@@ -47,7 +48,7 @@ describe('shared dialog focus', () => {
         const wrapper = mount(AppDialog, {attachTo: document.body,
             props: {open: false, title: 'Choose an event', fullscreenOnSmall: false, initialFocus: '#event-search'},
             slots: {default: '<label for="event-search">Search events</label><input id="event-search" />'},
-            global: {provide: {[pilotContextKey as symbol]: context}},
+            global: {plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[pilotContextKey as symbol]: context}},
         });
         try {
             for (const trigger of [first, second]) {
@@ -80,7 +81,7 @@ async function mountPackingView(view: components['schemas']['PackingListView']) 
     await router.push(`/frontend-pilot/packing/${listId}`);
     await router.isReady();
     const wrapper = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}]],
+        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
         provide: {[pilotContextKey as symbol]: context},
     }});
     await flushPromises();
@@ -129,7 +130,7 @@ describe('packing presentation compatibility', () => {
     it('preserves historical blank capacities, existing Everyone removals and packed color restoration', async () => {
         const base: components['schemas']['PackingItemView'] = {id: '33333333-3333-4333-8333-333333333333',
             title: 'Historical capacity', description: null, position: 0, requiredByAll: false,
-            maxAssignees: null, assignedCount: 0, selfAssigned: false, assignees: [], editToken: '"item"',
+            maxAssignees: null, assignedCount: 0, selfAssigned: false, assignees: [], editToken: '"edit-item"',
             capabilities: {editTitle: false, editDescription: false, editCapacity: false, editRequired: false, removeItem: false, removeAssignments: false}};
         const everyone = {...base, id: '44444444-4444-4444-8444-444444444444', title: 'Everyone item',
             requiredByAll: true, maxAssignees: 1, assignedCount: 1, selfAssigned: true};
@@ -179,7 +180,7 @@ describe('packing editor ownership', () => {
         await router.push(`/frontend-pilot/packing/${listId}`);
         await router.isReady();
         const wrapper = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}]],
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
             provide: {[pilotContextKey as symbol]: context},
             // Portal/focus-trap mechanics have their own real-browser journey. Keep the actual page,
             // editor, v-model and query observers together here to exercise draft component lifetime.

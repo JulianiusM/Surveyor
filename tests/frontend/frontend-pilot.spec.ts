@@ -1,10 +1,14 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {MetadataDraft} from '../../src/frontend/composables/metadataDraft';
 import {readPacked, writePacked} from '../../src/frontend/composables/packed';
-import {ApiFailure, ObsoleteRequestError, PilotApi, UnconfirmedResponseError} from '../../src/frontend/app/api';
+import {PilotApi} from '../../src/frontend/app/api';
+import {ApiFailure, ObsoleteRequestError, UnconfirmedResponseError} from '../../src/frontend/app/transport';
+import {PackingApi} from '../../src/frontend/features/packing/api';
+import {useHelpApi} from '../../src/frontend/features/help/api';
 import {canRetryRead, createPilotContext, refreshInterval} from '../../src/frontend/app/context';
 import {serializeBootstrap} from '../../src/frontend/app/serializeBootstrap';
 import {evictPackingResource} from '../../src/frontend/app/queryCache';
+import {overviewKeys, packingKeys} from '../../src/frontend/app/queryKeys';
 import type {components} from '../../src/types/api/v1';
 import type {PilotRequestScope} from '../../src/types/FrontendPilotUiTypes';
 
@@ -17,7 +21,7 @@ function metadata(values: components['schemas']['PackingMetadata']['values'] = {
         currentEventId: null, archived: false, inheritedArchived: false};
 }
 function session(context = scope.context, locale = 'en'): components['schemas']['SessionView'] {
-    return {kind: 'account', context, csrfToken: scope.csrfToken, locale,
+    return {kind: 'account', deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, context, csrfToken: scope.csrfToken, locale,
         activeProfile: {id: itemId, name: 'A profile'}, profiles: [{id: itemId, name: 'A profile'}],
         loginUrl: '/users/login', logoutUrl: '/users/logout', shell: {version: 'fixture', imprintUrl: '/imprint',
             privacyPolicyUrl: '/privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'Identity provider'}};
@@ -35,16 +39,14 @@ function deferred<T>() {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('packing draft reconciliation', () => {
-    it('keeps original token and dirty input during refresh, then reapplies only reviewed changes', () => {
+    it('adopts disjoint remote changes while keeping the sparse local draft', () => {
         const draft = new MetadataDraft(metadata(), '"a"');
         draft.values.description = 'My note';
         draft.receive(metadata({title: 'Remote title', description: 'Old note'}), '"b"');
-        expect(draft.etag).toBe('"a"');
-        expect(draft.values).toEqual({title: 'Original', description: 'My note'});
-        expect(draft.patch).toEqual({description: 'My note'});
-        expect(draft.review()).toBe(true);
         expect(draft.etag).toBe('"b"');
         expect(draft.values).toEqual({title: 'Remote title', description: 'My note'});
+        expect(draft.patch).toEqual({description: 'My note'});
+        expect(draft.remote).toBeNull();
         expect(draft.patch).toEqual({description: 'My note'});
     });
 
@@ -105,10 +107,10 @@ describe('typed pilot transport', () => {
 
     it('sends captured identity, locale, CSRF and edit token with the narrow metadata patch', async () => {
         let request!: Request;
-        const api = new PilotApi(() => true, vi.fn(), vi.fn(async (input: RequestInfo | URL) => {
+        const api = new PackingApi(new PilotApi(() => true, vi.fn(), vi.fn(async (input: RequestInfo | URL) => {
             request = input as Request;
             return response(metadata({title: 'Saved', description: 'Old note'}), 200, {ETag: '"b"'});
-        }));
+        })));
         const saved = await api.saveMetadata(listId, {title: 'Saved'}, '"a"', scope);
         expect(request.url).toBe(`http://localhost/api/v1/packing-lists/${listId}/metadata`);
         expect(request.headers.get('X-Surveyor-Context')).toBe(scope.context);
@@ -121,49 +123,54 @@ describe('typed pilot transport', () => {
 
     it('preserves a conditional read snapshot on 304 and rejects undeclared empty mutation success', async () => {
         const previous = {data: metadata(), etag: '"a"'};
-        const api = new PilotApi(() => true, vi.fn(), vi.fn(async () => new Response(null,
-            {status: 304, headers: {'X-Surveyor-Context': scope.context}})));
+        const api = new PackingApi(new PilotApi(() => true, vi.fn(), vi.fn(async () => new Response(null,
+            {status: 304, headers: {'X-Surveyor-Context': scope.context}}))));
         expect(await api.metadata(listId, scope, undefined, previous)).toBe(previous);
-        const empty = new PilotApi(() => true, vi.fn(), vi.fn(async () => new Response(null, {status: 204})));
+        const empty = new PackingApi(new PilotApi(() => true, vi.fn(), vi.fn(async () => new Response(null, {status: 204}))));
         await expect(empty.assign(listId, itemId, true, scope)).rejects.toBeInstanceOf(UnconfirmedResponseError);
+    });
+    it.each([201, 202])('rejects undeclared assignment success status %s even with a valid body', async status => {
+        const data = {listId, itemId, selfAssigned: true, assignedCount: 1, maxAssignees: 1};
+        const api = new PackingApi(new PilotApi(() => true, vi.fn(), vi.fn(async () => response(data, status))));
+        await expect(api.assign(listId, itemId, true, scope)).rejects.toBeInstanceOf(UnconfirmedResponseError);
     });
 
     it('rejects an obsolete successful response and never retries a command after a lost response', async () => {
         const result = deferred<Response>();
         let current = true;
         const send = vi.fn(() => result.promise);
-        const api = new PilotApi(() => current, vi.fn(), send);
+        const api = new PackingApi(new PilotApi(() => current, vi.fn(), send));
         const pending = api.assign(listId, itemId, true, scope);
         current = false;
         result.resolve(response({listId, itemId, selfAssigned: true, assignedCount: 1, maxAssignees: 1}));
         await expect(pending).rejects.toBeInstanceOf(ObsoleteRequestError);
         expect(send).toHaveBeenCalledOnce();
         const lost = vi.fn(async () => { throw new TypeError('connection lost'); });
-        await expect(new PilotApi(() => true, vi.fn(), lost).assign(listId, itemId, true, scope)).rejects.toThrow('connection lost');
+        await expect(new PackingApi(new PilotApi(() => true, vi.fn(), lost)).assign(listId, itemId, true, scope)).rejects.toThrow('connection lost');
         expect(lost).toHaveBeenCalledOnce();
     });
 
     it('does not accept an unexpected body or invalidate a new context because of an old unauthorized response', async () => {
         const invalidate = vi.fn();
-        const malformed = new PilotApi(() => true, invalidate, vi.fn(async () => response({status: 'success'})));
+        const malformed = new PackingApi(new PilotApi(() => true, invalidate, vi.fn(async () => response({status: 'success'}))));
         await expect(malformed.metadata(listId, scope)).rejects.toBeInstanceOf(UnconfirmedResponseError);
-        const old = new PilotApi(() => false, invalidate, vi.fn(async () => response({}, 401)));
+        const old = new PackingApi(new PilotApi(() => false, invalidate, vi.fn(async () => response({}, 401))));
         await expect(old.metadata(listId, scope)).rejects.toBeInstanceOf(ObsoleteRequestError);
         expect(invalidate).not.toHaveBeenCalled();
     });
 
     it('requires actor confirmation on private successes and safely displays unknown problem details', async () => {
         const invalidate = vi.fn();
-        const missingHeader = new PilotApi(() => true, invalidate, vi.fn(async () => new Response(JSON.stringify(metadata()),
-            {headers: {'Content-Type': 'application/json', ETag: '"a"'}})));
+        const missingHeader = new PackingApi(new PilotApi(() => true, invalidate, vi.fn(async () => new Response(JSON.stringify(metadata()),
+            {headers: {'Content-Type': 'application/json', ETag: '"a"'}}))));
         await expect(missingHeader.metadata(listId, scope)).rejects.toBeInstanceOf(UnconfirmedResponseError);
         const futureProblem = {type: 'https://surveyor.invalid/problems/future', title: 'Future rejection',
             status: 409, detail: 'Safe explanation from the server', requestId: 'request-12345', code: 'FUTURE_CODE'};
-        const api = new PilotApi(() => true, invalidate, vi.fn(async () => response(futureProblem, 409)));
+        const api = new PackingApi(new PilotApi(() => true, invalidate, vi.fn(async () => response(futureProblem, 409))));
         await expect(api.metadata(listId, scope)).rejects.toMatchObject({status: 409, problem: null,
             message: futureProblem.detail});
-        const wrongStatus = new PilotApi(() => true, invalidate,
-            vi.fn(async () => response({...futureProblem, status: 401, code: 'SESSION_CONTEXT_CHANGED'}, 409)));
+        const wrongStatus = new PackingApi(new PilotApi(() => true, invalidate,
+            vi.fn(async () => response({...futureProblem, status: 401, code: 'SESSION_CONTEXT_CHANGED'}, 409))));
         await expect(wrongStatus.metadata(listId, scope)).rejects.toMatchObject({status: 409, problem: null, message: 'HTTP 409'});
         expect(invalidate).not.toHaveBeenCalled();
     });
@@ -171,7 +178,7 @@ describe('typed pilot transport', () => {
     it('enforces server cooldown even when a new manual or focus caller has no prior query error', async () => {
         const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
         const send = vi.fn(async () => response({}, 429, {'Retry-After': '90'}));
-        const api = new PilotApi(() => true, vi.fn(), send);
+        const api = new PackingApi(new PilotApi(() => true, vi.fn(), send));
         await expect(api.metadata(listId, scope)).rejects.toMatchObject({retryAt: 91_000});
         now.mockReturnValue(2000);
         await expect(api.metadata(listId, scope)).rejects.toMatchObject({retryAfter: 89_000});
@@ -186,7 +193,7 @@ describe('typed pilot transport', () => {
         const pendingHelp = deferred<Response>();
         const context = createPilotContext({session: session()}, false, vi.fn(() => pendingHelp.promise));
         const captured = context.capture();
-        const result = context.api.help({}, captured);
+        const result = useHelpApi(context).help({}, captured);
         context.locale.value = 'de';
         expect(context.isCurrent(captured)).toBe(true);
         expect(context.isCurrent(captured, true)).toBe(false);
@@ -245,16 +252,15 @@ describe('identity, refresh and local state boundaries', () => {
 
     it('evicts denied-list projections and containing query families while retaining unrelated resources and actors', async () => {
         const context = createPilotContext({session: session()}, false);
-        const removed = [['v1', scope.context, 'en', 'packing', listId],
-            ['v1', scope.context, 'de', 'packing', listId, 'metadata'],
-            ['v1', scope.context, 'packing', listId, 'profiles', 'organizer'],
-            ['v1', scope.context, 'packing', listId, 'guest'],
-            ['v1', scope.context, 'en', 'packing', 'overview', {collection: 'owner', region: 'main'}],
-            ['v1', scope.context, 'de', 'packing', 'overview', {collection: 'participant', region: 'hidden'}],
-            ['v1', scope.context, 'en', 'packing', 'events', {selectedId: listId}]];
-        const retained = [['v1', scope.context, 'en', 'packing', itemId],
-            ['v1', 'other-actor', 'en', 'packing', listId],
-            ['v1', 'other-actor', 'en', 'packing', 'overview'], ['v1', scope.context, 'en', 'help']];
+        const removed = [packingKeys.detail(scope.context, listId, 'en'),
+            packingKeys.metadata(scope.context, listId, 'de'), packingKeys.profiles(scope.context, listId, 'organizer'),
+            packingKeys.guest(scope.context, listId),
+            overviewKeys.region(scope.context, 'en', {collection: 'owner', region: 'main'}),
+            overviewKeys.region(scope.context, 'de', {collection: 'participant', region: 'hidden'}),
+            packingKeys.eventPage(scope.context, 'en', '', {selectedId: listId})];
+        const retained = [packingKeys.detail(scope.context, itemId, 'en'),
+            packingKeys.detail('other-actor', listId, 'en'), overviewKeys.all('other-actor'),
+            ['v1', scope.context, 'en', 'help']];
         for (const key of [...removed, ...retained]) context.queryClient.setQueryData(key, 'private snapshot');
         await evictPackingResource(context.queryClient, scope.context, listId);
         for (const key of removed) expect(context.queryClient.getQueryData(key)).toBeUndefined();
@@ -265,7 +271,7 @@ describe('identity, refresh and local state boundaries', () => {
     it('cancels an in-flight containing overview read before it can restore an evicted private card', async () => {
         const context = createPilotContext({session: session()}, false);
         const result = deferred<{title: string}>();
-        const key = ['v1', scope.context, 'en', 'packing', 'overview', {collection: 'owner', region: 'main'}];
+        const key = overviewKeys.region(scope.context, 'en', {collection: 'owner', region: 'main'});
         let signal!: AbortSignal;
         const pending = context.queryClient.fetchQuery({queryKey: key, queryFn: (query) => {
             signal = query.signal;

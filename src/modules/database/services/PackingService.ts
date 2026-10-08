@@ -328,9 +328,7 @@ export async function withPackingListLock<T>(id: string, action: (manager: Entit
 
 /** Persist only the normalized fields supplied by the controller in its existing transaction. */
 export async function updatePackingListProperties(id: string, patch: BasicEntityPropertyPatch, manager: EntityManager): Promise<void> {
-    // The single UPDATE advances the revision atomically for v1 and every legacy title/description writer.
-    // Context-only changes are advanced by the lifecycle DBAL in its existing root transaction.
-    await manager.getRepository(PackingList).update(id, {...patch, metadataRevision: () => 'metadata_revision + 1'});
+    await manager.getRepository(PackingList).update(id, patch);
 }
 
 /** Read the root and parent through the caller's snapshot/transaction, without choosing an access policy. */

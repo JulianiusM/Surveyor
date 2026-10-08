@@ -10,6 +10,15 @@ export default defineConfig(({isSsrBuild}) => ({
     plugins: [vue()],
     publicDir: false,
     base: '/app/',
+    server: {
+        watch: {
+            // API validators and catalog resources are published together by the
+            // authored-input watcher, then its ready marker restarts Express/Vite.
+            // Do not hydrate against intermediate generator writes; ordinary Vue
+            // and stylesheet source edits still use Vite's normal HMR boundary.
+            ignored: ['**/.generated/**', '**/src/modules/localization/generated/**', '**/src/types/**'],
+        },
+    },
     build: {
         target: 'es2020',
         outDir: resolve(projectRoot, isSsrBuild ? 'dist/frontend-server' : 'dist/public/app'),

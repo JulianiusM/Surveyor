@@ -55,7 +55,22 @@ export class MetadataDraft {
 
     receive(data: Metadata, etag: string): void {
         if (!this.dirty) this.accept(data, etag);
-        else if (etag !== this.etag) this.remote = {data: copyMetadata(data), etag};
+        else if (etag !== this.etag) {
+            const changed = Object.keys(this.patch) as Field[];
+            const overlap = changed.some(field => !data.editableFields.includes(field)
+                || data.values[field] !== this.baseline.values[field]);
+            if (overlap) this.remote = {data: copyMetadata(data), etag};
+            else {
+                // Another client changed only untouched fields. Adopt those current values and
+                // their token while preserving this sparse draft; no conflict ceremony is needed.
+                const mine = {...this.values};
+                this.accept(data, etag);
+                for (const field of changed) {
+                    if (field === 'title' && mine.title !== undefined) this.values.title = mine.title;
+                    if (field === 'description' && mine.description !== undefined) this.values.description = mine.description;
+                }
+            }
+        }
     }
 
     /** A caller invokes this only after deliberate review; it never issues a write or selects a conflict. */

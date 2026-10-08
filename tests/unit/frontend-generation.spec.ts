@@ -10,7 +10,9 @@ const artifacts = ['.generated/api/v1/openapi.json', '.generated/api/v1/operatio
     '.generated/api/v1/server.cjs', '.generated/api/v1/browser.mjs',
     '.generated/api/v1/server.d.cts', '.generated/api/v1/browser.d.mts',
     'src/types/api/v1.d.ts', 'src/types/api/validation-v1.d.ts', 'src/types/LocalizationTypes.d.ts',
-    'src/modules/localization/generated/resources.json', 'src/modules/localization/generated/manifest.json'];
+    'src/modules/localization/generated/resources.json', 'src/modules/localization/generated/manifest.json',
+    'src/modules/localization/generated/permissions.ts', '.generated/api/v1/policy.mjs',
+    '.generated/api/v1/browser/validatePackingListView.mjs'];
 
 /** Run the real generators in an empty output tree; never substitute hand-authored validators. */
 function generate(script: string, arguments_: string[]): void {
@@ -78,6 +80,7 @@ describe('contract and catalog generation', () => {
             const german = JSON.parse(await fs.readFile(germanPath, 'utf8'));
             const invalidCatalogs = [
                 {...german, help: {directory: '../uploads'}},
+                {...german, help: {directory: '.'}},
                 {...german, resources: {...german.resources, ui: {...german.resources.ui, common: {...german.resources.ui.common, save: undefined}}}},
                 {...german, resources: {...german.resources, ui: {...german.resources.ui, app: {...german.resources.ui.app, activeProfile: 'Hallo {{unexpected}}'}}}},
                 {...german, resources: {...german.resources, ui: {...german.resources.ui, common: {...german.resources.ui.common, save: '<script>alert(1)</script>'}}}},

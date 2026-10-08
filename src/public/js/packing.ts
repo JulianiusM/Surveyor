@@ -3,7 +3,7 @@
  * Handles assignment, inline editing, reordering, and owner operations for packing lists
  */
 
-import {post} from './core/http';
+import {assertSuccessfulResponse, post} from './core/http';
 import {setCurrentNavLocation} from './core/navigation';
 import {loadPerms, requireEntityPerm, requireItemPerm} from './core/permissions';
 import {initEntityHeader} from "./modules/entity-header";
@@ -34,7 +34,7 @@ function initInlineEdit(): void {
             // with the rendered cells and attribute route without changing other features.
             const permission = cell.dataset.edit === 'title' ? 'EDIT_TITLE'
                 : cell.dataset.edit === 'maxAssignees' ? 'EDIT_CAPACITY' : undefined;
-            startInlineEdit(cell, `/api/packing/${listId}/item`, permission);
+            startInlineEdit(cell, `/api/packing/${listId}/item`, permission, true);
         });
     });
 
@@ -45,27 +45,46 @@ function initInlineEdit(): void {
  */
 function initMarkEveryone(): void {
     const listId = getPackListId();
+    const pending = new WeakMap<HTMLInputElement, boolean>();
 
     document.addEventListener('change', async (e: Event) => {
         const sw = (e.target as Element | null)?.closest('[data-required-toggle]') as HTMLInputElement | null;
         if (!sw) return;
+        // Disabling blocks real clicks; a synthetic/repeated change must not start a second
+        // write or change the value displayed for the command already in flight.
+        if (pending.has(sw)) {
+            sw.checked = pending.get(sw)!;
+            return;
+        }
+        if (sw.disabled) return;
 
         const itemId = sw.dataset.itemid;
+        const original = sw.defaultChecked;
+        const desired = sw.checked;
+        pending.set(sw, desired);
+        sw.disabled = true;
         try {
             requireItemPerm(itemId || '', 'EDIT_META', 'toggle shared requirements', 'ITEM_EDIT');
-            await post(`/api/packing/${listId}/item/${itemId}/required`, {flag: sw.checked});
+            assertSuccessfulResponse(await post(`/api/packing/${listId}/item/${itemId}/required`, {flag: desired, expectedValue: original}));
+            // Advance the saved baseline only after confirmed success. A second change before
+            // the existing delayed reload must compare against this saved value, not page load.
+            sw.defaultChecked = desired;
+            sw.checked = desired;
 
             // Visual highlighting
             const row = document.querySelector(`tr[data-itemid="${itemId}"]`);
-            if (row) row.classList.toggle('table-info', sw.checked);
+            if (row) row.classList.toggle('table-info', desired);
 
             reorderRequiredRows();
             showInlineAlert('success', 'Updated');
             reloadAfterDelay(100);
         } catch (err) {
-            sw.checked = !sw.checked;  // rollback
+            sw.checked = original;
             const message = err instanceof Error ? err.message : 'Unable to update shared requirement.';
             showInlineAlert('error', message);
+        } finally {
+            pending.delete(sw);
+            sw.disabled = false;
         }
     });
 }

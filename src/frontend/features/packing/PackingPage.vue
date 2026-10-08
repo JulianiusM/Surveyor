@@ -4,9 +4,12 @@ import {onBeforeRouteLeave, onBeforeRouteUpdate, useRoute} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
 import type {PilotRead} from '../../../types/FrontendPilotUiTypes';
+import {usePackingApi} from './api';
 import {usePilot, refreshInterval, canRetryRead} from '../../app/context';
-import {ApiFailure} from '../../app/api';
+import {ApiFailure} from '../../app/transport';
 import {evictPackingResource} from '../../app/queryCache';
+import {packingKeys} from '../../app/queryKeys';
+import {usePageTitle} from '../../composables/pageTitle';
 import {readPacked, writePacked} from '../../composables/packed';
 import {useCommand} from '../../composables/command';
 import {usePackingHeader} from '../../composables/packingHeader';
@@ -18,15 +21,10 @@ import PackingSettings from './PackingSettings.vue';
 type Item = components['schemas']['PackingItemView'];
 const route = useRoute();
 const context = usePilot();
+const api = usePackingApi(context);
 const {messages} = context;
 const listId = computed(() => String(route.params.listId).toLowerCase());
-const key = computed(() => [
-    'v1',
-    context.session.value?.context,
-    context.locale.value,
-    'packing',
-    listId.value,
-]);
+const key = computed(() => packingKeys.detail(context.session.value?.context, listId.value, context.locale.value));
 const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
 const editorOpen = ref(false);
 const packed = ref<Record<string, boolean>>({});
@@ -43,7 +41,7 @@ const list = useQuery({
         () => context.hydrated.value && context.ready.value && context.visible.value && !accessRevoked.value,
     ),
     queryFn: ({signal, queryKey}) =>
-        context.api.packing(
+        api.packing(
             listId.value,
             context.capture(),
             signal,
@@ -61,6 +59,7 @@ const denied = computed(
         (list.error.value instanceof ApiFailure && [401, 403, 404].includes(list.error.value.status)),
 );
 const data = computed(() => (denied.value ? null : list.data.value?.data));
+usePageTitle(() => data.value?.title || messages.value.t('packing.items'));
 const items = computed(() =>
     [...(data.value?.items ?? [])].sort(
         (a, b) => Number(b.requiredByAll) - Number(a.requiredByAll) || a.position - b.position,
@@ -98,6 +97,9 @@ function loadPacked(): void {
 }
 watch(() => items.value.map((item) => item.id).join('|'), loadPacked);
 watch(listId, () => {
+    // The route guard has accepted leaving this resource. An unknown command belongs to
+    // its previous list and must not block a fresh quick-add or assignment on the new list.
+    command.acknowledge();
     editorOpen.value = false;
     accessRevoked.value = false;
     dragged.value = null;
@@ -116,14 +118,7 @@ async function settingsAccessLost(): Promise<void> {
     // Losing edit authority does not prove that reading or self-assignment was revoked.
     // Cancel and remove editor projections across locales, then let the list endpoint
     // authoritatively decide which remaining view/actions this profile can still use.
-    const editors = {
-        predicate: (query: {queryKey: readonly unknown[]}) => {
-            const candidate = query.queryKey;
-            if (candidate[0] !== 'v1' || candidate[1] !== actor) return false;
-            const feature = candidate[2] === 'packing' ? 2 : candidate[3] === 'packing' ? 3 : -1;
-            return feature >= 0 && candidate[feature + 1] === resource && candidate.length > feature + 2;
-        },
-    };
+    const editors = {queryKey: packingKeys.editors(actor, resource)};
     await context.queryClient.cancelQueries(editors);
     context.queryClient.removeQueries(editors);
     if (!context.ready.value || resource !== listId.value || actor !== context.session.value?.context) return;
@@ -132,14 +127,11 @@ async function settingsAccessLost(): Promise<void> {
 watch(list.error, (failure) => {
     if (failure instanceof ApiFailure && [401, 403, 404].includes(failure.status)) revokeAccess();
 });
-watch(
-    () => data.value?.title,
-    (title) => {
-        if (context.browser && title) document.title = title + ' | ' + messages.value.t('app.title');
-    },
-);
 onMounted(loadPacked);
 function mayLeave(): boolean {
+    if (command.uncertain.value) {
+        return window.confirm(messages.value.t('state.unknownOutcome') + '\n\n' + messages.value.t('draft.discard'));
+    }
     return !quickAddDirty.value || window.confirm(messages.value.t('draft.discard'));
 }
 onBeforeRouteLeave(mayLeave);
@@ -158,6 +150,8 @@ onBeforeUnmount(() => {
     removeIdentityGuard?.();
     window.removeEventListener('beforeunload', beforeUnload);
 });
+const removeUpdateGuard = context.updates.registerGuard(() => !quickAddDirty.value);
+onBeforeUnmount(removeUpdateGuard);
 function togglePacked(itemId: string, event: Event): void {
     const selected = (event.target as HTMLInputElement).checked;
     packed.value[itemId] = selected;
@@ -188,11 +182,11 @@ async function patch(
               ? {title: value}
               : {description: value || null};
     return !!(await command.run((scope) =>
-        context.api.updateItem(listId.value, item.id, patch, token, scope),
+        api.updateItem(listId.value, item.id, patch, token, scope),
     ));
 }
 async function assign(item: Item): Promise<void> {
-    await command.run((scope) => context.api.assign(listId.value, item.id, !item.selfAssigned, scope));
+    await command.run((scope) => api.assign(listId.value, item.id, !item.selfAssigned, scope));
 }
 async function toggleRequired(item: Item, event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
@@ -200,22 +194,22 @@ async function toggleRequired(item: Item, event: Event): Promise<void> {
     // The checkbox remains authoritative until a confirmed response has been refreshed.
     input.checked = item.requiredByAll;
     await command.run((scope) =>
-        context.api.updateItem(listId.value, item.id, {requiredByAll: value}, item.editToken, scope),
+        api.updateItem(listId.value, item.id, {requiredByAll: value}, item.editToken, scope),
     );
 }
 async function removeItem(item: Item): Promise<void> {
     if (window.confirm(messages.value.t('packing.confirmDeleteItem'))) {
-        await command.run((scope) => context.api.deleteItem(listId.value, item.id, scope));
+        await command.run((scope) => api.deleteItem(listId.value, item.id, scope));
     }
 }
-async function removeAssignment(assignmentId: number): Promise<void> {
+async function removeAssignment(assignmentId: string): Promise<void> {
     if (window.confirm(messages.value.t('packing.confirmRemoveAssignment'))) {
-        await command.run((scope) => context.api.removeAssignment(listId.value, assignmentId, scope));
+        await command.run((scope) => api.removeAssignment(listId.value, assignmentId, scope));
     }
 }
 async function addItem(): Promise<void> {
     const result = await command.run((scope) =>
-        context.api.addItem(
+        api.addItem(
             listId.value,
             {
                 title: freshItem.title.trim(),
@@ -225,8 +219,18 @@ async function addItem(): Promise<void> {
             },
             scope,
         ),
+        true,
+        true,
     );
     if (result) Object.assign(freshItem, {title: '', description: '', maxAssignees: 1});
+}
+async function reviewUnknownItem(): Promise<void> {
+    // A read reveals current rows, but cannot prove which one a lost creation response added.
+    // Keep the captured input blocked until the user reviews that list and acknowledges it.
+    await refresh();
+    if (!list.error.value && window.confirm(messages.value.t('packing.confirmUnknownReviewed'))) {
+        command.acknowledge();
+    }
 }
 function beginDrag(item: Item, event: DragEvent): void {
     if (!data.value?.capabilities.reorder || blocked.value || editing.value) {
@@ -255,7 +259,7 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
         return;
     const ids = original.ids.filter((id) => id !== original.id);
     ids.splice(ids.indexOf(item.id), 0, original.id);
-    await command.run((scope) => context.api.reorder(listId.value, ids, original.token, scope));
+    await command.run((scope) => api.reorder(listId.value, ids, original.token, scope));
 }
 </script>
 
@@ -301,7 +305,14 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
             <StatusNotice
                 v-if="command.notice.value"
                 :kind="command.notice.value === 'state.saved' ? 'success' : 'warning'"
-                >{{ messages.t(command.notice.value) }}</StatusNotice
+                >{{ messages.t(command.notice.value) }}
+                <template v-if="command.uncertain.value && quickAddDirty">
+                    <p class="mb-2">{{ messages.t('packing.reviewUnknownItem') }}</p>
+                    <ActionButton variant="outline-warning" :pending="list.isFetching.value" @click="reviewUnknownItem">
+                        {{ messages.t('draft.review') }}
+                    </ActionButton>
+                </template>
+            </StatusNotice
             >
             <StatusNotice v-if="denied" kind="danger">{{ messages.t('state.forbidden') }}</StatusNotice>
             <StatusNotice v-else-if="list.error.value" kind="warning">{{

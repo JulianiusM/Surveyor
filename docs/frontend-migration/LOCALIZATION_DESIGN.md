@@ -4,17 +4,17 @@ documentation-metadata
 audience: maintainers; frontend and backend developers; translators; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-07
+last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: step-three shared English/German UI/API catalogs and independent help articles and figures, locale-owned stable fragments without cross-corpus reads, generated message contracts, request-fixed translation, native help and Vue SSR/SPA; focused synthetic help and locale tests; invoice, other Pug, email, PDF, principal preference persistence and full-application localization remain planned
+verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; step-three shared English/German UI/API catalogs and independent help articles and figures, locale-owned stable fragments without cross-corpus reads, generated message contracts, request-fixed translation, native help and Vue SSR/SPA; focused synthetic help and locale tests; invoice, other Pug, email, PDF, principal preference persistence and full-application localization remain planned
 source-anchors: src/locales/en.json; src/locales/de.json; scripts/generate-locales.mjs; src/modules/localization/translator.ts; src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/routes/api/v1.ts; src/modules/api/problem.ts; tests/unit/frontend-localization.spec.ts; tests/unit/frontend-generation.spec.ts; tests/fixtures/frontend-contracts.mts; src/modules/invoice/locales/en.ts; src/modules/invoice/wording.ts; src/modules/invoice/presentation.ts; src/modules/invoice/settlementEmail.ts; src/modules/invoice/exports.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/modules/email.ts; src/modules/lib/pdf.ts; src/modules/renderer.ts; src/controller/helpController.ts; src/modules/database/entities/user/User.ts; src/modules/database/entities/user/Guest.ts; tests/unit/invoice-presentation.spec.ts; docs/DOCUMENTATION_POLICY.md
 next-review: invoice-catalog-migration-or-localization-scope-expansion
 -->
 
 Use one application catalog per language, consumed by the Vue application, scoped Vue server rendering, Express
 responses, transitional Pug views, email and PDF presentation. Select **i18next** as the common formatting and message
-lookup engine. The pilot uses a small Vue provide/inject adapter over the shared core; **i18next-vue** remains an
-option for future rich component messages. Keep domain logic, API machine values and recorded user content independent
+lookup engine with **i18next-vue** as the selected Vue binding. Approved D1 restores that primary choice while
+preserving the typed application interface; the initial provide/inject translation substitution was not authorized. Keep domain logic, API machine values and recorded user content independent
 of translated wording. The bounded implementation below does not yet provide application-wide localization.
 
 ## Implemented pilot boundary
@@ -27,7 +27,7 @@ cardinal-plural consistency, derives API parameter types from OpenAPI, and emits
 
 [createTranslator(locale)](../../src/modules/localization/translator.ts) returns an immutable `{locale, t}` context
 with generated key/parameter types, runtime argument checks and plain-text output. Each call owns an initialized
-i18next instance. The [Vue context](../../src/frontend/app/context.ts) exposes it through the
+i18next instance, or wraps the supplied request/application instance. The [Vue context](../../src/frontend/app/context.ts) exposes it through the
 [application provider](../../src/frontend/app/createApp.ts); [API problems](../../src/modules/api/problem.ts) use the
 same catalogs. The pilot implements plain text and cardinal plurals. Rich slots, grammatical context/ordinal forms,
 shared regional/date formatters and additional script/font support remain work for later slices.
@@ -127,7 +127,8 @@ The official [i18next-vue SSR page](https://i18next.github.io/i18next-vue/guide/
 theoretical and excludes component-local messages and server-side reactive rerendering. Central preloaded resources
 fit those constraints, but a real render/hydration proof is required. Do not use component `<i18n>` blocks or
 `i18nOptions.messages`; those would also create a second catalog owner. If the binding proves unsuitable, a small
-Vue provide/inject adapter over the same core preserves this design without changing catalogs or API shapes.
+Vue provide/inject adapter remains a proposal requiring active user approval and a recorded decision; it is not
+authorization to bypass the selected binding. The restored binding uses the same core and catalog shapes.
 
 Bootstrap the exact resolved catalog locale, formatting locale, direction, catalog build identifier, time-zone context
 and initial server-rendered data. Hydration must use that snapshot before consulting browser language preferences.
@@ -347,15 +348,17 @@ older localized read must not replace newer-language presentation. A locale chan
 mutation, invalidate an invoice preview or discard an edit conflict. Profile/logout transitions still apply the
 stronger identity clearing rules from the [edge-case baseline](EDGE_CASES.md).
 
-The normal API and UI labels can be added through one language file. Long-form help is a deliberate exception:
-trusted release-shipped Markdown remains under `docs/user-guide/`, following the
-[help trust policy](../DOCUMENTATION_POLICY.md). Future translated guide files use a locale-aware resolver inside that
-fixed tree, the existing validation boundary and stable topic IDs. Adding a UI catalog must not require translating
-all help before that language is usable: show the available base-language guide with a localized language notice and
-correct content `lang`. Translate help shell/search controls in the common catalog; translate guide prose and
-screenshots as separate maintained content. Missing translated guides fall back predictably without arbitrary disk
-lookup or remote imports. Localized headings need stable explicit section identifiers or a generated topic/anchor
-mapping so a language switch does not break a contextual deep link.
+The normal API and UI labels belong to one complete language file. Long-form help remains trusted Markdown under
+`docs/user-guide/`, selected by that same catalog's fixed `help.directory`. A supported language must supply all
+articles and equivalent language-owned figures, captions and alt text. Each article owns its stable heading-anchor
+metadata; no loader derives a language's content or anchors by reading another corpus. Missing local content fails
+rather than borrowing another language's prose or pictures. This explicitly supersedes the original base-language
+help fallback proposal, rejected by the maintainer during pilot parity work.
+
+User-facing prose and pictures contain tasks, observable behavior and exact visible labels only. Frameworks,
+architecture, APIs, source paths, storage keys, permission identifiers and implementation/generation/verification
+claims are strictly forbidden in every language. Keep provenance in maintainer records or ignored review evidence;
+hidden required metadata must not appear in rendered help or illustrations. Follow the [help trust policy](../DOCUMENTATION_POLICY.md).
 
 ## Migration and verification
 

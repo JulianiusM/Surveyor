@@ -5,10 +5,10 @@ documentation-metadata
 audience: database administrators; operators; site reliability engineers; maintainers
 owner: application operators
 status: current
-last-verified: 2026-10-04
+last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: source review of packing metadata revision migration, atomic legacy/context writers, and application-downgrade writer boundary; archival entity fields, preference constraints, locking, migration compatibility, and downgrade-guard source review; no migration rehearsal claimed here; free-text column sizes and migration rollback protection; D04 accepted from source review and deployment-practice confirmation for runtime datasource, migration wrapper, schema bootstrap, sessions, backup targeting, and migration commands; controlled execution tracked separately in D04V
-source-anchors: src/migrations/1791072000000-AddPackingMetadataRevision.ts; src/modules/database/entities/packing/PackingList.ts; src/modules/database/services/PackingService.ts; src/modules/packing/api.ts; tests/integration/packing-metadata-migration.spec.ts; src/migrations/1789862400000-AddEntityArchival.ts; src/modules/database/entities/archive/EntityVisibilityPreference.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; src/modules/database/entities/session/Session.ts; src/migrations; package.json; .github/workflows/ci.yml
+verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; source review of removal of the unreleased packing revision migration, atomic native/v1 writers and current-value comparisons; archival entity fields, preference constraints, locking, migration compatibility, and downgrade-guard source review; no migration rehearsal claimed here; free-text column sizes and migration rollback protection; D04 accepted from source review and deployment-practice confirmation for runtime datasource, migration wrapper, schema bootstrap, sessions, backup targeting, and migration commands; controlled execution tracked separately in D04V
+source-anchors: src/modules/database/entities/packing/PackingList.ts; src/modules/database/services/PackingService.ts; src/modules/packing/api.ts; src/migrations/1789862400000-AddEntityArchival.ts; src/modules/database/entities/archive/EntityVisibilityPreference.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; src/modules/database/entities/session/Session.ts; src/migrations; package.json; .github/workflows/ci.yml
 next-review: D04V
 -->
 
@@ -248,25 +248,16 @@ that membership is restored. Preferences for deleted entities are also retained;
 an explicit empty-state reversal is unavailable or inappropriate. Migration SQL must
 be rehearsed separately from tests that only synchronize entity metadata.
 
-## Packing metadata edit revisions
+## Unreleased packing comparison change
 
-`AddPackingMetadataRevision1791072000000` adds the unsigned, non-null `packing_lists.metadata_revision` integer with
-default `0`. Existing rows retain their content and assignments. Apply the reviewed migration before running this
-release against an existing database, using the target verification and upgrade procedure above. The entity includes
-the same column for fresh schemas; the migration tolerates a column already created during empty-schema bootstrap.
+Approved D2 replaces the pilot-only packing metadata revision with lightweight current-value comparisons under
+existing controller/DBAL locks. The unreleased column, writer increments and migration were removed in place; no
+new persistent packing schema or replacement migration is required for the pilot. Existing invoice revisions and
+archival migrations retain their own contracts. See the [approved decision record](FRONTEND_FOUNDATION_DESIGN.md#authorized-rectification-2026-10-07).
 
-The [frontend pilot](FRONTEND_PILOT.md) uses this counter in its actor-scoped metadata ETag. Title/description saves,
-including the legacy writers in this release, advance it atomically. Relinking and direct or inherited archival
-changes also advance it under the existing transaction; an automatic event archive updates its packing children in
-the same commit. Ordinary assignments remain outside the metadata edit revision. This counter is not a replacement
-for invoice financial revisions, session context or permission checks.
-
-Older application versions do not advance this counter. Do not run old writers alongside the conditional v1 API and
-assume stale edits remain protected. Before an application downgrade, stop serving the pilot/v1 writes and stop the
-new-version processes. The down migration drops only this column and cannot enforce that writer shutdown for you;
-retain the column unless the reviewed rollback explicitly requires its removal. Follow the paired application/database
-rollback procedure in [Upgrading Surveyor](UPGRADING.md#full-rollback-procedure), and discard pre-downgrade edit tokens
-before re-enabling the pilot. The focused migration rehearsal is `tests/integration/packing-metadata-migration.spec.ts`.
+A developer who applied the abandoned pilot migration must inspect that local schema before changing it. Only a
+proven disposable test schema may be rebuilt through guarded test procedures; this note never authorizes dropping
+or synchronizing shared data. Production/shared schema changes still use the reviewed procedures above.
 
 ## Sessions are database data
 

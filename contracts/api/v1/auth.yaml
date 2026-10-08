@@ -192,6 +192,7 @@ paths:
   "/auth/login":
     post:
       operationId: "loginIdentity"
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: "login Identity"
       security: []
       parameters:
@@ -220,6 +221,7 @@ paths:
   "/auth/logout":
     post:
       operationId: "logoutIdentity"
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: "logout Identity"
       security: []
       parameters:
@@ -242,6 +244,7 @@ paths:
   "/auth/register":
     post:
       operationId: "registerAccount"
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: "register Account"
       security: []
       parameters:
@@ -270,6 +273,7 @@ paths:
   "/auth/forgot-password":
     post:
       operationId: "requestPasswordReset"
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: "request Password Reset"
       security: []
       parameters:
@@ -298,6 +302,7 @@ paths:
   "/auth/reset-password":
     get:
       operationId: checkPasswordReset
+      x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Check a recovery token before presenting the password form
       security: []
       parameters:
@@ -316,6 +321,7 @@ paths:
         default: {$ref: './openapi.yaml#/components/responses/Problem'}
     post:
       operationId: "resetAccountPassword"
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: "reset Account Password"
       security: []
       parameters:
@@ -344,6 +350,7 @@ paths:
   "/auth/activate":
     post:
       operationId: "activateIdentity"
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: "activate Identity"
       security: []
       parameters:
@@ -372,6 +379,7 @@ paths:
   "/auth/guest-login":
     post:
       operationId: "loginGuestIdentity"
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: "login Guest Identity"
       security: []
       parameters:
@@ -400,6 +408,7 @@ paths:
   "/auth/guest-recovery":
     post:
       operationId: "recoverGuestIdentity"
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: "recover Guest Identity"
       security: []
       parameters:
@@ -428,6 +437,7 @@ paths:
   "/auth/guest-email-exists":
     post:
       operationId: "findGuestEmail"
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: "find Guest Email"
       security: []
       parameters:
@@ -456,6 +466,7 @@ paths:
   "/auth/profile":
     put:
       operationId: "switchIdentityProfile"
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: "switch Identity Profile"
       security: []
       parameters:
@@ -484,6 +495,7 @@ paths:
   "/packing-lists/{listId}/guest":
     get:
       operationId: "getPackingGuestEntry"
+      x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: "get Packing Guest Entry"
       security: []
       parameters:
@@ -505,6 +517,7 @@ paths:
           "$ref": "./openapi.yaml#/components/responses/Problem"
     post:
       operationId: "registerPackingGuest"
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
       summary: "register Packing Guest"
       security: []
       parameters:

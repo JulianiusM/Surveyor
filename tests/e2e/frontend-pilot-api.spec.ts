@@ -42,7 +42,8 @@ test('bootstraps account and guest scopes while projecting only public session a
     const account = await bootstrap(page.request);
     expect(account.kind).toBe('account');
     expect(account.activeProfile).toEqual({id: expect.any(String), name: expect.any(String)});
-    expect(Object.keys(account).sort()).toEqual(['activeProfile', 'context', 'csrfToken', 'kind', 'locale', 'loginUrl', 'logoutUrl', 'profiles', 'shell']);
+    expect(Object.keys(account).sort()).toEqual(['activeProfile', 'context', 'csrfToken', 'deployment', 'kind', 'locale', 'loginUrl', 'logoutUrl', 'profiles', 'shell']);
+    expect(account.deployment).toEqual({buildId: expect.any(String), apiCompatibility: expect.any(String)});
     expect(Object.keys(account.shell).sort()).toEqual(['imprintUrl', 'localLoginEnabled', 'oidcEnabled', 'oidcName', 'privacyPolicyUrl', 'version']);
     for (const profile of account.profiles) expect(Object.keys(profile).sort()).toEqual(['id', 'name']);
     await expectProblem(await page.request.get(`/api/v1/packing-lists/${list.id}`), 400, 'CONTEXT_REQUIRED');
@@ -90,7 +91,12 @@ test('enforces CSRF, media types, UUIDs and closed payloads before a conditional
     const baseline = await page.request.get(path, {headers});
     expect(baseline.status()).toBe(200);
     const tag = baseline.headers().etag;
-    expect(tag).toMatch(/^"packing-meta-.+"$/);
+    expect(tag).toMatch(/^"edit-[A-Za-z0-9_-]+"$/);
+    const conditionalHeaders = {...headers, 'If-None-Match': tag};
+    expect((await page.request.get(path, {headers: conditionalHeaders})).status()).toBe(304);
+    await expectProblem(await page.request.get(path, {
+        headers: {...headers, 'If-None-Match': 'a'.repeat(4097)},
+    }), 400, 'VALIDATION_FAILED');
     const patchHeaders = {...headers, 'If-Match': tag};
     await expectProblem(await page.request.patch(path, {headers: {'X-Surveyor-Context': session.context}, data: {title: 'No CSRF'}}), 403, 'CSRF_INVALID');
     await expectProblem(await page.request.patch(path, {headers: {...patchHeaders, Origin: 'https://other.example'}, data: {title: 'Foreign origin'}}), 403, 'CSRF_INVALID');
@@ -110,13 +116,29 @@ test('enforces CSRF, media types, UUIDs and closed payloads before a conditional
     expect(saved.status()).toBe(200);
     expect(await saved.json()).toMatchObject({values: {title, description: 'Shared equipment'}});
     expect(saved.headers().etag).not.toBe(tag);
-    await expectProblem(await page.request.patch(path, {headers: patchHeaders, data: {description: 'Stale overwrite'}}), 412, 'PRECONDITION_FAILED');
+    const refreshed = await page.request.get(path, {headers: conditionalHeaders});
+    expect(refreshed.status()).toBe(200);
+    expect(await refreshed.json()).toMatchObject({values: {title, description: 'Shared equipment'}});
+    await expectProblem(await page.request.patch(path, {headers: patchHeaders, data: {title: 'Stale overwrite'}}), 412, 'PRECONDITION_FAILED');
+    const independent = await page.request.patch(path, {headers: patchHeaders, data: {description: 'Independent description'}});
+    expect(independent.status()).toBe(200);
 
-    const currentTag = saved.headers().etag;
-    expect((await page.request.post(`/api/packing/${list.id}/description`, {data: {description: 'Legacy tab edit'}})).ok()).toBe(true);
-    await expectProblem(await page.request.patch(path, {headers: {...headers, 'If-Match': currentTag}, data: {title: 'Would overwrite context'}}), 412, 'PRECONDITION_FAILED');
+    const currentTag = independent.headers().etag;
+    expect((await page.request.post(`/api/packing/${list.id}/description`, {
+        data: {description: 'Legacy tab edit', expectedValue: 'Independent description'},
+    })).ok()).toBe(true);
+    await expectProblem(await page.request.patch(path, {headers: {...headers, 'If-Match': currentTag}, data: {description: 'Would overwrite description'}}), 412, 'PRECONDITION_FAILED');
     const latest = await page.request.get(path, {headers});
     expect(await latest.json()).toMatchObject({values: {title, description: 'Legacy tab edit'}});
+    const staleNative = await page.request.post(`/api/packing/${list.id}/description`, {
+        data: {description: 'Stale native edit', expectedValue: 'Independent description'},
+    });
+    expect(staleNative.status()).toBe(412);
+    expect(await staleNative.json()).toMatchObject({status: 'error'});
+    const staleSetup = await page.request.post(`/api/packing/${list.id}/update`, {
+        data: {description: 'Stale native setup', expectedValues: {description: 'Shared equipment'}},
+    });
+    expect(staleSetup.status()).toBe(412);
 });
 
 test('rejects old profile scopes and returns structured authentication loss after the cookie disappears', async ({page, context}) => {
@@ -231,9 +253,10 @@ test('uses typed multipart, item/settings drafts and scoped binary transport for
     const created = await page.request.post('/api/v1/packing-lists', {headers, multipart: {
         data: JSON.stringify(creation), image: {name: 'header.png', mimeType: 'image/png', buffer: png},
     }});
-    expect(created.status()).toBe(200);
+    expect(created.status()).toBe(201);
     const id = (await created.json()).id as string;
     const root = `/api/v1/packing-lists/${id}`;
+    expect(created.headers().location).toBe(root);
     async function view(): Promise<components['schemas']['PackingListView']> {
         const response = await page.request.get(root, {headers});
         expect(response.status()).toBe(200);
@@ -256,7 +279,9 @@ test('uses typed multipart, item/settings drafts and scoped binary transport for
     await expectProblem(await page.request.patch(`${root}/items/${first.id}`, {headers, data: {title: 'No token'}}), 428, 'PRECONDITION_REQUIRED');
     expect((await page.request.patch(`${root}/items/${first.id}`, {headers: {...headers, 'If-Match': first.editToken}, data: {title: 'Updated tent'}})).status()).toBe(200);
     await expectProblem(await page.request.patch(`${root}/items/${first.id}`, {headers: {...headers, 'If-Match': first.editToken}, data: {title: 'Stale'}}), 412, 'PRECONDITION_FAILED');
-    expect((await page.request.post(`${root}/items`, {headers, data: {title: 'Towels', description: null, maxAssignees: 1, requiredByAll: false}})).status()).toBe(200);
+    const createdItem = await page.request.post(`${root}/items`, {headers, data: {title: 'Towels', description: null, maxAssignees: 1, requiredByAll: false}});
+    expect(createdItem.status()).toBe(201);
+    expect(createdItem.headers().location).toBe(`${root}#${(await createdItem.json()).id}`);
     current = await view();
     const reversed = current.items.map(item => item.id).reverse();
     expect((await page.request.put(`${root}/item-order`, {headers: {...headers, 'If-Match': current.orderToken}, data: {itemIds: reversed}})).status()).toBe(200);
@@ -267,7 +292,16 @@ test('uses typed multipart, item/settings drafts and scoped binary transport for
     }})).status()).toBe(200);
     const afterHeader = await settings();
     expect(afterHeader.headerVersion).not.toBe(beforeHeader.headerVersion);
-    await expectProblem(await page.request.put(`${root}/default-permissions`, {headers: {...headers, 'If-Match': beforeHeader.settingsToken}, data: creation.defaultPermissions}), 412, 'PRECONDITION_FAILED');
+    // A changed image does not invalidate an independently reviewed audience mask.
+    expect((await page.request.put(`${root}/default-permissions`, {headers: {...headers, 'If-Match': beforeHeader.settingsToken}, data: {guest: 16}})).status()).toBe(200);
+    await expectProblem(await page.request.put(`${root}/default-permissions`, {headers: {...headers, 'If-Match': beforeHeader.settingsToken}, data: {guest: 0}}), 412, 'PRECONDITION_FAILED');
+    const adminProfile = session.activeProfile!.id;
+    expect((await page.request.post(`${root}/admins`, {headers: {...headers, 'If-Match': beforeHeader.settingsToken}, data: {profileId: adminProfile, mask: 1}})).status()).toBe(200);
+    const adminBaseline = (await settings()).access!.admins.find(admin => admin.profileId === adminProfile)!;
+    expect((await page.request.patch(`${root}/admins/${adminProfile}`, {headers: {...headers, 'If-Match': adminBaseline.editToken}, data: {mask: 2}})).status()).toBe(200);
+    await expectProblem(await page.request.patch(`${root}/admins/${adminProfile}`, {headers: {...headers, 'If-Match': adminBaseline.editToken}, data: {mask: 1}}), 412, 'PRECONDITION_FAILED');
+    const freshAdmin = (await settings()).access!.admins.find(admin => admin.profileId === adminProfile)!;
+    expect((await page.request.delete(`${root}/admins/${adminProfile}`, {headers: {...headers, 'If-Match': freshAdmin.editToken}})).status()).toBe(200);
     expect((await page.request.delete(`${root}/header`, {headers: {...headers, 'If-Match': afterHeader.settingsToken}})).status()).toBe(200);
     await expectProblem(await page.request.get(`${root}/header`, {headers}), 404, 'NOT_FOUND');
     expect((await page.request.post(`${root}/archive`, {headers})).status()).toBe(200);
@@ -277,13 +311,13 @@ test('uses typed multipart, item/settings drafts and scoped binary transport for
     expect(duplicate.status()).toBe(200);
     expect(await duplicate.json()).toMatchObject({eventId: null, title: creation.title, items: expect.any(Array)});
     const overviewQuery = {collection: 'owner', region: 'main', q: creation.title};
-    const overview = await page.request.get('/api/v1/packing-lists/overview', {headers, params: overviewQuery});
+    const overview = await page.request.get('/api/v1/overview', {headers, params: overviewQuery});
     expect(overview.status()).toBe(200);
     expect((await overview.json()).items.map((card: {id: string}) => card.id)).toEqual([id]);
-    await expectProblem(await page.request.get('/api/v1/packing-lists/overview', {headers, params: {...overviewQuery, profileId: session.activeProfile!.id}}), 400, 'VALIDATION_FAILED');
-    const visibilityPath = `/api/v1/packing-lists/overview/packing/${id}/visibility`;
+    await expectProblem(await page.request.get('/api/v1/overview', {headers, params: {...overviewQuery, profileId: session.activeProfile!.id}}), 400, 'VALIDATION_FAILED');
+    const visibilityPath = `/api/v1/overview/packing/${id}/visibility`;
     expect((await page.request.put(visibilityPath, {headers, data: {visibility: 'hidden'}})).status()).toBe(200);
-    const hidden = await page.request.get('/api/v1/packing-lists/overview', {headers, params: {...overviewQuery, region: 'hidden'}});
+    const hidden = await page.request.get('/api/v1/overview', {headers, params: {...overviewQuery, region: 'hidden'}});
     expect((await hidden.json()).items.map((card: {id: string}) => card.id)).toEqual([id]);
     expect((await view()).archived).toBe(false);
     expect((await page.request.delete(root, {headers})).status()).toBe(200);

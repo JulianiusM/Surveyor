@@ -66,7 +66,7 @@ createEntityArchiveApiRouter(app, entityName, resFct);
 createEntityPropertyApiRouter(app, entityName, resFct, controller.updateProperties);
 
 app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.updateDescription(resFct(req).id, req.body, resFct(req).eventId ?? null);
+    const msg = await controller.updateDescription(resFct(req).id, req.body, resFct(req).eventId ?? null, req.session);
     renderer.respondWithSuccessJson(res, msg);
 }))
 
@@ -83,7 +83,7 @@ createEntityHeaderUpdateRouter(app, permFct, resFct, controller.updateHeaderImg,
 
 /* ----------- REORDER (nur Owner, JSON-Antwort) ---------------- */
 app.post('/:id/reorder', requirePermissionApi(permFct, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.reorderItems(resFct(req).id, req.body.orders);
+    const msg = await controller.reorderItems(resFct(req).id, req.body.orders, req.session);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
@@ -95,7 +95,7 @@ app.post('/:id/items', requirePermissionApi(permFct, PERM.ITEM_ADD), asyncHandle
 }));
 
 app.post('/:id/item/:itemId/description', requireItemPermissionApi(permFctItems, PERM.EDIT_DESC, [PERM.ITEM_EDIT, PERM.ITEM_EDIT_DESC]), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.updateItemDescription(req.params.itemId as string, req.body);
+    const msg = await controller.updateItemDescription(req.params.itemId as string, req.body, resFct(req).id, req.session);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
@@ -109,29 +109,29 @@ function requireAttributePermission(req: Request, res: Response, next: NextFunct
     return requireItemPermissionApi(permFctItems, permission, parent)(req, res, next);
 }
 app.post('/:id/item/:itemId/attr', requireAttributePermission, asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.updateItemAttr(req.params.itemId as string, req.body);
+    const msg = await controller.updateItemAttr(req.params.itemId as string, req.body, resFct(req).id, req.session);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 /* ---------- Everyone flag -------------------------------- */
 app.post('/:id/item/:itemId/required', requireItemPermissionApi(permFctItems, PERM.EDIT_META, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.updateRequired(req.params.itemId as string, req.body);
+    const msg = await controller.updateRequired(req.params.itemId as string, req.body, resFct(req).id, req.session);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 app.post('/:id/assignment/:assignId/delete', requireItemPermissionApi(permFctAssign, PERM.MANAGE_ASSIGNMENTS), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.deleteAssignment(req.params.assignId as string);
+    const msg = await controller.deleteAssignment(req.params.assignId as string, resFct(req).id, req.session);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 /* Owner-Settings ändern (AJAX) -------------------------------------- */
 app.post('/:id/settings', requirePermissionApi(permFct, PERM.MANAGE_PERMISSIONS), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.updateSettings(resFct(req).id, req.body);
+    const msg = await controller.updateSettings(resFct(req).id, req.body, req.session);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 app.post('/:id/item/:itemId/delete', requireItemPermissionApi(permFctItems, PERM.ITEM_DELETE, PERM.ITEM_DELETE), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.deleteItem(req.params.itemId as string);
+    const msg = await controller.deleteItem(req.params.itemId as string, resFct(req).id, req.session);
     renderer.respondWithSuccessJson(res, msg);
 }));
 

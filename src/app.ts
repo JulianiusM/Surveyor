@@ -30,6 +30,7 @@ import {AppDataSource} from "./modules/database/dataSource";
 import {Session} from "./modules/database/entities/session/Session";
 import {asyncHandler} from "./modules/lib/asyncHandler";
 import settings from './modules/settings';
+import {frontendDevelopmentMiddleware} from './modules/frontendDevelopment';
 import indexRouter from './routes';
 import activityRouter from './routes/activity';
 import apiRouter from './routes/api';
@@ -56,6 +57,7 @@ app.use(logger('dev'));
 app.use(express.json({limit: '1mb'}));
 app.use(express.urlencoded({extended: true, limit: '1mb'}));
 app.use(cookieParser());
+app.use(frontendDevelopmentMiddleware);
 app.use(express.static(path.join(__dirname, 'public')));
 // The development server runs source TS, while both pilot builds share their normal dist outputs.
 app.use('/app', express.static(path.resolve(__dirname, '../dist/public/app')));

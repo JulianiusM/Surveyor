@@ -3,9 +3,13 @@ import {computed, nextTick, ref, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import {usePilot} from '../../app/context';
+import {useHelpApi} from './api';
+import {usePageTitle} from '../../composables/pageTitle';
+import {helpKeys} from '../../app/queryKeys';
 import StatusNotice from '../../components/StatusNotice.vue';
 
 const context = usePilot();
+const api = useHelpApi(context);
 const {messages, locale} = context;
 const route = useRoute();
 const router = useRouter();
@@ -18,8 +22,8 @@ const query = computed(() => ({
 const search = ref(query.value.q ?? '');
 watch(() => query.value.q, value => { search.value = value ?? ''; });
 const help = useQuery({
-    queryKey: computed(() => ['v1', context.session.value?.context, locale.value, 'help', query.value]),
-    queryFn: ({signal}) => context.api.help(query.value, context.capture(), signal),
+    queryKey: computed(() => helpKeys.page(context.session.value?.context, locale.value, query.value)),
+    queryFn: ({signal}) => api.help(query.value, context.capture(), signal),
     initialData: () => context.bootstrap.initialUrl?.split('#')[0] === route.fullPath.split('#')[0]
         && context.bootstrap.help?.locale === locale.value ? context.bootstrap.help : undefined,
     staleTime: Infinity,
@@ -30,6 +34,7 @@ const page = computed(() => help.data.value?.locale === locale.value ? help.data
 const listId = computed(() => typeof route.query.list === 'string' ? route.query.list.toLowerCase() : null);
 const pageTitle = computed(() => page.value?.searchResults !== undefined ? messages.value.t('help.searchTitle')
     : page.value?.title ?? messages.value.t('help.title'));
+usePageTitle(pageTitle);
 
 /** Only release-shipped help links become SPA destinations. Files and external links stay native. */
 function helpRoute(href: string): string {
@@ -66,7 +71,6 @@ function followContentLink(event: MouseEvent): void {
 watch(() => [pageTitle.value, route.hash], async () => {
     if (!context.browser) return;
     await nextTick();
-    document.title = `${pageTitle.value} | ${messages.value.t('app.title')}`;
     if (route.hash) {
         try { document.getElementById(decodeURIComponent(route.hash.slice(1)))?.scrollIntoView(); }
         catch { /* An invalid fragment must not interrupt otherwise readable help. */ }

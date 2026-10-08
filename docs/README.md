@@ -5,9 +5,9 @@ documentation-metadata
 audience: all documentation readers
 owner: documentation maintainers
 status: current
-last-verified: 2026-10-04
+last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: frontend migration baseline and step-two foundation design added to the inventory; implemented entity property modal and plan evidence added to the inventory; implemented event-card overview inventory, mixed cards, scoped child sub-views, and maintained guidance; archival implementation documentation inventory verified on 2026-09-16; earlier verification retained for non-blocking documentation policy and optional report/test routing; D00 foundation plus D01-D13 reviewed user, operator, permission, activity-algorithm, maintainer, repository-entry, and AI-agent documentation; D14 completed in-app help UX, semantic validation, visual ownership, and trust-boundary enforcement
+verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; frontend migration baseline and step-two foundation design added to the inventory; implemented entity property modal and plan evidence added to the inventory; implemented event-card overview inventory, mixed cards, scoped child sub-views, and maintained guidance; archival implementation documentation inventory verified on 2026-09-16; earlier verification retained for non-blocking documentation policy and optional report/test routing; D00 foundation plus D01-D13 reviewed user, operator, permission, activity-algorithm, maintainer, repository-entry, and AI-agent documentation; D14 completed in-app help UX, semantic validation, visual ownership, and trust-boundary enforcement
 source-anchors: repository-tree; package.json; README.md; AGENTS.md; .github/copilot-instructions.md; .github/copilot/; docs/documentation-check.json; docs/documentation-remediation.yml; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; docs/user-guide/; src/server.ts; src/app.ts; src/modules/settings.ts; vitest.config.mts; playwright.config.ts; .github/workflows/ci.yml; .github/workflows/release.yml; docs/HELP_VISUALS.md; scripts/check-help-documentation.mjs; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: documentation-inventory-or-status-change
 -->
@@ -43,16 +43,17 @@ The canonical in-app help source is [`docs/user-guide/`](user-guide/). The appli
 | Document | Purpose | Current review state |
 |---|---|---|
 | [Project README](../README.md) | Product entry point, clean-clone development start, commands, CI, and release summary | Current: D12 |
-| [Architecture](ARCHITECTURE.md) | Runtime, layers, identity, authorization, persistence, frontend, build, release, and testing boundaries | Current: D12 architecture plus D08 advanced activity allocation; D14 owns help-integration follow-up |
-| [Development guide](DEVELOPMENT.md) | Clean-clone setup, generated files, current code patterns, change recipes, and troubleshooting | Current: D12 |
-| [Testing guide](TESTING_GUIDE.md) | Vitest/Playwright layer contracts, database safeguards, environments, commands, and CI | Current: D12/D14; content reports are separate from application tests |
+| [Architecture](ARCHITECTURE.md) | Runtime, layers, identity, authorization, persistence, frontend, build, release, and testing boundaries | Current: established runtime and approved frontend pilot ownership, including D1–D5 |
+| [Development guide](DEVELOPMENT.md) | Clean-clone setup, generated files, current code patterns, change recipes, and troubleshooting | Current: established patterns and canonical next-feature frontend contribution workflow |
+| [Testing guide](TESTING_GUIDE.md) | Vitest/Playwright layer contracts, database safeguards, environments, commands, and CI | Current: established test layers and frontend pilot checks; content reports remain separate from application tests |
 | [Activity requirement algorithm](ACTIVITY_REQUIREMENTS_ALGORITHM.md) | Detailed requirement and coverage algorithm | Current: D08 canonical requirement, coverage, allocation, job, review-state, application, and limitation reference |
 | [Permission system reference](PERMISSIONS_REFERENCE.md) | Generated bit/preset/default tables and maintainer authorization semantics | Current: D03 |
-| [Archival design and implementation record](ARCHIVAL_PLAN.md) | Authoritative archival, profile visibility, architecture, implementation steps, and acceptance criteria | Implemented in the working tree; current usage and operations are documented in the canonical guides |
+| [Archival design and implementation record](ARCHIVAL_PLAN.md) | Authoritative archival, profile visibility, architecture, implementation steps, and acceptance criteria | Implemented design record; current usage and operations are documented in the canonical guides |
 | [Event-card overview design](EVENT_OVERVIEW_PLAN.md) | Implemented mixed cards with expandable events and eligible linked-card sub-views, bounded queries/rendering, module boundaries, and acceptance criteria | Implemented; application checks and measured scale observations are recorded in the design document |
-| [Entity property modal concept and implementation plan](ENTITY_PROPERTY_MODAL_PLAN.md) | Permission-aware root property dialogs, filtered event selection, post-creation linking, archival presentation, module ownership, and verification | Implemented; retained design, ownership, acceptance criteria, and verification evidence |
-| [Frontend migration baseline](FRONTEND_MIGRATION_BASELINE.md) | Existing behaviors, route and permission boundaries, test assertions, native fallbacks, and desktop/mobile visual evidence | Step-one baseline; replacement frontend and API implementation remain subsequent work |
-| [Frontend foundation design](FRONTEND_FOUNDATION_DESIGN.md) | Framework choice, shared API/type/validation contracts, localization, component ownership, refresh/conflicts and implementation sequence | Step-two design; narrow packing and native-rendering proof slice is next, with no replacement runtime implemented yet |
+| [Entity property modal design and implementation record](ENTITY_PROPERTY_MODAL_PLAN.md) | Permission-aware root property dialogs, filtered event selection, post-creation linking, archival presentation, module ownership, and verification | Implemented; retained design, ownership, acceptance criteria, and verification evidence |
+| [Frontend migration baseline](FRONTEND_MIGRATION_BASELINE.md) | Existing behaviors, route and permission boundaries, test assertions, native fallbacks, and desktop/mobile visual evidence | Historical step-one behavior/evidence reference; implemented pilot reviewed separately |
+| [Frontend foundation design](FRONTEND_FOUNDATION_DESIGN.md) | Framework choice, shared API/type/validation contracts, localization, component ownership, refresh/conflicts and implementation sequence | Accepted design and explicit D1–D5 amendments; independent packing/overview/identity/help pilot implemented |
+| [Frontend pilot](FRONTEND_PILOT.md) | Implemented feature ownership, native fallback, comparison/recovery, localization and build workflow | Current implementation guide; dated evidence is in its paired review record |
 
 ## Operators and site reliability engineers
 
@@ -66,9 +67,8 @@ The canonical in-app help source is [`docs/user-guide/`](user-guide/). The appli
 Use these four documents as one operating set. The runtime release archive and matching tagged migration workspace are
 separate deployment inputs, while the database and both upload directories form one state and backup unit.
 
-A published API contract remains a backlog deliverable. The frontend migration baseline inventories the existing
-routes; the foundation design selects the versioned contract and generation approach for implementation. No v1 API
-is published by those records. The permission reference exists and is generated and verified in D03.
+The pilot implements `/api/v1` with one authored OpenAPI contract, generated types/validators and operation policies.
+It is unreleased and remains corrected in place; other feature families and default cutover are subsequent work. The permission reference exists and is generated and verified in D03.
 
 ## AI coding agents
 

@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-07
+last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: framework selection from step two, with the Vue/Vite packing and help SSR proof now implemented in step three; benchmarks and broader route cutover remain pending
+verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; framework selection from step two, with the Vue/Vite packing and help SSR proof now implemented in step three; benchmarks and broader route cutover remain pending
 source-anchors: package.json; esbuild.client.js; tsconfig.json; tsconfig.server.json; tsconfig.test.json; vitest.config.mts; playwright.config.ts; .github/workflows/ci.yml; .github/workflows/release.yml; src/app.ts; src/views/layout.pug; src/public/style/; src/public/js/; docs/frontend-migration/EDGE_CASES.md; docs/frontend-migration/BEHAVIOR_INVENTORY.md
 next-review: broader-feature-migration-or-measured-framework-limitation
 -->
@@ -16,7 +16,7 @@ next-review: broader-feature-migration-or-measured-framework-limitation
 Choose **Vue 3 with TypeScript single-file components, Vite, Vue Router and TanStack Vue Query**. Keep Express as
 the HTTP, authentication and backend owner. Build a small Surveyor component library using the existing Bootstrap
 appearance, native HTML controls and selected Reka UI primitives for complex interaction. Use shared i18next
-resources with an application-owned Vue provide/inject adapter, as defined in the
+resources with **i18next-vue** and the typed shared translation interface, as defined in the
 [localization design](LOCALIZATION_DESIGN.md).
 
 The normal interactive experience is an SPA: client navigation, data reads, periodic refresh and mutations update
@@ -175,10 +175,10 @@ and recovery. Components follow these rules:
   profile, logout or revoked access invalidates private context; a late response must not repopulate the old view.
   SSR query clients are request-local, with a controlled initial snapshot. The library documents SSR hydration,
   but Surveyor must enforce the authorization boundary. [Vue Query SSR](https://tanstack.com/query/latest/docs/framework/vue/guides/ssr)
-- Background refresh updates clean views without replacing dirty values or their original revision. A failed
+- Background refresh updates clean views without replacing dirty values or an overlapping comparison baseline. A failed
   refresh keeps confirmed visible data marked stale; a confirmed successful save followed by failed refresh does
   not become a failed save. Navigation and dialog close resolve unsaved drafts explicitly.
-- Ordinary resource changes use the designed revision/conditional-write protocol and offer explicit conflict
+- Ordinary resource changes use the approved touched-current-value comparison protocol and offer explicit conflict
   resolution. Shared component code must not assume a last-write-wins update. Current property checks are narrower
   than a general old-form revision check; see [identity/lifecycle cases](IDENTITY_LIFECYCLE_EDGE_CASES.md).
 - Financial previews, recalculation, settlement, payments/refunds, upload uncertainty and recommendation reviews
@@ -204,10 +204,10 @@ i18next documents browser/Node use and multiple framework integrations.
 
 The i18next-vue SSR guidance describes its advice as largely theoretical and excludes component-local message
 registration and server rerender events. Preload central resources before rendering and prove request isolation and
-hydration with the selected versions. If that binding does not satisfy the proof, replace only the thin Vue adapter
-with provide/inject around the same i18next core; do not fork catalogs or switch the backend's translation meaning.
-The pilot takes this thinner provide/inject option directly, retaining the typed shared translator and proving
-request isolation and hydration without adding the separate binding dependency.
+hydration with the selected versions. The originally described provide/inject fallback was an alternative, not
+authorization to replace the primary binding. The pilot initially selected it without approval; approved D1 restores
+i18next-vue while keeping the typed translator and shared core. Any future substitution needs active user approval,
+a recorded amendment and equivalent request-isolation/hydration evidence.
 [i18next-vue SSR guidance](https://i18next.github.io/i18next-vue/guide/ssr.html)
 
 ## Build and deployment integration
@@ -229,9 +229,10 @@ and existing declaration-file contracts. `vite build` does not replace SFC type 
 verification. Confirm the chosen Vue tooling against the repository's actual TypeScript and Node versions during
 implementation; reading compatibility guidance is not an executed compatibility check.
 
-The implemented development workflow runs separate Vite client/SSR watch builds beside the existing server and
-legacy browser watchers; Vue changes require a browser refresh. Middleware/HMR remains an optional later improvement
-while Express retains request ownership and cookie behavior. Production runs the existing Node
+The primary development choice is implemented through Express-hosted Vite middleware and HMR. The earlier
+manual-refresh watch builds were an unauthorized substitution, corrected by the approved rectification. The root
+workflow watches authored contracts/catalogs, regenerates dependent artifacts in order and restarts Express only
+after completion. Express retains request ownership and cookie behavior. Production runs the existing Node
 application with built assets and the built Vue renderer, not a Vite development server. Packages externalized by
 the SSR build must be production dependencies; release packaging currently removes development dependencies. Keep
 browser bundles free of database entities, server settings, secrets and Node-only imports. Any changed browser

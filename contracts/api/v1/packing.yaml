@@ -9,10 +9,9 @@ schemas:
       name:
         type: string
       assignmentId:
-        type:
-          - integer
-          - "null"
-        minimum: 1
+        anyOf:
+          - $ref: ./common.yaml#/schemas/DecimalId
+          - type: "null"
   PackingItemView:
     type: object
     additionalProperties: false
@@ -79,6 +78,8 @@ schemas:
             type: boolean
       editToken:
         type: string
+        maxLength: 4096
+        pattern: '^"edit-[A-Za-z0-9_-]+"$'
   PackingListView:
     type: object
     additionalProperties: false
@@ -261,6 +262,28 @@ schemas:
       - guest
       - authenticated
       - participant
+    properties:
+      public:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+      guest:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+      authenticated:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+      participant:
+        type: integer
+        minimum: 0
+        maximum: 2147483647
+  PermissionDefaultsPatch:
+    type: object
+    additionalProperties: false
+    minProperties: 1
+    description: Changed audience masks only. Unchanged audiences are retained and do not conflict with independent edits.
     properties:
       public:
         type: integer
@@ -518,6 +541,7 @@ schemas:
       - name
       - isGuest
       - mask
+      - editToken
     properties:
       profileId:
         $ref: ./common.yaml#/schemas/Uuid
@@ -528,6 +552,10 @@ schemas:
       mask:
         type: integer
         minimum: 0
+      editToken:
+        type: string
+        maxLength: 4096
+        pattern: '^"edit-[A-Za-z0-9_-]+"$'
   PackingAdminInput:
     type: object
     additionalProperties: false
@@ -703,6 +731,8 @@ schemas:
         description: Opaque image version; changes when the image is replaced without exposing its storage path.
       settingsToken:
         type: string
+        maxLength: 4096
+        pattern: '^"edit-[A-Za-z0-9_-]+"$'
   PackingHeaderUpload:
     type: object
     additionalProperties: false

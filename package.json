@@ -8,7 +8,7 @@
     "pretest:integration": "npm run generate",
     "pretest:ci": "npm run generate",
     "run": "node dist/server.js",
-    "server:dev": "nodemon --watch src --ext ts,js --exec \"ts-node --project tsconfig.server.json src/server.ts\"",
+    "server:dev": "cross-env NODE_ENV=development SURVEYOR_FRONTEND_DEV=1 nodemon --watch src --watch .generated/frontend-ready.json --ignore src/frontend --ignore src/public --ignore src/types --ignore src/locales --ignore src/modules/localization/generated --ext ts,js,json --delay 500ms --exec \"ts-node --project tsconfig.server.json src/server.ts\"",
     "server:client": "cross-env NODE_ENV=development node esbuild.client.js --watch",
     "server": "npm run build && concurrently \"npm run server:dev\" \"npm run server:client\" \"npm run server:frontend\"",
     "typeorm": "ts-node --project tsconfig.server.json scripts/runMigration.ts",
@@ -46,13 +46,13 @@
     "generate:locales": "node scripts/generate-locales.mjs",
     "prepare:frontend": "npm run generate:api && npm run generate:locales",
     "copy:contracts": "cpx \".generated/api/v1/{openapi.json,operations.json,server.cjs}\" dist/api-contracts",
-    "build:frontend": "npm run typecheck:frontend && vite build && vite build --ssr src/frontend/app/entry-server.ts",
+    "build:frontend": "npm run typecheck:frontend && cross-env NODE_ENV=production vite build --config vite.config.mts && cross-env NODE_ENV=production vite build --config vite.config.mts --ssr src/frontend/app/entry-server.ts",
     "pretest:quick": "npm run generate",
     "pretest:unit": "npm run generate",
     "pretest:frontend": "npm run generate",
     "pretypecheck:frontend": "npm run prepare:frontend",
     "typecheck:frontend": "vue-tsc --project tsconfig.frontend.json --noEmit && vue-tsc --project tsconfig.frontend-ssr.json --noEmit",
-    "server:frontend": "npm run prepare:frontend && concurrently \"vite build --watch\" \"vite build --ssr src/frontend/app/entry-server.ts --watch\""
+    "server:frontend": "node scripts/watch-frontend-inputs.mjs"
   },
   "overrides": {
     "openapi-typescript": {
@@ -80,6 +80,7 @@
     "express-validator": "^7.3.2",
     "http-errors": "^2.0.1",
     "i18next": "26.4.2",
+    "i18next-vue": "5.4.0",
     "joi": "^18.2.3",
     "marked": "^18.0.9",
     "morgan": "^1.11.0",

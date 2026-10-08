@@ -1,5 +1,5 @@
 schemas:
-  PackingOverviewCard:
+  OverviewCard:
     type: object
     additionalProperties: false
     required: [id, type, title, description, url, headerUrl, headerVersion, eventContext, visibility, overviewHidden, archived, inheritedArchived, capabilities, children]
@@ -43,7 +43,7 @@ schemas:
               total: {type: integer, minimum: 0}
               matching: {type: integer, minimum: 0}
           - type: 'null'
-  PackingOverviewRegion:
+  OverviewRegion:
     type: object
     additionalProperties: false
     required: [collection, region, q, type, availableTypes, page, childPage, eventId, pageSize, totalEntities, hiddenEntities, regionEntities, matchingEntities, totalCards, totalChildren, hasPrevious, hasNext, parent, items]
@@ -79,18 +79,18 @@ schemas:
       hasNext: {type: boolean}
       parent:
         anyOf:
-          - {$ref: '#/schemas/PackingOverviewCard'}
+          - {$ref: '#/schemas/OverviewCard'}
           - {type: 'null'}
       items:
         type: array
-        items: {$ref: '#/schemas/PackingOverviewCard'}
-  PackingVisibilityInput:
+        items: {$ref: '#/schemas/OverviewCard'}
+  OverviewVisibilityInput:
     type: object
     additionalProperties: false
     required: [visibility]
     properties:
       visibility: {type: string, enum: [default, hidden, shown]}
-  PackingVisibilityResult:
+  OverviewVisibilityResult:
     type: object
     additionalProperties: false
     required: [visibility, overviewHidden, archived]
@@ -101,7 +101,9 @@ schemas:
 paths:
   overview:
     get:
-      operationId: getPackingOverview
+      operationId: getOverview
+
+      x-surveyor-command: {retryPolicy: read, precondition: none}
       summary: Read one bounded mixed overview region for the admitted profile
       parameters:
         - {$ref: './openapi.yaml#/components/parameters/Context'}
@@ -118,11 +120,13 @@ paths:
           description: Authorized entity cards and eligible event containers; no account or persistence objects.
           content:
             application/json:
-              schema: {$ref: '#/schemas/PackingOverviewRegion'}
+              schema: {$ref: '#/schemas/OverviewRegion'}
         default: {$ref: './openapi.yaml#/components/responses/Problem'}
   visibility:
     put:
-      operationId: setPackingVisibility
+      operationId: setOverviewVisibility
+
+      x-surveyor-command: {retryPolicy: natural-idempotent, precondition: none}
       summary: Set only the admitted profile's overview visibility preference
       parameters:
         - {$ref: './openapi.yaml#/components/parameters/Context'}
@@ -134,11 +138,11 @@ paths:
         required: true
         content:
           application/json:
-            schema: {$ref: '#/schemas/PackingVisibilityInput'}
+            schema: {$ref: '#/schemas/OverviewVisibilityInput'}
       responses:
         '200':
           description: The saved personal preference and current shared archival state remain separate.
           content:
             application/json:
-              schema: {$ref: '#/schemas/PackingVisibilityResult'}
+              schema: {$ref: '#/schemas/OverviewVisibilityResult'}
         default: {$ref: './openapi.yaml#/components/responses/Problem'}

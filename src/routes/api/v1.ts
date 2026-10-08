@@ -8,6 +8,7 @@ import {localeManifest} from '../../modules/localization/translator';
 import {fetchHelpDoc, fetchHelpIndex, fetchHelpSearch} from '../../controller/helpController';
 import packingRouter from './v1/packing';
 import authRouter from './v1/auth';
+import overviewRouter from './v1/overview';
 
 const router = Router();
 
@@ -39,6 +40,7 @@ router.get('/help', asyncHandler(async function getHelpPage(req, res) {
 }));
 
 router.use(authRouter);
+router.use('/overview', overviewRouter);
 router.use('/packing-lists', packingRouter);
 router.use(function missingOperation(_req, _res, next) {next(new ApiProblem('NOT_FOUND'));});
 router.use(handleApiProblem);

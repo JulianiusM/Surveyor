@@ -1,15 +1,18 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
+import {defineComponent, h} from 'vue';
+import type {Component} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
+import I18NextVue from 'i18next-vue';
 import App from '../../src/frontend/app/App.vue';
 import HelpPage from '../../src/frontend/features/help/HelpPage.vue';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
 import {render} from '../../src/frontend/app/entry-server';
 import type {components} from '../../src/types/api/v1';
 
-const session: components['schemas']['SessionView'] = {kind: 'anonymous', context: 'shell-context-1234567890',
+const session: components['schemas']['SessionView'] = {kind: 'anonymous', deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, context: 'shell-context-1234567890',
     csrfToken: 'shell-csrf-1234567890', locale: 'en', activeProfile: null, profiles: [],
     loginUrl: '/users/login', logoutUrl: null, shell: {version: 'fixture-version', imprintUrl: '/fixture-imprint',
         privacyPolicyUrl: '/fixture-privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'}};
@@ -24,7 +27,7 @@ async function renderHelp(data = help, url = '/frontend-pilot/help?doc=fixture',
     await router.push(url);
     await router.isReady();
     const wrapper = mount(App, {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}]], provide: {[pilotContextKey as symbol]: context},
+        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]], provide: {[pilotContextKey as symbol]: context},
     }});
     await flushPromises();
     return {wrapper, context, router};
@@ -32,6 +35,61 @@ async function renderHelp(data = help, url = '/frontend-pilot/help?doc=fixture',
 afterEach(() => { vi.restoreAllMocks(); document.body.innerHTML = ''; });
 
 describe('native shell and help presentation contract', () => {
+    it.each([false, true])('keeps a pending lazy navigation when the locale response arrives (navigation first: %s)', async navigationFirst => {
+        let finishLocale!: (response: Response) => void;
+        const request = vi.fn(() => new Promise<Response>(resolve => { finishLocale = resolve; }));
+        const {wrapper, context, router} = await renderHelp(help, '/frontend-pilot/help?locale=en', request);
+        let finishRoute!: (component: Component) => void;
+        const loadRoute = vi.fn(() => new Promise<Component>(resolve => { finishRoute = resolve; }));
+        router.addRoute({path: '/frontend-pilot/users/login', component: loadRoute});
+        let navigation: ReturnType<typeof router.push> | undefined;
+        try {
+            if (navigationFirst) {
+                navigation = router.push('/frontend-pilot/users/login');
+                await flushPromises();
+            }
+            await wrapper.get('#pilot-locale').setValue('de');
+            if (!navigationFirst) navigation = router.push('/frontend-pilot/users/login');
+            await flushPromises();
+            expect(loadRoute).toHaveBeenCalledOnce();
+            finishLocale(new Response(JSON.stringify({...session, locale: 'de'}), {
+                headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context},
+            }));
+            await flushPromises();
+            finishRoute(defineComponent({render: () => h('h1', 'Login destination')}));
+            expect(await navigation).toBeUndefined();
+            await flushPromises();
+            expect(context.locale.value).toBe('de');
+            expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login');
+            expect(wrapper.text()).toContain('Login destination');
+        } finally { wrapper.unmount(); context.queryClient.clear(); }
+    });
+
+    it('synchronizes the new help destination after its lazy navigation settles', async () => {
+        let finishLocale!: (response: Response) => void;
+        const request = vi.fn(() => new Promise<Response>(resolve => { finishLocale = resolve; }));
+        const {wrapper, context, router} = await renderHelp(help, '/frontend-pilot/help?locale=en', request);
+        let finishRoute!: (component: Component) => void;
+        const loadRoute = vi.fn(() => new Promise<Component>(resolve => { finishRoute = resolve; }));
+        router.addRoute({path: '/frontend-pilot/help/next-fixture', component: loadRoute});
+        try {
+            await wrapper.get('#pilot-locale').setValue('de');
+            const navigation = router.push('/frontend-pilot/help/next-fixture?q=next&list=fixture-list&locale=en#fixture-task');
+            await flushPromises();
+            expect(loadRoute).toHaveBeenCalledOnce();
+            finishLocale(new Response(JSON.stringify({...session, locale: 'de'}), {
+                headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context},
+            }));
+            await flushPromises();
+            finishRoute(HelpPage);
+            expect(await navigation).toBeUndefined();
+            await flushPromises();
+            expect(router.currentRoute.value.path).toBe('/frontend-pilot/help/next-fixture');
+            expect(router.currentRoute.value.query).toEqual({q: 'next', list: 'fixture-list', locale: 'de'});
+            expect(router.currentRoute.value.hash).toBe('#fixture-task');
+        } finally { wrapper.unmount(); context.queryClient.clear(); }
+    });
+
     it('replaces the pinned help locale after a confirmed language switch while preserving reload context', async () => {
         const request = vi.fn(async () => new Response(JSON.stringify({...session, locale: 'de'}), {
             headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context},

@@ -3,15 +3,20 @@ import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue';
 import {onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
+import {usePackingApi} from './api';
 import {usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
+import {packingKeys} from '../../app/queryKeys';
+import {usePageTitle} from '../../composables/pageTitle';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
-import EventPicker from './EventPicker.vue';
-import AudiencePermissions from './AudiencePermissions.vue';
+import EventPicker from '../../components/EventPicker.vue';
+import AudiencePermissions from '../../components/permissions/AudiencePermissions.vue';
 
 const context = usePilot();
+const api = usePackingApi(context);
 const {messages} = context;
+usePageTitle(() => messages.value.t('packing.create'));
 const route = useRoute();
 const router = useRouter();
 const sourceId = computed(() =>
@@ -32,6 +37,9 @@ const submitted = ref(false);
 watch(
     () => [sourceId.value, route.query.eventId],
     () => {
+        // This watcher runs after navigation commits. The user has acknowledged leaving the
+        // prior draft; its unknown command must not disable the newly initialized form.
+        command.acknowledge();
         baseline.value = null;
         submitted.value = false;
         title.value = '';
@@ -43,14 +51,14 @@ watch(
     },
 );
 const creation = useQuery({
-    queryKey: computed(() => ['v1', context.session.value?.context, 'packing', 'create-context']),
+    queryKey: computed(() => packingKeys.creation(context.session.value?.context)),
     enabled: computed(() => context.hydrated.value && context.ready.value),
-    queryFn: ({signal}) => context.api.createContext(context.capture(), signal),
+    queryFn: ({signal}) => api.createContext(context.capture(), signal),
 });
 const duplicate = useQuery({
-    queryKey: computed(() => ['v1', context.session.value?.context, 'packing', sourceId.value, 'duplicate']),
+    queryKey: computed(() => packingKeys.duplicate(context.session.value?.context, sourceId.value)),
     enabled: computed(() => context.hydrated.value && context.ready.value && !!sourceId.value),
-    queryFn: ({signal}) => context.api.duplicate(sourceId.value!, context.capture(), signal),
+    queryFn: ({signal}) => api.duplicate(sourceId.value!, context.capture(), signal),
 });
 function snapshot(): string {
     return JSON.stringify({
@@ -92,10 +100,12 @@ const dirty = computed(
 );
 const command = useCommand(async () => {
     await context.refreshSession();
-});
+}, true);
 const blocked = computed(() => command.pending.value || command.uncertain.value);
 function mayLeave(): boolean {
-    return !blocked.value && (!dirty.value || window.confirm(messages.value.t('draft.discard')));
+    if (command.pending.value) return false;
+    if (command.uncertain.value) return window.confirm(messages.value.t('packing.leaveUnknown'));
+    return !dirty.value || window.confirm(messages.value.t('draft.discard'));
 }
 onBeforeRouteLeave(mayLeave);
 onBeforeRouteUpdate(mayLeave);
@@ -113,18 +123,20 @@ onBeforeUnmount(() => {
     removeIdentityGuard?.();
     window.removeEventListener('beforeunload', beforeUnload);
 });
+const removeUpdateGuard = context.updates.registerGuard(() => !dirty.value);
+onBeforeUnmount(removeUpdateGuard);
 function chooseImage(event: Event): void {
     image.value = (event.target as HTMLInputElement).files?.[0] ?? null;
 }
 async function create(): Promise<void> {
     if (!defaults.value) return;
     if (!rows.value.length) {
-        command.error.value = messages.value.t('packing.fillAllFields');
+        command.setError('packing.fillAllFields');
         return;
     }
     const result = await command.run(
         (scope) =>
-            context.api.createPacking(
+            api.createPacking(
                 {
                     title: title.value.trim(),
                     description: description.value.trim() || null,
@@ -208,7 +220,7 @@ async function create(): Promise<void> {
                     </div>
                     <div class="row mb-3">
                         <div class="col-md-12">
-                            <EventPicker v-model="eventId" prefix="create" :disabled="blocked" />
+                            <EventPicker v-model="eventId" :source="api.eventPicker" prefix="create" :disabled="blocked" />
                         </div>
                     </div>
                     <div class="row mb-3">

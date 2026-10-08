@@ -4,6 +4,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import YAML from 'yaml';
+import ts from 'typescript';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outputArgument = process.argv.indexOf('--output-root');
@@ -17,6 +18,39 @@ const contract = JSON.parse(await fs.readFile(path.join(apiRoot, '.generated/api
 const catalogs = [];
 const sourceHash = createHash('sha256').update(api.sourceHash);
 const pluralSuffix = /_(zero|one|two|few|many|other)$/;
+
+/** Read keys from the authoritative permission declarations without executing their module or
+ * copying a second permission inventory into the frontend. Unsupported registry structure fails visibly. */
+async function permissionRegistryKeys() {
+    const source = await fs.readFile(path.join(root, 'src/modules/lib/permissions.ts'), 'utf8');
+    sourceHash.update(source);
+    const tree = ts.createSourceFile('permissions.ts', source, ts.ScriptTarget.Latest, true);
+    function unwrap(node) {
+        while (ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isParenthesizedExpression(node)) node = node.expression;
+        return node;
+    }
+    const names = [];
+    for (const statement of tree.statements) {
+        if (!ts.isVariableStatement(statement)) continue;
+        for (const declaration of statement.declarationList.declarations) {
+            if (!['PERM', 'DEFAULT_PERM'].includes(declaration.name.getText(tree))) continue;
+            let value = unwrap(declaration.initializer);
+            if (ts.isCallExpression(value)) {
+                const factory = unwrap(value.expression);
+                const returned = factory.body.statements.find(ts.isReturnStatement);
+                value = unwrap(returned.expression);
+            }
+            if (!ts.isObjectLiteralExpression(value)) throw new Error('Unsupported permission registry declaration');
+            for (const property of value.properties) {
+                if (!property.name || !ts.isIdentifier(property.name)) throw new Error('Unsupported permission registry key');
+                names.push(property.name.text);
+            }
+        }
+    }
+    if (!names.length) throw new Error('Permission registry is empty');
+    return [...new Set(names)].sort();
+}
+const permissionKeys = await permissionRegistryKeys();
 
 function flattenResources(resources) {
     const result = {};
@@ -70,7 +104,9 @@ for (const file of files) {
     // Only release-owned help directories are selectable. A catalog cannot point the runtime
     // at uploads, an absolute path, or an ancestor outside docs/user-guide.
     if (!catalog.help || typeof catalog.help.directory !== 'string'
-        || !/^(?:\.|[a-zA-Z0-9][a-zA-Z0-9_-]*)$/.test(catalog.help.directory)) {
+        || catalog.help.directory !== (catalog.locale === 'en' ? '.' : catalog.locale)) {
+        // The existing English corpus owns the root. Every added language owns its own directory;
+        // a catalog may never silently redirect help to another language's documents or pictures.
         throw new Error(`Invalid fixed help source: ${file}`);
     }
     const messages = flattenResources(catalog.resources);
@@ -88,6 +124,7 @@ if (!english) throw new Error('The complete English fallback catalog is required
 const keys = Object.keys(english.groups).sort();
 const problemByKey = new Map(api.problems.map(problem => [problem.messageKey, problem]));
 for (const key of problemByKey.keys()) if (!english.groups[key]) throw new Error(`Missing contracted API message: ${key}`);
+for (const key of permissionKeys) if (!english.groups[`permissions.${key}`]) throw new Error(`Missing permission message: ${key}`);
 for (const key of Object.keys(english.uiContracts ?? {})) {
     if (!english.groups[key] || problemByKey.has(key)) throw new Error(`Invalid or duplicated UI contract: ${key}`);
 }
@@ -152,6 +189,9 @@ const output = new Map([
     ['src/types/LocalizationTypes.d.ts', declarations],
     ['src/modules/localization/generated/resources.json', `${JSON.stringify(resources, null, 2)}\n`],
     ['src/modules/localization/generated/manifest.json', `${JSON.stringify(manifest, null, 2)}\n`],
+    ['src/modules/localization/generated/permissions.ts', '// Generated from permission registry and locale catalogs; do not edit.\n'
+        + "import type {MessageKey} from '../../../types/LocalizationTypes';\n"
+        + `export const permissionMessageKeys = ${JSON.stringify(Object.fromEntries(permissionKeys.map(key => [key, `permissions.${key}`])), null, 2)} as const satisfies Record<string, MessageKey>;\n`],
 ]);
 for (const [relative, content] of output) {
     const destination = path.join(outputRoot, relative);

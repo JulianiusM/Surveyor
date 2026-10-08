@@ -21,7 +21,7 @@ export default defineConfig({
             provider: 'v8',
             reportsDirectory: 'coverage',
             reporter: ['text', 'lcov', 'json'],
-            include: ['src/**/*.ts'],
+            include: ['src/**/*.ts', 'src/frontend/**/*.vue'],
             exclude: [
                 'src/migrations/**',
                 'src/modules/database/__index__.ts',

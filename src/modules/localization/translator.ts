@@ -1,5 +1,6 @@
 /* Copyright 2026 Julian Malovanij. Licensed under the Apache License, Version 2.0. */
 import {createInstance} from 'i18next';
+import type {i18n, TFunction} from 'i18next';
 import resources from './generated/resources.json';
 import manifest from './generated/manifest.json';
 import type {Locale, LocaleDefinition, LocalizationContext, MessageKey, Translator} from '../../types/LocalizationTypes';
@@ -48,14 +49,23 @@ export function resolvePreferredLocale(values: readonly string[]): Locale {
  * is synchronous; no asynchronous loader or process-global changeLanguage can mix simultaneous locales.
  * HTML/Pug/Vue/email/PDF owners must escape or create text nodes at their own output boundary.
  */
-export function createTranslator(requestedLocale?: string | null): LocalizationContext {
+export function createLocalizationInstance(requestedLocale?: string | null): i18n {
     const locale = resolveLocale(requestedLocale);
     const instance = createInstance();
-    void instance.init({resources, lng: locale, fallbackLng: 'en', defaultNS: 'ui', ns: Object.keys(resources.en),
+    // A Vue binding can update its resources during development. Keep its writable store
+    // separate from concurrent server requests and other applications using this module.
+    void instance.init({resources: structuredClone(resources), lng: locale, fallbackLng: 'en', defaultNS: 'ui', ns: Object.keys(resources.en),
         initAsync: false, returnNull: false, returnEmptyString: false, saveMissing: false,
         interpolation: {escapeValue: false, skipOnVariables: true}});
     if (!instance.isInitialized) throw new Error('Bundled localization resources did not initialize synchronously');
-    const fixed = instance.getFixedT(locale);
+    return instance;
+}
+
+/** The Vue binding supplies its reactive translator; all other owners use a fixed request locale.
+ * Both paths keep the same generated key/parameter checks and interpolation boundary. */
+export function createTranslator(requestedLocale?: string | null, translation?: TFunction): LocalizationContext {
+    const locale = resolveLocale(requestedLocale);
+    const fixed = translation ?? createLocalizationInstance(locale).getFixedT(locale);
 
     /** Runtime guards also protect JavaScript/Pug callers and prevent options injection through parameters. */
     function translate(key: MessageKey, parameters: Record<string, unknown> = {}): string {

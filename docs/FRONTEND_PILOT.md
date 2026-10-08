@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: current
-last-verified: 2026-10-07
+last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: independent packing, management, mixed overview and identity workflows; prior permission-specific paired review; focused desktop/mobile overview and language-owned help-figure smoke checks; full English/German help corpus through API, SSR and SPA; generated contracts, conditional commands and build integration
-source-anchors: contracts/api/v1/; scripts/generate-api.mjs; scripts/generate-locales.mjs; src/frontend/; src/routes/api/v1.ts; src/routes/frontendPilot.ts; src/modules/api/; src/modules/packing/api.ts; src/modules/frontendPilotRenderer.ts; src/modules/localization/translator.ts; src/migrations/1791072000000-AddPackingMetadataRevision.ts; package.json; vite.config.mts; tests/unit/frontend-contracts.spec.ts; tests/unit/frontend-generation.spec.ts; tests/unit/frontend-localization.spec.ts; tests/frontend/frontend-pilot.spec.ts; tests/integration/packing-api.spec.ts; tests/integration/packing-metadata-migration.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-pilot.spec.ts
+verification-scope: ordinary development loading, hydration, lazy navigation, HMR and serialized generator restart verification; approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; independent packing, management, mixed overview and identity workflows; prior permission-specific paired review; focused desktop/mobile overview and language-owned help-figure smoke checks; full English/German help corpus through API, SSR and SPA; generated contracts, conditional commands and build integration
+source-anchors: src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/e2e/frontend-development.spec.ts; contracts/api/v1/; scripts/generate-api.mjs; scripts/generate-locales.mjs; src/frontend/; src/routes/api/v1.ts; src/routes/frontendPilot.ts; src/modules/api/; src/modules/packing/api.ts; src/modules/frontendPilotRenderer.ts; src/modules/localization/translator.ts; package.json; vite.config.mts; tests/unit/frontend-contracts.spec.ts; tests/unit/frontend-generation.spec.ts; tests/unit/frontend-localization.spec.ts; tests/frontend/frontend-pilot.spec.ts; tests/integration/packing-api.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-pilot.spec.ts
 next-review: frontend-pilot-scope-or-default-route-cutover
 -->
 
@@ -35,7 +35,7 @@ features' [recorded exceptions](frontend-migration/EDGE_CASES.md) when migrating
 
 ## Ownership and normal development
 
-Vue pages compose shared action, dialog and feedback controls. Reka supplies dialog focus/keyboard behavior; existing
+Vue pages compose shared action, dialog, feedback, tabs, permission matrices and event pickers. Reka supplies focus/keyboard behavior; existing
 Bootstrap styling supplies the visual baseline. TanStack Query owns server snapshots; form drafts own their original,
 local and latest remote values separately. There is no additional server-data store.
 
@@ -45,7 +45,8 @@ local and latest remote values separately. There is no additional server-data st
 | `src/locales/<locale>.json` | Discovered locale manifest, typed keys/parameters, bundled resources and fixed help-corpus directory; browser and API use the same translator |
 | `docs/user-guide/` and locale subdirectories | Full trusted help articles; the selected catalog chooses the same corpus for API, native help, Vue SSR and SPA |
 | `src/modules/packing/api.ts` | Authorized projections and commands; existing packing controller/service owners retain native operations and persistence |
-| `src/frontend/app/` | Request-scoped API transport, session/context boundary, routing and app setup |
+| `src/frontend/app/` | Common transport, session/context boundary, named query keys, update coordination, routing and app setup |
+| `src/frontend/features/<feature>/api.ts` | Feature-owned API operations and validators; overview owns the mixed collection independently of packing |
 | `src/frontend/composables/` | Explicit metadata reconciliation and legacy checklist persistence |
 | `src/frontend/components/` | Shared application controls |
 | `src/modules/frontendPilotRenderer.ts` | Express manifest loading and request-isolated Vue rendering |
@@ -55,10 +56,23 @@ or add forwarding modules. Runtime validators are generated from the contract wi
 browser responses permit additive fields. Known Problem variants retain correlated code/status/message/parameter
 types. Unknown future errors may display validated safe details but cannot activate known machine behavior.
 
-`npm run server` builds once and runs the existing server/legacy watchers plus the two Vite watch builds. Pilot asset
-outputs stay separate from legacy esbuild outputs. Vue source changes require a browser refresh during development;
-the watch workflow does not host a second application server. After changing contracts/catalogs, rerun
-`npm run prepare:frontend` (or restart `npm run server`) to regenerate their consumers.
+`npm run server` builds once and runs Express with Vite middleware/HMR, the legacy browser watcher and the
+authored-input watcher. Vue edits update through the selected development integration. Contract/catalog edits
+regenerate consumers serially and restart Express after completion. `npm run prepare:frontend` remains a standalone
+check. Production uses built assets in separate directories and does not depend on Vite or other development packages.
+Both Vite build commands explicitly select production compilation, including when the initial build runs inside the
+development workflow. Vue source serving still uses development compilation. Client and SSR artifacts must come from
+the same compilation mode and release; replacement tests swap the complete binary folder together.
+Development and both builds explicitly select the maintained `vite.config.mts`; source initialization also binds the
+project root. An emitted sibling config must not silently take precedence or make startup depend on the caller's directory.
+Nodemon ignores authored locale catalogs as well as generated consumers: the authored-input watcher publishes its
+completion marker after both generators finish, and that marker is the sole restart trigger for those input edits.
+
+Express owns page navigation, native static files and help assets. The renderer passes only source entry/style URLs
+through Vite's HTML transform; inserting the rendered component tree afterward keeps those Express URLs unchanged.
+Vite middleware handles its `/app/` namespace and restores the request URL on fallthrough. Do not prepend its base
+before the transform or transform the complete server-rendered page: either can break hydration while leaving a
+convincing but inactive HTML page. Tests must fetch the script/style URLs emitted by the document itself.
 
 `npm run build` generates contracts/catalogs, compiles Express and the legacy browser modules, type-checks both Vue
 entries, builds the client and SSR artifacts, then copies the existing assets/views. The release archive already
@@ -86,26 +100,37 @@ Hidden pages pause reads. Scope and locale guards discard obsolete responses. Re
 respect `Retry-After`; mutations do not retry automatically. A successful command followed by a failed read reports
 that it was saved. A lost mutation response reports uncertainty and requires a fresh read instead of replay.
 
-Metadata reads return a scoped ETag. Saves require `If-Match`: missing review returns 428; stale review returns 412.
+Metadata reads return a scoped comparison token. Saves require `If-Match`: missing review returns 428; a changed
+submitted field returns 412. Disjoint current-value changes can proceed without overwriting one another.
 Only submitted editable fields are changed, with omitted fields distinct from explicit clearing. Dirty input survives
 refresh and locale changes. A stale save exposes original, local and remote values, with explicit review before
 reapplying. Narrowed authority closes or disables the editor rather than submitting hidden fields.
 
-Inline items have their own edit token; ordering has a collection token. Defaults, administrators, header replacement
-and event reassociation use the reviewed settings token. An unrelated assignment does not stale an item draft.
+Inline items have a per-field edit token; ordering has a collection token. Defaults submit only changed audiences.
+Existing administrators have bounded per-row tokens; header/event changes compare their own current fields. An unrelated assignment does not stale an item draft.
 An inline stale write retains the local value and requires explicit review of the refreshed item. Settings and quick
 add also retain failed drafts. Commands whose response is lost are never automatically repeated. Pending writes and
 unsaved fields prevent silent navigation/discard; changing identity clears data belonging to the previous identity.
 
-The revision covers metadata writers in both frontends, including native title/description/property updates and
-packing event/archive context transitions. Assignment changes do not stale metadata editors. The v1 assignment
-command serializes current parent/list/item context and is naturally idempotent for desired self-membership, including
-historical duplicate-row removal. This does not claim that all legacy assignment endpoints have acquired the new
-aggregate locking policy, or that permission revocation/regrant has a persisted monotonic revision.
+Approved D2 removed the unreleased packing metadata counter/migration in place. Native and v1 packing writers
+share controller-owned operations and capacity coordination. Current-value comparisons cover all useful editable
+fields, including setup; fresh authorization remains server-owned. Desired self-membership is naturally idempotent,
+including historical duplicate-row removal. No edit history, relationship counter or operation tracking is added.
+
+A successful read cannot confirm an unknown creation. Quick-add keeps its input blocked until explicit review of
+the refreshed rows; list creation permits acknowledged departure to check the overview. Identity/email uncertainty
+also retains input and provides acknowledged exit. Confirmed saves remain saved when the subsequent read fails.
+Known error keys/parameters are retained and translated reactively when the language changes.
+
+Deployment identity is separate from API compatibility. Ordinary session refresh detects replacement of the current
+release folder; compatible loaded forms may finish before a clean idle view reloads once. A retired lazy chunk
+defers reload while any mounted draft or command needs attention. Incompatible commands reject before side effects.
+No retained old asset directories, shared asset store, service worker or persisted draft recovery is required.
 
 ## Localization and native rendering
 
-English and German pilot UI/API messages come from the same catalog path and typed translator. To add a language,
+English and German pilot UI/API messages come from the same catalog path and typed translator. The restored
+primary Vue binding is i18next-vue over that shared core; translation state is application/request isolated. To add a language,
 add one complete catalog using the English catalog's namespaces, keys, parameter declarations and language metadata,
 set its fixed `help.directory`, and add the complete translated article corpus there. Then regenerate. Discovery,
 validation and typed locale choices follow automatically. Text values remain plain text;
@@ -124,16 +149,16 @@ figures with its own text, captions and alt descriptions. See [Help Visual Asset
 Help GET links and search forms render the same Vue component tree on the server and hydrate into client navigation.
 They work with JavaScript disabled. The existing fixed-source help controller still owns document loading, validation
 and trusted rendered HTML. Each server render owns its session, locale, router and query state; bootstrap JSON escapes
-script delimiters. Packing initially renders a loading shell and loads its authorized content through the API.
-Packing and identity forms require JavaScript in this opt-in slice. Their native no-JavaScript rendering has not
-been migrated; the no-JavaScript comparison and fallback guarantee here apply to help only.
+script delimiters. The mixed overview renders authorized regions and native GET navigation through the same components. Required
+identity and guest forms retain guarded native POST/redirect/GET adapters using the same controller operations.
+Packing inline/item/settings controls retain their existing JavaScript requirement and load through the API.
 
 ## Schema and verification boundaries
 
-Existing installations need the reviewed [packing revision migration](../src/migrations/1791072000000-AddPackingMetadataRevision.ts)
-before running this build. Follow [Database and Migrations](DATABASE.md): inspect the effective target, back up and run
-the settings-aware migration wrapper. No migration or reset is authorized against shared data by a pilot test command.
-Rollback must retain compatible legacy revision writers or disable v1 conditional writes while older binaries run.
+This unreleased v1 pilot is corrected in place under approved D3. Lightweight comparison adds no persistent
+packing schema. The earlier unreleased metadata migration was removed; do not create another API version or
+replacement migration for that abandoned pilot-only column. Any already-applied disposable test schema may be
+rebuilt only through its guarded procedure. Shared database changes require the normal [database guide](DATABASE.md).
 
 The focused application checks are:
 
@@ -144,8 +169,8 @@ The focused application checks are:
   its focused dirty input while a localized list response is delayed. The rendered shell/help tests cover navigation,
   the help table of contents and the server-rendered selected locale; packing component tests cover empty/header
   states, authorized parent links and Everyone's existing-assignment exception.
-- Integration: `tests/integration/packing-api.spec.ts` and `packing-metadata-migration.spec.ts` exercise real locks,
-  revisions, admission, capacity, duplication and migration preservation in a guarded disposable schema.
+- Integration: `tests/integration/packing-api.spec.ts` and `packing-management-api.spec.ts` exercise real locks,
+  touched-field comparisons, admission, capacity and duplication in a guarded disposable schema.
 - Browser/HTTP: `tests/e2e/frontend-pilot.spec.ts` and `frontend-pilot-api.spec.ts` exercise the built application,
   session/privacy/CSRF, stale writes, uncertain responses, mobile actions and JavaScript-disabled help.
 
@@ -167,7 +192,10 @@ The existing optional `scripts/capture-frontend-baseline.cjs` supports `FRONTEND
 explicitly disposable local E2E environment through `E2E_DOTENV_FILE` and acknowledge its schema name through
 `FRONTEND_BASELINE_DISPOSABLE_DATABASE`, following the [Testing Guide](TESTING_GUIDE.md),
 build first, then run the script. It requires credentials restricted to that single schema, adds synthetic fixtures through real HTTP
-routes and runs its own built server without resetting the schema or running process-level retention jobs. It
+routes and runs its own built server without resetting the schema or running process-level retention jobs. Set
+`FRONTEND_BASELINE_RUNTIME=development` to compare source Express, Vue SSR and the Vite browser graph instead.
+The same database/grant checks apply; source inputs are fingerprinted alongside built assets. This capture still
+omits startup jobs and watchers, so separately exercise `npm run server` for startup, HMR and input regeneration. It
 captures each current/pilot pair at 1440×1000 and 390×844, and writes an ignored manifest and side-by-side gallery.
 Open original screenshots as well as the gallery; automatic capture success is not visual approval.
 For the built browser journeys, `E2E_PILOT_STATE_SCREENSHOTS=true` also records desktop/mobile checkpoints for
@@ -180,7 +208,7 @@ create the single-use links, which remain in memory and are redacted from saved 
 
 Set `FRONTEND_BASELINE_TWO_PHASE=1` only when recording a before/after correction: after the initial capture reports
 its output directory, rebuild, then write `rebuild.ready` there. The script restarts its server and retains the same
-actors and fixtures for the second phase. Do not change built assets during a capture phase. An existing gallery
+actors and fixtures for the second phase. Do not change built assets or selected runtime sources during a capture phase. An existing gallery
 can be regenerated with `node scripts/capture-frontend-baseline.cjs --gallery <capture directory>` without database
 access. When running Playwright afterward, use a separate `--output` directory so its cleanup preserves the images.
 
@@ -193,46 +221,7 @@ permission and behavior surface.
 
 ## Verification record
 
-The current correction replaces the earlier bounded pilot and its incomplete visual approval. Build/type checks,
-passing narrow tests and isolated pilot screenshots do not establish feature parity. The
-[paired review](frontend-migration/PILOT_PARITY_REVIEW.md) records the frozen-build comparison and its actual limits.
-
-The 7 October 2026 verification uses Chromium and dedicated local MariaDB integration/E2E schemas with separate
-restricted credentials. Integration suites rebuild only their explicitly disposable schema. The capture harness
-and owned built-app server add synthetic records without running schema reset or process-level retention jobs.
-No existing application database is reset. The review record separately identifies an excluded misconfigured
-diagnostic; successful verification uses the explicitly selected disposable targets.
-
-The preceding packing/identity correction passed `npm run build`, both Vue entry type checks and all 837 database-free cases
-across 46 files. The guarded authentication and packing-management persistence suites passed 25 and 10 cases.
-All nine built HTTP checks and all nine browser journeys passed, including binary image transport, typed multipart
-creation, identity admission, private guest-link returns, mobile picker bounds/focus, permission-filtered settings,
-inline conflicts and overview visibility/lifecycle. The paired review records visual evidence separately from these
-application checks.
-
-That correction's frozen-build capture `2026-10-07T16-49-34-114Z` completed 472 screenshots and 15 behavior checks without
-browser errors or failed requests. Every original was visually inspected, including permission-specific desktop/
-mobile packing/settings, identity feedback and all English/German help bodies. Fourteen additional selected
-screenshots cover stale review, uncertain/confirmed saves and cancelled/discarded navigation. The
-[review record](frontend-migration/PILOT_PARITY_REVIEW.md) links the gallery/manifest and retained confirmation
-evidence, records deliberate differences and excludes incomplete or misconfigured diagnostics.
-
-The subsequent mixed-overview and self-contained help-figure fixes passed `npm run build:server` and
-`npm run build:frontend`, including both Vue entry type checks. Focused help and overview regression checks passed.
-Two built-browser smoke journeys covered mixed membership, type filters, personal visibility, event children and
-language-owned figures/full-size links in native and pilot help, including JavaScript-disabled navigation. All 21
-selected desktop/mobile captures and the three final German PNGs were opened individually and inspected without
-finding a regression. Per the maintainer's explicit scope, the full paired comparison was not repeated. These
-targeted results supplement the preceding review; its frozen build is not the current artifact. The review record
-identifies the current fingerprints, checks and remaining execution limits.
-
-A subsequent user-help correction removes implementation information from English and German text, captions and
-navigation pictures. The core documentation instructions now forbid these details in all user-facing content.
-Focused checks cover all 20 articles at desktop/mobile sizes, and individual inspection covers both revised PNGs
-and 16 selected help captures. A reference-table readability regression found during that inspection was corrected
-in the shared help stylesheet and rechecked in native and pilot help. See the review record for this correction's
-evidence and the narrower build/test scope.
-
-Logs, screenshots, manifests and browser reports remain ignored local artifacts under
-`.temp/frontend-foundation/` and `test-results/`. No default application route has moved. Verification covers the
-recorded Chromium sizes and permission states, not other browser engines or a complete application cutover.
+The [paired review record](frontend-migration/PILOT_PARITY_REVIEW.md) owns dated build/test/capture evidence,
+corrected differences, excluded diagnostics and the actual browser/role limits. Its historical accepted pilot
+captures do not approve a later build. Each implementation change still needs the affected paired visual and
+behavior review described above. Reports and screenshots remain ignored local artifacts; no default route has moved.

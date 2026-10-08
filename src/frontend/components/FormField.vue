@@ -2,6 +2,7 @@
 withDefaults(
     defineProps<{
         id: string;
+        name?: string;
         label: string;
         modelValue: string;
         type?: string;
@@ -29,7 +30,7 @@ const emit = defineEmits<{'update:modelValue': [value: string]; focus: []; blur:
         <span v-if="inputIcon" class="input-group-text"><i class="bi" :class="inputIcon" aria-hidden="true"></i></span>
         <input
             :id="id"
-            :name="id"
+            :name="name ?? id"
             :type="type"
             :value="modelValue"
             class="form-control text-bg-dark"

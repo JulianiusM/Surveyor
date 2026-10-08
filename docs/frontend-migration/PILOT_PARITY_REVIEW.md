@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: current
-last-verified: 2026-10-07
+last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: independent complete packing controls and identity flows; corrected native title/description/counter baseline; prior permission-specific paired desktop/mobile comparison; focused mixed-overview and language-owned help-figure corrections; user-facing content cleanup and reference-table readability across English/German help; conditional edits and actual built-app behavior
-source-anchors: scripts/capture-frontend-baseline.cjs; src/frontend/; src/routes/frontendPilot.ts; src/routes/api/v1/; src/modules/packing/api.ts; src/controller/entityAdminController.ts; src/views/modules/module_entity_header.pug; src/views/packing/packing-view.pug; contracts/api/v1/; src/locales/; docs/user-guide/de/; tests/frontend/packing-management-ui.spec.ts; tests/frontend/packing-view.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/integration/packing-management-api.spec.ts; tests/e2e/frontend-pilot.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; docs/FRONTEND_PILOT.md
+verification-scope: development entry/hydration/navigation repair, real source-browser and HMR/restart verification, separate production replacement proof; approved D1–D5 rectification; full 472-image paired role/state review and 15 built behavior checks; focused final identity, native and deployment smoke review; shared-contract, current-value concurrency and final built-browser checks; preceding accepted packing/help evidence retained separately
+source-anchors: src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/frontend/frontend-route-recovery.spec.ts; tests/e2e/frontend-development.spec.ts; scripts/watch-frontend-inputs.mjs; scripts/capture-frontend-baseline.cjs; src/frontend/; src/routes/frontendPilot.ts; src/routes/api/v1/; src/modules/packing/api.ts; src/controller/entityAdminController.ts; src/views/modules/module_entity_header.pug; src/views/packing/packing-view.pug; contracts/api/v1/; src/locales/; docs/user-guide/de/; tests/frontend/packing-management-ui.spec.ts; tests/frontend/packing-view.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/integration/packing-management-api.spec.ts; tests/e2e/frontend-pilot.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; docs/FRONTEND_PILOT.md
 next-review: pilot-UI-behavior-change-or-feature-cutover
 -->
 
@@ -85,9 +85,205 @@ An implicit packing-only filter previously suppressed otherwise valid membership
 was a defect: unfiltered overview regions now include activity, drivers, event, packing and survey records, with an
 explicit type filter. Event-container administration belongs to the subsequent event slice; packing child actions
 remain inside the pilot and other feature cards preserve their existing destinations.
-Packing and identity require JavaScript in this slice; only help retains an implemented and compared no-JavaScript
-fallback. The native navbar's unrelated contextual-Help highlighting defect is recorded once as IMP-039 in the
+Packing item/settings interactions retain their existing JavaScript requirement. The approved rectification adds
+same-component native overview and identity adapters; their current execution evidence is recorded separately from
+the preceding accepted capture below. The native navbar's unrelated contextual-Help highlighting defect is recorded once as IMP-039 in the
 [remediation register](../documentation-remediation.yml); it is not reproduced in the independent router.
+
+## Approved foundation rectification, 2026-10-08
+
+The [approved D1–D5 ledger](../FRONTEND_FOUNDATION_DESIGN.md#authorized-rectification-2026-10-07)
+governs this change. i18next-vue implements the primary translation choice. The original rectification evidence
+below exercised the built runtime; it did **not** establish normal development hydration or HMR. The subsequent
+development-runtime correction records that gap and its verification separately. Feature-owned API
+modules, named query families and shared controls replace pilot duplication. Authored operation policies, decimal
+assignment IDs and generated validation/types keep the unreleased v1 contract corrected in place.
+
+Packing uses current-value comparisons under shared controller-owned locks, including setup fields. Sparse metadata,
+item, audience and administrator changes preserve unrelated edits; header/event/order operations compare their own
+state. Capacity check/write and assignment removal remain atomic. The unreleased metadata counter/migration is
+removed. Unknown creation or mail outcomes require review or acknowledged departure; commands are never replayed.
+Compatible loaded edits can finish after a current-folder replacement, with a single clean reload and no retained
+old asset directories. Known feedback and initial identity denials translate reactively through the shared catalog.
+
+The full frozen comparison is
+[`2026-10-07T22-38-11-444Z`](../../test-results/frontend-baseline/2026-10-07T22-38-11-444Z/index.html), with its
+[manifest](../../test-results/frontend-baseline/2026-10-07T22-38-11-444Z/manifest.json): all **472 originals**, all
+**15 behavior checks**, zero browser errors and zero failed requests. It covers 198 native/pilot pairs and
+76 German supplements at both recorded sizes. Review accounted for every original:
+
+| Review scope | Unique originals |
+|---|---:|
+| Packing, creation, editors and mixed overview | 76 |
+| Permissions, settings, linked/archive states and German core supplements | 220 |
+| Help articles, identity and navigation | 176 |
+| Total | 472 |
+
+Reviewers inspected original pixels, including readable help crops. Exact PNG-byte or decoded-pixel comparisons
+corroborated unchanged final views against the individually reviewed diagnostic images; changed images and final
+representative roles were opened again. Random fixture account names and tiny native border/hover differences are
+recorded separately from regressions. All 108 help images were unchanged. Independent article checks covered all
+40 language/viewport pairs: equal text, image source/alt and document height, with every picture loaded.
+The ignored inventories are `test-results/rectification/visual-core-inventory.json`, `visual-roles-B-review.json`
+and `visual-help-identity-coverage.json`; the detailed reports retain observations and limits.
+
+The earlier `2026-10-07T22-19-01-994Z` diagnostic is not an accepted build: it exposed header hydration and one-time
+activation-feedback replay defects. Those were corrected before the successful full comparison. Built-browser
+stale-review testing also exposed an undersized conditional-read header bound; valid edit tags now remain readable
+after rejection. Native logout correctly admits its deliberately body-free operation.
+
+The final localization supplement is
+[`2026-10-07T22-58-26-483Z`](../../test-results/frontend-baseline/2026-10-07T22-58-26-483Z/index.html): all 32 identity
+originals were inspected in 16 native/pilot pairs, with no new regression. After the final native guest-link spacing
+correction, both Vue entries were rebuilt/type-checked and all 18 production smoke screenshots were opened. Real
+initial CSRF and reset denials changed English to German in place without replacing the alert/document, exposing a
+form or making another admission read. Other full-matrix views remain covered by the preceding frozen comparison.
+
+| Executed check | Result |
+|---|---|
+| Complete application build; final frontend rebuild/type checks | Passed |
+| Database-free Vitest unit/frontend layers after generated inputs were prepared by the build | 52 files / 876 tests passed; final spacing-only correction verified by rebuild and browser smoke |
+| Guarded packing management, API and workflow integration runs | 17, 13 and 16 tests passed respectively; 46 across individual runs |
+| Final built HTTP/browser journeys | All 19 unique cases passed: 17 in the full run and two in focused completion after stale overview test selectors/caption expectations were corrected |
+| Isolated production/native/localization/replacement smoke | All eight checks passed; 18 screenshots inspected; one tracked native browser regression also passed |
+
+Four overlapping final browser journeys were rerun to retain fresh feedback evidence under
+`test-results/rectification/final-feedback-evidence/`; all four passed. All 14 desktop/mobile checkpoint originals
+were opened at original resolution. Metadata review values/choices, mobile scrolling, inline stale review,
+unknown-assignment versus confirmed-save refresh feedback, and cancelled/discarded drafts remain readable and
+reachable. Attachment copies are byte-identical and are not counted again. The actual report attachment records
+two browser `confirm` events with "Discard changes?": first dismissed, then accepted. The final review inventory
+is retained under `test-results/rectification/`; browser dialog chrome is not fabricated.
+
+The isolated release contains production dependencies only and rejects dependency fallback into the workspace.
+All 20 old hashed asset paths were absent after replacement. An actual retired lazy-route request returned 404;
+a clean tab reloaded exactly once. A dirty edit reloaded zero times before saving, saved once, then reloaded once.
+Copy-back rollback added one reload and retained both saved rows. Evidence is
+[`package-smoke/evidence.json`](../../test-results/rectification/package-smoke/evidence.json).
+The final installed build identity is `975848c3d54c65b8a00df67a`, with client `entry-client-DIO5Bpx0.js` and unchanged
+`entry-client-DTu8FiwB.css`; API/catalog identifiers are `c26b4208da57` / `2433a19a92d7`.
+
+No schema initializer/reset was run during browser evidence collection. Targets remain the restricted disposable
+schemas at port 33318. Owned verification servers are stopped. The advisory documentation report found no broken
+links, missing npm commands or stale terms; its remaining findings concern the existing source-baseline/reference
+allowance, ignored temporary reports and retained authoring-reference image. It is not a clean report or an
+application gate. Canonical contribution guidance now records decision approval, controller/DBAL ownership, shared
+contracts/components, native fallback, concurrency, localization, release recovery and paired verification.
+Completed archival/overview/property-modal plans are retained as implemented design records, preserving their unique
+rationale rather than presenting them as future work. Broader feature cutover, full accessibility certification and
+a live external OIDC round trip remain outside this bounded review.
+
+## Development-runtime correction, 2026-10-08
+
+The maintainer's ordinary development run exposed a gap in the preceding built-runtime acceptance: the server
+rendered a page, but the browser entry could not load. Vite applied its `/app/` base to an already prefixed source
+URL and to Express-owned page/assets URLs. That produced `/app/app/src/...` requests, HTML error responses in place
+of JavaScript and an inert server-rendered interface. The earlier URL test searched for a valid substring and then
+fetched a hardcoded path; it did not verify the actual emitted script URL.
+
+The renderer now gives Vite an unprefixed, minimal entry shell and inserts the authored Express head/body after
+transformation. Vite owns `/app/`; Express retains native styles, images, help assets and navigation URLs. Middleware
+restores the request URL on fallthrough. Tests fetch the exact emitted JavaScript/CSS URLs and verify status, MIME,
+single-prefix behavior and untouched native paths. Production does not initialize Vite, even with the development
+flag accidentally enabled.
+
+Actual browser execution also exposed three separate startup/navigation defects. A help-language query replacement
+could cancel an already pending lazy identity navigation; query synchronization now respects the pending destination.
+Firefox's dynamic-import failure wording is recognized by the existing guarded release recovery. Text entered into
+server-rendered controls before the entry loaded could be lost during hydration; the shared mount helper restores
+dirty editable text on surviving controls through their normal input handlers. It neither replays commands nor
+serializes passwords. Deferred-route and delayed-entry browser checks exercise these cases.
+
+Generated contracts/catalogs are excluded from Vite's source watcher, and nodemon excludes the authored locale
+directory. The serialized generator completion marker owns the server restart. An actual catalog edit and its
+restoration each caused generation in order followed by exactly one restart. CSS and Vue-component edits, including
+their restoration, applied through HMR without replacing the browser document. The ordinary `npm run server`
+workflow supplied this evidence; a capture-only source server cannot establish startup/watch behavior.
+
+Both frontend build commands explicitly select production mode. Otherwise `npm run server` can inherit development
+mode during its preparatory build and compile Vue's client and server differently from a separately built release.
+Replacement verification swaps the entire binary folder, including the corresponding server-renderer bundle.
+Mixing development-rendered HTML with a production client is not a valid replacement test.
+
+Final cleanup found an untracked compiler-emitted `vite.config.mjs` equivalent to the maintained TypeScript config.
+Vite's default selection could prefer that sibling and later drift silently. The generated duplicate was removed;
+both build commands and source initialization now bind `vite.config.mts` explicitly, with an absolute project root.
+The real emitted-assets unit check initializes from an unrelated caller directory and verifies that binding. Both
+unit cases and server/client/SSR type checks passed. The explicit-config frontend rebuild produced byte-identical
+complete client and SSR trees, corroborated in `config-binding-build-proof.json`. This cleanup followed the frozen
+full comparison and changes no view, style or component. Fresh source startup checks verify its runtime boundary.
+Both development cases passed again in Chromium and Firefox after a fresh source start. One intervening Firefox
+attempt failed on the external Bootstrap CDN's CORS/network response; that attempt is retained separately, and the
+unchanged error assertions passed on the repeat. No application error was filtered out.
+
+The structural follow-up keeps feature API facades keyed by the stable app/request transport and gives shared event
+pickers a caller-owned typed data source. Generated wire shapes remain the source for that discovery contract;
+components do not import packing-specific API/query ownership. Purposeful comments explain the hydration, pending
+navigation, namespace and release boundaries in their owning modules.
+
+The full frozen **source-development** comparison is
+[`2026-10-08T04-53-13-491Z`](../../test-results/frontend-baseline/2026-10-08T04-53-13-491Z/index.html), with its
+[manifest](../../test-results/frontend-baseline/2026-10-08T04-53-13-491Z/manifest.json): **472 originals**, all
+**15 behavior checks** passed, and no browser errors, failed asset responses or failed requests. Source, generated
+contract/catalog, renderer, native asset and help inputs stayed frozen throughout collection. The emitted client
+entry was `/app/src/frontend/app/entry-client.ts`, served by the actual Express-integrated Vite runtime.
+
+The review accounts for 76 core packing/create/editor/overview originals, 220 permission/settings/linked/archive
+originals and German supplements, and 176 help/identity/navigation originals. Each scope records the actual original
+paths, hashes, review method, findings and limits under `test-results/development-repair/`. All 220 role originals
+were opened individually, including mobile lower-scroll controls. All 80 article originals are byte-identical to
+the preceding accepted capture; readable crops of their original pixels and all 40 same-language native/pilot DOM
+pairs corroborate opening sections, diagrams, tables, recovery/privacy endings, complete body text and heights.
+Every image loaded. No new visual/control discrepancy was found in the reviewed matrix.
+
+Existing accepted differences are not described as literal pixel identity. They include the language selector,
+explicit Refresh, pristine Save/focus presentation, overview toolbar wrapping and feedback recovery wording. Parent
+event-container global administration remains a documented subsequent slice; its omission already exists in the
+accepted pilot, while packing child operations remain independent and complete. German packing/identity supplements
+are checked for the same permissions, controls and localized layout against the corresponding native English fixture;
+the review does not invent a German native implementation.
+
+The completed ordinary-source browser suite passed **21 cases in Chromium and 21 in Firefox**. The two development
+cases were repeated in each engine after the final build/watch correction. Each engine also passed five focused
+source smoke checks with eight original screenshots. All 16 focused originals and 36 workflow-feedback originals
+were inspected individually; mobile stale review, uncertain outcomes, failed follow-up reads and retained drafts
+remain readable. Evidence is under `test-results/development-repair/`, with the final focused visual inventory in
+`final-visual-state-review.json` and actual watcher observations in `workflow-probes/evidence.json`.
+
+The complete database-free run covered 54 files and 889 tests: 874 passed, while 15 assertions in the existing date
+helper file assumed UTC despite the parent Windows timezone. That entire file then passed all 138 tests with
+`TZ=UTC`; all 889 unique tests passed across those runs. This is not a claim that the first complete run passed.
+Server and both Vue entry type checks and the complete application build passed. No unrelated date behavior changed.
+
+The supplied `file:///` warning was not reproduced: the checked emitted links/assets in both engines and the
+maintained help/frontend corpus contain no such URL. It has no established cause in this review.
+
+The final isolated production checks passed **eight cases in each engine**; all **36 final originals** were opened
+and inspected. They use production dependencies only, reject workspace dependency fallback, and prove that a
+production start does not load Vite even with `SURVEYOR_FRONTEND_DEV=1`. All 20 old hashed paths disappeared after
+the complete-folder swap. An actual missing lazy route caused exactly one clean-tab reload; a mounted dirty edit
+saved successfully before its one reload. Copy-back rollback then caused one additional reload and retained the
+saved rows. Both engines reported no browser errors. The exact original release tree was restored: 808 files,
+SHA-256 `06d6296bc3d88f7826bed559cf1fde2544fccc46f62bc57941808e9e93914e83`.
+
+These production runs used build `74b214b5d3e3bf3b3fa57184`, replacement `f76bbd873e48d065c821accc` and rollback to
+the original. The workspace client is `entry-client-BnIkXWaz.js`, with unchanged `entry-client-DTu8FiwB.css` and
+API/catalog identifiers `c26b4208da57` / `2433a19a92d7`. Exact per-engine checks and image hashes are in
+`test-results/development-repair/package-final-visual-review.json`; diagnostic attempts are excluded.
+
+After canonical config binding, `npm run build:server` passed and regenerated the latest server. Only
+`modules/frontendDevelopment.js` and its source map changed in the distribution; contracts/catalog and full
+client/SSR trees stayed unchanged. Those generated helper artifacts were copied into the isolated package and all
+808 files matched the current distribution. The newly compiled helper then proved the production skip with Vite
+absent, the development flag enabled and workspace dependency fallback forbidden. This focused final proof is in
+`config-binding-final-proof.json`; the earlier full-folder rollback fingerprint above describes that preceding run.
+All owned verification servers are stopped. The maintainer's server at port 3010 was not controlled or restarted,
+and no shared application database or schema was reset during this correction.
+
+The advisory documentation report again has no broken links, missing npm commands or stale terms. Its 21 structure
+findings and one help-authoring finding remain the existing source-baseline/reference allowance, ignored temporary
+reports and retained authoring-reference image. The report is not clean and is not an application gate. Its generated
+outputs are retained under ignored verification evidence. No user-facing help text or picture changed in this repair.
 
 ## Preceding full packing and help review
 

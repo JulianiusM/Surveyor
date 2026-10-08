@@ -2,12 +2,16 @@
 import {ref, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
 import {usePilot} from '../../app/context';
+import {usePageTitle} from '../../composables/pageTitle';
 import OverviewRegion from './OverviewRegion.vue';
 const context = usePilot();
 const {messages} = context;
+usePageTitle(() => messages.value.t('app.overview'));
 const hidden = ref<Record<string, boolean>>({});
 const open = ref<Record<string, boolean>>({participant: true, owner: true});
-const counts = ref<Record<string, {total: number; hidden: number}>>({});
+const counts = ref<Record<string, {total: number; hidden: number}>>(Object.fromEntries(
+    (context.bootstrap.session.context === context.session.value?.context ? context.bootstrap.overview ?? [] : [])
+        .map(region => [region.collection, {total: region.totalEntities, hidden: region.hiddenEntities}])));
 const route = useRoute();
 const router = useRouter();
 watch(
@@ -32,6 +36,13 @@ async function toggleHidden(collection: string): Promise<void> {
         delete query[prefix + 'event'];
     } else query[prefix + 'open'] = '1';
     await router.push({query});
+}
+function hiddenHref(collection: string): string {
+    const query = {...route.query};
+    const prefix = collection + '_hidden_';
+    if (hidden.value[collection]) { delete query[prefix + 'open']; delete query[prefix + 'event']; }
+    else query[prefix + 'open'] = '1';
+    return router.resolve({path: '/frontend-pilot', query}).href;
 }
 </script>
 <template>
@@ -118,6 +129,7 @@ async function toggleHidden(collection: string): Promise<void> {
                                     <OverviewRegion
                                         :collection="collection"
                                         region="main"
+                                        :active="open[collection]"
                                         @counts="
                                             (total, hiddenCount) =>
                                                 updateCounts(collection, total, hiddenCount)
@@ -125,18 +137,19 @@ async function toggleHidden(collection: string): Promise<void> {
                                     />
                                     <div v-if="counts[collection]?.total" class="mt-4">
                                         <h3 class="h5">
-                                            <button
+                                            <a
                                                 class="btn btn-outline-secondary"
                                                 :aria-expanded="!!hidden[collection]"
                                                 :aria-controls="'overview-' + collection + '-hidden'"
-                                                @click="toggleHidden(collection)"
+                                                :href="hiddenHref(collection)"
+                                                @click.prevent="toggleHidden(collection)"
                                             >
                                                 <i class="bi bi-archive me-2" aria-hidden="true"></i
                                                 >{{ messages.t('overview.hidden') }}
                                                 <span class="badge bg-secondary ms-2">{{
                                                     counts[collection]?.hidden ?? 0
                                                 }}</span>
-                                            </button>
+                                            </a>
                                         </h3>
                                         <div
                                             v-if="hidden[collection]"
@@ -148,6 +161,7 @@ async function toggleHidden(collection: string): Promise<void> {
                                             <OverviewRegion
                                                 :collection="collection"
                                                 region="hidden"
+                                                :active="open[collection]"
                                                 @counts="
                                                     (total, hiddenCount) =>
                                                         updateCounts(collection, total, hiddenCount)

@@ -1,4 +1,12 @@
 schemas:
+  DeploymentView:
+    description: Current installed frontend build and separately reviewed API compatibility family.
+    type: object
+    additionalProperties: false
+    required: [buildId, apiCompatibility]
+    properties:
+      buildId: {type: string, minLength: 1, maxLength: 128}
+      apiCompatibility: {type: string, minLength: 1, maxLength: 128}
   ApplicationShell:
     description: Public presentation settings used by the existing navigation and footer; never the settings store.
     type: object
@@ -21,7 +29,7 @@ schemas:
   SessionView:
     type: object
     additionalProperties: false
-    required: [kind, context, csrfToken, locale, activeProfile, profiles, loginUrl, logoutUrl, shell]
+    required: [kind, context, csrfToken, locale, activeProfile, profiles, loginUrl, logoutUrl, shell, deployment]
     properties:
       kind: {type: string, enum: [anonymous, account, guest]}
       context: {type: string, minLength: 1, maxLength: 256}
@@ -38,6 +46,7 @@ schemas:
       loginUrl: {type: string, minLength: 1}
       logoutUrl: {type: [string, 'null']}
       shell: {$ref: '#/schemas/ApplicationShell'}
+      deployment: {$ref: '#/schemas/DeploymentView'}
     oneOf:
       - properties:
           kind: {const: anonymous}

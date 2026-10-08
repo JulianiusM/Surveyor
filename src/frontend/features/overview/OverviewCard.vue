@@ -7,13 +7,14 @@ import {usePackingHeader} from '../../composables/packingHeader';
 import {useDropdownPlacement} from '../../composables/dropdownPlacement';
 import ActionButton from '../../components/ActionButton.vue';
 const props = defineProps<{
-    card: components['schemas']['PackingOverviewCard'];
+    card: components['schemas']['OverviewCard'];
     disabled?: boolean;
     expansion?: boolean;
+    expansionHref?: string;
     filtered?: boolean;
 }>();
 const emit = defineEmits<{
-    visibility: [value: components['schemas']['PackingVisibilityInput']['visibility']];
+    visibility: [value: components['schemas']['OverviewVisibilityInput']['visibility']];
     expand: [];
     archive: [restore: boolean];
     remove: [];
@@ -186,12 +187,12 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside));
                     >
                 </div>
             </div>
-            <ActionButton
+            <a
                 v-if="expansion && card.children"
-                class="btn-sm mt-2"
-                variant="outline-primary"
+                class="btn btn-sm mt-2 btn-outline-primary"
                 :aria-label="messages.t('overview.showLinked', {title: card.title})"
-                @click="emit('expand')"
+                :href="expansionHref"
+                @click.prevent="emit('expand')"
                 ><i class="bi bi-collection me-1" aria-hidden="true"></i
                 >{{
                     filtered
@@ -200,7 +201,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside));
                               total: card.children.total,
                           })
                         : messages.t('overview.linkedTotal', {total: card.children.total})
-                }}</ActionButton
+                }}</a
             >
         </div>
         <div v-if="$slots.default" class="card-body border-top entity-overview-children"><slot /></div>

@@ -1,18 +1,27 @@
-import {computed, inject, ref, shallowRef} from 'vue';
+import {computed, inject, ref, shallowRef, watch} from 'vue';
 import type {InjectionKey} from 'vue';
+import {useTranslation} from 'i18next-vue';
 import {QueryClient} from '@tanstack/vue-query';
 import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
 import type {PilotContext, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {Locale, MessageKey} from '../../types/LocalizationTypes';
-import {createTranslator} from '../../modules/localization/translator';
-import {ApiFailure, ObsoleteRequestError, PilotApi} from './api';
+import {createLocalizationInstance, createTranslator, resolveLocale} from '../../modules/localization/translator';
+import {PilotApi} from './api';
+import {ApiFailure, ObsoleteRequestError} from './transport';
+import {createUpdateCoordinator} from './updateCoordinator';
 
-export const pilotContextKey: InjectionKey<PilotContext> = Symbol('Surveyor pilot context');
+// Development SSR can invalidate the context module between app construction and a lazy route
+// import. A stable key spans those module generations; the provided value remains app/request-local.
+export const pilotContextKey: InjectionKey<PilotContext> = Symbol.for('Surveyor pilot context');
 
 export function usePilot(): PilotContext {
     const context = inject(pilotContextKey);
     if (!context) throw new Error('The pilot application context is missing.');
-    return context;
+    const {t} = useTranslation();
+    // Keep the application contract typed while letting the selected Vue binding own
+    // translation dependencies, including changes to resources during development HMR.
+    const messages = computed(() => createTranslator(context.locale.value, t));
+    return {...context, messages};
 }
 
 /** Request-local on the server, application-local in the browser; never a module singleton. */
@@ -20,13 +29,17 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
                                    requestFetch?: typeof fetch): PilotContext {
     const session = shallowRef(bootstrap.session);
     const epoch = ref(0);
-    const locale = ref<Locale>(createTranslator(bootstrap.session.locale).locale);
+    const locale = ref<Locale>(resolveLocale(bootstrap.session.locale));
+    const i18next = createLocalizationInstance(locale.value);
+    const stopLanguage = watch(locale, next => { void i18next.changeLanguage(next); }, {flush: 'sync'});
     const visible = ref(browser && document.visibilityState !== 'hidden');
     const ready = ref(true);
     const hydrated = ref(false);
-    const notice = ref<MessageKey | null>(null);
-    const personalLink = ref<string | null>(null);
-    const messages = computed(() => createTranslator(locale.value));
+    const notice = ref<MessageKey | null>(bootstrap.identityFeedback === 'auth.logoutDone' ? bootstrap.identityFeedback : null);
+    const personalLink = ref<string | null>(bootstrap.personalLink ?? null);
+    const messages = computed(() => createTranslator(locale.value, i18next.getFixedT(locale.value)));
+    const pageTitle = ref('Surveyor');
+    const updates = createUpdateCoordinator(bootstrap.session.deployment, browser);
     const queryClient = new QueryClient({defaultOptions: {
         queries: {
             staleTime: 15_000,
@@ -92,6 +105,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
             if (current.context !== session.value.context) clearIdentity();
             session.value = current;
             locale.value = createTranslator(current.locale).locale;
+            updates.observe(current.deployment);
             ready.value = true;
         }).finally(() => {
             bootstrapRequest = undefined;
@@ -108,6 +122,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         if (!ready.value) return Promise.resolve();
         desiredLocale = nextLocale;
         if (localeRequest) return localeRequest;
+        const finishUpdateCommand = updates.commandStarted();
         // Serialize cookie-writing commands, coalescing clicks to the latest desired preference.
         // A response guard alone cannot prevent an older HTTP response overwriting the newer cookie.
         localeRequest = (async () => {
@@ -121,10 +136,11 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
                 // Locale does not change actor identity: keep dirty editors and their focus mounted.
                 session.value = current;
                 locale.value = createTranslator(current.locale).locale;
+                updates.observe(current.deployment);
                 await queryClient.cancelQueries();
                 await queryClient.invalidateQueries();
             }
-        })().finally(() => { localeRequest = undefined; });
+        })().finally(() => { localeRequest = undefined; finishUpdateCommand(); });
         return localeRequest;
     }
 
@@ -144,7 +160,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     }
 
     function start(): () => void {
-        if (!browser) return () => queryClient.clear();
+        if (!browser) return () => { stopLanguage(); updates.dispose(); queryClient.clear(); };
         hydrated.value = true;
         let checking = false;
         async function revalidate(refreshReads = true): Promise<void> {
@@ -184,13 +200,15 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
             window.removeEventListener('focus', onFocus);
             window.removeEventListener('online', onFocus);
             channel?.close();
+            stopLanguage();
+            updates.dispose();
             identityGuards.clear();
             void queryClient.cancelQueries();
             queryClient.clear();
         };
     }
 
-    return {api, bootstrap, browser, queryClient, session, epoch, locale, visible, hydrated, ready, notice, personalLink, messages,
+    return {api, bootstrap, browser, queryClient, session, epoch, locale, i18next, visible, hydrated, ready, notice, personalLink, messages, pageTitle, updates,
         capture, isCurrent, refreshSession, acceptIdentity, registerIdentityGuard, mayChangeIdentity,
         changeLocale, invalidateIdentity, start};
 }

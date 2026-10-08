@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed} from 'vue';
 import type {components} from '../../../types/api/v1';
+import {permissionLabel} from '../../../modules/localization/permissionLabels';
 import type {MessageKey} from '../../../types/LocalizationTypes';
 import {usePilot} from '../../app/context';
 
@@ -26,7 +27,7 @@ const groups = computed(() =>
         .filter((group) => group.permissions.length),
 );
 function label(key: string): string {
-    return messages.value.t(`permissions.${key}` as MessageKey);
+    return permissionLabel(key, messages.value.t);
 }
 function toggle(bit: number, event: Event): void {
     emit(

@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: archival defaults, coercion, inclusive UTC cutoff, startup validation, and pause behavior source review; D04 accepted from source review and deployment-practice confirmation for settings, precedence, authentication, SMTP, storage, and production safety; controlled execution tracked separately in D04V
-source-anchors: src/modules/entityArchival.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/settings.ts; src/server.ts; src/app.ts; src/modules/email.ts; src/modules/oidc.ts; src/modules/lib/fileCommons.ts; src/modules/invoiceRetention.ts; src/modules/database/services/EventInvoiceService.ts; .github/workflows/ci.yml
+source-anchors: src/modules/entityArchival.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/settings.ts; src/server.ts; src/app.ts; src/modules/email.ts; src/modules/oidc.ts; src/modules/lib/fileCommons.ts; src/modules/invoice/retention.ts; src/modules/database/services/EventInvoiceService.ts; .github/workflows/ci.yml
 next-review: D04V
 -->
 

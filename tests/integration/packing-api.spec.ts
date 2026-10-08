@@ -112,8 +112,11 @@ describe('versioned packing projections and metadata preconditions', () => {
         const saved = await patchPackingMetadata(id, {title: '  Trimmed title  '}, baseline.etag, sessionFor(owner));
         expect(saved.data.values).toEqual({title: 'Trimmed title', description: 'Shared equipment'});
         expect(saved.etag).not.toBe(baseline.etag);
-        await expect(patchPackingMetadata(id, {description: 'Lost update'}, baseline.etag, sessionFor(owner))).rejects.toMatchObject({status: 412});
-        const cleared = await patchPackingMetadata(id, {description: ''}, saved.etag, sessionFor(owner));
+        // Title and description have independent baselines. A title edit must not reject an
+        // untouched description, but a second edit to that same title remains a real conflict.
+        await expect(patchPackingMetadata(id, {title: 'Lost update'}, baseline.etag, sessionFor(owner))).rejects.toMatchObject({status: 412});
+        const independent = await patchPackingMetadata(id, {description: 'Independent description'}, baseline.etag, sessionFor(owner));
+        const cleared = await patchPackingMetadata(id, {description: ''}, independent.etag, sessionFor(owner));
         expect(cleared.data.values).toEqual({title: 'Trimmed title', description: null});
     });
 
@@ -128,24 +131,23 @@ describe('versioned packing projections and metadata preconditions', () => {
         expect(await readPackingMetadata(id, sessionFor(owner))).toEqual(baseline);
     });
 
-    it('invalidates reviewed tokens for every legacy metadata writer, including an ABA edit', async () => {
+    it('compares current values from every legacy writer without tracking historical round trips', async () => {
         const [id] = await createPackingListWithItem(owner.id);
         const original = await readPackingMetadata(id, sessionFor(owner));
         await packingService.updatePackingListTitle(id, 'Intermediate title');
         await packingService.updatePackingListTitle(id, original.data.values.title!);
         expect((await readPackingMetadata(id, sessionFor(owner))).data).toEqual(original.data);
-        await expect(patchPackingMetadata(id, {title: 'Stale'}, original.etag, sessionFor(owner))).rejects.toMatchObject({status: 412});
+        await patchPackingMetadata(id, {title: 'Current value still matches'}, original.etag, sessionFor(owner));
         const writers = [
-            () => packingService.updatePackingListDescription(id, 'Service description'),
-            () => packingController.updateDescription(id, {description: 'Legacy description'}),
-            async () => packingController.updateProperties((await packingService.getPackingListById(id))!, {title: 'Legacy form title'}),
+            {field: 'description', run: () => packingService.updatePackingListDescription(id, 'Service description')},
+            {field: 'description', run: () => packingController.updateDescription(id, {description: 'Legacy description'})},
+            {field: 'title', run: async () => packingController.updateProperties((await packingService.getPackingListById(id))!, {title: 'Legacy form title'})},
         ];
         for (const write of writers) {
             const before = await readPackingMetadata(id, sessionFor(owner));
-            await write();
-            await expect(patchPackingMetadata(id, {description: 'Stale'}, before.etag, sessionFor(owner))).rejects.toMatchObject({status: 412});
+            await write.run();
+            await expect(patchPackingMetadata(id, {[write.field]: 'Stale'}, before.etag, sessionFor(owner))).rejects.toMatchObject({status: 412});
         }
-        expect((await AppDataSource.getRepository(PackingList).findOneByOrFail({id})).metadataRevision).toBe(5);
     });
 
     it('rechecks grants and binds an edit token to the admitted profile', async () => {
@@ -155,44 +157,44 @@ describe('versioned packing projections and metadata preconditions', () => {
         const editorBaseline = await readPackingMetadata(id, sessionFor(editor));
         await expect(patchPackingMetadata(id, {title: 'Other actor'}, editorBaseline.etag, sessionFor(participant))).rejects.toMatchObject({status: 412});
         await adminService.updateAdminPerms('packing', id, editor.id, PERM.EDIT_TITLE | PERM.EDIT_DESC);
-        await expect(patchPackingMetadata(id, {title: 'Changed scope'}, editorBaseline.etag, sessionFor(editor))).rejects.toMatchObject({status: 412});
+        await patchPackingMetadata(id, {title: 'Still authorized'}, editorBaseline.etag, sessionFor(editor));
         const beforeRevocation = await readPackingMetadata(id, sessionFor(editor));
         await adminService.removeAdmin('packing', id, editor.id);
         await expect(patchPackingMetadata(id, {title: 'Revoked'}, beforeRevocation.etag, sessionFor(editor))).rejects.toMatchObject({status: 403});
         expect((await readPackingMetadata(id, sessionFor(editor))).data.values).toEqual({});
     });
 
-    it('invalidates tokens after parent and lifecycle round trips, while preserving content', async () => {
+    it('allows unchanged setup values after parent and lifecycle round trips with fresh authorization', async () => {
         const [id] = await createPackingListWithItem(owner.id);
         const eventId = await createIntegrationEvent(owner.id, 'Packing parent context');
         const baseline = await readPackingMetadata(id, sessionFor(owner));
         await changeEntityEvent('packing', (await packingService.getPackingListById(id))!, {eventId, expectedEventId: null}, sessionFor(owner));
         await changeEntityEvent('packing', (await packingService.getPackingListById(id))!, {eventId: null, expectedEventId: eventId}, sessionFor(owner));
         expect((await readPackingMetadata(id, sessionFor(owner))).data).toEqual(baseline.data);
-        await expect(patchPackingMetadata(id, {title: 'Before relink'}, baseline.etag, sessionFor(owner))).rejects.toMatchObject({status: 412});
+        await patchPackingMetadata(id, {title: 'After relink'}, baseline.etag, sessionFor(owner));
         await changeEntityEvent('packing', (await packingService.getPackingListById(id))!, {eventId, expectedEventId: null}, sessionFor(owner));
         for (const reference of [{type: 'packing' as const, id}, {type: 'event' as const, id: eventId}]) {
             const before = await readPackingMetadata(id, sessionFor(owner));
             await archiveEntity(reference, {}, sessionFor(owner));
             await restoreEntity(reference, {}, sessionFor(owner));
             expect((await readPackingMetadata(id, sessionFor(owner))).data).toEqual(before.data);
-            await expect(patchPackingMetadata(id, {title: 'Before archive'}, before.etag, sessionFor(owner))).rejects.toMatchObject({status: 412});
+            await patchPackingMetadata(id, {title: `${before.data.values.title} revised`}, before.etag, sessionFor(owner));
         }
     });
 
-    it('advances child edit revisions with an automatic parent archive and only once per archive', async () => {
+    it('refreshes inherited archive presentation without conflicting with unchanged text fields', async () => {
         const [id] = await createPackingListWithItem(owner.id);
         const eventId = await createIntegrationEvent(owner.id, 'Automatic packing archive');
         await eventService.updateEventDates(eventId, '2000-01-01', '2000-01-02');
         await changeEntityEvent('packing', (await packingService.getPackingListById(id))!, {eventId, expectedEventId: null}, sessionFor(owner));
         const before = await readPackingMetadata(id, sessionFor(owner));
-        const beforeRevision = (await AppDataSource.getRepository(PackingList).findOneByOrFail({id})).metadataRevision;
         await archiveExpiredEntities(0, new Date('2000-02-01T00:00:00Z'));
         expect((await readPackingMetadata(id, sessionFor(owner))).data.inheritedArchived).toBe(true);
-        expect((await AppDataSource.getRepository(PackingList).findOneByOrFail({id})).metadataRevision).toBe(beforeRevision + 1);
+        const archived = await readPackingMetadata(id, sessionFor(owner));
+        expect(archived.etag).not.toBe(before.etag);
         await archiveExpiredEntities(0, new Date('2000-02-01T00:00:00Z'));
-        expect((await AppDataSource.getRepository(PackingList).findOneByOrFail({id})).metadataRevision).toBe(beforeRevision + 1);
-        await expect(patchPackingMetadata(id, {title: 'Before sweep'}, before.etag, sessionFor(owner))).rejects.toMatchObject({status: 412});
+        expect(await readPackingMetadata(id, sessionFor(owner))).toEqual(archived);
+        await patchPackingMetadata(id, {title: 'After sweep'}, before.etag, sessionFor(owner));
     });
 });
 

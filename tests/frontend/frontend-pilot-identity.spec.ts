@@ -4,11 +4,13 @@ import {flushPromises, mount} from '@vue/test-utils';
 import {defineComponent} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
+import I18NextVue from 'i18next-vue';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
 import IdentityPage from '../../src/frontend/features/identity/IdentityPage.vue';
 import PackingGuestPage from '../../src/frontend/features/identity/PackingGuestPage.vue';
-import PackingHome from '../../src/frontend/features/packing/PackingHome.vue';
+import PackingHome from '../../src/frontend/features/overview/OverviewPage.vue';
 import AppHeader from '../../src/frontend/components/AppHeader.vue';
+import {problemMessage} from '../../src/frontend/composables/feedback';
 import type {components} from '../../src/types/api/v1';
 import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
 import {render} from '../../src/frontend/app/entry-server';
@@ -16,7 +18,7 @@ import {render} from '../../src/frontend/app/entry-server';
 const profileId = '11111111-1111-4111-8111-111111111111';
 const eventId = '22222222-2222-4222-8222-222222222222';
 const session: components['schemas']['SessionView'] = {
-    kind: 'account', context: 'identity-ui-context-1234567890', csrfToken: 'identity-ui-csrf-1234567890', locale: 'en',
+    kind: 'account', deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, context: 'identity-ui-context-1234567890', csrfToken: 'identity-ui-csrf-1234567890', locale: 'en',
     activeProfile: {id: profileId, name: 'Organizer'}, profiles: [{id: profileId, name: 'Organizer'}],
     loginUrl: '/users/login', logoutUrl: '/users/logout', shell: {version: 'fixture', imprintUrl: '/imprint',
         privacyPolicyUrl: '/privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'},
@@ -53,7 +55,7 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
     await router.push(path);
     await router.isReady();
     const wrapper = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
-        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}]],
+        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
         provide: {[pilotContextKey as symbol]: context},
     }});
     cleanups.push(async () => { wrapper.unmount(); await context.queryClient.cancelQueries(); context.queryClient.clear(); });
@@ -62,6 +64,28 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
 }
 
 describe('identity forms and packing overview navigation', () => {
+    it('retranslates initial identity and non-token reset denials in their mounted message region', async () => {
+        const problem: components['schemas']['Problem'] = {type: 'about:blank', title: 'Forbidden', status: 403,
+            code: 'FORBIDDEN', messageKey: 'api:errors.FORBIDDEN', params: {},
+            detail: 'You do not have permission for this action.', requestId: 'localized-denial'};
+        for (const path of ['/frontend-pilot/users/login', '/frontend-pilot/users/reset-password/fixture-token']) {
+            const initial = path.endsWith('/login') ? {identityProblem: problem} : {passwordReset: problem};
+            const {wrapper, context, request} = await mounted(path, async () => {
+                throw new Error('Initial admission must not fetch again');
+            }, {initialUrl: path, ...initial});
+            const alert = wrapper.get('[role="alert"]').element;
+            expect(alert.textContent).toBe('You do not have permission for this action.');
+            context.locale.value = 'de';
+            await flushPromises();
+            expect(wrapper.get('[role="alert"]').element).toBe(alert);
+            expect(alert.textContent).toBe('Du hast keine Berechtigung für diese Aktion.');
+            expect(wrapper.find('form').exists()).toBe(false);
+            expect(request).not.toHaveBeenCalled();
+            const future: components['schemas']['SafeProblemDetails'] = {type: 'urn:future:problem', title: 'Future error',
+                status: 403, detail: 'A future server supplied this safe explanation.', requestId: 'future-denial'};
+            expect(problemMessage(context.messages.value, future)).toBe(future.detail);
+        }
+    });
     it('reads the session after an uncertain identity request without claiming failure or replaying it', async () => {
         const {wrapper, request, router} = await mounted('/frontend-pilot/users/login', async req => {
             if (req.method === 'POST') throw new TypeError('Response lost');
@@ -81,16 +105,28 @@ describe('identity forms and packing overview navigation', () => {
         vi.stubGlobal('confirm', confirm);
         await router.push('/frontend-pilot/users/forgot-password');
         expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login');
+        expect(wrapper.get<HTMLInputElement>('#username').element.value).toBe('account');
+        expect(wrapper.get('form button[type="submit"]').attributes('disabled')).toBeDefined();
         confirm.mockReturnValue(true);
         await router.push('/frontend-pilot/users/forgot-password');
+        await flushPromises();
         expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/forgot-password');
         expect(request.mock.calls.map(([req]) => (req as Request).method)).toEqual(['POST', 'GET']);
+        expect(wrapper.get<HTMLInputElement>('#username').element.value).toBe('');
+        expect(wrapper.get('form button[type="submit"]').attributes('disabled')).toBeUndefined();
+        expect(wrapper.find('.alert-warning').exists()).toBe(false);
+        await wrapper.get('#username').setValue('another-account');
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(request.mock.calls.map(([req]) => (req as Request).method)).toEqual(['POST', 'GET', 'POST']);
     });
 
     it('refreshes guest session and entry after response loss without creating another guest', async () => {
-        const {wrapper, request} = await mounted(`/frontend-pilot/packing/${eventId}/guest`, async req => {
+        const {wrapper, request, router} = await mounted(`/frontend-pilot/packing/${eventId}/guest`, async req => {
             if (req.method === 'POST') throw new TypeError('Response lost');
-            return json(req.url.endsWith('/session') ? session : {id: eventId, title: 'Guest fixture'});
+            return json(req.url.endsWith('/session') ? session : {
+                id: new URL(req.url).pathname.split('/').at(-2), title: 'Guest fixture',
+            });
         });
         await wrapper.get('#guest-name').setValue('Guest name');
         await wrapper.get('form').trigger('submit');
@@ -103,6 +139,23 @@ describe('identity forms and packing overview navigation', () => {
         expect(requests.filter(req => req.method === 'GET').map(req => new URL(req.url).pathname))
             .toEqual([`/api/v1/packing-lists/${eventId}/guest`, '/api/v1/session', `/api/v1/packing-lists/${eventId}/guest`]);
         expect(wrapper.get('form button[type="submit"]').attributes('disabled')).toBeDefined();
+        const confirm = vi.fn(() => false);
+        vi.stubGlobal('confirm', confirm);
+        await router.push(`/frontend-pilot/packing/${profileId}/guest`);
+        expect(router.currentRoute.value.params.listId).toBe(eventId);
+        expect(wrapper.get<HTMLInputElement>('#guest-name').element.value).toBe('Guest name');
+        confirm.mockReturnValue(true);
+        await router.push(`/frontend-pilot/packing/${profileId}/guest`);
+        await flushPromises();
+        expect(wrapper.get<HTMLInputElement>('#guest-name').element.value).toBe('');
+        expect(wrapper.get('form button[type="submit"]').attributes('disabled')).toBeUndefined();
+        expect(request.mock.calls.map(([req]) => req as Request).filter(req => req.method === 'POST')).toHaveLength(1);
+        await wrapper.get('#guest-name').setValue('Different guest');
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(request.mock.calls.map(([req]) => req as Request).filter(req => req.method === 'POST')
+            .map(req => new URL(req.url).pathname))
+            .toEqual([`/api/v1/packing-lists/${eventId}/guest`, `/api/v1/packing-lists/${profileId}/guest`]);
     });
 
     it('retains registration password criteria while login/reset keep their native rules', async () => {
@@ -187,7 +240,7 @@ describe('identity forms and packing overview navigation', () => {
             messageKey: 'api:errors.FORBIDDEN', params: {}};
         const {context, router, request} = await mounted('/frontend-pilot/users/login', async () => json(problem, 403));
         context.session.value = {...session, profiles: [...session.profiles, {id: eventId, name: 'Other profile'}]};
-        const header = mount(AppHeader, {attachTo: document.body, global: {plugins: [router],
+        const header = mount(AppHeader, {attachTo: document.body, global: {plugins: [router, [I18NextVue, {i18next: context.i18next}]],
             provide: {[pilotContextKey as symbol]: context}}});
         try {
             const confirm = vi.fn(() => false);
@@ -354,7 +407,7 @@ describe('identity forms and packing overview navigation', () => {
     it('opens hidden regions from initial and same-page query navigation without losing their filters', async () => {
         const {wrapper, router, request} = await mounted(`/frontend-pilot?owner_hidden_q=equipment&owner_hidden_event=${eventId}`, async request => {
             const query = new URL(request.url).searchParams;
-            const value: components['schemas']['PackingOverviewRegion'] = {
+            const value: components['schemas']['OverviewRegion'] = {
                 collection: query.get('collection') as 'participant' | 'owner', region: query.get('region') as 'main' | 'hidden',
                 q: query.get('q') ?? '', type: 'all', availableTypes: [],
                 page: 1, childPage: 1, eventId: query.get('eventId'), pageSize: 24,
@@ -363,7 +416,7 @@ describe('identity forms and packing overview navigation', () => {
             };
             return json(value);
         });
-        const hiddenButtons = () => wrapper.findAll('button[aria-controls$="-hidden"]');
+        const hiddenButtons = () => wrapper.findAll('[aria-controls$="-hidden"]');
         expect(hiddenButtons().map(button => button.attributes('aria-expanded'))).toEqual(['false', 'true']);
         const queries = () => request.mock.calls.map(([input]) => new URL((input as Request).url).searchParams);
         expect(queries().some(query => query.get('collection') === 'owner' && query.get('region') === 'hidden'

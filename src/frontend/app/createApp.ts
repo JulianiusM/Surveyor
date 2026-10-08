@@ -1,14 +1,24 @@
 import {createSSRApp} from 'vue';
 import {createMemoryHistory, createRouter, createWebHistory} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
+import I18NextVue from 'i18next-vue';
 import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
 import {createPilotContext, pilotContextKey} from './context';
 import App from './App.vue';
-import PackingEntry from '../features/packing/PackingEntry.vue';
-import IdentityPage from '../features/identity/IdentityPage.vue';
-import PackingCreatePage from '../features/packing/PackingCreatePage.vue';
-import PackingHome from '../features/packing/PackingHome.vue';
-import HelpPage from '../features/help/HelpPage.vue';
+
+// Route chunks own their feature validators and views. The initial shell remains
+// small, and a later feature migration does not enlarge every visitor's entry bundle.
+const PackingEntry = () => import('../features/packing/PackingEntry.vue');
+const IdentityPage = () => import('../features/identity/IdentityPage.vue');
+const PackingCreatePage = () => import('../features/packing/PackingCreatePage.vue');
+const OverviewPage = () => import('../features/overview/OverviewPage.vue');
+const HelpPage = () => import('../features/help/HelpPage.vue');
+
+/** Browsers report retired module URLs differently. Recognize their load failures
+ * specifically, so an ordinary component bug does not suggest a release reload. */
+function isRouteModuleLoadFailure(error: unknown): boolean {
+    return /(?:Failed to fetch|error loading) dynamically imported module|Importing a module script failed|Loading chunk|Failed to load module script/i.test(String(error));
+}
 
 /** Server and browser construct the same component tree with separate application-owned state. */
 export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boolean) {
@@ -17,12 +27,16 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
     const router = createRouter({
         history: browser ? createWebHistory() : createMemoryHistory(),
         routes: [
-            {path: '/frontend-pilot', component: PackingHome},
+            {path: '/frontend-pilot', component: OverviewPage},
             {path: '/frontend-pilot/packing/create', component: PackingCreatePage},
             {path: '/frontend-pilot/packing/:listId/duplicate', component: PackingCreatePage},
             {path: '/frontend-pilot/packing/:listId/guest', component: PackingEntry},
             {path: '/frontend-pilot/packing/:listId', component: PackingEntry},
             {path: '/frontend-pilot/users/login', component: IdentityPage, meta: {identityMode: 'login'}},
+            // Native transition failures render the same localized message component and
+            // hydrate at their actual POST URL instead of falling through to a Pug error page.
+            {path: '/frontend-pilot/users/profile', component: IdentityPage, meta: {identityMode: 'error'}},
+            {path: '/frontend-pilot/users/logout', component: IdentityPage, meta: {identityMode: 'error'}},
             {path: '/frontend-pilot/users/register', component: IdentityPage, meta: {identityMode: 'register'}},
             {path: '/frontend-pilot/users/forgot-password', component: IdentityPage, meta: {identityMode: 'forgot'}},
             {path: '/frontend-pilot/users/reset-password/:token', component: IdentityPage, meta: {identityMode: 'reset'}},
@@ -38,7 +52,15 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
         },
     });
     app.provide(pilotContextKey, context);
+    app.use(I18NextVue, {i18next: context.i18next});
     app.use(VueQueryPlugin, {queryClient: context.queryClient});
     app.use(router);
+    router.onError(error => {
+        // An open document may request a route chunk retired by a release replacement.
+        // Preserve its mounted edits; the update owner decides when a reload is safe.
+        if (isRouteModuleLoadFailure(error)) {
+            context.updates.chunkFailed();
+        }
+    });
     return {app, router, context};
 }

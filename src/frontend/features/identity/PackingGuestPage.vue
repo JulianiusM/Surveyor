@@ -1,20 +1,28 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, reactive, ref} from 'vue';
+import {computed, onBeforeUnmount, reactive, ref, watch} from 'vue';
 import {useRoute, RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import {usePilot} from '../../app/context';
+import {usePackingApi} from '../packing/api';
 import {useCommand} from '../../composables/command';
+import {packingKeys} from '../../app/queryKeys';
+import {usePageTitle} from '../../composables/pageTitle';
 import FormField from '../../components/FormField.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import NativeContextFields from '../../components/NativeContextFields.vue';
+import {ApiFailure} from '../../app/transport';
 
 const context = usePilot();
+const api = usePackingApi(context);
 const {messages} = context;
 const route = useRoute();
 const listId = computed(() => String(route.params.listId).toLowerCase());
 const next = computed(() => '/frontend-pilot/packing/' + listId.value);
-const fields = reactive({name: '', email: ''});
+const nativeInitial = context.bootstrap.initialUrl === route.fullPath
+    && context.bootstrap.session.context === context.session.value?.context ? context.bootstrap : undefined;
+const fields = reactive({name: nativeInitial?.identityFields?.username ?? '', email: nativeInitial?.identityFields?.email ?? ''});
 const choiceOpen = ref(false);
 const recovered = ref(false);
 const checkingEmail = ref(false);
@@ -28,13 +36,28 @@ onBeforeUnmount(removeIdentityGuard);
 onBeforeRouteLeave(mayLeave);
 onBeforeRouteUpdate(mayLeave);
 const entry = useQuery({
-    queryKey: computed(() => ['v1', context.session.value?.context, 'packing', listId.value, 'guest']),
+    queryKey: computed(() => packingKeys.guest(context.session.value?.context, listId.value)),
     enabled: computed(() => context.ready.value && context.hydrated.value),
-    queryFn: ({signal}) => context.api.guestEntry(listId.value, context.capture(), signal),
+    queryFn: ({signal}) => api.guestEntry(listId.value, context.capture(), signal),
+    initialData: () => nativeInitial?.guestEntry?.id === listId.value ? nativeInitial.guestEntry : undefined,
 });
 const command = useCommand(async () => {
     await context.refreshSession();
+}, true);
+watch(listId, () => {
+    // Guards have accepted leaving the previous entity. Preserve its unknown outcome until
+    // that commitment, then start a clean guest form for the newly selected entity.
+    command.acknowledge();
+    Object.assign(fields, {name: '', email: ''});
+    choiceOpen.value = false;
+    recovered.value = false;
 });
+if (nativeInitial?.identityFormProblem) {
+    command.setError(new ApiFailure(nativeInitial.identityFormProblem.status, nativeInitial.identityFormProblem));
+}
+usePageTitle(() => entry.data.value?.title || messages.value.t('app.packing'));
+const removeUpdateGuard = context.updates.registerGuard(() => !checkingEmail.value && !fields.name && !fields.email);
+onBeforeUnmount(removeUpdateGuard);
 const blocked = computed(() => checkingEmail.value || command.pending.value || command.uncertain.value);
 async function refreshIdentityState(): Promise<void> {
     if (reconciling.value) return;
@@ -45,14 +68,14 @@ async function refreshIdentityState(): Promise<void> {
         if (context.isCurrent(scope)) await entry.refetch({throwOnError: true});
         // The identity-bearing command may still be completing. Only a changed authoritative
         // session remounts this page; a title read does not prove guest creation failed.
-    } catch { command.error.value = messages.value.t('state.loadFailed'); }
+    } catch { command.setError('state.loadFailed'); }
     finally { reconciling.value = false; }
 }
 async function register(): Promise<void> {
     choiceOpen.value = false;
     const result = await command.run(
         (scope) =>
-            context.api.registerGuest(
+            api.registerGuest(
                 listId.value,
                 {username: fields.name.trim(), email: fields.email.trim().toLowerCase() || null},
                 scope,
@@ -151,9 +174,12 @@ async function recover(): Promise<void> {
                     <div class="flex-grow-1"></div>
                 </div>
             </StatusNotice>
-            <form class="row gx-3 gy-3 justify-content-center" autocomplete="on" @submit.prevent="submit">
+            <form class="row gx-3 gy-3 justify-content-center" autocomplete="on" method="post"
+                :action="'/frontend-pilot/packing/' + listId + '/guest'" @submit.prevent="submit">
+                <NativeContextFields :next="next" />
                 <FormField
                     id="guest-name"
+                    name="username"
                     v-model="fields.name"
                     class="col-12 col-md-8"
                     :label="messages.t('auth.displayName')"
@@ -169,6 +195,7 @@ async function recover(): Promise<void> {
                 >
                 <FormField
                     id="guest-email"
+                    name="email"
                     v-model="fields.email"
                     class="col-12 col-md-8"
                     :label="messages.t('auth.emailOptional')"

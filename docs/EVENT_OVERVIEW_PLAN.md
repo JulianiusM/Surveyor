@@ -4,13 +4,14 @@ documentation-metadata
 audience: product maintainers; developers; reviewers
 owner: dashboard feature maintainers
 status: current
-last-verified: 2026-09-16
+last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: implemented mixed card overview with expandable event cards, bounded queries and rendering, preserved membership and visibility, shared module ownership, source-reviewed query/navigation contracts, application checks, and measured 500-event/100000-child fixture with latency limitations recorded below
+verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; implemented mixed card overview with expandable event cards, bounded queries and rendering, preserved membership and visibility, shared module ownership, source-reviewed query/navigation contracts, application checks, and measured 500-event/100000-child fixture with latency limitations recorded below
 source-anchors: src/controller/userController.ts; src/controller/entityAdminController.ts; src/modules/database/services/UserService.ts; src/modules/database/services/EntityAdminService.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/ActivityService.ts; src/modules/database/services/PackingService.ts; src/modules/database/services/DriverService.ts; src/modules/database/services/EventService.ts; src/modules/database/services/SurveyService.ts; src/modules/archive/policy.ts; src/modules/permissionEngine.ts; src/modules/lib/util.ts; src/modules/renderer.ts; src/types/UserTypes.d.ts; src/routes/users.ts; src/routes/api/users.ts; src/views/users/dashboard.pug; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json
 next-review: overview-query-or-navigation-contract-change
 -->
 
+This completed design record retains unique overview behavior, query and scale evidence; it is not an active plan.
 The implemented overview uses mixed cards: event cards retain their images, titles, and familiar appearance and
 expand into a sub-view of the profile's relevant linked entities. This document records the implemented design,
 module boundaries, and acceptance criteria for maintaining that behavior. The user procedure is maintained in

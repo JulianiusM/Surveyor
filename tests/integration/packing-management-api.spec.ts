@@ -7,6 +7,8 @@ import * as adminService from '../../src/modules/database/services/EntityAdminSe
 import * as packingService from '../../src/modules/database/services/PackingService';
 import * as userService from '../../src/modules/database/services/UserService';
 import * as packing from '../../src/modules/packing/api';
+import {readOverview, setOverviewVisibility} from '../../src/modules/overview/api';
+import packingController from '../../src/controller/packingController';
 import {archiveEntity} from '../../src/controller/entityAdminController';
 import {contractValidator} from '../../src/modules/api/contracts';
 import {DEFAULT_PERM, PERM} from '../../src/modules/lib/permissions';
@@ -100,6 +102,40 @@ describe('complete versioned packing management', () => {
         expect((await packing.readPackingList(id, actor(owner))).data.items.map(item => item.id)).toEqual(order);
     });
 
+    it('rechecks native reorder authority and the complete current item set before any order write', async () => {
+        const id = await fixture();
+        await adminService.addAdmin('packing', id, editor.id, PERM.ITEM_EDIT);
+        const original = (await packing.readPackingList(id, actor(owner))).data;
+        const nativeOrder = original.items.map((item, position) => ({itemId: item.id, position: original.items.length - position - 1}));
+        await packingController.reorderItems(id, nativeOrder, actor(editor));
+        expect((await packing.readPackingList(id, actor(owner))).data.items.map(item => item.id)).toEqual(original.items.map(item => item.id).reverse());
+        await adminService.removeAdmin('packing', id, editor.id);
+        await expect(packingController.reorderItems(id, nativeOrder, actor(editor))).rejects.toMatchObject({status: 403});
+
+        await packing.createPackingItem(id, {title: 'Added while native tab was open', description: null, maxAssignees: 1, requiredByAll: false}, actor(owner));
+        const current = (await packing.readPackingList(id, actor(owner))).data;
+        await expect(packingController.reorderItems(id, nativeOrder, actor(owner))).rejects.toMatchObject({status: 409});
+        const duplicates = current.items.map((item, position) => ({itemId: position === 1 ? current.items[0].id : item.id, position}));
+        await expect(packingController.reorderItems(id, duplicates, actor(owner))).rejects.toMatchObject({status: 409});
+        expect((await packing.readPackingList(id, actor(owner))).data.items.map(item => item.id)).toEqual(current.items.map(item => item.id));
+    });
+
+    it('does not replay native permission defaults after atomic runtime creation', async () => {
+        const form = {title: 'Atomic native creation', description: '', event_id: '',
+            items: JSON.stringify(creation().items.map(item => ({...item, description: item.description ?? ''}))),
+            defaultPerms: {public: ['ACCESS_VIEW'], guest: []}};
+        const data = Object.assign(packingController.preprocessCreate(form), {_body: form});
+        const id = await packingController.createEntity(owner.id, data, actor(owner));
+        expect(await adminService.getDefaultPerms('packing', id)).toMatchObject({public: PERM.ACCESS_VIEW, guest: 0});
+        // A later authorized write must survive the generic post-create hook. Runtime creation
+        // already committed defaults, whereas actor-free fixture hooks still initialize them.
+        await adminService.updatePerms('packing', id, {public: PERM.ACCESS_VIEW | PERM.ITEM_EDIT, guest: PERM.ITEM_ADD});
+        await packingController.afterCreateItems(id, data, actor(owner));
+        expect(await adminService.getDefaultPerms('packing', id)).toMatchObject({public: PERM.ACCESS_VIEW | PERM.ITEM_EDIT, guest: PERM.ITEM_ADD});
+        await packingController.afterCreateItems(id, data);
+        expect(await adminService.getDefaultPerms('packing', id)).toMatchObject({public: PERM.ACCESS_VIEW, guest: 0});
+    });
+
     it('reveals assignment handles only for allowed removal, rejects foreign handles, and cascades item deletion', async () => {
         const id = await fixture();
         const foreign = await fixture();
@@ -125,11 +161,104 @@ describe('complete versioned packing management', () => {
         await adminService.updatePerms('packing', id, {guest: PERM.ITEM_ADD});
         await expect(packing.updatePackingDefaults(id, creation().defaultPermissions, actor(owner), initial.settingsToken)).rejects.toMatchObject({status: 412});
         const current = await packing.readPackingSettings(id, actor(owner));
-        await packing.setPackingAdmin(id, editor.id, PERM.MANAGE_PERMISSIONS, actor(owner), current.settingsToken);
+        await packing.setPackingAdmin(id, editor.id, PERM.MANAGE_PERMISSIONS, actor(owner), current.access!.admins.find(admin => admin.profileId === editor.id)!.editToken);
         await expect(packing.setPackingAdmin(id, editor.id, 0, actor(owner), current.settingsToken)).rejects.toMatchObject({status: 412});
         const fresh = await packing.readPackingSettings(id, actor(owner));
-        await packing.setPackingAdmin(id, editor.id, null, actor(owner), fresh.settingsToken);
+        await packing.setPackingAdmin(id, editor.id, null, actor(owner), fresh.access!.admins.find(admin => admin.profileId === editor.id)!.editToken);
         expect(await adminService.isAdmin('packing', id, editor.id)).toBe(false);
+    });
+
+    it('lets disjoint item and setup edits complete while rejecting changed touched fields', async () => {
+        const id = await fixture();
+        const initial = (await packing.readPackingList(id, actor(owner))).data;
+        const item = initial.items[0];
+        await packing.updatePackingItem(id, item.id, {description: 'Another client description'}, item.editToken, actor(owner));
+        await packing.updatePackingItem(id, item.id, {title: 'Independent title'}, item.editToken, actor(owner));
+        await expect(packing.updatePackingItem(id, item.id, {description: 'Stale overwrite'}, item.editToken, actor(owner)))
+            .rejects.toMatchObject({status: 412});
+        expect(await packingService.getPackingItemById(item.id)).toMatchObject({title: 'Independent title', description: 'Another client description'});
+
+        const settings = await packing.readPackingSettings(id, actor(owner));
+        await packing.updatePackingDefaults(id, {guest: PERM.ITEM_ADD}, actor(owner), settings.settingsToken);
+        await packing.updatePackingDefaults(id, {participant: PERM.ACCESS_VIEW}, actor(owner), settings.settingsToken);
+        await expect(packing.updatePackingDefaults(id, {guest: 0}, actor(owner), settings.settingsToken)).rejects.toMatchObject({status: 412});
+        // An independent ACL edit never invalidates a header or another administrator's mask.
+        await packing.setPackingHeader(id, undefined, actor(owner), settings.settingsToken);
+        await packing.setPackingAdmin(id, editor.id, PERM.EDIT_TITLE, actor(owner), settings.settingsToken);
+        const adminBaseline = (await packing.readPackingSettings(id, actor(owner))).access!.admins.find(admin => admin.profileId === editor.id)!;
+        await packing.updatePackingDefaults(id, {public: PERM.ACCESS_VIEW | PERM.ITEM_ADD}, actor(owner),
+            (await packing.readPackingSettings(id, actor(owner))).settingsToken);
+        await packing.setPackingAdmin(id, editor.id, PERM.EDIT_DESC, actor(owner), adminBaseline.editToken);
+        await expect(packing.setPackingAdmin(id, editor.id, PERM.EDIT_TITLE, actor(owner), adminBaseline.editToken)).rejects.toMatchObject({status: 412});
+        // A stale add cannot silently replace an independently added grant, even if desired masks match.
+        await expect(packing.setPackingAdmin(id, editor.id, PERM.EDIT_DESC, actor(owner), settings.settingsToken)).rejects.toMatchObject({status: 412});
+    });
+
+    it('serializes public description edits and retains assignments when reducing a capacity', async () => {
+        const id = await fixture();
+        await adminService.updatePerms('packing', id, {public: PERM.ACCESS_VIEW | PERM.ITEM_EDIT_DESC});
+        const first = (await packing.readPackingList(id, actor(editor))).data.items[0];
+        const second = (await packing.readPackingList(id, actor(owner))).data.items[0];
+        const edits = await Promise.allSettled([
+            packing.updatePackingItem(id, first.id, {description: 'Public edit'}, first.editToken, actor(editor)),
+            packing.updatePackingItem(id, second.id, {description: 'Organizer edit'}, second.editToken, actor(owner)),
+        ]);
+        expect(edits.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+        expect(edits.filter(result => result.status === 'rejected')).toEqual([
+            expect.objectContaining({reason: expect.objectContaining({status: 412})}),
+        ]);
+        await packing.setPackingSelfAssignment(id, first.id, true, actor(editor));
+        await packing.setPackingSelfAssignment(id, first.id, true, actor(owner));
+        const capacityBaseline = (await packing.readPackingList(id, actor(owner))).data.items[0];
+        await packing.updatePackingItem(id, first.id, {maxAssignees: 1}, capacityBaseline.editToken, actor(owner));
+        expect((await packing.readPackingList(id, actor(owner))).data.items[0]).toMatchObject({assignedCount: 2, maxAssignees: 1});
+        expect(await packing.setPackingSelfAssignment(id, first.id, true, actor(owner))).toMatchObject({assignedCount: 2});
+        const another = await persistIntegrationProfile({name: 'Capacity competitor'});
+        await expect(packing.setPackingSelfAssignment(id, first.id, true, actor(another))).rejects.toMatchObject({status: 409});
+    });
+
+    it('rejects stale native and pilot field edits in both directions under the same item lock', async () => {
+        const id = await fixture();
+        await adminService.updatePerms('packing', id, {public: PERM.ACCESS_VIEW | PERM.ITEM_EDIT_DESC});
+        const pilotBaseline = (await packing.readPackingList(id, actor(editor))).data.items[0];
+        await packingController.updateItemDescription(pilotBaseline.id,
+            {description: 'Native edit', expectedValue: pilotBaseline.description}, id, actor(editor));
+        await expect(packing.updatePackingItem(id, pilotBaseline.id, {description: 'Stale pilot edit'}, pilotBaseline.editToken, actor(editor)))
+            .rejects.toMatchObject({status: 412});
+        const current = (await packing.readPackingList(id, actor(editor))).data.items[0];
+        await packing.updatePackingItem(id, current.id, {description: 'Pilot edit'}, current.editToken, actor(editor));
+        await expect(packingController.updateItemDescription(current.id,
+            {description: 'Stale native edit', expectedValue: current.description}, id, actor(editor))).rejects.toMatchObject({status: 412});
+        expect((await packingService.getPackingItemById(current.id))!.description).toBe('Pilot edit');
+
+        const entity = (await packingService.getPackingListById(id))!;
+        const metadata = await packing.readPackingMetadata(id, actor(owner));
+        await packing.patchPackingMetadata(id, {title: 'Pilot setup edit'}, metadata.etag, actor(owner));
+        await expect(packingController.updateProperties(entity, {title: 'Stale native setup', expectedValues: {title: entity.title}}, actor(owner)))
+            .rejects.toMatchObject({status: 412});
+        await packingController.updateProperties(entity, {description: 'Independent native setup', expectedValues: {description: entity.description ?? ''}}, actor(owner));
+        expect(await packingService.getPackingListById(id)).toMatchObject({title: 'Pilot setup edit', description: 'Independent native setup'});
+    });
+
+    it('retains native field-only write grants independently of linked-page admission', async () => {
+        const eventId = await createIntegrationEvent(owner.id, 'Private native mutation parent');
+        const id = await fixture();
+        const settings = await packing.readPackingSettings(id, actor(owner));
+        await packing.changePackingEvent(id, {eventId, expectedEventId: null}, actor(owner), settings.settingsToken);
+        await adminService.updatePerms('packing', id, {public: 0, guest: 0, authenticated: 0, participant: 0});
+        await adminService.addAdmin('packing', id, editor.id, PERM.EDIT_TITLE | PERM.ITEM_ADD | PERM.EDIT_META);
+        const item = (await packing.readPackingList(id, actor(owner))).data.items[0];
+        await adminService.addAdmin('packingItem', item.id, editor.id, PERM.EDIT_DESC);
+        await expect(packing.readPackingList(id, actor(editor))).rejects.toMatchObject({status: 403});
+        const entity = (await packingService.getPackingListById(id))!;
+        await packingController.updateProperties(entity, {title: 'Native title-only grant', expectedValues: {title: entity.title}}, actor(editor));
+        await packingController.updateItemDescription(item.id, {description: 'Native child grant', expectedValue: item.description}, id, actor(editor));
+        await packingController.quickAddItem(entity, {title: 'Native add-only grant'}, actor(editor));
+        await packingController.deleteHeaderImg(entity, actor(editor));
+        expect(await packingService.getPackingListById(id)).toMatchObject({title: 'Native title-only grant'});
+        expect(await packingService.getPackingItemById(item.id)).toMatchObject({description: 'Native child grant'});
+        await adminService.updateAdminPerms('packing', id, editor.id, PERM.ITEM_ADD);
+        await expect(packingController.updateProperties(entity, {title: 'Revoked grant'}, actor(editor))).rejects.toMatchObject({status: 403});
     });
 
     it('preserves guest administration but prohibits account-only create/duplicate and owner-only root deletion', async () => {
@@ -190,53 +319,53 @@ describe('pilot mixed overview projection', () => {
         const participantSession = actor(isolatedParticipant);
         const eventId = await createIntegrationEvent(isolatedOwner.id, 'Container for packing');
         const id = (await packing.createPackingList({...creation(eventId), title: 'Scoped packing overview'}, undefined, session)).id;
-        const overview = await packing.readPackingOverview({collection: 'owner', region: 'main'}, session);
-        expect(contractValidator('PackingOverviewRegion')(overview)).toBe(true);
+        const overview = await readOverview({collection: 'owner', region: 'main'}, session);
+        expect(contractValidator('OverviewRegion')(overview)).toBe(true);
         expect(overview.items.map(card => [card.type, card.id])).toEqual([['event', eventId]]);
-        const children = await packing.readPackingOverview({collection: 'owner', region: 'main', eventId}, session);
+        const children = await readOverview({collection: 'owner', region: 'main', eventId}, session);
         // The selected event encloses the child collection as a complete card. Its native
         // feature link and personal visibility survive without exposing event commands here.
-        expect(contractValidator('PackingOverviewRegion')(children)).toBe(true);
+        expect(contractValidator('OverviewRegion')(children)).toBe(true);
         expect(children.parent).toMatchObject({id: eventId, type: 'event', title: 'Container for packing',
             description: 'A production-shaped integration workflow', url: `/event/${eventId}`,
             visibility: 'default', overviewHidden: false, children: {total: 1, matching: 1},
             capabilities: {archive: false, restore: false, duplicate: false, remove: false}});
         expect(children).toMatchObject({totalChildren: 1, childPage: 1, hasPrevious: false, hasNext: false});
-        await packing.setPackingVisibility('event', eventId, {visibility: 'shown'}, session);
-        expect((await packing.readPackingOverview({collection: 'owner', region: 'main', eventId}, session)).parent)
+        await setOverviewVisibility('event', eventId, {visibility: 'shown'}, session);
+        expect((await readOverview({collection: 'owner', region: 'main', eventId}, session)).parent)
             .toMatchObject({id: eventId, visibility: 'shown', overviewHidden: false});
         expect(children.items.map(card => card.id)).toEqual([id]);
         expect(children.items[0].url).toBe(`/frontend-pilot/packing/${id}`);
         expect(children.items[0].capabilities).toEqual({archive: true, restore: false, duplicate: true, remove: true});
         const item = (await packing.readPackingList(id, session)).data.items[0];
         await packing.setPackingSelfAssignment(id, item.id, true, participantSession);
-        const participantView = await packing.readPackingOverview({collection: 'participant', region: 'main'}, participantSession);
+        const participantView = await readOverview({collection: 'participant', region: 'main'}, participantSession);
         expect(participantView.items.map(card => card.id)).toEqual([id]);
         expect(participantView.items[0].eventContext).toBeNull();
         expect(participantView.parent).toBeNull();
-        expect((await packing.readPackingOverview({collection: 'owner', region: 'main'}, participantSession)).items).toEqual([]);
-        await expect(packing.setPackingVisibility('event', eventId, {visibility: 'hidden'}, participantSession)).rejects.toMatchObject({status: 403});
-        for (let retry = 0; retry < 2; retry++) expect(await packing.setPackingVisibility('packing', id, {visibility: 'hidden'}, participantSession))
+        expect((await readOverview({collection: 'owner', region: 'main'}, participantSession)).items).toEqual([]);
+        await expect(setOverviewVisibility('event', eventId, {visibility: 'hidden'}, participantSession)).rejects.toMatchObject({status: 403});
+        for (let retry = 0; retry < 2; retry++) expect(await setOverviewVisibility('packing', id, {visibility: 'hidden'}, participantSession))
             .toEqual({visibility: 'hidden', overviewHidden: true, archived: false});
-        expect((await packing.readPackingOverview({collection: 'participant', region: 'main'}, participantSession)).items).toEqual([]);
-        expect((await packing.readPackingOverview({collection: 'participant', region: 'hidden'}, participantSession)).items.map(card => card.id)).toEqual([id]);
-        expect((await packing.readPackingOverview({collection: 'owner', region: 'hidden'}, participantSession)).items).toEqual([]);
-        expect((await packing.readPackingOverview({collection: 'owner', region: 'main', eventId}, session)).items.map(card => card.id)).toEqual([id]);
+        expect((await readOverview({collection: 'participant', region: 'main'}, participantSession)).items).toEqual([]);
+        expect((await readOverview({collection: 'participant', region: 'hidden'}, participantSession)).items.map(card => card.id)).toEqual([id]);
+        expect((await readOverview({collection: 'owner', region: 'hidden'}, participantSession)).items).toEqual([]);
+        expect((await readOverview({collection: 'owner', region: 'main', eventId}, session)).items.map(card => card.id)).toEqual([id]);
         expect((await packing.readPackingList(id, session)).data.archived).toBe(false);
-        await packing.setPackingVisibility('packing', id, {visibility: 'default'}, participantSession);
-        const search = await packing.readPackingOverview({collection: 'participant', region: 'main', q: 'missing', page: '999'}, participantSession);
+        await setOverviewVisibility('packing', id, {visibility: 'default'}, participantSession);
+        const search = await readOverview({collection: 'participant', region: 'main', q: 'missing', page: '999'}, participantSession);
         expect(search).toMatchObject({page: 1, items: [], matchingEntities: 0, hasNext: false, hasPrevious: false});
         // "Shown" is an explicit preference even for an active card. Later shared archival
         // must keep that card in this profile's main region without pretending it was restored.
-        expect(await packing.setPackingVisibility('packing', id, {visibility: 'shown'}, participantSession))
+        expect(await setOverviewVisibility('packing', id, {visibility: 'shown'}, participantSession))
             .toEqual({visibility: 'shown', overviewHidden: false, archived: false});
         await packing.setPackingArchived(id, true, session);
-        const shownArchived = await packing.readPackingOverview({collection: 'participant', region: 'main'}, participantSession);
+        const shownArchived = await readOverview({collection: 'participant', region: 'main'}, participantSession);
         expect(shownArchived.items).toHaveLength(1);
         expect(shownArchived.items[0]).toMatchObject({id, visibility: 'shown', overviewHidden: false, archived: true});
-        await packing.setPackingVisibility('packing', id, {visibility: 'default'}, participantSession);
-        expect((await packing.readPackingOverview({collection: 'participant', region: 'main'}, participantSession)).items).toEqual([]);
-        expect((await packing.readPackingOverview({collection: 'participant', region: 'hidden'}, participantSession)).items[0])
+        await setOverviewVisibility('packing', id, {visibility: 'default'}, participantSession);
+        expect((await readOverview({collection: 'participant', region: 'main'}, participantSession)).items).toEqual([]);
+        expect((await readOverview({collection: 'participant', region: 'hidden'}, participantSession)).items[0])
             .toMatchObject({id, visibility: 'default', overviewHidden: true, archived: true});
         const serialized = JSON.stringify([participantView, children, shownArchived]);
         for (const privateKey of ['ownerId', 'profileId', 'email', 'headerImg']) expect(serialized).not.toContain(`"${privateKey}"`);
@@ -246,8 +375,8 @@ describe('pilot mixed overview projection', () => {
         const isolatedOwner = await persistIntegrationProfile({name: 'Mixed overview owner'});
         const session = actor(isolatedOwner);
         const [surveyId] = await createSurveyWithCombinations(isolatedOwner.id);
-        const surveyOnly = await packing.readPackingOverview({collection: 'owner', region: 'main'}, session);
-        expect(contractValidator('PackingOverviewRegion')(surveyOnly)).toBe(true);
+        const surveyOnly = await readOverview({collection: 'owner', region: 'main'}, session);
+        expect(contractValidator('OverviewRegion')(surveyOnly)).toBe(true);
         expect(surveyOnly).toMatchObject({type: 'all', availableTypes: ['survey'], totalEntities: 1,
             matchingEntities: 1, totalCards: 1});
         expect(surveyOnly.items).toMatchObject([{id: surveyId, type: 'survey', url: `/survey/${surveyId}`}]);
@@ -255,28 +384,28 @@ describe('pilot mixed overview projection', () => {
         const eventId = await createIntegrationEvent(isolatedOwner.id, 'Mixed trip');
         const activityId = await createEventActivityPlan(isolatedOwner.id, eventId);
         const packingId = (await packing.createPackingList(creation(eventId), undefined, session)).id;
-        const overview = await packing.readPackingOverview({collection: 'owner', region: 'main'}, session);
-        expect(contractValidator('PackingOverviewRegion')(overview)).toBe(true);
+        const overview = await readOverview({collection: 'owner', region: 'main'}, session);
+        expect(contractValidator('OverviewRegion')(overview)).toBe(true);
         expect(overview).toMatchObject({type: 'all', totalEntities: 4, matchingEntities: 4, totalCards: 2});
         expect(new Set(overview.availableTypes)).toEqual(new Set(['event', 'activity', 'packing', 'survey']));
         expect(overview.items.find(card => card.id === eventId)?.children).toEqual({total: 2, matching: 2});
-        const children = await packing.readPackingOverview({collection: 'owner', region: 'main', eventId}, session);
+        const children = await readOverview({collection: 'owner', region: 'main', eventId}, session);
         expect(children.parent?.children).toEqual({total: 2, matching: 2});
         expect(new Set(children.items.map(card => card.id))).toEqual(new Set([activityId, packingId]));
         expect(children.items.find(card => card.id === activityId)?.url).toBe(`/activity/${activityId}`);
         expect(children.items.find(card => card.id === packingId)?.url).toBe(`/frontend-pilot/packing/${packingId}`);
 
-        const filtered = await packing.readPackingOverview({collection: 'owner', region: 'main', type: 'activity'}, session);
+        const filtered = await readOverview({collection: 'owner', region: 'main', type: 'activity'}, session);
         expect(filtered).toMatchObject({type: 'activity', totalEntities: 4, matchingEntities: 1, totalCards: 1});
         expect(filtered.items).toMatchObject([{id: eventId, type: 'event', children: {total: 2, matching: 1}}]);
-        const filteredChildren = await packing.readPackingOverview({collection: 'owner', region: 'main', type: 'activity', eventId}, session);
+        const filteredChildren = await readOverview({collection: 'owner', region: 'main', type: 'activity', eventId}, session);
         expect(filteredChildren.items.map(card => card.id)).toEqual([activityId]);
 
-        await packing.setPackingVisibility('survey', surveyId, {visibility: 'hidden'}, session);
-        const hidden = await packing.readPackingOverview({collection: 'owner', region: 'hidden'}, session);
+        await setOverviewVisibility('survey', surveyId, {visibility: 'hidden'}, session);
+        const hidden = await readOverview({collection: 'owner', region: 'hidden'}, session);
         expect(hidden).toMatchObject({type: 'all', totalEntities: 4, hiddenEntities: 1, matchingEntities: 1});
         expect(hidden.items).toMatchObject([{id: surveyId, type: 'survey', visibility: 'hidden'}]);
-        const missing = await packing.readPackingOverview({collection: 'owner', region: 'main', q: 'no such title'}, session);
+        const missing = await readOverview({collection: 'owner', region: 'main', q: 'no such title'}, session);
         expect(missing).toMatchObject({type: 'all', totalEntities: 4, matchingEntities: 0, items: []});
     });
 });

@@ -86,13 +86,13 @@ test('guest creation and emailed personal URLs stay in the frontend and authenti
             const before = await session(recovered.request);
             // Request the link path against the guarded server rather than its configured
             // deployment origin. No extra JavaScript, login button or confirmation is required.
-            const landing = await recovered.request.get(link.pathname + link.search, {maxRedirects: 0});
+            const landing = await recovered.request.get(link.pathname + link.search + '&locale=de', {maxRedirects: 0});
             expect(landing.status()).toBe(302);
-            expect(landing.headers().location).toBe(`/frontend-pilot/packing/${list.id}`);
+            expect(landing.headers().location).toBe(`/frontend-pilot/packing/${list.id}?locale=de`);
             const after = await session(recovered.request);
             expect(after).toMatchObject({kind: 'guest', activeProfile: created.session.activeProfile});
             expect(after.context).not.toBe(before.context);
-            expect((await recovered.request.get(link.pathname + '?next=https%3A%2F%2Foutside.invalid', {maxRedirects: 0})).headers().location).toBe('/frontend-pilot');
+            expect((await recovered.request.get(link.pathname + '?next=https%3A%2F%2Foutside.invalid', {maxRedirects: 0})).headers().location).toBe('/frontend-pilot?locale=en');
         } finally { await recovered.close(); }
     } finally { await guestBrowser.close(); }
 });

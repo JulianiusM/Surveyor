@@ -1,5 +1,6 @@
 // Compiled by the foundation generation test. Negative assertions protect actual consumer declarations.
 import type {components} from '../../src/types/api/v1.js';
+import type {ApiResponseBody, ApiSuccessStatus} from '../../src/types/ApiTransportTypes.js';
 import {validatePackingListView} from '../../.generated/api/v1/browser.mjs';
 import {createTranslator} from '../../src/modules/localization/translator.js';
 
@@ -11,6 +12,15 @@ const invalidPatch: components['schemas']['PackingMetadataPatch'] = {title: fals
 const broadPatch: components['schemas']['PackingMetadataPatch'] = {title: 'Title', archived: true};
 void invalidPatch;
 void broadPatch;
+
+const readStatus: ApiSuccessStatus<'getSession'> = 200;
+// @ts-expect-error Statuses are operation-specific, even if another operation accepts 201.
+const wrongReadStatus: ApiSuccessStatus<'getSession'> = 201;
+// @ts-expect-error An assignment result cannot be sent as a session representation.
+const wrongResponse: ApiResponseBody<'getSession', 200> = {assigned: true};
+void readStatus;
+void wrongReadStatus;
+void wrongResponse;
 
 const params: Extract<components['schemas']['Problem'], {code: 'PACKING_ITEM_FULL'}>['params'] = {itemId: 'uuid-at-runtime'};
 void params;

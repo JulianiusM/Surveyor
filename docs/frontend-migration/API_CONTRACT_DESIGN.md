@@ -5,9 +5,9 @@ documentation-metadata
 audience: maintainers; frontend and backend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-07
+last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: source review of expanded packing management, overview, identity, multipart/binary and generated contract boundaries; original step-two cross-feature design retained and distinguished from implemented scope; this documentation update runs no application, database or browser checks and makes no complete-parity claim
+verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; source review of expanded packing management, overview, identity, multipart/binary and generated contract boundaries; original step-two cross-feature design retained and distinguished from implemented scope; this documentation update runs no application, database or browser checks and makes no complete-parity claim
 source-anchors: contracts/api/v1/openapi.yaml; contracts/api/v1/common.yaml; contracts/api/v1/packing.yaml; contracts/api/v1/overview.yaml; contracts/api/v1/auth.yaml; scripts/generate-api.mjs; src/modules/api/contracts.ts; src/modules/api/session.ts; src/modules/api/transport.ts; src/modules/api/problem.ts; src/types/ApiTypes.d.ts; src/routes/api/v1.ts; src/routes/api/v1/packing.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; src/modules/packing/api.ts; tests/unit/frontend-contracts.spec.ts; tests/unit/frontend-generation.spec.ts; tests/integration/packing-management-api.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; tests/fixtures/frontend-contracts.mts; docs/FRONTEND_MIGRATION_BASELINE.md; docs/ARCHITECTURE.md; src/controller/packingController.ts; src/modules/database/services/PackingService.ts; src/modules/database/services/EntityLifecycleService.ts; package.json
 next-review: pilot-contract-expansion-or-transport-subset-change
 -->
@@ -28,7 +28,7 @@ shapes, headers and statuses. Invoice, activity and other feature examples remai
 
 The mounted implementation covers packing creation/duplication, item editing/order/assignment management,
 properties, audience/admin permissions, event selection/relinking, header files, archive/restore/hard deletion,
-the bounded packing overview and personal visibility. It also covers session bootstrap, browser-cookie locale
+the bounded mixed-feature overview and personal visibility. It also covers session bootstrap, browser-cookie locale
 selection, help, local and guest identity entry/recovery, registration/activation/reset, logout and profile switching.
 Packing Vue screens use these v1 operations without delegating packing workflows to the Pug frontend. Authorized
 event navigation and other unmigrated modules remain separate application destinations. The
@@ -38,7 +38,7 @@ event navigation and other unmigrated modules remain separate application destin
 operation/problem metadata, strict server validators and additive browser response validators.
 [Contract loading](../../src/modules/api/contracts.ts), [transport](../../src/modules/api/transport.ts),
 [session admission](../../src/modules/api/session.ts) and [problem formatting](../../src/modules/api/problem.ts)
-consume those generated owners. The [API operation type](../../src/types/ApiTypes.d.ts) is `keyof operations` from
+consume those generated owners. The [API operation type](../../src/types/ApiTransportTypes.d.ts) is `keyof operations` from
 the generated declaration; transport calls therefore cannot silently introduce a differently spelled operation ID.
 
 The [validator](../../tests/unit/frontend-contracts.spec.ts) and
@@ -46,8 +46,8 @@ The [validator](../../tests/unit/frontend-contracts.spec.ts) and
 client fields, closed known-problem parameters, deterministic generation, standalone loading without dynamic function
 compilation, and [TypeScript consumer fixtures](../../tests/fixtures/frontend-contracts.mts). The multipart fixture
 also checks that nested create data stays strict when a referenced shape is additive in a browser response. These
-are executable evidence locations, not a claim that every suite was rerun for this document update. Other feature
-families and conditional native-form adapters remain planned.
+are executable evidence locations, not a claim that every suite was rerun for this document update. Other feature families remain planned. Overview and required identity native adapters share their Vue views
+and controller operations; packing inline/settings controls retain their JavaScript requirement.
 
 ## Contract authority and toolchain
 
@@ -310,72 +310,53 @@ uses the request locale. A client translates locally only a known, validated key
 unknown problem code, a generated common problem validator may retain the safe server `detail` as text; it does not cast
 unknown params into a known error variant. This compatibility fallback cannot report an unknown success DTO as saved.
 
-## Optimistic concurrency and conditional reads
+## Current-value comparisons and conditional reads
 
-Use separate tokens for separate meanings. `updatedAt` is not an aggregate revision, a transaction lock is not an
-old-form detector, and a full-page cache ETag is not a financial confirmation token.
+Approved D2 supersedes the original monotonic packing metadata revision and broad cross-panel settings comparison.
+The unreleased column/migration was removed. Lightweight opaque tokens contain bounded hashes of reviewed current
+fields and actor/resource scope; they carry no revision history, leases, presence or live-editing state. The original
+proposal remains historical rationale, not the current implementation. Existing invoice revisions and activity
+fingerprints keep their own semantics.
 
 | Boundary | Implemented protection | Remaining scope/limits |
 |---|---|---|
-| Packing metadata | Scoped metadata resource, monotonic root revision, strong ETag and required `If-Match`, checked under parent/root coordination | Legacy forms advance the revision but do not submit conditional edit tokens |
-| Packing event relationship | Existing `expectedEventId` plus `If-Match: settingsToken` for an actual move, locked parents/root and reauthorization; relinking advances the root revision | Already-achieved target retains the shared controller's authorized no-op before edit-token validation; no separately persisted relationship revision |
-| Packing assignment capacity | Parent/root/item locks, existing-assignment check before capacity, transactional insertion | Natural idempotence for the captured actor; no metadata precondition and no generic command retry |
-| Packing item metadata | Per-item `editToken`, field authority and route-parent scope under the locked operation | Token hashes current editable values/authority/root context; it is not a separate monotonic item history counter |
-| Packing order | `orderToken` covers current item IDs/positions and root context; exact membership and `ITEM_EDIT` checks | Concurrent additions/removals/reorders invalidate the reviewed order; no separate persisted order revision |
-| Packing settings | `settingsToken` covers defaults/admin masks/header identity/event/root revision/actor permissions; required for ACL/header changes and actual relinking | Shared settings token can conflict across panels; ACL/item/order changes away and back are not a general monotonic-history guarantee |
-| Invoice preview/apply | Existing `calculationRevision` and root lock, including payment-triggered revision changes | Future v1 work must preserve command-specific `expectedRevision`/409 semantics; not implemented by packing tokens |
-| Activity recommendation apply | Existing contexts/fingerprints and coordinated locks | Future v1 work must retain their cross-plan scope |
+| Packing metadata | Scoped metadata read and required `If-Match`; sparse PATCH compares only submitted fields inside parent/root locks | Native and v1 adapters use shared controller operations; native packing properties submit original values for changed fields and use their existing error feedback on conflict |
+| Packing item fields | Per-item `editToken`, current field authority and route-parent checks inside item coordination | Compare changed fields; unrelated metadata/setup/assignment changes do not stale the edit |
+| Packing order | `orderToken` covers current IDs/positions and captured actor/list | Exact membership/order is compared; no persisted order counter |
+| Default masks | Sparse audience patch, current-value hashes and owning permission checks | Preserve unchanged audiences; overlapping changed audiences require review |
+| Existing administrators | Per-row `editToken` scoped to target profile and current mask | Bounded token size independent of total administrators; creation compares an absent-target marker |
+| Header and event | Compare current header identity or `expectedEventId` plus the event field token under existing locks | Authorized already-achieved event association remains a no-op; no change-away-and-back history |
+| Assignment capacity | Parent/root/item locks, existing membership check before capacity, transactional insertion | Capacity updates use the same locking owner; retain historical null capacity and capacity-lowering behavior |
+| Invoice preview/apply | Existing `calculationRevision`, financial checks and root lock | Future v1 transport must preserve command-specific revision/409 behavior |
+| Activity recommendation apply | Existing contexts/fingerprints and coordinated locks | Future migration retains cross-plan scope |
 
-Create `GET/PATCH /api/v1/packing-lists/{listId}/metadata` as the edit representation. It contains only the current
-actor's editable metadata values and relevant capability/parent context. Its strong ETag covers canonical serialized
-representation bytes, a monotonic metadata revision, and the actor/context-dependent projection. Revision inclusion
-detects edits that change a value away and back. Recompute current permissions/context before comparison; revoked
-authority returns 403 instead of disclosing hidden current values in a conflict response.
+The metadata edit projection contains only currently editable values and relevant parent/lifecycle facts. Its opaque
+tag also covers read presentation, while writes compare just their submitted value hashes. Locale changes do not
+stale machine values. A full list read tag covers items, assignments, counts and capabilities and cannot serve as
+an edit token. Always reauthorize a read before returning 304, or a write before comparing its baseline.
 
-The metadata edit representation contains machine values, field identifiers, and capability/context facts, without
-translated labels or messages. Localize its controls separately through the shared catalog. Changing locale alone
-must not invalidate the reviewed metadata ETag; include locale in a read-cache key or view ETag only when that
-representation actually varies by locale.
+Missing required `If-Match` returns 428; a mismatched touched field returns 412 without a write. Wildcards/weak tags
+do not bypass application comparison. This is a field comparison protocol carried in `If-Match`, rather than a
+claim that every changed full representation rejects every sparse PATCH. A disjoint edit may proceed with its
+reviewed unchanged fields. Fresh authorization takes precedence: a forbidden field returns 403 and never discloses
+hidden current values as a conflict response.
 
-PATCH requires the exact strong `If-Match` obtained for that metadata representation. Reject missing precondition
-with 428 and a stale one with 412. Do not accept weak tags or `*` as permission to bypass this edit protocol. After
-success return the fresh authorized metadata representation and ETag. A full list GET has its own ETag covering
-items, assignments and capabilities; it cannot be used as the metadata edit tag. Keeping these distinct avoids
-conflicts when another participant simply assigns an item.
-([HTTP strong comparison and If-Match](https://www.rfc-editor.org/rfc/rfc9110.html#name-if-match),
-[428 Precondition Required](https://www.rfc-editor.org/rfc/rfc6585.html#section-3))
+On overlapping refresh or 412, preserve original/local/current values and require explicit review/reapply. A remote
+change to an untouched field can update that field and advance the local baseline while preserving the sparse draft.
+No reconciliation automatically issues another command. Semantically coupled future fields, such as deadline and
+timezone, remain one comparison unit; financial calculations require a fresh preview and their existing review.
 
-The persisted metadata revision exists in the [packing entity](../../src/modules/database/entities/packing/PackingList.ts)
-and [reviewed migration](../../src/migrations/1791072000000-AddPackingMetadataRevision.ts).
-[Packing writers](../../src/modules/database/services/PackingService.ts) advance it with title/description writes;
-[lifecycle writers](../../src/modules/database/services/EntityLifecycleService.ts) advance it for packing relinking,
-direct archival and affected parent archival/deletion contexts. Assignment-only writes do not advance it. Current
-permission masks are recomputed for token comparison. [ACL DBAL operations](../../src/modules/database/services/EntityAdminService.ts)
-serialize packing changes on the root lock, but do not provide a new persisted ACL-history counter.
-
-The implemented relationship body is `{eventId, expectedEventId}`; its reviewed token is the `If-Match` header,
-not the originally proposed `expectedRelationshipToken` field. The shared controller checks current source/target
-authority and expected parent, then invokes the settings-token check inside the same transaction for an actual move.
-A conflicting parent returns 409; a stale settings token returns 412. Relinking away and back still advances the
-root revision. Other feature relationships remain outside this packing implementation.
-
-For a 412, preserve the draft and load a fresh authorized baseline. Compare original, local draft and current
-server values; offer review/reapply or discard. Never silently merge a conflicting field or refresh a draft's
-original comparison token. A reapply sends the newly reviewed token. Financial calculation conflicts always need
-a fresh preview and explicit review of its effects, not ordinary field merging.
-
-Reads may use `If-None-Match` to avoid retransmitting unchanged authorized data. Their ETag covers the exact DTO
-projection including capabilities and any localized content, not just the root timestamp. For packing, obtain
-items/assignments/counts/capabilities from a consistent read snapshot or explicitly proven equivalent revision
-scheme. The v1 packing reader uses the DBAL's `REPEATABLE READ` snapshot for its permission, parent, item and
-assignment projection; legacy `fetchForView` remains a separate multi-read renderer owner.
+Packing reads use the DBAL's `REPEATABLE READ` snapshot for parent, permission, item and assignment projection.
+Permission caches live only inside that snapshot; assignment rows are grouped once per read. Writes always evaluate
+current authority against locked state. `src/modules/packing/api.ts`, shared packing controller operations and
+the private comparison helpers in that packing owner define this boundary; persistence services remain pure DBAL.
 
 ## Idempotency and retry policy
 
-For future generated retry policy, declare per-operation policy in the authored contract, for example an `x-surveyor-command` extension with
-`retryPolicy: read | natural-idempotent | reconcile-only` and its precondition kind. Generate the client policy
-registry from those declarations; do not infer retry safety from POST/PUT names or from a disabled button. That
-extension/registry is not implemented. The current [command owner](../../src/frontend/composables/command.ts) disables
+Each operation declares `x-surveyor-command` retry policy and precondition kind. Generation emits success statuses,
+response validators and the client policy registry from the contract; unknown extension values fail generation.
+Do not infer retry safety from HTTP method names or a disabled button. Browser transport confirms only declared
+success statuses and validated bodies. Commands remain free of automatic retries, including naturally idempotent ones. The current [command owner](../../src/frontend/composables/command.ts) disables
 automatic retries, distinguishes confirmed failure from uncertain outcome, and offers read reconciliation where the
 feature provides it. The owning server operation establishes the endpoint-specific no-op behavior.
 
@@ -388,7 +369,8 @@ feature provides it. The owning server operation establishes the endpoint-specif
 | Invoice upload, organizer expense, token consumption, arbitrary creation | Reconcile-only by default; no automatic repeat after response loss |
 | Reviewed financial/recommendation commands | Retain revision/fingerprint rejection; inspect current state and obtain a new preview before a new command |
 
-No generic server idempotency-key store exists in the packing implementation. If later needed for an expense
+Approved D4 keeps reconcile-only recovery without a generic server idempotency-key store. Any later proposal
+requires active, explicit user authorization before introducing tracking. If authorized for an expense
 or another creation endpoint, design its key scope, request fingerprint (including file identity), transactionally
 stored result, retention, concurrent in-progress behavior, and same-key/different-body rejection as a feature.
 Such a contract needs persistence and integration evidence; it cannot be promised by a frontend retry plugin.
@@ -452,20 +434,20 @@ table are relative to `/api/v1`; [OpenAPI](../../contracts/api/v1/openapi.yaml) 
 | `GET /packing-lists/{listId}/duplicate` | Authorized copy draft including item order/Everyone/default permissions; no assignments, file, event, admins or archival copied; submission uses the same creation command |
 | `POST /packing-lists/{listId}/items`; `PATCH`/`DELETE /packing-lists/{listId}/items/{itemId}` | Quick add, field-specific conditional edit, scoped removal; retain direct item grants and creator ownership |
 | `PUT /packing-lists/{listId}/item-order` | Complete reviewed item order with `If-Match: orderToken` and exact current membership |
-| `DELETE /packing-lists/{listId}/assignments/{assignmentId}` | Authorized removal of another assignment; numeric handle is disclosed only to actors with the removal capability |
+| `DELETE /packing-lists/{listId}/assignments/{assignmentId}` | Authorized removal of another assignment; canonical positive decimal-string handle is disclosed only to actors with the removal capability |
 | `GET /packing-lists/{listId}/settings` | Separate allowed properties/event/access/lifecycle projection with `settingsToken`; administrator matrix omitted without permission |
-| `PUT /packing-lists/{listId}/default-permissions`; `POST /packing-lists/{listId}/admins`; `PATCH`/`DELETE /packing-lists/{listId}/admins/{profileId}` | Audience and administrator changes use the reviewed settings token and owning permission checks |
+| `PUT /packing-lists/{listId}/default-permissions`; `POST /packing-lists/{listId}/admins`; `PATCH`/`DELETE /packing-lists/{listId}/admins/{profileId}` | Sparse audience changes use settings field hashes; existing administrator updates/removals use row tokens and owning permission checks |
 | `GET /packing-lists/{listId}/profiles`; `GET /packing-lists/events` | Authorized profile/event selection through existing discovery owners; event query retains its declared filters/cursor/selected reference |
 | `PUT /packing-lists/{listId}/event` | Expected-parent and reviewed settings checks; preserve independent parent disclosure and current admission after relinking |
 | `PUT`/`DELETE`/`GET /packing-lists/{listId}/header` | Conditional multipart replacement/removal; context-authorized binary read, opaque version and safe file cleanup |
 | `POST /packing-lists/{listId}/archive`; `POST /packing-lists/{listId}/restore`; `DELETE /packing-lists/{listId}` | Shared archive owner and inherited restrictions; separate full-account owner-only permanent deletion |
-| `GET /packing-lists/overview`; `PUT /packing-lists/overview/{entityType}/{entityId}/visibility` | Existing bounded overview reader forced to packing; four participant/owner × main/hidden regions, eligible event containers, private desired visibility |
+| `GET /overview`; `PUT /overview/{entityType}/{entityId}/visibility` | Existing bounded overview reader retains all five authorized types; four participant/owner × main/hidden regions, eligible event containers, private desired visibility |
 | `POST /auth/login`, `/auth/logout`, `/auth/register`, `/auth/forgot-password`, `/auth/reset-password`, `/auth/activate`, `/auth/guest-login`, `/auth/guest-recovery`, `/auth/guest-email-exists`; `PUT /auth/profile` | Generated identity shapes mapped onto the owning account/guest checks; session-changing results explicitly confirm their new context |
 | `GET`/`POST /packing-lists/{listId}/guest` | Public guest-entry title projection and scoped guest registration, including the deliberately private personal access link in the transition result |
 
 The overview wraps [the existing user controller](../../src/controller/userController.ts); it does not replace its
 membership/grouping queries with raw ORM reads. Region totals retain their existing pre-type-filter meanings,
-while `matchingEntities` is the packing/search total. Packing cards use v1 images and Vue destinations; event
+while `matchingEntities` is the selected type/search total across the authorized mixed collection. Packing cards use v1 images and Vue destinations; event
 containers disclose only the references allowed by the existing owner. Event pages and account administration
 outside these identity-entry commands remain unmigrated destinations. Packing has no native export feature to add.
 
@@ -525,16 +507,15 @@ X-CSRF-Token: current-session-csrf-token
 ```
 
 The controller rechecks submitted-field authority against current locked state, verifies the edit tag, persists
-only title, increments metadata revision, and returns the normalized representation with `"packing-meta-b"`.
-B's old-tag description change returns 412 without writing; the UI retains B's draft and offers review against the
-fresh baseline. Missing If-Match yields 428. Forged `ownerId` is a shape error; a valid but unauthorized description
+only title, and returns the normalized representation with a new comparison token.
+B's disjoint description change can proceed because its reviewed description remains current. An overlapping title
+change returns 412 without writing; the UI retains B's draft and offers review against the fresh baseline. Missing If-Match yields 428. Forged `ownerId` is a shape error; a valid but unauthorized description
 field gives 403. A concurrent assignment alone does not invalidate the metadata tag. No guessed default overwrites
 an omitted description or event link.
 
 The pilot [metadata command](../../src/modules/packing/api.ts) implements the conditional write through existing
-root/relink coordination. Its [revision migration](../../src/migrations/1791072000000-AddPackingMetadataRevision.ts)
-and legacy-writer invalidation are part of the implementation slice. Legacy forms still do not submit an edit
-precondition; advancing the revision protects v1 review tokens without making those forms conditional.
+root/relink coordination shared with native writers. A changed native value is detected by the v1 touched-field
+comparison. The approved D2 amendment removed the unreleased persisted counter and migration in place.
 
 ### Scenario C — Full item and a lost assignment response
 
@@ -575,11 +556,15 @@ untrusted input, not authority. Extract these transport fields separately from t
 do not forward them as editable entity properties. Reject a stale identity or edit token without silently overwriting
 data; preserve the submitted draft and native error/redirect behavior as appropriate. Regenerate context-bound fields
 on a fresh authorized render. An old form missing newly required preconditions needs draft-preserving recovery, not
-an unconditional write. Advancing revisions in legacy writers protects v1 stale saves; it does not make those older
-forms conditional by itself. Direct controller invocation must not become a bypass for checks otherwise enforced
-by API middleware. These adapters and protections are proposed implementation work, not existing native-form guarantees.
+an unconditional write. Shared native packing writers update the current values compared by v1 without
+adding history counters. Packing inline and properties requests include their reviewed original primitive values;
+the existing native error presentation reports a rejected overlap. Direct controller invocation must not become a bypass for checks otherwise enforced
+by API middleware. Identity/guest native adapters and the mixed overview GET path are implemented; other feature adapters retain
+their explicitly recorded migration scope.
 
-Version the contract independently (`info.version` within major `/v1`). Add optional response fields compatibly,
+Approved D3 treats this pilot v1 as unreleased: all corrections happen in place, including wire/status changes.
+Do not create v2 or extra pilot versions to preserve a contract that has never entered production. For a future
+production contract, version independently (`info.version` within major `/v1`). Add optional response fields compatibly,
 but treat required-field additions, enum changes, meaning changes, privacy changes and status changes as reviewed
 compatibility work. Clients must tolerate explicitly allowed unknown response fields for rolling releases while
 servers validate the exact known projection they emit. This may use a generated response-validation mode that

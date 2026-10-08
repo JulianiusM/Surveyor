@@ -21,9 +21,15 @@ async function retrySession(): Promise<void> {
         <AppHeader @locale-error="localeError = true" />
         <main id="pilot-main" class="container-fluid flex-grow-1 py-3" tabindex="-1">
             <div class="sticky-top mt-1">
-                <StatusNotice v-if="context.personalLink.value" kind="success"><strong>{{ messages.t('auth.personalLink') }} </strong><a :href="context.personalLink.value" class="text-break">{{ context.personalLink.value }}</a><ActionButton class="btn-sm ms-2" variant="outline-light" :aria-label="messages.t('common.close')" @click="context.personalLink.value = null">&times;</ActionButton></StatusNotice>
-                <StatusNotice v-if="notice" kind="warning">{{ messages.t(notice) }}</StatusNotice>
+                <StatusNotice v-if="context.personalLink.value" kind="success"><strong class="me-1">{{ messages.t('auth.personalLink') }}</strong><a :href="context.personalLink.value" class="text-break">{{ context.personalLink.value }}</a><ActionButton class="btn-sm ms-2" variant="outline-light" :aria-label="messages.t('common.close')" @click="context.personalLink.value = null">&times;</ActionButton></StatusNotice>
+                <StatusNotice v-if="notice" :kind="notice === 'auth.logoutDone' ? 'success' : 'warning'">{{ messages.t(notice) }}</StatusNotice>
                 <StatusNotice v-if="localeError" kind="danger">{{ messages.t('common.error') }}</StatusNotice>
+                <StatusNotice v-if="context.updates.available.value" kind="warning">
+                    {{ messages.t('state.updateAvailable') }}
+                    <ActionButton class="btn-sm ms-2" variant="outline-light" @click="context.updates.requestReload">
+                        {{ messages.t('state.refreshPage') }}
+                    </ActionButton>
+                </StatusNotice>
             </div>
             <RouterView v-if="ready" :key="epoch" />
             <section v-else class="card bg-dark text-white p-4">

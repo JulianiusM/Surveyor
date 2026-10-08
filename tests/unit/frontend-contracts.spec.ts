@@ -13,7 +13,7 @@ function packingView(): components['schemas']['PackingListView'] {
         capabilities: {editTitle: true, editDescription: false, selfAssign: true, addItem: false, reorder: false, manageSettings: true},
         counters: {participants: 1, open: 0, empty: 0},
         items: [{id: itemId, title: 'Tent', description: null, position: 0, requiredByAll: false,
-            maxAssignees: 1, assignedCount: 1, selfAssigned: true, assignees: [{name: 'A participant', assignmentId: null}], editToken: '"item"',
+            maxAssignees: 1, assignedCount: 1, selfAssigned: true, assignees: [{name: 'A participant', assignmentId: null}], editToken: '"edit-aXRlbQ"',
             capabilities: {editTitle: false, editDescription: false, editCapacity: false, editRequired: false, removeItem: false, removeAssignments: false}}]};
 }
 
@@ -105,7 +105,7 @@ describe('generated v1 contract boundaries', () => {
     });
 
     it('enforces anonymous session privacy without requiring an active profile for an existing account', () => {
-        const session = {kind: 'anonymous', context: 'opaque-context', csrfToken: 'opaque-csrf', locale: 'en',
+        const session = {kind: 'anonymous', deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, context: 'opaque-context', csrfToken: 'opaque-csrf', locale: 'en',
             activeProfile: null, profiles: [], loginUrl: '/users/login', logoutUrl: null,
             shell: {version: 'test', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy', localLoginEnabled: true,
                 oidcEnabled: false, oidcName: 'Single sign-on'}};
@@ -126,21 +126,32 @@ describe('generated v1 contract boundaries', () => {
         expect(server.validateGetHelpPageParameters({path: {}, query: {q: ['a', 'b']}, header: {}})).toBe(false);
     });
 
+    it('accepts bounded field-comparison tags for conditional metadata reads', () => {
+        // Metadata has several independent field hashes, so its ordinary edit tag is longer
+        // than a single resource digest. The read boundary must accept the tags it returns.
+        const parameters = {path: {listId}, query: {}, header: {'If-None-Match': `"edit-${'a'.repeat(700)}"`}};
+        expect(server.validateGetPackingMetadataParameters(parameters)).toBe(true);
+        expect(server.validateGetPackingMetadataParameters({...parameters,
+            header: {'If-None-Match': 'a'.repeat(4096)}})).toBe(true);
+        expect(server.validateGetPackingMetadataParameters({...parameters,
+            header: {'If-None-Match': 'a'.repeat(4097)}})).toBe(false);
+    });
+
     it('accepts every native overview entity type and only explicit allowed filters', () => {
         const card = {id: listId, type: 'survey', title: 'Trip dates', description: null, url: `/survey/${listId}`,
             headerUrl: null, headerVersion: null, eventContext: null, visibility: 'default', overviewHidden: false,
             archived: false, inheritedArchived: false, capabilities: {archive: false, restore: false, duplicate: false, remove: false},
             children: null};
         const query = {collection: 'owner', region: 'main'};
-        expect(server.validateGetPackingOverviewParameters({path: {}, query, header: {}})).toBe(true);
+        expect(server.validateGetOverviewParameters({path: {}, query, header: {}})).toBe(true);
         for (const type of ['activity', 'drivers', 'event', 'packing', 'survey'] as const) {
-            for (const validators of [server, browser]) expect(validators.validatePackingOverviewCard({...card, type})).toBe(true);
-            expect(server.validateGetPackingOverviewParameters({path: {}, query: {...query, type}, header: {}})).toBe(true);
-            expect(server.validateSetPackingVisibilityParameters({path: {entityType: type, entityId: listId}, query: {}, header: {}})).toBe(true);
+            for (const validators of [server, browser]) expect(validators.validateOverviewCard({...card, type})).toBe(true);
+            expect(server.validateGetOverviewParameters({path: {}, query: {...query, type}, header: {}})).toBe(true);
+            expect(server.validateSetOverviewVisibilityParameters({path: {entityType: type, entityId: listId}, query: {}, header: {}})).toBe(true);
         }
-        expect(server.validateGetPackingOverviewParameters({path: {}, query: {...query, type: 'all'}, header: {}})).toBe(true);
-        expect(server.validateGetPackingOverviewParameters({path: {}, query: {...query, type: 'private'}, header: {}})).toBe(false);
-        expect(server.validateGetPackingOverviewParameters({path: {}, query: {...query, profileId: listId}, header: {}})).toBe(false);
-        expect(browser.validatePackingOverviewCard({...card, type: 'private'})).toBe(false);
+        expect(server.validateGetOverviewParameters({path: {}, query: {...query, type: 'all'}, header: {}})).toBe(true);
+        expect(server.validateGetOverviewParameters({path: {}, query: {...query, type: 'private'}, header: {}})).toBe(false);
+        expect(server.validateGetOverviewParameters({path: {}, query: {...query, profileId: listId}, header: {}})).toBe(false);
+        expect(browser.validateOverviewCard({...card, type: 'private'})).toBe(false);
     });
 });

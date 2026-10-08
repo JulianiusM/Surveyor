@@ -25,8 +25,15 @@ const local = ref('');
 const original = ref('');
 const token = ref('');
 const pending = ref(false);
-const remoteChanged = computed(() => editing.value && props.token !== token.value);
+const remoteChanged = computed(() => editing.value && String(props.value ?? '') !== original.value);
 const dirty = computed(() => editing.value && local.value.trim() !== original.value);
+watch(() => props.token, latest => {
+    // An item's other field can change while this one is being edited. The server compares
+    // only this PATCH field, and an unchanged displayed value can adopt the new token safely.
+    if (editing.value && !remoteChanged.value) token.value = latest;
+});
+const removeUpdateGuard = context.updates.registerGuard(() => !pending.value && !dirty.value);
+onBeforeUnmount(removeUpdateGuard);
 watch(
     () => props.editable,
     (allowed) => {

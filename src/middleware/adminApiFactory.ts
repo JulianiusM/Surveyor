@@ -31,7 +31,7 @@ import {
 import type {EntityBase} from '../types/UserTypes';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import renderer from "../modules/renderer";
-import type {EntityGetter, GetResource} from "../types/PermissionTypes";
+import type {EntityGetter, GetResource, SessionLike} from "../types/PermissionTypes";
 import type {CombEntityType, EntityType} from "../types/UtilTypes";
 import {requirePermissionApi} from './permissionMiddleware';
 
@@ -124,13 +124,20 @@ export function createEntityPropertyApiRouter(
     app: Router,
     entityType: EntityType,
     getResource: GetResource,
-    updateProperties: (entity: any, body: unknown) => Promise<string>,
+    updateProperties: (entity: any, body: unknown, session?: SessionLike) => Promise<string>,
     invalidateEventContext?: (id: string) => void,
 ) {
     async function update(req: Request, res: Response) {
         const entity: EntityBase = getResource(req);
-        await requireEntityPropertyUpdate(entityType, entity, req.body, req.session);
-        const message = await updateProperties(entity, req.body);
+        // Packing's original values are comparison evidence, not additional editable fields.
+        // Its controller validates them under the write lock after ordinary field authorization.
+        let authorizedBody = req.body;
+        if (entityType === 'packing' && authorizedBody && typeof authorizedBody === 'object' && !Array.isArray(authorizedBody)) {
+            authorizedBody = {...authorizedBody};
+            delete authorizedBody.expectedValues;
+        }
+        await requireEntityPropertyUpdate(entityType, entity, authorizedBody, req.session);
+        const message = await updateProperties(entity, req.body, req.session);
         renderer.respondWithSuccessJson(res, message);
     }
     app.post('/:id/update', asyncHandler(update));

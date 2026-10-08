@@ -1,4 +1,9 @@
 schemas:
+  DecimalId:
+    description: Canonical positive decimal handle for a legacy numeric record; converted only at its owning server boundary.
+    type: string
+    pattern: ^[1-9][0-9]*$
+    maxLength: 16
   Uuid:
     type: string
     format: uuid
@@ -104,6 +109,12 @@ schemas:
         items:
           $ref: "#/schemas/FieldError"
     oneOf:
+      - properties:
+          code: {const: CLIENT_UPDATE_REQUIRED}
+          messageKey: {const: 'api:errors.CLIENT_UPDATE_REQUIRED'}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
       - properties:
           code: {const: INVALID_CREDENTIALS}
           messageKey: {const: 'api:errors.INVALID_CREDENTIALS'}

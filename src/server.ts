@@ -19,6 +19,7 @@ import {initDataSource} from "./modules/database/dataSource";
 import {startInvoiceRetentionJob} from './modules/invoice/retention';
 import {startEntityArchivalJob} from './modules/entityArchival';
 import settings from './modules/settings';
+import {initializeFrontendDevelopment} from './modules/frontendDevelopment';
 
 async function bootstrap() {
     try {
@@ -34,6 +35,7 @@ async function bootstrap() {
 
         const {default: app} = await require('./app');
         const server = http.createServer(app);
+        await initializeFrontendDevelopment(server);
         server.listen(settings.value.appPort, () => {
             console.log(`🚀 Server listening on ${settings.value.rootUrl}`);
         });

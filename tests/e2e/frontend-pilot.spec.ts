@@ -122,6 +122,38 @@ test('pilot navigates without replacing the document and preserves the legacy Pa
     expect(await page.evaluate(key => localStorage.getItem(key), `packed_${list.id}_${itemId}`)).toBe('1');
 });
 
+test('native local login and body-free logout remain usable without JavaScript', async ({browser, baseURL}) => {
+    const context = await browser.newContext({baseURL, javaScriptEnabled: false});
+    try {
+        const page = await context.newPage();
+        const credentials = createE2ELogin();
+        await page.goto('/frontend-pilot/users/login?locale=de');
+        await page.locator('input[name="username"]').fill(credentials.username);
+        await page.locator('input[name="password"]').fill('invalid-native-password');
+        const loginForm = page.locator('form[action="/frontend-pilot/users/login"]').filter({has: page.locator('input[name="password"]')});
+        await loginForm.locator('button[type="submit"]').click();
+        await expect(page.locator('main [role="alert"]')).toBeVisible();
+        await expect(page.locator('input[name="username"]')).toHaveValue(credentials.username);
+        await expect(page.locator('input[name="password"]')).toHaveValue('');
+        await page.locator('input[name="password"]').fill(credentials.password);
+        await loginForm.locator('button[type="submit"]').click();
+        await expect(page).toHaveURL(/\/frontend-pilot\?locale=de$/);
+        expect((await bootstrap(context.request)).kind).toBe('account');
+        const logout = page.locator('form[action="/frontend-pilot/users/logout"]');
+        await page.locator('header details').filter({has: logout}).locator('summary').click();
+        // The declared operation has no request body. Native hidden context controls
+        // must still be admitted without inventing an input schema for this command.
+        await logout.locator('button[type="submit"]').click();
+        await expect(page).toHaveURL(/\/frontend-pilot\?locale=de$/);
+        expect((await bootstrap(context.request)).kind).toBe('anonymous');
+        await expect(page.locator('main .status-notice.alert-success')).toBeVisible();
+        await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+        await page.goto('/frontend-pilot/users/login?locale=de');
+        await expect(page.locator('main .status-notice.alert-success')).toHaveCount(0);
+        await expect(page.locator('input[name="password"]')).toBeVisible();
+    } finally { await context.close(); }
+});
+
 test('pilot owner keyboard dialog and mobile guest assignment retain readable, reachable controls', async ({page, browser, baseURL}, testInfo) => {
     await page.setViewportSize({width: 1280, height: 900});
     const list = await packing(page, true);
@@ -310,7 +342,9 @@ test('pilot edits items with conflict review, quick-adds, reorders and removes a
     const previousViewport = page.viewportSize()!;
     await page.setViewportSize({width: 390, height: 844});
     const conflict = row.locator('.pilot-inline-conflict');
-    expect((await conflict.boundingBox())!.width).toBeGreaterThanOrEqual(224);
+    // Gecko may report the 224px minimum as 223.9999847; compare whole CSS pixels
+    // while the following viewport checks still protect readable, reachable controls.
+    expect(Math.round((await conflict.boundingBox())!.width)).toBeGreaterThanOrEqual(224);
     await conflict.scrollIntoViewIfNeeded();
     await expect(conflict).toBeInViewport({ratio: 1});
     await expect(row.getByRole('button', {name: 'Review changes', exact: true})).toBeInViewport({ratio: 1});
@@ -340,7 +374,7 @@ test('pilot edits items with conflict review, quick-adds, reorders and removes a
     await page.locator('#quick-description').fill('Bring gas');
     await page.locator('#quick-max').fill('2');
     await packingCommand(page, resource.id, '/items', 'POST',
-        () => page.getByRole('button', {name: 'Add', exact: true}).click());
+        () => page.getByRole('button', {name: 'Add', exact: true}).click(), 201);
     await expect(page.locator('#quick-title')).toHaveValue('');
     const added = (await readPacking(page.request, resource.id)).items.find(item => item.title === 'Shared stove')!;
     const addedRow = page.locator(`tr[data-item-id="${added.id}"]`);
@@ -517,7 +551,7 @@ test('pilot creates and duplicates complete lists through the SPA forms with row
         && response.request().method() === 'POST');
     await page.getByRole('button', {name: 'Create list', exact: true}).click();
     const createResponse = await created;
-    expect(createResponse.status()).toBe(200);
+    expect(createResponse.status()).toBe(201);
     const originalId = (await createResponse.json()).id as string;
     await expect(page).toHaveURL(new RegExp('/frontend-pilot/packing/' + originalId + '$'));
     await expect(page.getByRole('heading', {name: title, exact: true})).toBeVisible();
@@ -540,7 +574,7 @@ test('pilot creates and duplicates complete lists through the SPA forms with row
         && response.request().method() === 'POST');
     await page.getByRole('button', {name: 'Create list', exact: true}).click();
     const copyResponse = await copied;
-    expect(copyResponse.status()).toBe(200);
+    expect(copyResponse.status()).toBe(201);
     const copyId = (await copyResponse.json()).id as string;
     expect(copyId).not.toBe(originalId);
     await expect(page.getByRole('heading', {name: title + ' copy', exact: true})).toBeVisible();
@@ -606,7 +640,7 @@ test('pilot overview preserves personal visibility, shared archive state and lin
 
     async function preference(card: ReturnType<Page['locator']>, value: 'hidden' | 'shown' | 'default'): Promise<void> {
         await card.locator('summary').click();
-        const response = page.waitForResponse(result => new URL(result.url()).pathname === `/api/v1/packing-lists/overview/packing/${standalone.id}/visibility`
+        const response = page.waitForResponse(result => new URL(result.url()).pathname === `/api/v1/overview/packing/${standalone.id}/visibility`
             && result.request().method() === 'PUT');
         await card.getByRole('button', {name: {hidden: 'Hide for me', shown: 'Show for me', default: 'Use default visibility'}[value], exact: true}).click();
         const saved = await response;
@@ -617,7 +651,7 @@ test('pilot overview preserves personal visibility, shared archive state and lin
     await expect(ownedCard).toHaveCount(0);
     await expect(participant.locator(`[data-id="${standalone.id}"]`)).toHaveCount(0);
     expect((await readPacking(page.request, standalone.id)).archived).toBe(false);
-    await owner.locator('..').getByRole('button', {name: /^Archived and hidden/}).click();
+    await owner.locator('..').getByRole('link', {name: /^Archived and hidden/}).click();
     const hidden = page.locator('[data-collection="owner"][data-region="hidden"]');
     const hiddenCard = hidden.locator(`[data-id="${standalone.id}"]`);
     await expect(hiddenCard).toContainText('Hidden for me');
@@ -642,16 +676,16 @@ test('pilot overview preserves personal visibility, shared archive state and lin
     await expect(ownedCard).toBeVisible();
     expect((await readPacking(page.request, standalone.id)).archived).toBe(false);
 
-    await owner.getByRole('button', {name: 'Clear filters', exact: true}).click();
+    await owner.getByRole('link', {name: 'Clear filters', exact: true}).click();
     const eventCard = owner.locator(`[data-id="${event.id}"]`);
-    await expect(eventCard).toContainText('Show linked entities — 1 of 1 match');
-    await eventCard.getByRole('button', {name: 'Show linked entities for ' + event.title, exact: true}).click();
+    await expect(eventCard).toContainText('Show linked entities (1)');
+    await eventCard.getByRole('link', {name: 'Show linked entities for ' + event.title, exact: true}).click();
     await expect(page).toHaveURL(new RegExp('owner_main_event=' + event.id));
     await expect(owner.locator('.entity-overview-children')).toContainText(linked.title);
     await expect(owner.locator('.entity-overview-children')).toContainText('Linked entities 1–1 of 1');
-    await owner.getByRole('button', {name: 'Back to overview', exact: true}).click();
+    await owner.getByRole('link', {name: 'Back to overview', exact: true}).click();
     await expect(owner.locator('.entity-overview-children')).toHaveCount(0);
-    await eventCard.getByRole('button', {name: 'Show linked entities for ' + event.title, exact: true}).click();
+    await eventCard.getByRole('link', {name: 'Show linked entities for ' + event.title, exact: true}).click();
     await owner.locator(`[data-id="${linked.id}"] > a.card-body`).click();
     await expect(page).toHaveURL(new RegExp('/frontend-pilot/packing/' + linked.id + '$'));
     await expect(page.getByRole('heading', {name: linked.title, exact: true})).toBeVisible();

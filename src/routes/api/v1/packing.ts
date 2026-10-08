@@ -8,14 +8,14 @@
 import {Router, type Request, type Response} from 'express';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import type {components, operations} from '../../../types/api/v1';
+import type {components} from '../../../types/api/v1';
 import {ApiProblem} from '../../../modules/api/problem';
 import {prepareFileUploader, removeImage} from '../../../modules/lib/fileCommons';
 import settings from '../../../modules/settings';
 import * as packingApi from '../../../modules/packing/api';
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import {requireApiContext} from '../../../modules/api/session';
-import {sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
+import {sendValidatedBinary, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
 import {patchPackingMetadata, preparePackingMetadataPatch, readPackingList, readPackingMetadata, setPackingSelfAssignment} from '../../../modules/packing/api';
 
 const router = Router();
@@ -28,20 +28,6 @@ async function readImageUpload(req: Request, res: Response): Promise<void> {
         else reject(new ApiProblem(error.code === 'LIMIT_FILE_SIZE' ? 'PAYLOAD_TOO_LARGE' : 'UPLOAD_INVALID'));
     }));
 }
-
-router.get('/overview', asyncHandler(async function getPackingOverview(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    validateOperationRequest(req, 'getPackingOverview');
-    const query = req.query as operations['getPackingOverview']['parameters']['query'];
-    sendValidatedJson(req, res, 'getPackingOverview', 200, await packingApi.readPackingOverview(query, actor));
-}));
-
-router.put('/overview/:entityType/:entityId/visibility', asyncHandler(async function setPackingVisibility(req, res) {
-    const actor = await requireApiContext(req, res, true);
-    validateOperationRequest(req, 'setPackingVisibility');
-    sendValidatedJson(req, res, 'setPackingVisibility', 200, await packingApi.setPackingVisibility(
-        req.params.entityType as components['schemas']['PackingOverviewCard']['type'], String(req.params.entityId), req.body, actor));
-}));
 
 router.get('/create-context', asyncHandler(async function getPackingCreateContext(req, res) {
     const actor = await requireApiContext(req, res, true);
@@ -72,7 +58,8 @@ router.post('/', asyncHandler(async function createPackingList(req, res) {
         const form = req.body as components['schemas']['PackingCreateForm'];
         const result = await packingApi.createPackingList(form.data, req.file, actor);
         committed = true;
-        sendValidatedJson(req, res, 'createPackingList', 200, result);
+        res.location(`/api/v1/packing-lists/${encodeURIComponent(result.id)}`);
+        sendValidatedJson(req, res, 'createPackingList', 201, result);
     } finally {
         // A response serialization/network failure after commit must not remove the committed image.
         if (!committed && req.file) removeImage(req.file.path);
@@ -131,7 +118,12 @@ router.get('/:listId/duplicate', asyncHandler(async function getPackingDuplicate
 router.post('/:listId/items', asyncHandler(async function createPackingItem(req, res) {
     const actor = await requireApiContext(req, res, true);
     validateOperationRequest(req, 'createPackingItem');
-    sendValidatedJson(req, res, 'createPackingItem', 200, await packingApi.createPackingItem(String(req.params.listId), req.body, actor));
+    const id = String(req.params.listId);
+    const result = await packingApi.createPackingItem(id, req.body, actor);
+    // The ordered parent representation is authoritative for item reads. The fragment identifies
+    // its newly created row without promising an unsupported single-item GET endpoint.
+    res.location(`/api/v1/packing-lists/${encodeURIComponent(id)}#${encodeURIComponent(result.id)}`);
+    sendValidatedJson(req, res, 'createPackingItem', 201, result);
 }));
 
 router.patch('/:listId/items/:itemId', asyncHandler(async function updatePackingItem(req, res) {
@@ -155,7 +147,7 @@ router.put('/:listId/item-order', asyncHandler(async function reorderPackingItem
 router.delete('/:listId/assignments/:assignmentId', asyncHandler(async function deletePackingAssignment(req, res) {
     const actor = await requireApiContext(req, res, true);
     validateOperationRequest(req, 'deletePackingAssignment');
-    sendValidatedJson(req, res, 'deletePackingAssignment', 200, await packingApi.deletePackingAssignment(String(req.params.listId), Number(req.params.assignmentId), actor));
+    sendValidatedJson(req, res, 'deletePackingAssignment', 200, await packingApi.deletePackingAssignment(String(req.params.listId), String(req.params.assignmentId), actor));
 }));
 
 router.put('/:listId/event', asyncHandler(async function changePackingEvent(req, res) {
@@ -229,8 +221,7 @@ router.get('/:listId/header', asyncHandler(async function getPackingHeader(req, 
     let bytes: Buffer;
     try { bytes = await fs.readFile(fullPath); }
     catch { throw new ApiProblem('NOT_FOUND'); }
-    res.set('Cache-Control', 'private, no-store').set('X-Surveyor-Context', actor.context).vary('Cookie').vary('X-Surveyor-Context');
-    res.type('application/octet-stream').send(bytes);
+    sendValidatedBinary(req, res, 'getPackingHeader', 200, bytes);
 }));
 
 router.post('/:listId/archive', asyncHandler(async function archivePackingList(req, res) {
