@@ -2,7 +2,7 @@ import {expect, test, type APIRequestContext, type APIResponse} from '@playwrigh
 import {randomUUID} from 'node:crypto';
 import type {components} from '../../src/types/api/v1';
 import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, loginForE2E} from '../keywords/e2eCoreKeywords';
+import {createResourceViaForm, loginForE2E, waitForPilotHydration} from '../keywords/e2eCoreKeywords';
 
 /** Exercise cookie/session admission through the built application, without a test-only identity shortcut. */
 async function bootstrap(request: APIRequestContext): Promise<components['schemas']['SessionView']> {
@@ -200,6 +200,39 @@ test('keeps exact native and SPA duplicate destinations including query context 
             headers: headersFor(session), params: {returnTo: 'https://outside.invalid/duplicate'},
         });
         expect(new URL((await forbidden.json()).entry.url, baseURL).searchParams.get('next')).toBe('/frontend-pilot');
+
+        // Exercise native POST/redirect/GET through the actual client entry. SSR-only notice
+        // assertions miss a browser decoder that discards the consumed one-time feedback.
+        const signedIn = await anonymous.request.post('/frontend-pilot/users/login', {maxRedirects: 0, form: {
+            ...createE2ELogin(), next: pilotReturn, locale: 'de', _context: session.context,
+            _csrf: session.csrfToken, _compatibility: session.deployment.apiCompatibility,
+        }});
+        expect(signedIn.status()).toBe(303);
+        const returned = new URL(signedIn.headers().location!, baseURL);
+        expect(returned.pathname + returned.search).toBe(pilotReturn);
+        const nativePage = await anonymous.newPage();
+        const document = await nativePage.goto(returned.pathname + returned.search);
+        expect(await document!.text()).toContain('"pageNotice":{"kind":"success","messageKey":"auth.loginDone"}');
+        await waitForPilotHydration(nativePage);
+        await expect(nativePage.locator('#pilot-locale')).toBeEnabled();
+        await expect(nativePage.getByText('Erfolgreich angemeldet.', {exact: true})).toBeVisible();
+        await nativePage.locator('#pilot-locale').selectOption('en');
+        await expect(nativePage.getByText('Login successful', {exact: true})).toBeVisible();
+
+        const loggedIn = await bootstrap(anonymous.request);
+        const logoutReturn = '/frontend-pilot/help?doc=packing_lists';
+        const loggedOut = await anonymous.request.post('/frontend-pilot/users/logout', {maxRedirects: 0, form: {
+            next: logoutReturn, locale: 'en', _context: loggedIn.context,
+            _csrf: loggedIn.csrfToken, _compatibility: loggedIn.deployment.apiCompatibility,
+        }});
+        expect(loggedOut.status()).toBe(303);
+        const logoutDestination = new URL(loggedOut.headers().location!, baseURL);
+        expect(logoutDestination.pathname).toBe('/frontend-pilot/help');
+        expect(logoutDestination.searchParams.get('doc')).toBe('packing_lists');
+        await nativePage.goto(logoutDestination.pathname + logoutDestination.search);
+        await waitForPilotHydration(nativePage);
+        await expect(nativePage.locator('#pilot-locale')).toBeEnabled();
+        await expect(nativePage.getByText('Logout successful.', {exact: true})).toBeVisible();
     } finally {
         await anonymous.close();
     }
@@ -217,6 +250,15 @@ test('renders invalid guest capability links as native 401 HTML with guest-speci
     expect(html).toContain('Invalid or mismatched token');
     expect(html).not.toContain('Your session has expired');
     expect(html).toContain('"pageEntry":{"kind":"denied","status":401,"messageKey":"auth.invalidGuestLink"}');
+    await page.goto(`/frontend-pilot/guest/${id}/login/${token}?locale=en`);
+    await waitForPilotHydration(page);
+    await expect(page.locator('#pilot-locale')).toBeEnabled();
+    // A reactive locale change proves this is the hydrated error surface, not merely the
+    // server's initial Error card before the production decoder and route owner run.
+    await page.locator('#pilot-locale').selectOption('de');
+    await expect(page.locator('#pilot-main h1')).toHaveText('Fehler');
+    await expect(page.locator('#pilot-main')).toContainText('Ungültiger oder nicht passender Token');
+    await expect(page.locator('#pilot-main form')).toHaveCount(0);
 });
 
 test('runs the native expiry/logout document journey before invalid stored identity becomes an API problem', async ({page, browser, baseURL}) => {

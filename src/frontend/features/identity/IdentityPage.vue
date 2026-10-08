@@ -7,7 +7,7 @@ import {usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {problemMessage} from '../../composables/feedback';
 import {usePageTitle} from '../../composables/pageTitle';
-import {completeIdentityEntry, completePageEntry} from '../../composables/pageEntry';
+import {completeIdentityEntry, completePageEntry, useConfirmedNavigation} from '../../composables/pageEntry';
 import FormField from '../../components/FormField.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
@@ -24,12 +24,12 @@ const context = usePilot();
 const {messages} = context;
 const route = useRoute();
 const router = useRouter();
+const confirmedNavigation = useConfirmedNavigation();
 const mode = computed(
     () => route.meta.identityMode as 'login' | 'register' | 'forgot' | 'reset' | 'activate' | 'guest-login' | 'recovery' | 'error',
 );
 const next = computed(() => safeFrontendReturn(route.query.next));
-const nativeInitial = context.bootstrap.initialUrl === route.fullPath
-    && context.bootstrap.session.context === context.session.value?.context ? context.bootstrap : undefined;
+const nativeInitial = context.initialDocumentFor(route.fullPath);
 // Passwords belong only to this mounted form; neither bootstrap nor persistent recovery stores them.
 const fields = reactive({
     username: nativeInitial?.identityFields?.username ?? '',
@@ -81,15 +81,15 @@ function clearFields(): void {
 if (nativeInitial?.identityFormProblem) {
     command.setError(new ApiFailure(nativeInitial.identityFormProblem.status, nativeInitial.identityFormProblem));
 }
-const bootstrapMatchesRoute = computed(() => context.bootstrap.initialUrl === route.fullPath);
+const initialDocument = computed(() => context.initialDocumentFor(route.fullPath));
 const needsOidc = computed(() => ['login', 'register'].includes(mode.value)
     && !context.session.value?.shell.localLoginEnabled && context.session.value?.shell.oidcEnabled);
 const identityDenial = computed(() => {
-    const entry = bootstrapMatchesRoute.value ? context.bootstrap.pageEntry : undefined;
+    const entry = initialDocument.value?.pageEntry;
     if (entry?.kind === 'denied') {
         return messages.value.t(isPlainMessageKey(entry.messageKey) ? entry.messageKey : 'common.error');
     }
-    const initial = bootstrapMatchesRoute.value ? context.bootstrap.identityProblem : undefined;
+    const initial = initialDocument.value?.identityProblem;
     if (initial) return problemMessage(messages.value, initial);
     if (mode.value === 'error') return messages.value.t('common.error');
     if (!['guest-login', 'recovery'].includes(mode.value)
@@ -108,7 +108,7 @@ const resetAttempt = ref(0);
 let usedInitialReset = false;
 // Only this exact initial route may consume the server admission. Reused Vue routes
 // must obtain their own read, and an obsolete token response cannot reveal a form.
-watch(() => [mode.value, route.params.token, context.epoch.value, context.ready.value, resetAttempt.value],
+watch(() => [mode.value, route.params.token, initialDocument.value, context.epoch.value, context.ready.value, resetAttempt.value],
     refreshResetAdmission, {immediate: true});
 
 /** A reused reset route gets fresh admission; cleanup prevents an old token read reopening its form. */
@@ -125,9 +125,9 @@ async function refreshResetAdmission(_value: unknown, _previous: unknown, onClea
 
     // Use bootstrap only for its own first route. Later tokens and retry attempts read again.
     if (mode.value !== 'reset' || identityDenial.value) return;
-    if (!usedInitialReset && bootstrapMatchesRoute.value && context.bootstrap.passwordReset) {
+    if (!usedInitialReset && initialDocument.value?.passwordReset) {
         usedInitialReset = true;
-        resetAdmission.value = context.bootstrap.passwordReset;
+        resetAdmission.value = initialDocument.value.passwordReset;
         return;
     }
     if (!context.browser || !context.ready.value) return;
@@ -150,7 +150,7 @@ const resetDenial = computed(() => {
     if (!problem || !('code' in problem)) return null;
     return problemMessage(messages.value, problem);
 });
-const blocked = computed(() => command.pending.value || command.uncertain.value);
+const blocked = computed(() => command.pending.value || command.uncertain.value || !!confirmedNavigation.target.value);
 
 /** Check identity authority without replaying mail, registration or sign-in commands. */
 async function refreshIdentityState(): Promise<void> {
@@ -197,6 +197,9 @@ const submitIcon = computed(() => presentation.value.submitIcon);
 
 /** Dispatch the current form through one command owner after local, native-equivalent validation. */
 async function submit(): Promise<void> {
+    // A confirmed command awaiting destination delivery can only retry navigation.
+    // The shared receipt survives the private view's identity-driven remount.
+    if (blocked.value) return;
     if (identityDenial.value || needsOidc.value || mode.value === 'reset' && !resetAllowed.value) return;
     if (mode.value === 'register' && !isRegistrationPasswordValid(fields.password)) {
         showPasswordCriteria.value = true;
@@ -216,7 +219,7 @@ async function submit(): Promise<void> {
         if (result) {
             clearFields();
             await completeIdentityEntry(context, router, result,
-                {kind: 'redirect', url: destination, notice: null}, origin);
+                {kind: 'redirect', url: destination, notice: {kind: 'success', messageKey: 'auth.loginDone'}}, origin, confirmedNavigation);
         }
         return;
     }
@@ -274,12 +277,13 @@ async function submitIdentityForm(scope: PilotRequestScope) {
 /** Native recovery completes on the full message surface. Unknown delivery preserves the
  * mounted form and its values; only confirmation releases those values and departure guards. */
 async function recover(): Promise<void> {
+    if (blocked.value) return;
     const scope = context.capture();
     const origin = route.fullPath;
     if (await command.run(requestRecovery, false)) {
         clearFields();
         await completePageEntry(context, router, '/frontend-pilot/guest/recovery',
-            'auth.recoverySent', 'success', scope, origin);
+            'auth.recoverySent', 'success', scope, origin, confirmedNavigation);
     }
 }
 
@@ -292,11 +296,12 @@ onMounted(() => {
 /** Reused route components need the same admission as first mounts. A URL alone cannot
  * restore a completed command; only trusted POST feedback or the scoped receipt can. */
 function admitRecovery(): void {
-    if (context.browser && mode.value === 'recovery' && !recoveryCompleted.value && !identityDenial.value) {
+    if (context.browser && context.ready.value && mode.value === 'recovery' && !recoveryCompleted.value && !identityDenial.value) {
         void router.replace('/frontend-pilot/users/login');
     }
 }
-watch(mode, admitRecovery, {immediate: true});
+watch(() => [mode.value, route.fullPath, identityDenial.value, recoveryCompleted.value, context.ready.value],
+    admitRecovery, {immediate: true});
 </script>
 
 <template>
@@ -308,6 +313,15 @@ watch(mode, admitRecovery, {immediate: true});
     <PageMessage v-else-if="recoveryCompleted" kind="success" :message="messages.t('auth.recoverySent')" />
     <LoadingSkeleton v-else-if="mode === 'recovery'" variant="form" />
     <template v-else>
+        <!-- A delivered command stays confirmed even if its destination cannot load.
+             Retry belongs to the shared receipt and never resubmits credentials or mail. -->
+        <StatusNotice v-if="confirmedNavigation.target.value" kind="success">
+            {{ messages.t('state.saved') }}
+            <ActionButton class="btn-sm ms-2" variant="outline-light"
+                :pending="confirmedNavigation.pending.value" @click="confirmedNavigation.retry">
+                {{ messages.t('common.retry') }}
+            </ActionButton>
+        </StatusNotice>
         <!-- Identity validation and activation feedback occupy the same shared region
              above the form card as native account pages. Keep it outside the form. -->
         <StatusNotice v-if="activationNotice" kind="success">{{ messages.t('auth.activated') }}</StatusNotice>

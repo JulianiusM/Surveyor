@@ -1,9 +1,9 @@
-import {computed, onBeforeUnmount, shallowRef, watch} from 'vue';
+import {computed, getCurrentInstance, onBeforeUnmount, ref, shallowRef, watch} from 'vue';
 import {isNavigationFailure, useRoute, useRouter} from 'vue-router';
 import type {RouteLocationNormalized, Router} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../types/api/v1';
-import type {PilotContext, PilotPageEntrySource, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
+import type {PilotConfirmedNavigation, PilotContext, PilotPageEntrySource, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {MessageKey} from '../../types/LocalizationTypes';
 import {safeFrontendReturn} from '../../modules/lib/frontendIdentity';
 import {isPlainMessageKey} from '../../modules/localization/translator';
@@ -66,6 +66,17 @@ export async function navigatePageEntry(context: PilotContext, router: Router,
     // The existing return owner rejects external and malformed destinations. The server's
     // projection supplies the actual destination; frontend code only enforces that boundary.
     const destination = pageDestination(router, outcome.url);
+    // A server-owned canonical redirect can follow an identity redirect before a page is
+    // shown. Keep that transition's feedback until its rendered destination; ordinary user
+    // departures still clear it in the shell, and identity retirement removes old notices.
+    const notice = outcome.notice ?? context.pageNotice.value;
+    // Native header transitions can return to their current URL after changing identity.
+    // That destination is already committed; a duplicated router replacement is not a
+    // failed completion and must still publish its one-time feedback without new history.
+    if (router.currentRoute.value.fullPath === destination) {
+        context.pageNotice.value = notice;
+        return true;
+    }
     try {
         const result = await router.replace(destination);
         if (isNavigationFailure(result) || !context.isCurrent(scope)
@@ -73,7 +84,7 @@ export async function navigatePageEntry(context: PilotContext, router: Router,
 
         // Apply one-time feedback after commitment. A cancelled dirty-form guard leaves its input
         // and earlier notice untouched; the shell dismisses this notice on the next committed visit.
-        context.pageNotice.value = outcome.notice;
+        context.pageNotice.value = notice;
         return true;
     } catch {
         // Failed lazy delivery is already reported by the router's application-owned error
@@ -89,7 +100,8 @@ export async function navigatePageEntry(context: PilotContext, router: Router,
 export async function completePageEntry(context: PilotContext, router: Router, destination: string,
                                         messageKey: MessageKey, kind: 'success' | 'info',
                                         scope: PilotRequestScope = context.capture(),
-                                        origin: string = router.currentRoute.value.fullPath): Promise<boolean> {
+                                        origin: string = router.currentRoute.value.fullPath,
+                                        navigation?: PilotConfirmedNavigation): Promise<boolean> {
     if (!context.isCurrent(scope) || router.currentRoute.value.fullPath !== origin
         || !isPlainMessageKey(messageKey)) return false;
     const previous = context.pageCompletion.value;
@@ -99,11 +111,11 @@ export async function completePageEntry(context: PilotContext, router: Router, d
 
     // A confirmed command belongs to its actor, not the language used to submit it.
     // Capture the current locale for navigation; the typed receipt translates reactively.
-    const committed = await navigatePageEntry(context, router,
-        {kind: 'redirect', url: receipt.destination, notice: null}, context.capture(), origin);
+    const committed = await navigateConfirmedEntry(context, router,
+        {kind: 'redirect', url: receipt.destination, notice: null}, origin, navigation);
     // Identity retirement may already have removed this receipt. Restore an earlier
     // presentation only when this unsuccessful navigation still owns the current one.
-    if (!committed && context.pageCompletion.value === installed) context.pageCompletion.value = previous;
+    if (!committed && !navigation && context.pageCompletion.value === installed) context.pageCompletion.value = previous;
     return committed;
 }
 
@@ -116,7 +128,8 @@ const identityNavigations = new WeakMap<PilotContext['session'], () => void>();
  * A later matching Retry never replays login/registration or visits a retired origin.
  */
 function retainIdentityNavigation(context: PilotContext, router: Router, confirmedContext: string,
-                                 outcome: components['schemas']['PageEntryOutcome'], origin: string): void {
+                                 outcome: components['schemas']['PageEntryOutcome'], origin: string,
+                                 completion?: PilotConfirmedNavigation): void {
     const navigation = observePageNavigation(router, resumeNavigation);
     const stop = watch(() => [context.ready.value, context.session.value?.context, context.epoch.value], resumeNavigation);
     identityNavigations.set(context.session, retireNavigation);
@@ -135,7 +148,7 @@ function retainIdentityNavigation(context: PilotContext, router: Router, confirm
         if (!context.ready.value || navigation.pending()) return;
         const matches = context.session.value?.context === confirmedContext;
         retireNavigation();
-        if (matches) void navigatePageEntry(context, router, outcome, context.capture(), origin);
+        if (matches) void navigateConfirmedEntry(context, router, outcome, origin, completion);
     }
     // A Retry can finish in the same tick that the failed command relinquishes its handler.
     resumeNavigation();
@@ -148,19 +161,194 @@ function retainIdentityNavigation(context: PilotContext, router: Router, confirm
 export async function completeIdentityEntry(context: PilotContext, router: Router,
                                             result: components['schemas']['IdentityResult'],
                                             outcome: components['schemas']['PageEntryOutcome'],
-                                            origin: string = router.currentRoute.value.fullPath): Promise<boolean> {
+                                            origin: string = router.currentRoute.value.fullPath,
+                                            navigation?: PilotConfirmedNavigation): Promise<boolean> {
     identityNavigations.get(context.session)?.();
     try {
         await context.acceptIdentity(result);
     } catch {
         if (!context.ready.value && router.currentRoute.value.fullPath === origin) {
-            retainIdentityNavigation(context, router, result.session.context, outcome, origin);
+            retainIdentityNavigation(context, router, result.session.context, outcome, origin, navigation);
             return false;
         }
         // A superseding authoritative actor is never allowed to consume this confirmation.
         if (context.session.value?.context !== result.session.context) return false;
     }
+    return navigateConfirmedEntry(context, router, outcome, origin, navigation);
+}
+
+/** The caller's existing admission result supplies all policy and feedback. Retained
+ * completion only adds delivery recovery; render/denial still follow the ordinary boundary. */
+function navigateConfirmedEntry(context: PilotContext, router: Router,
+                                outcome: components['schemas']['PageEntryOutcome'], origin: string,
+                                navigation?: PilotConfirmedNavigation): Promise<boolean> {
+    if (navigation && outcome.kind === 'redirect') {
+        return navigation.navigate(outcome.url, context.capture(), origin, outcome.notice);
+    }
     return navigatePageEntry(context, router, outcome, context.capture(), origin);
+}
+
+// Identity admission replaces epoch-keyed route instances, including after a healthy
+// bootstrap. This application-local owner keeps only canonical delivery receipts across
+// those remounts. Separate SSR requests/browser apps have separate session ref keys.
+const confirmedNavigations = new WeakMap<PilotContext['session'], ReturnType<typeof createConfirmedNavigation>>();
+
+/** One application-owned delivery state, observed by mounted command owners. Component
+ * type identifies the receipt's logical owner through an identity remount; the header and
+ * unrelated feature editors cannot expose each other's Retry or command confirmation. */
+function createConfirmedNavigation(context: PilotContext, router: Router) {
+    const receipt = shallowRef<{destination: string; scope: PilotRequestScope; origin: string;
+        notice: components['schemas']['EntryNotice'] | null; owner: unknown}>();
+    const pending = ref(false);
+    const mountedOwners = shallowRef(new Map<unknown, number>());
+    let owners = 0;
+    let disposed = false;
+
+    // A release update must not silently reload the old creation form while its confirmed
+    // entity's destination is still awaiting delivery. No receipt is persisted or replayed.
+    const removeUpdateGuard = context.updates.registerGuard(canReload);
+    const removeIdentityGuard = context.registerIdentityGuard(canChangeIdentity);
+    const removeNavigationGuard = router.beforeEach(admitNavigation);
+    const removeNavigationFinish = router.afterEach(retireDepartedReceipt);
+    const stopIdentity = watch(() => [context.ready.value, context.session.value?.context, context.epoch.value], retireObsoleteReceipt);
+    if (context.browser) window.addEventListener('beforeunload', protectPendingDeparture);
+
+    function canReload(): boolean {
+        return !pending.value && receipt.value === undefined;
+    }
+
+    function canChangeIdentity(): boolean {
+        return !pending.value;
+    }
+
+    function admitNavigation(to: RouteLocationNormalized): boolean {
+        return !pending.value || to.fullPath === receipt.value?.destination;
+    }
+
+    function protectPendingDeparture(event: BeforeUnloadEvent): void {
+        // Failed delivery retains the confirmed destination too. Browser reload/close must
+        // ask for deliberate departure instead of silently returning to a repeatable form.
+        if (canReload()) return;
+        event.preventDefault();
+        event.returnValue = '';
+    }
+
+    function retireDepartedReceipt(_to: RouteLocationNormalized, _from: RouteLocationNormalized,
+                                   failure?: unknown): void {
+        if (!failure && router.currentRoute.value.fullPath !== receipt.value?.origin) receipt.value = undefined;
+    }
+
+    function retireObsoleteReceipt(): void {
+        if (receipt.value && !context.isCurrent(receipt.value.scope)) receipt.value = undefined;
+    }
+
+    /** Retry delivery with the current presentation language, while retaining the confirmed
+     * actor/epoch and origin. Language selection cannot invalidate a committed business result. */
+    async function retry(owner: unknown): Promise<boolean> {
+        const confirmed = receipt.value;
+        if (disposed || pending.value || !confirmed || confirmed.owner !== owner) return false;
+        if (!context.isCurrent(confirmed.scope) || router.currentRoute.value.fullPath !== confirmed.origin) {
+            receipt.value = undefined;
+            return false;
+        }
+
+        pending.value = true;
+        try {
+            const committed = await navigatePageEntry(context, router,
+                {kind: 'redirect', url: confirmed.destination, notice: confirmed.notice}, context.capture(), confirmed.origin);
+            if (committed && receipt.value === confirmed) receipt.value = undefined;
+            return committed;
+        } finally {
+            pending.value = false;
+        }
+    }
+
+    async function navigate(owner: unknown, destination: string, scope: PilotRequestScope = context.capture(),
+                            origin: string = router.currentRoute.value.fullPath,
+                            notice: components['schemas']['EntryNotice'] | null = null): Promise<boolean> {
+        if (disposed || pending.value || receipt.value || !context.isCurrent(scope)
+            || router.currentRoute.value.fullPath !== origin) return false;
+        receipt.value = {destination: pageDestination(router, destination), scope, origin, notice, owner};
+        return retry(owner);
+    }
+
+    function target(owner: unknown): string | null {
+        const confirmed = receipt.value;
+        return confirmed && confirmed.owner === owner ? confirmed.destination : null;
+    }
+
+    function fallbackTarget(): string | null {
+        const confirmed = receipt.value;
+        return confirmed && !mountedOwners.value.has(confirmed.owner) ? confirmed.destination : null;
+    }
+
+    function retryFallback(): Promise<boolean> {
+        const confirmed = receipt.value;
+        if (!confirmed || mountedOwners.value.has(confirmed.owner)) return Promise.resolve(false);
+        return retry(confirmed.owner);
+    }
+
+    function retain(owner: unknown): () => void {
+        owners++;
+        const counts = new Map(mountedOwners.value);
+        counts.set(owner, (counts.get(owner) ?? 0) + 1);
+        mountedOwners.value = counts;
+        return releaseOwner;
+
+        function releaseOwner(): void {
+            release(owner);
+        }
+    }
+
+    function release(owner: unknown): void {
+        const counts = new Map(mountedOwners.value);
+        const count = (counts.get(owner) ?? 1) - 1;
+        if (count > 0) counts.set(owner, count);
+        else counts.delete(owner);
+        mountedOwners.value = counts;
+        if (--owners > 0) return;
+        disposed = true;
+        receipt.value = undefined;
+        removeUpdateGuard();
+        removeIdentityGuard();
+        removeNavigationGuard();
+        removeNavigationFinish();
+        stopIdentity();
+        if (context.browser) window.removeEventListener('beforeunload', protectPendingDeparture);
+        if (confirmedNavigations.get(context.session) === navigation) confirmedNavigations.delete(context.session);
+    }
+    const navigation = {pending, target, fallbackTarget, navigate, retry, retryFallback, retain};
+    return navigation;
+}
+
+/** Retain only navigation after a confirmed command. A failed or cancelled lazy destination
+ * must not make creation/deletion available again: callers keep the confirmed result and use
+ * Retry to repeat this navigation, never the command. An identity remount observes this same
+ * application's receipt; another committed visit or authoritative actor retires it.
+ */
+export function useConfirmedNavigation(): PilotConfirmedNavigation {
+    const context = usePilot();
+    const router = useRouter();
+    const owner = getCurrentInstance()?.type ?? {};
+    let shared = confirmedNavigations.get(context.session);
+    if (!shared) {
+        shared = createConfirmedNavigation(context, router);
+        confirmedNavigations.set(context.session, shared);
+    }
+    const navigation = shared;
+    onBeforeUnmount(navigation.retain(owner));
+    const target = computed(() => navigation.target(owner));
+    const fallbackTarget = computed(navigation.fallbackTarget);
+    async function navigate(destination: string, scope: PilotRequestScope = context.capture(),
+                            origin: string = router.currentRoute.value.fullPath,
+                            notice: components['schemas']['EntryNotice'] | null = null): Promise<boolean> {
+        return navigation.navigate(owner, destination, scope, origin, notice);
+    }
+
+    function retry(): Promise<boolean> {
+        return navigation.retry(owner);
+    }
+    return {pending: navigation.pending, target, fallbackTarget, navigate, retry, retryFallback: navigation.retryFallback};
 }
 
 /** One reusable read/navigation boundary for server-owned page admission. A feature supplies

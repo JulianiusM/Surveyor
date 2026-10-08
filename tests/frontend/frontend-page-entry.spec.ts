@@ -10,7 +10,7 @@ import {createPilotContext, pilotContextKey} from '../../src/frontend/app/contex
 import PackingEntry from '../../src/frontend/features/packing/PackingEntry.vue';
 import IdentityPage from '../../src/frontend/features/identity/IdentityPage.vue';
 import App from '../../src/frontend/app/App.vue';
-import {completePageEntry, navigatePageEntry} from '../../src/frontend/composables/pageEntry';
+import {completePageEntry, navigatePageEntry, useConfirmedNavigation} from '../../src/frontend/composables/pageEntry';
 
 const firstId = '11111111-1111-4111-8111-111111111111';
 const secondId = '22222222-2222-4222-8222-222222222222';
@@ -68,6 +68,95 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
 }
 
 describe('server-owned page entry and canonical navigation', () => {
+    it('retains a confirmed destination after lazy delivery fails and retries only navigation', async () => {
+        const {context, router} = await mounted(`/frontend-pilot/packing/${firstId}/guest`, async () => json({
+            entry: {kind: 'render'}, guest: {id: firstId, title: 'Guest fixture'},
+        }));
+        let completion!: ReturnType<typeof useConfirmedNavigation>;
+        const ConfirmedOwner = defineComponent({template: '<p>Confirmed command</p>', setup() {
+            completion = useConfirmedNavigation();
+            return {};
+        }});
+        const Destination = defineComponent({template: '<p>Confirmed destination</p>'});
+        let deliveries = 0;
+
+        async function deliverDestination() {
+            deliveries++;
+            if (deliveries === 1) throw new Error('Failed to fetch dynamically imported module');
+            return Destination;
+        }
+
+        router.addRoute({path: '/frontend-pilot/command-fixture', component: ConfirmedOwner});
+        router.addRoute({path: '/frontend-pilot/confirmed-destination', component: deliverDestination});
+        await router.push('/frontend-pilot/command-fixture');
+        await flushPromises();
+        const origin = router.currentRoute.value.fullPath;
+        expect(await completion.navigate('/frontend-pilot/confirmed-destination', context.capture(), origin)).toBe(false);
+        expect(completion.target.value).toBe('/frontend-pilot/confirmed-destination');
+        expect(completion.pending.value).toBe(false);
+        expect(router.currentRoute.value.fullPath).toBe(origin);
+
+        const unload = new Event('beforeunload', {cancelable: true});
+        window.dispatchEvent(unload);
+        expect(unload.defaultPrevented).toBe(true);
+
+        const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {});
+        context.updates.observe({...session.deployment, buildId: 'replacement-fixture'});
+        await flushPromises();
+        expect(reload).not.toHaveBeenCalled();
+        expect(context.updates.requestReload()).toBe(false);
+        // A caller cannot replace a confirmed receipt by attempting its command destination
+        // again. The only recovery operation retained here is delivery of that first result.
+        expect(await completion.navigate('/frontend-pilot/help')).toBe(false);
+        expect(await completion.retry()).toBe(true);
+        await flushPromises();
+        expect(deliveries).toBe(2);
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/confirmed-destination');
+        expect(completion.target.value).toBeNull();
+    });
+
+    it('protects a pending confirmed destination and retires a cancelled receipt on another actor', async () => {
+        const {context, router} = await mounted(`/frontend-pilot/packing/${firstId}/guest`, async () => json({
+            entry: {kind: 'render'}, guest: {id: firstId, title: 'Guest fixture'},
+        }));
+        let completion!: ReturnType<typeof useConfirmedNavigation>;
+        const ConfirmedOwner = defineComponent({template: '<p>Confirmed command</p>', setup() {
+            completion = useConfirmedNavigation();
+            return {};
+        }});
+        const Destination = defineComponent({template: '<p>Confirmed destination</p>'});
+        let finishDelivery!: (page: typeof Destination) => void;
+        const held = new Promise<typeof Destination>(resolve => { finishDelivery = resolve; });
+
+        function deliverDestination() {
+            return held;
+        }
+
+        router.addRoute({path: '/frontend-pilot/command-fixture', component: ConfirmedOwner});
+        router.addRoute({path: '/frontend-pilot/confirmed-destination', component: deliverDestination});
+        await router.push('/frontend-pilot/command-fixture');
+        await flushPromises();
+        const origin = router.currentRoute.value.fullPath;
+        const navigation = completion.navigate('/frontend-pilot/confirmed-destination');
+        await flushPromises();
+        expect(completion.pending.value).toBe(true);
+        expect(context.mayChangeIdentity()).toBe(false);
+        expect(await completion.retry()).toBe(false);
+        await router.push('/frontend-pilot/help');
+        expect(router.currentRoute.value.fullPath).toBe(origin);
+        context.locale.value = 'de';
+        finishDelivery(Destination);
+        // The competing aborted navigation supersedes the first router attempt. Its
+        // confirmed receipt stays reachable; Retry still navigates and never writes.
+        expect(await navigation).toBe(false);
+        expect(completion.target.value).toBe('/frontend-pilot/confirmed-destination');
+        context.session.value = {...session, context: 'superseding-context-1234567890'};
+        await flushPromises();
+        expect(completion.target.value).toBeNull();
+        expect(await completion.retry()).toBe(false);
+        expect(router.currentRoute.value.fullPath).toBe(origin);
+    });
+
     it('redirects standalone anonymous detail to its canonical guest form, with the real title', async () => {
         const path = `/frontend-pilot/packing/${firstId}`;
         const {wrapper, router, request} = await mounted(path, async request => {

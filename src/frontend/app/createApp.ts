@@ -3,7 +3,7 @@ import {createMemoryHistory, createRouter, createWebHistory} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
-import {createPilotContext, pilotContextKey} from './context';
+import {createPilotContext, observeInitialDocument, pilotContextKey} from './context';
 import App from './App.vue';
 
 // Route chunks own their feature validators and views. The initial shell remains
@@ -59,6 +59,7 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
             return {top: 0};
         },
     });
+    observeInitialDocument(context, router);
     app.provide(pilotContextKey, context);
     app.use(I18NextVue, {i18next: context.i18next});
     app.use(VueQueryPlugin, {queryClient: context.queryClient});

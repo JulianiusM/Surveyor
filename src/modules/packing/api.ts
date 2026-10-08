@@ -23,7 +23,7 @@ import * as packingService from '../database/services/PackingService';
 import * as lifecycleService from '../database/services/EntityLifecycleService';
 import * as adminService from '../database/services/EntityAdminService';
 import * as userService from '../database/services/UserService';
-import {evaluateEntities, evaluateSubject} from '../permissionEngine';
+import {evaluateEntities, evaluateSubject, isOwner} from '../permissionEngine';
 import {getInitialPerms, getPermMeta, getPresets} from '../lib/permissions';
 import {generateUniqueId, getHeaderImageVersion} from '../lib/util';
 import {checkNewImage, removeImage} from '../lib/fileCommons';
@@ -390,8 +390,10 @@ function headerProjection(list: PackingList) {
 }
 
 function mayOpenSettings(list: PackingList, permissions: PermView, session: SessionLike): boolean {
+    // Settings expose profile-owned deletion independently of the account-only duplicate action.
     return permissions.any('EDIT_TITLE', 'EDIT_DESC', 'EDIT_META', 'MANAGE_PERMISSIONS')
-        || Boolean(session.auth?.user && (permissions.has('DATA_DUPLICATE') || list.ownerId === session.profile?.id));
+        || isOwner(session, list.ownerId)
+        || Boolean(session.auth?.user && permissions.has('DATA_DUPLICATE'));
 }
 
 /** Parent/root locks serialize management with relinking. DBAL owns locks; this controller owns every decision. */
@@ -510,27 +512,68 @@ export async function readPackingSettings(id: string, session: SessionLike): Pro
         const list = requireList(row);
         const permissions = await authorizeRead(manager, list, session);
         if (!mayOpenSettings(list, permissions, session)) throw new ApiProblem('FORBIDDEN');
+
+        // Linking a parent does not grant access to its identifying fields. Keep the native
+        // disclosure policy even when this profile may manage the packing list itself.
         let currentEvent: components['schemas']['PackingCurrentEvent'] | null = null;
         if (list.event) {
             const views = await evaluateEntities([{entityType: 'event', entityId: list.event.id, ownerId: list.event.ownerId, eventId: list.event.id}], session, manager);
             const parentPermissions = views.get(`event:${list.event.id}`)!;
             const disclose = parentPermissions.any('ACCESS_VIEW', 'MANAGE_ASSIGNMENTS');
-            currentEvent = {id: list.event.id, title: disclose ? list.event.title : null, startDate: disclose ? list.event.startDate : null,
-                endDate: disclose ? list.event.endDate : null, url: getAuthorizedEventUrl(list.event.id, parentPermissions)};
+            currentEvent = {
+                id: list.event.id,
+                title: disclose ? list.event.title : null,
+                startDate: disclose ? list.event.startDate : null,
+                endDate: disclose ? list.event.endDate : null,
+                url: getAuthorizedEventUrl(list.event.id, parentPermissions),
+            };
         }
+
+        // Do not disclose administrator identities or their edit baselines without the
+        // corresponding grant. The settings token follows the same visibility boundary.
         let access: components['schemas']['PackingAccess'] | null = null;
         if (permissions.has('MANAGE_PERMISSIONS')) {
             const admins = await adminService.listAdmins('packing', id, manager);
-            access = {defaults: completeDefaults(await adminService.getDefaultPerms('packing', id, manager)), ...permissionDefinitions(),
-                admins: admins.map(admin => ({profileId: admin.profileId, name: admin.profile.name, isGuest: Boolean(admin.profile.guestId), mask: admin.perms,
-                    editToken: comparisonToken('packing-admin', `${id}:${admin.profileId}`, session, {mask: admin.perms})}))};
+            access = {
+                defaults: completeDefaults(await adminService.getDefaultPerms('packing', id, manager)),
+                ...permissionDefinitions(),
+                admins: admins.map(admin => ({
+                    profileId: admin.profileId,
+                    name: admin.profile.name,
+                    isGuest: Boolean(admin.profile.guestId),
+                    mask: admin.perms,
+                    editToken: comparisonToken('packing-admin', `${id}:${admin.profileId}`, session, {mask: admin.perms}),
+                })),
+            };
         }
-        return {id, title: list.title, settingsToken: await settingsEditToken(manager, list, session, permissions.has('MANAGE_PERMISSIONS')), ...headerProjection(list), editableFields: metadataProjection(list, permissions).editableFields,
-            capabilities: {editHeader: permissions.has('EDIT_META'), linkEvent: permissions.has('EDIT_META'), managePermissions: permissions.has('MANAGE_PERMISSIONS'),
-                duplicate: Boolean(session.auth?.user && permissions.has('DATA_DUPLICATE')), remove: Boolean(session.auth?.user && list.ownerId === actorId(session)),
-                manageArchive: permissions.has('EDIT_META'), archive: permissions.has('EDIT_META') && !list.archivedAt, restore: permissions.has('EDIT_META') && Boolean(list.archivedAt) && !list.event?.archivedAt},
-            currentEvent, archive: {direct: Boolean(list.archivedAt), inherited: Boolean(list.event?.archivedAt), archivedAt: list.archivedAt?.toISOString() ?? null,
-                autoArchivePaused: false, eventUrl: currentEvent?.url ?? null}, access};
+
+        return {
+            id,
+            title: list.title,
+            settingsToken: await settingsEditToken(manager, list, session, permissions.has('MANAGE_PERMISSIONS')),
+            ...headerProjection(list),
+            editableFields: metadataProjection(list, permissions).editableFields,
+            capabilities: {
+                editHeader: permissions.has('EDIT_META'),
+                linkEvent: permissions.has('EDIT_META'),
+                managePermissions: permissions.has('MANAGE_PERMISSIONS'),
+                duplicate: Boolean(session.auth?.user && permissions.has('DATA_DUPLICATE')),
+                // Native deletion is profile-owned; guest owners have the same authority.
+                remove: isOwner(session, list.ownerId),
+                manageArchive: permissions.has('EDIT_META'),
+                archive: permissions.has('EDIT_META') && !list.archivedAt,
+                restore: permissions.has('EDIT_META') && Boolean(list.archivedAt) && !list.event?.archivedAt,
+            },
+            currentEvent,
+            archive: {
+                direct: Boolean(list.archivedAt),
+                inherited: Boolean(list.event?.archivedAt),
+                archivedAt: list.archivedAt?.toISOString() ?? null,
+                autoArchivePaused: false,
+                eventUrl: currentEvent?.url ?? null,
+            },
+            access,
+        };
     });
 }
 
@@ -705,10 +748,12 @@ export async function readPackingHeaderPath(id: string, session: SessionLike): P
 
 /** Hard deletion stays the simple feature repository operation, separate from archival coordination. */
 export async function deletePackingList(id: string, session: SessionLike): Promise<components['schemas']['MutationResult']> {
-    requirePackingCreation(session);
+    actorId(session);
     const oldPath = await packingService.withPackingListLock(id, async function removeList(manager, row) {
         const list = requireList(row);
-        if (list.ownerId !== actorId(session)) throw new ApiProblem('FORBIDDEN');
+        // Check the locked current owner, independently of account-only creation admission
+        // and administrator grants. Profile ownership also includes an established guest.
+        if (!isOwner(session, list.ownerId)) throw new ApiProblem('FORBIDDEN');
         await packingService.deletePackingList(id, manager);
         return list.headerImg;
     });

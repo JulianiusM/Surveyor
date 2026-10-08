@@ -9,7 +9,7 @@ import {usePackingApi} from '../packing/api';
 import {useCommand} from '../../composables/command';
 import {packingKeys} from '../../app/queryKeys';
 import {usePageTitle} from '../../composables/pageTitle';
-import {completeIdentityEntry, completePageEntry} from '../../composables/pageEntry';
+import {completeIdentityEntry, completePageEntry, useConfirmedNavigation} from '../../composables/pageEntry';
 import FormField from '../../components/FormField.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
@@ -24,10 +24,10 @@ const api = usePackingApi(context);
 const {messages} = context;
 const route = useRoute();
 const router = useRouter();
+const completion = useConfirmedNavigation();
 const listId = computed(() => String(route.params.listId).toLowerCase());
 const next = computed(() => '/frontend-pilot/packing/' + listId.value);
-const nativeInitial = context.bootstrap.initialUrl === route.fullPath
-    && context.bootstrap.session.context === context.session.value?.context ? context.bootstrap : undefined;
+const nativeInitial = context.initialDocumentFor(route.fullPath);
 const fields = reactive({name: nativeInitial?.identityFields?.username ?? '', email: nativeInitial?.identityFields?.email ?? ''});
 const choiceOpen = ref(false);
 const checkingEmail = ref(false);
@@ -65,7 +65,8 @@ if (nativeInitial?.identityFormProblem) {
     command.setError(new ApiFailure(nativeInitial.identityFormProblem.status, nativeInitial.identityFormProblem));
 }
 usePageTitle(() => guestEntry.value?.title || messages.value.t('app.packing'));
-const blocked = computed(() => checkingEmail.value || command.pending.value || command.uncertain.value);
+const blocked = computed(() => checkingEmail.value || command.pending.value || command.uncertain.value
+    || completion.pending.value || completion.target.value !== null);
 /** Reconcile identity without assuming a successful title read proves guest creation failed. */
 async function refreshIdentityState(): Promise<void> {
     if (reconciling.value) return;
@@ -85,6 +86,7 @@ async function refreshIdentityState(): Promise<void> {
 
 /** Submit once and release the draft only after the server confirms the guest identity. */
 async function register(): Promise<void> {
+    if (blocked.value) return;
     choiceOpen.value = false;
     const origin = route.fullPath;
     const destination = next.value;
@@ -94,7 +96,7 @@ async function register(): Promise<void> {
         // The shared owner retains confirmed identity/navigation across a failed bootstrap;
         // Retry must complete this journey without replaying guest registration.
         await completeIdentityEntry(context, router, result,
-            {kind: 'redirect', url: destination, notice: null}, origin);
+            {kind: 'redirect', url: destination, notice: null}, origin, completion);
     }
 }
 
@@ -132,13 +134,14 @@ async function submit(): Promise<void> {
 /** Confirmed recovery has the same complete message outcome as the native form. Pending or
  * unknown mail delivery stays on this form with its entered values and explicit recovery. */
 async function recover(): Promise<void> {
+    if (blocked.value) return;
     choiceOpen.value = false;
     const scope = context.capture();
     const origin = route.fullPath;
     if (await command.run(requestRecovery, false)) {
         Object.assign(fields, {name: '', email: ''});
         await completePageEntry(context, router, '/frontend-pilot/guest/recovery',
-            'auth.recoverySent', 'success', scope, origin);
+            'auth.recoverySent', 'success', scope, origin, completion);
     }
 }
 
@@ -160,6 +163,14 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
             <StatusNotice v-if="command.error.value || entry.error.value" kind="danger">{{
                 command.error.value ?? messages.t('state.loadFailed')
             }}</StatusNotice>
+            <!-- A confirmed identity/mail result is never submitted again because a route
+                 chunk failed. Keep delivery Retry with this mounted form when it owns it. -->
+            <StatusNotice v-if="completion.target.value" kind="warning">
+                {{ messages.t('state.loadFailed') }}
+                <ActionButton class="ms-2" variant="outline-light" :pending="completion.pending.value" @click="completion.retry">
+                    {{ messages.t('common.retry') }}
+                </ActionButton>
+            </StatusNotice>
             <StatusNotice v-if="command.uncertain.value" kind="warning">{{
                 messages.t('state.unknownOutcome')
             }} {{ messages.t('auth.unconfirmedRequest') }}<ActionButton class="ms-2" variant="outline-light" :pending="reconciling" :disabled="reconciling" @click="refreshIdentityState">{{ messages.t('common.refresh') }}</ActionButton></StatusNotice>

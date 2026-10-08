@@ -16,6 +16,18 @@ export interface PilotRequestScope {
 
 export interface PilotRead<T> { data: T; etag: string | null; }
 
+/** A confirmed command retries only its canonical navigation. The shared owner retains the
+ * actor/route receipt across identity remounts without persisting inputs or replaying writes. */
+export interface PilotConfirmedNavigation {
+    pending: Ref<boolean>;
+    target: ComputedRef<string | null>;
+    fallbackTarget: ComputedRef<string | null>;
+    navigate(destination: string, scope?: PilotRequestScope, origin?: string,
+             notice?: components['schemas']['EntryNotice'] | null): Promise<boolean>;
+    retry(): Promise<boolean>;
+    retryFallback(): Promise<boolean>;
+}
+
 /** An entry owner supplies its existing API read and cache family; the shared navigation
  * helper retires outcomes when that route or identity is no longer current. */
 export interface PilotPageEntrySource<T extends {entry: components['schemas']['PageEntryOutcome']}> {
@@ -85,6 +97,9 @@ export interface PilotContext {
     pageTitle: Ref<string>;
     updates: PilotUpdateCoordinator;
     capture(): PilotRequestScope;
+    /** Initial native presentation belongs to one actor and one committed visit. */
+    initialDocumentFor(url: string): FrontendPilotBootstrap | undefined;
+    retireInitialDocument(destination: string): void;
     isCurrent(scope: PilotRequestScope, checkLocale?: boolean): boolean;
     refreshSession(): Promise<void>;
     acceptIdentity(result: components['schemas']['IdentityResult']): Promise<void>;

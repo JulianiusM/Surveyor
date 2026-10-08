@@ -19,6 +19,18 @@ const pageNoticeText = computed(() => {
     const key = context.pageNotice.value?.messageKey;
     return key ? messages.value.t(isPlainMessageKey(key) ? key : 'common.error') : null;
 });
+const personalLinkText = computed(formatPersonalLink);
+
+/** Keep the native success sentence in one parameterized catalog entry, including word
+ * order chosen by each language. Split only the interpolated URL to retain its existing
+ * clickable control; Vue escapes both surrounding text and the link without translated HTML. */
+function formatPersonalLink(): {before: string; after: string} | null {
+    const link = context.personalLink.value;
+    if (!link) return null;
+    const text = messages.value.t('auth.personalLink', {link});
+    const position = text.indexOf(link);
+    return {before: text.slice(0, position), after: text.slice(position + link.length)};
+}
 // Lazy route modules resolve before currentRoute commits. Keep that current view
 // mounted, including its drafts and focused controls, while indicating delivery.
 // These guards are application-owned, never shared between server-rendered requests.
@@ -69,9 +81,8 @@ function dismissPersonalLink(): void {
             <div class="pilot-page-notices sticky-top mt-1">
                 <!-- Personal edit links remain visible after confirmed guest registration.
                      They belong to the admitted identity and can be dismissed independently. -->
-                <StatusNotice v-if="context.personalLink.value" kind="success">
-                    <strong class="me-1">{{ messages.t('auth.personalLink') }}</strong>
-                    <a :href="context.personalLink.value" class="text-break">{{ context.personalLink.value }}</a>
+                <StatusNotice v-if="context.personalLink.value && personalLinkText" kind="success">
+                    {{ personalLinkText.before }}<a :href="context.personalLink.value" class="text-break">{{ context.personalLink.value }}</a>{{ personalLinkText.after }}
                     <ActionButton class="btn-sm ms-2" variant="outline-light" :aria-label="messages.t('common.close')"
                         @click="dismissPersonalLink">
                         &times;

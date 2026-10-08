@@ -6,22 +6,9 @@ import {frontendIdentityMessageFeedback} from '../../modules/lib/frontendIdentit
 
 /** Express supplies the already-authorized session/help projection; SSR never calls its own HTTP server. */
 export async function render(url: string, bootstrap: FrontendPilotBootstrap): Promise<FrontendPilotRenderResult> {
-    const initial: FrontendPilotBootstrap = {session: bootstrap.session, initialUrl: url,
-        ...(bootstrap.pageEntry ? {pageEntry: bootstrap.pageEntry} : {}),
-        ...(bootstrap.pageNotice ? {pageNotice: bootstrap.pageNotice} : {}),
-        ...(bootstrap.pageCompletion ? {pageCompletion: bootstrap.pageCompletion} : {}),
-        ...(bootstrap.help ? {help: bootstrap.help} : {}),
-        ...(bootstrap.identityProblem ? {identityProblem: bootstrap.identityProblem} : {}),
-        ...(bootstrap.identityFields ? {identityFields: bootstrap.identityFields} : {}),
-        ...(bootstrap.identityFormProblem ? {identityFormProblem: bootstrap.identityFormProblem} : {}),
-        ...(bootstrap.identityFeedback ? {identityFeedback: bootstrap.identityFeedback} : {}),
-        ...(bootstrap.guestEntry ? {guestEntry: bootstrap.guestEntry} : {}),
-        ...(bootstrap.packingError ? {packingError: bootstrap.packingError} : {}),
-        ...(bootstrap.packingCreateContext ? {packingCreateContext: bootstrap.packingCreateContext} : {}),
-        ...(bootstrap.packingDuplicate ? {packingDuplicate: bootstrap.packingDuplicate} : {}),
-        ...(bootstrap.personalLink ? {personalLink: bootstrap.personalLink} : {}),
-        ...(bootstrap.overview ? {overview: bootstrap.overview} : {}),
-        ...(bootstrap.passwordReset ? {passwordReset: bootstrap.passwordReset} : {})};
+    // The renderer already supplies the request-safe declaration. Preserve its complete
+    // projection; the browser codec validates every declared field before hydration.
+    const initial: FrontendPilotBootstrap = {...bootstrap, initialUrl: url};
     const {app, router, context} = createPilotApp(initial, false);
     try {
         await router.push(url);

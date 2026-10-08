@@ -6,14 +6,14 @@ import {usePageTitle} from '../../composables/pageTitle';
 import OverviewRegion from './OverviewRegion.vue';
 const context = usePilot();
 const {messages} = context;
+const route = useRoute();
+const router = useRouter();
 usePageTitle(() => messages.value.t('app.overview'));
 const hidden = ref<Record<string, boolean>>({});
 const open = ref<Record<string, boolean>>({participant: true, owner: true});
 const counts = ref<Record<string, {total: number; hidden: number}>>(Object.fromEntries(
-    (context.bootstrap.session.context === context.session.value?.context ? context.bootstrap.overview ?? [] : [])
+    (context.initialDocumentFor(route.fullPath)?.overview ?? [])
         .map(region => [region.collection, {total: region.totalEntities, hidden: region.hiddenEntities}])));
-const route = useRoute();
-const router = useRouter();
 watch(
     () => route.query,
     (query) => {

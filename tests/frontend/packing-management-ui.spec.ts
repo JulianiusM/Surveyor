@@ -5,7 +5,8 @@ import {defineComponent, nextTick, reactive, type Component} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
-import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
+import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
+import App from '../../src/frontend/app/App.vue';
 import InlineCell from '../../src/frontend/components/InlineCell.vue';
 import PackingPage from '../../src/frontend/features/packing/PackingPage.vue';
 import PackingEntry from '../../src/frontend/features/packing/PackingEntry.vue';
@@ -17,6 +18,7 @@ import OverviewCard from '../../src/frontend/features/overview/OverviewCard.vue'
 import OverviewRegion from '../../src/frontend/features/overview/OverviewRegion.vue';
 import type {components} from '../../src/types/api/v1';
 import type {PilotContext, PilotEventPickerSource} from '../../src/types/FrontendPilotUiTypes';
+import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
 import {usePackingApi} from '../../src/frontend/features/packing/api';
 import {overviewKeys, packingKeys} from '../../src/frontend/app/queryKeys';
 
@@ -50,7 +52,7 @@ const list: components['schemas']['PackingListView'] = {
 function json(value: unknown, status = 200): Response {
     return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context, ETag: '"original"'}});
 }
-function problem(code: 'VALIDATION_FAILED' | 'PRECONDITION_FAILED' | 'FORBIDDEN', status: number): Response {
+function problem(code: 'VALIDATION_FAILED' | 'PRECONDITION_FAILED' | 'FORBIDDEN' | 'NOT_FOUND', status: number): Response {
     return json({type: 'about:blank', title: 'Request failed', status, detail: 'Review the request.',
         code, messageKey: 'api:errors.' + code, params: {}}, status);
 }
@@ -60,30 +62,33 @@ afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(
 /** Only the HTTP boundary is replaced. Components, validators, commands and query state are real. */
 async function mounted(component: Component, props: Record<string, unknown> | ((context: PilotContext) => Record<string, unknown>) = {},
     handler: (request: Request) => Promise<Response> = async () => json(list),
-    path = '/frontend-pilot/packing/' + id, initialSession = session) {
+    path = '/frontend-pilot/packing/' + id, initialSession = session,
+    initial: Omit<FrontendPilotBootstrap, 'session'> = {}, withShell = false) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
-    const context = createPilotContext({session: initialSession}, true, request);
+    const context = createPilotContext({...initial, session: initialSession}, true, request);
     context.hydrated.value = true;
     const componentProps = reactive(typeof props === 'function' ? props(context) : {...props});
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/frontend-pilot', component, props: () => componentProps},
+        {name: 'packing-test-overview', path: '/frontend-pilot', component, props: () => componentProps},
         {path: '/frontend-pilot/packing/create', component, props: () => componentProps},
         {path: '/frontend-pilot/packing/:listId/duplicate', component, props: () => componentProps},
         {path: '/frontend-pilot/packing/:listId', component, props: () => componentProps},
         {path: '/frontend-pilot/users/login', component: defineComponent({template: '<p>Login destination</p>'})},
+        {path: '/frontend-pilot/help', component: defineComponent({template: '<p>Help destination</p>'})},
         {path: '/away', component: defineComponent({template: '<p>Away</p>'})},
     ]});
     await router.push(path);
-    const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
+    const stopInitialDocument = observeInitialDocument(context, router);
+    const root = mount(withShell ? App : defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
         provide: {[pilotContextKey as symbol]: context},
         stubs: {AppDialog: defineComponent({template: '<section role="dialog"><slot name="navigation" /><slot /><slot name="footer" /></section>'})},
     }});
     await flushPromises();
     const wrapper = root.findComponent(component);
-    cleanups.push(async () => { root.unmount(); await context.queryClient.cancelQueries(); context.queryClient.clear(); });
+    cleanups.push(async () => { root.unmount(); stopInitialDocument(); await context.queryClient.cancelQueries(); context.queryClient.clear(); });
     async function update(values: Record<string, unknown>) { Object.assign(componentProps, values); await nextTick(); }
-    return {wrapper, context, router, request, update};
+    return {root, wrapper, context, router, request, update};
 }
 function button(wrapper: ReturnType<typeof mount>, label: string) {
     const result = wrapper.findAll('button, a.btn').find(candidate => candidate.text() === label);
@@ -849,6 +854,138 @@ describe('packing command forms', () => {
         expect(wrapper.get<HTMLInputElement>('#quick-title').element.value).toBe('Retained stove');
     });
 
+    it.each([false, true])('decides every page/dialog draft before deletion and never asks after its write (approve: %s)', async approve => {
+        const projection = {...settings, capabilities: {...settings.capabilities, managePermissions: true, remove: true},
+            access: {defaults, admins: [], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
+        let deletes = 0;
+        const {wrapper, router} = await mounted(PackingPage, {}, async request => {
+            if (request.method === 'DELETE') {
+                deletes++;
+                return json({changed: true});
+            }
+            return json(new URL(request.url).pathname.endsWith('/settings') ? projection
+                : {...list, capabilities: {...list.capabilities, manageSettings: true}});
+        });
+        // The committed destination is a different feature, as in the real route table.
+        router.addRoute({name: 'packing-test-overview', path: '/frontend-pilot',
+            component: defineComponent({template: '<p>Overview destination</p>'})});
+        await wrapper.get('#quick-title').setValue('Parent draft');
+        await button(wrapper, 'Entity settings').trigger('click');
+        await flushPromises();
+        await wrapper.get('#settings-defaults-participant-EDIT_TITLE').setValue(true);
+        await wrapper.get('#pilot-settings-tab-actions').trigger('click');
+
+        // A prompt after DELETE would be too late. Make such a prompt fail so the
+        // accepted case proves that the whole root decision happens before the write.
+        const confirm = vi.fn(() => deletes === 0 && approve);
+        vi.stubGlobal('confirm', confirm);
+        await button(wrapper, 'Delete permanently').trigger('click');
+        await flushPromises();
+        expect(deletes).toBe(approve ? 1 : 0);
+        expect(confirm.mock.calls.map(([message]) => message)).toEqual(approve
+            ? ['Discard changes?', 'Delete this entity permanently? This cannot be undone.']
+            : ['Discard changes?']);
+        if (approve) expect(router.currentRoute.value.path).toBe('/frontend-pilot');
+        else {
+            expect(router.currentRoute.value.path).toBe('/frontend-pilot/packing/' + id);
+            expect(wrapper.get<HTMLInputElement>('#quick-title').element.value).toBe('Parent draft');
+            expect(wrapper.get<HTMLInputElement>('#settings-defaults-participant-EDIT_TITLE').element.checked).toBe(true);
+        }
+    });
+
+    it('keeps confirmed deletion navigation retryable after delivery failure without another DELETE or discard prompt', async () => {
+        const projection = {...settings, capabilities: {...settings.capabilities, managePermissions: true, remove: true},
+            access: {defaults, admins: [], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
+        let deletes = 0;
+        const {wrapper, router} = await mounted(PackingPage, {}, async request => {
+            if (request.method === 'DELETE') {
+                deletes++;
+                return json({changed: true});
+            }
+            return json(new URL(request.url).pathname.endsWith('/settings') ? projection
+                : {...list, capabilities: {...list.capabilities, manageSettings: true}});
+        });
+        let failNavigation = true;
+        router.addRoute({name: 'packing-test-overview', path: '/frontend-pilot', component: async function loadOverview() {
+            if (failNavigation) throw new TypeError('Failed to fetch dynamically imported module');
+            return defineComponent({template: '<p>Overview destination</p>'});
+        }});
+        router.onError(() => {});
+        await wrapper.get('#quick-title').setValue('Parent draft');
+        await button(wrapper, 'Entity settings').trigger('click');
+        await flushPromises();
+        await wrapper.get('#settings-defaults-participant-EDIT_TITLE').setValue(true);
+        await wrapper.get('#pilot-settings-tab-actions').trigger('click');
+        const confirm = vi.fn(() => deletes === 0);
+        vi.stubGlobal('confirm', confirm);
+        await button(wrapper, 'Delete permanently').trigger('click');
+        await flushPromises();
+        expect(deletes).toBe(1);
+        expect(confirm).toHaveBeenCalledTimes(2);
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/packing/' + id);
+        expect(wrapper.findComponent(PackingSettings).exists()).toBe(true);
+        expect(button(wrapper, 'Delete permanently').attributes('disabled')).toBeDefined();
+        expect(button(wrapper, 'Close').attributes('disabled')).toBeDefined();
+
+        failNavigation = false;
+        await button(wrapper, 'Try again').trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot');
+        expect(deletes).toBe(1);
+        expect(confirm).toHaveBeenCalledTimes(2);
+    });
+
+    it('retains navigation-only recovery in the shell when post-deletion reads close the private editor', async () => {
+        const projection = {...settings, capabilities: {...settings.capabilities, managePermissions: true, remove: true},
+            access: {defaults, admins: [], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
+        let deletes = 0;
+        const {root, wrapper, router, context} = await mounted(PackingPage, {}, async request => {
+            if (request.method === 'DELETE') {
+                deletes++;
+                return json({changed: true});
+            }
+            if (deletes) return problem('NOT_FOUND', 404);
+            return json(new URL(request.url).pathname.endsWith('/settings') ? projection
+                : {...list, capabilities: {...list.capabilities, manageSettings: true}});
+        }, '/frontend-pilot/packing/' + id, session, {}, true);
+        let failNavigation = true;
+        router.addRoute({name: 'packing-test-overview', path: '/frontend-pilot', component: async function loadOverview() {
+            if (failNavigation) throw new TypeError('Failed to fetch dynamically imported module');
+            return defineComponent({template: '<p>Overview destination</p>'});
+        }});
+        router.onError(() => {});
+        await wrapper.get('#quick-title').setValue('Parent draft');
+        await button(wrapper, 'Entity settings').trigger('click');
+        await flushPromises();
+        await wrapper.get('#settings-defaults-participant-EDIT_TITLE').setValue(true);
+        await wrapper.get('#pilot-settings-tab-actions').trigger('click');
+        const confirm = vi.fn(() => deletes === 0);
+        vi.stubGlobal('confirm', confirm);
+        await button(wrapper, 'Delete permanently').trigger('click');
+        await flushPromises();
+
+        // These are real subsequent server reads of the deleted resource. Its denial
+        // must close private controls without losing the confirmed destination's Retry.
+        await context.queryClient.invalidateQueries({queryKey: packingKeys.editors(session.context, id)});
+        await flushPromises();
+        expect(wrapper.findComponent(PackingSettings).exists()).toBe(false);
+        expect(wrapper.find('#quick-title').exists()).toBe(false);
+        expect(wrapper.find('[data-item-id]').exists()).toBe(false);
+        expect(deletes).toBe(1);
+        expect(confirm).toHaveBeenCalledTimes(2);
+        expect(context.updates.requestReload()).toBe(false);
+        const departure = new Event('beforeunload', {cancelable: true});
+        window.dispatchEvent(departure);
+        expect(departure.defaultPrevented).toBe(true);
+
+        failNavigation = false;
+        await button(root, context.messages.value.t('common.retry')).trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot');
+        expect(deletes).toBe(1);
+        expect(confirm).toHaveBeenCalledTimes(2);
+    });
+
     it('keeps a metadata save confirmed when its settings refresh fails and exposes a read retry', async () => {
         let title = 'Original';
         let writes = 0;
@@ -1018,10 +1155,33 @@ describe('packing command forms', () => {
         reject = false;
         await wrapper.get('form').trigger('submit');
         await flushPromises();
-        expect(sent).toEqual([{title: 'Ground sheet', description: 'Dry', maxAssignees: 3, requiredByAll: false},
-            {title: 'Ground sheet', description: 'Dry', maxAssignees: 3, requiredByAll: false}]);
+        expect(sent).toEqual([{title: '  Ground sheet  ', description: 'Dry', maxAssignees: 3, requiredByAll: false},
+            {title: '  Ground sheet  ', description: 'Dry', maxAssignees: 3, requiredByAll: false}]);
         expect(wrapper.get<HTMLInputElement>('#quick-title').element.value).toBe('');
         expect(wrapper.get<HTMLInputElement>('#quick-max').element.value).toBe('1');
+    });
+
+    it('matches native quick-add raw strings and optional blank capacity default', async () => {
+        const sent: unknown[] = [];
+        const {wrapper} = await mounted(PackingPage, {}, async request => {
+            if (request.method === 'POST') {
+                sent.push(await request.json());
+                return json({id: otherId}, 201);
+            }
+            return json(list);
+        });
+        await wrapper.get('#quick-title').setValue('  Raw title  ');
+        await wrapper.get('#quick-description').setValue('  Raw note  ');
+        await wrapper.get('#quick-max').setValue('');
+        expect(wrapper.get<HTMLInputElement>('#quick-max').element.required).toBe(false);
+        expect(wrapper.get<HTMLFormElement>('form').element.checkValidity()).toBe(true);
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        await wrapper.get('#quick-title').setValue('   ');
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(sent).toEqual([{title: '  Raw title  ', description: '  Raw note  ', maxAssignees: 1, requiredByAll: false},
+            {title: '   ', description: '', maxAssignees: 1, requiredByAll: false}]);
     });
 
     it('keeps an unknown quick-add on cancelled navigation and releases it only for the committed next list', async () => {
@@ -1244,6 +1404,64 @@ describe('packing command forms', () => {
         await flushPromises();
         expect(submitted).toEqual({title: '  Edited copy  ', description: '  Shared root  ', eventId: null,
             defaultPermissions: defaults, items: duplicate.items.map(value => ({...value, description: value.description ?? ''}))});
+    });
+
+    it.each(['failure', 'cancellation'] as const)('retains a confirmed created destination after navigation %s and retries without another POST', async failure => {
+        let posts = 0;
+        const {wrapper, router, context} = await mounted(PackingCreatePage, {}, async request => {
+            if (request.method === 'POST') {
+                posts++;
+                return json({id: otherId}, 201);
+            }
+            return json(new URL(request.url).pathname.endsWith('/events')
+                ? {items: [], nextCursor: null, selected: null}
+                : {entry: {kind: 'render'}, context: {defaults, permissions: [], presets: []}});
+        }, '/frontend-pilot/packing/create');
+        const destination = '/frontend-pilot/packing/' + otherId;
+        let rejectNavigation = true;
+        router.addRoute({path: destination, component: async function loadCreatedPage() {
+            if (failure === 'failure' && rejectNavigation) throw new TypeError('Failed to fetch dynamically imported module');
+            return defineComponent({template: '<p>Created destination</p>'});
+        }});
+        router.beforeEach(to => failure === 'cancellation' && rejectNavigation && to.fullPath === destination ? false : undefined);
+        router.onError(() => {});
+        await wrapper.get('#create-title').setValue('Confirmed list');
+        await wrapper.get('tbody input').setValue('Tent');
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(posts).toBe(1);
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/packing/create');
+        expect(wrapper.get('fieldset').attributes('disabled')).toBeDefined();
+        expect(wrapper.text()).toContain(context.messages.value.t('state.saved'));
+        expect(context.updates.requestReload()).toBe(false);
+
+        // Even a programmatic repeated submit cannot create another record. Recovery
+        // follows the retained confirmed ID through the generic navigation owner only.
+        await wrapper.get('form').trigger('submit');
+        expect(posts).toBe(1);
+        rejectNavigation = false;
+        await button(wrapper, context.messages.value.t('common.retry')).trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.fullPath).toBe(destination);
+        expect(posts).toBe(1);
+    });
+
+    it('retires a native creation denial after committed departure and reads fresh admission on revisit', async () => {
+        const path = '/frontend-pilot/packing/create';
+        const {wrapper, router, request} = await mounted(PackingCreatePage, {}, async incoming =>
+            json(new URL(incoming.url).pathname.endsWith('/events') ? {items: [], nextCursor: null, selected: null}
+                : {entry: {kind: 'render'}, context: {defaults, permissions: [], presets: []}}),
+        path, session, {initialUrl: path, packingError: 'api:errors.FORBIDDEN'});
+        expect(wrapper.find('form').exists()).toBe(false);
+        expect(request).not.toHaveBeenCalled();
+        await router.push('/away');
+        await router.push(path);
+        await flushPromises();
+        // The old component wrapper was unmounted. Inspect the newly mounted destination
+        // through the real DOM rather than retaining another request's native denial.
+        expect(document.querySelector('#create-title')).not.toBeNull();
+        expect(request.mock.calls.map(([value]) => new URL((value as Request).url).pathname))
+            .toContain('/api/v1/packing-lists/create-entry');
     });
 
     it.each(['anonymous', 'guest', 'account-without-profile'] as const)('follows account admission from a %s duplicate submission with its exact return and no new discard prompt', async kind => {

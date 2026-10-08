@@ -221,9 +221,11 @@ async function addItem(): Promise<void> {
         api.addItem(
             listId.value,
             {
-                title: freshItem.title.trim(),
-                description: freshItem.description.trim() || null,
-                maxAssignees: freshItem.maxAssignees,
+                // Quick-add posts raw native form values. Creation's collection-row
+                // trimming is a different workflow; a blank optional capacity uses one.
+                title: freshItem.title,
+                description: freshItem.description,
+                maxAssignees: Number(freshItem.maxAssignees) || 1,
                 requiredByAll: false,
             },
             scope,
@@ -591,7 +593,6 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
                                     type="number"
                                     min="1"
                                     class="form-control text-bg-dark"
-                                    required
                                     :disabled="blocked"
                                 />
                             </div>

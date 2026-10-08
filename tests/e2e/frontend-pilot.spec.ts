@@ -1,11 +1,60 @@
 import {expect, test, type APIRequestContext, type Locator, type Page, type Route, type TestInfo} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
+import {resolve} from 'node:path';
+import {pathToFileURL} from 'node:url';
 import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, loginForE2E} from '../keywords/e2eCoreKeywords';
+import {createResourceViaForm, loginForE2E, waitForPilotHydration} from '../keywords/e2eCoreKeywords';
 import type {components} from '../../src/types/api/v1';
+import type {FrontendPilotBootstrap, FrontendPilotRenderResult} from '../../src/types/FrontendPilotTypes';
 
 type Session = components['schemas']['SessionView'];
+
+/** Isolate initial presentation without sending mail or manufacturing persisted records.
+ * The real built renderer supplies HTML/state, the normal HTTP shell supplies its selected
+ * client assets, and the browser executes the actual entry decoder and hydration. Only the
+ * initial document delivery is substituted; session reads keep their ordinary HTTP boundary. */
+async function initialPresentation(page: Page, url: string, bootstrap: FrontendPilotBootstrap): Promise<void> {
+    const renderer = await import(pathToFileURL(resolve('dist/frontend-server/entry-server.mjs')).href) as {
+        render(url: string, bootstrap: FrontendPilotBootstrap): Promise<FrontendPilotRenderResult>;
+    };
+    const rendered = await renderer.render(url, bootstrap);
+    const shell = await page.request.get('/frontend-pilot/users/login?locale=en');
+    expect(shell.status()).toBe(200);
+    const html = (await shell.text())
+        .replace(/<div id="surveyor-pilot">[\s\S]*?(?=<script id="surveyor-pilot-state")/u,
+            () => `<div id="surveyor-pilot">${rendered.html}</div>\n`)
+        .replace(/(<script id="surveyor-pilot-state" type="application\/json">)[\s\S]*?(<\/script>)/u,
+            () => `<script id="surveyor-pilot-state" type="application/json">${rendered.state}</script>`);
+    await page.route(url, route => route.fulfill({status: 200, contentType: 'text/html', body: html}));
+    await page.goto(url, {waitUntil: 'domcontentloaded'});
+    await waitForPilotHydration(page);
+}
+
+test('actual startup preserves confirmed native recovery and retires it after committed departure', async ({page}) => {
+    const session = await bootstrap(page.request);
+    const url = '/frontend-pilot/guest/recovery';
+    await initialPresentation(page, url, {session, pageCompletion: {context: session.context,
+        destination: url, messageKey: 'auth.recoverySent', kind: 'success'}});
+    await expect(page.getByRole('heading', {name: 'Success', exact: true})).toBeVisible();
+    await expect(page.locator('main')).toContainText('The link(s) to your guest account(s) have been sent to your email address.');
+    await expect(page.locator('main form')).toHaveCount(0);
+    await expect(page).toHaveURL(/\/frontend-pilot\/guest\/recovery$/);
+
+    await page.locator('header').getByRole('link', {name: 'Home', exact: true}).click();
+    await expect(page).toHaveURL(/\/frontend-pilot$/);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/frontend-pilot\/users\/login$/);
+    await expect(page.getByRole('heading', {name: 'Login', exact: true})).toBeVisible();
+});
+
+test('actual startup preserves the native expired-session notice', async ({page}) => {
+    const session = await bootstrap(page.request);
+    await initialPresentation(page, '/frontend-pilot/users/login', {session,
+        pageNotice: {kind: 'error', messageKey: 'auth.sessionExpired'}});
+    await expect(page.locator('main .alert-danger')).toContainText('Session has expired');
+    await expect(page.getByRole('heading', {name: 'Login', exact: true})).toBeVisible();
+});
 
 /** Optional release evidence uses the actual mounted checkpoint, without replacing data or UI.
  * Restore the viewport and focused node before the rest of the normal journey continues. */
@@ -135,7 +184,8 @@ test('shared entry preserves header creation admission, exact duplicate login re
         await guestPage.getByRole('button', {name: 'Continue as guest', exact: true}).click();
         await expect(guestPage).toHaveURL(new URL(`/frontend-pilot/packing/${list.id}`, baseURL).href);
         await expect(guestPage.getByRole('heading', {name: list.title, exact: true})).toBeVisible();
-        await expect(guestPage.locator('.alert-success')).toContainText('Your private access link');
+        const privateLink = await guestPage.locator('.alert-success a').innerText();
+        await expect(guestPage.locator('.alert-success')).toContainText(`Login successful. Use ${privateLink} to edit later.`);
         expect((await bootstrap(guestPage.request)).activeProfile?.name).toBe(name);
         expect(await guestPage.evaluate(() => document.documentElement.dataset.entryDocument)).toBe('guest');
     } finally {

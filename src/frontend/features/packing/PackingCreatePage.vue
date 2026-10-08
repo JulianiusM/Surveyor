@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue';
-import {useRoute, useRouter} from 'vue-router';
+import {useRoute} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
 import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
@@ -9,7 +9,7 @@ import {usePilot} from '../../app/context';
 import {ApiFailure} from '../../app/transport';
 import {isPlainMessageKey} from '../../../modules/localization/translator';
 import {useCommand} from '../../composables/command';
-import {usePageEntry} from '../../composables/pageEntry';
+import {useConfirmedNavigation, usePageEntry} from '../../composables/pageEntry';
 import {packingKeys} from '../../app/queryKeys';
 import {usePageTitle} from '../../composables/pageTitle';
 import ActionButton from '../../components/ActionButton.vue';
@@ -23,18 +23,16 @@ const context = usePilot();
 const api = usePackingApi(context);
 const {messages} = context;
 const route = useRoute();
-const router = useRouter();
+const destination = useConfirmedNavigation();
 const sourceId = computed(() =>
     typeof route.params.listId === 'string' ? route.params.listId.toLowerCase() : null,
 );
-const bootstrapError = computed(() => context.bootstrap.initialUrl?.split('?')[0] === route.path
-    && context.bootstrap.session.context === context.session.value?.context
-    ? context.bootstrap.packingError : undefined);
+const bootstrapError = computed(() => context.initialDocumentFor(route.fullPath)?.packingError);
 
 /** SSR seeds only the admitted document and actor; later SPA routes use their own query admission. */
 function isInitialForm(): boolean {
-    return context.bootstrap.initialUrl === route.fullPath
-        && context.bootstrap.session.context === context.session.value?.context;
+    return context.initialDocumentFor(route.fullPath) !== undefined
+        && context.bootstrap.session.locale === context.locale.value;
 }
 
 function initialCreationEntry(): components['schemas']['PackingCreateEntry'] | undefined {
@@ -165,7 +163,7 @@ const command = useCommand(context.refreshSession, true, {
     busy: () => admittingSubmission.value,
     unknownMessage: 'packing.leaveUnknown',
 });
-const blocked = computed(() => command.pending.value || command.uncertain.value || admittingSubmission.value);
+const blocked = computed(() => submitted.value || command.pending.value || command.uncertain.value || admittingSubmission.value);
 function chooseImage(event: Event): void {
     image.value = (event.target as HTMLInputElement).files?.[0] ?? null;
 }
@@ -219,6 +217,8 @@ async function create(): Promise<void> {
         command.setError('packing.fillAllFields');
         return;
     }
+    const scope = context.capture();
+    const origin = route.fullPath;
     const result = await command.run(
         (scope) =>
             api.createPacking(
@@ -235,8 +235,10 @@ async function create(): Promise<void> {
         false,
     );
     if (result) {
+        // A created ID is confirmation even when delivery of its page fails. Retain
+        // that destination under the shared navigation owner and never submit again.
         submitted.value = true;
-        await router.push('/frontend-pilot/packing/' + result.id);
+        await destination.navigate('/frontend-pilot/packing/' + result.id, scope, origin);
     }
 }
 </script>
@@ -254,6 +256,13 @@ async function create(): Promise<void> {
             <StatusNotice v-if="command.uncertain.value" kind="warning">{{
                 messages.t('packing.creationUnknown')
             }}</StatusNotice>
+            <StatusNotice v-if="destination.target.value" kind="success">
+                {{ messages.t('state.saved') }}
+                <ActionButton class="btn-sm ms-2" variant="outline-light"
+                    :pending="destination.pending.value" @click="destination.retry">
+                    {{ messages.t('common.retry') }}
+                </ActionButton>
+            </StatusNotice>
             <StatusNotice v-if="loadError" kind="danger">{{
                 messages.t('state.loadFailed')
             }}</StatusNotice>

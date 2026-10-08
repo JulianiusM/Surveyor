@@ -5,7 +5,7 @@ import {defineComponent} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
-import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
+import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
 import IdentityPage from '../../src/frontend/features/identity/IdentityPage.vue';
 import PackingGuestPage from '../../src/frontend/features/identity/PackingGuestPage.vue';
 import PackingHome from '../../src/frontend/features/overview/OverviewPage.vue';
@@ -57,18 +57,147 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
         {path: '/frontend-pilot/packing/create', component: defineComponent({template: '<p>Create</p>'})},
         {path: '/frontend-pilot/help', component: defineComponent({template: '<p>Help</p>'})},
     ]});
+    const stopInitialDocument = observeInitialDocument(context, router);
     await router.push(path);
     await router.isReady();
     const wrapper = mount(useShell ? App : defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
         provide: {[pilotContextKey as symbol]: context},
     }});
-    cleanups.push(async () => { wrapper.unmount(); await context.queryClient.cancelQueries(); context.queryClient.clear(); });
+    cleanups.push(async () => { stopInitialDocument(); wrapper.unmount(); await context.queryClient.cancelQueries(); context.queryClient.clear(); });
     await flushPromises();
     return {wrapper, context, router, request};
 }
 
 describe('identity forms and packing overview navigation', () => {
+    it.each([false, true])('keeps native header logout return precedence (explicit next=%s)', async explicit => {
+        const destination = `/frontend-pilot/packing/${eventId}/duplicate?eventId=${profileId}`;
+        const origin = '/frontend-pilot/help?doc=packing_lists' + (explicit ? '&next=' + encodeURIComponent(destination) : '');
+        const anonymous = {...session, kind: 'anonymous' as const, context: 'logout-anonymous-context-1234567890',
+            activeProfile: null, profiles: [], logoutUrl: null};
+        let logoutCommands = 0;
+        const {wrapper, context, router} = await mounted(origin, async request => {
+            if (request.method === 'POST') {
+                logoutCommands++;
+                // Native header next takes precedence even when the controller supplies an
+                // OIDC fallback. The browser must never invent an external destination.
+                return json({session: anonymous, personalLink: null, redirect: 'https://provider.test/logout'}, 200, anonymous.context);
+            }
+            return json(anonymous, 200, anonymous.context);
+        }, {}, true);
+        await wrapper.get('form[action="/frontend-pilot/users/logout"]').trigger('submit');
+        await flushPromises();
+        expect(router.currentRoute.value.fullPath).toBe(explicit ? destination : origin);
+        expect(context.pageNotice.value).toEqual({kind: 'success', messageKey: 'auth.logoutDone'});
+        expect(wrapper.text()).toContain('Logout successful.');
+        expect(logoutCommands).toBe(1);
+    });
+
+    it.each([false, true])('resumes confirmed header logout only for the matching Retry actor (mismatch=%s)', async mismatch => {
+        const destination = `/frontend-pilot/packing/${eventId}/duplicate?eventId=${profileId}`;
+        const origin = '/frontend-pilot/help?next=' + encodeURIComponent(destination);
+        const anonymous = {...session, kind: 'anonymous' as const, context: 'confirmed-logout-context-1234567890',
+            activeProfile: null, profiles: [], logoutUrl: null};
+        const resumedActor = mismatch ? {...anonymous, context: 'superseding-actor-context-1234567890'} : anonymous;
+        let logoutCommands = 0;
+        let bootstrapReads = 0;
+        const {wrapper, context, router} = await mounted(origin, async request => {
+            if (request.method === 'POST') {
+                logoutCommands++;
+                return json({session: anonymous, personalLink: null, redirect: null}, 200, anonymous.context);
+            }
+            bootstrapReads++;
+            return bootstrapReads === 1 ? new Response(null, {status: 503}) : json(resumedActor, 200, resumedActor.context);
+        }, {}, true);
+        await wrapper.get('form[action="/frontend-pilot/users/logout"]').trigger('submit');
+        await flushPromises();
+        expect(context.ready.value).toBe(false);
+        expect(router.currentRoute.value.fullPath).toBe(origin);
+        expect(logoutCommands).toBe(1);
+
+        const retry = wrapper.findAll('button').find(button => button.text() === context.messages.value.t('common.retry'))!;
+        await retry.trigger('click');
+        await flushPromises();
+        expect(context.ready.value).toBe(true);
+        expect(router.currentRoute.value.fullPath).toBe(mismatch ? origin : destination);
+        expect(context.pageNotice.value).toEqual(mismatch ? null : {kind: 'success', messageKey: 'auth.logoutDone'});
+        expect(logoutCommands).toBe(1);
+        expect(bootstrapReads).toBe(2);
+        await context.refreshSession();
+        await flushPromises();
+        expect(logoutCommands).toBe(1);
+        expect(router.currentRoute.value.fullPath).toBe(mismatch ? origin : destination);
+    });
+
+    it('retains confirmed login across the shell remount and retries failed delivery without another login', async () => {
+        const destination = '/frontend-pilot/delayed-identity-destination';
+        const authenticated = {...session, context: 'delivered-login-context-1234567890'};
+        let loginCommands = 0;
+        const {wrapper, router, context} = await mounted(`/frontend-pilot/users/login?next=${encodeURIComponent(destination)}`,
+            async request => {
+                if (request.method === 'POST') {
+                    loginCommands++;
+                    return json({session: authenticated, personalLink: null, redirect: null}, 200, authenticated.context);
+                }
+                return json(authenticated, 200, authenticated.context);
+            }, {}, true);
+        let failedDelivery = true;
+        router.addRoute({path: destination, component: async function loadConfirmedDestination() {
+            if (failedDelivery) throw new Error('Failed to fetch dynamically imported module');
+            return defineComponent({template: '<p>Delivered signed-in destination</p>'});
+        }});
+        router.onError(() => {});
+
+        await wrapper.get('#username').setValue('account');
+        await wrapper.get('#password').setValue('password1');
+        await wrapper.findAll('main form')[0].trigger('submit');
+        await flushPromises();
+        expect(context.ready.value).toBe(true);
+        expect(context.session.value?.context).toBe(authenticated.context);
+        expect(wrapper.get<HTMLInputElement>('#password').element.value).toBe('');
+        expect(wrapper.get('main button[type="submit"]').attributes('disabled')).toBeDefined();
+
+        // Programmatic submission cannot bypass the confirmed receipt's command guard.
+        await wrapper.findAll('main form')[0].trigger('submit');
+        expect(loginCommands).toBe(1);
+        failedDelivery = false;
+        const retry = wrapper.findAll('main button').find(button => button.text() === context.messages.value.t('common.retry'))!;
+        await retry.trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe(destination);
+        expect(wrapper.text()).toContain('Delivered signed-in destination');
+        expect(context.pageNotice.value).toEqual({kind: 'success', messageKey: 'auth.loginDone'});
+        expect(loginCommands).toBe(1);
+    });
+
+    it('retains confirmed recovery after destination failure and retries navigation without sending mail again', async () => {
+        let recoveryCommands = 0;
+        const {wrapper, context, router} = await mounted('/frontend-pilot/users/login', async request => {
+            if (request.method === 'POST') recoveryCommands++;
+            return json({changed: true});
+        }, {}, true);
+        const removeFailure = router.beforeResolve(function failRecoveryDelivery(to): void {
+            if (to.path === '/frontend-pilot/guest/recovery') throw new Error('Failed to fetch dynamically imported module');
+        });
+        router.onError(() => {});
+        await wrapper.get('#recovery-email').setValue('guest@example.test');
+        await wrapper.findAll('main form')[1].trigger('submit');
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login');
+        expect(context.pageCompletion.value?.messageKey).toBe('auth.recoverySent');
+        expect(wrapper.get<HTMLInputElement>('#recovery-email').element.value).toBe('');
+        await wrapper.findAll('main form')[1].trigger('submit');
+        expect(recoveryCommands).toBe(1);
+
+        removeFailure();
+        const retry = wrapper.findAll('main button').find(button => button.text() === context.messages.value.t('common.retry'))!;
+        await retry.trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/guest/recovery');
+        expect(wrapper.get('h1').text()).toBe('Success');
+        expect(recoveryCommands).toBe(1);
+    });
+
     it('preserves a native guest name and navigates confirmed registration to canonical detail', async () => {
         const anonymous = {...session, kind: 'anonymous' as const, activeProfile: null, profiles: []};
         const guest = {...session, kind: 'guest' as const, context: 'registered-guest-context-1234567890'};
@@ -197,6 +326,43 @@ describe('identity forms and packing overview navigation', () => {
         expect(wrapper.text()).toContain('Check the submitted values.');
         expect(wrapper.find('form').exists()).toBe(false);
         expect(request).not.toHaveBeenCalled();
+    });
+
+    it('retires rejected native recovery feedback after departure and admits a later recovery visit as native GET', async () => {
+        const path = '/frontend-pilot/guest/recovery';
+        const identityProblem: components['schemas']['Problem'] = {type: 'about:blank', title: 'Bad Request', status: 400,
+            code: 'VALIDATION_FAILED', messageKey: 'api:errors.VALIDATION_FAILED', params: {},
+            detail: 'Invalid recovery email', requestId: 'recovery-visit'};
+        const {wrapper, router, context} = await mounted(path, async () => json({changed: true}),
+            {initialUrl: path, identityProblem});
+        expect(wrapper.get('h1').text()).toBe('Error');
+
+        // A rejected guard preserves the actual initial response, including its denial.
+        const removeGuard = router.beforeEach(() => false);
+        await router.push('/frontend-pilot/help');
+        expect(context.initialDocumentFor(path)?.identityProblem).toEqual(identityProblem);
+        expect(wrapper.get('h1').text()).toBe('Error');
+        removeGuard();
+
+        await router.push('/frontend-pilot/help');
+        expect(context.initialDocumentFor(path)).toBeUndefined();
+        await router.push(path);
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login');
+        expect(wrapper.get('h1').text()).toBe('Login');
+        expect(wrapper.text()).not.toContain('Check the submitted values.');
+    });
+
+    it('does not revive a completed native registration message on a later visit to its form', async () => {
+        const path = '/frontend-pilot/users/register';
+        const {wrapper, router} = await mounted(path, async () => json({changed: true}),
+            {initialUrl: path, identityFeedback: 'auth.registered'});
+        expect(wrapper.find('form').exists()).toBe(false);
+        await router.push('/frontend-pilot/help');
+        await router.push(path);
+        await flushPromises();
+        expect(wrapper.get('#username').exists()).toBe(true);
+        expect(wrapper.find('form').exists()).toBe(true);
     });
 
     it('renders the native guest capability rejection rather than a new empty login form', async () => {

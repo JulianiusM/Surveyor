@@ -7,6 +7,20 @@ export interface CreatedResource {
     id: string;
 }
 
+/** Wait for client event ownership before interacting with server-rendered SPA controls.
+ * The mounted-container marker establishes readiness only; callers still assert observable
+ * behavior. Visible SSR content and enabled controls do not establish hydration readiness. */
+export async function waitForPilotHydration(page: Page): Promise<void> {
+    await page.waitForFunction(pilotMounted);
+}
+
+/** Playwright executes this callback in the browser, independently of the test process. */
+function pilotMounted(): boolean {
+    const container = document.getElementById('surveyor-pilot') as
+        HTMLElement & {__vue_app__?: unknown} | null;
+    return Boolean(container?.__vue_app__);
+}
+
 /** Review a frontend invoice gate before the existing action sends its original API payload. */
 export async function confirmInvoiceCommand(page: Page, opener: Locator): Promise<void> {
     const review = page.locator('#invoiceCommandConfirmModal');

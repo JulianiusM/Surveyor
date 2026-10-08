@@ -4,9 +4,13 @@ import {RouterLink, useRoute, useRouter} from 'vue-router';
 import type {RouteLocationNormalized} from 'vue-router';
 import {usePilot} from '../app/context';
 import {localeManifest} from '../../modules/localization/translator';
+import {safeFrontendReturn} from '../../modules/lib/frontendIdentity';
+import {completeIdentityEntry, useConfirmedNavigation} from '../composables/pageEntry';
 import type {Locale} from '../../types/LocalizationTypes';
 import AppNavigationDropdown from './AppNavigationDropdown.vue';
 import NativeContextFields from './NativeContextFields.vue';
+import ActionButton from './ActionButton.vue';
+import StatusNotice from './StatusNotice.vue';
 
 // TODO (docs/FRONTEND_PILOT.md): Migrate the remaining creation, profile-management and
 // account-administration destinations in their feature increments. Keep their native links
@@ -16,6 +20,7 @@ const context = usePilot();
 const {messages, session, locale, ready} = context;
 const route = useRoute();
 const router = useRouter();
+const completion = useConfirmedNavigation();
 const identityPending = ref(false);
 const identityError = ref(false);
 const expanded = ref(false);
@@ -52,7 +57,9 @@ const helpRoute = computed(() => ({
         ...(route.path.startsWith('/frontend-pilot/packing/') ? {doc: 'packing_lists'} : {}),
     },
 }));
-const next = computed(() => route.fullPath);
+// Native header links prefer an explicit return destination, otherwise their current page.
+// Apply the existing pilot return boundary before using either value in forms or navigation.
+const next = computed(() => safeFrontendReturn(typeof route.query.next === 'string' ? route.query.next : route.fullPath));
 const profileLabel = computed(() =>
     session.value?.kind === 'guest'
         ? messages.value.t('app.guestLabel', {name: session.value.activeProfile?.name ?? ''})
@@ -96,16 +103,20 @@ async function selectLocale(event: Event): Promise<void> {
     }
 }
 async function logout(): Promise<void> {
-    if (identityPending.value || !context.mayChangeIdentity()) return;
+    if (identityPending.value || completion.target.value || !context.mayChangeIdentity()) return;
     identityPending.value = true;
     identityError.value = false;
     const scope = context.capture();
+    const origin = route.fullPath;
+    const destination = next.value;
     const finishUpdateCommand = context.updates.commandStarted();
     try {
         const result = await context.api.logout(scope);
-        await context.acceptIdentity(result);
-        if (result.redirect && /^https?:\/\//u.test(result.redirect)) window.location.assign(result.redirect);
-        else await router.push({path: '/frontend-pilot/users/login', query: {next: route.fullPath}});
+        // The native header always supplies next, which takes precedence over the provider's
+        // fallback logout URL. Keep that exact destination after the new anonymous actor is
+        // admitted. A failed bootstrap is recovered by shell Retry without repeating logout.
+        await completeIdentityEntry(context, router, result,
+            {kind: 'redirect', url: destination, notice: {kind: 'success', messageKey: 'auth.logoutDone'}}, origin, completion);
     } catch {
         identityError.value = true;
     } finally {
@@ -113,6 +124,14 @@ async function logout(): Promise<void> {
         finishUpdateCommand();
     }
 }
+
+/** The form/dialog normally owns delivery Retry. After a private subtree retires, the
+ * shell presents only its orphaned canonical destination, without reviving private controls. */
+async function retryCompletion(): Promise<void> {
+    if (completion.target.value) await completion.retry();
+    else await completion.retryFallback();
+}
+
 async function switchProfile(event: Event): Promise<void> {
     const select = event.target as HTMLSelectElement;
     const selectedProfile = select.value;
@@ -330,5 +349,13 @@ async function switchProfile(event: Event): Promise<void> {
                 {{ messages.t('common.error') }}
             </p>
         </nav>
+        <!-- Confirmed commands keep their own feedback. This shared recovery surface appears
+             only for header-owned navigation or after its originating form has unmounted. -->
+        <StatusNotice v-if="!completion.pending.value && (completion.target.value || completion.fallbackTarget.value)" kind="warning" class="mb-0">
+            {{ messages.t('state.loadFailed') }}
+            <ActionButton class="ms-2" variant="outline-light" :pending="completion.pending.value" @click="retryCompletion">
+                {{ messages.t('common.retry') }}
+            </ActionButton>
+        </StatusNotice>
     </header>
 </template>

@@ -6,6 +6,7 @@ import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
 import type {PilotContext, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {Locale, MessageKey} from '../../types/LocalizationTypes';
 import type {components} from '../../types/api/v1';
+import type {Router} from 'vue-router';
 import {createLocalizationInstance, createTranslator, resolveLocale} from '../../modules/localization/translator';
 import {PilotApi} from './api';
 import {ApiFailure, ObsoleteRequestError} from './transport';
@@ -35,6 +36,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     const stopLanguage = watch(locale, next => { void i18next.changeLanguage(next); }, {flush: 'sync'});
     const visible = ref(browser && document.visibilityState !== 'hidden');
     const ready = ref(true);
+    const initialDocumentActive = ref(true);
     const hydrated = ref(false);
     const notice = ref<MessageKey | null>(bootstrap.identityFeedback === 'auth.logoutDone' ? bootstrap.identityFeedback : null);
     // Entry feedback is a typed one-time page notice. Session/read conditions keep their
@@ -90,12 +92,30 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
             locale: locale.value, epoch: epoch.value};
     }
 
+    /** Bootstrap is evidence of the initial request, including POST errors and messages.
+     * A later visit to the same URL is a new GET-style journey and must obtain fresh admission.
+     * The reactive eligibility flag prevents reused views from reviving an old response. */
+    function initialDocumentFor(url: string): FrontendPilotBootstrap | undefined {
+        // A fragment selects content within the same document; it is not sent to Express.
+        // Path and query still identify the original request and may never revive on return.
+        if (!initialDocumentActive.value || !ready.value || bootstrap.initialUrl?.split('#')[0] !== url.split('#')[0]
+            || bootstrap.session.context !== session.value.context) return;
+        return bootstrap;
+    }
+
+    /** Only committed departure retires native presentation; canceled navigation retains it.
+     * Identity retirement independently revokes eligibility even if the URL stays unchanged. */
+    function retireInitialDocument(destination: string): void {
+        if (destination.split('#')[0] !== bootstrap.initialUrl?.split('#')[0]) initialDocumentActive.value = false;
+    }
+
     function isCurrent(scope: PilotRequestScope, checkLocale = false): boolean {
         return !disposed && ready.value && scope.epoch === epoch.value && scope.context === session.value.context
             && (!checkLocale || scope.locale === locale.value);
     }
 
     function clearIdentity(): void {
+        initialDocumentActive.value = false;
         pendingIdentity = undefined;
         personalLink.value = null;
         pageNotice.value = null;
@@ -265,8 +285,17 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     }
 
     return {api, bootstrap, browser, queryClient, session, epoch, locale, i18next, visible, hydrated, ready, notice, pageNotice, pageCompletion, personalLink, messages, pageTitle, updates,
-        capture, isCurrent, refreshSession, acceptIdentity, registerIdentityGuard, mayChangeIdentity,
+        capture, initialDocumentFor, retireInitialDocument, isCurrent, refreshSession, acceptIdentity, registerIdentityGuard, mayChangeIdentity,
         changeLocale, invalidateIdentity, start};
+}
+
+/** Observe the actual router commitment, independently of which view happens to be mounted.
+ * Server rendering and browser startup share this lifetime; failure and canceled guards do
+ * not consume the initial document. The returned subscription belongs to that router. */
+export function observeInitialDocument(context: PilotContext, router: Router): () => void {
+    return router.afterEach(function retireCommittedDocument(to, _from, failure): void {
+        if (!failure) context.retireInitialDocument(to.fullPath);
+    });
 }
 
 /** Keep ordinary visible read recovery within roughly one minute. Server-imposed Retry-After

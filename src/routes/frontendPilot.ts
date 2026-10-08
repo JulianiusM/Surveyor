@@ -97,10 +97,19 @@ async function applyPageEntry(req: Request, res: Response, state: FrontendPilotB
     state.pageEntry = entry;
     if (entry.kind === 'denied') res.status(entry.status);
     if (entry.kind !== 'redirect') return false;
-    if (entry.notice) req.flash('frontend-pilot-notice', JSON.stringify(entry.notice));
+    // Bootstrap consumed document feedback before admission chose another canonical URL.
+    // Carry it to the first rendered destination instead of losing a successful transition.
+    const notice = entry.notice ?? state.pageNotice;
+    if (notice) flashPageNotice(req, notice);
     await persistSession(req.session);
     res.redirect(nativeFrontendReturn(req, entry.url));
     return true;
+}
+
+/** Use one typed flash channel for native redirects and hydrated admission feedback. The
+ * destination consumes it once; session persistence remains explicit at the transition owner. */
+function flashPageNotice(req: Request, notice: components['schemas']['EntryNotice']): void {
+    req.flash('frontend-pilot-notice', JSON.stringify(notice));
 }
 
 router.get('/', asyncHandler(async function renderOverviewPilot(req, res) {
@@ -233,6 +242,8 @@ async function submitNativeIdentity(req: Request, res: Response): Promise<void> 
             await admitNativeIdentity(req, res, 'loginIdentity', input);
             requireLocalLogin();
             await userController.loginUser(input, req.session, {frontend: true, next, beforeTransition: identityTransitionGuard(req)});
+            flashPageNotice(req, {kind: 'success', messageKey: 'auth.loginDone'});
+            await persistSession(req.session);
             return res.redirect(303, nativeFrontendReturn(req, next));
         } else if (req.path === '/users/register') {
             const input = {username: body.username, displayname: body.displayname, email: body.email,
@@ -320,9 +331,14 @@ router.post(['/users/profile', '/users/logout'], asyncHandler(async function sub
         }
         await admitNativeIdentity(req, res, 'logoutIdentity');
         const destination = await userController.logoutUserOidc(req.session);
-        req.flash('frontend-pilot', 'auth.logoutDone');
+        flashPageNotice(req, {kind: 'success', messageKey: 'auth.logoutDone'});
         await persistSession(req.session);
-        res.redirect(303, destination === settings.value.rootUrl ? `/frontend-pilot?locale=${requestLocale(req)}` : destination);
+        // Like native logout, an explicit bounded next takes precedence over the controller's
+        // provider destination. With no return supplied, keep that server-owned fallback.
+        const suppliedNext = req.body?.next ?? req.query.next;
+        const redirect = suppliedNext !== undefined ? nativeFrontendReturn(req, suppliedNext)
+            : destination === settings.value.rootUrl ? `/frontend-pilot?locale=${requestLocale(req)}` : destination;
+        res.redirect(303, redirect);
     } catch (error) {
         // A stale tab or rejected native form must stay inside the independent Vue shell.
         // Re-read authority for the error page; never redisplay obsolete profile form values.
@@ -351,6 +367,8 @@ router.get('/guest/:guestId/login/:token', asyncHandler(async function enterPilo
         // Emailed capability links have always authenticated on GET. Keep that workflow
         // without an extra confirmation screen or a Pug destination.
         await userController.loginGuest(String(req.params.guestId), String(req.params.token), req.session);
+        flashPageNotice(req, {kind: 'success', messageKey: 'auth.loginDone'});
+        await persistSession(req.session);
         res.redirect(nativeFrontendReturn(req, req.query.next));
     } catch (error) {
         if (!(error instanceof ExpectedError) || error.cause !== 'TOKEN_INVALID') throw error;

@@ -44,7 +44,12 @@ function keyEnt(t: CombEntityType, id: string) {
     return `${t}:${id}`;
 }
 
-function isOwner(
+/**
+ * Ownership belongs to the active profile, whether it belongs to an account or a guest.
+ * Reuse this pure predicate for owner-only operations; an effective permission mask does
+ * not distinguish ownership from administrator grants and must not authorize deletion.
+ */
+export function isOwner(
     session: SessionLike,
     ownerId?: string | null
 ): boolean {

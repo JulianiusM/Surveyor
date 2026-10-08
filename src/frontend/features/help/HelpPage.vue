@@ -25,8 +25,8 @@ watch(() => query.value.q, value => { search.value = value ?? ''; });
 const help = useQuery({
     queryKey: computed(() => helpKeys.page(context.session.value?.context, locale.value, query.value)),
     queryFn: ({signal}) => api.help(query.value, context.capture(), signal),
-    initialData: () => context.bootstrap.initialUrl?.split('#')[0] === route.fullPath.split('#')[0]
-        && context.bootstrap.help?.locale === locale.value ? context.bootstrap.help : undefined,
+    initialData: () => context.initialDocumentFor(route.fullPath)?.help?.locale === locale.value
+        ? context.initialDocumentFor(route.fullPath)?.help : undefined,
     staleTime: Infinity,
     enabled: computed(() => context.hydrated.value && context.ready.value),
 });

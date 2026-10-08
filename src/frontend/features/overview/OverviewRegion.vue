@@ -76,10 +76,8 @@ const overview = useQuery({
     queryKey: computed(() => overviewKeys.region(context.session.value?.context, context.locale.value, query.value)),
     enabled: computed(() => props.active !== false && context.hydrated.value && context.ready.value && context.visible.value),
     queryFn: ({signal}) => loadOverview(signal),
-    initialData: () => context.bootstrap.initialUrl === route.fullPath
-        && context.bootstrap.session.context === context.session.value?.context
-        && context.bootstrap.session.locale === context.locale.value
-        ? context.bootstrap.overview?.find(value => value.collection === props.collection && value.region === props.region) : undefined,
+    initialData: () => context.initialDocumentFor(route.fullPath)?.session.locale === context.locale.value
+        ? context.initialDocumentFor(route.fullPath)?.overview?.find(value => value.collection === props.collection && value.region === props.region) : undefined,
     refetchOnMount: 'always',
     refetchInterval: (value) =>
         props.active !== false && context.visible.value

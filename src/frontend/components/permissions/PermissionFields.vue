@@ -15,17 +15,27 @@ const props = defineProps<{
 const emit = defineEmits<{'update:modelValue': [mask: number]}>();
 const {messages} = usePilot();
 const categories = ['ACCESS', 'EDIT', 'ITEM', 'MANAGE', 'DATA', 'OTHER'];
-const groups = computed(() =>
-    categories
-        .map((category) => ({
-            category,
-            permissions: props.permissions.filter((permission) => {
-                const prefix = permission.key.split('_')[0]!;
-                return (categories.includes(prefix) ? prefix : 'OTHER') === category;
-            }),
-        }))
-        .filter((group) => group.permissions.length),
-);
+const groups = computed(permissionGroups);
+
+/** Preserve the established category order while grouping the server-projected definitions.
+ * Unknown prefixes belong to Other; empty categories disappear without changing permissions
+ * or masks. Named phases avoid nested callbacks obscuring this presentation-only operation. */
+function permissionGroups() {
+    const grouped = new Map<string, components['schemas']['PermissionDefinition'][]>();
+    for (const category of categories) grouped.set(category, []);
+
+    for (const permission of props.permissions) {
+        const prefix = permission.key.split('_')[0]!;
+        const category = categories.includes(prefix) ? prefix : 'OTHER';
+        grouped.get(category)!.push(permission);
+    }
+
+    const result: {category: string; permissions: components['schemas']['PermissionDefinition'][]}[] = [];
+    for (const [category, permissions] of grouped) {
+        if (permissions.length) result.push({category, permissions});
+    }
+    return result;
+}
 function label(key: string): string {
     return permissionLabel(key, messages.value.t);
 }

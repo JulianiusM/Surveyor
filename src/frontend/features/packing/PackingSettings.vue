@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import {computed, ref, watch} from 'vue';
+import {computed, onBeforeUnmount, ref, watch} from 'vue';
 import {RouterLink, useRouter} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
+import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {permissionLabel as translatedPermissionLabel} from '../../../modules/localization/permissionLabels';
 import {usePackingApi} from './api';
 import {usePilot, refreshInterval} from '../../app/context';
 import {ApiFailure} from '../../app/transport';
 import {useCommand} from '../../composables/command';
+import {useConfirmedNavigation} from '../../composables/pageEntry';
 import {useDebouncedValue} from '../../composables/debounced';
 import {packingKeys} from '../../app/queryKeys';
 import ActionButton from '../../components/ActionButton.vue';
@@ -28,6 +30,9 @@ const context = usePilot();
 const api = usePackingApi(context);
 const {messages} = context;
 const router = useRouter();
+const destination = useConfirmedNavigation();
+let releaseDeparture: (() => void) | undefined;
+onBeforeUnmount(releaseUnconfirmedDeparture);
 type Settings = components['schemas']['PackingSettings'];
 type Defaults = components['schemas']['PermissionDefaults'];
 const panel = ref(props.metadataAvailable === true ? 'general' : '');
@@ -221,7 +226,7 @@ const busy = computed(() => refreshingSettings.value || command.pending.value
 const awaitingAuthority = computed(() => !!defaults.value?.confirmed || event.value?.confirmed !== undefined
     || Object.values(admins.value).some(draft => draft.confirmed !== undefined));
 const blocked = computed(
-    () => busy.value || command.uncertain.value || fields.value?.unknown || awaitingAuthority.value,
+    () => busy.value || command.uncertain.value || fields.value?.unknown || awaitingAuthority.value || !!destination.target.value,
 );
 /** A confirmed metadata save stays confirmed even if its related settings read fails. */
 async function metadataSaved(): Promise<void> {
@@ -329,6 +334,7 @@ function cancelAddAdmin(): void {
     preset.value = '';
 }
 function close(): void {
+    if (destination.target.value) return;
     if (command.mayLeave()) emit('close');
 }
 function chooseImage(event: Event): void {
@@ -482,20 +488,44 @@ async function archive(restore: boolean): Promise<void> {
     }
 }
 async function remove(): Promise<void> {
-    if (!command.mayLeave() || !window.confirm(messages.value.t('packing.confirmDelete'))) return;
-    // Delete has no representation to refresh. Its confirmation redirects inside the SPA.
-    const id = await command.run(async (scope) => {
-        await api.deletePacking(props.listId, scope);
-        return props.listId;
-    }, false);
-    if (id) {
-        defaults.value = null;
-        admins.value = {};
-        event.value = null;
-        image.value = null;
-        emit('close');
-        await router.push('/frontend-pilot');
+    if (blocked.value) return;
+    const approval = command.prepareDeparture();
+    if (!approval) return;
+    if (!window.confirm(messages.value.t('packing.confirmDelete'))) {
+        approval();
+        return;
     }
+
+    // Approve every mounted page/dialog draft before deletion. Consent releases no
+    // values on rejection; after confirmation it covers only the ensuing departure.
+    releaseDeparture = approval;
+    const scope = context.capture();
+    const origin = router.currentRoute.value.fullPath;
+    try {
+        const id = await command.run(deletePacking, false);
+        if (id) await destination.navigate('/frontend-pilot', scope, origin);
+    } finally {
+        // A failed route delivery retains the confirmed destination and its approval.
+        // Retry can only navigate; no DELETE or late discard prompt may run again.
+        if (!destination.target.value) releaseApprovedDeparture();
+    }
+}
+
+function releaseApprovedDeparture(): void {
+    releaseDeparture?.();
+    releaseDeparture = undefined;
+}
+
+/** A denied poll can close this editor after DELETE. Its confirmed departure consent
+ * then remains with the root until navigation commits. Pending work releases through
+ * remove's finally branch once its actual result is known; rejected work releases here. */
+function releaseUnconfirmedDeparture(): void {
+    if (!command.pending.value && command.outcome.value?.confirmation !== 'confirmed') releaseApprovedDeparture();
+}
+
+async function deletePacking(scope: PilotRequestScope): Promise<string> {
+    await api.deletePacking(props.listId, scope);
+    return props.listId;
 }
 function initials(name: string): string {
     return name
@@ -515,7 +545,7 @@ function permissionLabel(key: string): string {
         :open="true"
         :title="messages.t('packing.edit')"
         :subtitle="data?.title ?? listTitle"
-        :pending="!!busy"
+        :pending="!!busy || !!destination.target.value"
         @close="close"
     >
         <template #navigation
@@ -939,6 +969,10 @@ function permissionLabel(key: string): string {
             </div>
         </template>
         <template #footer
+            ><ActionButton v-if="destination.target.value" variant="outline-secondary"
+                :pending="destination.pending.value" @click="destination.retry">
+                {{ messages.t('common.retry') }}
+            </ActionButton
             ><ActionButton
                 v-if="settings.error.value || command.uncertain.value || awaitingAuthority || command.notice.value === 'state.savedRefreshFailed'"
                 variant="outline-secondary"
@@ -946,7 +980,7 @@ function permissionLabel(key: string): string {
                 :disabled="busy"
                 @click="refreshSettings"
                 >{{ messages.t('common.refresh') }}</ActionButton
-            ><ActionButton variant="secondary" :disabled="busy" @click="close">{{
+            ><ActionButton variant="secondary" :disabled="busy || !!destination.target.value" @click="close">{{
                 messages.t('common.close')
             }}</ActionButton></template
         >

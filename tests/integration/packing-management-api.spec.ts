@@ -1,5 +1,6 @@
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {AppDataSource} from '../../src/modules/database/dataSource';
+import {PackingAssignment} from '../../src/modules/database/entities/packing/PackingAssignment';
 import {PackingItem} from '../../src/modules/database/entities/packing/PackingItem';
 import {PackingList} from '../../src/modules/database/entities/packing/PackingList';
 import type {Profile} from '../../src/modules/database/entities/user/Profile';
@@ -14,7 +15,7 @@ import {contractValidator} from '../../src/modules/api/contracts';
 import {DEFAULT_PERM, PERM} from '../../src/modules/lib/permissions';
 import type {components} from '../../src/types/api/v1';
 import type {SessionLike} from '../../src/types/PermissionTypes';
-import {createEventActivityPlan, createIntegrationEvent, createSurveyWithCombinations, persistIntegrationProfile} from '../keywords/coreDomainKeywords';
+import {createEventActivityPlan, createIntegrationEvent, createPackingListWithItem, createSurveyWithCombinations, persistIntegrationProfile} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 
 let owner: Profile;
@@ -275,6 +276,46 @@ describe('complete versioned packing management', () => {
         await expect(packing.deletePackingList(id, session)).rejects.toMatchObject({status: 403});
         await adminService.addAdmin('packing', id, editor.id, DEFAULT_PERM.ADMIN);
         await expect(packing.deletePackingList(id, actor(editor))).rejects.toMatchObject({status: 403});
+    });
+
+    it.each(['account', 'guest'] as const)('permits a persisted %s profile owner to delete without granting that authority to administrators', async identity => {
+        let session = actor(owner);
+        if (identity === 'guest') {
+            const guest = await userService.createGuest('Packing guest owner');
+            session = {auth: {guest}, profile: guest.profile};
+        }
+
+        // The trusted domain fixture establishes existing profile ownership, including a
+        // guest-owned record. It must not grant guests permission to create new lists today.
+        const [id, item] = await createPackingListWithItem(session.profile!.id);
+        const settings = await packing.readPackingSettings(id, session);
+        expect(settings.capabilities).toMatchObject({remove: true, duplicate: identity === 'account'});
+        expect(contractValidator('PackingSettings')(settings)).toBe(true);
+        expect((await packing.readPackingList(id, session)).data.capabilities.manageSettings).toBe(true);
+        if (identity === 'guest') {
+            await expect(packing.createPackingList(creation(), undefined, session)).rejects.toMatchObject({status: 403});
+        }
+
+        // Full administrative grants deliberately do not imply ownership, for either
+        // account or guest profiles. Denied deletions leave the persisted root intact.
+        const administrator = await userService.createGuest('Packing guest nonowner');
+        const administratorSession: SessionLike = {auth: {guest: administrator}, profile: administrator.profile};
+        await adminService.addAdmin('packing', id, administrator.profile.id, DEFAULT_PERM.ADMIN);
+        await adminService.addAdmin('packing', id, editor.id, DEFAULT_PERM.ADMIN);
+        expect((await packing.readPackingSettings(id, administratorSession)).capabilities.remove).toBe(false);
+        expect((await packing.readPackingSettings(id, actor(editor))).capabilities.remove).toBe(false);
+        await expect(packing.deletePackingList(id, administratorSession)).rejects.toMatchObject({status: 403});
+        await expect(packing.deletePackingList(id, actor(editor))).rejects.toMatchObject({status: 403});
+        expect(await packingService.getPackingListById(id)).toMatchObject({ownerId: session.profile!.id});
+
+        // Exercise the real repository deletion and foreign-key cascades, rather than
+        // replacing the persistence boundary or treating deletion as archival.
+        await packing.setPackingSelfAssignment(id, item.id, true, session);
+        expect(await AppDataSource.getRepository(PackingAssignment).countBy({entity: {id}})).toBe(1);
+        expect(await packing.deletePackingList(id, session)).toEqual({changed: true});
+        expect(await packingService.getPackingListById(id)).toBeNull();
+        expect(await AppDataSource.getRepository(PackingItem).countBy({entity: {id}})).toBe(0);
+        expect(await AppDataSource.getRepository(PackingAssignment).countBy({entity: {id}})).toBe(0);
     });
 
     it('duplicates content and defaults without assignments, files, or lifecycle; retains historical nullable capacity in the draft', async () => {

@@ -1,5 +1,6 @@
-import {inject, onBeforeUnmount, onMounted, provide, ref, shallowRef} from 'vue';
-import {onBeforeRouteLeave, onBeforeRouteUpdate} from 'vue-router';
+import {inject, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch} from 'vue';
+import {onBeforeRouteLeave, onBeforeRouteUpdate, useRouter} from 'vue-router';
+import type {NavigationFailure, RouteLocationNormalized} from 'vue-router';
 import {usePilot} from '../app/context';
 import {ApiFailure, InvalidInputError, ObsoleteRequestError} from '../app/transport';
 import type {PilotCommandDraft, PilotCommandOutcome, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
@@ -16,6 +17,7 @@ interface DraftState {
 
 interface DraftOwner {
     register(read: () => DraftState): () => void;
+    prepareDeparture(): (() => void) | undefined;
 }
 
 const draftOwnerKey = Symbol.for('surveyor.pilot.draft-owner');
@@ -28,9 +30,11 @@ const draftOwnerKey = Symbol.for('surveyor.pilot.draft-owner');
  */
 export function useDraftProtection(draft: PilotCommandDraft) {
     const context = usePilot();
+    const router = useRouter();
     const parent = inject<DraftOwner | null>(draftOwnerKey, null);
     const children = new Set<() => DraftState>();
-    provide<DraftOwner>(draftOwnerKey, {register});
+    const approvedDepartures = new Set<{origin: string}>();
+    provide<DraftOwner>(draftOwnerKey, {register, prepareDeparture});
 
     function register(read: () => DraftState): () => void {
         children.add(read);
@@ -56,8 +60,41 @@ export function useDraftProtection(draft: PilotCommandDraft) {
     function mayLeave(): boolean {
         const state = readState();
         if (state.busy) return false;
+        if (approvedDepartures.size) return true;
         if (state.unknownMessage) return window.confirm(context.messages.value.t(state.unknownMessage));
         return !state.dirty || window.confirm(context.messages.value.t('draft.discard'));
+    }
+
+    /** An irreversible command must obtain the whole page's departure decision before
+     * writing. Descendants delegate to the root, including sibling drafts behind a dialog.
+     * Keep this consent until its confirmed navigation finishes; its later route guard must
+     * not ask whether to discard an already deleted resource. Pending work still blocks
+     * departure, and automatic reload never treats this approval as a clean draft. */
+    function prepareDeparture(): (() => void) | undefined {
+        if (parent) return parent.prepareDeparture();
+        if (!mayLeave()) return;
+        const departure = {origin: router.currentRoute.value.fullPath};
+        approvedDepartures.add(departure);
+
+        return function releaseDeparture(): void {
+            // Set removal is idempotent even after the root retired all leases.
+            approvedDepartures.delete(departure);
+        };
+    }
+
+    /** Confirmed deletion can close its child editor on a later denied read while this
+     * page remains mounted. Accepted consent belongs to the root's visit, not that child:
+     * release it after actual departure or actor retirement, never on failed delivery. */
+    function retireDepartures(to: RouteLocationNormalized, _from: RouteLocationNormalized,
+                              failure?: NavigationFailure | void): void {
+        if (failure) return;
+        for (const departure of approvedDepartures) {
+            if (departure.origin !== to.fullPath) approvedDepartures.delete(departure);
+        }
+    }
+
+    function clearDepartures(): void {
+        approvedDepartures.clear();
     }
 
     /** Release updates cannot ask to discard input or silently acknowledge an unknown result. */
@@ -74,6 +111,13 @@ export function useDraftProtection(draft: PilotCommandDraft) {
 
     if (parent) onBeforeUnmount(parent.register(readState));
     else {
+        const removeDepartureObserver = router.afterEach(retireDepartures);
+        const stopIdentity = watch(context.epoch, clearDepartures);
+        onBeforeUnmount(() => {
+            removeDepartureObserver();
+            stopIdentity();
+            clearDepartures();
+        });
         onBeforeUnmount(context.registerIdentityGuard(mayLeave));
         onBeforeUnmount(context.updates.registerGuard(mayReload));
         onBeforeRouteLeave(mayLeave);
@@ -81,7 +125,7 @@ export function useDraftProtection(draft: PilotCommandDraft) {
         onMounted(() => window.addEventListener('beforeunload', beforeUnload));
         onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
     }
-    return {mayLeave, mayReload};
+    return {mayLeave, mayReload, prepareDeparture};
 }
 
 /** One command owner per form/page. Commands never replay automatically: a missing response
@@ -188,5 +232,5 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     }
 
     return {pending, uncertain, error, notice, outcome, setError, run, reconcile, acknowledge,
-        mayLeave: protection.mayLeave};
+        mayLeave: protection.mayLeave, prepareDeparture: protection.prepareDeparture};
 }

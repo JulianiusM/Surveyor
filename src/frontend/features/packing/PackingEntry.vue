@@ -22,9 +22,7 @@ const guestRoute = computed(() => route.path.endsWith('/guest'));
 
 // Initial admission belongs to one URL and identity. Reusing this wrapper for another
 // list, locale or explicit guest route gets its own query through the shared entry owner.
-const nativeInitial = context.bootstrap.initialUrl === route.fullPath
-    && context.bootstrap.session.context === context.session.value?.context
-    ? context.bootstrap : undefined;
+const nativeInitial = context.initialDocumentFor(route.fullPath);
 const initialEntry: components['schemas']['PackingResourceEntry'] | undefined = nativeInitial
     ? {entry: nativeInitial.pageEntry ?? (nativeInitial.packingError
         ? {kind: 'denied', status: 404, messageKey: nativeInitial.packingError} : {kind: 'render'}),

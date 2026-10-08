@@ -6,7 +6,7 @@ import {ApiFailure, ObsoleteRequestError, UnconfirmedResponseError} from '../../
 import {PackingApi} from '../../src/frontend/features/packing/api';
 import {useHelpApi} from '../../src/frontend/features/help/api';
 import {canRetryRead, createPilotContext, refreshInterval} from '../../src/frontend/app/context';
-import {serializeBootstrap} from '../../src/frontend/app/serializeBootstrap';
+import {decodeBootstrap, serializeBootstrap} from '../../src/frontend/app/serializeBootstrap';
 import {evictPackingResource} from '../../src/frontend/app/queryCache';
 import {overviewKeys, packingKeys} from '../../src/frontend/app/queryKeys';
 import type {components} from '../../src/types/api/v1';
@@ -37,6 +37,27 @@ function deferred<T>() {
 }
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+describe('complete frontend bootstrap boundary', () => {
+    it('preserves server-owned entry, notice and completion together through the wire codec', async () => {
+        const bootstrap = {session: session(), initialUrl: '/frontend-pilot/guest/recovery',
+            pageEntry: {kind: 'denied' as const, status: 401, messageKey: 'auth.invalidGuestLink'},
+            pageNotice: {kind: 'error' as const, messageKey: 'auth.sessionExpired'},
+            pageCompletion: {context: scope.context, destination: '/frontend-pilot/guest/recovery',
+                messageKey: 'auth.recoverySent' as const, kind: 'success' as const}};
+        expect(await decodeBootstrap(JSON.parse(serializeBootstrap(bootstrap)))).toEqual(bootstrap);
+    });
+
+    it.each([
+        {pageEntry: {kind: 'denied', status: '401', messageKey: 'auth.invalidGuestLink'}},
+        {pageNotice: {kind: 'executable', messageKey: 'auth.sessionExpired'}},
+        {pageCompletion: {context: scope.context, destination: '/frontend-pilot/guest/recovery', messageKey: 'unknown', kind: 'success'}},
+        {identityFields: {password: 'must never enter bootstrap'}},
+        {undeclaredField: true},
+    ])('rejects malformed or undeclared initial state %j before mounting', async invalid => {
+        await expect(decodeBootstrap({session: session(), ...invalid})).rejects.toThrow('Invalid pilot bootstrap');
+    });
+});
 
 describe('packing draft reconciliation', () => {
     it('adopts disjoint remote changes while keeping the sparse local draft', () => {
