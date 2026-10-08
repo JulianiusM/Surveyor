@@ -39,7 +39,8 @@ block content
             eventIdQuery = `?eventId=${parsed.eventId}`
         }
 
-    form#planForm(action=`/activity/create${eventIdQuery}` method="post" enctype="multipart/form-data")
+    //- The shared guest-flow action preserves the exact duplicate destination through account login.
+    form#planForm(action=data.creationAction || `/activity/create${eventIdQuery}` method="post" enctype="multipart/form-data")
         .row.g-3.mb-3
             .col-md-6
                 label.form-label(for="title")

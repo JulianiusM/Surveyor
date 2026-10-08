@@ -231,6 +231,44 @@ describe('identity, refresh and local state boundaries', () => {
         context.queryClient.clear();
     });
 
+    it('delivers a confirmed guest link after a failed bootstrap is recovered without repeating registration', async () => {
+        const current = {...session('confirmed-guest-context-1234'), kind: 'guest' as const};
+        const send = vi.fn<typeof fetch>().mockRejectedValueOnce(new Error('Session read unavailable'))
+            .mockResolvedValueOnce(response(current, 200, {'X-Surveyor-Context': current.context}));
+        const context = createPilotContext({session: session()}, false, send);
+
+        await expect(context.acceptIdentity({session: current, personalLink: 'https://example.test/private-link', redirect: null}))
+            .rejects.toThrow();
+        expect(context.ready.value).toBe(false);
+        expect(context.personalLink.value).toBeNull();
+        await context.refreshSession();
+
+        expect(context.ready.value).toBe(true);
+        expect(context.session.value.context).toBe(current.context);
+        expect(context.personalLink.value).toBe('https://example.test/private-link');
+        expect(send).toHaveBeenCalledTimes(2);
+        expect(send.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+        context.queryClient.clear();
+    });
+
+    it('retires a retained identity receipt when retry confirms a different actor', async () => {
+        const confirmed = {...session('confirmed-guest-context-1234'), kind: 'guest' as const};
+        const other = session('different-actor-context-1234');
+        const send = vi.fn<typeof fetch>().mockRejectedValueOnce(new Error('Session read unavailable'))
+            .mockResolvedValueOnce(response(other, 200, {'X-Surveyor-Context': other.context}))
+            .mockResolvedValueOnce(response(confirmed, 200, {'X-Surveyor-Context': confirmed.context}));
+        const context = createPilotContext({session: session()}, false, send);
+
+        await expect(context.acceptIdentity({session: confirmed, personalLink: 'https://example.test/private-link', redirect: null}))
+            .rejects.toThrow();
+        await context.refreshSession();
+        expect(context.session.value.context).toBe(other.context);
+        expect(context.personalLink.value).toBeNull();
+        await context.refreshSession();
+        expect(context.personalLink.value).toBeNull();
+        context.queryClient.clear();
+    });
+
     it('serializes rapid language changes so the final explicit preference also owns the final cookie response', async () => {
         const german = deferred<Response>();
         const english = deferred<Response>();
@@ -247,6 +285,69 @@ describe('identity, refresh and local state boundaries', () => {
         await latest;
         expect(context.locale.value).toBe('en');
         expect(context.epoch.value).toBe(0);
+        context.queryClient.clear();
+    });
+
+    it('keeps a confirmed locale when an older session read finishes without discarding private state', async () => {
+        const olderSession = deferred<Response>();
+        const send = vi.fn<typeof fetch>().mockReturnValueOnce(olderSession.promise)
+            .mockResolvedValueOnce(response(session(scope.context, 'de')));
+        const context = createPilotContext({session: session()}, false, send);
+        const captured = context.capture();
+        context.queryClient.setQueryData(['private'], 'Existing editor');
+
+        const reading = context.refreshSession();
+        await context.changeLocale('de');
+        olderSession.resolve(response(session()));
+        await reading;
+
+        expect(context.locale.value).toBe('de');
+        expect(context.session.value.locale).toBe('de');
+        expect(context.messages.value.locale).toBe('de');
+        expect(context.isCurrent(captured)).toBe(true);
+        expect(context.queryClient.getQueryData(['private'])).toBe('Existing editor');
+        context.queryClient.clear();
+    });
+
+    it('still applies authoritative identity changes from an older locale projection', async () => {
+        const olderSession = deferred<Response>();
+        const send = vi.fn<typeof fetch>().mockReturnValueOnce(olderSession.promise)
+            .mockResolvedValueOnce(response(session(scope.context, 'de')));
+        const context = createPilotContext({session: session()}, false, send);
+        const captured = context.capture();
+        context.queryClient.setQueryData(['private'], 'Previous actor');
+
+        const reading = context.refreshSession();
+        await context.changeLocale('de');
+        const current = session('changed-context-1234567890');
+        olderSession.resolve(response(current, 200, {'X-Surveyor-Context': current.context}));
+        await reading;
+
+        expect(context.session.value.context).toBe(current.context);
+        expect(context.ready.value).toBe(true);
+        expect(context.isCurrent(captured)).toBe(false);
+        expect(context.queryClient.getQueryData(['private'])).toBeUndefined();
+        expect(context.locale.value).toBe('de');
+        expect(context.session.value.locale).toBe('de');
+        context.queryClient.clear();
+    });
+
+    it('does not suppress an authoritative locale after a rejected language command', async () => {
+        const olderSession = deferred<Response>();
+        const problem: components['schemas']['Problem'] = {type: 'about:blank', title: 'Forbidden', status: 403,
+            detail: 'This operation is not permitted.', requestId: 'locale-request', code: 'FORBIDDEN',
+            messageKey: 'api:errors.FORBIDDEN', params: {}};
+        const send = vi.fn<typeof fetch>().mockReturnValueOnce(olderSession.promise)
+            .mockResolvedValueOnce(response(problem, 403));
+        const context = createPilotContext({session: session()}, false, send);
+
+        const reading = context.refreshSession();
+        await expect(context.changeLocale('de')).rejects.toBeInstanceOf(ApiFailure);
+        olderSession.resolve(response(session(scope.context, 'de')));
+        await reading;
+
+        expect(context.locale.value).toBe('de');
+        expect(context.session.value.locale).toBe('de');
         context.queryClient.clear();
     });
 

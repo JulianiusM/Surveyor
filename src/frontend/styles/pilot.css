@@ -1,5 +1,9 @@
 /* Keep the rendered Bootstrap theme while giving Vue exclusive ownership of interactive state. */
 .pilot-app { color: var(--bs-body-color); }
+/* Native message pages move their live-alert region into the card. An empty outer
+   region therefore reserves no space here. Ordinary pages retain their native mt-1
+   region, and actual shell notices stay visible above every kind of page. */
+#pilot-main:has(> .pilot-page-message) > .pilot-page-notices:empty { display: none; }
 .pilot-nav-dropdown > summary { list-style: none; cursor: pointer; }
 .pilot-nav-dropdown > summary::-webkit-details-marker { display: none; }
 .pilot-nav-dropdown > .dropdown-menu { top: 100%; left: 0; margin-top: var(--bs-dropdown-spacer); }

@@ -70,6 +70,7 @@ async function mounted(component: Component, props: Record<string, unknown> | ((
         {path: '/frontend-pilot/packing/create', component, props: () => componentProps},
         {path: '/frontend-pilot/packing/:listId/duplicate', component, props: () => componentProps},
         {path: '/frontend-pilot/packing/:listId', component, props: () => componentProps},
+        {path: '/frontend-pilot/users/login', component: defineComponent({template: '<p>Login destination</p>'})},
         {path: '/away', component: defineComponent({template: '<p>Away</p>'})},
     ]});
     await router.push(path);
@@ -99,7 +100,8 @@ function deferredResponse() {
 
 describe('packing route title ownership', () => {
     it('hydrates the admitted feature and retains its title through locale changes', async () => {
-        const {wrapper, context} = await mounted(PackingEntry);
+        const {wrapper, context} = await mounted(PackingEntry, {}, async request =>
+            json(new URL(request.url).pathname.endsWith('/entry') ? {entry: {kind: 'render'}, guest: null} : list));
         expect(wrapper.get('h1').text()).toBe('Equipment');
         expect(document.title).toBe('Equipment | Surveyor');
 
@@ -253,7 +255,7 @@ describe('progressive packing loading', () => {
         expect(wrapper.get(initialForm).exists()).toBe(true);
         expect(wrapper.find('form').exists()).toBe(false);
         delayed.resolve(json(duplicate ? {title: 'Empty source', description: null, eventId: null,
-            items: [], defaultPermissions: defaults, formContext} : formContext));
+            items: [], defaultPermissions: defaults, formContext} : {entry: {kind: 'render'}, context: formContext}));
         await flushPromises();
         expect(wrapper.find(initialForm).exists()).toBe(false);
         expect(wrapper.get('#create-title').exists()).toBe(true);
@@ -692,6 +694,161 @@ describe('packing overview presentation and navigation', () => {
 });
 
 describe('packing command forms', () => {
+    it.each(['defaults', 'event', 'admin'] as const)('retains confirmed %s values without adopting stale authority after a failed read', async editor => {
+        const choice = {id: itemId, title: 'Chosen camp', startDate: '2026-10-07', endDate: '2026-10-08',
+            archived: false, description: null, deadlinePassed: false};
+        let projection: components['schemas']['PackingSettings'] = {...settings,
+            capabilities: {...settings.capabilities, managePermissions: true, linkEvent: true},
+            access: {defaults, admins: [{profileId: otherId, name: 'Delegate', isGuest: false,
+                mask: 0, editToken: '"edit-admin-original"'}], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
+        let failRead = false;
+        const writes: {body: unknown; token: string | null}[] = [];
+        const {wrapper, context} = await mounted(PackingSettings, context => {
+            context.queryClient.setDefaultOptions({queries: {retry: false}});
+            return {listId: id};
+        }, async function settingsRequest(request) {
+            const path = new URL(request.url).pathname;
+            if (path.endsWith('/events')) return json({items: [choice], selected: null, nextCursor: null});
+            if (request.method === 'GET') {
+                if (failRead) throw new TypeError('Read unavailable');
+                return json(projection);
+            }
+            const body = await request.json();
+            writes.push({body, token: request.headers.get('If-Match')});
+            if (editor === 'defaults') projection = {...projection, access: {...projection.access!,
+                defaults: {...defaults, participant: 1}}};
+            else if (editor === 'event') projection = {...projection,
+                currentEvent: {id: itemId, title: choice.title, startDate: null, endDate: null, url: null}};
+            else projection = {...projection, access: {...projection.access!, admins: [{profileId: otherId,
+                name: 'Delegate', isGuest: false, mask: 1, editToken: '"edit-admin-current"'}]}};
+            projection = {...projection, settingsToken: '"edit-current"'};
+            failRead = true;
+            return json(editor === 'event' ? {changed: true, canView: true} : {changed: true});
+        });
+        const confirm = vi.fn(() => true);
+        vi.stubGlobal('confirm', confirm);
+        if (editor === 'event') {
+            await wrapper.get('#pilot-settings-tab-event').trigger('click');
+            await wrapper.get('[data-event-id="' + itemId + '"]').trigger('click');
+            await wrapper.get('#pilot-settings-event form').trigger('submit');
+        } else {
+            await wrapper.get('#pilot-settings-tab-access').trigger('click');
+            if (editor === 'defaults') {
+                await wrapper.get('#settings-defaults-participant-EDIT_TITLE').setValue(true);
+                await wrapper.get('#pilot-access-defaults').trigger('submit');
+            } else {
+                await wrapper.get('#pilot-access-admins-tab').trigger('click');
+                await wrapper.get('.accordion-button').trigger('click');
+                await wrapper.get('#admin-' + otherId + '-EDIT_TITLE').setValue(true);
+                await button(wrapper, 'Save').trigger('click');
+            }
+        }
+        await flushPromises();
+        expect(writes).toHaveLength(1);
+        expect(wrapper.text()).toContain(context.messages.value.t('state.savedRefreshFailed'));
+        if (editor === 'event') expect(wrapper.get('[data-event-id="' + itemId + '"]').attributes('aria-pressed')).toBe('true');
+        else expect(wrapper.get<HTMLInputElement>(editor === 'defaults'
+            ? '#settings-defaults-participant-EDIT_TITLE' : '#admin-' + otherId + '-EDIT_TITLE').element.checked).toBe(true);
+        confirm.mockClear();
+        expect(context.mayChangeIdentity()).toBe(true);
+        expect(confirm).not.toHaveBeenCalled();
+        expect(button(wrapper, 'Close').attributes('disabled')).toBeUndefined();
+        expect(button(wrapper, editor === 'event' ? 'Save event link' : editor === 'defaults'
+            ? 'Update permissions' : 'Save').attributes('disabled')).toBeDefined();
+
+        failRead = false;
+        await button(wrapper, 'Refresh').trigger('click');
+        await flushPromises();
+        expect(writes).toHaveLength(1);
+        expect(button(wrapper, editor === 'event' ? 'Save event link' : editor === 'defaults'
+            ? 'Update permissions' : 'Save').attributes('disabled')).toBeUndefined();
+        if (editor === 'defaults') {
+            await wrapper.get('#settings-defaults-participant-EDIT_TITLE').setValue(false);
+            await wrapper.get('#pilot-access-defaults').trigger('submit');
+        } else if (editor === 'admin') {
+            await wrapper.get('#admin-' + otherId + '-EDIT_TITLE').setValue(false);
+            await button(wrapper, 'Save').trigger('click');
+        } else await wrapper.get('#pilot-settings-event form').trigger('submit');
+        await flushPromises();
+        expect(writes[1]?.token).toBe(editor === 'admin' ? '"edit-admin-current"' : '"edit-current"');
+    });
+
+    it('offers acknowledged Settings departure when a response and reconciliation are unavailable, without replay', async () => {
+        let failRead = false;
+        let writes = 0;
+        const projection = {...settings, capabilities: {...settings.capabilities, managePermissions: true},
+            access: {defaults, admins: [], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
+        const {wrapper, context, router} = await mounted(PackingSettings, context => {
+            context.queryClient.setDefaultOptions({queries: {retry: false}});
+            return {listId: id};
+        }, async function settingsRequest(request) {
+            if (request.method !== 'GET') {
+                writes++;
+                failRead = true;
+                throw new TypeError('Command response lost');
+            }
+            if (failRead) throw new TypeError('Reconciliation unavailable');
+            return json(projection);
+        });
+        await wrapper.get('#settings-defaults-participant-EDIT_TITLE').setValue(true);
+        await wrapper.get('#pilot-access-defaults').trigger('submit');
+        await flushPromises();
+        await button(wrapper, 'Refresh').trigger('click');
+        await flushPromises();
+        expect(button(wrapper, 'Close').attributes('disabled')).toBeUndefined();
+        const confirm = vi.fn(() => false);
+        vi.stubGlobal('confirm', confirm);
+        await button(wrapper, 'Close').trigger('click');
+        expect(wrapper.emitted('close')).toBeUndefined();
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(wrapper.get<HTMLInputElement>('#settings-defaults-participant-EDIT_TITLE').element.checked).toBe(true);
+        confirm.mockClear();
+        expect(context.mayChangeIdentity()).toBe(false);
+        expect(confirm).toHaveBeenCalledOnce();
+        confirm.mockClear();
+        await router.push('/away');
+        expect(router.currentRoute.value.path).not.toBe('/away');
+        expect(confirm).toHaveBeenCalledOnce();
+        context.updates.observe({...session.deployment, buildId: 'next-release'});
+        await flushPromises();
+        expect(context.updates.requestReload()).toBe(false);
+        confirm.mockReturnValue(true);
+        confirm.mockClear();
+        await router.push('/away');
+        expect(router.currentRoute.value.path).toBe('/away');
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(writes).toBe(1);
+        expect(context.mayChangeIdentity()).toBe(true);
+    });
+
+    it('asks once for a quick-add draft and an open Settings draft and retains both on cancellation', async () => {
+        const projection = {...settings, capabilities: {...settings.capabilities, managePermissions: true},
+            access: {defaults, admins: [], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
+        const {wrapper, router, context} = await mounted(PackingPage, {}, async request =>
+            json(new URL(request.url).pathname.endsWith('/settings') ? projection
+                : {...list, capabilities: {...list.capabilities, manageSettings: true}}));
+        await wrapper.get('#quick-title').setValue('Retained stove');
+        await button(wrapper, 'Entity settings').trigger('click');
+        await flushPromises();
+        await wrapper.get('#settings-defaults-participant-EDIT_TITLE').setValue(true);
+        const confirm = vi.fn(() => false);
+        vi.stubGlobal('confirm', confirm);
+        await router.push('/away');
+        expect(router.currentRoute.value.path).not.toBe('/away');
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(wrapper.get<HTMLInputElement>('#quick-title').element.value).toBe('Retained stove');
+        expect(wrapper.get<HTMLInputElement>('#settings-defaults-participant-EDIT_TITLE').element.checked).toBe(true);
+        confirm.mockClear();
+        expect(context.mayChangeIdentity()).toBe(false);
+        expect(confirm).toHaveBeenCalledOnce();
+        confirm.mockReturnValue(true);
+        confirm.mockClear();
+        await button(wrapper, 'Close').trigger('click');
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(wrapper.findComponent(PackingSettings).exists()).toBe(false);
+        expect(wrapper.get<HTMLInputElement>('#quick-title').element.value).toBe('Retained stove');
+    });
+
     it('keeps a metadata save confirmed when its settings refresh fails and exposes a read retry', async () => {
         let title = 'Original';
         let writes = 0;
@@ -1072,15 +1229,49 @@ describe('packing command forms', () => {
             }
             if (path.endsWith('/duplicate')) return json(duplicate);
             if (path.endsWith('/events')) return json({items: [], nextCursor: null, selected: null});
-            return json({defaults, permissions: [], presets: []});
+            return json({entry: {kind: 'render'}, context: {defaults, permissions: [], presets: []}});
         }, '/frontend-pilot/packing/' + id + '/duplicate');
         expect(wrapper.findAll('tbody tr')).toHaveLength(2);
         expect(wrapper.findAll<HTMLInputElement>('tbody input[type="checkbox"]').map(input => input.element.checked)).toEqual([false, true]);
-        await wrapper.get('#create-title').setValue('Edited copy');
+        await wrapper.get('#create-title').setValue('  Edited copy  ');
+        await wrapper.get('#create-description').setValue('  Shared root  ');
+        const itemRows = wrapper.findAll('tbody tr');
+        await itemRows[0]!.findAll('input')[0]!.setValue('  Tent  ');
+        await itemRows[0]!.findAll('input')[1]!.setValue('   ');
+        await button(wrapper, 'Add row').trigger('click');
+        await wrapper.findAll('tbody tr')[2]!.get('input').setValue('   ');
         await wrapper.get('form').trigger('submit');
         await flushPromises();
-        expect(submitted).toEqual({title: 'Edited copy', description: 'Shared', eventId: null,
-            defaultPermissions: defaults, items: duplicate.items});
+        expect(submitted).toEqual({title: '  Edited copy  ', description: '  Shared root  ', eventId: null,
+            defaultPermissions: defaults, items: duplicate.items.map(value => ({...value, description: value.description ?? ''}))});
+    });
+
+    it.each(['anonymous', 'guest', 'account-without-profile'] as const)('follows account admission from a %s duplicate submission with its exact return and no new discard prompt', async kind => {
+        const actor = kind === 'account-without-profile' ? {...session, activeProfile: null, profiles: []}
+            : {...session, kind, ...(kind === 'anonymous' ? {activeProfile: null, profiles: [], logoutUrl: null} : {})};
+        const duplicateUrl = `/frontend-pilot/packing/${id}/duplicate`;
+        const {wrapper, context, router, request} = await mounted(PackingCreatePage, {}, async function entryRequest(request) {
+            const url = new URL(request.url);
+            if (url.pathname.endsWith('/create-entry')) {
+                expect(url.searchParams.get('returnTo')).toBe(duplicateUrl);
+                return json({entry: {kind: 'redirect', url: '/frontend-pilot/users/login?next=' + encodeURIComponent(duplicateUrl),
+                    notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, context: null});
+            }
+            if (url.pathname.endsWith('/events')) return json({items: [], selected: null, nextCursor: null});
+            return json({title: 'Duplicate draft', description: null, eventId: null, defaultPermissions: defaults,
+                items: [{title: 'Tent', description: null, maxAssignees: 1, requiredByAll: false}],
+                formContext: {defaults, permissions: [], presets: []}});
+        }, duplicateUrl, actor);
+        await wrapper.get('#create-title').setValue('Submitted duplicate draft');
+        const confirm = vi.fn(() => false);
+        vi.stubGlobal('confirm', confirm);
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login');
+        expect(router.currentRoute.value.query.next).toBe(duplicateUrl);
+        expect(confirm).not.toHaveBeenCalled();
+        expect(context.pageNotice.value).toEqual({kind: 'info', messageKey: 'auth.accountRequired'});
+        expect(request.mock.calls.filter(([value]) => (value as Request).method === 'POST')).toHaveLength(0);
     });
 
     it.each(['anonymous', 'guest'] as const)('loads a %s duplicate through SPA navigation without invoking account-only creation context', async kind => {
@@ -1111,7 +1302,7 @@ describe('packing command forms', () => {
             const path = new URL(req.url).pathname;
             if (path.endsWith('/duplicate')) return json(duplicate);
             if (path.endsWith('/events')) return json({items: [], nextCursor: null, selected: null});
-            return json({defaults, permissions: [], presets: []});
+            return json({entry: {kind: 'render'}, context: {defaults, permissions: [], presets: []}});
         }, '/frontend-pilot/packing/create');
         await wrapper.get('#create-title').setValue('Unknown creation');
         await wrapper.get('tbody input').setValue('Sleeping bag');

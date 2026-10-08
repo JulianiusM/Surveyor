@@ -1,13 +1,19 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
-import {defineComponent, h} from 'vue';
+import {createSSRApp, defineComponent, h} from 'vue';
 import type {Component} from 'vue';
+import {renderToString} from 'vue/server-renderer';
+import {readFileSync} from 'node:fs';
+import {resolve} from 'node:path';
+import * as pug from 'pug';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import App from '../../src/frontend/app/App.vue';
 import HelpPage from '../../src/frontend/features/help/HelpPage.vue';
+import FormField from '../../src/frontend/components/FormField.vue';
+import PageMessage from '../../src/frontend/components/PageMessage.vue';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
 import {render} from '../../src/frontend/app/entry-server';
 import type {components} from '../../src/types/api/v1';
@@ -32,9 +38,78 @@ async function renderHelp(data = help, url = '/frontend-pilot/help?doc=fixture',
     await flushPromises();
     return {wrapper, context, router};
 }
+
+/** The native page supplies actual label/footer markup, not a copied template fixture. */
+function nativeGuestPage(): HTMLElement {
+    const native = document.createElement('div');
+    native.innerHTML = pug.renderFile(resolve('src/views/users/register-guest.pug'), {
+        status: undefined, messages: {}, version: session.shell.version, nxtUrl: '/packing/fixture', profile: undefined,
+        permData: undefined, settings: {imprintUrl: session.shell.imprintUrl, privacyPolicyUrl: session.shell.privacyPolicyUrl},
+        data: {entityType: 'packing', entityId: 'fixture', title: 'Fixture list', guestRegistrationNags: {}},
+    });
+    return native;
+}
 afterEach(() => { vi.restoreAllMocks(); document.body.innerHTML = ''; });
 
 describe('native shell and help presentation contract', () => {
+    it('preserves native outer alert spacing for ordinary pages and actual notices, while empty message pages reserve none', async () => {
+        const stylesheet = document.createElement('style');
+        stylesheet.textContent = readFileSync(resolve('src/frontend/styles/pilot.css'), 'utf8');
+        document.body.append(stylesheet);
+        const {wrapper, context, router} = await renderHelp();
+        router.addRoute({path: '/frontend-pilot/message-fixture', component: defineComponent({
+            render: () => h(PageMessage, {kind: 'success', message: 'Confirmed fixture message'}),
+        })});
+        try {
+            // Native ordinary pages retain an empty mt-1 live-alert region above their card.
+            const region = wrapper.get<HTMLElement>('.pilot-page-notices');
+            expect(region.element.children).toHaveLength(0);
+            expect(getComputedStyle(region.element).display).not.toBe('none');
+
+            await router.push('/frontend-pilot/message-fixture');
+            await flushPromises();
+            expect(wrapper.get('.pilot-page-message').text()).toContain('Confirmed fixture message');
+            expect(getComputedStyle(region.element).display).toBe('none');
+
+            context.pageNotice.value = {kind: 'info', messageKey: 'auth.accountRequired'};
+            await flushPromises();
+            expect(region.text()).toContain(context.messages.value.t('auth.accountRequired'));
+            expect(getComputedStyle(region.element).display).not.toBe('none');
+        } finally { wrapper.unmount(); context.queryClient.clear(); stylesheet.remove(); }
+    });
+
+    it('renders the same native label text next to its margin-owned icon in SSR and the mounted client', async () => {
+        const native = nativeGuestPage();
+        for (const name of ['username', 'email']) {
+            const nativeLabel = native.querySelector<HTMLLabelElement>(`label[for="${name}"]`)!;
+            const props = {id: name, label: nativeLabel.textContent!, modelValue: '',
+                labelIcon: nativeLabel.querySelector('i')!.className};
+            const rendered = document.createElement('div');
+            rendered.innerHTML = await renderToString(createSSRApp(FormField, props));
+            expect(rendered.querySelector('label')?.textContent).toBe(nativeLabel.textContent);
+
+            const wrapper = mount(FormField, {props});
+            try {
+                expect(wrapper.get('label').element.textContent).toBe(nativeLabel.textContent);
+                expect(wrapper.get('label i').classes()).toContain('me-1');
+            } finally { wrapper.unmount(); }
+        }
+    });
+
+    it('preserves the native footer text, icon-owned gap and nonbreaking bullet separators', async () => {
+        const native = nativeGuestPage().querySelector('footer small')!;
+        const result = await render('/frontend-pilot/help', {session, help});
+        const rendered = document.createElement('div');
+        rendered.innerHTML = result.html;
+        expect(rendered.querySelector('footer small')?.textContent).toBe(native.textContent);
+
+        const {wrapper, context} = await renderHelp();
+        try {
+            expect(wrapper.get('footer small').element.textContent).toBe(native.textContent);
+            expect(wrapper.get('footer i').classes()).toContain('mx-1');
+        } finally { wrapper.unmount(); context.queryClient.clear(); }
+    });
+
     it.each([false, true])('keeps a pending lazy navigation when the locale response arrives (navigation first: %s)', async navigationFirst => {
         let finishLocale!: (response: Response) => void;
         const request = vi.fn(() => new Promise<Response>(resolve => { finishLocale = resolve; }));

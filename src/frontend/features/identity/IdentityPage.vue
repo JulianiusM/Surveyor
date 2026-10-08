@@ -7,6 +7,7 @@ import {usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {problemMessage} from '../../composables/feedback';
 import {usePageTitle} from '../../composables/pageTitle';
+import {completeIdentityEntry, completePageEntry} from '../../composables/pageEntry';
 import FormField from '../../components/FormField.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
@@ -15,7 +16,8 @@ import NativeContextFields from '../../components/NativeContextFields.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import {ApiFailure, ObsoleteRequestError} from '../../app/transport';
 import type {components} from '../../../types/api/v1';
-import {safeFrontendReturn} from '../../../modules/lib/frontendIdentity';
+import {frontendIdentityMessageFeedback, safeFrontendReturn} from '../../../modules/lib/frontendIdentity';
+import {isPlainMessageKey} from '../../../modules/localization/translator';
 import {isRegistrationPasswordValid, passwordCriteria} from '../../../public/js/core/password-policy';
 
 const context = usePilot();
@@ -23,7 +25,7 @@ const {messages} = context;
 const route = useRoute();
 const router = useRouter();
 const mode = computed(
-    () => route.meta.identityMode as 'login' | 'register' | 'forgot' | 'reset' | 'activate' | 'guest-login' | 'error',
+    () => route.meta.identityMode as 'login' | 'register' | 'forgot' | 'reset' | 'activate' | 'guest-login' | 'recovery' | 'error',
 );
 const next = computed(() => safeFrontendReturn(route.query.next));
 const nativeInitial = context.bootstrap.initialUrl === route.fullPath
@@ -36,8 +38,16 @@ const fields = reactive({
     displayname: nativeInitial?.identityFields?.displayname ?? '',
     email: nativeInitial?.identityFields?.email ?? '',
 });
-const finished = ref(['auth.registered', 'auth.resetSent', 'auth.resetDone'].includes(nativeInitial?.identityFeedback ?? ''));
-const recoveryFinished = ref(nativeInitial?.identityFeedback === 'auth.recoverySent');
+const finished = ref(!!nativeInitial?.identityFeedback && frontendIdentityMessageFeedback.includes(nativeInitial.identityFeedback));
+// A URL is not evidence that mail was sent. Enhanced completion is an in-memory
+// receipt scoped to its actor and exact destination. Native POST seeds that same receipt
+// once, so returning after another committed visit cannot reconstruct an old success.
+const recoveryCompleted = computed(() => {
+    const completion = context.pageCompletion.value;
+    return mode.value === 'recovery' && completion !== null
+        && completion.context === context.session.value?.context
+        && completion.destination === route.fullPath && completion.messageKey === 'auth.recoverySent';
+});
 const activationNotice = ref(nativeInitial?.identityFeedback === 'auth.activated');
 const reconciling = ref(false);
 const showPasswordCriteria = ref(false);
@@ -51,7 +61,7 @@ watch(() => [mode.value, route.params.token, route.params.guestId], resetForm);
 
 /** Every entered field participates in the same leave/reload policy, including password-only drafts. */
 function isDirty(): boolean {
-    return !finished.value && Object.values(fields).some(Boolean);
+    return !finished.value && !recoveryCompleted.value && Object.values(fields).some(Boolean);
 }
 
 /** A committed route change releases the old draft; a cancelled guard never reaches this watcher. */
@@ -59,7 +69,6 @@ function resetForm(): void {
     command.acknowledge();
     clearFields();
     finished.value = false;
-    recoveryFinished.value = false;
     activationNotice.value = false;
     showPasswordCriteria.value = false;
     if (mode.value === 'activate' && context.browser && !identityDenial.value) void submit();
@@ -76,10 +85,15 @@ const bootstrapMatchesRoute = computed(() => context.bootstrap.initialUrl === ro
 const needsOidc = computed(() => ['login', 'register'].includes(mode.value)
     && !context.session.value?.shell.localLoginEnabled && context.session.value?.shell.oidcEnabled);
 const identityDenial = computed(() => {
+    const entry = bootstrapMatchesRoute.value ? context.bootstrap.pageEntry : undefined;
+    if (entry?.kind === 'denied') {
+        return messages.value.t(isPlainMessageKey(entry.messageKey) ? entry.messageKey : 'common.error');
+    }
     const initial = bootstrapMatchesRoute.value ? context.bootstrap.identityProblem : undefined;
     if (initial) return problemMessage(messages.value, initial);
     if (mode.value === 'error') return messages.value.t('common.error');
-    if (mode.value !== 'guest-login' && !context.session.value?.shell.localLoginEnabled && !needsOidc.value) {
+    if (!['guest-login', 'recovery'].includes(mode.value)
+        && !context.session.value?.shell.localLoginEnabled && !needsOidc.value) {
         return messages.value.t('api:errors.LOCAL_LOGIN_DISABLED');
     }
     return null;
@@ -166,9 +180,16 @@ const presentations = {
         submit: 'auth.activationTitle', submitIcon: 'bi-box-arrow-in-right'},
     error: {title: 'common.errorTitle', icon: 'bi-box-arrow-in-right',
         submit: 'common.errorTitle', submitIcon: 'bi-box-arrow-in-right'},
+    recovery: {title: 'common.successTitle', icon: 'bi-check-circle',
+        submit: 'common.successTitle', submitIcon: 'bi-check-circle'},
 } as const;
 const presentation = computed(() => presentations[mode.value]);
-const title = computed(() => messages.value.t(presentation.value.title));
+const title = computed(() => {
+    if (identityDenial.value || mode.value === 'reset' && resetDenial.value) return messages.value.t('common.errorTitle');
+    if (recoveryCompleted.value) return messages.value.t('common.successTitle');
+    if (finished.value) return messages.value.t(mode.value === 'register' ? 'common.infoTitle' : 'common.successTitle');
+    return messages.value.t(presentation.value.title);
+});
 usePageTitle(title);
 const titleIcon = computed(() => presentation.value.icon);
 const submitLabel = computed(() => messages.value.t(presentation.value.submit));
@@ -189,11 +210,13 @@ async function submit(): Promise<void> {
         }
     }
     if (mode.value === 'login' || mode.value === 'guest-login') {
+        const origin = route.fullPath;
+        const destination = next.value;
         const result = await command.run(signIn, false);
         if (result) {
             clearFields();
-            await context.acceptIdentity(result);
-            await router.push(next.value);
+            await completeIdentityEntry(context, router, result,
+                {kind: 'redirect', url: destination, notice: null}, origin);
         }
         return;
     }
@@ -248,21 +271,32 @@ async function submitIdentityForm(scope: PilotRequestScope) {
     }
 }
 
-/** A successful recovery clears only its submitted email, preserving unrelated login drafts. */
+/** Native recovery completes on the full message surface. Unknown delivery preserves the
+ * mounted form and its values; only confirmation releases those values and departure guards. */
 async function recover(): Promise<void> {
-    if (
-        await command.run(
-            (scope) => context.api.recoverGuest({email: fields.email, next: next.value}, scope),
-            false,
-        )
-    ) {
-        recoveryFinished.value = true;
-        fields.email = '';
+    const scope = context.capture();
+    const origin = route.fullPath;
+    if (await command.run(requestRecovery, false)) {
+        clearFields();
+        await completePageEntry(context, router, '/frontend-pilot/guest/recovery',
+            'auth.recoverySent', 'success', scope, origin);
     }
+}
+
+function requestRecovery(scope: PilotRequestScope): Promise<components['schemas']['MutationResult']> {
+    return context.api.recoverGuest({email: fields.email, next: next.value}, scope);
 }
 onMounted(() => {
     if (mode.value === 'activate' && !identityDenial.value) void submit();
 });
+/** Reused route components need the same admission as first mounts. A URL alone cannot
+ * restore a completed command; only trusted POST feedback or the scoped receipt can. */
+function admitRecovery(): void {
+    if (context.browser && mode.value === 'recovery' && !recoveryCompleted.value && !identityDenial.value) {
+        void router.replace('/frontend-pilot/users/login');
+    }
+}
+watch(mode, admitRecovery, {immediate: true});
 </script>
 
 <template>
@@ -270,7 +304,9 @@ onMounted(() => {
         <ActionButton v-if="resetReadFailure && !identityDenial" variant="outline-light" @click="resetAttempt++">{{ messages.t('common.retry') }}</ActionButton>
     </PageMessage>
     <PageMessage v-else-if="finished" :kind="mode === 'register' ? 'info' : 'success'" :message="messages.t(mode === 'register'
-        ? 'auth.registered' : mode === 'forgot' ? 'auth.resetSent' : 'auth.resetDone')" />
+         ? 'auth.registered' : mode === 'forgot' ? 'auth.resetSent' : 'auth.resetDone')" />
+    <PageMessage v-else-if="recoveryCompleted" kind="success" :message="messages.t('auth.recoverySent')" />
+    <LoadingSkeleton v-else-if="mode === 'recovery'" variant="form" />
     <template v-else>
         <!-- Identity validation and activation feedback occupy the same shared region
              above the form card as native account pages. Keep it outside the form. -->
@@ -429,11 +465,8 @@ onMounted(() => {
                     ><hr />
                     <h2 class="text-center">{{ messages.t('auth.recoveryTitle') }}</h2>
                     <p class="text-center">{{ messages.t('auth.recoveryIntro') }}</p>
-                    <StatusNotice v-if="recoveryFinished" kind="success">{{
-                        messages.t('auth.recoverySent')
-                    }}</StatusNotice>
-                    <form class="row gy-3 justify-content-center" method="post" action="/frontend-pilot/users/login" @submit.prevent="recover">
-                        <NativeContextFields :next="next" /><input type="hidden" name="_recovery" value="1" />
+                    <form class="row gy-3 justify-content-center" method="post" action="/frontend-pilot/guest/recovery" @submit.prevent="recover">
+                        <NativeContextFields :next="next" />
                         <FormField
                             id="recovery-email"
                             name="email"

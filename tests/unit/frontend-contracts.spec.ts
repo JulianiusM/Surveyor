@@ -18,6 +18,18 @@ function packingView(): components['schemas']['PackingListView'] {
 }
 
 describe('generated v1 contract boundaries', () => {
+    it('keeps native optional non-null creation descriptions separate from nullable wire descriptions', () => {
+        const native = {title: 'Native', items: [{title: 'Tent', maxAssignees: 1, requiredByAll: false}]};
+        expect(server.validatePackingNativeCreateInput(native)).toBe(true);
+        expect(server.validatePackingNativeCreateInput({...native, description: ''})).toBe(true);
+        expect(server.validatePackingNativeCreateInput({...native, description: null})).toBe(false);
+        expect(server.validatePackingNativeCreateInput({...native, items: [{...native.items[0], description: null}]})).toBe(false);
+        expect(server.validatePackingNewItem({...native.items[0], description: null})).toBe(true);
+        expect(server.validatePageEntryOutcome({kind: 'denied', status: 400, messageKey: 'packing.eventRegistrationRequired'})).toBe(true);
+        expect(server.validatePageEntryOutcome({kind: 'redirect', url: '/frontend-pilot/users/login', notice: null})).toBe(true);
+        expect(server.validatePageEntryOutcome({kind: 'render', url: '/unrequested'})).toBe(false);
+    });
+
     it('rejects unknown server output while accepting additive response fields in the browser', () => {
         const view = packingView();
         expect(server.validatePackingListView(view)).toBe(true);

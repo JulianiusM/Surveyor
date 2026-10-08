@@ -87,6 +87,17 @@ test('preserves native packing HTML 404s, standalone guest entry and public dupl
         expect(duplicateHtml.indexOf('</noscript>')).toBeLessThan(duplicateHtml.indexOf('<div id="surveyor-pilot">'));
         const anonymous = await bootstrap(request);
         expect((await request.get(`/api/v1/packing-lists/${list.id}/duplicate`, {headers: headersFor(anonymous)})).status()).toBe(200);
+        const detailEntry = await request.get(`/api/v1/packing-lists/${list.id}/entry?view=detail`, {headers: headersFor(anonymous)});
+        expect(await detailEntry.json()).toEqual({entry: {kind: 'redirect', url: `/frontend-pilot/packing/${list.id}/guest`, notice: null}, guest: null});
+        const guestEntry = await request.get(`/api/v1/packing-lists/${list.id}/entry?view=guest`, {headers: headersFor(anonymous)});
+        expect(await guestEntry.json()).toEqual({entry: {kind: 'render'}, guest: {id: list.id, title: list.title}});
+        const duplicateReturn = `/frontend-pilot/packing/${list.id}/duplicate?locale=de`;
+        const createEntry = await request.get('/api/v1/packing-lists/create-entry', {
+            headers: headersFor(anonymous), params: {returnTo: duplicateReturn},
+        });
+        expect(await createEntry.json()).toEqual({entry: {kind: 'redirect',
+            url: `/frontend-pilot/users/login?next=${encodeURIComponent(duplicateReturn)}`,
+            notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, context: null});
         await expectProblem(await request.get('/api/v1/packing-lists/create-context', {headers: headersFor(anonymous)}), 401, 'AUTH_REQUIRED');
         const ownerGuest = await page.request.get(`/frontend-pilot/packing/${list.id}/guest?locale=en`, {maxRedirects: 0});
         expect(ownerGuest.status()).toBe(302);
@@ -119,12 +130,17 @@ test('preserves attached packing HTML membership and explicit view alternatives 
         expect(deniedHtml).toContain('Du musst für die Veranstaltung angemeldet sein');
         expect(deniedHtml).not.toContain(list.title);
         expect(deniedHtml).not.toContain('Two person tent');
+        const entryPath = `/api/v1/packing-lists/${list.id}/entry?view=detail`;
+        expect(await (await guestContext.request.get(entryPath, {headers: headersFor(guest)})).json())
+            .toEqual({entry: {kind: 'denied', status: 400, messageKey: 'packing.eventRegistrationRequired'}, guest: null});
         // The event owner counts as an event participant under the native admission owner.
         expect((await page.request.get(`/frontend-pilot/packing/${list.id}`)).status()).toBe(200);
         expect((await page.request.post(`/api/packing/${list.id}/admins`, {
             data: {profileId: guest.activeProfile!.id, perms: ['ACCESS_VIEW']},
         })).ok()).toBe(true);
         expect((await guestContext.request.get(`/frontend-pilot/packing/${list.id}`)).status()).toBe(200);
+        expect(await (await guestContext.request.get(entryPath, {headers: headersFor(guest)})).json())
+            .toEqual({entry: {kind: 'render'}, guest: null});
         expect((await page.request.patch(`/api/packing/${list.id}/admins/${guest.activeProfile!.id}`, {
             data: {perms: ['DATA_DUPLICATE']},
         })).ok()).toBe(true);
@@ -142,6 +158,100 @@ test('preserves attached packing HTML membership and explicit view alternatives 
         }), 403, 'FORBIDDEN');
     } finally {
         await guestContext.close();
+    }
+});
+
+test('keeps exact native and SPA duplicate destinations including query context through account-only submission', async ({page, browser, baseURL}) => {
+    await loginForE2E(page.request, createE2ELogin());
+    const input = createE2EPackingList();
+    Object.assign(input.form, {'defaultPerms[public][0]': 'DATA_DUPLICATE'});
+    const list = await createResourceViaForm(page.request, input);
+    const event = await createResourceViaForm(page.request, createE2EEvent());
+    const anonymous = await browser.newContext({baseURL});
+    try {
+        const nativeReturn = `${list.path}/duplicate?eventId=${event.id}&locale=en`;
+        const native = await anonymous.request.get(nativeReturn);
+        expect(native.status()).toBe(200);
+        const html = await native.text();
+        const action = html.match(/<form[^>]*id="packingForm"[^>]*action="([^"]+)"/)?.[1]?.replaceAll('&amp;', '&');
+        expect(action).toBeTruthy();
+        expect(new URL(action!, baseURL).searchParams.get('next')).toBe(nativeReturn);
+        const rejected = await anonymous.request.post(action!, {form: input.form, maxRedirects: 0});
+        expect(rejected.status()).toBe(302);
+        const login = new URL(rejected.headers().location!, baseURL);
+        expect(login.pathname).toBe('/users/login');
+        expect(login.searchParams.get('next')).toBe(nativeReturn);
+        const resumed = await anonymous.request.post(login.pathname + login.search, {form: createE2ELogin(), maxRedirects: 0});
+        expect(resumed.status()).toBe(302);
+        expect(resumed.headers().location).toBe(nativeReturn);
+
+        // A fresh anonymous SPA receives the same account decision; its exact pilot
+        // source URL is bounded by the existing frontend return owner rather than inferred.
+        await anonymous.clearCookies();
+        const session = await bootstrap(anonymous.request);
+        const pilotReturn = `/frontend-pilot/packing/${list.id}/duplicate?eventId=${event.id}&locale=de`;
+        const entry = await anonymous.request.get('/api/v1/packing-lists/create-entry', {
+            headers: headersFor(session), params: {returnTo: pilotReturn},
+        });
+        expect((await entry.json()).entry).toMatchObject({kind: 'redirect',
+            url: `/frontend-pilot/users/login?next=${encodeURIComponent(pilotReturn)}`,
+            notice: {kind: 'info', messageKey: 'auth.accountRequired'}});
+        const forbidden = await anonymous.request.get('/api/v1/packing-lists/create-entry', {
+            headers: headersFor(session), params: {returnTo: 'https://outside.invalid/duplicate'},
+        });
+        expect(new URL((await forbidden.json()).entry.url, baseURL).searchParams.get('next')).toBe('/frontend-pilot');
+    } finally {
+        await anonymous.close();
+    }
+});
+
+test('renders invalid guest capability links as native 401 HTML with guest-specific wording', async ({page}) => {
+    const id = randomUUID();
+    const token = randomUUID();
+    const native = await page.request.get(`/guest/${id}/login/${token}`, {maxRedirects: 0});
+    const pilot = await page.request.get(`/frontend-pilot/guest/${id}/login/${token}?locale=en`, {maxRedirects: 0});
+    expect(native.status()).toBe(401);
+    expect(pilot.status()).toBe(native.status());
+    expect(pilot.headers()['content-type']).toContain('text/html');
+    const html = await pilot.text();
+    expect(html).toContain('Invalid or mismatched token');
+    expect(html).not.toContain('Your session has expired');
+    expect(html).toContain('"pageEntry":{"kind":"denied","status":401,"messageKey":"auth.invalidGuestLink"}');
+});
+
+test('runs the native expiry/logout document journey before invalid stored identity becomes an API problem', async ({page, browser, baseURL}) => {
+    await loginForE2E(page.request, createE2ELogin());
+    const original = await bootstrap(page.request);
+    const profileName = `Expiry profile ${randomUUID().slice(0, 8)}`;
+    expect((await page.request.post('/users/profile/create', {form: {name: profileName}, maxRedirects: 0})).status()).toBe(302);
+    const profile = (await bootstrap(page.request)).profiles.find(value => value.name === profileName)!;
+    expect(profile).toBeTruthy();
+    const documentContext = await browser.newContext({baseURL});
+    const apiContext = await browser.newContext({baseURL});
+    try {
+        for (const request of [documentContext.request, apiContext.request]) {
+            await loginForE2E(request, createE2ELogin());
+            expect((await request.get(`/users/profile/change/${profile.id}`, {maxRedirects: 0})).status()).toBe(302);
+            expect((await bootstrap(request)).activeProfile!.id).toBe(profile.id);
+        }
+        // Detach the profile through its real owner workflow while the two other
+        // sessions retain the old serialized profile. No session fixture or DB mutation
+        // bypasses middleware, persistence or the application's identity ownership check.
+        expect((await page.request.get(`/users/profile/change/${profile.id}`, {maxRedirects: 0})).status()).toBe(302);
+        expect((await page.request.post('/users/profile/delete', {form: {name: profileName}, maxRedirects: 0})).status()).toBe(302);
+        const expiredDocument = await documentContext.request.get('/frontend-pilot/help', {maxRedirects: 0});
+        expect(expiredDocument.status()).toBe(302);
+        expect(expiredDocument.headers()['content-type']).not.toContain('application/json');
+        const expiryPage = await documentContext.request.get(expiredDocument.headers().location!);
+        expect(expiryPage.headers()['content-type']).toContain('text/html');
+        expect(await expiryPage.text()).toContain('Session has expired');
+        expect((await bootstrap(documentContext.request)).kind).toBe('anonymous');
+        await expectProblem(await apiContext.request.get('/api/v1/session'), 401, 'AUTH_REQUIRED');
+        expect((await bootstrap(apiContext.request)).kind).toBe('anonymous');
+    } finally {
+        await documentContext.close();
+        await apiContext.close();
+        await page.request.get(`/users/profile/change/${original.activeProfile!.id}`, {maxRedirects: 0});
     }
 });
 

@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: current
 last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: progressive skeleton/loading implementation, 955 database-free cases, full build and final frontend build, 21 built HTTP/browser checks and final 26 shared/content cases plus two loading browser cases and ten individually inspected final originals; FPR-01–06 migration-only runtime rectification, final 919 database-free cases and full build, 17 guarded integration cases, 19 final built HTTP/browser journeys and 32 individually inspected focused captures followed by 12 inspected correction captures; two source-browser checks preceded the final title/presentation corrections; FPR-07 native documentation preservation, staged cutover guidance, bounded bilingual navigation correction and advisory multilingual report with synthetic tooling checks; development entry/hydration/navigation repair, real source-browser and HMR/restart verification, separate production replacement proof; approved D1–D5 rectification; full 472-image paired role/state review and 15 built behavior checks; focused final identity, native and deployment smoke review; preceding accepted packing/help evidence retained separately
+verification-scope: authorized native-parity and shared-ownership implementation, 1013 database-free cases, 46 guarded integration cases, 46 distinct built HTTP/browser cases across broad and focused runs, three normal development-source journeys, full build and final shared-presentation frontend build, eight individually inspected final guest/recovery originals and advisory tooling checks; exact execution ordering and limits recorded below; preceding progressive loading, FPR-01–07, D1–D5, 472-image role/state and deployment evidence retained as historical records
 source-anchors: src/frontend/components/LoadingSkeleton.vue; src/frontend/styles/pilot.css; tests/frontend/frontend-loading-shell.spec.ts; tests/frontend/frontend-content-loading.spec.ts; src/frontend/composables/pageTitle.ts; tests/frontend/frontend-refresh-navigation.spec.ts; scripts/capture-frontend-rectification-readonly.cjs; docs/frontend-migration/staged/DEVELOPMENT.md; src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/frontend/frontend-route-recovery.spec.ts; tests/e2e/frontend-development.spec.ts; scripts/watch-frontend-inputs.mjs; scripts/capture-frontend-baseline.cjs; src/frontend/; src/routes/frontendPilot.ts; src/routes/api/v1/; src/modules/packing/api.ts; src/controller/entityAdminController.ts; src/views/modules/module_entity_header.pug; src/views/packing/packing-view.pug; contracts/api/v1/; src/locales/; docs/user-guide/de/; tests/frontend/packing-management-ui.spec.ts; tests/frontend/packing-view.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/integration/packing-management-api.spec.ts; tests/e2e/frontend-pilot.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; docs/FRONTEND_PILOT.md
 next-review: pilot-UI-behavior-change-or-feature-cutover
 -->
@@ -487,7 +487,7 @@ the restricted explicitly disposable schema at port 33318. This entry neither ch
 ## Frontend runtime rectification, 2026-10-08
 
 FPR-01–06 implement the known findings under the migration-only boundary in the
-[pilot implementation record](../FRONTEND_PILOT.md#rectification-implementation-2026-10-08). Existing business
+[pilot implementation record](../FRONTEND_PILOT.md#previous-rectification-implementation-2026-10-08). Existing business
 behavior, controller/DBAL responsibilities, native grants and D1–D5 remain the baseline. No authentication system,
 general permission framework, schema change or repository-wide lock protocol was introduced. The independent
 `BACKEND-HARDENING-01` backlog retains that work; Overview and other future increments retain source TODOs.
@@ -657,3 +657,81 @@ needed for loading. This increment did not rerun database integration, the full 
 startup/HMR, deployment replacement, another browser engine or a live provider round trip. Prior evidence remains
 historical. Production user/operator/developer documentation is unchanged by this loading increment; reusable
 loading and test guidance is staged until cutover. The existing native/scaffold/backlog boundaries still apply.
+
+## Native parity and shared ownership rectification, 2026-10-08
+
+The maintainer authorized implementation and explicitly amended unauthorized duplication to return after login
+to the exact `<entity>/<id>/duplicate` URL, including query context. The
+[design amendment](../FRONTEND_FOUNDATION_DESIGN.md#authorized-parity-and-shared-ownership-amendment-2026-10-08)
+preserves the original native ordinary-create return and the later approval. The
+[implementation record](../FRONTEND_PILOT.md#native-parity-rectification-2026-10-08) records current ownership;
+the [staged development recipe](staged/DEVELOPMENT.md#implementing-the-next-feature-slice) is the maintained
+contribution guidance. The native remediation backlog has no changes from this increment.
+
+Shared server admission delegates to existing user/entity controllers and Packing business operations. Native
+creation uses generated structural validation plus named transport-only scalar converters; error ordering follows
+the generated schema rather than another field list. Existing event authorization still runs before native
+decoding. Database services, entities, migrations, archival, hard deletion and file retention are unchanged.
+Every existing guest-flow factory consumer uses the same renderer action and exact duplicate-return rule,
+including the deliberate survey exception. Document expiry retains provider logout evidence; API expiry remains
+structured. Guest registration reaches canonical detail, invalid guest links retain native denial, and confirmed
+recovery uses the native message destination whose subsequent GET still redirects to login.
+
+Shared page-entry navigation retires stale and pending-destination responses, preserves mounted editors while a
+redirect is being guarded, and removes controls after confirmed denial. One-time notices keep their server-owned
+severity. A confirmed identity receipt survives an unavailable session read only for its matching actor; Retry
+resumes the captured destination once without replaying the command. Full completion messages use actor-scoped
+memory receipts. Locale ordering has an independent generation. Nested draft owners register one global guard
+tree; confirmed settings values remain distinct from authoritative write tokens when a follow-up read fails.
+
+| Executed check | Result and boundary |
+|---|---|
+| `npx --no-install cross-env TZ=UTC npm run test:quick` | Passed 1,013 cases in 60 files after the final admission, identity, recovery and draft logic corrections. The later shared presentation correction changes only markup/style and has separate focused checks below. |
+| `npm run build` | Passed all normal build stages. The normal `npm run server` workflow subsequently completed its own full build before starting the source app and watchers. Existing dependency/Sass deprecation warnings remain. |
+| Guarded Packing integration selection | `packing-api.spec.ts`, `packing-management-api.spec.ts` and `packing-workflows.spec.ts` passed all 46 cases against real persistence. Later corrections affect presentation, native validation error ordering and command receipt handling, without changing the exercised persistence operations. |
+| Four built HTTP/browser files | `core-workflows.spec.ts`, `frontend-identity-api.spec.ts`, `frontend-pilot-api.spec.ts` and `frontend-pilot.spec.ts` passed 44 of 46 cases. The other two assertions omitted the approved locale query in document redirects; correcting only those assertions and rerunning the two cases passed 2 of 2 on the same runtime. This verifies 46 distinct cases, not a single all-passing 46-case run. |
+| Normal source `frontend-development.spec.ts` | Passed all three cases through `npm run server`: source modules/lazy navigation and locale refresh, input typed before Overview hydration, and a real Packing item POST plus authoritative refresh without replacing the document. |
+| Final `npm run build:frontend` | Passed both Vue type checks and matching client/SSR builds after the shared visual correction. |
+| Final shared shell focus | `frontend-pilot-shell.spec.ts` passed all 11 cases, including native compiled Pug versus Vue SSR/mounted label and footer text, and the actual production message-layout stylesheet. Ordinary-page spacing and visible notices are preserved. Eight cases overlap the quick total; the three presentation cases were added afterward. |
+| Final built entry/recovery capture | The two affected browser journeys passed again on the corrected presentation build, producing the final eight desktop/mobile originals inspected below. |
+| Synthetic documentation tooling | `node --test scripts/tests/documentation-check.test.mjs scripts/tests/documentation-advisory.test.mjs` passed 45 cases. Reports remain advisory and maintained prose is not an application-test dependency. |
+
+Built browser fixtures cover native creation for all five modules, shared exact duplicate return, server admission,
+expired identity, invalid guest links, canonical guest completion, recovery, settings and command recovery,
+progressive loading, Overview and Help. The initial broader diagnostic failures and cold SSR timeout are excluded
+from passing evidence; they led to the corrected reset fallback, bounded unique fixtures, correct selectors and
+the final checks above. Empty test selections are also excluded. No test weakened observable assertions to claim
+an unexecuted workflow. The multi-locale cold SSR check has a documented compilation budget rather than a sleep.
+
+Individual inspection of the entry/recovery originals exposed an extra icon-to-label text gap, footer whitespace
+and a four-pixel message-page offset. `FormField` now lets the native icon margin own the gap. `AppFooter` retains
+native icon adjacency and nonbreaking separators. Shared `PageMessage`,
+the application shell and its stylesheet preserve native message spacing without a feature-specific override.
+Ordinary-page alert spacing and visible notices remain intact. These findings required the final frontend build
+and focused browser recapture; the preliminary pictures are not final parity evidence.
+
+The final eight originals under `.temp/frontend-foundation/current-shared-presentation-final-evidence/` were opened
+individually, captured with 1440 × 1000 and 390 × 844 viewports. Mobile guest forms use full-page 390 × 1183
+pictures; recovery fits 390 × 844. Guest forms share the native title, notices, fields, action order,
+desktop geometry and narrow-screen wrapping. Recovery shares the native Success card, message, Home action and
+card geometry. The approved locale selector remains present in the pilot header. Captures wait for fonts and
+check horizontal overflow; they show the real controller-backed workflows rather than synthetic page data.
+An independent Chromium canvas read compared all four final native/pilot image pairs below the 56-pixel header:
+each pair had zero differing pixels, including its footer. This is evidence for these captured states and sizes,
+not a claim about every role or viewport.
+
+Integration selected only `127.0.0.1:33318/surveyor_frontend_test`; its guarded runner rebuilt that dedicated
+disposable schema. Browser/source checks selected only `127.0.0.1:33318/surveyor_frontend_e2e`. Helpers verified
+the selected database and schema-limited grants before use. Built startup and browser runs performed no initializer
+or schema reset; fixtures performed ordinary HTTP writes. Normal source startup ran its existing invoice-retention
+boundary against that disposable schema, with automatic archival disabled. Only owned application process trees
+were stopped afterward; the pre-existing isolated MariaDB was retained. No default-port-3306 operation occurred.
+
+API/catalog identifiers are `52664d8af503` and `81b77141b8f5`. The current increment does not claim a new full
+472-image comparison, production cutover, deployment replacement, another browser engine, live provider round
+trip or external mail delivery. Prior evidence remains historical. Six tracked generated reports and the required
+documentation CI invocation were removed; temporary evidence is excluded from maintained-document discovery and
+source fingerprints. Optional documentation reporting retains the existing baseline-fingerprint finding and the
+already recorded unused illustration finding; historical baselines and that illustration were not rewritten.
+The final advisory report inspected 78 maintained Markdown files with no broken links, metadata errors, missing
+scripts, missing documented paths or stale terms. Its two findings remain visible in the ignored review output.

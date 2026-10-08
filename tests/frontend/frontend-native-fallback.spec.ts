@@ -24,6 +24,8 @@ function region(collection: 'owner' | 'participant', visibility: 'main' | 'hidde
 afterEach(() => { vi.unstubAllGlobals(); document.body.innerHTML = ''; });
 
 describe('same-component native fallback', () => {
+    // The cold full-suite run compiles both complete lazy packing view graphs inside this
+    // multi-locale SSR case. Budget that startup work without weakening admission assertions.
     it('renders localized packing admission errors without private views or unsupported-page fallback', async () => {
         const fetch = vi.fn(() => {throw new Error('An admission error must not request private packing data');});
         vi.stubGlobal('fetch', fetch);
@@ -46,7 +48,7 @@ describe('same-component native fallback', () => {
             }
         }
         expect(fetch).not.toHaveBeenCalled();
-    }, 20_000);
+    }, 60_000);
 
     it('initializes an admitted public duplicate form without granting account creation or calling HTTP during SSR', async () => {
         const fetch = vi.fn(() => {throw new Error('SSR must use its admitted copy projection');});

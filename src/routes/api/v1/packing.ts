@@ -21,6 +21,20 @@ import {patchPackingMetadata, preparePackingMetadataPatch, readPackingList, read
 const router = Router();
 const uploadHeader = prepareFileUploader(settings.value.headerImgDir).single('image');
 
+router.get('/create-entry', asyncHandler(async function getPackingCreateEntry(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'getPackingCreateEntry');
+    sendValidatedJson(req, res, 'getPackingCreateEntry', 200, packingApi.readPackingCreateEntry(actor, req.query.returnTo));
+}));
+
+router.get('/:listId/entry', asyncHandler(async function getPackingResourceEntry(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'getPackingResourceEntry');
+    const view = req.query.view as 'detail' | 'guest';
+    sendValidatedJson(req, res, 'getPackingResourceEntry', 200,
+        await packingApi.readPackingResourceEntry(String(req.params.listId), view, actor));
+}));
+
 /** Multer owns byte/file limits; the generated schema validates decoded multipart metadata. */
 async function readImageUpload(req: Request, res: Response): Promise<void> {
     await new Promise<void>((resolve, reject) => uploadHeader(req, res, error => {

@@ -5,6 +5,7 @@
   "releaseWorkflow": ".github/workflows/release.yml",
   "excludedDirectories": [
     ".git",
+    ".temp",
     "node_modules",
     "dist",
     "coverage",

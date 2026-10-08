@@ -23,6 +23,9 @@ const pending = ref(false);
 const refreshing = ref(false);
 const {error, setError} = useFeedbackError();
 const unknown = ref(false);
+// A confirmed relink can require discarding a previously acknowledged properties
+// draft. Retain that decision through a failed read; authority still comes from a read.
+let discardAfterSettings = false;
 const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
 const key = computed(() => packingKeys.metadata(context.session.value?.context, props.listId, context.locale.value));
 const metadata = useQuery({
@@ -46,6 +49,11 @@ watch(
     (result) => {
         if (!result?.etag) return;
         if (!draft.value) draft.value = new MetadataDraft(result.data, result.etag);
+        else if (discardAfterSettings) {
+            draft.value.accept(result.data, result.etag);
+            unknown.value = false;
+            discardAfterSettings = false;
+        }
         // A background read updates the cache, but cannot decide what happened to a lost
         // command response. Keep that editor's baseline until its explicit recovery read.
         else if (!unknown.value) draft.value.receive(result.data, result.etag);
@@ -116,8 +124,16 @@ async function readMetadata(discard = false): Promise<void> {
 
 /** The dialog keeps its command pending until the related editor has caught up.
  * Propagate read failures so a saved settings write cannot be reported as fully refreshed. */
-async function refreshAfterSettings(): Promise<void> {
-    await metadata.refetch({throwOnError: true});
+async function refreshAfterSettings(discard = false): Promise<void> {
+    discardAfterSettings ||= discard;
+    const result = await metadata.refetch({throwOnError: true});
+    // Structural sharing can retain the same query object, so an explicitly successful
+    // read must also complete the accepted discard when the watcher does not run.
+    if (discardAfterSettings && result.data?.etag && draft.value) {
+        draft.value.accept(result.data.data, result.data.etag);
+        unknown.value = false;
+        discardAfterSettings = false;
+    }
 }
 
 /** Acknowledgement advances the baseline; saving the retained draft remains a separate action. */

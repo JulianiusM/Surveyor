@@ -104,7 +104,7 @@ test.describe('actual frontend development runtime', () => {
         const event = await createResourceViaForm(page.request, eventInput);
         const packingInput = createE2EPackingList();
         packingInput.title = packingInput.form.title = `${marker} standalone`;
-        await createResourceViaForm(page.request, packingInput);
+        const packing = await createResourceViaForm(page.request, packingInput);
 
         let releaseEntry!: () => void;
         let entryStarted!: () => void;
@@ -119,22 +119,53 @@ test.describe('actual frontend development runtime', () => {
             await page.goto(`/frontend-pilot?owner_main_q=${encodeURIComponent(marker)}`, {waitUntil: 'commit'});
             await entryAttempt;
             const owner = page.locator('[data-collection="owner"][data-region="main"]');
-            await expect(owner.locator(`[data-id="${event.id}"]`)).toBeVisible();
+            // Progressive Overview SSR carries the search controls and placeholders,
+            // not collection records. Prove early interaction against that actual shell.
+            await expect(owner.locator('[data-loading-skeleton="cards"]')).toBeVisible();
+            await expect(owner.locator(`[data-id="${event.id}"]`)).toHaveCount(0);
             const input = owner.getByRole('searchbox');
             await input.fill(`${marker} standalone`);
             releaseEntry();
             // The native profile submit is hidden only after successful enhancement.
-            // Cached SSR data is fresh, so hydration need not issue another overview read.
+            // Region data arrives after hydration. The replayed input must survive that
+            // authoritative read rather than being restored from the original URL filter.
             await expect(page.locator('header form[action="/frontend-pilot/users/profile"] button[type="submit"]'))
                 .toHaveAttribute('style', /display:\s*none/);
             await expect(input).toHaveValue(`${marker} standalone`);
             await owner.getByRole('button', {name: 'Search', exact: true}).click();
             await expect(owner.locator(`[data-id="${event.id}"]`)).toHaveCount(0);
+            await expect(owner.locator(`[data-id="${packing.id}"]`)).toBeVisible();
             await expect(owner).toContainText('1 matching entity');
         } finally {
             releaseEntry();
             await page.unroute('**/app/src/frontend/app/entry-client.ts*');
         }
+    });
+
+    test('hydrates source packing controls and confirms a real item command without replacing the document', async ({page}) => {
+        await loginForE2E(page.request, createE2ELogin());
+        const packing = await createResourceViaForm(page.request, createE2EPackingList());
+        const title = `Source packing item ${randomUUID().slice(0, 8)}`;
+        const errors: string[] = [];
+        page.on('pageerror', error => errors.push(error.message));
+
+        await page.goto(`/frontend-pilot/packing/${packing.id}?locale=en`);
+        await expect(page.locator('tr[data-item-id]').first()).toBeVisible();
+        await page.evaluate(() => { document.documentElement.dataset.developmentDocument = 'packing-original'; });
+
+        // Only the HTTP boundary observes this command. Creation, generated validation,
+        // admission, persistence and the follow-up projection all use the real source app.
+        await page.locator('#quick-title').fill(title);
+        await page.locator('#quick-description').fill('Source runtime confirmation');
+        await page.locator('#quick-max').fill('2');
+        const confirmation = page.waitForResponse(response => response.request().method() === 'POST'
+            && new URL(response.url()).pathname === `/api/v1/packing-lists/${packing.id}/items`);
+        await page.getByRole('button', {name: 'Add', exact: true}).click();
+        expect((await confirmation).status()).toBe(201);
+        await expect(page.locator('tr[data-item-id]').filter({hasText: title})).toBeVisible();
+        await expect(page.locator('#quick-title')).toHaveValue('');
+        expect(await documentMarker(page)).toBe('packing-original');
+        expect(errors).toEqual([]);
     });
 });
 

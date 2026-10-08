@@ -91,6 +91,9 @@
         "preview": "Vorschau"
       },
       "auth": {
+        "accountRequired": "Du musst mit einem Benutzerkonto angemeldet sein, um diese Seite aufzurufen.",
+        "sessionExpired": "Die Sitzung ist abgelaufen",
+        "invalidGuestLink": "Ungültiger oder nicht passender Token",
         "unconfirmedRequest": "Die Anfrage kann bereits abgeschlossen sein. Prüfe deine E-Mails oder dein aktuelles Konto, bevor du sie erneut startest.",
         "leaveUnknown": "Die Anfrage kann bereits abgeschlossen sein. Dieses Formular verlassen und zuerst deine E-Mails oder dein Konto prüfen?",
         "yourName": "Dein Name",

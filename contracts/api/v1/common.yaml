@@ -1,4 +1,42 @@
 schemas:
+  EntryNotice:
+    description: One plain localized page notice. Message keys require no interpolation parameters.
+    type: object
+    additionalProperties: false
+    required: [kind, messageKey]
+    properties:
+      kind:
+        type: string
+        enum: [info, error, success]
+      messageKey:
+        type: string
+        minLength: 1
+        maxLength: 128
+  PageEntryOutcome:
+    description: Server-owned page admission, shared by initial HTML and browser navigation. It never authorizes a later command.
+    oneOf:
+      - type: object
+        additionalProperties: false
+        required: [kind]
+        properties:
+          kind: {const: render, type: string}
+      - type: object
+        additionalProperties: false
+        required: [kind, url, notice]
+        properties:
+          kind: {const: redirect, type: string}
+          url: {type: string, minLength: 1, maxLength: 4096}
+          notice:
+            anyOf:
+              - $ref: '#/schemas/EntryNotice'
+              - type: 'null'
+      - type: object
+        additionalProperties: false
+        required: [kind, status, messageKey]
+        properties:
+          kind: {const: denied, type: string}
+          status: {type: integer, minimum: 400, maximum: 599}
+          messageKey: {type: string, minLength: 1, maxLength: 128}
   DecimalId:
     description: Canonical positive decimal handle for a legacy numeric record; converted only at its owning server boundary.
     type: string

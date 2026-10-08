@@ -5,6 +5,7 @@ import {QueryClient} from '@tanstack/vue-query';
 import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
 import type {PilotContext, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {Locale, MessageKey} from '../../types/LocalizationTypes';
+import type {components} from '../../types/api/v1';
 import {createLocalizationInstance, createTranslator, resolveLocale} from '../../modules/localization/translator';
 import {PilotApi} from './api';
 import {ApiFailure, ObsoleteRequestError} from './transport';
@@ -36,6 +37,14 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     const ready = ref(true);
     const hydrated = ref(false);
     const notice = ref<MessageKey | null>(bootstrap.identityFeedback === 'auth.logoutDone' ? bootstrap.identityFeedback : null);
+    // Entry feedback is a typed one-time page notice. Session/read conditions keep their
+    // existing independent lifetime and must not replace an admission notice's severity.
+    const pageNotice = ref<components['schemas']['EntryNotice'] | null>(bootstrap.pageNotice ?? null);
+    // A confirmed command can finish on a native message destination without another
+    // write. This presentation receipt is memory-only and belongs to the current actor.
+    const pageCompletion = ref<PilotContext['pageCompletion']['value']>(
+        bootstrap.pageCompletion?.context === bootstrap.session.context ? bootstrap.pageCompletion : null,
+    );
     const personalLink = ref<string | null>(bootstrap.personalLink ?? null);
     const messages = computed(() => createTranslator(locale.value, i18next.getFixedT(locale.value)));
     const pageTitle = ref('Surveyor');
@@ -55,6 +64,12 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     let bootstrapRequest: Promise<void> | undefined;
     let localeRequest: Promise<void> | undefined;
     let desiredLocale: Locale | null = null;
+    // Retain only a confirmed identity receipt while its authoritative session read
+    // is unavailable. Retry can deliver the private link without replaying registration.
+    let pendingIdentity: components['schemas']['IdentityResult'] | undefined;
+    // Identity and language have independent ordering. A confirmed language command retires
+    // only older locale projections, without discarding authoritative identity/deployment data.
+    let localeGeneration = 0;
     let channel: BroadcastChannel | undefined;
     let disposed = false;
     const identityGuards = new Set<() => boolean>();
@@ -81,7 +96,10 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     }
 
     function clearIdentity(): void {
+        pendingIdentity = undefined;
         personalLink.value = null;
+        pageNotice.value = null;
+        pageCompletion.value = null;
         ready.value = false;
         epoch.value++;
         void queryClient.cancelQueries();
@@ -96,28 +114,57 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
 
     const api = new PilotApi(isCurrent, invalidateIdentity, requestFetch);
 
+    /** Publish one coherent session/language projection while retaining the server's actor evidence. */
+    function receiveSession(current: components['schemas']['SessionView'], selectedLocale: Locale): void {
+        // Keep the public session and the reactive translation owner in agreement. When an old
+        // read loses its language authority, its remaining session fields are still useful.
+        session.value = current.locale === selectedLocale ? current : {...current, locale: selectedLocale};
+        locale.value = selectedLocale;
+        updates.observe(current.deployment);
+    }
+
     /** One bootstrap gate precedes focus/reconnect reads, preventing automatic fetches with an old cookie scope. */
     function refreshSession(): Promise<void> {
         if (bootstrapRequest) return bootstrapRequest;
         const generation = epoch.value;
-        bootstrapRequest = api.bootstrap().then(current => {
+        const capturedLocaleGeneration = localeGeneration;
+
+        function receiveBootstrap(current: components['schemas']['SessionView']): void {
             if (disposed || generation !== epoch.value) return;
+
+            // Capture the matching receipt before ordinary actor retirement clears private
+            // state. A different authoritative actor never receives another guest's link.
+            const confirmedIdentity = pendingIdentity?.session.context === current.context ? pendingIdentity : undefined;
+            // An actual actor transition remains authoritative even when a language command
+            // overtook this read. It must clear private queries and drafts in the usual way.
             if (current.context !== session.value.context) clearIdentity();
-            session.value = current;
-            locale.value = createTranslator(current.locale).locale;
-            updates.observe(current.deployment);
+            const selectedLocale = capturedLocaleGeneration === localeGeneration
+                ? resolveLocale(current.locale) : locale.value;
+            receiveSession(current, selectedLocale);
             ready.value = true;
+            pendingIdentity = undefined;
+
+            if (confirmedIdentity) {
+                personalLink.value = confirmedIdentity.personalLink;
+                notice.value = null;
+                channel?.postMessage({kind: 'identity'});
+            }
+
             // This notice belongs to the session read, not any feature's resource read.
             // Clear only that recovered failure; logout/identity feedback remains separate.
             if (notice.value === 'state.stale') notice.value = null;
-        }).finally(() => {
+        }
+
+        function finishBootstrap(): void {
             bootstrapRequest = undefined;
             // An identity hint can obsolete an already pending bootstrap. Its result is ignored,
             // but a second check must follow rather than leaving recovery stalled until the next timer.
             if (!disposed && !ready.value && generation !== epoch.value) {
                 queueMicrotask(() => { void refreshSession().catch(() => {}); });
             }
-        });
+        }
+
+        bootstrapRequest = api.bootstrap().then(receiveBootstrap).finally(finishBootstrap);
         return bootstrapRequest;
     }
 
@@ -128,7 +175,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         const finishUpdateCommand = updates.commandStarted();
         // Serialize cookie-writing commands, coalescing clicks to the latest desired preference.
         // A response guard alone cannot prevent an older HTTP response overwriting the newer cookie.
-        localeRequest = (async () => {
+        async function updateLocalePreference(): Promise<void> {
             while (desiredLocale !== null) {
                 const requested = desiredLocale;
                 desiredLocale = null;
@@ -136,14 +183,22 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
                 const scope = capture();
                 const current = await api.setLocale(requested, scope);
                 if (!isCurrent(scope)) { desiredLocale = null; return; }
+
                 // Locale does not change actor identity: keep dirty editors and their focus mounted.
-                session.value = current;
-                locale.value = createTranslator(current.locale).locale;
-                updates.observe(current.deployment);
+                // Increment only on confirmation: a failed preference must not silence a valid read.
+                localeGeneration++;
+                receiveSession(current, resolveLocale(current.locale));
                 await queryClient.cancelQueries();
                 await queryClient.invalidateQueries();
             }
-        })().finally(() => { localeRequest = undefined; finishUpdateCommand(); });
+        }
+
+        function finishLocalePreference(): void {
+            localeRequest = undefined;
+            finishUpdateCommand();
+        }
+
+        localeRequest = updateLocalePreference().finally(finishLocalePreference);
         return localeRequest;
     }
 
@@ -154,12 +209,10 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         // Retire that generation and drain its promise before asking for authoritative new state.
         // Reusing it would incorrectly compare a successful login to the old anonymous context.
         clearIdentity();
+        pendingIdentity = result;
         if (bootstrapRequest) await bootstrapRequest.catch(() => {});
         await refreshSession();
         if (session.value.context !== result.session.context) throw new ObsoleteRequestError();
-        personalLink.value = result.personalLink;
-        notice.value = null;
-        channel?.postMessage({kind: 'identity'});
     }
 
     function start(): () => void {
@@ -211,7 +264,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         };
     }
 
-    return {api, bootstrap, browser, queryClient, session, epoch, locale, i18next, visible, hydrated, ready, notice, personalLink, messages, pageTitle, updates,
+    return {api, bootstrap, browser, queryClient, session, epoch, locale, i18next, visible, hydrated, ready, notice, pageNotice, pageCompletion, personalLink, messages, pageTitle, updates,
         capture, isCurrent, refreshSession, acceptIdentity, registerIdentityGuard, mayChangeIdentity,
         changeLocale, invalidateIdentity, start};
 }

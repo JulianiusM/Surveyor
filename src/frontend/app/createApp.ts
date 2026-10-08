@@ -49,6 +49,7 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
             {path: '/frontend-pilot/users/reset-password/:token', component: IdentityPage, meta: {...javascriptPage, identityMode: 'reset'}},
             {path: '/frontend-pilot/users/activate/:token', component: IdentityPage, meta: {...javascriptPage, identityMode: 'activate'}},
             {path: '/frontend-pilot/guest/:guestId/login/:token', component: IdentityPage, meta: {...javascriptPage, identityMode: 'guest-login'}},
+            {path: '/frontend-pilot/guest/recovery', component: IdentityPage, meta: {identityMode: 'recovery'}},
             {path: '/frontend-pilot/help', component: HelpPage},
             {path: '/frontend-pilot/help/:doc', component: HelpPage},
         ],

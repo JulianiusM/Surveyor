@@ -3,7 +3,7 @@ import type {NextFunction, Request, Response} from 'express';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {captureApiActor, identityTransitionGuard, requireApiContext, sessionView} from '../modules/api/session';
 import {ApiProblem, classifyApiError, requestLocale, validatedProblemBody} from '../modules/api/problem';
-import {localeManifest} from '../modules/localization/translator';
+import {isPlainMessageKey, localeManifest} from '../modules/localization/translator';
 import {renderFrontendPilot} from '../modules/frontendPilotRenderer';
 import {fetchHelpDoc, fetchHelpIndex, fetchHelpSearch} from '../controller/helpController';
 import type {FrontendPilotBootstrap} from '../types/FrontendPilotTypes';
@@ -18,13 +18,32 @@ import type {components} from '../types/api/v1';
 import type {ApiOperationId} from '../types/ApiTransportTypes';
 import {paramHandler} from '../middleware/paramHandler';
 import {requirePermission} from '../middleware/permissionMiddleware';
-import {canAccessEntityView} from '../controller/entityAdminController';
 import {getPermFct, getResource} from '../modules/lib/util';
 import {PERM} from '../modules/lib/permissions';
 import type {PackingList} from '../modules/database/entities/packing/PackingList';
-import {packingFormContext, readPackingDuplicate} from '../modules/packing/api';
+import {readPackingCreateEntry, readPackingDuplicate, readPackingResourceEntry} from '../modules/packing/api';
 
 const router = Router();
+
+/**
+ * Document admission reloads and validates stored identity before API-style clearing
+ * can discard OIDC logout evidence. Expiry follows native flash/logout; store failures
+ * retain their ordinary operational error instead of being treated as false expiry.
+ */
+router.use(asyncHandler(async function admitPilotDocument(req, res, next) {
+    applyNativePresentationLocale(req);
+    try {
+        await captureApiActor(req, true);
+        next();
+    } catch (error) {
+        if (!(error instanceof ApiProblem) || error.code !== 'AUTH_REQUIRED') throw error;
+        req.flash('error', 'Session has expired');
+        const destination = await userController.logoutUserOidc(req.session);
+        req.flash('frontend-pilot-notice', JSON.stringify({kind: 'error', messageKey: 'auth.sessionExpired'}));
+        await persistSession(req.session);
+        res.redirect(destination);
+    }
+}));
 
 // Reuse the native resource loader: malformed and absent IDs are HTML 404s, and
 // every packing URL (including guest entry) resolves the same current parent.
@@ -52,7 +71,36 @@ async function bootstrap(req: Request): Promise<FrontendPilotBootstrap> {
     // Check that boundary and select a known message rather than trusting a cast or stored text.
     const flashes: unknown = req.flash('frontend-pilot');
     const feedback = frontendIdentityFeedback.find(key => Array.isArray(flashes) && flashes.includes(key));
-    return {session, ...(feedback ? {identityFeedback: feedback} : {})};
+    const state: FrontendPilotBootstrap = {session, ...(feedback ? {identityFeedback: feedback} : {})};
+    // Flash storage remains an untyped boundary. Accept only a known plain catalog
+    // message, never submitted text or interpolation/options through this channel.
+    const notices: unknown = req.flash('frontend-pilot-notice');
+    if (Array.isArray(notices)) {
+        for (const notice of notices) {
+            if (typeof notice !== 'string') continue;
+            try {
+                const value = JSON.parse(notice) as {kind?: unknown; messageKey?: unknown};
+                if (['info', 'error', 'success'].includes(String(value.kind)) && isPlainMessageKey(value.messageKey)) {
+                    state.pageNotice = value as components['schemas']['EntryNotice'];
+                }
+            } catch { /* Ignore malformed stored feedback rather than treating it as page authority. */ }
+        }
+    }
+    const links: unknown = req.flash('frontend-pilot-link');
+    if (Array.isArray(links) && typeof links[0] === 'string') state.personalLink = links[0];
+    return state;
+}
+
+/** Apply shared admission at the native HTTP boundary; Vue consumes this same declaration. */
+async function applyPageEntry(req: Request, res: Response, state: FrontendPilotBootstrap,
+    entry: components['schemas']['PageEntryOutcome']): Promise<boolean> {
+    state.pageEntry = entry;
+    if (entry.kind === 'denied') res.status(entry.status);
+    if (entry.kind !== 'redirect') return false;
+    if (entry.notice) req.flash('frontend-pilot-notice', JSON.stringify(entry.notice));
+    await persistSession(req.session);
+    res.redirect(nativeFrontendReturn(req, entry.url));
+    return true;
 }
 
 router.get('/', asyncHandler(async function renderOverviewPilot(req, res) {
@@ -73,11 +121,9 @@ async function admitPackingSession(req: Request, _res: Response, next: NextFunct
 
 router.get('/packing/create', asyncHandler(async function renderPackingCreatePilot(req, res) {
     const state = await bootstrap(req);
-    // Native create GET requires an account; duplicate GET deliberately does not.
-    if (state.session.kind !== 'account' || !state.session.activeProfile) {
-        return res.redirect(nativeFrontendReturn(req, `/frontend-pilot/users/login?next=${encodeURIComponent(req.originalUrl)}`));
-    }
-    state.packingCreateContext = packingFormContext();
+    const result = readPackingCreateEntry(await captureApiActor(req), req.originalUrl);
+    if (await applyPageEntry(req, res, state, result.entry)) return;
+    state.packingCreateContext = result.context ?? undefined;
     await renderFrontendPilot(res, req.originalUrl, state);
 }));
 
@@ -100,16 +146,8 @@ router.get('/packing/:listId/duplicate', asyncHandler(admitPackingSession),
 
 router.get('/packing/:listId', asyncHandler(async function renderPackingPilot(req, res) {
     const state = await bootstrap(req);
-    const list = packingResource(req);
-    // Attached-list admission precedes guest entry in the native route. A profile
-    // may enter through event membership or an explicit ACCESS_VIEW alternative.
-    if (list.eventId) {
-        if (!await canAccessEntityView('packing', list, req.session)) {
-            throw new ExpectedError('You must be registered for the event to access this resource');
-        }
-    } else if (!state.session.activeProfile) {
-        return res.redirect(nativeFrontendReturn(req, `/frontend-pilot/packing/${list.id}/guest`));
-    }
+    const result = await readPackingResourceEntry(packingResource(req).id, 'detail', await captureApiActor(req));
+    if (await applyPageEntry(req, res, state, result.entry)) return;
     await renderFrontendPilot(res, req.originalUrl, state);
 }));
 
@@ -121,10 +159,10 @@ async function guestBootstrap(req: Request): Promise<FrontendPilotBootstrap> {
     return state;
 }
 router.get('/packing/:listId/guest', asyncHandler(async function renderGuestPilot(req, res) {
-    const state = await guestBootstrap(req);
-    if (state.session.activeProfile) {
-        return res.redirect(nativeFrontendReturn(req, `/frontend-pilot/packing/${packingResource(req).id}`));
-    }
+    const state = await bootstrap(req);
+    const result = await readPackingResourceEntry(packingResource(req).id, 'guest', await captureApiActor(req));
+    if (await applyPageEntry(req, res, state, result.entry)) return;
+    state.guestEntry = result.guest ?? undefined;
     await renderFrontendPilot(res, req.originalUrl, state);
 }));
 
@@ -174,11 +212,22 @@ async function submitNativeIdentity(req: Request, res: Response): Promise<void> 
     const inputNext = {next};
     let feedback: typeof frontendIdentityFeedback[number] | undefined;
     try {
-        if (req.path === '/users/login' && body._recovery === '1') {
+        if (req.path === '/guest/recovery' || req.path === '/users/login' && body._recovery === '1') {
             const input = {email: body.email, ...inputNext};
             await admitNativeIdentity(req, res, 'recoverGuestIdentity', input);
             await userController.recoverGuestAccount(String(input.email).trim().toLowerCase(), {frontend: true, next});
             feedback = 'auth.recoverySent';
+            if (req.path === '/guest/recovery') {
+                // Native recovery POST renders its full Success card at the submitted
+                // /guest/recovery URL. Its generic actor/destination receipt is retired
+                // by the shared page owner on departure; bootstrap feedback alone must
+                // not recreate confirmed mail delivery when this URL is revisited.
+                const state = await bootstrap(req);
+                state.pageCompletion = {context: state.session.context, destination: req.originalUrl,
+                    messageKey: feedback, kind: 'success'};
+                await renderFrontendPilot(res, req.originalUrl, state);
+                return;
+            }
         } else if (req.path === '/users/login') {
             const input = {username: body.username, password: body.password, ...inputNext};
             await admitNativeIdentity(req, res, 'loginIdentity', input);
@@ -214,7 +263,14 @@ async function submitNativeIdentity(req: Request, res: Response): Promise<void> 
         req.apiActor = undefined;
         const state = await bootstrap(req);
         state.identityFields = safeIdentityFields(body);
-        state.identityFormProblem = validatedProblemBody(problem, state.session.locale);
+        const message = validatedProblemBody(problem, state.session.locale);
+        if (req.path === '/guest/recovery') {
+            // Recovery owns a complete native message page rather than a redisplayed
+            // standalone form. Preserve its known Error/status before and after hydration.
+            state.identityProblem = message;
+        } else {
+            state.identityFormProblem = message;
+        }
         if (req.path.startsWith('/users/reset-password/')) {
             state.passwordReset = problem.code === 'TOKEN_INVALID' ? state.identityFormProblem : {valid: true};
         }
@@ -222,8 +278,13 @@ async function submitNativeIdentity(req: Request, res: Response): Promise<void> 
         await renderFrontendPilot(res, req.originalUrl, state);
     }
 }
-router.post(['/users/login', '/users/register', '/users/forgot-password', '/users/reset-password/:token'],
+router.post(['/users/login', '/users/register', '/users/forgot-password', '/users/reset-password/:token', '/guest/recovery'],
     asyncHandler(submitNativeIdentity));
+
+/** Native recovery has no standalone GET form; the login page owns its existing form. */
+router.get('/guest/recovery', function redirectGuestRecovery(req, res) {
+    res.redirect(nativeFrontendReturn(req, '/frontend-pilot/users/login'));
+});
 
 router.post('/packing/:listId/guest', asyncHandler(async function submitNativeGuest(req, res) {
     try {
@@ -231,11 +292,13 @@ router.post('/packing/:listId/guest', asyncHandler(async function submitNativeGu
             email: req.body.email || null};
         await admitNativeIdentity(req, res, 'registerPackingGuest', input);
         const state = await guestBootstrap(req);
-        state.personalLink = await userController.registerGuest(input.username, input.email ?? undefined, req.session,
+        const personalLink = await userController.registerGuest(input.username, input.email ?? undefined, req.session,
             {frontend: true, next: `/frontend-pilot/packing/${state.guestEntry!.id}`, beforeTransition: identityTransitionGuard(req)});
-        req.apiActor = undefined;
-        state.session = await sessionView(req);
-        await renderFrontendPilot(res, req.originalUrl, state);
+        // Preserve native POST/redirect/GET and retain the private link only in the
+        // newly authenticated session's one-time feedback for its canonical detail page.
+        req.flash('frontend-pilot-link', personalLink);
+        await persistSession(req.session);
+        res.redirect(303, nativeFrontendReturn(req, `/frontend-pilot/packing/${state.guestEntry!.id}`));
     } catch (error) {
         const problem = classifyApiError(error);
         req.apiActor = undefined;
@@ -291,7 +354,10 @@ router.get('/guest/:guestId/login/:token', asyncHandler(async function enterPilo
         res.redirect(nativeFrontendReturn(req, req.query.next));
     } catch (error) {
         if (!(error instanceof ExpectedError) || error.cause !== 'TOKEN_INVALID') throw error;
-        await renderFrontendPilot(res, req.originalUrl, await bootstrap(req));
+        const state = await bootstrap(req);
+        state.pageEntry = {kind: 'denied', status: 401, messageKey: 'auth.invalidGuestLink'};
+        res.status(401);
+        await renderFrontendPilot(res, req.originalUrl, state);
     }
 }));
 

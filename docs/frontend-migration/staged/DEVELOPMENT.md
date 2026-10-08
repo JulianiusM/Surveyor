@@ -6,7 +6,7 @@ owner: developer-experience maintainers
 status: migration-pending
 last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved shared skeleton/progressive-loading source and contribution rules; FPR-07 documentation staging and source corrections; prospective frontend replacement, not production cutover or new runtime execution evidence
+verification-scope: approved native-parity rectification and reusable page-entry, command-confirmation, draft-tree, locale-ordering and native-form adapter guidance; shared skeleton/progressive-loading contribution rules; prospective frontend replacement, not production cutover; execution evidence belongs to the paired review
 source-anchors: src/frontend/components/LoadingSkeleton.vue; src/frontend/features/help/HelpPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/features/overview/OverviewRegion.vue; tests/frontend/frontend-content-loading.spec.ts; src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/e2e/frontend-development.spec.ts; src/controller/helpController.ts; docs/user-guide/de/; tests/unit/help-localization.spec.ts; contracts/api/v1/; src/locales/; src/frontend/; src/routes/frontendPilot.ts; src/routes/api/v1.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; vite.config.mts; tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/views/modules/module_entity_archive.pug; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
 next-review: frontend-production-cutover
 production-reference: 2dfa257 native frontend documentation; reference only, not evidence of an installed production commit
@@ -259,7 +259,8 @@ prerequisite to repeat before fixing its known findings. For a future module, us
 feature-specific edge cases to constrain the requested increment:
 
 1. Identify the increment's existing journeys, labels, admission, permissions and mutation owners. Preserve native
-   business behavior and deliberate feature exceptions. Help and packing are the current completeness obligation;
+   business behavior, visual layout and deliberate feature exceptions. Trace both GET and submitted-form admission;
+   an explicit guest page and a duplicate form can have different admission from detail and creation. Help and packing are the current completeness obligation;
    Overview and other scaffolds keep purposeful TODOs for the remaining migration, without being excluded forever.
 2. Extend the unreleased v1 YAML in place. Declare status, media, retry policy and precondition once. Use decimal
    strings for packing assignment IDs, including nullable read handles, and reuse shared schema references. Run
@@ -267,23 +268,36 @@ feature-specific edge cases to constrain the requested increment:
    parallel DTOs, structural validators or a locale registry. Keep shared type-only contracts under `src/types/`
    as `.d.ts` files.
 3. Adapt existing controllers and DBAL operations. Reuse declared permission middleware and the existing policy
-   helper for HTML admission. Keep controller-owned business checks inside the relevant existing transaction when
+   helpers for HTML and API admission. Reuse `hasAccountProfile` and `getEntityViewAdmission` where those established
+   policies apply, rather than reimplementing them in a route or Vue component. Keep controller-owned business checks inside the relevant existing transaction when
    they depend on locked rows. Migration adapters preserve existing authentication and domain behavior; broader
-   authentication, authorization, legacy race and lock redesign remain in the independent deferred backlog.
+   authentication, authorization, legacy race and lock redesign remain separate native work. The native remediation
+   backlog never tracks migration or pilot work.
 4. Reuse the application transport, context gate, query-key/invalidation owners, debounce helper and read scheduler.
    Keep authoritative snapshots, original edit baselines and local input separate. Scope reads by actor, resource
-   and locale; reject late results. Healthy visible reads retain the 30-second cadence and recover toward roughly
+   and locale; reject late results. Use `usePageEntry` for server-owned render, redirect and denied decisions, including
+   canonical redirects and one-time notice severity. It also retires results when a lazy destination is pending.
+   A confirmed locale preference advances its own generation; an older session read can still report a real actor
+   change without reverting that preference. Healthy visible reads retain the 30-second cadence and recover toward roughly
    one-minute convergence under a responsive backend, respecting cooldown, hidden tabs and disposed observers.
    Closed selectors consume their owner's current authority; they do not invent continuous hidden search polling.
 5. Compose the shared form, dialog, command, draft, feedback and departure owners. Use complete dirty predicates
-   and established empty/null equivalence. Keep one dialog-level departure owner, preserve drafts through refresh
+   and established empty/null equivalence. `useDraftProtection` composes nested editors into their nearest owner;
+   only the root registers global departure guards, and a dialog can still check its own subtree on Close. Preserve drafts through refresh
    and cancellation, and release them only after accepted navigation commits. A confirmed write stays saved even
-   when its follow-up read fails. Unknown commands remain explicit until reconciliation or acknowledged exit;
+   when its follow-up read fails. The additive typed command outcome separates confirmation from refresh; accepted
+   submitted values are distinct from the last authoritative revision and cannot supply a new write token. Unknown commands remain explicit until reconciliation or acknowledged exit;
    recovery stays reachable and never automatically replays a command. Secrets stay in the mounted form.
 6. Use centralized catalogs with the typed i18next-vue interface. Keep machine values and entered content separate
    from translated labels. Interactive migrated pages require JavaScript; a clear shared message or genuinely
    read-only server result supplies the disabled-JavaScript fallback. Same-component SSR/hydration remains
    available. Preserve native route, filter/history, focus, visual and form semantics for JavaScript-enabled use.
+   Guest registration preserves the submitted display name. Native browser collection owns its existing item
+   trimming and empty-row rules; JSON validation must not silently normalize stored user text. Author native form
+   structure in the same contract source; a narrow transport decoder may retain established scalar coercions.
+   The shared guest-flow factory supplies the form action and exact login return destination to every consumer,
+   including modules outside the current frontend slice. The approved duplicate-return amendment preserves
+   `<entity>/<id>/duplicate` after login; do not substitute the module's ordinary create URL.
 7. Reuse update coordination for mounted dirty, pending and uncertain states. Compatible forms can finish across
    replacement of the current binary folder; do not require retained old assets, external deployment services,
    persisted secrets/drafts or reload loops. Explain state ownership, nontrivial comparisons, authorization and
@@ -301,9 +315,25 @@ forms use that boundary rather than introducing their own input replay. Hidden a
 and submissions are never replayed; secrets remain only in the mounted form and temporary synchronous snapshot.
 Navigation-related asynchronous work must also account for a pending lazy destination, before `currentRoute` changes.
 
+Confirmed identity receipts remain in the existing context only while an authoritative session read is unavailable.
+A successful Retry delivers a personal link only to its matching actor; a mismatching identity retires it. The shared
+entry owner resumes the captured canonical destination once, while an intervening committed visit retires that
+continuation. Never repeat a confirmed registration or sign-in to recover a failed session read.
+
+Confirmed message destinations use the shared entry completion operation and an actor-scoped, memory-only presentation
+receipt. Guest recovery from every entry form finishes at the same recovery URL and existing message card. Its direct
+GET retains the native login redirect; neither an arbitrary URL nor reload reconstructs a prior success. Native form
+POSTs use the same destination and existing controller operation.
+
 Route wrappers relinquish page-title ownership to their mounted feature except when presenting an admission error.
 The existing `usePageTitle` helper accepts an undefined title for that handover. Reactive effects calculate output
 from their declared inputs; they must not also subscribe to a shared output that another mounted owner writes.
+
+Use the shared `PageMessage` for full information, success and error pages. Its shared shell marker preserves native
+message-page spacing without changing ordinary pages or hiding real notices. Shared form labels let the icon's
+existing margin own its text spacing; extra template whitespace changes narrow-screen wrapping. The shared footer
+preserves native icon adjacency and nonbreaking separators through translated text. Correct shared
+presentation in these owners rather than adding feature-specific layout overrides.
 
 ### Progressive loading and shared placeholders
 

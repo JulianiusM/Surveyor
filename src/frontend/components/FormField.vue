@@ -31,10 +31,11 @@ function updateValue(event: Event): void {
 
 <template>
     <div>
-        <!-- Label, native field name and accessible feedback remain one shared form contract. -->
+        <!-- Label, native field name and accessible feedback remain one shared form contract.
+             Native labels put text immediately after the icon: me-1 owns that gap.
+             Extra template whitespace would widen it and change narrow-screen wrapping. -->
         <label class="form-label mb-1" :for="id">
-            <i v-if="labelIcon" class="bi me-1" :class="labelIcon" aria-hidden="true"></i>
-            {{ label }}<template v-if="required"> *</template>
+            <i v-if="labelIcon" class="bi me-1" :class="labelIcon" aria-hidden="true"></i>{{ label }}<template v-if="required"> *</template>
         </label>
         <div :class="{'input-group': inputIcon || largeGroup, 'input-group-lg': largeGroup}">
             <span v-if="inputIcon" class="input-group-text">

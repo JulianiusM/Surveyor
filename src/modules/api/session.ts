@@ -24,14 +24,23 @@ function sameToken(left: string | undefined, right: string | undefined): boolean
 async function reloadSession(req: Request): Promise<void> {
     if (!req.session.auth && !req.session.frontendContext) return;
     await new Promise<void>(function reloadStoredSession(resolve, reject) {
-        req.session.reload(function finishSessionReload(error) {
-            if (error) return reject(new ApiProblem('AUTH_REQUIRED'));
+        req.sessionStore.get(req.sessionID, function finishSessionReload(error, stored) {
+            // An unavailable store is an operational error, not proof that an account
+            // expired. Preserve that error rather than logging out a valid identity.
+            if (error) return reject(error);
+            if (!stored) return reject(new ApiProblem('AUTH_REQUIRED'));
+            // Use Express Session's reload boundary directly. A single store read
+            // distinguishes absence from failure without a racing preliminary probe.
+            req.sessionStore.createSession(req, stored);
             resolve();
         });
     });
 }
 
-async function clearInvalidIdentity(req: Request): Promise<never> {
+async function clearInvalidIdentity(req: Request, preserveForNativeLogout: boolean): Promise<never> {
+    // Documents must run OIDC logout before token evidence is discarded. APIs retain
+    // their structured expiry response and clear invalid authority immediately.
+    if (preserveForNativeLogout) throw new ApiProblem('AUTH_REQUIRED');
     req.session.auth = undefined;
     req.session.profile = undefined;
     req.session.tokens = undefined;
@@ -41,7 +50,7 @@ async function clearInvalidIdentity(req: Request): Promise<never> {
 }
 
 /** Hydrate audience relations explicitly, never infer identity from an optional serialized ORM relation. */
-export async function captureApiActor(req: Request): Promise<ApiActor> {
+export async function captureApiActor(req: Request, preserveForNativeLogout = false): Promise<ApiActor> {
     if (req.apiActor) return req.apiActor;
 
     // Refresh once, then keep this request's context and identity evidence fixed.
@@ -49,15 +58,15 @@ export async function captureApiActor(req: Request): Promise<ApiActor> {
     if (ensureFrontendSessionContext(req.session)) await persistSession(req.session);
     const context = req.session.frontendContext!;
     const auth = req.session.auth;
-    if (auth?.user && auth?.guest) return clearInvalidIdentity(req);
+    if (auth?.user && auth?.guest) return clearInvalidIdentity(req, preserveForNativeLogout);
 
     // Load the explicit account/guest/profile relations before checking ownership.
     // Their presence in a serialized session alone is not authoritative evidence.
     const user = auth?.user ? await userService.getUserById(auth.user.id) : null;
     const guest = auth?.guest ? await userService.getGuestInternal(auth.guest.id) : null;
     const profile = req.session.profile ? await userService.getProfileById(req.session.profile.id) : null;
-    if ((auth?.user && !user) || (auth?.guest && !guest) || (req.session.profile && !profile)) return clearInvalidIdentity(req);
-    if (profile && ((!user && !guest) || (user && profile.userId !== user.id) || (guest && profile.guestId !== guest.id))) return clearInvalidIdentity(req);
+    if ((auth?.user && !user) || (auth?.guest && !guest) || (req.session.profile && !profile)) return clearInvalidIdentity(req, preserveForNativeLogout);
+    if (profile && ((!user && !guest) || (user && profile.userId !== user.id) || (guest && profile.guestId !== guest.id))) return clearInvalidIdentity(req, preserveForNativeLogout);
 
     if (profile) {
         profile.user = user;

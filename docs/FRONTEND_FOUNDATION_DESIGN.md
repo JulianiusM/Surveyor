@@ -105,6 +105,26 @@ owns the reusable component/query rules. The [pilot guide](FRONTEND_PILOT.md) an
 [paired review](frontend-migration/PILOT_PARITY_REVIEW.md) own the implemented scope and execution evidence;
 this delivery amendment does not authorize production cutover or broader backend work.
 
+### Authorized parity and shared ownership amendment (2026-10-08)
+
+After reviewing the remaining pilot shortfalls, the maintainer explicitly approved implementation of the
+[rectification sequence](FRONTEND_PILOT.md) with these additional requirements:
+
+- The migration preserves identical native UI/UX and behavior except for explicitly approved changes. Guest entry,
+  account-only creation, admission errors, canonical destinations, forms and confirmed outcomes are part of parity.
+- The original native duplicate submission defaulted login return to creation, and the proposed parity plan initially
+  preserved that default. The maintainer explicitly amended it: a rejected duplicate submission returns after login
+  to the exact entity's duplicate URL. Apply this through the shared guest-flow owner and all existing form consumers,
+  including modules whose frontend migration remains pending. This amendment does not grant creation or duplication.
+- Shared admission outcomes, navigation, command results and draft/departure behavior must be general and reusable.
+  Feature owners supply their data and existing policies; they must not introduce feature-specific copies of shared
+  behavior. Preserve deliberate feature differences, including surveys' permission exception.
+- The native remediation backlog is exclusively for native improvements and defects. Pilot/frontend-migration
+  findings and execution evidence stay in their existing migration plan/review owners.
+
+The approved technologies and D1–D5 remain binding. This records explicit authorization, not runtime verification;
+the paired review owns actual execution outcomes and limitations.
+
 | Record | Decision it owns |
 |---|---|
 | [Framework decision](frontend-migration/FRAMEWORK_DECISION.md) | Vue versus Svelte and other options; reusable UI primitives; same-component server rendering; build integration |
@@ -138,8 +158,9 @@ flowchart LR
 
 The normal JavaScript-enabled experience uses client routing and typed API reads/commands, with declared multipart
 for files. It does not exchange Pug fragments or create a second imperative DOM tree. Express renders the **same Vue
-components** for the initial shell and the browser hydrates them. Help GET/search and the mixed overview render
-authorized data on the server. Identity and guest forms preserve native post/redirect/get adapters through the
+components** for the initial shell and the browser hydrates them. Help GET/search renders its authorized content on
+the server. Under the approved progressive-delivery amendment, Overview renders its interactive shell and reads
+its independent regions after hydration. Identity and guest forms preserve native post/redirect/get adapters through the
 same controller operations. Packing item/settings interactions load their DTOs after hydration and require JavaScript.
 Survey voting and other unmigrated native flows are not implemented by the packing renderer. External authentication,
 downloads, print documents and email deep links remain legitimate document boundaries.
@@ -329,7 +350,9 @@ and [refresh](frontend-migration/REFRESH_CONFLICT_DESIGN.md) records own those e
 ### Subsequent feature slices
 
 After packing parity review, migrate remaining account/profile administration, surveys/drivers/events, activity,
-and invoices/outputs in bounded feature slices. The mixed overview and necessary identity entry now exist; do not count them again as unimplemented work.
+and invoices/outputs in bounded feature slices. The mixed overview and necessary identity entry have implemented
+scaffolds; remaining Overview/account work still belongs to those increments. Review implemented boundaries without
+claiming complete feature migration or repeating completed foundation work.
 The exact order can change with dependency evidence; each slice includes its reads, writes, lifecycle, permission,
 error, fallback and output behavior rather than migrating only the happy-path page.
 

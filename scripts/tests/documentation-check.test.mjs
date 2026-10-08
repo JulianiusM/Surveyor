@@ -113,6 +113,28 @@ test('creating optional/generated files changes neither reference counts nor fin
     assert.equal(report.allowlistedMissingDocumentedPaths.length, 0);
 });
 
+test('local review evidence is excluded while maintained migration staging stays checked', t => {
+    const root = fixture(t);
+    const before = inspect(root).report;
+
+    // Evidence can contain generated Markdown without maintainer metadata and copied source.
+    // Neither belongs to the maintained corpus or the implementation fingerprint.
+    write(root, '.temp/review/summary.md', '# Generated review\n[Absent evidence](missing.md)\n');
+    write(root, '.temp/review/reproducer.ts', 'export const evidence = true;\n');
+
+    // Staged guidance is maintained source material, even though it is not yet production prose.
+    const staged = 'docs/frontend-migration/staged/EXAMPLE.md';
+    write(root, staged, `# Staged guide\n${metadata}\n\nUse the existing workflow.\n`);
+    const {report} = inspect(root, true);
+    assert.equal(report.sourceFingerprint, before.sourceFingerprint);
+    assert.equal(report.summary.markdownFiles, before.summary.markdownFiles + 1);
+    assert.equal(report.summary.totalErrors, 0);
+
+    // Excluding local evidence must not accidentally excuse invalid maintained staging.
+    write(root, staged, '# Staged guide without metadata\n');
+    expectError(root, 'missing-metadata');
+});
+
 for (const present of [false, true]) {
     test(`exact reference counts remain enforced (optional file present: ${present})`, t => {
         const root = fixture(t);

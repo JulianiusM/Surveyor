@@ -1,8 +1,14 @@
 import type {MessageKey} from '../../types/LocalizationTypes';
 
+/** These confirmed identity operations finish on a complete message instead of another form.
+ * The view and document fallback must agree so no-JavaScript clients can read that outcome. */
+export const frontendIdentityMessageFeedback: readonly MessageKey[] = [
+    'auth.registered', 'auth.resetSent', 'auth.resetDone',
+];
+
 /** Native post/redirect/get feedback contains catalog keys only, never HTML or submitted values. */
 export const frontendIdentityFeedback: readonly MessageKey[] = [
-    'auth.registered', 'auth.resetSent', 'auth.resetDone', 'auth.activated', 'auth.recoverySent', 'auth.logoutDone',
+    ...frontendIdentityMessageFeedback, 'auth.activated', 'auth.recoverySent', 'auth.logoutDone',
 ];
 
 /** Only application-owned relative destinations can complete a pilot identity transition. */

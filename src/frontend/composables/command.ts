@@ -1,10 +1,88 @@
-import {onBeforeUnmount, onMounted, ref} from 'vue';
+import {inject, onBeforeUnmount, onMounted, provide, ref, shallowRef} from 'vue';
 import {onBeforeRouteLeave, onBeforeRouteUpdate} from 'vue-router';
 import {usePilot} from '../app/context';
 import {ApiFailure, InvalidInputError, ObsoleteRequestError} from '../app/transport';
-import type {PilotCommandDraft, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
+import type {PilotCommandDraft, PilotCommandOutcome, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {MessageKey} from '../../types/LocalizationTypes';
 import {useFeedbackError} from './feedback';
+
+/** These collaborators are private to the mounted draft tree. No draft values or callbacks
+ * enter server rendering data, query caches, browser storage or another application request. */
+interface DraftState {
+    busy: boolean;
+    dirty: boolean;
+    unknownMessage: MessageKey | null;
+}
+
+interface DraftOwner {
+    register(read: () => DraftState): () => void;
+}
+
+const draftOwnerKey = Symbol.for('surveyor.pilot.draft-owner');
+
+/**
+ * Compose mounted form state along the component tree. Only its root registers global
+ * departure guards; descendants still receive their own decision for dialog Close.
+ * This lets a page, its dialog and inline editors ask once without discarding on consent:
+ * the owning form releases values only after navigation commits or a confirmed result.
+ */
+export function useDraftProtection(draft: PilotCommandDraft) {
+    const context = usePilot();
+    const parent = inject<DraftOwner | null>(draftOwnerKey, null);
+    const children = new Set<() => DraftState>();
+    provide<DraftOwner>(draftOwnerKey, {register});
+
+    function register(read: () => DraftState): () => void {
+        children.add(read);
+        return function unregister(): void { children.delete(read); };
+    }
+
+    /** Pending work wins over prompts. One unknown outcome also covers other unsaved input. */
+    function readState(): DraftState {
+        const state: DraftState = {
+            busy: draft.busy?.() ?? false,
+            dirty: draft.dirty(),
+            unknownMessage: draft.uncertain?.() ? draft.unknownMessage : null,
+        };
+        for (const read of children) {
+            const child = read();
+            state.busy ||= child.busy;
+            state.dirty ||= child.dirty;
+            state.unknownMessage ??= child.unknownMessage;
+        }
+        return state;
+    }
+
+    function mayLeave(): boolean {
+        const state = readState();
+        if (state.busy) return false;
+        if (state.unknownMessage) return window.confirm(context.messages.value.t(state.unknownMessage));
+        return !state.dirty || window.confirm(context.messages.value.t('draft.discard'));
+    }
+
+    /** Release updates cannot ask to discard input or silently acknowledge an unknown result. */
+    function mayReload(): boolean {
+        const state = readState();
+        return !state.busy && !state.dirty && !state.unknownMessage;
+    }
+
+    function beforeUnload(event: BeforeUnloadEvent): void {
+        if (mayReload()) return;
+        event.preventDefault();
+        event.returnValue = '';
+    }
+
+    if (parent) onBeforeUnmount(parent.register(readState));
+    else {
+        onBeforeUnmount(context.registerIdentityGuard(mayLeave));
+        onBeforeUnmount(context.updates.registerGuard(mayReload));
+        onBeforeRouteLeave(mayLeave);
+        onBeforeRouteUpdate(mayLeave);
+        onMounted(() => window.addEventListener('beforeunload', beforeUnload));
+        onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
+    }
+    return {mayLeave, mayReload};
+}
 
 /** One command owner per form/page. Commands never replay automatically: a missing response
  * blocks further commands until an authoritative read reconciles a desired-state update, or
@@ -16,12 +94,14 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     const uncertain = ref(false);
     const {error, setError} = useFeedbackError();
     const notice = ref<MessageKey | null>(null);
+    const outcome = shallowRef<PilotCommandOutcome | null>(null);
     const needsUnknownReview = ref(requireUnknownReview);
-    // Register blockers during setup, before mounted draft guards can ask to discard edits.
-    const removeIdentityGuard = context.registerIdentityGuard(mayLeave);
-    onBeforeUnmount(removeIdentityGuard);
-    const removeUpdateGuard = context.updates.registerGuard(mayReload);
-    onBeforeUnmount(removeUpdateGuard);
+    const protection = useDraftProtection({
+        dirty: () => draft?.dirty() ?? false,
+        busy: () => pending.value || (draft?.busy?.() ?? false),
+        uncertain: () => uncertain.value || (draft?.uncertain?.() ?? false),
+        unknownMessage: draft?.unknownMessage ?? 'draft.leaveUnknown',
+    });
 
     /** Read authority before releasing a desired-state command; creations still need acknowledgement. */
     async function reconcile(): Promise<void> {
@@ -37,6 +117,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
         uncertain.value = false;
         setError(null);
         notice.value = null;
+        outcome.value = null;
     }
 
     /** Execute once in the captured identity scope and distinguish write failure from refresh failure. */
@@ -49,21 +130,41 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
         setError(null);
         notice.value = null;
         needsUnknownReview.value = reviewUnknown;
+        outcome.value = {confirmation: 'pending', refresh: 'not-requested'};
         const finishUpdateCommand = context.updates.commandStarted();
         let confirmed = false;
         let result: T | undefined;
         try {
             result = await operation(scope);
-            if (!context.isCurrent(scope)) return;
+            if (!context.isCurrent(scope)) {
+                outcome.value = {confirmation: 'obsolete', refresh: 'not-requested'};
+                return;
+            }
             confirmed = true;
+            outcome.value = {confirmation: 'confirmed', refresh: refreshAfter ? 'pending' : 'not-requested'};
             // Confirmation belongs to the write. A following read failure cannot undo it.
-            if (refreshAfter) await refresh();
-            if (context.isCurrent(scope)) notice.value = 'state.saved';
+            if (refreshAfter) {
+                await refresh();
+                outcome.value = {confirmation: 'confirmed', refresh: 'succeeded'};
+            }
+            if (!context.isCurrent(scope)) {
+                outcome.value = {confirmation: 'obsolete', refresh: outcome.value.refresh};
+                return;
+            }
+            notice.value = 'state.saved';
         } catch (failure) {
-            if (failure instanceof ObsoleteRequestError || !context.isCurrent(scope)) return;
-            if (confirmed) notice.value = 'state.savedRefreshFailed';
-            else if (failure instanceof InvalidInputError) setError('api:errors.VALIDATION_FAILED');
-            else if (failure instanceof ApiFailure && failure.status < 500) {
+            if (failure instanceof ObsoleteRequestError || !context.isCurrent(scope)) {
+                outcome.value = {confirmation: 'obsolete', refresh: outcome.value?.refresh ?? 'not-requested'};
+                return;
+            }
+            if (confirmed) {
+                outcome.value = {confirmation: 'confirmed', refresh: 'failed'};
+                notice.value = 'state.savedRefreshFailed';
+            } else if (failure instanceof InvalidInputError) {
+                outcome.value = {confirmation: 'rejected', refresh: 'not-requested'};
+                setError('api:errors.VALIDATION_FAILED');
+            } else if (failure instanceof ApiFailure && failure.status < 500) {
+                outcome.value = {confirmation: 'rejected', refresh: 'not-requested'};
                 setError(failure);
                 // A stale inline edit stays a draft. Refresh only the remote representation;
                 // its component still requires explicit review before adopting a new token.
@@ -75,6 +176,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
                     }
                 }
             } else {
+                outcome.value = {confirmation: 'unknown', refresh: 'not-requested'};
                 uncertain.value = true;
                 notice.value = 'state.unknownOutcome';
             }
@@ -85,28 +187,6 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
         return confirmed ? result : undefined;
     }
 
-    /** One form decision serves SPA routes and explicit identity switches without changing its draft. */
-    function mayLeave(): boolean {
-        if (pending.value || draft?.busy?.()) return false;
-        if (!draft) return true;
-        if (uncertain.value) return window.confirm(context.messages.value.t(draft.unknownMessage));
-        return !draft.dirty() || window.confirm(context.messages.value.t('draft.discard'));
-    }
-
-    /** Update reloads are noninteractive: all local edits and unknown outcomes must first be resolved. */
-    function mayReload(): boolean {
-        return !pending.value && !uncertain.value && !draft?.busy?.() && !draft?.dirty();
-    }
-
-    /** Browser departure gets its native prompt, including password-only and reverted unknown drafts. */
-    function beforeUnload(event: BeforeUnloadEvent): void {
-        if (mayReload()) return;
-        event.preventDefault();
-        event.returnValue = '';
-    }
-    onBeforeRouteLeave(mayLeave);
-    onBeforeRouteUpdate(mayLeave);
-    onMounted(() => window.addEventListener('beforeunload', beforeUnload));
-    onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
-    return {pending, uncertain, error, notice, setError, run, reconcile, acknowledge, mayLeave};
+    return {pending, uncertain, error, notice, outcome, setError, run, reconcile, acknowledge,
+        mayLeave: protection.mayLeave};
 }

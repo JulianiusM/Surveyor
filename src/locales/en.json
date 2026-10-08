@@ -91,6 +91,9 @@
         "preview": "Preview"
       },
       "auth": {
+        "accountRequired": "You must be logged in as user to access this site.",
+        "sessionExpired": "Session has expired",
+        "invalidGuestLink": "Invalid or mismatched token",
         "unconfirmedRequest": "The request may already have completed. Check your email or current account before starting it again.",
         "leaveUnknown": "The request may already have completed. Leave this form and check your email or account before trying again?",
         "yourName": "Your name",

@@ -127,3 +127,49 @@ test('invalid password-reset links are denied before rendering a form, with scop
         await expect(resetPage.locator('input[type="password"]')).toHaveCount(0);
     } finally { await noScript.close(); }
 });
+
+test('native pilot recovery GET redirects to login while rejected and confirmed POSTs retain their full message at the recovery URL', async ({page}) => {
+    const native = await page.request.get('/guest/recovery', {maxRedirects: 0});
+    expect(native.status()).toBe(302);
+    expect(native.headers().location).toBe('/users/login');
+    const pilot = await page.request.get('/frontend-pilot/guest/recovery?locale=en', {maxRedirects: 0});
+    expect(pilot.status()).toBe(native.status());
+    expect(pilot.headers().location).toBe('/frontend-pilot/users/login?locale=en');
+    const current = await session(page.request);
+    // A rejected recovery submission owns a complete Error page at this URL. It
+    // cannot be projected as a form error because recovery has no standalone form.
+    const rejected = await page.request.post('/frontend-pilot/guest/recovery', {form: {
+        email: 'not-an-email-address', next: '/frontend-pilot', locale: 'en',
+        _context: current.context, _csrf: current.csrfToken, _compatibility: current.deployment.apiCompatibility,
+    }, maxRedirects: 0});
+    expect(rejected.status()).toBe(400);
+    expect(rejected.headers().location).toBeUndefined();
+    expect(new URL(rejected.url()).pathname).toBe('/frontend-pilot/guest/recovery');
+    expect(rejected.headers()['content-type']).toContain('text/html');
+    const errorHtml = await rejected.text();
+    expect(errorHtml).toContain('Error');
+    expect(errorHtml).toContain('"identityProblem":');
+    expect(errorHtml).toContain('"code":"VALIDATION_FAILED"');
+    expect(errorHtml).not.toContain('"identityFormProblem":');
+    expect(errorHtml).not.toContain('<input id="email"');
+    expect(errorHtml).not.toContain('"identityFeedback":"auth.recoverySent"');
+    // A nonexistent address completes the same privacy-preserving recovery workflow
+    // without requiring an external mailbox or inspecting whether a guest exists.
+    const completion = await page.request.post('/frontend-pilot/guest/recovery', {form: {
+        email: `no-existing-guest-${randomUUID()}@example.invalid`, next: '/frontend-pilot', locale: 'en',
+        _context: current.context, _csrf: current.csrfToken, _compatibility: current.deployment.apiCompatibility,
+    }, maxRedirects: 0});
+    expect(completion.status()).toBe(200);
+    expect(completion.headers().location).toBeUndefined();
+    expect(new URL(completion.url()).pathname).toBe('/frontend-pilot/guest/recovery');
+    expect(completion.headers()['content-type']).toContain('text/html');
+    const html = await completion.text();
+    expect(html).toContain('Success');
+    expect(html).toContain('The link(s) to your guest account(s) have been sent to your email address.');
+    expect(html).toContain('"pageCompletion":');
+    expect(html).toContain(`"context":"${current.context}","destination":"/frontend-pilot/guest/recovery"`);
+    expect(html).toContain('"messageKey":"auth.recoverySent","kind":"success"');
+    expect(html).not.toContain('"identityFeedback":"auth.recoverySent"');
+    expect(html).not.toContain('<input id="username"');
+    expect((await page.request.get('/frontend-pilot/guest/recovery', {maxRedirects: 0})).status()).toBe(302);
+});

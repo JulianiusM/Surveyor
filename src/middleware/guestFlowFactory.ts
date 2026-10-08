@@ -120,7 +120,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
      * templates never need to depend on optional feature properties in res.locals.
      * An eventId query selects context, but permission to attach content is still checked.
      */
-    async function getCreationData(req: Request) {
+    async function getCreationData(req: Request, duplicateReturn?: string) {
         // Search results are loaded by the shared picker endpoint. Only a permitted initial
         // choice is rendered here, including on validation recovery; historical state never
         // excludes a destination. A posted choice supersedes a contextual URL preselection.
@@ -135,10 +135,18 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
                 // performs its own mandatory check after feature field normalization.
             }
         }
-        if (!selected) return {eventId: undefined, events: [], archive: null};
+        // All factory consumers use this explicit form action. A public/guest duplicate
+        // draft must return to that exact source after account login, rather than losing
+        // its copied content at /create. The submitted query retains it on validation recovery.
+        const returnTo = duplicateReturn ?? (typeof req.query.next === 'string' ? req.query.next : undefined);
+        const query = new URLSearchParams();
+        if (selected) query.set('eventId', selected.id);
+        if (returnTo) query.set('next', returnTo);
+        const creationAction = `${req.baseUrl}/create${query.size ? `?${query}` : ''}`;
+        if (!selected) return {eventId: undefined, events: [], archive: null, creationAction};
         const ref = {type: 'event' as const, id: selected.id};
         const archives = await getArchivePresentations([ref], req.session);
-        return {eventId: selected.id, events: [projectEventLinkOption(selected)], archive: archives.get(archiveKey(ref)) ?? null};
+        return {eventId: selected.id, events: [projectEventLinkOption(selected)], archive: archives.get(archiveKey(ref)) ?? null, creationAction};
     }
 
     /** Render the initial form through the same data path used after validation failures. */
@@ -260,7 +268,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         const data = await fetchForDuplicate(resFct(req), req.session);
         // Duplicating copies form content, not lifecycle state. Any archive notice belongs
         // to the explicitly selected target event, independently of the source entity.
-        const creationData = await getCreationData(req);
+        const creationData = await getCreationData(req, req.originalUrl);
         renderer.renderWithData(res, create, {
             title: `Copy of ${resFct(req).title}`,
             entity: resFct(req),

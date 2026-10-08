@@ -18,6 +18,7 @@
  * lib/permissionMiddleware.ts
  */
 import {NextFunction, Request, Response} from "express";
+import {hasAccountProfile} from '../controller/userController';
 import * as entityAdminService from "../modules/database/services/EntityAdminService"
 import {isRegisteredForEvent} from "../modules/database/services/EventService";
 import {asyncHandler} from "../modules/lib/asyncHandler";
@@ -153,11 +154,13 @@ export const requireEventParticipant = (getResource: GetResource = defaultGetRes
 
 /* -------------------- Unchanged auth redirect middleware -------------------- */
 export function isAuthenticated(req: Request, res: Response, next: NextFunction) {
-    if (req.session.auth?.user && req.session.profile) return next();
+    if (hasAccountProfile(req.session)) return next();
     req.flash("info", "You must be logged in as user to access this site.");
     let nxt = "";
     if (typeof req.query.next === "string") {
-        nxt = `?next=${req.query.next}`;
+        // A duplicate return may carry its own event/query context. Encode it as one
+        // login parameter so that context survives rather than becoming login's query.
+        nxt = `?next=${encodeURIComponent(req.query.next)}`;
     } else {
         nxt = `?next=${req.baseUrl}${req.path}`;
     }

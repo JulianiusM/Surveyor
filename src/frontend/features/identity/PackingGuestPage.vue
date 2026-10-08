@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import {computed, reactive, ref, watch} from 'vue';
-import {useRoute, RouterLink} from 'vue-router';
+import {useRoute, useRouter, RouterLink} from 'vue-router';
+import type {components} from '../../../types/api/v1';
+import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {useQuery} from '@tanstack/vue-query';
 import {usePilot} from '../../app/context';
 import {usePackingApi} from '../packing/api';
 import {useCommand} from '../../composables/command';
 import {packingKeys} from '../../app/queryKeys';
 import {usePageTitle} from '../../composables/pageTitle';
+import {completeIdentityEntry, completePageEntry} from '../../composables/pageEntry';
 import FormField from '../../components/FormField.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
@@ -15,25 +18,27 @@ import NativeContextFields from '../../components/NativeContextFields.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import {ApiFailure} from '../../app/transport';
 
+const props = defineProps<{entry?: components['schemas']['GuestEntry']}>();
 const context = usePilot();
 const api = usePackingApi(context);
 const {messages} = context;
 const route = useRoute();
+const router = useRouter();
 const listId = computed(() => String(route.params.listId).toLowerCase());
 const next = computed(() => '/frontend-pilot/packing/' + listId.value);
 const nativeInitial = context.bootstrap.initialUrl === route.fullPath
     && context.bootstrap.session.context === context.session.value?.context ? context.bootstrap : undefined;
 const fields = reactive({name: nativeInitial?.identityFields?.username ?? '', email: nativeInitial?.identityFields?.email ?? ''});
 const choiceOpen = ref(false);
-const recovered = ref(false);
 const checkingEmail = ref(false);
 const reconciling = ref(false);
 const entry = useQuery({
     queryKey: computed(() => packingKeys.guest(context.session.value?.context, listId.value)),
-    enabled: computed(() => context.ready.value && context.hydrated.value),
+    enabled: computed(() => context.ready.value && context.hydrated.value && !props.entry),
     queryFn: ({signal}) => api.guestEntry(listId.value, context.capture(), signal),
-    initialData: () => nativeInitial?.guestEntry?.id === listId.value ? nativeInitial.guestEntry : undefined,
+    initialData: () => props.entry ?? (nativeInitial?.guestEntry?.id === listId.value ? nativeInitial.guestEntry : undefined),
 });
+const guestEntry = computed(() => props.entry ?? entry.data.value);
 const command = useCommand(context.refreshSession, true, {
     dirty: isDirty,
     busy: isCheckingEmail,
@@ -55,12 +60,11 @@ watch(listId, () => {
     command.acknowledge();
     Object.assign(fields, {name: '', email: ''});
     choiceOpen.value = false;
-    recovered.value = false;
 });
 if (nativeInitial?.identityFormProblem) {
     command.setError(new ApiFailure(nativeInitial.identityFormProblem.status, nativeInitial.identityFormProblem));
 }
-usePageTitle(() => entry.data.value?.title || messages.value.t('app.packing'));
+usePageTitle(() => guestEntry.value?.title || messages.value.t('app.packing'));
 const blocked = computed(() => checkingEmail.value || command.pending.value || command.uncertain.value);
 /** Reconcile identity without assuming a successful title read proves guest creation failed. */
 async function refreshIdentityState(): Promise<void> {
@@ -82,19 +86,23 @@ async function refreshIdentityState(): Promise<void> {
 /** Submit once and release the draft only after the server confirms the guest identity. */
 async function register(): Promise<void> {
     choiceOpen.value = false;
-    const result = await command.run(
-        (scope) =>
-            api.registerGuest(
-                listId.value,
-                {username: fields.name.trim(), email: fields.email.trim().toLowerCase() || null},
-                scope,
-            ),
-        false,
-    );
+    const origin = route.fullPath;
+    const destination = next.value;
+    const result = await command.run(registerIdentity, false);
     if (result) {
         Object.assign(fields, {name: '', email: ''});
-        await context.acceptIdentity(result);
+        // The shared owner retains confirmed identity/navigation across a failed bootstrap;
+        // Retry must complete this journey without replaying guest registration.
+        await completeIdentityEntry(context, router, result,
+            {kind: 'redirect', url: destination, notice: null}, origin);
     }
+}
+
+/** Native guest names are saved exactly as submitted. Email normalization remains the
+ * existing identity rule; command attribution and the list are captured before the request. */
+function registerIdentity(scope: PilotRequestScope): Promise<components['schemas']['IdentityResult']> {
+    return api.registerGuest(listId.value, {username: fields.name,
+        email: fields.email.trim().toLowerCase() || null}, scope);
 }
 
 /** Preserve the native advisory email choice; a failed lookup does not block a new guest. */
@@ -121,19 +129,21 @@ async function submit(): Promise<void> {
     await register();
 }
 
-/** Recovery confirms mail submission rather than creation; keep an unrelated name draft intact. */
+/** Confirmed recovery has the same complete message outcome as the native form. Pending or
+ * unknown mail delivery stays on this form with its entered values and explicit recovery. */
 async function recover(): Promise<void> {
     choiceOpen.value = false;
-    if (
-        await command.run(
-            (scope) =>
-                context.api.recoverGuest({email: fields.email.trim().toLowerCase(), next: next.value}, scope),
-            false,
-        )
-    ) {
-        recovered.value = true;
-        fields.email = '';
+    const scope = context.capture();
+    const origin = route.fullPath;
+    if (await command.run(requestRecovery, false)) {
+        Object.assign(fields, {name: '', email: ''});
+        await completePageEntry(context, router, '/frontend-pilot/guest/recovery',
+            'auth.recoverySent', 'success', scope, origin);
     }
+}
+
+function requestRecovery(scope: PilotRequestScope): Promise<components['schemas']['MutationResult']> {
+    return context.api.recoverGuest({email: fields.email.trim().toLowerCase(), next: next.value}, scope);
 }
 </script>
 
@@ -141,19 +151,18 @@ async function recover(): Promise<void> {
     <section class="card bg-dark text-white mb-3">
         <h1 class="card-header text-center py-3 mb-0">
             <i class="bi bi-door-open-fill me-2" aria-hidden="true"></i
-            >{{ messages.t('auth.join', {title: entry.data.value?.title ?? messages.t('app.packing')}) }}
+            >{{ messages.t('auth.join', {title: guestEntry?.title ?? messages.t('app.packing')}) }}
         </h1>
         <div class="card-body">
             <!-- The entry title loads independently of the generic identity choices and
                  editable draft. Never replace those mounted fields during a title refresh. -->
-            <LoadingSkeleton v-if="!entry.data.value && !entry.error.value" :rows="1" />
+            <LoadingSkeleton v-if="!guestEntry && !entry.error.value" :rows="1" />
             <StatusNotice v-if="command.error.value || entry.error.value" kind="danger">{{
                 command.error.value ?? messages.t('state.loadFailed')
             }}</StatusNotice>
             <StatusNotice v-if="command.uncertain.value" kind="warning">{{
                 messages.t('state.unknownOutcome')
             }} {{ messages.t('auth.unconfirmedRequest') }}<ActionButton class="ms-2" variant="outline-light" :pending="reconciling" :disabled="reconciling" @click="refreshIdentityState">{{ messages.t('common.refresh') }}</ActionButton></StatusNotice>
-            <StatusNotice v-if="recovered" kind="success">{{ messages.t('auth.recoverySent') }}</StatusNotice>
             <div class="text-center mb-4">
                 <h3 class="mb-2">{{ messages.t('auth.guestIntro') }}</h3>
                 <ul class="list-unstyled small d-inline-block text-start mb-0">
@@ -240,7 +249,7 @@ async function recover(): Promise<void> {
                             type="submit"
                             variant="success"
                             class="btn-lg d-inline-flex align-items-center justify-content-center gap-2"
-                            :disabled="blocked || !entry.data.value"
+                            :disabled="blocked || !guestEntry"
                             :pending="command.pending.value || checkingEmail"
                             ><i class="bi bi-check-lg" aria-hidden="true"></i
                             >{{ messages.t('auth.continueGuest') }}</ActionButton

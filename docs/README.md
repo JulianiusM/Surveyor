@@ -43,9 +43,9 @@ The canonical in-app help source is [`docs/user-guide/`](user-guide/). The appli
 | Document | Purpose | Current review state |
 |---|---|---|
 | [Project README](../README.md) | Product entry point, clean-clone development start, commands, CI, and release summary | Current: D12 |
-| [Architecture](ARCHITECTURE.md) | Runtime, layers, identity, authorization, persistence, frontend, build, release, and testing boundaries | Current: established runtime and approved frontend pilot ownership, including D1–D5 |
-| [Development guide](DEVELOPMENT.md) | Clean-clone setup, generated files, current code patterns, change recipes, and troubleshooting | Current: established patterns and canonical next-feature frontend contribution workflow |
-| [Testing guide](TESTING_GUIDE.md) | Vitest/Playwright layer contracts, database safeguards, environments, commands, and CI | Current: established test layers and frontend pilot checks; content reports remain separate from application tests |
+| [Architecture](ARCHITECTURE.md) | Runtime, layers, identity, authorization, persistence, frontend, build, release, and testing boundaries | Native production reference; pilot architecture is in the [staged replacement](frontend-migration/staged/ARCHITECTURE.md) |
+| [Development guide](DEVELOPMENT.md) | Clean-clone setup, generated files, current code patterns, change recipes, and troubleshooting | Native production reference; the [staged migration recipe](frontend-migration/staged/DEVELOPMENT.md#implementing-the-next-feature-slice) owns the next frontend increment |
+| [Testing guide](TESTING_GUIDE.md) | Vitest/Playwright layer contracts, database safeguards, environments, commands, and CI | Native production reference; use the [staged replacement](frontend-migration/staged/TESTING_GUIDE.md) and current scripts for pilot checks |
 | [Activity requirement algorithm](ACTIVITY_REQUIREMENTS_ALGORITHM.md) | Detailed requirement and coverage algorithm | Current: D08 canonical requirement, coverage, allocation, job, review-state, application, and limitation reference |
 | [Permission system reference](PERMISSIONS_REFERENCE.md) | Generated bit/preset/default tables and maintainer authorization semantics | Current: D03 |
 | [Archival design and implementation record](ARCHIVAL_PLAN.md) | Authoritative archival, profile visibility, architecture, implementation steps, and acceptance criteria | Implemented design record; current usage and operations are documented in the canonical guides |

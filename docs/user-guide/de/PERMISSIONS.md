@@ -4,10 +4,10 @@ documentation-metadata
 audience: Organisatoren; erfahrene Administratoren
 owner: permission-system maintainers
 status: current
-last-verified: 2026-10-07
+last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: vollständige eigenständige deutsche Anleitung mit unveränderter Abschnittsstruktur; additive Freigaben, Zielgruppen, Voreinstellungen und getrennte Ansichts- und Aktionsberechtigungen; Abgleich übersetzter Konto-, Übersichts- und Packlistenbeschriftungen mit dem zentralen Katalog, englische E-Mail- und bestehende Formularbezeichnungen erhalten
-source-anchors: src/modules/lib/permissions.ts; src/modules/permissionEngine.ts; src/locales/de.json; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue
+verification-scope: vollständige eigenständige deutsche Anleitung mit unveränderter Abschnittsstruktur; additive Freigaben, Zielgruppen, Voreinstellungen und getrennte Ansichts- und Aktionsberechtigungen; Abgleich übersetzter Konto-, Übersichts- und Packlistenbeschriftungen mit dem zentralen Katalog, englische E-Mail- und bestehende Formularbezeichnungen erhalten; autorisierte Rückkehr zum selben Duplizierungsformular nach der Anmeldung und Prüfung vor erneutem Absenden
+source-anchors: src/modules/lib/permissions.ts; src/modules/permissionEngine.ts; src/middleware/guestFlowFactory.ts; src/middleware/permissionMiddleware.ts; src/locales/de.json; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue
 heading-anchors: 1:permissions-and-sharing; 2:choose-a-common-setup; 2:four-rules-to-remember; 3:example-of-cumulative-grants; 2:who-receives-each-grant; 2:open-the-permission-controls; 3:while-creating-an-item; 3:after-creation; 2:configure-group-permissions; 2:add-or-change-a-named-administrator; 2:sharing-recipes; 3:normal-open-collaboration; 3:full-account-profiles-only; 3:registered-event-participants-only; 3:read-only-participation; 3:let-participants-add-entries-without-managing-everybody; 3:delegate-a-limited-organizer; 3:delegate-property-or-event-link-editing; 3:delegate-complete-control; 2:permission-label-reference; 2:preset-reference; 3:initial-selections; 2:parent-and-child-permissions; 2:page-access-is-not-the-same-as-an-action-permission; 2:troubleshooting; 3:a-permission-remains-after-i-cleared-it; 3:a-full-account-user-receives-a-guest-permission; 3:a-participant-cannot-use-an-action-on-a-linked-list-or-plan; 3:an-event-organizer-cannot-open-the-administration-dashboard; 3:an-administrator-appears-but-cannot-do-anything; 3:i-cannot-find-a-guest-in-add-administrator
 next-review: permission-or-entity-settings-behavior-change
 -->
@@ -200,6 +200,9 @@ Wähle mit diesen Beschriftungen die Aktionen aus, die eine Person ausführen da
 | **Zugriff auf Verwaltung** (Access Admin) | Die Verwaltungsübersicht einer Veranstaltung öffnen. Gewährt nicht alle Verwaltungsrechte. |
 | **Zugriff auf Teilnehmer** (Access Participants) | Teilnehmer- oder Zusagennamen und Listen sehen, soweit verfügbar. |
 | **Zugriff auf Gegenstände** (Access Items) | Die verknüpften Aktivitätenpläne, Pack- und Fahrtenlisten einer Veranstaltung sehen. |
+
+Wenn du dich beim Absenden einer Kopie anmelden musst, kehrst du nach der Anmeldung zum selben
+Duplizierungsformular zurück. Prüfe dessen Werte, bevor du es erneut absendest.
 
 ## Referenz der Voreinstellungen
 

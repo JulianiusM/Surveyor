@@ -9,6 +9,14 @@ import type {Locale, LocaleDefinition, LocalizationContext, MessageKey, Translat
 export const localeManifest: readonly LocaleDefinition[] = Object.freeze(manifest.locales.map(locale => Object.freeze({...locale})) as LocaleDefinition[]);
 export const catalogVersion: string = manifest.version;
 
+/** Entry outcomes and one-time notices carry catalog identity rather than translated text.
+ * Only known parameter-free messages can be rendered without a separate parameter payload;
+ * the generated manifest remains the single owner of those message contracts. */
+export function isPlainMessageKey(value: unknown): value is MessageKey {
+    if (typeof value !== 'string' || !Object.hasOwn(manifest.messages, value)) return false;
+    return manifest.messages[value as MessageKey].required.length === 0;
+}
+
 /** The same locale definition owns interface messages and its fixed, release-shipped help corpus. */
 export function helpSourceDirectory(requestedLocale?: string | null): string {
     return manifest.helpSources[resolveLocale(requestedLocale)];

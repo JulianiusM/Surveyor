@@ -40,7 +40,8 @@ block content
             eventIdQuery = `?eventId=${parsed.eventId}`
         }
 
-    form#packingForm(action=`/packing/create${eventIdQuery}` method="POST" enctype="multipart/form-data")
+    //- The shared guest-flow action preserves the exact duplicate destination through account login.
+    form#packingForm(action=data.creationAction || `/packing/create${eventIdQuery}` method="POST" enctype="multipart/form-data")
         // Titel
         .mb-3
             label.form-label(for="title")

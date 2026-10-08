@@ -37,8 +37,25 @@ import type {SessionLike} from "../types/PermissionTypes";
 import {archiveKey, isHiddenInOverview} from "../modules/archive/policy";
 import {getArchivePresentations} from "./entityAdminController";
 import {evaluateEntities} from "../modules/permissionEngine";
+import type {components} from '../types/api/v1';
 
 const CREATE_TEMPLATE = 'users/register';
+
+/** Native creation admits an account with an active profile; a guest remains a separate identity. */
+export function hasAccountProfile(session: SessionLike): boolean {
+    return Boolean(session.auth?.user && session.profile);
+}
+
+/**
+ * Project the established account-only admission for any migrating feature. Adapters supply
+ * their own bounded login/return URLs; this decision never depends on a browser's session guess.
+ * The creation command independently repeats account admission before doing work.
+ */
+export function getAccountPageEntry(session: SessionLike, loginUrl: string, returnTo: string): components['schemas']['PageEntryOutcome'] {
+    if (hasAccountProfile(session)) return {kind: 'render'};
+    return {kind: 'redirect', url: `${loginUrl}?next=${encodeURIComponent(returnTo)}`,
+        notice: {kind: 'info', messageKey: 'auth.accountRequired'}};
+}
 const LOGIN_TEMPLATE = 'users/login';
 
 /** Native and SPA mail use the same controller; only the trusted application route differs. */

@@ -437,7 +437,12 @@ without those options retain their established message layout.
 
 ### Versioned frontend pilot
 
-`src/frontend/` owns the Vue application, router, shared visual components, query refresh and feature views. Vite builds its browser assets and server-rendering bundle separately. Express renders the same Vue tree for initial HTML. Help and the mixed overview receive authorized server data; identity forms retain native guarded adapters. Packing item/settings data loads through v1 after hydration. Packing controls are independent of the legacy frontend. Each server render owns its query state and never performs an HTTP request to its own server.
+`src/frontend/` owns the Vue application, router, shared visual components, query refresh and feature views. Vite builds
+its browser assets and server-rendering bundle separately. Express renders the same Vue tree for initial HTML. Help
+receives complete authorized server content; Overview renders its interactive shell and loads independent regions
+after hydration under the approved progressive-delivery amendment. Identity forms retain native guarded adapters.
+Packing item/settings data loads through v1 after hydration. Packing controls are independent of the legacy frontend.
+Each server render owns its query state and never performs an HTTP request to its own server.
 
 `contracts/api/v1/` is the authored OpenAPI source for wire shapes. Generation creates ignored declaration files under `src/types/api/` and Ajv standalone validators for server and browser use. Server request validation and safe DTO projection are strict; browser response validation permits additive fields. `src/locales/` supplies the shared pilot UI/API catalog, with generated typed keys and parameter checks. Existing feature catalogs retain their current scope.
 

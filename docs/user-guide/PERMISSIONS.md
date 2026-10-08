@@ -4,9 +4,9 @@ documentation-metadata
 audience: organizers; advanced administrators
 owner: permission-system maintainers
 status: current
-last-verified: 2026-10-07
+last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; source-reviewed Entity settings dialog labels, per-action permissions, root property changes, image/actions, minimal archival hints, and event selection/reassociation boundaries; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D03 cumulative grants, overlapping audiences, sharing recipes, presets, complete permission labels, page admission, item fallback, administration, and explicit survey exclusion; D14 rendered help navigation, semantic checks, and trusted-content integration
+verification-scope: compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; source-reviewed Entity settings dialog labels, per-action permissions, root property changes, image/actions, minimal archival hints, and event selection/reassociation boundaries; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D03 cumulative grants, overlapping audiences, sharing recipes, presets, complete permission labels, page admission, item fallback, administration, and explicit survey exclusion; D14 rendered help navigation, semantic checks, and trusted-content integration; authorized shared duplicate login return and review-before-resubmission behavior
 source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/modules/permissionEngine.ts; src/modules/lib/permissions.ts; src/middleware/permissionMiddleware.ts; src/middleware/guestFlowFactory.ts; src/middleware/adminApiFactory.ts; src/controller/entityAdminController.ts; src/modules/database/services/EntityAdminService.ts; src/views/modules/module_perm_matrix.pug; src/views/modules/module_admin_matrix.pug; src/views/modules/module_admin_options.pug; src/public/js/modules/perm-matrix.ts; src/public/js/modules/admin-matrix.ts; src/routes/event.ts; src/routes/api/event.ts; src/routes/api/activity.ts; src/routes/api/packing.ts; src/routes/api/drivers.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: permission-or-entity-settings-behavior-change
 -->
@@ -202,6 +202,9 @@ Use these labels to choose the actions a person may perform. Feature guides expl
 | **Access Admin** | Open the Event administration dashboard. It does not grant every management permission. |
 | **Access Participants** | See participant or assignee names and lists where available. |
 | **Access Items** | See an event’s related activity plans, packing lists, and drivers lists. |
+
+If you are asked to log in when submitting a duplicate, you return to the same duplicate form after logging in.
+Review its values before submitting it again.
 
 ## Preset reference
 

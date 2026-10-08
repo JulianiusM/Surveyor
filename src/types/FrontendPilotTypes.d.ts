@@ -4,9 +4,24 @@ import type {MessageKey} from './LocalizationTypes';
 /** Native packing admission has its own HTTP outcomes, independently of API problem statuses. */
 export type PackingPageError = 'packing.notFound' | 'packing.eventRegistrationRequired' | 'api:errors.FORBIDDEN';
 
+/** A confirmed message result belongs to one actor and canonical destination. The same
+ * declaration seeds native POST rendering and scopes in-memory SPA completion receipts. */
+export interface FrontendPageCompletion {
+    context: string;
+    destination: string;
+    messageKey: MessageKey;
+    kind: 'success' | 'info';
+}
+
 /** Request-safe renderer input. API payload shapes belong exclusively to the generated contract. */
 export interface FrontendPilotBootstrap {
     session: components['schemas']['SessionView'];
+    /** The initial document and SPA navigation consume the same server-owned admission decision. */
+    pageEntry?: components['schemas']['PageEntryOutcome'];
+    /** One-time native redirect feedback, rendered before and after hydration. */
+    pageNotice?: components['schemas']['EntryNotice'];
+    /** Initial confirmed POST presentation is consumed once by the shared context owner. */
+    pageCompletion?: FrontendPageCompletion;
     help?: components['schemas']['HelpPageData'];
     /** Initial reset-link admission shares its successful or denied API contract with Vue navigation. */
     passwordReset?: components['schemas']['PasswordResetCheck'] | components['schemas']['Problem'];

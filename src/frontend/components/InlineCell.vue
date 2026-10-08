@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue';
-import {onBeforeRouteLeave, onBeforeRouteUpdate} from 'vue-router';
+import {computed, nextTick, onBeforeUnmount, ref, watch} from 'vue';
 import {usePilot} from '../app/context';
+import {useDraftProtection} from '../composables/command';
 
 const props = defineProps<{
     value: string | number | null;
@@ -32,8 +32,13 @@ watch(() => props.token, latest => {
     // only this PATCH field, and an unchanged displayed value can adopt the new token safely.
     if (editing.value && !remoteChanged.value) token.value = latest;
 });
-const removeUpdateGuard = context.updates.registerGuard(() => !pending.value && !dirty.value);
-onBeforeUnmount(removeUpdateGuard);
+// The containing page aggregates this editor with other mounted forms. A standalone
+// cell remains its own departure owner; no form values leave this component.
+useDraftProtection({
+    dirty: () => dirty.value,
+    busy: () => pending.value,
+    unknownMessage: 'draft.leaveUnknown',
+});
 watch(
     () => props.editable,
     (allowed) => {
@@ -79,24 +84,7 @@ async function commit(): Promise<void> {
         pending.value = false;
     }
 }
-function mayLeave(): boolean {
-    return !pending.value && (!dirty.value || window.confirm(messages.value.t('draft.discard')));
-}
-onBeforeRouteLeave(mayLeave);
-onBeforeRouteUpdate(mayLeave);
-function beforeUnload(event: BeforeUnloadEvent): void {
-    if (!pending.value && !dirty.value) return;
-    event.preventDefault();
-    event.returnValue = '';
-}
-let removeIdentityGuard: (() => void) | undefined;
-onMounted(() => {
-    removeIdentityGuard = context.registerIdentityGuard(mayLeave);
-    window.addEventListener('beforeunload', beforeUnload);
-});
 onBeforeUnmount(() => {
-    removeIdentityGuard?.();
-    window.removeEventListener('beforeunload', beforeUnload);
     // A remotely deleted row must release the page's drag lock exactly once.
     if (editing.value) emit('editing', false);
 });

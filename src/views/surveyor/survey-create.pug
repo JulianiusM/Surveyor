@@ -33,7 +33,8 @@ block content
             eventIdQuery = `?eventId=${parsed.eventId}`
         }
 
-    form#surveyForm.row.gy-4.justify-content-center(action=`/survey/create${eventIdQuery}` method="POST" enctype="multipart/form-data")
+    //- The shared guest-flow action preserves the exact duplicate destination through account login.
+    form#surveyForm.row.gy-4.justify-content-center(action=data.creationAction || `/survey/create${eventIdQuery}` method="POST" enctype="multipart/form-data")
         //── Survey Title ─────────────────────────────────────
         .col-md-12
             label.form-label.mb-1(for="title")

@@ -84,6 +84,99 @@ async function packingCommand(page: Page, id: string, suffix: string, method: st
     expect((await response).status()).toBe(status);
 }
 
+test('shared entry preserves header creation admission, exact duplicate login return and canonical guest completion', async ({page, browser, baseURL}, testInfo) => {
+    test.setTimeout(60_000);
+    const credentials = createE2ELogin();
+    await loginForE2E(page.request, credentials);
+    const input = createE2EPackingList();
+    Object.assign(input.form, {'defaultPerms[public][0]': 'DATA_DUPLICATE'});
+    const list = await createResourceViaForm(page.request, input);
+    const anonymous = await browser.newContext({baseURL});
+    const guest = await browser.newContext({baseURL});
+    try {
+        const visitor = await anonymous.newPage();
+        await visitor.goto('/frontend-pilot/help?locale=en', {waitUntil: 'domcontentloaded'});
+        await visitor.evaluate(() => { document.documentElement.dataset.entryDocument = 'original'; });
+        await visitor.locator('header summary').filter({hasText: /^New$/}).click();
+        await visitor.locator('header').getByRole('link', {name: 'Packing list', exact: true}).click();
+        await expect(visitor).toHaveURL(/\/frontend-pilot\/users\/login\?/);
+        expect(new URL(visitor.url()).searchParams.get('next')).toBe('/frontend-pilot/packing/create');
+        await expect(visitor.locator('.alert-info')).toContainText('You must be logged in as user');
+        expect(await visitor.evaluate(() => document.documentElement.dataset.entryDocument)).toBe('original');
+
+        // Duplicate GET has its own public grant. Submission uses account admission,
+        // then the shared login completion returns to this precise source and query.
+        const duplicate = `/frontend-pilot/packing/${list.id}/duplicate?locale=en`;
+        await visitor.goto(duplicate, {waitUntil: 'domcontentloaded'});
+        await expect(visitor.locator('#create-title')).toHaveValue(list.title);
+        await visitor.evaluate(() => { document.documentElement.dataset.entryDocument = 'duplicate'; });
+        await visitor.locator('#create-title').fill('Submitted duplicate draft');
+        await visitor.getByRole('button', {name: 'Create list', exact: true}).click();
+        await expect(visitor).toHaveURL(/\/frontend-pilot\/users\/login\?/);
+        expect(new URL(visitor.url()).searchParams.get('next')).toBe(duplicate);
+        await visitor.locator('#username').fill(credentials.username);
+        await visitor.locator('#password').fill(credentials.password);
+        await visitor.getByRole('button', {name: 'Login', exact: true}).click();
+        await expect(visitor).toHaveURL(new URL(duplicate, baseURL).href);
+        await expect(visitor.locator('#create-title')).toHaveValue(list.title);
+        expect(await visitor.evaluate(() => document.documentElement.dataset.entryDocument)).toBe('duplicate');
+
+        // Inspect the same native and pilot guest form before consuming its fields.
+        const guestPage = await guest.newPage();
+        await guestPage.goto(`${list.path}/guest`, {waitUntil: 'domcontentloaded'});
+        await captureState(guestPage, testInfo, 'native-guest-entry');
+        await guestPage.goto(`/frontend-pilot/packing/${list.id}`, {waitUntil: 'domcontentloaded'});
+        await expect(guestPage).toHaveURL(new URL(`/frontend-pilot/packing/${list.id}/guest?locale=en`, baseURL).href);
+        await expect(guestPage.locator('#guest-name')).toBeVisible();
+        await captureState(guestPage, testInfo, 'pilot-guest-entry');
+        await guestPage.evaluate(() => { document.documentElement.dataset.entryDocument = 'guest'; });
+        const name = `  Guest ${randomUUID().slice(0, 8)}  `;
+        await guestPage.locator('#guest-name').fill(name);
+        await guestPage.getByRole('button', {name: 'Continue as guest', exact: true}).click();
+        await expect(guestPage).toHaveURL(new URL(`/frontend-pilot/packing/${list.id}`, baseURL).href);
+        await expect(guestPage.getByRole('heading', {name: list.title, exact: true})).toBeVisible();
+        await expect(guestPage.locator('.alert-success')).toContainText('Your private access link');
+        expect((await bootstrap(guestPage.request)).activeProfile?.name).toBe(name);
+        expect(await guestPage.evaluate(() => document.documentElement.dataset.entryDocument)).toBe('guest');
+    } finally {
+        await anonymous.close();
+        await guest.close();
+    }
+});
+
+test('shared recovery finishes at the native message URL and a reload follows its login GET', async ({browser, baseURL}, testInfo) => {
+    test.setTimeout(60_000);
+    const native = await browser.newContext({baseURL});
+    const pilot = await browser.newContext({baseURL});
+    const email = `no-matching-guest-${randomUUID()}@example.test`;
+    try {
+        // An unused fictional address preserves native non-disclosure without an
+        // external mail dependency; both requests execute the real recovery controller.
+        const nativePage = await native.newPage();
+        await nativePage.goto('/users/login', {waitUntil: 'domcontentloaded'});
+        await nativePage.locator('#email').fill(email);
+        await nativePage.getByRole('button', {name: /Request access/}).click();
+        await expect(nativePage).toHaveURL(/\/guest\/recovery(?:\?|$)/);
+        await expect(nativePage.getByRole('heading', {name: /Success/})).toBeVisible();
+        await captureState(nativePage, testInfo, 'native-recovery-completion');
+
+        const pilotPage = await pilot.newPage();
+        await pilotPage.goto('/frontend-pilot/users/login?locale=en', {waitUntil: 'domcontentloaded'});
+        await pilotPage.locator('#recovery-email').fill(email);
+        await pilotPage.getByRole('button', {name: 'Request access', exact: true}).click();
+        await expect(pilotPage).toHaveURL(new URL('/frontend-pilot/guest/recovery', baseURL).href);
+        await expect(pilotPage.getByRole('heading', {name: 'Success', exact: true})).toBeVisible();
+        await expect(pilotPage.locator('main')).toContainText('The link(s) to your guest account(s) have been sent');
+        await captureState(pilotPage, testInfo, 'pilot-recovery-completion');
+        await pilotPage.reload({waitUntil: 'domcontentloaded'});
+        await expect(pilotPage).toHaveURL(new URL('/frontend-pilot/users/login?locale=en', baseURL).href);
+        await expect(pilotPage.locator('#username')).toBeVisible();
+    } finally {
+        await native.close();
+        await pilot.close();
+    }
+});
+
 test('pilot navigates without replacing the document and preserves the legacy Packed key', async ({page}, testInfo) => {
     const list = await packing(page);
     const errors: string[] = [];

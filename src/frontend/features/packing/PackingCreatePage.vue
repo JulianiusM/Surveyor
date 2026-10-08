@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue';
-import {onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter} from 'vue-router';
+import {computed, ref, watch} from 'vue';
+import {useRoute, useRouter} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
+import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {usePackingApi} from './api';
 import {usePilot} from '../../app/context';
+import {ApiFailure} from '../../app/transport';
+import {isPlainMessageKey} from '../../../modules/localization/translator';
 import {useCommand} from '../../composables/command';
+import {usePageEntry} from '../../composables/pageEntry';
 import {packingKeys} from '../../app/queryKeys';
 import {usePageTitle} from '../../composables/pageTitle';
 import ActionButton from '../../components/ActionButton.vue';
@@ -23,10 +27,9 @@ const router = useRouter();
 const sourceId = computed(() =>
     typeof route.params.listId === 'string' ? route.params.listId.toLowerCase() : null,
 );
-const admissionError = computed(() => context.bootstrap.initialUrl?.split('?')[0] === route.path
+const bootstrapError = computed(() => context.bootstrap.initialUrl?.split('?')[0] === route.path
     && context.bootstrap.session.context === context.session.value?.context
     ? context.bootstrap.packingError : undefined);
-usePageTitle(() => messages.value.t(admissionError.value ? 'common.errorTitle' : 'packing.create'));
 
 /** SSR seeds only the admitted document and actor; later SPA routes use their own query admission. */
 function isInitialForm(): boolean {
@@ -34,8 +37,9 @@ function isInitialForm(): boolean {
         && context.bootstrap.session.context === context.session.value?.context;
 }
 
-function initialCreationContext(): components['schemas']['PackingCreateContext'] | undefined {
-    return isInitialForm() ? context.bootstrap.packingCreateContext : undefined;
+function initialCreationEntry(): components['schemas']['PackingCreateEntry'] | undefined {
+    if (!isInitialForm() || !context.bootstrap.packingCreateContext || sourceId.value) return;
+    return {entry: context.bootstrap.pageEntry ?? {kind: 'render'}, context: context.bootstrap.packingCreateContext};
 }
 
 function initialDuplicate(): components['schemas']['PackingDuplicate'] | undefined {
@@ -51,44 +55,66 @@ const rows = ref<Row[]>([]);
 const defaults = ref<components['schemas']['PermissionDefaults'] | null>(null);
 const baseline = ref<string | null>(null);
 const submitted = ref(false);
+const admittingSubmission = ref(false);
+const leavingAfterSubmission = ref(false);
+const retainedContext = ref<components['schemas']['PackingCreateContext'] | null>(null);
 // Vue reuses this route component between creation/duplicate URLs. A confirmed navigation
 // starts a new draft instead of retaining a previous list's copied rows or uploaded file.
 watch(
-    () => [sourceId.value, route.query.eventId],
-    () => {
-        // This watcher runs after navigation commits. The user has acknowledged leaving the
-        // prior draft; its unknown command must not disable the newly initialized form.
-        command.acknowledge();
-        baseline.value = null;
-        submitted.value = false;
-        title.value = '';
-        description.value = '';
-        defaults.value = null;
-        rows.value = [];
-        image.value = null;
-        eventId.value = typeof route.query.eventId === 'string' ? route.query.eventId : null;
-    },
+    () => [sourceId.value, route.query.eventId, context.epoch.value],
+    resetCreationDraft,
 );
-const creation = useQuery({
-    queryKey: computed(() => packingKeys.creation(context.session.value?.context)),
-    initialData: initialCreationContext,
+
+/** A cancelled guard never commits these inputs. Start the next admitted form only
+ * after its route or actor changes, without carrying an unresolved prior command. */
+function resetCreationDraft(): void {
+    command.acknowledge();
+    baseline.value = null;
+    retainedContext.value = null;
+    submitted.value = false;
+    title.value = '';
+    description.value = '';
+    defaults.value = null;
+    rows.value = [];
+    image.value = null;
+    eventId.value = typeof route.query.eventId === 'string' ? route.query.eventId : null;
+}
+const creation = usePageEntry({
+    key: computed(() => packingKeys.creation(context.session.value?.context)),
+    initial: initialCreationEntry(),
     // Duplicate GET supplies its own admitted form definitions. The separate
     // create-context endpoint retains the native account-only create GET policy.
-    enabled: computed(() => context.hydrated.value && context.ready.value && context.session.value?.kind === 'account'
-        && !sourceId.value && !admissionError.value),
-    queryFn: ({signal}) => api.createContext(context.capture(), signal),
+    enabled: computed(() => !sourceId.value && !bootstrapError.value),
+    read: readCreationEntry,
 });
+function readCreationEntry(scope: PilotRequestScope, signal: AbortSignal): Promise<components['schemas']['PackingCreateEntry']> {
+    return api.createEntry(scope, signal, route.fullPath);
+}
+const admissionError = computed(() => {
+    const key = bootstrapError.value
+        ?? (creation.outcome.value?.kind === 'denied' ? creation.outcome.value.messageKey : undefined);
+    return key ? messages.value.t(isPlainMessageKey(key) ? key : 'common.error') : undefined;
+});
+usePageTitle(() => messages.value.t(admissionError.value ? 'common.errorTitle' : 'packing.create'));
+
+// A locale entry read must not unmount a focused creation draft. Retain only this
+// actor/route's admitted form definitions; the committed-route watcher releases them.
+function receiveCreationEntry(value: components['schemas']['PackingCreateEntry'] | undefined): void {
+    if (value?.entry.kind === 'render' && value.context) retainedContext.value = value.context;
+}
+watch(creation.data, receiveCreationEntry, {immediate: true});
 const duplicate = useQuery({
     queryKey: computed(() => packingKeys.duplicate(context.session.value?.context, sourceId.value)),
     initialData: initialDuplicate,
     enabled: computed(() => context.hydrated.value && context.ready.value && !!sourceId.value && !admissionError.value),
     queryFn: ({signal}) => api.duplicate(sourceId.value!, context.capture(), signal),
 });
-const formContext = computed(() => sourceId.value ? duplicate.data.value?.formContext : creation.data.value);
+const formContext = computed(() => sourceId.value ? duplicate.data.value?.formContext
+    : creation.data.value?.context ?? retainedContext.value);
 const loadError = computed(() => sourceId.value ? duplicate.error.value : creation.error.value);
 const initialLoading = computed(() => !formContext.value && !loadError.value
-    && (sourceId.value ? duplicate.isPending.value : creation.isPending.value));
-const reading = computed(() => sourceId.value ? duplicate.isFetching.value : creation.isFetching.value);
+    && (sourceId.value ? duplicate.isPending.value : creation.pending.value));
+const reading = computed(() => sourceId.value ? duplicate.isFetching.value : creation.pending.value);
 
 function snapshot(): string {
     return JSON.stringify({
@@ -111,62 +137,85 @@ function newRow(value?: components['schemas']['PackingDuplicateItem']): Row {
 }
 watch(
     [formContext, duplicate.data, baseline],
-    ([create, copy]) => {
-        if (baseline.value !== null || !create || (sourceId.value && !copy)) return;
-        title.value = copy?.title ?? '';
-        description.value = copy?.description ?? '';
-        defaults.value = {...(copy?.defaultPermissions ?? create.defaults)};
-        // Duplicate preserves row order and Everyone, but does not copy assignments, image,
-        // event association, administrators or archive state. Empty source lists retain zero rows.
-        rows.value = copy ? copy.items.map(newRow) : [newRow()];
-        baseline.value = snapshot();
-    },
+    initializeForm,
     {immediate: true},
 );
+
+/** Initialize once from the admitted projection. Later reads update definitions, never
+ * entered fields; a duplicate copies rows/defaults while retaining its native exclusions. */
+function initializeForm(): void {
+    const create = formContext.value;
+    const copy = duplicate.data.value;
+    if (baseline.value !== null || !create || (sourceId.value && !copy)) return;
+    title.value = copy?.title ?? '';
+    description.value = copy?.description ?? '';
+    defaults.value = {...(copy?.defaultPermissions ?? create.defaults)};
+    // Duplicate preserves row order and Everyone, but does not copy assignments, image,
+    // event association, administrators or archive state. Empty source lists retain zero rows.
+    rows.value = copy ? copy.items.map(newRow) : [newRow()];
+    baseline.value = snapshot();
+}
 const dirty = computed(
     () =>
         !submitted.value &&
         (image.value !== null || (baseline.value !== null && snapshot() !== baseline.value)),
 );
-const command = useCommand(async () => {
-    await context.refreshSession();
-}, true);
-const blocked = computed(() => command.pending.value || command.uncertain.value);
-function mayLeave(): boolean {
-    if (command.pending.value) return false;
-    if (command.uncertain.value) return window.confirm(messages.value.t('packing.leaveUnknown'));
-    return !dirty.value || window.confirm(messages.value.t('draft.discard'));
-}
-onBeforeRouteLeave(mayLeave);
-onBeforeRouteUpdate(mayLeave);
-function beforeUnload(event: BeforeUnloadEvent): void {
-    if (!dirty.value && !blocked.value) return;
-    event.preventDefault();
-    event.returnValue = '';
-}
-let removeIdentityGuard: (() => void) | undefined;
-onMounted(() => {
-    removeIdentityGuard = context.registerIdentityGuard(mayLeave);
-    window.addEventListener('beforeunload', beforeUnload);
+const command = useCommand(context.refreshSession, true, {
+    dirty: () => dirty.value && !leavingAfterSubmission.value,
+    busy: () => admittingSubmission.value,
+    unknownMessage: 'packing.leaveUnknown',
 });
-onBeforeUnmount(() => {
-    removeIdentityGuard?.();
-    window.removeEventListener('beforeunload', beforeUnload);
-});
-const removeUpdateGuard = context.updates.registerGuard(() => !dirty.value);
-onBeforeUnmount(removeUpdateGuard);
+const blocked = computed(() => command.pending.value || command.uncertain.value || admittingSubmission.value);
 function chooseImage(event: Event): void {
     image.value = (event.target as HTMLInputElement).files?.[0] ?? null;
 }
-async function create(): Promise<void> {
-    if (!defaults.value) return;
-    // Preserve native creation POST admission even when a duplicate grant allowed
-    // this visitor to inspect the draft. Login remains an ordinary guarded navigation.
-    if (context.session.value?.kind !== 'account') {
-        await router.push({path: '/frontend-pilot/users/login', query: {next: route.fullPath}});
-        return;
+/** A duplicate grant admits its form independently of creation. The server projects the
+ * account-login journey and exact duplicate return; the browser does not duplicate that policy. */
+async function admitSubmission(): Promise<boolean> {
+    const scope = context.capture();
+    const expectedRoute = route.fullPath;
+    admittingSubmission.value = true;
+    try {
+        const result = await api.createEntry(scope, undefined, expectedRoute);
+        if (!context.isCurrent(scope, true) || route.fullPath !== expectedRoute) return false;
+        if (result.entry.kind === 'render') return true;
+
+        // A known submission admission is a completed native form journey. It does
+        // not introduce another discard prompt; cancellation by another owner still
+        // keeps this mounted draft. Pending/unknown commands never use this bypass.
+        admittingSubmission.value = false;
+        leavingAfterSubmission.value = true;
+        await creation.navigate(result.entry, scope, expectedRoute);
+        return false;
+    } catch (failure) {
+        if (context.isCurrent(scope, true) && route.fullPath === expectedRoute) {
+            command.setError(failure instanceof ApiFailure ? failure : 'state.loadFailed');
+        }
+        return false;
+    } finally {
+        admittingSubmission.value = false;
+        leavingAfterSubmission.value = false;
     }
-    if (!rows.value.length) {
+}
+
+/** Mirror the native browser collector: omit blank titles, trim item strings and
+ * parse the number field with its historical fallback. Root fields keep their whitespace. */
+function collectedItems(): components['schemas']['PackingNewItem'][] {
+    const items: components['schemas']['PackingNewItem'][] = [];
+    for (const row of rows.value) {
+        const itemTitle = row.title.trim();
+        if (!itemTitle) continue;
+        const capacity = String(row.maxAssignees ?? '');
+        items.push({title: itemTitle, description: row.description?.trim() ?? '',
+            maxAssignees: Number.parseInt(capacity || '1'), requiredByAll: row.requiredByAll});
+    }
+    return items;
+}
+
+async function create(): Promise<void> {
+    if (!defaults.value || blocked.value || !(await admitSubmission())) return;
+    const items = collectedItems();
+    if (!items.length) {
         command.setError('packing.fillAllFields');
         return;
     }
@@ -174,16 +223,11 @@ async function create(): Promise<void> {
         (scope) =>
             api.createPacking(
                 {
-                    title: title.value.trim(),
-                    description: description.value.trim() || null,
+                    title: title.value,
+                    description: description.value || null,
                     eventId: eventId.value,
                     defaultPermissions: defaults.value!,
-                    items: rows.value.map((row) => ({
-                        title: row.title.trim(),
-                        description: row.description?.trim() || null,
-                        maxAssignees: Number(row.maxAssignees),
-                        requiredByAll: row.requiredByAll,
-                    })),
+                    items,
                 },
                 image.value,
                 scope,
@@ -200,7 +244,7 @@ async function create(): Promise<void> {
 <template>
     <!-- Use the shared error card/Home action for initial route denials. These
          denials mount no form, issue no resource queries and disclose no copy. -->
-    <PageMessage v-if="admissionError" kind="error" :message="messages.t(admissionError)" />
+    <PageMessage v-if="admissionError" kind="error" :message="admissionError" />
     <section v-else class="card bg-dark text-white mb-3">
         <h1 class="card-header text-center">
             <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>{{ messages.t('packing.create') }}

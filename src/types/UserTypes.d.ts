@@ -186,3 +186,6 @@ export interface OverviewPageView {
 }
 
 export type GuestLinkData = Guest & { link: string }
+
+/** Shared native page admission; attached roots are checked before standalone guest entry. */
+export type EntityViewAdmission = 'render' | 'guest' | 'event-registration-required';

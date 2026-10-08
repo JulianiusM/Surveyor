@@ -11,7 +11,9 @@ const title = computed(() => messages.value.t(props.kind === 'info' ? 'common.in
 </script>
 
 <template>
-    <section class="card bg-dark text-white mb-3">
+    <!-- The shared marker preserves native message-page alert placement in the shell;
+         no feature route or message kind needs its own spacing rule. -->
+    <section class="pilot-page-message card bg-dark text-white mb-3">
         <h1 class="card-header text-center bg-dark text-light">
             <i class="bi me-2" :class="kind === 'error' ? 'bi-exclamation-triangle-fill'
                 : kind === 'success' ? 'bi-check-circle-fill' : 'bi-info-circle-fill'" aria-hidden="true"></i>{{ title }}

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {mount, flushPromises} from '@vue/test-utils';
-import {defineComponent, nextTick} from 'vue';
+import {defineComponent, nextTick, ref} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import I18NextVue from 'i18next-vue';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
@@ -17,7 +17,7 @@ const session: components['schemas']['SessionView'] = {
         privacyPolicyUrl: '/privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'SSO'},
 };
 const cleanups: (() => void)[] = [];
-afterEach(() => { cleanups.splice(0).forEach(cleanup => cleanup()); vi.restoreAllMocks(); });
+afterEach(() => { cleanups.splice(0).forEach(cleanup => cleanup()); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 async function mountedCommand(review = false) {
     const context = createPilotContext({session}, false);
@@ -40,6 +40,7 @@ describe('reconcile-only commands', () => {
         const create = vi.fn(async () => { throw new TypeError('Response was lost'); });
         await command.run(create);
         expect(command.uncertain.value).toBe(true);
+        expect(command.outcome.value).toEqual({confirmation: 'unknown', refresh: 'not-requested'});
         await command.reconcile();
         expect(refresh).toHaveBeenCalledOnce();
         expect(command.uncertain.value).toBe(true);
@@ -57,7 +58,83 @@ describe('reconcile-only commands', () => {
         refresh.mockRejectedValueOnce(new TypeError('Read failed'));
         expect(await command.run(async () => ({changed: true}))).toEqual({changed: true});
         expect(command.notice.value).toBe('state.savedRefreshFailed');
+        expect(command.outcome.value).toEqual({confirmation: 'confirmed', refresh: 'failed'});
         expect(command.uncertain.value).toBe(false);
+    });
+
+    it('retires a confirmed result when its following read changes the active identity', async () => {
+        const {command, context, refresh} = await mountedCommand();
+        refresh.mockImplementationOnce(async () => { context.epoch.value++; });
+        expect(await command.run(async () => ({changed: true}))).toBeUndefined();
+        expect(command.outcome.value).toEqual({confirmation: 'obsolete', refresh: 'succeeded'});
+        expect(command.notice.value).toBeNull();
+    });
+
+    it('aggregates parent and child drafts into one departure, preserving cancellation and blocking pending work', async () => {
+        const context = createPilotContext({session}, false);
+        const parentDirty = ref(true);
+        const childDirty = ref(true);
+        const refresh = async () => undefined;
+        let parentCommand!: ReturnType<typeof useCommand>;
+        let childCommand!: ReturnType<typeof useCommand>;
+        const identityGuard = vi.spyOn(context, 'registerIdentityGuard');
+        const child = defineComponent({
+            setup() {
+                childCommand = useCommand(refresh, true, {dirty: () => childDirty.value,
+                    unknownMessage: 'auth.leaveUnknown'});
+                return {};
+            },
+            template: '<p>Child draft</p>',
+        });
+        const parent = defineComponent({
+            components: {ChildDraft: child},
+            setup() {
+                parentCommand = useCommand(refresh, false, {dirty: () => parentDirty.value,
+                    unknownMessage: 'draft.leaveUnknown'});
+                return {};
+            },
+            template: '<ChildDraft />',
+        });
+        const router = createRouter({history: createMemoryHistory(), routes: [
+            {path: '/', component: parent}, {path: '/away', component: defineComponent({template: '<p>Away</p>'})},
+        ]});
+        await router.push('/');
+        const wrapper = mount(defineComponent({template: '<RouterView />'}), {global: {
+            plugins: [router, [I18NextVue, {i18next: context.i18next}]], provide: {[pilotContextKey as symbol]: context},
+        }});
+        cleanups.push(() => { wrapper.unmount(); context.queryClient.clear(); context.updates.dispose(); });
+        await flushPromises();
+        expect(identityGuard).toHaveBeenCalledOnce();
+
+        const confirm = vi.fn(() => false);
+        vi.stubGlobal('confirm', confirm);
+        await router.push('/away');
+        expect(router.currentRoute.value.path).toBe('/');
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(parentDirty.value).toBe(true);
+        expect(childDirty.value).toBe(true);
+
+        await childCommand.run(async () => { throw new TypeError('Response lost'); });
+        confirm.mockClear();
+        expect(context.mayChangeIdentity()).toBe(false);
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(confirm).toHaveBeenCalledWith(context.messages.value.t('auth.leaveUnknown'));
+        expect(childCommand.uncertain.value).toBe(true);
+        childCommand.acknowledge();
+
+        let finish!: () => void;
+        const pending = childCommand.run(() => new Promise<void>(resolve => { finish = resolve; }), false);
+        confirm.mockClear();
+        expect(parentCommand.mayLeave()).toBe(false);
+        expect(confirm).not.toHaveBeenCalled();
+        finish();
+        await pending;
+
+        confirm.mockReturnValue(true);
+        await router.push('/away');
+        expect(router.currentRoute.value.path).toBe('/away');
+        expect(confirm).toHaveBeenCalledOnce();
+        expect(context.mayChangeIdentity()).toBe(true);
     });
 
     it('changes known server and local validation messages with the mounted form language', async () => {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch} from 'vue';
-import {onBeforeRouteLeave, onBeforeRouteUpdate, useRoute} from 'vue-router';
+import {computed, onMounted, reactive, ref, shallowRef, watch} from 'vue';
+import {useRoute} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
 import type {PilotRead} from '../../../types/FrontendPilotUiTypes';
@@ -97,6 +97,11 @@ const header = usePackingHeader(
 );
 const command = useCommand(async () => {
     await list.refetch({throwOnError: true});
+}, false, {
+    // Descendant Settings and inline editors delegate their global guards here.
+    // The command owner combines all mounted input into one departure decision.
+    dirty: () => quickAddDirty.value,
+    unknownMessage: 'draft.leaveUnknown',
 });
 const blocked = computed(() => command.pending.value || command.uncertain.value);
 const canEdit = computed(
@@ -156,30 +161,6 @@ watch(list.error, (failure) => {
     if (failure instanceof ApiFailure && [401, 403, 404].includes(failure.status)) revokeAccess();
 });
 onMounted(loadPacked);
-function mayLeave(): boolean {
-    if (command.uncertain.value) {
-        return window.confirm(messages.value.t('state.unknownOutcome') + '\n\n' + messages.value.t('draft.discard'));
-    }
-    return !quickAddDirty.value || window.confirm(messages.value.t('draft.discard'));
-}
-onBeforeRouteLeave(mayLeave);
-onBeforeRouteUpdate(mayLeave);
-function beforeUnload(event: BeforeUnloadEvent): void {
-    if (!quickAddDirty.value) return;
-    event.preventDefault();
-    event.returnValue = '';
-}
-let removeIdentityGuard: (() => void) | undefined;
-onMounted(() => {
-    removeIdentityGuard = context.registerIdentityGuard(mayLeave);
-    window.addEventListener('beforeunload', beforeUnload);
-});
-onBeforeUnmount(() => {
-    removeIdentityGuard?.();
-    window.removeEventListener('beforeunload', beforeUnload);
-});
-const removeUpdateGuard = context.updates.registerGuard(() => !quickAddDirty.value);
-onBeforeUnmount(removeUpdateGuard);
 function togglePacked(itemId: string, event: Event): void {
     const selected = (event.target as HTMLInputElement).checked;
     packed.value[itemId] = selected;

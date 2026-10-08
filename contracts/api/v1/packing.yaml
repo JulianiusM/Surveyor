@@ -1,4 +1,53 @@
 schemas:
+  PackingCreateEntry:
+    type: object
+    additionalProperties: false
+    required: [entry, context]
+    properties:
+      entry:
+        $ref: ./common.yaml#/schemas/PageEntryOutcome
+      context:
+        anyOf:
+          - $ref: '#/schemas/PackingCreateContext'
+          - type: 'null'
+  PackingResourceEntry:
+    type: object
+    additionalProperties: false
+    required: [entry, guest]
+    properties:
+      entry:
+        $ref: ./common.yaml#/schemas/PageEntryOutcome
+      guest:
+        anyOf:
+          - $ref: ./auth.yaml#/schemas/GuestEntry
+          - type: 'null'
+  PackingNativeItem:
+    description: Decoded native creation item, after the native form adapter's established scalar coercions. Optional descriptions accept empty strings, never explicit null.
+    type: object
+    additionalProperties: true
+    required: [title, maxAssignees, requiredByAll]
+    properties:
+      title: {type: string, minLength: 1}
+      description: {type: string}
+      maxAssignees: {type: integer, minimum: 1}
+      requiredByAll: {type: boolean}
+  PackingNativeCreateInput:
+    description: Native decoded form contract. Keep its optional/non-null fields distinct from the nullable JSON API transport.
+    type: object
+    additionalProperties: true
+    required: [title, items]
+    properties:
+      title: {type: string, minLength: 1}
+      description: {type: string}
+      items:
+        type: array
+        minItems: 1
+        items:
+          $ref: '#/schemas/PackingNativeItem'
+      event_id:
+        anyOf:
+          - $ref: ./common.yaml#/schemas/Uuid
+          - {type: string, const: ''}
   PackingAssignee:
     type: object
     additionalProperties: false

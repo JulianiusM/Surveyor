@@ -13,6 +13,50 @@ servers:
 security:
   - sessionCookie: []
 paths:
+  /packing-lists/create-entry:
+    get:
+      operationId: getPackingCreateEntry
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Read the native account-only creation admission and public form context
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Context'
+        - $ref: '#/components/parameters/Locale'
+        - name: returnTo
+          in: query
+          schema: {type: string, maxLength: 2048}
+      responses:
+        '200':
+          description: Server-owned page admission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackingCreateEntry'
+        default:
+          $ref: '#/components/responses/Problem'
+  /packing-lists/{listId}/entry:
+    get:
+      operationId: getPackingResourceEntry
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Read native detail or guest-entry admission without disclosing protected list data
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Context'
+        - $ref: '#/components/parameters/Locale'
+        - $ref: '#/components/parameters/ListId'
+        - name: view
+          in: query
+          required: true
+          schema: {type: string, enum: [detail, guest]}
+      responses:
+        '200':
+          description: Server-owned page admission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackingResourceEntry'
+        default:
+          $ref: '#/components/responses/Problem'
   /overview:
     $ref: ./overview.yaml#/paths/overview
   /overview/{entityType}/{entityId}/visibility:
@@ -910,6 +954,18 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
   schemas:
+    EntryNotice:
+      $ref: ./common.yaml#/schemas/EntryNotice
+    PageEntryOutcome:
+      $ref: ./common.yaml#/schemas/PageEntryOutcome
+    PackingCreateEntry:
+      $ref: ./packing.yaml#/schemas/PackingCreateEntry
+    PackingResourceEntry:
+      $ref: ./packing.yaml#/schemas/PackingResourceEntry
+    PackingNativeItem:
+      $ref: ./packing.yaml#/schemas/PackingNativeItem
+    PackingNativeCreateInput:
+      $ref: ./packing.yaml#/schemas/PackingNativeCreateInput
     OverviewCard:
       $ref: ./overview.yaml#/schemas/OverviewCard
     OverviewRegion:

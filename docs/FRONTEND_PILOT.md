@@ -6,18 +6,19 @@ owner: frontend migration maintainers
 status: current
 last-verified: 2026-10-08
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: shared skeleton, progressive independent reads and preserved draft/focus loading boundaries; implemented frontend rectification under the maintainer-directed migration-only scope and independent deferral of backend hardening; actual execution evidence remains in the paired review record; ordinary development loading, hydration, lazy navigation, HMR and serialized generator restart verification; approved D1–D5 rectification source/ownership and documentation consistency review; independent packing, management, mixed overview and identity workflows; prior permission-specific paired review; focused desktop/mobile overview and language-owned help-figure smoke checks; full English/German help corpus through API, SSR and SPA; generated contracts, conditional commands and build integration
-source-anchors: src/frontend/components/LoadingSkeleton.vue; tests/frontend/frontend-loading-shell.spec.ts; tests/frontend/frontend-content-loading.spec.ts; docs/documentation-remediation.yml; src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/e2e/frontend-development.spec.ts; contracts/api/v1/; scripts/generate-api.mjs; scripts/generate-locales.mjs; src/frontend/; src/routes/api/v1.ts; src/routes/frontendPilot.ts; src/modules/api/; src/modules/packing/api.ts; src/modules/frontendPilotRenderer.ts; src/modules/localization/translator.ts; package.json; vite.config.mts; tests/unit/frontend-contracts.spec.ts; tests/unit/frontend-generation.spec.ts; tests/unit/frontend-localization.spec.ts; tests/frontend/frontend-pilot.spec.ts; tests/integration/packing-api.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-pilot.spec.ts
-next-review: frontend-pilot-scope-or-default-route-cutover
+verification-scope: authorized native-parity and shared-ownership rectification implementation, exact duplicate return amendment and retired execution plan; runtime checks and limits belong to the paired review; previous progressive loading and D1–D5 records retained
+source-anchors: src/middleware/guestFlowFactory.ts; src/middleware/permissionMiddleware.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/controller/packingController.ts; src/routes/packing.ts; src/routes/guests.ts; src/app.ts; src/modules/oidc.ts; src/views/users/register-guest.pug; src/views/packing/packing-create.pug; src/public/js/packing-create.ts; src/public/js/register-guest.ts; src/frontend/components/LoadingSkeleton.vue; tests/frontend/frontend-loading-shell.spec.ts; tests/frontend/frontend-content-loading.spec.ts; docs/documentation-remediation.yml; src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/e2e/frontend-development.spec.ts; contracts/api/v1/; scripts/generate-api.mjs; scripts/generate-locales.mjs; src/frontend/; src/routes/api/v1.ts; src/routes/frontendPilot.ts; src/modules/api/; src/modules/packing/api.ts; src/modules/frontendPilotRenderer.ts; src/modules/localization/translator.ts; package.json; vite.config.mts; tests/unit/frontend-contracts.spec.ts; tests/unit/frontend-generation.spec.ts; tests/unit/frontend-localization.spec.ts; tests/frontend/frontend-pilot.spec.ts; tests/integration/packing-api.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-pilot.spec.ts
+next-review: frontend-pilot-parity-rectification
 -->
 
 ## Migration boundary and current iteration (2026-10-08)
 
 The task is to migrate the existing frontend to the approved architecture while preserving the native application's
-business behavior and nearly identical UI/UX. Backend work is limited to the contract, projection and adapter support
-needed by that migration. Reuse existing controller operations, permission declarations, authentication flows and
-DBAL transactions; do not turn frontend migration into authentication redesign, broader authorization hardening,
-new domain validation or repository-wide locking changes. Preserve the already approved D1–D5 amendments.
+business behavior and identical native UI/UX except for explicitly approved migration changes. Backend work is
+limited to the contract, projection and adapter support needed by that migration. Reuse existing controller
+operations, permission declarations, authentication flows and DBAL transactions; do not turn frontend migration into
+authentication redesign, broader authorization hardening, new domain validation or repository-wide locking changes.
+Preserve the already approved D1–D5 amendments.
 
 | Area | Current iteration obligation |
 |---|---|
@@ -30,7 +31,87 @@ The pilot expands over successive iterations until it covers the approved native
 is not permanently excluded, and its existing code is not exempt from review. Distinguish implementation presence,
 feature completeness and actual verification; missing future functionality is not the same as a behavioral regression.
 
-### Rectification implementation (2026-10-08)
+## Native parity rectification (2026-10-08)
+
+The maintainer explicitly authorized implementation and required reusable shared behavior. This increment restores
+native visual and behavioral parity within the existing Help/Packing slice and its entry journeys. Source changes
+are implemented; verification is recorded in the [paired review](frontend-migration/PILOT_PARITY_REVIEW.md).
+Production cutover, future feature completion, schema changes and unrelated native hardening remain outside scope.
+The native remediation backlog remains exclusively native and was not changed.
+
+The original proposal followed native duplicate POST admission back to ordinary creation. The later authorization
+instead requires the exact `<entity>/<id>/duplicate` return, including query context. The
+[dated design amendment](FRONTEND_FOUNDATION_DESIGN.md#authorized-parity-and-shared-ownership-amendment-2026-10-08)
+preserves that original behavior and approval. No approved technology or D1–D5 decision changes here.
+
+| Implemented boundary | Existing or shared owner |
+|---|---|
+| Native and API admission | `userController.hasAccountProfile`, `entityAdminController.getEntityViewAdmission`, existing permission middleware and Packing business operations; generated common entry outcomes. DBAL remains persistence only. |
+| Canonical entry navigation | Shared `usePageEntry` scopes admission by identity, epoch, route and locale, retires pending-destination responses, and applies one-time notice severity only after committed replacement navigation. |
+| Account-only creation and duplicate return | Existing guest-flow factory supplies explicit renderer form actions to every native consumer. The SPA consumes creation admission with its exact requested return; existing survey exceptions remain. |
+| Native values and validation | One authored contract owns native decoded structure and strict JSON structure. Named native scalar decoders preserve established coercion, while browser item collection preserves trimming/empty-row semantics and root text remains unchanged. |
+| Stored identity and guest outcomes | Existing session/document owners preserve provider logout evidence, native expiry feedback and invalid guest-token status. A confirmed identity receipt survives a temporary session read only for its matching actor. Shared completion resumes the exact captured destination once; recovery ends at the native message URL, whose GET still redirects to login. |
+| Locale/session ordering | Existing context owner fences captured locale generations while still accepting genuine identity changes from older session reads. |
+| Command and draft recovery | Existing command composable adds typed confirmation/refresh outcomes and a nested draft tree. Root owners register global guards once; dialogs check their own subtree. Settings keeps confirmed values separate from authoritative revisions and tokens. |
+| Maintainability and source verification | Named operations, comments, expanded templates and logical spacing explain admission and recovery. Source-browser coverage uses the shell before hydration and exercises real Packing controls. |
+
+The staged [development recipe](frontend-migration/staged/DEVELOPMENT.md#implementing-the-next-feature-slice) is the
+single contribution guideline for these shared patterns. It covers server admission, canonical destinations, field
+semantics, locale ordering, confirmed-versus-refreshed state, nested departure ownership, progressive loading and
+test selection. Remaining Overview/header/card boundaries retain their existing scaffold obligations. A later
+module reuses these owners rather than duplicating Packing behavior or creating thin controllers/services.
+
+### Native journey contract
+
+Use `guestFlowFactory.ts`, its actual packing configuration, permission middleware, user controllers, rendered Pug
+and browser modules together. Route ordering matters: explicit guest and duplicate routes precede the detail-page
+safe zone. Do not infer their admission from the detail endpoint or from another feature's guest behavior.
+
+| Journey and actor | Native outcome the pilot must reproduce |
+|---|---|
+| Missing or malformed packing identifier | The same missing-resource presentation and document status, without a guest form or resource disclosure. |
+| Standalone detail without an active profile | Guest registration at the equivalent `/packing/<id>/guest` destination, with the actual list title, native fields, notices and actions. |
+| Standalone detail with an active account or guest profile | The packing view under its canonical detail URL; command permissions remain separately enforced. |
+| Event-linked detail without an active profile | Native event-registration admission error, including its existing document status; do not substitute guest registration. |
+| Event-linked detail with an active profile | Apply the existing event-registration or effective child-view policy. Admitted profiles see the view; rejected profiles receive the native admission presentation. |
+| Explicit guest URL without an active profile | Native guest registration, including an attached list's public entry title. Do not apply the later detail safe zone to this explicit route. |
+| Explicit guest URL with an active profile | Redirect to canonical detail and apply its admission; do not render detail while retaining `/guest` in the address bar. |
+| Creation GET with an authenticated account and active profile | The native creation form, including its event preselection, initial items, permissions and optional image. |
+| Creation GET or POST without that account/profile combination | Native account-login journey and informational feedback. A guest profile is insufficient; preserve local-login/provider behavior and the bounded equivalent return destination. |
+| Duplicate GET | Only the existing duplicate grant controls access. Preserve the copy form even when account-only creation would be rejected; do not add detail admission or an eager account requirement. |
+| Duplicate form submission without an account/profile | Follow account-only creation POST admission and return after login to the exact duplicate URL, as explicitly authorized in the shared amendment. |
+| Confirmed guest registration | Navigate to canonical detail, retaining the native success/personal-link feedback. The identity transition must not merely swap components beneath `/guest`. |
+| Invalid or mismatched emailed guest link | The native known rejection and document status, with its guest-specific wording and ordinary message-page actions; do not show a new empty Login form. |
+| Invalid stored identity on document entry | The native expiry/logout/reauthentication journey, including its error feedback and any existing provider logout boundary; APIs continue to return their structured expiry outcome. |
+| Confirmed guest-link recovery | The native success-message destination/presentation. Pending or unknown results retain input and recovery controls; a confirmed recovery must not leave a new inline-success workflow on the old form. |
+
+Map native destinations to their pilot equivalents only for implemented journeys. Preserve valid return context,
+query parameters, one-time feedback, Back/Forward behavior and committed destination focus. Redirects must not add
+an extra abandoned destination or run departure confirmation twice. User-selected navigation pushes history;
+admission redirects replace the attempted destination. One existing navigation owner coordinates confirmed guest
+completion with identity acceptance and entry remounting; neither caller nor watcher may navigate a second time.
+Compare final user-visible journeys instead of copying incidental redirect plumbing or reproducing a centrally
+recorded native defect. An OIDC provider or other existing document boundary remains an ordinary navigation boundary.
+
+For packing guest entry, preserve its own generic guest notices. Event-specific account recommendations and
+submission confirmation belong to event guest entry and must not be added to packing. The native recovery GET
+already leads to the login page; this plan does not introduce another recovery screen. Match its existing recovery
+form and confirmed message outcome. Any change from the pilot's prior inline recovery/draft handling is an
+explicit restoration of this native confirmed outcome; pending and uncertain commands still preserve their drafts.
+
+### Repository hygiene
+
+The required documentation CI invocation and six tracked generated reports were removed. Unique report conclusions
+remain in their existing native follow-up; the retained illustration is untouched. The checker's shared exclusion
+configuration excludes `.temp` from maintained-document discovery and source fingerprints, with a synthetic fixture
+still verifying maintained staged Markdown. Historical fingerprints are preserved. Reports remain optional and
+advisory. Documentation routing and Overview SSR descriptions now distinguish native production references,
+prospective cutover drafts, complete read-only Help SSR and the independently loaded Overview shell.
+
+The execution plan is retired into this implementation record; actual passing checks, excluded attempts and
+limitations belong to the paired review. Primary choices and authorized amendments remain in the foundation record.
+
+### Previous rectification implementation (2026-10-08)
 
 The completed review and the maintainer's migration-only scope supplied these corrections. Implementation did not
 repeat that review or add an authentication system, authorization framework, schema change or repository-wide
@@ -48,9 +129,9 @@ cache age does not become a new write restriction.
 | FPR-07 Documentation staging | Production guidance describes native behavior. Necessary replacement guidance, prospective images and one global localization guide per language are staged with canonical merge targets and preserved native baselines. Original decisions and authorized amendments remain recorded. | Optional documentation reports and individually inspected maintained figures |
 | FPR-08 Verification | Focused observable regressions, database-free checks, builds and justified real HTTP/browser checks verify the changed boundaries. Exact execution outcomes and limitations belong to the paired review record. | [Paired review](frontend-migration/PILOT_PARITY_REVIEW.md) |
 
-The execution plan is retired into this implementation record. Actual execution evidence remains separate from
-source presence; the table does not certify an unrun database, browser, provider or deployment check. Use the
-cheapest stable test layer for each observable outcome. Documentation reports remain advisory and never gate
+The previous FPR-01–08 execution plan is retired into this implementation record. Actual execution evidence remains
+separate from source presence; the table does not certify an unrun database, browser, provider or deployment check.
+Use the cheapest stable test layer for each observable outcome. Documentation reports remain advisory and never gate
 application delivery.
 
 Migration guidance is maintained in [staged development guidance](frontend-migration/staged/DEVELOPMENT.md),

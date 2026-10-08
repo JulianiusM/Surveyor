@@ -20,6 +20,8 @@ import {applyPackingItemPatch, applyPackingMembership, createPackingItem, create
     patchPackingMetadata, preparePackingMetadataPatch, reorderPackingItems, requirePackingFieldValues, setPackingHeader, setPackingSelfAssignment, updatePackingDefaults, updatePackingItem} from '../modules/packing/api';
 import type {BasicEntityPropertyPatch} from '../types/EntityPropertyTypes';
 import Joi from 'joi';
+import type {ErrorObject} from 'ajv';
+import {contractPathOrder, contractValidator} from '../modules/api/contracts';
 import {PackingItem} from "../modules/database/entities/packing/PackingItem";
 import {PackingList} from "../modules/database/entities/packing/PackingList";
 
@@ -36,7 +38,68 @@ import {PERM, toMaskFromBodyValue} from '../modules/lib/permissions';
 // Template constant for create errors
 const CREATE_TEMPLATE = 'packing/packing-create';
 
-function preprocessCreate(body: any): Partial<PackingList> & { items: Partial<PackingItem>[] } {
+// Joi remains only as the established native transport scalar converter. The generated
+// authored contract below owns object fields, optionality, types and domain constraints;
+// there is deliberately no parallel Joi creation shape. These converters preserve Joi's
+// decimal/exponent safety checks and case-insensitive true/false strings without broad
+// Number() coercion (which would also accept hexadecimal and other new input forms).
+const nativeNumberCoercion = Joi.number();
+const nativeBooleanCoercion = Joi.boolean();
+
+/** Convert an AJV JSON pointer to the human-readable labels used by the native form. */
+function nativeFieldLabel(pointer: string): string {
+    const parts = pointer.split('/').slice(1);
+    let label = '';
+    for (const part of parts) label += /^\d+$/.test(part) ? `[${part}]` : `${label ? '.' : ''}${part}`;
+    return label || 'value';
+}
+
+/** Preserve native field error wording while structural validation has one generated owner. */
+function nativeValidationMessage(error: ErrorObject): string {
+    const pointer = error.keyword === 'required' ? `${error.instancePath}/${String(error.params.missingProperty)}` : error.instancePath;
+    const label = `"${nativeFieldLabel(pointer)}"`;
+    if (error.keyword === 'required') return `${label} is required`;
+    if (error.keyword === 'minLength') return `${label} is not allowed to be empty`;
+    if (error.keyword === 'minItems') return `${label} must contain at least ${error.params.limit} items`;
+    if (error.keyword === 'minimum') return `${label} must be greater than or equal to ${error.params.limit}`;
+    if (error.keyword === 'type') {
+        const type = String(error.params.type);
+        if (type === 'object') return `${label} must be of type object`;
+        return `${label} must be ${type === 'integer' || type === 'array' || type === 'object' ? 'an' : 'a'} ${type}`;
+    }
+    if (pointer === '/event_id') return `${label} must be a valid GUID`;
+    return `${label} ${error.message ?? 'is invalid'}`;
+}
+
+/** Normalize only legacy form scalars, retaining submitted item/title/description whitespace. */
+function normalizeNativeItem(input: unknown, index: number, errors: Map<string, string>): unknown {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
+    const item = {...input} as Record<string, unknown>;
+    for (const [field, converter] of [['maxAssignees', nativeNumberCoercion], ['requiredByAll', nativeBooleanCoercion]] as const) {
+        if (!Object.hasOwn(item, field)) continue;
+        const result = converter.validate(item[field]);
+        if (result.error) {
+            const pointer = `/items/${index}/${field}`;
+            errors.set(pointer, result.error.message.replace('"value"', `"${nativeFieldLabel(pointer)}"`));
+        } else {
+            item[field] = result.value;
+        }
+    }
+    return item;
+}
+
+/** Compare source-owned schema order, retaining each row's order and each field's rule sequence. */
+function compareNativeErrorPaths(left: string, right: string): number {
+    const leftOrder = contractPathOrder('PackingNativeCreateInput', left);
+    const rightOrder = contractPathOrder('PackingNativeCreateInput', right);
+    for (let index = 0; index < Math.min(leftOrder.length, rightOrder.length); index++) {
+        if (leftOrder[index] !== rightOrder[index]) return leftOrder[index]! - rightOrder[index]!;
+    }
+    return leftOrder.length - rightOrder.length;
+}
+
+/** Decode native JSON rows, preserve form coercions/errors, then validate the authored native contract. */
+function preprocessCreate(body: any): Omit<Partial<PackingList>, 'items' | 'eventId'> & {items: Partial<PackingItem>[]; eventId: string | null} {
     let items;
     try {
         items = JSON.parse(body.items || '[]');
@@ -44,33 +107,43 @@ function preprocessCreate(body: any): Partial<PackingList> & { items: Partial<Pa
         throw new ValidationError(CREATE_TEMPLATE, 'Invalid items JSON', {body});
     }
 
-    const itemSchema = Joi.object({
-        title: Joi.string().required(),
-        description: Joi.string().allow(''),
-        maxAssignees: Joi.number().integer().min(1).required(),
-        requiredByAll: Joi.boolean().required()
-    });
-
-    const schema = Joi.object({
-        title: Joi.string().required(),
-        description: Joi.string().allow('').optional(),
-        items: Joi.array().items(itemSchema).min(1).required(),
-        event_id: Joi.string().uuid().allow('').optional(),
-    });
-
-    const {error, value} = schema.validate(
-        {
-            title: body.title,
-            description: body.description,
-            items,
-            event_id: body.event_id,
-        },
-        {abortEarly: false, allowUnknown: true}
-    );
-    if (error) {
-        const msg = error.details.map((d: any) => d.message).join(', ');
-        throw new ValidationError(CREATE_TEMPLATE, msg, {body});
+    const errors = new Map<string, string>();
+    const decoded: Record<string, unknown> = {items};
+    // Undefined native fields mean omitted; explicit null remains invalid even though
+    // the distinct JSON API transport deliberately permits nullable descriptions.
+    for (const field of ['title', 'description', 'event_id']) {
+        if (body[field] !== undefined) decoded[field] = body[field];
     }
+    if (Array.isArray(items)) {
+        const normalized = [];
+        for (let index = 0; index < items.length; index++) normalized.push(normalizeNativeItem(items[index], index, errors));
+        decoded.items = normalized;
+    }
+    const validator = contractValidator('PackingNativeCreateInput');
+    const messages = new Map<string, string[]>();
+    for (const [pointer, message] of errors) messages.set(pointer, [message]);
+    if (!validator(decoded)) {
+        for (const error of validator.errors ?? []) {
+            // Scalar conversion errors already preserve the original, more specific
+            // wording (including unsafe numbers); anyOf's UUID branches describe one field.
+            const pointer = error.keyword === 'required' ? `${error.instancePath}/${String(error.params.missingProperty)}` : error.instancePath;
+            if (errors.has(pointer)) continue;
+            const message = nativeValidationMessage(error);
+            const fieldMessages = messages.get(pointer) ?? [];
+            // A UUID anyOf describes one native field failure. A non-string already
+            // has its truthful native type message; branch failures must not add GUID errors.
+            if (pointer === '/event_id' && fieldMessages.length) continue;
+            if (!fieldMessages.includes(message)) fieldMessages.push(message);
+            messages.set(pointer, fieldMessages);
+        }
+    }
+    if (messages.size) {
+        const ordered = [...messages.keys()].sort(compareNativeErrorPaths);
+        const allMessages: string[] = [];
+        for (const pointer of ordered) allMessages.push(...messages.get(pointer)!);
+        throw new ValidationError(CREATE_TEMPLATE, allMessages.join(', '), {body});
+    }
+    const value = decoded as components['schemas']['PackingNativeCreateInput'];
 
     return {
         title: value.title,
@@ -83,7 +156,7 @@ function preprocessCreate(body: any): Partial<PackingList> & { items: Partial<Pa
 /** Native form normalization stays at this adapter; runtime creation uses the shared locked operation. */
 async function createEntity(
     ownerId: string,
-    listData: Partial<PackingList> & {items: Partial<PackingItem>[]; _body?: unknown; _file?: Express.Multer.File},
+    listData: Omit<Partial<PackingList>, 'items' | 'eventId'> & {items: Partial<PackingItem>[]; eventId?: string | null; _body?: unknown; _file?: Express.Multer.File},
     session?: SessionLike,
 ) {
     if (session) {
@@ -118,7 +191,7 @@ async function createEntity(
             requiredByAll: Boolean(it.requiredByAll),
             pos: i
         })),
-        listData.eventId,
+        listData.eventId ?? undefined,
         listData.headerImg,
     );
 }

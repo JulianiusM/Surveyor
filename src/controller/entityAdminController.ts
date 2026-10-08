@@ -31,7 +31,7 @@ import {evaluateEntities, evaluateSubject} from '../modules/permissionEngine';
 import type {BasicEntityPropertyPatch, EntityPropertyField, EntityPropertyPresentation} from '../types/EntityPropertyTypes';
 import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, ArchiveState, ArchiveTarget, LockedArchiveContext} from '../types/ArchiveTypes';
 import type {EntityDescriptor, PermType, PermView, SessionLike} from '../types/PermissionTypes';
-import type {Entity, EntityBase} from '../types/UserTypes';
+import type {Entity, EntityBase, EntityViewAdmission} from '../types/UserTypes';
 import type {CombEntityType, EntityType} from "../types/UtilTypes";
 
 // One closed field policy drives both renderer projection and request authorization.
@@ -218,14 +218,24 @@ export async function changeEntityEvent(type: EntityType, entity: EntityBase, bo
  * standalone entity. Attached roots additionally admit event members or an explicit child
  * ACCESS_VIEW grant; linking alone never grants admission to an unregistered editor.
  */
-export async function canAccessEntityView(type: EntityType, entity: Pick<EntityBase, 'id' | 'ownerId' | 'eventId'>, session: SessionLike): Promise<boolean> {
-    if (!session.profile) return false;
-    if (!entity.eventId) return true;
-    if (await eventService.isRegisteredForEvent(session.profile.id, entity.eventId)) return true;
-    const permissions = await evaluateSubject({kind: 'entity', entity: {
+export async function getEntityViewAdmission(type: EntityType, entity: Pick<EntityBase, 'id' | 'ownerId' | 'eventId'>,
+    session: SessionLike, manager?: EntityManager, knownPermissions?: PermView): Promise<EntityViewAdmission> {
+    // The linked-event rejection deliberately precedes guest registration. A missing
+    // profile must not turn an attached entity's native 400 into a standalone login redirect.
+    if (!session.profile) return entity.eventId ? 'event-registration-required' : 'guest';
+    if (!entity.eventId) return 'render';
+    if (await eventService.isRegisteredForEvent(session.profile.id, entity.eventId, manager)) return 'render';
+    // Snapshot callers reuse their existing permission view and transaction, preventing
+    // admission from combining a projection with membership from a different DB snapshot.
+    const permissions = knownPermissions ?? await evaluateSubject({kind: 'entity', entity: {
         entityType: type, entityId: entity.id, ownerId: entity.ownerId, eventId: entity.eventId,
-    }}, session);
-    return permissions.has('ACCESS_VIEW');
+    }}, session, undefined, manager);
+    return permissions.has('ACCESS_VIEW') ? 'render' : 'event-registration-required';
+}
+
+/** Boolean compatibility adapter for existing native callers and reassociation redirects. */
+export async function canAccessEntityView(type: EntityType, entity: Pick<EntityBase, 'id' | 'ownerId' | 'eventId'>, session: SessionLike): Promise<boolean> {
+    return await getEntityViewAdmission(type, entity, session) === 'render';
 }
 
 const REQ_PERM = PERM.MANAGE_PERMISSIONS;

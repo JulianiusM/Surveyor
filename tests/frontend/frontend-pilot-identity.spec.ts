@@ -10,6 +10,7 @@ import IdentityPage from '../../src/frontend/features/identity/IdentityPage.vue'
 import PackingGuestPage from '../../src/frontend/features/identity/PackingGuestPage.vue';
 import PackingHome from '../../src/frontend/features/overview/OverviewPage.vue';
 import AppHeader from '../../src/frontend/components/AppHeader.vue';
+import App from '../../src/frontend/app/App.vue';
 import {problemMessage} from '../../src/frontend/composables/feedback';
 import type {components} from '../../src/types/api/v1';
 import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
@@ -23,9 +24,9 @@ const session: components['schemas']['SessionView'] = {
     loginUrl: '/users/login', logoutUrl: '/users/logout', shell: {version: 'fixture', imprintUrl: '/imprint',
         privacyPolicyUrl: '/privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'},
 };
-function json(value: unknown, status = 200): Response {
+function json(value: unknown, status = 200, responseContext = session.context): Response {
     return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
-        'X-Surveyor-Context': session.context}});
+        'X-Surveyor-Context': responseContext}});
 }
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -36,7 +37,8 @@ afterEach(async () => {
 });
 
 /** Real route reuse, commands and generated validators; only the HTTP boundary is replaced. */
-async function mounted(path: string, handler: (request: Request) => Promise<Response>, bootstrap: Partial<FrontendPilotBootstrap> = {}) {
+async function mounted(path: string, handler: (request: Request) => Promise<Response>,
+                       bootstrap: Partial<FrontendPilotBootstrap> = {}, useShell = false) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
     const context = createPilotContext({session, ...bootstrap}, true, request);
     context.hydrated.value = true;
@@ -47,14 +49,17 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
         {path: '/frontend-pilot/users/forgot-password', component: IdentityPage, meta: {identityMode: 'forgot'}},
         {path: '/frontend-pilot/users/reset-password/:token', component: IdentityPage, meta: {identityMode: 'reset'}},
         {path: '/frontend-pilot/users/activate/:token', component: IdentityPage, meta: {identityMode: 'activate'}},
+        {path: '/frontend-pilot/guest/recovery', component: IdentityPage, meta: {identityMode: 'recovery'}},
         {path: '/frontend-pilot/packing/:listId/guest', component: PackingGuestPage},
+        {path: '/frontend-pilot/packing/:listId/duplicate', component: defineComponent({template: '<p>Duplicate destination</p>'})},
+        {path: '/frontend-pilot/packing/:listId', component: defineComponent({template: '<p>Canonical detail</p>'})},
         {path: '/frontend-pilot', component: PackingHome},
         {path: '/frontend-pilot/packing/create', component: defineComponent({template: '<p>Create</p>'})},
         {path: '/frontend-pilot/help', component: defineComponent({template: '<p>Help</p>'})},
     ]});
     await router.push(path);
     await router.isReady();
-    const wrapper = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
+    const wrapper = mount(useShell ? App : defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
         provide: {[pilotContextKey as symbol]: context},
     }});
@@ -64,6 +69,156 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
 }
 
 describe('identity forms and packing overview navigation', () => {
+    it('preserves a native guest name and navigates confirmed registration to canonical detail', async () => {
+        const anonymous = {...session, kind: 'anonymous' as const, activeProfile: null, profiles: []};
+        const guest = {...session, kind: 'guest' as const, context: 'registered-guest-context-1234567890'};
+        let submittedName: unknown;
+        let registered = false;
+        const {wrapper, context, router} = await mounted(`/frontend-pilot/packing/${eventId}/guest`, async request => {
+            if (request.method === 'POST') {
+                submittedName = (await request.clone().json()).username;
+                registered = true;
+                return json({session: guest, personalLink: 'https://example.test/guest/edit', redirect: null}, 200, guest.context);
+            }
+            if (new URL(request.url).pathname === '/api/v1/session') return json(guest, 200, guest.context);
+            return json({id: eventId, title: 'Native guest fixture'}, 200, registered ? guest.context : anonymous.context);
+        }, {session: anonymous});
+        await wrapper.get('#guest-name').setValue('  Guest name with spaces  ');
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(submittedName).toBe('  Guest name with spaces  ');
+        expect(router.currentRoute.value.path).toBe(`/frontend-pilot/packing/${eventId}`);
+        expect(wrapper.text()).toContain('Canonical detail');
+        expect(context.personalLink.value).toBe('https://example.test/guest/edit');
+    });
+
+    it('returns confirmed account login to the exact entity duplicate path and its query context', async () => {
+        const destination = `/frontend-pilot/packing/${eventId}/duplicate?eventId=${profileId}`;
+        const authenticated = {...session, context: 'confirmed-login-context-1234567890'};
+        const {wrapper, router} = await mounted(`/frontend-pilot/users/login?next=${encodeURIComponent(destination)}`, async request => {
+            return request.method === 'POST'
+                ? json({session: authenticated, personalLink: null, redirect: null}, 200, authenticated.context)
+                : json(authenticated, 200, authenticated.context);
+        });
+        await wrapper.get('#username').setValue('account');
+        await wrapper.get('#password').setValue('password1');
+        await wrapper.findAll('form')[0].trigger('submit');
+        await flushPromises();
+        expect(router.currentRoute.value.fullPath).toBe(destination);
+        expect(wrapper.text()).toContain('Duplicate destination');
+    });
+
+    it('shows the native complete success-message outcome after confirmed guest recovery', async () => {
+        const {wrapper, context, router} = await mounted('/frontend-pilot/users/login', async () => json({changed: true}));
+        await wrapper.get('#username').setValue('Unrelated entered username');
+        await wrapper.get('#recovery-email').setValue('guest@example.test');
+        const form = wrapper.findAll('form').find(form => form.find('#recovery-email').exists())!;
+        await form.trigger('submit');
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/guest/recovery');
+        expect(wrapper.get('h1').text()).toBe('Success');
+        expect(wrapper.text()).toContain('The link(s) to your guest account(s) have been sent to your email address.');
+        expect(wrapper.find('form').exists()).toBe(false);
+        expect(context.pageTitle.value).toBe('Success | Surveyor');
+        expect(context.mayChangeIdentity()).toBe(true);
+    });
+
+    it('follows recovery GET admission without manufacturing a successful mail result from its URL', async () => {
+        const {wrapper, router, request} = await mounted('/frontend-pilot/guest/recovery', async () => json({changed: true}));
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login');
+        expect(wrapper.get('h1').text()).toBe('Login');
+        expect(wrapper.text()).not.toContain('The link(s) to your guest account(s)');
+        expect(request).not.toHaveBeenCalled();
+    });
+
+    it('renders trusted native recovery POST feedback independently of local account configuration', async () => {
+        const path = '/frontend-pilot/guest/recovery';
+        const result = await render(path, {session: {...session,
+            shell: {...session.shell, localLoginEnabled: false}}, initialUrl: path,
+            pageCompletion: {context: session.context, destination: path, messageKey: 'auth.recoverySent', kind: 'success'}});
+        expect(result.html).toContain('Success');
+        expect(result.html).toContain('The link(s) to your guest account(s)');
+        expect(result.html).not.toContain('Local account login is disabled');
+        expect(result.javascriptRequired).toBe(false);
+        expect(JSON.parse(result.state).pageCompletion?.destination).toBe(path);
+        const content = document.createElement('div');
+        content.innerHTML = result.html;
+        expect(content.querySelector('main form')).toBeNull();
+    });
+
+    it.each([
+        ['/frontend-pilot/users/register', 'auth.registered', 'Info', 'Account successfully registered.'],
+        ['/frontend-pilot/users/forgot-password', 'auth.resetSent', 'Success', 'A link has been sent to the email'],
+        ['/frontend-pilot/users/reset-password/confirmed-token', 'auth.resetDone', 'Success', 'Your password has been successfully reset.'],
+    ] as const)('keeps confirmed native identity messages readable without JavaScript at %s', async (path, feedback, title, message) => {
+        const result = await render(path, {session, initialUrl: path, identityFeedback: feedback});
+        expect(result.javascriptRequired).toBe(false);
+        expect(result.title).toBe(`${title} | Surveyor`);
+        expect(result.html).toContain(message);
+        const content = document.createElement('div');
+        content.innerHTML = result.html;
+        expect(content.querySelector('main form')).toBeNull();
+    });
+
+    it('consumes trusted native completion once without reviving success on a later recovery visit', async () => {
+        const path = '/frontend-pilot/guest/recovery';
+        const {wrapper, context, router, request} = await mounted(path, async () => json({changed: true}),
+            {initialUrl: path, identityFeedback: 'auth.recoverySent',
+                pageCompletion: {context: session.context, destination: path, messageKey: 'auth.recoverySent', kind: 'success'}}, true);
+        expect(wrapper.get('h1').text()).toBe('Success');
+        await router.push('/frontend-pilot/help');
+        await flushPromises();
+        expect(context.pageCompletion.value).toBeNull();
+        await router.push(path);
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login');
+        expect(wrapper.get('h1').text()).toBe('Login');
+        expect(wrapper.text()).not.toContain('The link(s) to your guest account(s)');
+        expect(request).not.toHaveBeenCalled();
+    });
+
+    it('retains a rejected native recovery POST on the full error surface across hydration', async () => {
+        const path = '/frontend-pilot/guest/recovery';
+        const problem: components['schemas']['Problem'] = {type: 'about:blank', title: 'Bad Request', status: 400,
+            code: 'VALIDATION_FAILED', messageKey: 'api:errors.VALIDATION_FAILED', params: {},
+            detail: 'Invalid recovery email', requestId: 'recovery-error'};
+        const bootstrap = {session, initialUrl: path, identityProblem: problem};
+        const result = await render(path, bootstrap);
+        expect(result.title).toBe('Error | Surveyor');
+        expect(result.html).toContain('Check the submitted values.');
+        const content = document.createElement('div');
+        content.innerHTML = result.html;
+        expect(content.querySelector('main form')).toBeNull();
+
+        const {wrapper, router, request} = await mounted(path, async () => json({changed: true}), bootstrap);
+        expect(router.currentRoute.value.path).toBe(path);
+        expect(wrapper.get('h1').text()).toBe('Error');
+        expect(wrapper.text()).toContain('Check the submitted values.');
+        expect(wrapper.find('form').exists()).toBe(false);
+        expect(request).not.toHaveBeenCalled();
+    });
+
+    it('renders the native guest capability rejection rather than a new empty login form', async () => {
+        const path = `/frontend-pilot/guest/${eventId}/login/invalid-token`;
+        const result = await render(path, {session, initialUrl: path,
+            pageEntry: {kind: 'denied', status: 401, messageKey: 'auth.invalidGuestLink'}});
+        expect(result.html).toContain('Invalid or mismatched token');
+        expect(result.html).not.toContain('id="username"');
+        expect(result.html).not.toContain('id="password"');
+        expect(result.title).toBe('Error | Surveyor');
+        expect(result.javascriptRequired).toBe(false);
+    });
+
+    it('retains native one-time page feedback in the SSR shell and hydration state', async () => {
+        const path = '/frontend-pilot/users/login';
+        const result = await render(path, {session, initialUrl: path,
+            pageNotice: {kind: 'error', messageKey: 'auth.sessionExpired'}});
+        expect(result.html).toContain('Session has expired');
+        expect(result.html).toContain('alert-danger');
+        expect(JSON.parse(result.state).pageNotice).toEqual({kind: 'error', messageKey: 'auth.sessionExpired'});
+    });
+
     it.each([
         ['/frontend-pilot/users/login', '#username', 'account'],
         ['/frontend-pilot/users/login', '#password', 'secret1'],
@@ -384,6 +539,7 @@ describe('identity forms and packing overview navigation', () => {
         expect(result.html).toContain('This link is invalid, expired, or already used.');
         expect(result.html).not.toContain('id="password"');
         expect(result.state).toContain('"passwordReset"');
+        expect(result.javascriptRequired).toBe(false);
         const {wrapper, request} = await mounted(path, async () => json({valid: true}), bootstrap);
         expect(wrapper.get('h1').text()).toBe('Error');
         expect(wrapper.find('form').exists()).toBe(false);

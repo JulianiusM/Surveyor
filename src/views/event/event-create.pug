@@ -23,7 +23,8 @@ block content
             }
         }
 
-    form#eventForm(action="/event/create" method="POST" enctype="multipart/form-data")
+    //- The shared guest-flow action preserves the exact duplicate destination through account login.
+    form#eventForm(action=data.creationAction || "/event/create" method="POST" enctype="multipart/form-data")
         // Titel
         .mb-3
             label.form-label(for="title")

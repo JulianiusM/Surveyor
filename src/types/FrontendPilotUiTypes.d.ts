@@ -3,7 +3,7 @@ import type {QueryClient} from '@tanstack/vue-query';
 import type {i18n} from 'i18next';
 import type {components, paths} from './api/v1';
 import type {LocalizationContext, Locale, MessageKey} from './LocalizationTypes';
-import type {FrontendPilotBootstrap} from './FrontendPilotTypes';
+import type {FrontendPageCompletion, FrontendPilotBootstrap} from './FrontendPilotTypes';
 import type {PilotApi} from '../frontend/app/api';
 
 /** Browser-only collaborators must never enter the backend bootstrap declaration's import graph. */
@@ -16,12 +16,29 @@ export interface PilotRequestScope {
 
 export interface PilotRead<T> { data: T; etag: string | null; }
 
+/** An entry owner supplies its existing API read and cache family; the shared navigation
+ * helper retires outcomes when that route or identity is no longer current. */
+export interface PilotPageEntrySource<T extends {entry: components['schemas']['PageEntryOutcome']}> {
+    key: ComputedRef<readonly unknown[]>;
+    enabled?: ComputedRef<boolean>;
+    read(scope: PilotRequestScope, signal: AbortSignal): Promise<T>;
+    initial?: T;
+}
+
 /** Optional form state joins the command owner's route, identity, update and unload guards.
  * The owner resets its draft only after successful navigation or a confirmed form result. */
 export interface PilotCommandDraft {
     dirty(): boolean;
     busy?(): boolean;
+    uncertain?(): boolean;
     unknownMessage: MessageKey;
+}
+
+/** Command confirmation and its following read are independent outcomes. The result returned
+ * by run remains compatible with existing callers; editors use this state when adopting authority. */
+export interface PilotCommandOutcome {
+    confirmation: 'pending' | 'confirmed' | 'rejected' | 'unknown' | 'obsolete';
+    refresh: 'not-requested' | 'pending' | 'succeeded' | 'failed';
 }
 
 /** Reuse the authored wire shapes while the caller owns its discovery endpoint and cache family.
@@ -60,6 +77,8 @@ export interface PilotContext {
     hydrated: Ref<boolean>;
     ready: Ref<boolean>;
     notice: Ref<MessageKey | null>;
+    pageNotice: Ref<components['schemas']['EntryNotice'] | null>;
+    pageCompletion: Ref<FrontendPageCompletion | null>;
     personalLink: Ref<string | null>;
     messages: ComputedRef<LocalizationContext>;
     i18next: i18n;

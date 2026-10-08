@@ -1,4 +1,5 @@
 import {expect, request as playwrightRequest, test, type APIRequestContext} from '@playwright/test';
+import {randomUUID} from 'node:crypto';
 import {
     createE2EActivityPlan,
     createE2EDriversList,
@@ -6,12 +7,23 @@ import {
     createE2ELogin,
     createE2EPackingList,
     createE2ESurvey,
+    type E2ECreateCase,
+    type E2ECreateForm,
 } from '../factories/e2eCoreFactory';
 import {createResourceViaForm, expectCreatedResourceLoaded, expectPageContains, loginForE2E, type CreatedResource} from '../keywords/e2eCoreKeywords';
 
 // These smoke tests intentionally run serially because they build one authenticated user's
 // realistic core workspace and then verify the high-value pages that depend on that setup.
 test.describe.configure({mode: 'serial'});
+
+const runId = randomUUID();
+
+/** Keep the shared production fixtures readable while isolating bounded dashboard
+ * searches from roots created by other journeys or an earlier run of this suite. */
+function createRunCase<TForm extends E2ECreateForm>(input: E2ECreateCase<TForm>): E2ECreateCase<TForm> {
+    const title = `${input.title} ${runId}`;
+    return {...input, title, expectedViewText: title, form: {...input.form, title}};
+}
 
 // Canary: groups related smoke checks so a maintainer can understand the protected workflow quickly.
 test.describe('authenticated core workflow smoke suite', () => {
@@ -34,7 +46,7 @@ test.describe('authenticated core workflow smoke suite', () => {
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
     test('creates an event through the real create route', async () => {
-        resources.event = await createResourceViaForm(authedRequest, createE2EEvent());
+        resources.event = await createResourceViaForm(authedRequest, createRunCase(createE2EEvent()));
         expect(resources.event.path).toContain('/event/');
     });
 
@@ -62,7 +74,7 @@ test.describe('authenticated core workflow smoke suite', () => {
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
     test('creates a survey through the real create route', async () => {
-        resources.survey = await createResourceViaForm(authedRequest, createE2ESurvey());
+        resources.survey = await createResourceViaForm(authedRequest, createRunCase(createE2ESurvey()));
         expect(resources.survey.path).toContain('/survey/');
     });
 
@@ -87,7 +99,7 @@ test.describe('authenticated core workflow smoke suite', () => {
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
     test('creates an activity plan through the real create route', async () => {
-        resources.activity = await createResourceViaForm(authedRequest, createE2EActivityPlan());
+        resources.activity = await createResourceViaForm(authedRequest, createRunCase(createE2EActivityPlan()));
         expect(resources.activity.path).toContain('/activity/');
     });
 
@@ -112,7 +124,7 @@ test.describe('authenticated core workflow smoke suite', () => {
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
     test('creates a drivers list through the real create route', async () => {
-        resources.drivers = await createResourceViaForm(authedRequest, createE2EDriversList());
+        resources.drivers = await createResourceViaForm(authedRequest, createRunCase(createE2EDriversList()));
         expect(resources.drivers.path).toContain('/drivers/');
     });
 
@@ -123,7 +135,7 @@ test.describe('authenticated core workflow smoke suite', () => {
 
     // Canary: protects a high-value production behavior while avoiding private implementation details.
     test('creates a packing list through the real create route', async () => {
-        resources.packing = await createResourceViaForm(authedRequest, createE2EPackingList());
+        resources.packing = await createResourceViaForm(authedRequest, createRunCase(createE2EPackingList()));
         expect(resources.packing.path).toContain('/packing/');
     });
 

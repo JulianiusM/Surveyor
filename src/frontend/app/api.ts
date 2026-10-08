@@ -13,8 +13,12 @@ type Session = components['schemas']['SessionView'];
 /** Session and identity commands are needed by the shell; product feature operations stay with their routes. */
 export class PilotApi extends PilotTransport {
     async bootstrap(signal?: AbortSignal): Promise<Session> {
-        return this.allowedRead('session', undefined, async () =>
-            this.read("getSession", await this.client.GET('/session', {signal, cache: 'no-store'}), validateSessionView).data);
+        const transport = this;
+        async function readSession(): Promise<Session> {
+            const response = await transport.client.GET('/session', {signal, cache: 'no-store'});
+            return transport.read("getSession", response, validateSessionView).data;
+        }
+        return this.allowedRead('session', undefined, readSession);
     }
 
     async setLocale(locale: string, scope: PilotRequestScope): Promise<Session> {
@@ -24,9 +28,14 @@ export class PilotApi extends PilotTransport {
     }
 
     async checkPasswordReset(token: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['PasswordResetCheck']> {
-        return this.allowedRead(`identity/reset/${token}`, scope, async () => this.read("checkPasswordReset", await this.client.GET('/auth/reset-password', {
-            params: {query: {token}, header: this.headers(scope)}, signal, cache: 'no-store',
-        }), validatePasswordResetCheck, scope).data);
+        const transport = this;
+        async function readResetAdmission(): Promise<components['schemas']['PasswordResetCheck']> {
+            const response = await transport.client.GET('/auth/reset-password', {
+                params: {query: {token}, header: transport.headers(scope)}, signal, cache: 'no-store',
+            });
+            return transport.read("checkPasswordReset", response, validatePasswordResetCheck, scope).data;
+        }
+        return this.allowedRead(`identity/reset/${token}`, scope, readResetAdmission);
     }
 
     identity(operationId: ApiOperationId, result: {data?: unknown; error?: unknown; response: Response}, scope: PilotRequestScope) {

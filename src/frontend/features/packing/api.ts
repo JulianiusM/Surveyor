@@ -19,6 +19,8 @@ import {validatePackingEventOptions} from '../../../../.generated/api/v1/browser
 import {validatePackingEventChanged} from '../../../../.generated/api/v1/browser/validatePackingEventChanged.mjs';
 import {validatePackingProfileOptions} from '../../../../.generated/api/v1/browser/validatePackingProfileOptions.mjs';
 import {validateGuestEntry} from '../../../../.generated/api/v1/browser/validateGuestEntry.mjs';
+import {validatePackingCreateEntry} from '../../../../.generated/api/v1/browser/validatePackingCreateEntry.mjs';
+import {validatePackingResourceEntry} from '../../../../.generated/api/v1/browser/validatePackingResourceEntry.mjs';
 
 type List = components['schemas']['PackingListView'];
 type Metadata = components['schemas']['PackingMetadata'];
@@ -38,16 +40,26 @@ export class PackingApi {
 
     async packing(listId: string, scope: PilotRequestScope, signal?: AbortSignal,
                   previous?: PilotRead<List>): Promise<PilotRead<List>> {
-        return this.transport.allowedRead(`packing/${listId}`, scope, async () => this.transport.read('getPackingList', await this.transport.client.GET('/packing-lists/{listId}', {
-            params: {path: {listId}, header: this.transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
-        }), validatePackingListView, scope, previous));
+        const transport = this.transport;
+        async function readPacking(): Promise<PilotRead<List>> {
+            const response = await transport.client.GET('/packing-lists/{listId}', {
+                params: {path: {listId}, header: transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
+            });
+            return transport.read('getPackingList', response, validatePackingListView, scope, previous);
+        }
+        return transport.allowedRead(`packing/${listId}`, scope, readPacking);
     }
 
     async metadata(listId: string, scope: PilotRequestScope, signal?: AbortSignal,
                    previous?: PilotRead<Metadata>): Promise<PilotRead<Metadata>> {
-        const result = await this.transport.allowedRead(`packing/${listId}/metadata`, scope, async () => this.transport.read('getPackingMetadata', await this.transport.client.GET('/packing-lists/{listId}/metadata', {
-            params: {path: {listId}, header: this.transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
-        }), validatePackingMetadata, scope, previous));
+        const transport = this.transport;
+        async function readMetadata(): Promise<PilotRead<Metadata>> {
+            const response = await transport.client.GET('/packing-lists/{listId}/metadata', {
+                params: {path: {listId}, header: transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
+            });
+            return transport.read('getPackingMetadata', response, validatePackingMetadata, scope, previous);
+        }
+        const result = await transport.allowedRead(`packing/${listId}/metadata`, scope, readMetadata);
         if (!result.etag || !/^"[^"\r\n]+"$/u.test(result.etag)) throw new UnconfirmedResponseError();
         return result;
     }
@@ -71,21 +83,64 @@ export class PackingApi {
     }
 
     async settings(listId: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['PackingSettings']> {
-        return this.transport.allowedRead(`packing/${listId}/settings`, scope, async () => this.transport.read('getPackingSettings', await this.transport.client.GET('/packing-lists/{listId}/settings', {
-            params: {path: {listId}, header: this.transport.headers(scope)}, signal, cache: 'no-store',
-        }), validatePackingSettings, scope).data);
+        const transport = this.transport;
+        async function readSettings(): Promise<components['schemas']['PackingSettings']> {
+            const response = await transport.client.GET('/packing-lists/{listId}/settings', {
+                params: {path: {listId}, header: transport.headers(scope)}, signal, cache: 'no-store',
+            });
+            return transport.read('getPackingSettings', response, validatePackingSettings, scope).data;
+        }
+        return transport.allowedRead(`packing/${listId}/settings`, scope, readSettings);
     }
 
     async createContext(scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['PackingCreateContext']> {
-        return this.transport.allowedRead('packing/create-context', scope, async () => this.transport.read('getPackingCreateContext', await this.transport.client.GET('/packing-lists/create-context', {
-            params: {header: this.transport.headers(scope)}, signal, cache: 'no-store',
-        }), validatePackingCreateContext, scope).data);
+        const transport = this.transport;
+        async function readCreationContext(): Promise<components['schemas']['PackingCreateContext']> {
+            const response = await transport.client.GET('/packing-lists/create-context', {
+                params: {header: transport.headers(scope)}, signal, cache: 'no-store',
+            });
+            return transport.read('getPackingCreateContext', response, validatePackingCreateContext, scope).data;
+        }
+        return transport.allowedRead('packing/create-context', scope, readCreationContext);
+    }
+
+    /** Creation admission is distinct from the public duplication projection. The caller supplies
+     * its exact return destination; the server owns account admission and bounded destination policy. */
+    async createEntry(scope: PilotRequestScope, signal?: AbortSignal,
+                      returnTo?: string): Promise<components['schemas']['PackingCreateEntry']> {
+        const transport = this.transport;
+        async function readCreationEntry(): Promise<components['schemas']['PackingCreateEntry']> {
+            const response = await transport.client.GET('/packing-lists/create-entry', {
+                params: {query: {returnTo}, header: transport.headers(scope)}, signal, cache: 'no-store',
+            });
+            return transport.read('getPackingCreateEntry', response, validatePackingCreateEntry, scope).data;
+        }
+        return transport.allowedRead('packing/create-entry/' + (returnTo ?? ''), scope, readCreationEntry);
+    }
+
+    /** Detail and explicit guest routes deliberately have different native admission. Never
+     * infer either route from session presence or from permissions on the other projection. */
+    async resourceEntry(listId: string, view: 'detail' | 'guest', scope: PilotRequestScope,
+                        signal?: AbortSignal): Promise<components['schemas']['PackingResourceEntry']> {
+        const transport = this.transport;
+        async function readResourceEntry(): Promise<components['schemas']['PackingResourceEntry']> {
+            const response = await transport.client.GET('/packing-lists/{listId}/entry', {
+                params: {path: {listId}, query: {view}, header: transport.headers(scope)}, signal, cache: 'no-store',
+            });
+            return transport.read('getPackingResourceEntry', response, validatePackingResourceEntry, scope).data;
+        }
+        return transport.allowedRead(`packing/${listId}/entry/${view}`, scope, readResourceEntry);
     }
 
     async duplicate(listId: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['PackingDuplicate']> {
-        return this.transport.allowedRead(`packing/${listId}/duplicate`, scope, async () => this.transport.read('getPackingDuplicate', await this.transport.client.GET('/packing-lists/{listId}/duplicate', {
-            params: {path: {listId}, header: this.transport.headers(scope)}, signal, cache: 'no-store',
-        }), validatePackingDuplicate, scope).data);
+        const transport = this.transport;
+        async function readDuplicate(): Promise<components['schemas']['PackingDuplicate']> {
+            const response = await transport.client.GET('/packing-lists/{listId}/duplicate', {
+                params: {path: {listId}, header: transport.headers(scope)}, signal, cache: 'no-store',
+            });
+            return transport.read('getPackingDuplicate', response, validatePackingDuplicate, scope).data;
+        }
+        return transport.allowedRead(`packing/${listId}/duplicate`, scope, readDuplicate);
     }
 
     async createPacking(input: components['schemas']['PackingCreateInput'], image: File | null,
@@ -133,10 +188,15 @@ export class PackingApi {
     }
 
     async events(query: PilotEventPickerQuery,
-                 scope: PilotRequestScope, signal?: AbortSignal) {
-        return this.transport.allowedRead(`packing/events/${JSON.stringify(query)}`, scope, async () => this.transport.read('searchPackingEvents', await this.transport.client.GET('/packing-lists/events', {
-            params: {query, header: this.transport.headers(scope)}, signal, cache: 'no-store',
-        }), validatePackingEventOptions, scope).data);
+                  scope: PilotRequestScope, signal?: AbortSignal) {
+        const transport = this.transport;
+        async function readEventOptions(): Promise<components['schemas']['PackingEventOptions']> {
+            const response = await transport.client.GET('/packing-lists/events', {
+                params: {query, header: transport.headers(scope)}, signal, cache: 'no-store',
+            });
+            return transport.read('searchPackingEvents', response, validatePackingEventOptions, scope).data;
+        }
+        return transport.allowedRead(`packing/events/${JSON.stringify(query)}`, scope, readEventOptions);
     }
 
     async linkEvent(listId: string, input: components['schemas']['PackingEventChange'], token: string, scope: PilotRequestScope) {
@@ -152,9 +212,14 @@ export class PackingApi {
     }
 
     async profiles(listId: string, q: string, scope: PilotRequestScope, signal?: AbortSignal) {
-        return this.transport.allowedRead(`packing/${listId}/profiles/${q}`, scope, async () => this.transport.read('searchPackingProfiles', await this.transport.client.GET('/packing-lists/{listId}/profiles', {
-            params: {path: {listId}, query: {q}, header: this.transport.headers(scope)}, signal, cache: 'no-store',
-        }), validatePackingProfileOptions, scope).data);
+        const transport = this.transport;
+        async function readProfileOptions(): Promise<components['schemas']['PackingProfileOptions']> {
+            const response = await transport.client.GET('/packing-lists/{listId}/profiles', {
+                params: {path: {listId}, query: {q}, header: transport.headers(scope)}, signal, cache: 'no-store',
+            });
+            return transport.read('searchPackingProfiles', response, validatePackingProfileOptions, scope).data;
+        }
+        return transport.allowedRead(`packing/${listId}/profiles/${q}`, scope, readProfileOptions);
     }
 
     async addAdmin(listId: string, input: components['schemas']['PackingAdminInput'], token: string, scope: PilotRequestScope) {
@@ -187,7 +252,8 @@ export class PackingApi {
     }
 
     async uploadHeader(listId: string, image: File, token: string, scope: PilotRequestScope) {
-        const form = new FormData(); form.append('image', image);
+        const form = new FormData();
+        form.append('image', image);
         return this.transport.read('uploadPackingHeader', await this.transport.client.PUT('/packing-lists/{listId}/header', {
             params: {path: {listId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: {image: image.name}, bodySerializer: () => form, cache: 'no-store',
         }), validateMutationResult, scope).data;
@@ -213,9 +279,14 @@ export class PackingApi {
 
 
     async guestEntry(listId: string, scope: PilotRequestScope, signal?: AbortSignal) {
-        return this.transport.allowedRead('packing/' + listId + '/guest', scope, async () => this.transport.read('getPackingGuestEntry', await this.transport.client.GET('/packing-lists/{listId}/guest', {
-            params: {path: {listId}, header: this.transport.headers(scope)}, signal, cache: 'no-store',
-        }), validateGuestEntry, scope).data);
+        const transport = this.transport;
+        async function readGuestEntry(): Promise<components['schemas']['GuestEntry']> {
+            const response = await transport.client.GET('/packing-lists/{listId}/guest', {
+                params: {path: {listId}, header: transport.headers(scope)}, signal, cache: 'no-store',
+            });
+            return transport.read('getPackingGuestEntry', response, validateGuestEntry, scope).data;
+        }
+        return transport.allowedRead('packing/' + listId + '/guest', scope, readGuestEntry);
     }
 
     async registerGuest(listId: string, input: components['schemas']['GuestRegistrationInput'], scope: PilotRequestScope) {
@@ -230,6 +301,9 @@ export class PackingApi {
 const owners = new WeakMap<PilotApi, PackingApi>();
 export function usePackingApi(context: PilotContext): PackingApi {
     let owner = owners.get(context.api);
-    if (!owner) { owner = new PackingApi(context.api); owners.set(context.api, owner); }
+    if (!owner) {
+        owner = new PackingApi(context.api);
+        owners.set(context.api, owner);
+    }
     return owner;
 }

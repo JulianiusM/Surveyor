@@ -14,7 +14,8 @@ import type {PackingList} from '../database/entities/packing/PackingList';
 import type {Event} from '../database/entities/event/Event';
 import type {PackingItem} from '../database/entities/packing/PackingItem';
 import type {PackingAssignment} from '../database/entities/packing/PackingAssignment';
-import {archiveEntity, restoreEntity, changeEntityEvent, entityPropertyPermission, getAuthorizedEventUrl} from '../../controller/entityAdminController';
+import {archiveEntity, restoreEntity, changeEntityEvent, entityPropertyPermission, getAuthorizedEventUrl, getEntityViewAdmission} from '../../controller/entityAdminController';
+import {getAccountPageEntry, hasAccountProfile} from '../../controller/userController';
 import {getEventLinkOptions} from '../../controller/eventController';
 import {ApiProblem} from '../api/problem';
 import {validateApiInput} from '../api/transport';
@@ -27,6 +28,7 @@ import {getInitialPerms, getPermMeta, getPresets} from '../lib/permissions';
 import {generateUniqueId, getHeaderImageVersion} from '../lib/util';
 import {checkNewImage, removeImage} from '../lib/fileCommons';
 import {APIError} from '../lib/errors';
+import {safeFrontendReturn} from '../lib/frontendIdentity';
 
 // This is the native packing field policy. Both API generations and capability
 // projection consume it; a UI capability is never a separate authorization rule.
@@ -112,10 +114,9 @@ function requireList(list: PackingList | null): PackingList {
  * remain available even when ACCESS_VIEW has not been granted for an assignment command.
  */
 async function authorizeRead(manager: EntityManager, list: PackingList, session: SessionLike, caches?: PermEngineCaches): Promise<PermView> {
-    const profileId = actorId(session);
+    actorId(session);
     const permissions = await packingPermissions(manager, list, session, caches);
-    if (list.eventId && !permissions.has('ACCESS_VIEW') && list.event?.ownerId !== profileId
-        && !await packingService.getPackingEventRegistration(manager, list.eventId, profileId)) {
+    if (await getEntityViewAdmission('packing', list, session, manager, permissions) !== 'render') {
         throw new ApiProblem('FORBIDDEN');
     }
     return permissions;
@@ -418,7 +419,42 @@ function permissionDefinitions() {
 /** Creation POST requires an account, including when a public/guest duplicate GET supplied its draft. */
 export function requirePackingCreation(session: SessionLike): void {
     actorId(session);
-    if (!session.auth?.user) throw new ApiProblem('FORBIDDEN');
+    if (!hasAccountProfile(session)) throw new ApiProblem('FORBIDDEN');
+}
+
+/**
+ * Project native account-only creation admission without requiring a profile at the API
+ * transport boundary. Public duplicate GET deliberately remains independently grantable;
+ * its later submission asks this operation with the exact duplicate URL as returnTo.
+ */
+export function readPackingCreateEntry(session: SessionLike, returnTo?: unknown): components['schemas']['PackingCreateEntry'] {
+    const target = safeFrontendReturn(returnTo ?? '/frontend-pilot/packing/create');
+    const entry = getAccountPageEntry(session, '/frontend-pilot/users/login', target);
+    return {entry, context: entry.kind === 'render' ? packingFormContext() : null};
+}
+
+/**
+ * Read only the current root and shared page policy in one snapshot. Detail admission
+ * discloses no protected rows; guest entry discloses exactly the native public title.
+ * Both initial HTML and client navigation consume this operation, while subsequent
+ * projection/command operations independently authorize their own current snapshot.
+ */
+export async function readPackingResourceEntry(id: string, view: 'detail' | 'guest', session: SessionLike): Promise<components['schemas']['PackingResourceEntry']> {
+    async function readEntry(manager: EntityManager, list: PackingList | null): Promise<components['schemas']['PackingResourceEntry']> {
+        if (!list) return {entry: {kind: 'denied', status: 404, messageKey: 'packing.notFound'}, guest: null};
+        const detailUrl = `/frontend-pilot/packing/${encodeURIComponent(list.id)}`;
+        if (view === 'guest') {
+            return session.profile ? {entry: {kind: 'redirect', url: detailUrl, notice: null}, guest: null}
+                : {entry: {kind: 'render'}, guest: {id: list.id, title: list.title}};
+        }
+        const admission = await getEntityViewAdmission('packing', list, session, manager);
+        if (admission === 'guest') return {entry: {kind: 'redirect', url: `${detailUrl}/guest`, notice: null}, guest: null};
+        if (admission === 'event-registration-required') {
+            return {entry: {kind: 'denied', status: 400, messageKey: 'packing.eventRegistrationRequired'}, guest: null};
+        }
+        return {entry: {kind: 'render'}, guest: null};
+    }
+    return packingService.withPackingReadSnapshot(id, readEntry);
 }
 
 /** Public form definitions contain no resource data; native duplicate GET can use them without an account. */
