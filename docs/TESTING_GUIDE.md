@@ -4,11 +4,11 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: test maintainers
 status: current
-last-verified: 2026-10-08
+last-verified: 2026-10-11
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: FPR-07 preservation of the pre-pilot native production documentation reference and current non-pilot source-path corrections; no deployment, command execution or runtime certification
+verification-scope: native product reference retained; shared current test hooks, explicit TypeScript configuration, UTC isolated parallel database-free and serialized integration projects, three-stage CI with built-in result/coverage merge reviewed; migration-specific risk/procedure routing retained in staged guide; actual execution and timing evidence belongs to the paired pilot review; no production deployment or cutover claimed
 source-anchors: tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs
-next-review: native-production-change-or-frontend-cutover
+next-review: test-runner-or-CI-change-native-production-change-or-frontend-cutover
 production-reference: 2dfa257 native frontend documentation; reference only, not evidence of an installed production commit
 -->
 
@@ -17,6 +17,10 @@ while the frontend migration is in progress; the reference is not evidence of th
 site. Developers working in the migration checkout must use the [staged replacement](frontend-migration/staged/TESTING_GUIDE.md) and current
 `package.json` for the changed frontend commands. Merge the staged replacement into this canonical document at
 production cutover, retaining any intervening native changes.
+
+Shared runner, preparation and CI sections below describe the current checkout for both native and migrated tests.
+The [migration risk and cost procedure](frontend-migration/staged/TESTING_GUIDE.md#risk-and-test-cost) owns the current
+test-consolidation criteria; the implementation guideline remains in the staged Development Guide.
 
 
 Surveyor uses two runners with four test layers:
@@ -99,7 +103,10 @@ npm test
 
 `npm test` runs every Vitest layer, including MariaDB integration tests. It is not a database-free shortcut. `npm run test:quick` is the database-free unit-plus-frontend command.
 
-The package `pretest`, `pretest:integration`, and `pretest:ci` hooks regenerate `src/modules/database/__index__.ts` before their corresponding commands. The layer-specific unit and frontend scripts do not have dedicated pre-hooks, but those suites do not initialize the database.
+The package pre-hooks for `test`, `test:unit`, `test:frontend`, `test:quick`, `test:integration`, and `test:ci` run
+`npm run generate` first, refreshing TypeORM metadata, API declarations/validators and locale artifacts without a
+database connection. Direct runner invocations bypass these hooks; prepare after a clean checkout or source-definition
+change. All package test commands explicitly select the maintained `vitest.config.mts`.
 
 ## Vitest configuration
 
@@ -111,15 +118,22 @@ tests/frontend/**/*.spec.ts
 tests/integration/**/*.spec.ts
 ```
 
-The configuration uses the Node environment, loads `tests/support/env.ts`, and keeps file-level parallelism disabled. Sequential test files are required because integration suites independently rebuild the same disposable schema.
+The configuration uses Node by default, loads `tests/support/env.ts` and applies UTC in each isolated worker.
+Database-free unit/frontend files use at most two workers; integration files use one worker after that group because
+they independently rebuild the same disposable schema. Mounted consumers opt into happy-dom and restore their own
+globals and query state. Adjacent emitted source/configuration copies are rejected by the existing generation guard.
 
-Coverage uses V8 and includes `src/**/*.ts`, excluding migrations, generated database metadata, and declaration-only type files. The CI command writes text, LCOV, JSON, and JUnit outputs.
+Coverage uses V8 and includes TypeScript and Vue components under `src/`, excluding migrations, generated database
+metadata and declaration-only type files. The CI command retains text, LCOV, JSON and JUnit outputs.
 
 ## Layer contracts
 
 ### Unit tests
 
-Use `tests/unit/` when the subject can be exercised without MariaDB, an Express application, filesystem mutation, SMTP, OIDC discovery, or a real browser.
+Use `tests/unit/` for isolated production logic or tooling without MariaDB, the running Surveyor application,
+SMTP, OIDC discovery or a real browser. Tooling fixtures may use test-owned temporary output or a bounded local
+middleware fixture; they do not bootstrap application routes/session/database. Close fixtures and verify cleanup
+stays within their owned paths. Actual application HTTP/source workflows remain E2E boundaries.
 
 Good subjects include:
 
@@ -202,6 +216,10 @@ Each integration file owns a clean schema for its suite. Do not rely on rows cre
 Narrow spies are appropriate at an external side-effect boundary when the database workflow is the subject. The existing invoice integration suite, for example, spies on the mail-sending function while preserving the production database services. Keep such replacements local, restore them, and assert the observable notification contract.
 
 ### E2E tests
+
+The shared Playwright configuration supplies `Connection: close` to browser and API contexts, including additional
+actors created inside tests. This keeps loopback transports fresh instead of sharing idle sockets between fixtures;
+routes, cookies, payloads and assertions remain unchanged. It does not retry uncertain business commands.
 
 Use `tests/e2e/` for a critical journey that requires the actual built server, middleware order, cookies/session state, redirects, Pug rendering, or public route/API behavior.
 
@@ -292,7 +310,7 @@ Do not create a new helper path in documentation before it exists in the reposit
 | Browser helper with stubbed globals | Frontend | real Pug wiring, navigation, or session state matters |
 | Service transaction or relationship | Integration | middleware/route admission is part of the risk |
 | Controller using production services | Integration | full request parsing, cookies, redirect, or view rendering matters |
-| Authentication, guest, route, or critical creation flow | E2E | keep lower-layer edge cases too |
+| Authentication, guest, route, or critical creation flow | E2E | a distinct lower-layer edge risk remains unprotected |
 | Documentation label/path contract | Optional advisory documentation report | Keep application-behavior tests separate from maintained wording and images. |
 
 A change may need several layers, but more layers are not automatically better. Protect each distinct failure mode at the cheapest stable seam.
@@ -320,6 +338,7 @@ before either rehearsal. Documentation reports remain advisory and are not subst
 - Assert user-visible output, returned domain data, persisted state, emitted email contract, or permission result.
 - Avoid assertions on repository-call counts or private implementation order unless that order itself is the contract.
 - Use unique identifiers or factory defaults that make failures readable.
+- Keep uploads in test-owned directories permitted by the production file-serving policy; file existence alone does not prove a valid download fixture.
 - Freeze or inject time for deadline/retention behavior where production functions allow it.
 - Close database connections and restore globals/spies in teardown.
 - Never make a test depend on a previous spec file.
@@ -329,29 +348,32 @@ before either rehearsal. Documentation reports remain advisory and are not subst
 
 | Command | Database | Build | Browser | Intended use |
 |---|---|---|---|---|
-| `npm run test:unit` | No | No | No | Isolated server logic. |
-| `npm run test:frontend` | No | No | Stubbed globals only | Browser helper logic. |
-| `npm run test:quick` | No | No | Stubbed globals only | Fast local regression pass. |
-| `npm run test:integration` | Disposable MariaDB | No | No | Persistence and production-service workflows. |
-| `npm test` | Disposable MariaDB | No | Stubbed globals only | All Vitest layers. |
-| `npm run test:ci` | Disposable MariaDB | No | Stubbed globals only | Vitest coverage and JUnit output for CI. |
+| `npm run test:unit` | No | No | No | Isolated server logic/tooling. |
+| `npm run test:frontend` | No | No | Stubbed globals or happy-dom | Browser helpers and mounted consumers. |
+| `npm run test:quick` | No | No | Stubbed globals or happy-dom | Bounded parallel database-free regression. |
+| `npm run test:integration` | Disposable MariaDB | No | No | Serialized persistence/production workflows. |
+| `npm test` | Disposable MariaDB | No | Stubbed globals or happy-dom | Both Vitest projects. |
+| `npm run test:ci` | Disposable MariaDB | No | Stubbed globals or happy-dom | Both projects with coverage/JUnit. |
 | `npm run e2e:prepare` | Destructive E2E schema reset | Existing `dist/` not used | No | Initialize and seed only. |
 | `npm run e2e` | Destructive E2E schema reset through managed server | Requires existing `dist/` | Chromium | Focused built-application flows. |
 | `npm run test:all` | Both disposable schemas | Yes | Chromium | Full local sequence. |
 
 ## CI contract
 
-`.github/workflows/ci.yml` uses Node.js 24.15.0 and MariaDB 10.11. It:
+`.github/workflows/ci.yml` runs three independent verification stages with Node.js 24.15.0 and their own MariaDB
+10.11 services. Shared steps install the lockfile, configure disposable schemas and write test environment files:
 
-1. Installs the lockfile with `npm ci`.
-2. Creates and grants dedicated `surveyor_test` and `surveyor_e2e` schemas.
-3. Writes `tests/.env.test` and `.env.e2e`.
-4. Runs `npm run test:ci` with application Vitest coverage and JUnit output.
-5. Builds the application.
-6. Installs or restores Chromium.
-7. Runs `npm run e2e` with application Playwright reports.
-8. Uploads reports and coverage artifacts.
-9. Runs the configured SonarQube scan.
+- **Database-free** runs the complete isolated unit/frontend project with at most two workers.
+- **Integration** runs the complete database-backed project with one schema-owning worker.
+- **Browser** performs the full server/client/SSR/type/assets build, restores or installs Chromium, and runs all
+  ordinary built E2E checks with two workers. Source-only development cases retain their explicit separate workflow.
+
+Both Vitest stages use `npm run test:ci -- --project=<project>` with coverage and uniquely named blob reports. Each
+stage uploads diagnostics even on failure; separate copies preserve partial JUnit/coverage during collection. The
+report job uses the matching lockfile, fresh generation and Vitest's built-in `--merge-reports` to replay results
+and merge both coverage maps without rerunning tests. The existing combined `test-reports` artifact retains the
+original JUnit/LCOV paths and stage diagnostics. Sonar and release still require complete CI success. A twenty-minute
+stage timeout is an upper bound, not a claim that the ten-minute target has been measured on hosted runners.
 
 Documentation checks and tooling regressions are absent from this required sequence. Tests of maintained prose,
 images, guide search examples, or documentation completeness live outside application test discovery.
@@ -366,7 +388,8 @@ Confirm that `TEST_DB_NAME` contains `test`, points to a disposable schema, and 
 
 ### Integration suites interfere with one another
 
-Do not enable Vitest file parallelism. Each suite rebuilds the shared schema; the committed configuration deliberately serializes files.
+Keep the integration project serialized. Each integration suite rebuilds the shared schema; the isolated
+database-free project's bounded parallelism does not grant integration files permission to run concurrently.
 
 ### E2E initialization refuses the database
 

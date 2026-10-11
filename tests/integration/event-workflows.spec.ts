@@ -30,13 +30,11 @@ import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../suppor
 
 let owner: Profile;
 let participant: Profile;
-let secondParticipant: Profile;
 
 beforeAll(async () => {
     await initializeIntegrationDatabase();
     owner = await persistIntegrationProfile();
     participant = await persistIntegrationProfile();
-    secondParticipant = await persistIntegrationProfile();
 });
 
 afterAll(async () => {
@@ -48,10 +46,20 @@ describe('event user stories', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Workflow event', 20);
 
         expect(await eventService.getEventById(eventId)).toMatchObject({
+            id: eventId,
+            title: 'Workflow event',
+            ownerId: owner.id,
             location: 'Lakeside',
             timezone: 'UTC',
             maxParticipants: 20
         });
+
+        // A persisted event belonging to another organizer makes the owner-list
+        // assertion detect a missing ownership predicate, rather than an empty list.
+        const otherEventId = await createIntegrationEvent(participant.id, 'Other organizer event');
+        const ownedIds = (await eventService.getEventsByOwnerId(owner.id)).map(event => event.id);
+        expect(ownedIds).toContain(eventId);
+        expect(ownedIds).not.toContain(otherEventId);
     });
 
     it('updates the title and description shown to participants', async () => {
@@ -73,14 +81,35 @@ describe('event user stories', () => {
             location: 'Mountain',
             maxParticipants: 12,
             requireDietaryInfo: false,
-            allowDietComment: false
+            allowDietComment: false,
+            allowDietUpdateAfterDeadline: true,
+            allowRegCancelAfterDeadline: true,
+            allowRegDateUpdateAfterDeadline: true
         });
-        expect(await eventService.getEventById(eventId)).toMatchObject({
+        const event = await eventService.getEventById(eventId);
+        expect(event).toMatchObject({
             startDate: '2027-07-01',
             endDate: '2027-07-05',
             location: 'Mountain',
             maxParticipants: 12
         });
+        // The form names differ from the persisted columns for these deadline
+        // policies; assert the database result as well as the visible metadata.
+        expect(Boolean(event?.requireDietaryInfo)).toBe(false);
+        expect(Boolean(event?.allowDietComment)).toBe(false);
+        expect(Boolean(event?.allowRegDietUpdateAfterDeadline)).toBe(true);
+        expect(Boolean(event?.allowRegCancelationAfterDeadline)).toBe(true);
+        expect(Boolean(event?.allowRegDateUpdatesAfterDeadline)).toBe(true);
+
+        // Verify the opposite transition on the same persisted event: checking
+        // both values catches an update that silently ignores an enabled option.
+        await eventService.updateEventMeta(eventId, {
+            requireDietaryInfo: true,
+            allowDietComment: true
+        });
+        const enabled = await eventService.getEventById(eventId);
+        expect(Boolean(enabled?.requireDietaryInfo)).toBe(true);
+        expect(Boolean(enabled?.allowDietComment)).toBe(true);
     });
 
     it('registers a participant for an event', async () => {

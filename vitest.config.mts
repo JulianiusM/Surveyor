@@ -4,19 +4,42 @@ import vue from '@vitejs/plugin-vue';
 export default defineConfig({
     plugins: [vue()],
     test: {
-        include: [
-            'tests/unit/**/*.spec.ts',
-            'tests/integration/**/*.spec.ts',
-            'tests/frontend/**/*.spec.ts',
-        ],
         globals: false,
         environment: 'node',
-        // Integration suites share the disposable MariaDB schema. Keeping files
-        // sequential prevents one production-shaped suite from rebuilding it
-        // while another suite is exercising a multi-service workflow.
-        fileParallelism: false,
+        // Date fixtures and the database contract use UTC, as CI already does.
+        // Apply that contract in each worker so a developer's local zone cannot
+        // turn an unchanged serializer into a misleading regression failure.
+        env: {TZ: 'UTC'},
+        // Database-free files have isolated workers and restore their own globals.
+        // Bound concurrency for ordinary two-core CI runners instead of serializing
+        // those files behind a restriction required only by the shared test schema.
+        isolate: true,
+        maxWorkers: 2,
         hookTimeout: 30_000,
         setupFiles: ['tests/support/env.ts'],
+        projects: [
+            {
+                extends: true,
+                test: {
+                    name: 'database-free',
+                    include: ['tests/unit/**/*.spec.ts', 'tests/frontend/**/*.spec.ts'],
+                    fileParallelism: true,
+                    sequence: {groupOrder: 0},
+                },
+            },
+            {
+                extends: true,
+                test: {
+                    name: 'integration',
+                    include: ['tests/integration/**/*.spec.ts'],
+                    // Every file rebuilds the same disposable schema. This project
+                    // must own a single worker, after the independent files finish;
+                    // no suite may reset rows while another suite uses them.
+                    fileParallelism: false,
+                    sequence: {groupOrder: 1},
+                },
+            },
+        ],
         coverage: {
             provider: 'v8',
             reportsDirectory: 'coverage',

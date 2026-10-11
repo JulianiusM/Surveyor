@@ -71,7 +71,9 @@ describe('activity plan user stories', () => {
         const planId = await createActivityPlanWithSlot(owner.id);
 
         expect(await activityService.getActivityPlanById(planId)).toMatchObject({title: 'Camp activity plan', ownerId: owner.id});
-        expect(await activityService.getActivitySlotsFlat(planId)).toHaveLength(1);
+        expect(await activityService.getActivitySlotsFlat(planId)).toMatchObject([
+            {title: 'Morning activity', day: '2027-06-01', maxAssignees: 2},
+        ]);
     });
 
     it('rejects an activity plan without a participant-visible slot', async () => {
@@ -157,8 +159,12 @@ describe('activity plan user stories', () => {
         const slots = await activityService.getActivitySlotsFlat(planId);
         await assignActivitySlot(slots[0].id, participant.id);
         const assignmentId = (await activityService.getActivitySlotAssignees(planId))[slots[0].id][0].id;
+        await activityController.updateSlotAttr(slots[0].id, {field: 'title', value: 'Updated activity'}, {itemAllow: () => true} as never);
         await activityController.reorderSlots(planId, [{slotId: slots[0].id, pos: 2}, {slotId: slots[1].id, pos: 1}]);
-        expect((await activityService.getActivitySlotsFlat(planId))[0].title).toBe('First after reorder');
+        expect(await activityService.getActivitySlotsFlat(planId)).toMatchObject([
+            {title: 'First after reorder', pos: 1, assignedCount: 0},
+            {title: 'Updated activity', pos: 2, assignedCount: 1},
+        ]);
         expect((await activityService.getActivitySlotAssignmentById(assignmentId))?.id).toBe(assignmentId);
     });
 
@@ -175,8 +181,10 @@ describe('activity plan user stories', () => {
 
         const [slot] = await activityService.getActivitySlotsFlat(planId);
         await assignActivitySlot(slot.id, participant.id);
+        const firstAssignmentId = (await activityService.getActivitySlotAssignees(planId))[slot.id][0].id;
         await assignActivitySlot(slot.id, participant.id);
         expect(await activityService.getActivitySlotAssignments(planId, participant.id)).toHaveLength(1);
+        expect((await activityService.getActivitySlotAssignees(planId))[slot.id][0].id).toBe(firstAssignmentId);
     });
 
     it('shows assignment counts and participant plans', async () => {

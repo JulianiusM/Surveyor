@@ -1,6 +1,6 @@
 import {expect, request as playwrightRequest, test, type Request} from '@playwright/test';
 import {createE2EEvent, createE2ELogin} from '../factories/e2eCoreFactory';
-import {confirmInvoiceCommand, createResourceViaForm, loginForE2E} from '../keywords/e2eCoreKeywords';
+import {closeModalForE2E, confirmInvoiceCommand, createResourceViaForm, loginForE2E, openModalForE2E} from '../keywords/e2eCoreKeywords';
 
 test('records organizer expenses without attendance and accepts consecutive participant uploads', async ({page, browser, baseURL}, testInfo) => {
     test.setTimeout(120_000);
@@ -155,14 +155,11 @@ test('records organizer expenses without attendance and accepts consecutive part
         const paidAfter = (await paid.boundingBox())!;
         expect(Math.abs(paidBefore.x - paidAfter.x)).toBeLessThan(0.6);
         expect(Math.abs(paidBefore.y - paidAfter.y)).toBeLessThan(0.6);
-        await share.getByText('View breakdown', {exact: true}).click();
         const breakdown = page.locator(`#pool-${poolId}-share-breakdown`);
+        await openModalForE2E(breakdown, share.getByText('View breakdown', {exact: true}));
         await expect(breakdown).toBeVisible();
         await expect(breakdown.locator('[data-share-details-content]')).toContainText('60.00');
-        await Promise.all([
-            breakdown.evaluate(element => new Promise<void>(resolve => element.addEventListener('hidden.bs.modal', () => resolve(), {once: true}))),
-            breakdown.locator('.modal-header .btn-close').click(),
-        ]);
+        await closeModalForE2E(breakdown);
         const paidAfterDetails = (await paid.boundingBox())!;
         expect(Math.abs(paidBefore.x - paidAfterDetails.x)).toBeLessThan(0.6);
         expect(Math.abs(paidBefore.y - paidAfterDetails.y)).toBeLessThan(0.6);

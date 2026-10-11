@@ -29,7 +29,7 @@ async function removeTemporary(directory: string): Promise<void> {
 }
 
 describe('contract and catalog generation', () => {
-    it('keeps emitted JavaScript from shadowing maintained TypeScript modules', async () => {
+    it('keeps emitted JavaScript from shadowing maintained TypeScript modules and root configurations', async () => {
         // Extensionless imports can resolve an adjacent emitted .js before
         // the maintained .ts source. Such a copy can make both tests and production
         // bundles consume stale behavior despite a successful TypeScript check.
@@ -42,7 +42,18 @@ describe('contract and catalog generation', () => {
         for (const file of files) {
             if (!file.endsWith('.ts') || file.endsWith('.d.ts')) continue;
             const emitted = file.slice(0, -3) + '.js';
-            if (files.has(emitted)) collisions.push(emitted);
+            if (files.has(emitted)) collisions.push(path.join('src', emitted));
+        }
+        // Runner/build configuration is authored in explicit TypeScript module
+        // formats. Adjacent emitted .mjs/.cjs copies can similarly select stale
+        // configuration before the maintained source, including a different test
+        // concurrency policy. Discover these pairs without a second config list.
+        const rootFiles = new Set(await fs.readdir(root));
+        for (const file of rootFiles) {
+            if (file.endsWith('.d.mts') || file.endsWith('.d.cts')) continue;
+            const emitted = file.endsWith('.mts') ? file.slice(0, -4) + '.mjs'
+                : file.endsWith('.cts') ? file.slice(0, -4) + '.cjs' : null;
+            if (emitted !== null && rootFiles.has(emitted)) collisions.push(emitted);
         }
         expect(collisions.sort()).toEqual([]);
     });

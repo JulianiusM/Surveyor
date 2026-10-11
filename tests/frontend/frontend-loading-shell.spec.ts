@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import {afterEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
 import {createSSRApp, defineComponent, h, ref} from 'vue';
 import type {Component} from 'vue';
@@ -20,6 +20,14 @@ const session: components['schemas']['SessionView'] = {
         privacyPolicyUrl: '/privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'},
 };
 const cleanups: Array<() => void> = [];
+
+/** The final SSR case resolves the real lazy Help route. Cold SFC transformation
+ * is runner setup, not observable route-delivery time, and can compete with other
+ * test files. Prepare that exact production graph with a bounded startup budget;
+ * both independent documents still render through the real server entry below. */
+beforeAll(async function prepareServerHelpRoute(): Promise<void> {
+    await import('../../src/frontend/features/help/HelpPage.vue');
+}, 30_000);
 
 afterEach(() => {
     for (const cleanup of cleanups.splice(0)) cleanup();
@@ -62,23 +70,6 @@ async function mountedApp() {
 }
 
 describe('shared skeleton accessibility', () => {
-    it.each(['lines', 'form', 'table', 'cards', 'article'] as const)(
-        'announces %s loading once and keeps every placeholder decorative', variant => {
-            const context = createPilotContext({session}, false);
-            const wrapper = mount(LoadingSkeleton, {props: {variant}, global: {
-                plugins: [[I18NextVue, {i18next: context.i18next}]],
-                provide: {[pilotContextKey as symbol]: context},
-            }});
-            cleanups.push(() => { wrapper.unmount(); context.start()(); });
-            expect(wrapper.attributes('data-loading-skeleton')).toBe(variant);
-            expect(wrapper.findAll('[role="status"]')).toHaveLength(1);
-            expect(wrapper.get('[role="status"]').text()).toBe('Loading…');
-            expect(wrapper.get('[role="status"]').classes()).toContain('visually-hidden');
-            expect(wrapper.get('.pilot-skeleton-shapes').attributes('aria-hidden')).toBe('true');
-            expect(wrapper.find('input, button, a, select, textarea, [tabindex]').exists()).toBe(false);
-        },
-    );
-
     it('accepts a region-specific translated status without duplicating an announcement', () => {
         const context = createPilotContext({session: {...session, locale: 'de'}}, false);
         const wrapper = mount(LoadingSkeleton, {props: {label: 'Inhalt wird geladen'}, global: {
@@ -91,7 +82,7 @@ describe('shared skeleton accessibility', () => {
     });
 
     it.each(['lines', 'form', 'table', 'cards', 'article'] as const)(
-        'keeps server-rendered %s geometry and status inside a phrasing context', async variant => {
+        'keeps %s decorative with one announcement inside a parsed phrasing context', async variant => {
             const context = createPilotContext({session}, false);
             const app = createSSRApp(defineComponent({
                 components: {LoadingSkeleton},
@@ -107,8 +98,18 @@ describe('shared skeleton accessibility', () => {
             // hydration; verify the parsed DOM, rather than only the source template.
             expect(host.children).toHaveLength(1);
             const paragraph = host.querySelector('#inline-loading')!;
-            expect(paragraph.querySelector('[data-loading-skeleton]')).not.toBeNull();
-            expect(paragraph.querySelector('[role="status"]')?.textContent).toBe('Loading…');
+            // Parsed output protects each static shape's semantics as well as the
+            // hydration-sensitive wrapper. Custom labels and real mounted
+            // loading consumers are covered separately, without a second shape matrix.
+            const skeleton = paragraph.querySelector('[data-loading-skeleton]')!;
+            expect(skeleton).not.toBeNull();
+            expect(skeleton.getAttribute('data-loading-skeleton')).toBe(variant);
+            expect(skeleton.querySelectorAll('[role="status"]')).toHaveLength(1);
+            const status = skeleton.querySelector('[role="status"]')!;
+            expect(status.textContent).toBe('Loading…');
+            expect(status.classList.contains('visually-hidden')).toBe(true);
+            expect(skeleton.querySelector('.pilot-skeleton-shapes')?.getAttribute('aria-hidden')).toBe('true');
+            expect(skeleton.querySelector('input, button, a, select, textarea, [tabindex]')).toBeNull();
             expect(paragraph.textContent).toContain('Before');
             expect(paragraph.textContent).toContain('After');
         },

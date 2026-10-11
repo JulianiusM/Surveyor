@@ -414,13 +414,13 @@ async function navigationDisclosure(page: Page): Promise<void> {
     await expect(menu).toBeHidden();
 }
 
-test('shared entry preserves header creation admission, exact duplicate login return and canonical guest completion', async ({page, browser, baseURL}, testInfo) => {
+test('shared entry preserves header creation admission, exact duplicate login return and canonical guest completion', async ({request, browser, baseURL}, testInfo) => {
     test.setTimeout(60_000);
     const credentials = createE2ELogin();
-    await loginForE2E(page.request, credentials);
+    await loginForE2E(request, credentials);
     const input = createE2EPackingList();
     Object.assign(input.form, {'defaultPerms[public][0]': 'DATA_DUPLICATE'});
-    const list = await createResourceViaForm(page.request, input);
+    const list = await createResourceViaForm(request, input);
     const anonymous = await browser.newContext({baseURL});
     // The native oracle owns an independent cookie session, so another live
     // application's activity cannot affect the flash being compared at redirect.
@@ -1520,6 +1520,13 @@ test('pilot overview preserves personal visibility, shared archive state and lin
     try { await expect(popup).toHaveURL(new RegExp('owner_main_event=' + event.id)); }
     finally { await popup.close(); }
     expect(page.url()).toBe(originalUrl);
+    // Previous commands left timed alerts above this region. Dismiss them through their
+    // actual controls before measuring scroll, so expiry cannot remove height during Back.
+    const transientAlerts = page.locator('#liveAlerts .alert');
+    while (await transientAlerts.count()) {
+        await transientAlerts.first().getByRole('button', {name: 'Dismiss notification', exact: true}).click();
+    }
+    await expect(transientAlerts).toHaveCount(0);
     await page.evaluate(() => document.fonts.ready);
     await expansion.scrollIntoViewIfNeeded();
     const originalScroll = await page.evaluate(() => window.scrollY);
@@ -1619,8 +1626,8 @@ test('native and pilot disclosures keep link semantics and pilot failed paginati
 
 /** The existing-email lookup is advisory. Closing its choice must preserve input without
  * creating an identity; deliberately continuing creates a distinct guest, not a recovery. */
-test('existing guest email choice preserves cancelled input and explicitly creates a new guest', async ({page, browser, baseURL}, testInfo) => {
-    const list = await packingFixture(page.request, true);
+test('existing guest email choice preserves cancelled input and explicitly creates a new guest', async ({request, browser, baseURL}, testInfo) => {
+    const list = await packingFixture(request, true);
     const existing = await browser.newContext({baseURL});
     const visitor = await browser.newContext({baseURL});
     const email = `guest-choice-${randomUUID()}@example.invalid`;
@@ -1672,21 +1679,21 @@ test('existing guest email choice preserves cancelled input and explicitly creat
 
 /** Reject malformed uploads at the actual multipart boundary. Neither rejection may
  * replace the persisted image reference or lose the previously authorized image bytes. */
-test('rejected header MIME and oversized uploads retain the existing header and settings token', async ({page}) => {
-    const list = await packingFixture(page.request);
-    const session = await bootstrap(page.request);
+test('rejected header MIME and oversized uploads retain the existing header and settings token', async ({request}) => {
+    const list = await packingFixture(request);
+    const session = await bootstrap(request);
     const root = `/api/v1/packing-lists/${list.id}`;
     const png = readFileSync('src/public/img/logo.png');
-    const settings = await page.request.get(`${root}/settings`, {headers: headers(session)});
+    const settings = await request.get(`${root}/settings`, {headers: headers(session)});
     expect(settings.status()).toBe(200);
     const initial = await settings.json() as components['schemas']['PackingSettings'];
-    const uploaded = await page.request.put(`${root}/header`, {
+    const uploaded = await request.put(`${root}/header`, {
         headers: {...headers(session), 'If-Match': initial.settingsToken},
         multipart: {image: {name: 'existing-header.png', mimeType: 'image/png', buffer: png}},
     });
     expect(uploaded.status()).toBe(200);
-    const before = await readPacking(page.request, list.id);
-    const currentSettings = await page.request.get(`${root}/settings`, {headers: headers(session)});
+    const before = await readPacking(request, list.id);
+    const currentSettings = await request.get(`${root}/settings`, {headers: headers(session)});
     expect(currentSettings.status()).toBe(200);
     const reviewed = await currentSettings.json() as components['schemas']['PackingSettings'];
 
@@ -1694,17 +1701,17 @@ test('rejected header MIME and oversized uploads retain the existing header and 
         {name: 'wrong-type.png', mimeType: 'text/plain', buffer: Buffer.from('Rejected MIME'), status: 400, code: 'UPLOAD_INVALID'},
         {name: 'oversized.png', mimeType: 'image/png', buffer: Buffer.alloc(10 * 1024 * 1024 + 1), status: 413, code: 'PAYLOAD_TOO_LARGE'},
     ]) {
-        const response = await page.request.put(`${root}/header`, {
+        const response = await request.put(`${root}/header`, {
             headers: {...headers(session), 'If-Match': reviewed.settingsToken},
             multipart: {image: {name: rejected.name, mimeType: rejected.mimeType, buffer: rejected.buffer}},
         });
         expect(response.status()).toBe(rejected.status);
         expect(await response.json()).toMatchObject({status: rejected.status, code: rejected.code});
-        expect((await readPacking(page.request, list.id)).headerVersion).toBe(before.headerVersion);
-        const after = await page.request.get(`${root}/settings`, {headers: headers(session)});
+        expect((await readPacking(request, list.id)).headerVersion).toBe(before.headerVersion);
+        const after = await request.get(`${root}/settings`, {headers: headers(session)});
         expect(after.status()).toBe(200);
         expect((await after.json()).settingsToken).toBe(reviewed.settingsToken);
-        const retained = await page.request.get(`${root}/header`, {headers: headers(session)});
+        const retained = await request.get(`${root}/header`, {headers: headers(session)});
         expect(retained.status()).toBe(200);
         expect(await retained.body()).toEqual(png);
     }

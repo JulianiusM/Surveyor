@@ -1,13 +1,6 @@
 import {expect, request as playwrightRequest, test, type Locator, type Page} from '@playwright/test';
 import {createE2EEvent, createE2ELogin} from '../factories/e2eCoreFactory';
-import {confirmInvoiceCommand, createResourceViaForm, loginForE2E} from '../keywords/e2eCoreKeywords';
-
-async function closeModal(modal: Locator) {
-    await Promise.all([
-        modal.evaluate(element => new Promise<void>(resolve => element.addEventListener('hidden.bs.modal', () => resolve(), {once: true}))),
-        modal.locator('.modal-header .btn-close').click(),
-    ]);
-}
+import {closeModalForE2E, confirmInvoiceCommand, createResourceViaForm, loginForE2E, openModalForE2E} from '../keywords/e2eCoreKeywords';
 
 async function openInvoices(pool: Locator) {
     if (await pool.locator('.accordion-button').getAttribute('aria-expanded') !== 'true') await pool.locator('.accordion-button').click();
@@ -71,12 +64,12 @@ test('confirms retroactive invoice changes and retains participant retractions w
         const initialPreview = (await (await page.request.get(`${endpoint}/preview`)).json()).data;
         expect((await other.post(`${endpoint}/invoices/${pendingId}/retract`, {data: {confirmed: true, expectedRevision: initialPreview.revision}})).status()).toBe(403);
         expect((await participant.request.post(`${endpoint}/invoices/${pendingId}/retract`, {data: {expectedRevision: initialPreview.revision}})).status()).toBe(400);
-        await pending.getByRole('button', {name: 'Retract', exact: true}).click();
         const retract = participantPage.locator('#invoiceRetractModal');
+        await openModalForE2E(retract, pending.getByRole('button', {name: 'Retract', exact: true}));
         await expect(retract).toBeVisible();
-        await closeModal(retract);
+        await closeModalForE2E(retract);
         await expect(pending).toContainText('Awaiting review');
-        await pending.getByRole('button', {name: 'Retract', exact: true}).click();
+        await openModalForE2E(retract, pending.getByRole('button', {name: 'Retract', exact: true}));
         await Promise.all([participantPage.waitForEvent('load'), retract.getByRole('button', {name: 'Confirm retraction', exact: true}).click()]);
         await expect(participantPage).toHaveURL(/#invoiceHistory$/);
         await expect(history).toBeVisible();
@@ -152,14 +145,14 @@ test('confirms retroactive invoice changes and retains participant retractions w
         await expect(paid).toHaveAttribute('data-paid', 'false');
         await expect(payer.locator('[data-share-balance]')).toHaveText('30.00');
         const breakdown = payer.getByRole('button', {name: 'View breakdown for Invoice owner', exact: true});
-        await breakdown.click();
         const details = page.locator(`#pool-${poolId}-share-breakdown`);
+        await openModalForE2E(details, breakdown);
         // Prior credit remains traceable even when unused adjustments and derived rows are omitted.
         const breakdownTerms = details.locator('dl').first().locator('dt');
         await expect(breakdownTerms.filter({hasText: /^Previously settled$/}).locator('xpath=following-sibling::dd[1]')).toHaveText('40.00');
         await expect(breakdownTerms.filter({hasText: /^Calculated balance$/}).locator('xpath=following-sibling::dd[1]')).toHaveText('30.00');
         await expect(breakdownTerms.filter({hasText: /^Payment status$/}).locator('xpath=following-sibling::dd[1]')).toHaveText('Payment due');
-        await closeModal(details);
+        await closeModalForE2E(details);
     } finally {
         await participant.close();
         await other.dispose();

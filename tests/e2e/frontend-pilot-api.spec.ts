@@ -228,18 +228,18 @@ test('native and pilot creation/duplicate entries drop missing or forbidden init
     expect((await pilotView.json()).currentEventId).toBeNull();
 });
 
-test('uses one duplicate admission for serialized account login, profile switch, guest return and anonymous audience grants', async ({page, browser, baseURL}) => {
-    await loginForE2E(page.request, createE2ELogin());
+test('uses one duplicate admission for serialized account login, profile switch, guest return and anonymous audience grants', async ({request, browser, baseURL}) => {
+    await loginForE2E(request, createE2ELogin());
     const suffix = randomUUID().slice(0, 8);
     const ownerName = `Audience owner ${suffix}`;
-    expect((await page.request.post('/users/profile/create', {form: {name: ownerName}, maxRedirects: 0})).status()).toBe(302);
-    const ownerSession = await bootstrap(page.request);
+    expect((await request.post('/users/profile/create', {form: {name: ownerName}, maxRedirects: 0})).status()).toBe(302);
+    const ownerSession = await bootstrap(request);
     const ownerProfile = ownerSession.profiles.find(profile => profile.name === ownerName)!;
     expect(ownerProfile).toBeTruthy();
-    expect((await page.request.get(`/users/profile/change/${ownerProfile.id}`, {maxRedirects: 0})).status()).toBe(302);
+    expect((await request.get(`/users/profile/change/${ownerProfile.id}`, {maxRedirects: 0})).status()).toBe(302);
     const input = createE2EPackingList();
     input.form.title = `Audience-only duplicate ${suffix}`;
-    const list = await createResourceViaForm(page.request, input);
+    const list = await createResourceViaForm(request, input);
 
     const accountLogin = await browser.newContext({baseURL});
     const accountSwitch = await browser.newContext({baseURL});
@@ -273,7 +273,7 @@ test('uses one duplicate admission for serialized account login, profile switch,
         for (const audience of ['authenticated', 'guest', 'public', 'none'] as const) {
             const defaults: Record<string, string[]> = {public: [], guest: [], authenticated: [], participant: []};
             if (audience !== 'none') defaults[audience] = ['DATA_DUPLICATE'];
-            expect((await page.request.post(`/api/packing/${list.id}/settings`, {data: {defaultPerms: defaults}})).ok()).toBe(true);
+            expect((await request.post(`/api/packing/${list.id}/settings`, {data: {defaultPerms: defaults}})).ok()).toBe(true);
 
             await expectDuplicateEntry(accountLogin.request, list.id, input.form.title, audience !== 'none');
             await expectDuplicateEntry(accountSwitch.request, list.id, input.form.title, audience !== 'none');
@@ -346,12 +346,12 @@ test('preserves attached packing HTML membership and explicit view alternatives 
     }
 });
 
-test('keeps exact native and SPA duplicate destinations including query context through account-only submission', async ({page, browser, baseURL}) => {
-    await loginForE2E(page.request, createE2ELogin());
+test('keeps exact native and SPA duplicate destinations including query context through account-only submission', async ({request, browser, baseURL}) => {
+    await loginForE2E(request, createE2ELogin());
     const input = createE2EPackingList();
     Object.assign(input.form, {'defaultPerms[public][0]': 'DATA_DUPLICATE'});
-    const list = await createResourceViaForm(page.request, input);
-    const event = await createResourceViaForm(page.request, createE2EEvent());
+    const list = await createResourceViaForm(request, input);
+    const event = await createResourceViaForm(request, createE2EEvent());
     const anonymous = await browser.newContext({baseURL});
     try {
         const nativeReturn = `${list.path}/duplicate?eventId=${event.id}&locale=en`;
@@ -446,12 +446,12 @@ test('renders invalid guest capability links as native 401 HTML with guest-speci
     await expect(page.locator('#pilot-main form')).toHaveCount(0);
 });
 
-test('runs the native expiry/logout document journey before invalid stored identity becomes an API problem', async ({page, browser, baseURL}) => {
-    await loginForE2E(page.request, createE2ELogin());
-    const original = await bootstrap(page.request);
+test('runs the native expiry/logout document journey before invalid stored identity becomes an API problem', async ({request, browser, baseURL}) => {
+    await loginForE2E(request, createE2ELogin());
+    const original = await bootstrap(request);
     const profileName = `Expiry profile ${randomUUID().slice(0, 8)}`;
-    expect((await page.request.post('/users/profile/create', {form: {name: profileName}, maxRedirects: 0})).status()).toBe(302);
-    const profile = (await bootstrap(page.request)).profiles.find(value => value.name === profileName)!;
+    expect((await request.post('/users/profile/create', {form: {name: profileName}, maxRedirects: 0})).status()).toBe(302);
+    const profile = (await bootstrap(request)).profiles.find(value => value.name === profileName)!;
     expect(profile).toBeTruthy();
     const documentContext = await browser.newContext({baseURL});
     const apiContext = await browser.newContext({baseURL});
@@ -464,8 +464,8 @@ test('runs the native expiry/logout document journey before invalid stored ident
         // Detach the profile through its real owner workflow while the two other
         // sessions retain the old serialized profile. No session fixture or DB mutation
         // bypasses middleware, persistence or the application's identity ownership check.
-        expect((await page.request.get(`/users/profile/change/${profile.id}`, {maxRedirects: 0})).status()).toBe(302);
-        expect((await page.request.post('/users/profile/delete', {form: {name: profileName}, maxRedirects: 0})).status()).toBe(302);
+        expect((await request.get(`/users/profile/change/${profile.id}`, {maxRedirects: 0})).status()).toBe(302);
+        expect((await request.post('/users/profile/delete', {form: {name: profileName}, maxRedirects: 0})).status()).toBe(302);
         const expiredDocument = await documentContext.request.get('/frontend-pilot/help', {maxRedirects: 0});
         expect(expiredDocument.status()).toBe(302);
         expect(expiredDocument.headers()['content-type']).not.toContain('application/json');
@@ -478,7 +478,7 @@ test('runs the native expiry/logout document journey before invalid stored ident
     } finally {
         await documentContext.close();
         await apiContext.close();
-        await page.request.get(`/users/profile/change/${original.activeProfile!.id}`, {maxRedirects: 0});
+        await request.get(`/users/profile/change/${original.activeProfile!.id}`, {maxRedirects: 0});
     }
 });
 
@@ -505,7 +505,7 @@ test('shows the localized JavaScript fallback outside hidden interactive control
     }
 });
 
-test('keeps native Help path aliases authoritative while retaining authored pilot root query links', async ({page}) => {
+test('keeps native Help path aliases authoritative while retaining authored pilot root query links', async ({request}) => {
     // Assert selection metadata rather than maintained guide wording. The real SSR
     // route must project the same search/article decision as the shared browser owner.
     const cases = [
@@ -517,7 +517,7 @@ test('keeps native Help path aliases authoritative while retaining authored pilo
         ['/frontend-pilot/help?doc=packing_lists', 'packing_lists', undefined],
     ] as const;
     for (const [path, currentDoc, searchQuery] of cases) {
-        const response = await page.request.get(path);
+        const response = await request.get(path);
         expect(response.status()).toBe(200);
         const html = await response.text();
         const serialized = html.match(/<script id="surveyor-pilot-state" type="application\/json">([^<]+)<\/script>/u)?.[1];
@@ -533,28 +533,28 @@ test('keeps native Help path aliases authoritative while retaining authored pilo
     // complete Error card, while the API reports its authored structured rejection.
     const missing = `missing-${randomUUID()}`;
     for (const path of [`/help/${missing}`, `/frontend-pilot/help/${missing}`, `/frontend-pilot/help?doc=${missing}`]) {
-        const response = await page.request.get(path);
+        const response = await request.get(path);
         expect(response.status()).toBe(404);
         expect(response.headers()['content-type']).toContain('text/html');
         const html = await response.text();
         expect(html).toContain('card-header text-center bg-dark text-light');
         expect(html).not.toContain('card-body help-content');
     }
-    const current = await bootstrap(page.request);
-    await expectProblem(await page.request.get('/api/v1/help', {params: {doc: missing}, headers: headersFor(current)}), 404, 'NOT_FOUND');
+    const current = await bootstrap(request);
+    await expectProblem(await request.get('/api/v1/help', {params: {doc: missing}, headers: headersFor(current)}), 404, 'NOT_FOUND');
 });
 
-test('bootstraps account and guest scopes while projecting only public session and packing fields', async ({page, browser, baseURL}) => {
-    await loginForE2E(page.request, createE2ELogin());
-    const list = await createApiPackingList(page.request);
-    const account = await bootstrap(page.request);
+test('bootstraps account and guest scopes while projecting only public session and packing fields', async ({request, browser, baseURL}) => {
+    await loginForE2E(request, createE2ELogin());
+    const list = await createApiPackingList(request);
+    const account = await bootstrap(request);
     expect(account.kind).toBe('account');
     expect(account.activeProfile).toEqual({id: expect.any(String), name: expect.any(String)});
     expect(Object.keys(account).sort()).toEqual(['activeProfile', 'context', 'csrfToken', 'deployment', 'kind', 'locale', 'loginUrl', 'logoutUrl', 'profiles', 'shell']);
     expect(account.deployment).toEqual({buildId: expect.any(String), apiCompatibility: expect.any(String)});
     expect(Object.keys(account.shell).sort()).toEqual(['imprintUrl', 'localLoginEnabled', 'oidcEnabled', 'oidcName', 'privacyPolicyUrl', 'version']);
     for (const profile of account.profiles) expect(Object.keys(profile).sort()).toEqual(['id', 'name']);
-    await expectProblem(await page.request.get(`/api/v1/packing-lists/${list.id}`), 400, 'CONTEXT_REQUIRED');
+    await expectProblem(await request.get(`/api/v1/packing-lists/${list.id}`), 400, 'CONTEXT_REQUIRED');
 
     const guestContext = await browser.newContext({baseURL});
     try {
@@ -590,30 +590,30 @@ test('bootstraps account and guest scopes while projecting only public session a
     }
 });
 
-test('enforces CSRF, media types, UUIDs and closed payloads before a conditional metadata save', async ({page}) => {
-    await loginForE2E(page.request, createE2ELogin());
-    const list = await createApiPackingList(page.request);
-    const session = await bootstrap(page.request);
+test('enforces CSRF, media types, UUIDs and closed payloads before a conditional metadata save', async ({request}) => {
+    await loginForE2E(request, createE2ELogin());
+    const list = await createApiPackingList(request);
+    const session = await bootstrap(request);
     const headers = headersFor(session);
     const path = `/api/v1/packing-lists/${list.id}/metadata`;
-    const baseline = await page.request.get(path, {headers});
+    const baseline = await request.get(path, {headers});
     expect(baseline.status()).toBe(200);
     const tag = baseline.headers().etag;
     expect(tag).toMatch(/^"edit-[A-Za-z0-9_-]+"$/);
     const conditionalHeaders = {...headers, 'If-None-Match': tag};
-    expect((await page.request.get(path, {headers: conditionalHeaders})).status()).toBe(304);
-    await expectProblem(await page.request.get(path, {
+    expect((await request.get(path, {headers: conditionalHeaders})).status()).toBe(304);
+    await expectProblem(await request.get(path, {
         headers: {...headers, 'If-None-Match': 'a'.repeat(4097)},
     }), 400, 'VALIDATION_FAILED');
     const patchHeaders = {...headers, 'If-Match': tag};
-    await expectProblem(await page.request.patch(path, {headers: {'X-Surveyor-Context': session.context}, data: {title: 'No CSRF'}}), 403, 'CSRF_INVALID');
-    await expectProblem(await page.request.patch(path, {headers: {...patchHeaders, Origin: 'https://other.example'}, data: {title: 'Foreign origin'}}), 403, 'CSRF_INVALID');
-    await expectProblem(await page.request.patch(path, {headers: {...patchHeaders, 'Sec-Fetch-Site': 'cross-site'}, data: {title: 'Cross site'}}), 403, 'CSRF_INVALID');
-    await expectProblem(await page.request.get('/api/v1/packing-lists/not-a-uuid', {headers}), 400, 'VALIDATION_FAILED');
-    await expectProblem(await page.request.patch(path, {headers: patchHeaders, data: {title: false}}), 400, 'VALIDATION_FAILED');
-    await expectProblem(await page.request.patch(path, {headers: patchHeaders, data: {title: 'Forged', profileId: session.activeProfile!.id}}), 400, 'VALIDATION_FAILED');
-    await expectProblem(await page.request.patch(path, {headers: patchHeaders, form: {title: 'Wrong media'}}), 415, 'UNSUPPORTED_MEDIA_TYPE');
-    await expectProblem(await page.request.patch(path, {headers: {...patchHeaders, 'Content-Type': 'application/json'}, data: '{invalid'}), 400, 'INVALID_JSON');
+    await expectProblem(await request.patch(path, {headers: {'X-Surveyor-Context': session.context}, data: {title: 'No CSRF'}}), 403, 'CSRF_INVALID');
+    await expectProblem(await request.patch(path, {headers: {...patchHeaders, Origin: 'https://other.example'}, data: {title: 'Foreign origin'}}), 403, 'CSRF_INVALID');
+    await expectProblem(await request.patch(path, {headers: {...patchHeaders, 'Sec-Fetch-Site': 'cross-site'}, data: {title: 'Cross site'}}), 403, 'CSRF_INVALID');
+    await expectProblem(await request.get('/api/v1/packing-lists/not-a-uuid', {headers}), 400, 'VALIDATION_FAILED');
+    await expectProblem(await request.patch(path, {headers: patchHeaders, data: {title: false}}), 400, 'VALIDATION_FAILED');
+    await expectProblem(await request.patch(path, {headers: patchHeaders, data: {title: 'Forged', profileId: session.activeProfile!.id}}), 400, 'VALIDATION_FAILED');
+    await expectProblem(await request.patch(path, {headers: patchHeaders, form: {title: 'Wrong media'}}), 415, 'UNSUPPORTED_MEDIA_TYPE');
+    await expectProblem(await request.patch(path, {headers: {...patchHeaders, 'Content-Type': 'application/json'}, data: '{invalid'}), 400, 'INVALID_JSON');
 
     // The two HTTP generations share normalization and authored constraints, while the
     // original native envelope keeps its precise field diagnostics. Literal oracles
@@ -624,14 +624,14 @@ test('enforces CSRF, media types, UUIDs and closed payloads before a conditional
         {body: {}, message: '"value" must have at least 1 key'},
     ];
     for (const invalid of invalidNativeProperties) {
-        const native = await page.request.post(`/api/packing/${list.id}/update`, {data: invalid.body});
+        const native = await request.post(`/api/packing/${list.id}/update`, {data: invalid.body});
         expect(native.status()).toBe(400);
         expect(await native.json()).toEqual({status: 'error', message: invalid.message, data: {}});
-        const versioned = await page.request.patch(path, {headers: patchHeaders, data: invalid.body});
+        const versioned = await request.patch(path, {headers: patchHeaders, data: invalid.body});
         await expectProblem(versioned, 400, 'VALIDATION_FAILED');
         expect(await versioned.json()).toMatchObject({detail: 'Check the submitted values.'});
     }
-    const nativeDescription = await page.request.post(`/api/packing/${list.id}/description`, {data: {description: 'D'.repeat(16001)}});
+    const nativeDescription = await request.post(`/api/packing/${list.id}/description`, {data: {description: 'D'.repeat(16001)}});
     expect(nativeDescription.status()).toBe(400);
     expect(await nativeDescription.json()).toEqual({status: 'error',
         message: '"description" length must be less than or equal to 16000 characters long', data: {}});
@@ -639,43 +639,43 @@ test('enforces CSRF, media types, UUIDs and closed payloads before a conditional
     // The original description adapter supplied an optional own key even when omitted.
     // TypeORM performs its tracking-only update: the native operation succeeds without
     // clearing either property. This accepted native input must not weaken v1's empty-patch rule.
-    const missingNativeDescription = await page.request.post(`/api/packing/${list.id}/description`, {data: {}});
+    const missingNativeDescription = await request.post(`/api/packing/${list.id}/description`, {data: {}});
     expect(missingNativeDescription.status()).toBe(200);
     expect(await missingNativeDescription.json()).toEqual({status: 'success', message: 'Description updated', data: null});
-    const afterNativeNoOp = await page.request.get(path, {headers});
+    const afterNativeNoOp = await request.get(path, {headers});
     expect((await afterNativeNoOp.json()).values).toEqual((await baseline.json()).values);
-    await expectProblem(await page.request.patch(path, {headers: patchHeaders, data: {}}), 400, 'VALIDATION_FAILED');
+    await expectProblem(await request.patch(path, {headers: patchHeaders, data: {}}), 400, 'VALIDATION_FAILED');
 
-    await expectProblem(await page.request.patch(path, {headers, data: {title: 'Missing review'}}), 428, 'PRECONDITION_REQUIRED');
-    await expectProblem(await page.request.patch(path, {headers: {...headers, 'If-Match': `W/${tag}`}, data: {title: 'Weak review'}}), 412, 'PRECONDITION_FAILED');
+    await expectProblem(await request.patch(path, {headers, data: {title: 'Missing review'}}), 428, 'PRECONDITION_REQUIRED');
+    await expectProblem(await request.patch(path, {headers: {...headers, 'If-Match': `W/${tag}`}, data: {title: 'Weak review'}}), 412, 'PRECONDITION_FAILED');
 
     // Transport normalization must match native forms: surrounding spaces do not count
     // toward the persisted title limit, and all failed requests above left this tag valid.
     const title = 'T'.repeat(255);
-    const saved = await page.request.patch(path, {headers: patchHeaders, data: {title: `  ${title}  `}});
+    const saved = await request.patch(path, {headers: patchHeaders, data: {title: `  ${title}  `}});
     expect(saved.status()).toBe(200);
     expect(await saved.json()).toMatchObject({values: {title, description: 'Shared equipment'}});
     expect(saved.headers().etag).not.toBe(tag);
-    const refreshed = await page.request.get(path, {headers: conditionalHeaders});
+    const refreshed = await request.get(path, {headers: conditionalHeaders});
     expect(refreshed.status()).toBe(200);
     expect(await refreshed.json()).toMatchObject({values: {title, description: 'Shared equipment'}});
-    await expectProblem(await page.request.patch(path, {headers: patchHeaders, data: {title: 'Stale overwrite'}}), 412, 'PRECONDITION_FAILED');
-    const independent = await page.request.patch(path, {headers: patchHeaders, data: {description: 'Independent description'}});
+    await expectProblem(await request.patch(path, {headers: patchHeaders, data: {title: 'Stale overwrite'}}), 412, 'PRECONDITION_FAILED');
+    const independent = await request.patch(path, {headers: patchHeaders, data: {description: 'Independent description'}});
     expect(independent.status()).toBe(200);
 
     const currentTag = independent.headers().etag;
-    expect((await page.request.post(`/api/packing/${list.id}/description`, {
+    expect((await request.post(`/api/packing/${list.id}/description`, {
         data: {description: 'Legacy tab edit', expectedValue: 'Independent description'},
     })).ok()).toBe(true);
-    await expectProblem(await page.request.patch(path, {headers: {...headers, 'If-Match': currentTag}, data: {description: 'Would overwrite description'}}), 412, 'PRECONDITION_FAILED');
-    const latest = await page.request.get(path, {headers});
+    await expectProblem(await request.patch(path, {headers: {...headers, 'If-Match': currentTag}, data: {description: 'Would overwrite description'}}), 412, 'PRECONDITION_FAILED');
+    const latest = await request.get(path, {headers});
     expect(await latest.json()).toMatchObject({values: {title, description: 'Legacy tab edit'}});
-    const staleNative = await page.request.post(`/api/packing/${list.id}/description`, {
+    const staleNative = await request.post(`/api/packing/${list.id}/description`, {
         data: {description: 'Stale native edit', expectedValue: 'Independent description'},
     });
     expect(staleNative.status()).toBe(412);
     expect(await staleNative.json()).toMatchObject({status: 'error'});
-    const staleSetup = await page.request.post(`/api/packing/${list.id}/update`, {
+    const staleSetup = await request.post(`/api/packing/${list.id}/update`, {
         data: {description: 'Stale native setup', expectedValues: {description: 'Shared equipment'}},
     });
     expect(staleSetup.status()).toBe(412);
@@ -688,67 +688,67 @@ test('enforces CSRF, media types, UUIDs and closed payloads before a conditional
         {body: {description: '\u{1F600}'.repeat(8001)}, message: '"description" length must be less than or equal to 16000 characters long'},
     ];
     for (const invalid of nativeUnicodeFailures) {
-        const native = await page.request.post(`/api/packing/${list.id}/update`, {data: invalid.body});
+        const native = await request.post(`/api/packing/${list.id}/update`, {data: invalid.body});
         expect(native.status()).toBe(400);
         expect(await native.json()).toEqual({status: 'error', message: invalid.message, data: {}});
     }
     const nativeUnicodeTitle = '\u{1F600}'.repeat(127);
-    expect((await page.request.post(`/api/packing/${list.id}/update`, {data: {title: nativeUnicodeTitle}})).status()).toBe(200);
-    const unicodeBaseline = await page.request.get(path, {headers});
+    expect((await request.post(`/api/packing/${list.id}/update`, {data: {title: nativeUnicodeTitle}})).status()).toBe(200);
+    const unicodeBaseline = await request.get(path, {headers});
     expect((await unicodeBaseline.json()).values.title).toBe(nativeUnicodeTitle);
     const codePointValues = {title: '\u{1F600}'.repeat(128), description: '\u{1F600}'.repeat(8001)};
-    const unicodeVersioned = await page.request.patch(path, {
+    const unicodeVersioned = await request.patch(path, {
         headers: {...headers, 'If-Match': unicodeBaseline.headers().etag}, data: codePointValues,
     });
     expect(unicodeVersioned.status()).toBe(200);
     expect((await unicodeVersioned.json()).values).toEqual(codePointValues);
 });
 
-test('rejects old profile scopes and returns structured authentication loss after the cookie disappears', async ({page, context}) => {
-    await loginForE2E(page.request, createE2ELogin());
-    const list = await createApiPackingList(page.request);
-    const original = await bootstrap(page.request);
+test('rejects old profile scopes and returns structured authentication loss after the cookie disappears', async ({context}) => {
+    await loginForE2E(context.request, createE2ELogin());
+    const list = await createApiPackingList(context.request);
+    const original = await bootstrap(context.request);
     const profileName = `API alternate ${randomUUID()}`;
-    expect((await page.request.post('/users/profile/create', {form: {name: profileName}, maxRedirects: 0})).status()).toBe(302);
-    const withProfiles = await bootstrap(page.request);
+    expect((await context.request.post('/users/profile/create', {form: {name: profileName}, maxRedirects: 0})).status()).toBe(302);
+    const withProfiles = await bootstrap(context.request);
     const alternate = withProfiles.profiles.find(profile => profile.name === profileName)!;
     expect(alternate).toBeTruthy();
-    expect((await page.request.get(`/users/profile/change/${alternate.id}`, {maxRedirects: 0})).status()).toBe(302);
-    await expectProblem(await page.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(original)}), 409, 'SESSION_CONTEXT_CHANGED');
-    await expectProblem(await page.request.patch(`/api/v1/packing-lists/${list.id}/metadata`, {
+    expect((await context.request.get(`/users/profile/change/${alternate.id}`, {maxRedirects: 0})).status()).toBe(302);
+    await expectProblem(await context.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(original)}), 409, 'SESSION_CONTEXT_CHANGED');
+    await expectProblem(await context.request.patch(`/api/v1/packing-lists/${list.id}/metadata`, {
         headers: {...headersFor(original), 'If-Match': '"old"'}, data: {title: 'Old profile command'},
     }), 409, 'SESSION_CONTEXT_CHANGED');
-    const switched = await bootstrap(page.request);
+    const switched = await bootstrap(context.request);
     expect(switched.activeProfile!.id).toBe(alternate.id);
     expect(switched.context).not.toBe(original.context);
     expect(switched.csrfToken).not.toBe(original.csrfToken);
-    expect((await page.request.get(`/users/profile/change/${original.activeProfile!.id}`, {maxRedirects: 0})).status()).toBe(302);
-    const restored = await bootstrap(page.request);
+    expect((await context.request.get(`/users/profile/change/${original.activeProfile!.id}`, {maxRedirects: 0})).status()).toBe(302);
+    const restored = await bootstrap(context.request);
     expect(restored.context).not.toBe(original.context);
-    await expectProblem(await page.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(original)}), 409, 'SESSION_CONTEXT_CHANGED');
+    await expectProblem(await context.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(original)}), 409, 'SESSION_CONTEXT_CHANGED');
 
     // Expiry removes the cookie from subsequent requests. Preserve the old browser headers
     // to verify that private endpoints return a Problem rather than a login redirect or HTML.
     await context.clearCookies();
-    await expectProblem(await page.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(restored)}), 401, 'AUTH_REQUIRED');
-    const anonymous = await bootstrap(page.request);
+    await expectProblem(await context.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(restored)}), 401, 'AUTH_REQUIRED');
+    const anonymous = await bootstrap(context.request);
     expect(anonymous).toMatchObject({kind: 'anonymous', activeProfile: null, profiles: []});
-    await expectProblem(await page.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(anonymous)}), 401, 'AUTH_REQUIRED');
+    await expectProblem(await context.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(anonymous)}), 401, 'AUTH_REQUIRED');
 });
 
-test('reauthorizes a conditional read before returning 304 or private content', async ({page, browser, baseURL}) => {
-    await loginForE2E(page.request, createE2ELogin());
-    const list = await createApiPackingList(page.request);
-    const event = await createResourceViaForm(page.request, createE2EEvent());
+test('reauthorizes a conditional read before returning 304 or private content', async ({request, browser, baseURL}) => {
+    await loginForE2E(request, createE2ELogin());
+    const list = await createApiPackingList(request);
+    const event = await createResourceViaForm(request, createE2EEvent());
     const guestContext = await browser.newContext({baseURL});
     try {
         expect((await guestContext.request.post(`${list.path}/guest`, {form: {username: `Cache guest ${randomUUID().slice(0, 8)}`}, maxRedirects: 0})).status()).toBe(302);
         const guest = await bootstrap(guestContext.request);
-        expect((await page.request.post(`/api/packing/${list.id}/event`, {data: {eventId: event.id, expectedEventId: null}})).ok()).toBe(true);
-        expect((await page.request.post(`/api/packing/${list.id}/settings`, {data: {
+        expect((await request.post(`/api/packing/${list.id}/event`, {data: {eventId: event.id, expectedEventId: null}})).ok()).toBe(true);
+        expect((await request.post(`/api/packing/${list.id}/settings`, {data: {
             defaultPerms: {public: [], guest: [], authenticated: [], participant: []},
         }})).ok()).toBe(true);
-        expect((await page.request.post(`/api/packing/${list.id}/admins`, {data: {profileId: guest.activeProfile!.id, perms: ['ACCESS_VIEW']}})).ok()).toBe(true);
+        expect((await request.post(`/api/packing/${list.id}/admins`, {data: {profileId: guest.activeProfile!.id, perms: ['ACCESS_VIEW']}})).ok()).toBe(true);
         const path = `/api/v1/packing-lists/${list.id}`;
         const initial = await guestContext.request.get(path, {headers: headersFor(guest)});
         expect(initial.status()).toBe(200);
@@ -757,7 +757,7 @@ test('reauthorizes a conditional read before returning 304 or private content', 
         expect(unchanged.status()).toBe(304);
         expect(await unchanged.body()).toHaveLength(0);
         expect(unchanged.headers()['x-surveyor-context']).toBe(guest.context);
-        expect((await page.request.delete(`/api/packing/${list.id}/admins/${guest.activeProfile!.id}`)).ok()).toBe(true);
+        expect((await request.delete(`/api/packing/${list.id}/admins/${guest.activeProfile!.id}`)).ok()).toBe(true);
         const revoked = await guestContext.request.get(path, {headers: conditionalHeaders});
         await expectProblem(revoked, 403, 'FORBIDDEN');
         expect(await revoked.text()).not.toContain(list.title);
@@ -766,32 +766,32 @@ test('reauthorizes a conditional read before returning 304 or private content', 
     }
 });
 
-test('applies captured self-membership idempotently and reports capacity without accepting a body actor', async ({page, browser, baseURL}) => {
-    await loginForE2E(page.request, createE2ELogin());
-    const list = await createApiPackingList(page.request);
-    const owner = await bootstrap(page.request);
-    const listResponse = await page.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(owner)});
+test('applies captured self-membership idempotently and reports capacity without accepting a body actor', async ({request, browser, baseURL}) => {
+    await loginForE2E(request, createE2ELogin());
+    const list = await createApiPackingList(request);
+    const owner = await bootstrap(request);
+    const listResponse = await request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(owner)});
     const item = (await listResponse.json()).items[0];
     const path = `/api/v1/packing-lists/${list.id}/items/${item.id}/self-assignment`;
     const guestContext = await browser.newContext({baseURL});
     try {
         expect((await guestContext.request.post(`${list.path}/guest`, {form: {username: `Assign guest ${randomUUID().slice(0, 8)}`}, maxRedirects: 0})).status()).toBe(302);
         const guest = await bootstrap(guestContext.request);
-        await expectProblem(await page.request.put(path, {headers: headersFor(owner), data: {profileId: guest.activeProfile!.id}}), 400, 'VALIDATION_FAILED');
-        await expectProblem(await page.request.put(path, {headers: {...headersFor(owner), 'Content-Type': 'text/plain'}, data: 'unexpected'}), 400, 'VALIDATION_FAILED');
+        await expectProblem(await request.put(path, {headers: headersFor(owner), data: {profileId: guest.activeProfile!.id}}), 400, 'VALIDATION_FAILED');
+        await expectProblem(await request.put(path, {headers: {...headersFor(owner), 'Content-Type': 'text/plain'}, data: 'unexpected'}), 400, 'VALIDATION_FAILED');
         for (let retry = 0; retry < 2; retry++) {
             const assigned = await guestContext.request.put(path, {headers: headersFor(guest)});
             expect(assigned.status()).toBe(200);
             expect(await assigned.json()).toEqual({listId: list.id, itemId: item.id, selfAssigned: true, assignedCount: 1, maxAssignees: 1});
         }
-        const versionedFull = await page.request.put(path, {headers: headersFor(owner)});
+        const versionedFull = await request.put(path, {headers: headersFor(owner)});
         await expectProblem(versionedFull, 409, 'PACKING_ITEM_FULL');
         expect(await versionedFull.json()).toMatchObject({detail: 'This packing item is already fully assigned', params: {itemId: item.id}});
-        const nativeFull = await page.request.post(`/api/packing/${list.id}/assign`, {data: {itemId: item.id}});
+        const nativeFull = await request.post(`/api/packing/${list.id}/assign`, {data: {itemId: item.id}});
         expect(nativeFull.status()).toBe(409);
         expect(await nativeFull.json()).toEqual({status: 'error',
             message: 'This packing item is already fully assigned', data: {itemId: item.id}});
-        const ownView = await page.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(owner)});
+        const ownView = await request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(owner)});
         expect((await ownView.json()).items[0]).toMatchObject({selfAssigned: false, assignedCount: 1, assignees: [{name: guest.activeProfile!.name}]});
         for (let retry = 0; retry < 2; retry++) {
             const unassigned = await guestContext.request.delete(path, {headers: headersFor(guest)});
@@ -803,8 +803,8 @@ test('applies captured self-membership idempotently and reports capacity without
     }
 });
 
-test('preserves native signed capacity edits and SQL rounding through the versioned locked operation', async ({page}) => {
-    await loginForE2E(page.request, createE2ELogin());
+test('preserves native signed capacity edits and SQL rounding through the versioned locked operation', async ({request}) => {
+    await loginForE2E(request, createE2ELogin());
     const input = createE2EPackingList();
     const title = `Capacity transport ${randomUUID().slice(0, 8)}`;
     Object.assign(input, {title, expectedViewText: title});
@@ -812,13 +812,13 @@ test('preserves native signed capacity edits and SQL rounding through the versio
         {title: 'Native capacity', maxAssignees: 1, requiredByAll: false},
         {title: 'Versioned capacity', maxAssignees: 1, requiredByAll: false},
     ])});
-    const list = await createResourceViaForm(page.request, input);
-    const session = await bootstrap(page.request);
+    const list = await createResourceViaForm(request, input);
+    const session = await bootstrap(request);
     const headers = headersFor(session);
     const path = `/api/v1/packing-lists/${list.id}`;
 
     async function readItems(): Promise<components['schemas']['PackingItemView'][]> {
-        const response = await page.request.get(path, {headers});
+        const response = await request.get(path, {headers});
         expect(response.status()).toBe(200);
         const body = await response.json() as components['schemas']['PackingListView'];
         return body.items;
@@ -852,10 +852,10 @@ test('preserves native signed capacity edits and SQL rounding through the versio
             expect(before).toHaveLength(2);
             const nativeItem = before[0];
             const versionedItem = before[1];
-            const native = await page.request.post(`/api/packing/${list.id}/item/${nativeItem.id}/attr`, {
+            const native = await request.post(`/api/packing/${list.id}/item/${nativeItem.id}/attr`, {
                 data: {field: 'maxAssignees', value: scenario.value, expectedValue: nativeItem.maxAssignees},
             });
-            const versioned = await page.request.patch(`${path}/items/${versionedItem.id}`, {
+            const versioned = await request.patch(`${path}/items/${versionedItem.id}`, {
                 headers: {...headers, 'If-Match': versionedItem.editToken}, data: {maxAssignees: scenario.value},
             });
             expect(native.status()).toBe(scenario.status);
@@ -881,27 +881,27 @@ test('preserves native signed capacity edits and SQL rounding through the versio
             expect(after[1].assignedCount).toBe(0);
         }
     } finally {
-        expect((await page.request.delete(path, {headers})).status()).toBe(200);
+        expect((await request.delete(path, {headers})).status()).toBe(200);
     }
 });
 
-test('uses typed multipart, item/settings drafts and scoped binary transport for the complete packing workflow', async ({page}) => {
-    await loginForE2E(page.request, createE2ELogin());
-    const session = await bootstrap(page.request);
+test('uses typed multipart, item/settings drafts and scoped binary transport for the complete packing workflow', async ({request}) => {
+    await loginForE2E(request, createE2ELogin());
+    const session = await bootstrap(request);
     const headers = headersFor(session);
-    const creationContext = await page.request.get('/api/v1/packing-lists/create-context', {headers});
+    const creationContext = await request.get('/api/v1/packing-lists/create-context', {headers});
     expect(creationContext.status()).toBe(200);
     const creation = {title: `Typed packing ${randomUUID()}`, description: null, eventId: null,
         defaultPermissions: (await creationContext.json()).defaults,
         items: [{title: 'Tent', description: null, maxAssignees: 2, requiredByAll: false},
             {title: 'Water', description: 'Drink bottle', maxAssignees: 1, requiredByAll: true}]};
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX2kAAAAASUVORK5CYII=', 'base64');
-    await expectProblem(await page.request.post('/api/v1/packing-lists', {headers, data: creation}), 415, 'UNSUPPORTED_MEDIA_TYPE');
-    await expectProblem(await page.request.post('/api/v1/packing-lists', {headers, multipart: {data: '{bad-json'}}), 400, 'VALIDATION_FAILED');
-    await expectProblem(await page.request.post('/api/v1/packing-lists', {headers, multipart: {
+    await expectProblem(await request.post('/api/v1/packing-lists', {headers, data: creation}), 415, 'UNSUPPORTED_MEDIA_TYPE');
+    await expectProblem(await request.post('/api/v1/packing-lists', {headers, multipart: {data: '{bad-json'}}), 400, 'VALIDATION_FAILED');
+    await expectProblem(await request.post('/api/v1/packing-lists', {headers, multipart: {
         data: JSON.stringify({...creation, items: [{...creation.items[0], maxAssignees: false}]}),
     }}), 400, 'VALIDATION_FAILED');
-    const created = await page.request.post('/api/v1/packing-lists', {headers, multipart: {
+    const created = await request.post('/api/v1/packing-lists', {headers, multipart: {
         data: JSON.stringify(creation), image: {name: 'header.png', mimeType: 'image/png', buffer: png},
     }});
     expect(created.status()).toBe(201);
@@ -909,23 +909,23 @@ test('uses typed multipart, item/settings drafts and scoped binary transport for
     const root = `/api/v1/packing-lists/${id}`;
     expect(created.headers().location).toBe(root);
     async function view(): Promise<components['schemas']['PackingListView']> {
-        const response = await page.request.get(root, {headers});
+        const response = await request.get(root, {headers});
         expect(response.status()).toBe(200);
         return response.json();
     }
     async function settings(): Promise<components['schemas']['PackingSettings']> {
-        const response = await page.request.get(`${root}/settings`, {headers});
+        const response = await request.get(`${root}/settings`, {headers});
         expect(response.status()).toBe(200);
         return response.json();
     }
     let current = await view();
     expect(current.items.map(item => item.position)).toEqual([0, 1]);
     expect(current.headerUrl).toBe(`${root}/header`);
-    const binary = await page.request.get(current.headerUrl!, {headers});
+    const binary = await request.get(current.headerUrl!, {headers});
     expect(binary.status()).toBe(200);
     expect(binary.headers()['x-surveyor-context']).toBe(session.context);
     expect(await binary.body()).toEqual(png);
-    await expectProblem(await page.request.get(current.headerUrl!), 400, 'CONTEXT_REQUIRED');
+    await expectProblem(await request.get(current.headerUrl!), 400, 'CONTEXT_REQUIRED');
     const first = current.items[0];
     // Undefined-only native item edits historically report this exact known failure
     // after admission; root-description omission above is a distinct accepted input.
@@ -935,58 +935,58 @@ test('uses typed multipart, item/settings drafts and scoped binary transport for
         {suffix: 'attr', body: {field: 'title'}},
     ];
     for (const missing of missingNativeItemValues) {
-        const native = await page.request.post(`/api/packing/${id}/item/${first.id}/${missing.suffix}`, {data: missing.body});
+        const native = await request.post(`/api/packing/${id}/item/${first.id}/${missing.suffix}`, {data: missing.body});
         expect(native.status()).toBe(500);
         expect(await native.json()).toEqual({status: 'error', message: 'Unknown error while saving', data: missing.body});
     }
     expect((await view()).items[0]).toEqual(first);
-    await expectProblem(await page.request.patch(`${root}/items/${first.id}`, {
+    await expectProblem(await request.patch(`${root}/items/${first.id}`, {
         headers: {...headers, 'If-Match': first.editToken}, data: {},
     }), 400, 'VALIDATION_FAILED');
-    await expectProblem(await page.request.patch(`${root}/items/${first.id}`, {headers, data: {title: 'No token'}}), 428, 'PRECONDITION_REQUIRED');
-    expect((await page.request.patch(`${root}/items/${first.id}`, {headers: {...headers, 'If-Match': first.editToken}, data: {title: 'Updated tent'}})).status()).toBe(200);
-    await expectProblem(await page.request.patch(`${root}/items/${first.id}`, {headers: {...headers, 'If-Match': first.editToken}, data: {title: 'Stale'}}), 412, 'PRECONDITION_FAILED');
-    const createdItem = await page.request.post(`${root}/items`, {headers, data: {title: 'Towels', description: null, maxAssignees: 1, requiredByAll: false}});
+    await expectProblem(await request.patch(`${root}/items/${first.id}`, {headers, data: {title: 'No token'}}), 428, 'PRECONDITION_REQUIRED');
+    expect((await request.patch(`${root}/items/${first.id}`, {headers: {...headers, 'If-Match': first.editToken}, data: {title: 'Updated tent'}})).status()).toBe(200);
+    await expectProblem(await request.patch(`${root}/items/${first.id}`, {headers: {...headers, 'If-Match': first.editToken}, data: {title: 'Stale'}}), 412, 'PRECONDITION_FAILED');
+    const createdItem = await request.post(`${root}/items`, {headers, data: {title: 'Towels', description: null, maxAssignees: 1, requiredByAll: false}});
     expect(createdItem.status()).toBe(201);
     expect(createdItem.headers().location).toBe(`${root}#${(await createdItem.json()).id}`);
     current = await view();
     const reversed = current.items.map(item => item.id).reverse();
-    expect((await page.request.put(`${root}/item-order`, {headers: {...headers, 'If-Match': current.orderToken}, data: {itemIds: reversed}})).status()).toBe(200);
+    expect((await request.put(`${root}/item-order`, {headers: {...headers, 'If-Match': current.orderToken}, data: {itemIds: reversed}})).status()).toBe(200);
     expect((await view()).items.map(item => item.id)).toEqual(reversed);
     const beforeHeader = await settings();
-    expect((await page.request.put(`${root}/header`, {headers: {...headers, 'If-Match': beforeHeader.settingsToken}, multipart: {
+    expect((await request.put(`${root}/header`, {headers: {...headers, 'If-Match': beforeHeader.settingsToken}, multipart: {
         image: {name: 'replacement.png', mimeType: 'image/png', buffer: png},
     }})).status()).toBe(200);
     const afterHeader = await settings();
     expect(afterHeader.headerVersion).not.toBe(beforeHeader.headerVersion);
     // A changed image does not invalidate an independently reviewed audience mask.
-    expect((await page.request.put(`${root}/default-permissions`, {headers: {...headers, 'If-Match': beforeHeader.settingsToken}, data: {guest: 16}})).status()).toBe(200);
-    await expectProblem(await page.request.put(`${root}/default-permissions`, {headers: {...headers, 'If-Match': beforeHeader.settingsToken}, data: {guest: 0}}), 412, 'PRECONDITION_FAILED');
+    expect((await request.put(`${root}/default-permissions`, {headers: {...headers, 'If-Match': beforeHeader.settingsToken}, data: {guest: 16}})).status()).toBe(200);
+    await expectProblem(await request.put(`${root}/default-permissions`, {headers: {...headers, 'If-Match': beforeHeader.settingsToken}, data: {guest: 0}}), 412, 'PRECONDITION_FAILED');
     const adminProfile = session.activeProfile!.id;
-    expect((await page.request.post(`${root}/admins`, {headers: {...headers, 'If-Match': beforeHeader.settingsToken}, data: {profileId: adminProfile, mask: 1}})).status()).toBe(200);
+    expect((await request.post(`${root}/admins`, {headers: {...headers, 'If-Match': beforeHeader.settingsToken}, data: {profileId: adminProfile, mask: 1}})).status()).toBe(200);
     const adminBaseline = (await settings()).access!.admins.find(admin => admin.profileId === adminProfile)!;
-    expect((await page.request.patch(`${root}/admins/${adminProfile}`, {headers: {...headers, 'If-Match': adminBaseline.editToken}, data: {mask: 2}})).status()).toBe(200);
-    await expectProblem(await page.request.patch(`${root}/admins/${adminProfile}`, {headers: {...headers, 'If-Match': adminBaseline.editToken}, data: {mask: 1}}), 412, 'PRECONDITION_FAILED');
+    expect((await request.patch(`${root}/admins/${adminProfile}`, {headers: {...headers, 'If-Match': adminBaseline.editToken}, data: {mask: 2}})).status()).toBe(200);
+    await expectProblem(await request.patch(`${root}/admins/${adminProfile}`, {headers: {...headers, 'If-Match': adminBaseline.editToken}, data: {mask: 1}}), 412, 'PRECONDITION_FAILED');
     const freshAdmin = (await settings()).access!.admins.find(admin => admin.profileId === adminProfile)!;
-    expect((await page.request.delete(`${root}/admins/${adminProfile}`, {headers: {...headers, 'If-Match': freshAdmin.editToken}})).status()).toBe(200);
-    expect((await page.request.delete(`${root}/header`, {headers: {...headers, 'If-Match': afterHeader.settingsToken}})).status()).toBe(200);
-    await expectProblem(await page.request.get(`${root}/header`, {headers}), 404, 'NOT_FOUND');
-    expect((await page.request.post(`${root}/archive`, {headers})).status()).toBe(200);
+    expect((await request.delete(`${root}/admins/${adminProfile}`, {headers: {...headers, 'If-Match': freshAdmin.editToken}})).status()).toBe(200);
+    expect((await request.delete(`${root}/header`, {headers: {...headers, 'If-Match': afterHeader.settingsToken}})).status()).toBe(200);
+    await expectProblem(await request.get(`${root}/header`, {headers}), 404, 'NOT_FOUND');
+    expect((await request.post(`${root}/archive`, {headers})).status()).toBe(200);
     expect((await view()).archived).toBe(true);
-    expect((await page.request.post(`${root}/restore`, {headers})).status()).toBe(200);
-    const duplicate = await page.request.get(`${root}/duplicate`, {headers});
+    expect((await request.post(`${root}/restore`, {headers})).status()).toBe(200);
+    const duplicate = await request.get(`${root}/duplicate`, {headers});
     expect(duplicate.status()).toBe(200);
     expect(await duplicate.json()).toMatchObject({eventId: null, title: creation.title, items: expect.any(Array)});
     const overviewQuery = {collection: 'owner', region: 'main', q: creation.title};
-    const overview = await page.request.get('/api/v1/overview', {headers, params: overviewQuery});
+    const overview = await request.get('/api/v1/overview', {headers, params: overviewQuery});
     expect(overview.status()).toBe(200);
     expect((await overview.json()).items.map((card: {id: string}) => card.id)).toEqual([id]);
-    await expectProblem(await page.request.get('/api/v1/overview', {headers, params: {...overviewQuery, profileId: session.activeProfile!.id}}), 400, 'VALIDATION_FAILED');
+    await expectProblem(await request.get('/api/v1/overview', {headers, params: {...overviewQuery, profileId: session.activeProfile!.id}}), 400, 'VALIDATION_FAILED');
     const visibilityPath = `/api/v1/overview/packing/${id}/visibility`;
-    expect((await page.request.put(visibilityPath, {headers, data: {visibility: 'hidden'}})).status()).toBe(200);
-    const hidden = await page.request.get('/api/v1/overview', {headers, params: {...overviewQuery, region: 'hidden'}});
+    expect((await request.put(visibilityPath, {headers, data: {visibility: 'hidden'}})).status()).toBe(200);
+    const hidden = await request.get('/api/v1/overview', {headers, params: {...overviewQuery, region: 'hidden'}});
     expect((await hidden.json()).items.map((card: {id: string}) => card.id)).toEqual([id]);
     expect((await view()).archived).toBe(false);
-    expect((await page.request.delete(root, {headers})).status()).toBe(200);
-    await expectProblem(await page.request.get(root, {headers}), 404, 'NOT_FOUND');
+    expect((await request.delete(root, {headers})).status()).toBe(200);
+    await expectProblem(await request.get(root, {headers}), 404, 'NOT_FOUND');
 });

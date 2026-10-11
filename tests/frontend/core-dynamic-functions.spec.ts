@@ -124,8 +124,10 @@ describe("frontend core dynamic functions smoke suite", () => {
   });
 
   describe("events date and registration payload dynamics", () => {
-    // Canary: protects a high-value production behavior while avoiding private implementation details.
-    it.each(createActivityCases())("$description", async (testCase) => {
+    // The serializer carries date strings unchanged; alternate sample days do not
+    // exercise another branch. Activity window boundaries are covered below.
+    it("preserves registration dates and multiple selected registrations", () => {
+      const testCase = createActivityCases()[0]!;
       // Canary: registration forms must preserve attendance dates and selected registrations.
       vi.stubGlobal("FormData", FakeFormData);
       const form = {
@@ -144,31 +146,31 @@ describe("frontend core dynamic functions smoke suite", () => {
   });
 
   describe("invoice pool form dynamics", () => {
-    // Canary: protects a high-value production behavior while avoiding private implementation details.
-    it.each(createActivityCases())(
-      "$description invoice base settings",
-      async (testCase) => {
-        // Canary: invoice pool edits must send the stable fields the backend expects.
-        vi.stubGlobal("FormData", FakeFormData);
-        const form = {
-          values: [
-            ["description", `Travel pool ${testCase.expectedDates[0]}`],
-            ["distribution", "EQUAL"],
-          ],
-          multiValues: [],
-        } as unknown as HTMLFormElement;
+    // Pool serialization does not interpret its description's sample date. One
+    // complete payload protects the field contract without repeating that literal.
+    it("preserves invoice base settings in the submitted payload", () => {
+      const testCase = createActivityCases()[0]!;
+      // Canary: invoice pool edits must send the stable fields the backend expects.
+      vi.stubGlobal("FormData", FakeFormData);
+      const form = {
+        values: [
+          ["description", `Travel pool ${testCase.expectedDates[0]}`],
+          ["distribution", "EQUAL"],
+        ],
+        multiValues: [],
+      } as unknown as HTMLFormElement;
 
-        expect(serializePoolBaseSettings(form)).toEqual({
-          description: `Travel pool ${testCase.expectedDates[0]}`,
-          distribution: "EQUAL",
-        });
-      },
-    );
+      expect(serializePoolBaseSettings(form)).toEqual({
+        description: `Travel pool ${testCase.expectedDates[0]}`,
+        distribution: "EQUAL",
+      });
+    });
   });
 
   describe("activity plan slot dynamics", () => {
-    // Canary: protects a high-value production behavior while avoiding private implementation details.
-    it.each(createActivityCases())("$description", (testCase) => {
+    // The factory cycles through the same five event days three times. Keep all
+    // distinct days, including both boundaries, without repeating renamed slots.
+    it.each(createActivityCases().slice(0, 5))("$description", (testCase) => {
       // Canary: activity slot JSON must keep only slots inside the event window.
       const state = new ActivityCreateState();
       const logic = new ActivityCreateLogic(state);
@@ -187,8 +189,9 @@ describe("frontend core dynamic functions smoke suite", () => {
   });
 
   describe("recommendation matching dynamics", () => {
-    // Canary: protects a high-value production behavior while avoiding private implementation details.
-    it.each(createRecommendationCases())("$description", (testCase) => {
+    // Retain every distinct attendance day; later factory entries only rename
+    // the participant and slot while repeating those same five date inputs.
+    it.each(createRecommendationCases().slice(0, 5))("$description", (testCase) => {
       // Canary: recommendations must keep matching participants to available slots.
       const state = new ActivityRecommendationsState();
       state.setParticipantOptions([testCase.participant]);
@@ -292,8 +295,10 @@ describe("frontend core dynamic functions smoke suite", () => {
   });
 
   describe("packing list row collection dynamics", () => {
-    // Canary: protects a high-value production behavior while avoiding private implementation details.
-    it.each(createPackingCases())("$description", async (testCase) => {
+    // Both required states and capacities remain in this two-row payload. Other
+    // factory entries differ only in numeric suffixes added to these titles.
+    it("collects the complete packing item payload", () => {
+      const testCase = createPackingCases()[0]!;
       // Canary: packing rows must serialize to the production item payload shape.
       const table = createItemTable(testCase.rows);
 
@@ -304,8 +309,10 @@ describe("frontend core dynamic functions smoke suite", () => {
   });
 
   describe("drivers list row collection dynamics", () => {
-    // Canary: protects a high-value production behavior while avoiding private implementation details.
-    it.each(createDriversCases())("$description", async (testCase) => {
+    // Driver collection has its own production owner and payload contract; retain
+    // it independently while dropping repetitions that only rename these rows.
+    it("collects the complete driver option payload", () => {
+      const testCase = createDriversCases()[0]!;
       // Canary: driver rows must serialize to the production item payload shape.
       const table = createItemTable(testCase.rows);
 
@@ -316,8 +323,9 @@ describe("frontend core dynamic functions smoke suite", () => {
   });
 
   describe("survey combination dynamics", () => {
-    // Canary: protects a high-value production behavior while avoiding private implementation details.
-    it.each(createSurveyCases())("$description", async (testCase) => {
+    // These five weekday/week pairs are repeated exactly by the factory's next
+    // ten entries. Keep each distinct pair and the native formatting assertions.
+    it.each(createSurveyCases().slice(0, 5))("$description", (testCase) => {
       // Canary: survey rows must keep weekday/week combinations compatible with backend entities.
       const table = createSurveyTable(testCase.combinations);
 

@@ -2,26 +2,16 @@ import {describe, expect, it} from 'vitest';
 import {APIError} from '../../src/modules/lib/errors';
 import {enforceAssignmentItemScope} from '../../src/middleware/assignFlowFactory';
 import {coerceLimit, enforceChildResourceScope, performAPIAction, SQL_ALLOW_LIST} from '../../src/modules/lib/util';
-import {createApiActionCase, createApiRequest, createRecordingAction} from '../factories/apiActionFactory';
+import {createApiRequest, createRecordingAction} from '../factories/apiActionFactory';
 import {createQueryLimitCase} from '../factories/queryLimitFactory';
 
 describe('API contract behavior suite', () => {
     describe('authenticated API action guard', () => {
         // Canary: protects a high-value production behavior while avoiding private implementation details.
-        it('passes the request body and profile id to protected API actions', async () => {
-            const apiCase = createApiActionCase();
-            const action = createRecordingAction();
-
-            await performAPIAction(apiCase.request, action);
-
-            expect(action.calls).toEqual([{body: apiCase.expectedBody, profileId: apiCase.expectedProfileId}]);
-        });
-
-        // Canary: protects a high-value production behavior while avoiding private implementation details.
-        it('passes nested payloads without reshaping client input', async () => {
+        it('passes the profile id and complete payload without reshaping client input', async () => {
             const request = createApiRequest({
                 profileId: 'profile-2',
-                body: {items: [{id: 'item-1', quantity: 2}], meta: {source: 'api'}},
+                body: {title: 'Shared equipment', items: [{id: 'item-1', quantity: 2}], meta: {source: 'api'}},
             });
             const action = createRecordingAction();
 
@@ -32,19 +22,14 @@ describe('API contract behavior suite', () => {
 
         // Canary: protects a high-value production behavior while avoiding private implementation details.
         it('rejects protected actions without an authenticated profile', async () => {
-            await expect(performAPIAction(createApiRequest({body: {title: 'No profile'}}), createRecordingAction())).rejects.toMatchObject({
+            const action = createRecordingAction();
+            const rejected = performAPIAction(createApiRequest({body: {title: 'No profile'}}), action);
+            await expect(rejected).rejects.toBeInstanceOf(APIError);
+            await expect(rejected).rejects.toMatchObject({
                 name: APIError.name,
                 message: 'Unknown user',
                 status: 401,
             });
-        });
-
-        // Canary: protects a high-value production behavior while avoiding private implementation details.
-        it('does not invoke protected actions when authentication is missing', async () => {
-            const action = createRecordingAction();
-
-            await expect(performAPIAction(createApiRequest({body: {title: 'Do not call'}}), action)).rejects.toBeInstanceOf(APIError);
-
             expect(action.calls).toEqual([]);
         });
 
@@ -116,6 +101,7 @@ describe('API contract behavior suite', () => {
         it('caps list limits at the endpoint maximum to protect expensive queries', () => {
             const limitCase = createQueryLimitCase({input: '100', expectedLimit: 25});
             expect(coerceLimit(limitCase.input, limitCase.defaultLimit, limitCase.maxLimit)).toBe(limitCase.expectedLimit);
+            expect(coerceLimit('250', 10, 50)).toBe(50);
         });
 
         // Canary: protects a high-value production behavior while avoiding private implementation details.
@@ -125,9 +111,11 @@ describe('API contract behavior suite', () => {
         });
 
         // Canary: protects a high-value production behavior while avoiding private implementation details.
-        it('raises empty list limits to the minimum page size', () => {
+        it('raises empty and non-positive list limits to the minimum page size', () => {
             const limitCase = createQueryLimitCase({input: '', expectedLimit: 1});
             expect(coerceLimit(limitCase.input, limitCase.defaultLimit, limitCase.maxLimit)).toBe(limitCase.expectedLimit);
+            expect(coerceLimit('0', 10, 50)).toBe(1);
+            expect(coerceLimit('-1', 10, 50)).toBe(1);
         });
     });
 

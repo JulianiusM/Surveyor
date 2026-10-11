@@ -12,11 +12,9 @@ import * as userController from '../../src/controller/userController';
 import {Profile} from '../../src/modules/database/entities/user/Profile';
 import {PERM} from '../../src/modules/lib/permissions';
 import * as activityService from '../../src/modules/database/services/ActivityService';
-import * as driverService from '../../src/modules/database/services/DriverService';
 import * as adminService from '../../src/modules/database/services/EntityAdminService';
 import * as eventService from '../../src/modules/database/services/EventService';
 import * as invoiceService from '../../src/modules/database/services/EventInvoiceService';
-import * as packingService from '../../src/modules/database/services/PackingService';
 import * as surveyService from '../../src/modules/database/services/SurveyService';
 import * as userService from '../../src/modules/database/services/UserService';
 import {
@@ -84,6 +82,7 @@ describe('permission user stories', () => {
         await entityAdminController.updateAdmin('event', eventId, participant.id, {mask: viewAdmin});
 
         expect(await adminService.getProfilePerms('event', eventId, participant.id)).toBe(viewAdmin);
+        expect(await adminService.isAdmin('event', eventId, participant.id)).toBe(true);
     });
 
     it('lists delegated administrators with their profile', async () => {
@@ -96,11 +95,13 @@ describe('permission user stories', () => {
 
     it('removes delegated event administration', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Permission workflow event');
-        const viewAdmin = PERM.ACCESS_VIEW;
-        await entityAdminController.addAdmin('event', eventId, {profileId: participant.id, mask: viewAdmin});
+        const adminMask = PERM.ACCESS_ADMIN;
+        await entityAdminController.addAdmin('event', eventId, {profileId: participant.id, mask: adminMask});
+        expect(await adminService.getIds('event', participant.id, PERM.ACCESS_ADMIN)).toContain(eventId);
 
         await entityAdminController.removeAdmin('event', eventId, participant.id);
         expect(await adminService.isAdmin('event', eventId, participant.id)).toBe(false);
+        expect(await adminService.getIds('event', participant.id, PERM.ACCESS_ADMIN)).not.toContain(eventId);
     });
 
     it('keeps permissions isolated between entities', async () => {
@@ -185,13 +186,6 @@ describe('permission user stories', () => {
         expect(await adminService.getIds('event', participant.id, PERM.ACCESS_ADMIN)).not.toContain(eventId);
     });
 
-    it('includes owned and delegated packing lists in management', async () => {
-
-        const listId = await packingService.createPackingListTx(owner.id, 'Delegated packing', 'Shared', []);
-        await entityAdminController.addAdmin('packing', listId, {profileId: participant.id, mask: PERM.ACCESS_ADMIN});
-        expect((await packingService.getManagedLists(participant.id)).map((list) => list.id)).toContain(listId);
-    });
-
     it('includes owned and delegated activity plans in management', async () => {
 
         const planId = await activityService.createActivityPlanTx(owner.id, 'Delegated activity', 'Shared', '2027-06-01', '2027-06-03', []);
@@ -199,11 +193,18 @@ describe('permission user stories', () => {
         expect((await activityService.getManagedPlans(participant.id)).map((plan) => plan.id)).toContain(planId);
     });
 
-    it('includes owned and delegated drivers lists in management', async () => {
-
-        const listId = await driverService.createDriversList(owner.id, 'Delegated drivers', 'Shared');
-        await entityAdminController.addAdmin('drivers', listId, {profileId: participant.id, mask: PERM.ACCESS_ADMIN});
-        expect((await driverService.getManagedListsForProfile(participant.id)).map((list) => list.id)).toContain(listId);
+    it('persists audience permissions under a survey resource type', async () => {
+        // Retain the polymorphic storage boundary formerly checked by the general
+        // service suite. Packing and Drivers management remain in their own workflows.
+        const surveyId = await surveyService.createSurveyTx(owner.id, 'Shared survey', 'Visibility', [
+            {weekday: 'WED', week: '3'},
+        ]);
+        await adminService.updatePerms('survey', surveyId, {
+            public: PERM.ACCESS_VIEW, authenticated: PERM.ACCESS_VIEW | PERM.ITEM_ADD,
+        });
+        expect(await adminService.getDefaultPerms('survey', surveyId)).toEqual({
+            public: PERM.ACCESS_VIEW, authenticated: PERM.ACCESS_VIEW | PERM.ITEM_ADD,
+        });
     });
 
 });

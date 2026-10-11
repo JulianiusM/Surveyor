@@ -127,25 +127,6 @@ describe('authorized event discovery and reassociation', () => {
         await expect(authorizeEventLink(id, sessionFor(outsider))).rejects.toMatchObject({status: 403});
     });
 
-    it('filters denied events before pagination and does not expose private titles', async () => {
-        const privateRows = [];
-        for (let index = 0; index < 301; index++) {
-            privateRows.push({id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`, owner: outsider,
-                title: `Sparse picker private ${index}`, startDate: '2000-01-01', endDate: '2000-01-02'});
-        }
-        const allowedId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
-        await AppDataSource.getRepository(Event).save(privateRows);
-        await AppDataSource.getRepository(Event).save({id: allowedId, owner: editor, title: 'Sparse picker authorized', startDate: '2000-01-01', endDate: '2000-01-02'});
-        const first = await getEventLinkOptions({q: 'Sparse picker'}, sessionFor(editor));
-        expect(first.items.map(item => item.id)).toEqual([allowedId]);
-        expect(first.nextCursor).toBeNull();
-        expect(JSON.stringify(first)).not.toContain('Sparse picker private');
-        expect(JSON.stringify(first)).not.toContain(privateRows[299].id);
-        // A search matching only private rows has no authorized continuation to display.
-        const terminal = await getEventLinkOptions({q: 'Sparse picker private 1'}, sessionFor(editor));
-        expect(terminal).toMatchObject({items: [], nextCursor: null});
-    });
-
     it('pages thousands of matches through every grant source without exposing denied events', async () => {
         const events: Array<Partial<Event>> = [];
         const assignments: Array<Partial<EntityAdminAssignment>> = [];
@@ -204,6 +185,10 @@ describe('authorized event discovery and reassociation', () => {
         expect(pageSizes).toEqual([25, 25, 22]);
         expect(received).toEqual(expectedIds);
         expect(new Set(received).size).toBe(received.length);
+        // Reuse the same denied rows to protect an empty authorized result and
+        // terminal cursor, without a second expensive sparse-discovery fixture.
+        const terminal = await getEventLinkOptions({q: 'Scale picker private 1'}, sessionFor(editor));
+        expect(terminal).toMatchObject({items: [], nextCursor: null});
     });
 
     it('requires destination authority even for a child owner and preserves committed items', async () => {

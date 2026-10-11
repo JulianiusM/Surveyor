@@ -6,7 +6,7 @@ owner: developer-experience maintainers
 status: migration-pending
 last-verified: 2026-10-11
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: 2026-10-11 contribution recipe reconciled with actual native-oracle/decision evidence, shared command/read authority, silent image recovery, validated admission retirement, scoped successful-read receipts, Retry timing, safe diagnostics, deliberate read-only recovery and selected localization binding; semantic first-read premises, accessible controls/focus, geometry/scroll ownership and actual normal source/HMR/regeneration lessons verified; original decisions/progressive-loading rules retained; exact bounded execution and current image/deployment evidence belongs to the paired review; prospective frontend replacement, not production cutover
+verification-scope: 2026-10-11 concise migration procedure and review criteria reconciled with risk-based test selection and scoped build preparation; contribution recipe reconciled with actual native-oracle/decision evidence, shared command/read authority, silent image recovery, validated admission retirement, scoped successful-read receipts, Retry timing, safe diagnostics, deliberate read-only recovery and selected localization binding; semantic first-read premises, accessible controls/focus, geometry/scroll ownership and actual normal source/HMR/regeneration lessons verified; original decisions/progressive-loading rules retained; exact bounded execution and current image/deployment evidence belongs to the paired review; prospective frontend replacement, not production cutover
 source-anchors: src/frontend/components/LoadingSkeleton.vue; src/frontend/features/help/HelpPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/features/overview/OverviewRegion.vue; tests/frontend/frontend-content-loading.spec.ts; src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/e2e/frontend-development.spec.ts; src/controller/helpController.ts; docs/user-guide/de/; tests/unit/help-localization.spec.ts; contracts/api/v1/; src/locales/; src/frontend/; src/routes/frontendPilot.ts; src/routes/api/v1.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; vite.config.mts; tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/views/modules/module_entity_archive.pug; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
 next-review: frontend-production-cutover
 production-reference: 2dfa257 native frontend documentation; reference only, not evidence of an installed production commit
@@ -209,6 +209,11 @@ unexpected copy outside the source tree while establishing its provenance instea
 
 ### Generated files
 
+The full build generates inputs in its server stage before the client/typecheck stages. Its scoped
+`--ignore-scripts` on `build:client` skips the redundant nested preparation hook; the explicit Vue typecheck and
+both builds still run. Standalone `build:client`, `build:frontend` and `typecheck:frontend` retain their preparation.
+Do not bypass preparation for an independent command or add a client lifecycle dependency hidden from this chain.
+
 Do not hand-edit or commit these generated outputs:
 
 - `src/modules/database/__index__.ts`
@@ -276,62 +281,52 @@ outside-pointer/focus dismissal, Escape focus return and arrow policy together, 
 and tabs continue using the selected Reka primitives. Reassess a future wrapper's fit instead of copying this
 bounded assessment to a different interaction.
 
-Use this recipe when implementing the next authorized feature increment. The completed pilot review is not a
-prerequisite to repeat before fixing its known findings. For a future module, use the existing baseline and
-feature-specific edge cases to constrain the requested increment:
+This is the single migration guideline. Use the short procedure below for each authorized slice; consult the
+boundary-specific sections that follow only when that boundary changes. Help/Packing are the completed pilot
+obligation; remaining scaffolds are future work, not authorization to change their native behavior.
 
-1. Identify the increment's existing journeys, labels, admission, permissions and mutation owners. Preserve native
-   business behavior, visual layout and deliberate feature exceptions. Trace both GET and submitted-form admission;
-   an explicit guest page and a duplicate form can have different admission from detail and creation. Help and packing are the current completeness obligation;
-   Overview and other scaffolds keep purposeful TODOs for the remaining migration, without being excluded forever.
-2. Extend the unreleased v1 YAML in place. Declare status, media, retry policy and precondition once. Use decimal
-   strings for packing assignment IDs, including nullable read handles, and reuse shared schema references. Run
-   the existing generator for declaration-file types and strict Ajv request/response validators; do not hand-write
-   parallel DTOs, structural validators or a locale registry. Keep shared type-only contracts under `src/types/`
-   as `.d.ts` files.
-3. Adapt existing controllers and DBAL operations. Reuse declared permission middleware and the existing policy
-   helpers for HTML and API admission. Reuse `hasAccountProfile` and `getEntityViewAdmission` where those established
-   policies apply, rather than reimplementing them in a route or Vue component. Keep controller-owned business checks inside the relevant existing transaction when
-   they depend on locked rows. Migration adapters preserve existing authentication and domain behavior; broader
-   authentication, authorization, legacy race and lock redesign remain separate native work. The native remediation
-   backlog never tracks migration or pilot work.
-4. Reuse the application transport, context gate, query-key/invalidation owners, debounce helper and read scheduler.
-   Keep authoritative snapshots, original edit baselines and local input separate. Scope reads by actor and resource;
-   include locale in the query identity only when the server representation varies by language. Reject late results.
-   Use `usePageEntry` for server-owned render, redirect and denied decisions, including
-   canonical redirects and one-time notice severity. It also retires results when a lazy destination is pending.
-   A confirmed locale preference advances its own generation; an older session read can still report a real actor
-   change without reverting that preference. Healthy visible reads retain the 30-second cadence and recover toward roughly
-   one-minute convergence under a responsive backend, respecting cooldown, hidden tabs and disposed observers.
-   Closed selectors consume their owner's current authority; they do not invent continuous hidden search polling.
-5. Compose the shared form, dialog, command, draft, feedback and departure owners. Use complete dirty predicates
-   and established empty/null equivalence. `useDraftProtection` composes nested editors into their nearest owner;
-   the application shell owns the whole-page root, and a dialog can still check its own subtree on Close. Preserve drafts through refresh
-   and cancellation, and release them only after accepted navigation commits. A confirmed write stays saved even
-   when its follow-up read fails. The additive typed command outcome separates confirmation from refresh; accepted
-   submitted values are distinct from the last authoritative revision and cannot supply a new write token. Unknown commands remain explicit until reconciliation or acknowledged exit;
-   recovery stays reachable and never automatically replays a command. Secrets stay in the mounted form.
-6. Use centralized catalogs with the typed i18next-vue interface. Keep machine values and entered content separate
-   from translated labels. Interactive migrated pages require JavaScript; a clear shared message or genuinely
-   read-only server result supplies the disabled-JavaScript fallback. Same-component SSR/hydration remains
-   available. Preserve native route, filter/history, focus, visual and form semantics for JavaScript-enabled use.
-   Guest registration preserves the submitted display name. Native browser collection owns its existing item
-   trimming and empty-row rules; JSON validation must not silently normalize stored user text. Author native form
-   structure in the same contract source; a narrow transport decoder may retain established scalar coercions.
-   The shared guest-flow factory supplies the form action and exact login return destination to every consumer,
-   including modules outside the current frontend slice. The approved duplicate-return amendment preserves
-   `<entity>/<id>/duplicate` after login; do not substitute the module's ordinary create URL.
-7. Reuse update coordination for mounted dirty, pending and uncertain states. Compatible forms can finish across
-   replacement of the current binary folder; do not require retained old assets, external deployment services,
-   persisted secrets/drafts or reload loops. Explain state ownership, nontrivial comparisons, authorization and
-   recovery with named helpers, purposeful internal comments and logical blank lines. Follow neighboring style.
-8. Run only the cheapest checks protecting the changed observable boundary. Compare affected native/pilot roles,
-   states and desktop/mobile behavior, including the agreed JavaScript-required/read-only fallback. Verify the
-   normal `npm run server` path when build/watch/hydration changes are touched, rather than treating a successful
-   built SSR screenshot as development evidence. Record actual execution and limitations in the paired review.
-   Preserve production documentation and feature help; stage necessary maintainer/operator replacements here
-   until cutover. One global localization guide owns language choice and language counterparts. Documentation
-   reports remain advisory; no application assertions or delivery checks depend on maintained prose or images.
+1. **Establish the contract.** List the slice's journeys, roles, data and explicit exclusions. Compare actual native
+   routes, submitted forms, collectors and rendered controls with the original vision and decision ledger. Resolve
+   conflicting instructions and obtain approval for unintended consequences or design departures before coding.
+2. **Reuse owners.** Extend existing controllers, DBAL, permission/admission policies and shared frontend owners.
+   Controllers own business checks/errors, including checks inside DBAL-managed locks. Keep archive, personal
+   visibility, hard deletion and file retention separate. Render feature state through `data`, not `res.locals`.
+3. **Keep one contract and one state owner.** Author v1 YAML and catalogs once; generate validators/types and keep
+   shared contracts in `.d.ts`. Reuse transport, admission, query, command, draft, feedback, image, localization and
+   update coordination. Separate server authority, edit baselines and local input; reject retired responses,
+   preserve drafts and confirmed writes, and never automatically replay an uncertain command.
+4. **Preserve the observable experience.** Use the native labels, field collection, permissions, empty/no-op states,
+   URLs/history, roles, focus, spacing and scroll ownership as the independent oracle. Apply approved SPA additions
+   through shared owners, including complete read recovery and the selected i18next-vue binding. Verify SSR and
+   early editing at the actual consumer; a root hydration marker alone does not prove a usable first read.
+5. **Make the code maintainable.** Follow adjacent formatting, logical blank lines and descriptive named helpers.
+   Avoid excessive/nested lambdas, parallel validators/state and thin new modules. Comment nontrivial intent,
+   authority, concurrency and recovery in code and unbuffered Pug comments. Hide implementation details behind
+   established boundaries; share coherent behavior when another feature needs it.
+6. **Spend testing effort on distinct risk.** Use the [risk and test-selection procedure](TESTING_GUIDE.md#risk-and-test-cost)
+   and cheapest stable observable layer. Keep consequential financial, deletion, privacy and authorization coverage.
+   Remove equivalent input matrices and repeated setup; retain another layer only for a different failure mode.
+   Exercise actual consumers and independent native assertions, not a new helper compared with its own assumptions.
+7. **Review the finished slice.** Use every criterion below against the final source. Validate affected behavior and
+   images against one coherent build; run source/HMR, schema/migration or installed-folder replacement only when
+   those boundaries changed. Review every affected consumer of a corrected shared behavior; a repaired call site
+   does not clear its peers. Preserve failed diagnostics and report skipped/unrun boundaries honestly.
+8. **Close existing records.** Update the paired review and affected staged/canonical documents in their owners.
+   Preserve original decisions and approved amendments. Retire superseded execution plans after transferring useful
+   evidence; keep necessary design history and future cutover drafts. Do not create another checklist or report file.
+   Documentation reports remain advisory and never become application tests or delivery gates.
+
+| Review criterion | Evidence required before claiming the slice complete |
+|---|---|
+| Original vision and scope | Every in-scope journey and deliberate exception is implemented; exclusions are explicit. |
+| Original design and technology choices | Original decisions remain intact; every difference has recorded approval or is corrected. |
+| Architecture and modularity | Implemented owners match the design; reuse is demonstrated and adjustments are resolved explicitly. |
+| Core principles | DRY, separation of concerns, information hiding and one authoritative owner hold across the boundary. |
+| Human maintenance | Purposeful comments, named helpers, neighboring formatting and logical blank lines explain the flow. |
+| New technical debt | No avoidable duplication or abandoned adapter; any remaining issue has an explicit disposition. |
+| Repository and documentation | Existing owners are current; obsolete plans are retired and useful decision history is retained. |
+| Staged documentation | Descriptions match the actual pilot; prospective cutover work is clearly separate. |
+| Verification | Independent native oracles and distinct risk coverage apply to the final source/artifacts; limits are stated. |
 
 The shared client mount preserves text entered or autofilled into native forms while modules download. Future SSR
 forms use that boundary rather than introducing their own input replay. Hidden admission fields, identity selectors
@@ -570,72 +565,31 @@ against actual query/cache behavior without assuming object identity across diff
 
 ### Baseline-to-observable verification
 
-Use the existing baseline, feature edge cases and paired review as the review owners; do not introduce another plan
-or registry. For each changed journey, connect its relevant behavior/edge-case IDs to the native executable owner,
-the implemented consumer, the observable assertion and any explicit approved exception or remaining limit.
+Use the [migration procedure](#implementing-the-next-feature-slice) and the
+[distinct-risk selection](TESTING_GUIDE.md#risk-and-test-cost). The following are conditional checks, not a
+requirement to repeat every layer or the whole pilot capture for each feature.
 
-1. Establish the native oracle independently. Trace its routes, middleware, controller, Pug and browser collector,
-   then compare native and pilot using the same records, actors, grants and entered values. Verify GET and POST
-   admission separately, exact statuses/destinations/query context, validation order, payload semantics, visible
-   labels and available actions, including pristine submits and controls that remain present without a write.
-   Compare accessible names, roles, expanded/selected state, keyboard behavior and focus against native markup as
-   well as the actual browser tree. A visually equivalent wrapper does not authorize different button semantics.
-   Compare field types, required/min/max/step/length attributes, browser validation and authored wire constraints;
-   a new client or schema limit is an observable change requiring approval, even when ordinary fixtures fit within it.
-   Check the actual submission trigger and accepted operation domain, including supplementary-character length
-   units and raw numeric/null/blank/decimal edits where native persistence supplies their interpretation.
-   Distinguish known server rejection from local validation and unknown delivery when comparing retained secrets.
-   Two consumers of the same new API do not independently prove native parity.
-   Resolve each observed difference against the original approved decisions before changing either implementation
-   or expected output. Keep unexplained failures visible in the paired review rather than editing the design or a
-   capture expectation to make the new behavior its own oracle.
-   Synchronize a fixture with committed observable state before its next action: a debounced search can replace
-   its native disclosure after a premature click. Wait for the canonical URL and completed region read rather than
-   extending arbitrary delays or weakening selectors. Check the current generated label and native accessible role;
-   a valid conditional GET may finish with 304 instead of 200. Preserve failed diagnostic runs and distinguish a
-   demonstrated harness assumption from an actual application difference before correcting either.
-2. Exercise lifetime transitions at the production boundary. Hold an actual or synthetic HTTP response, then change
-   actor, resource, document, locale or permission, or unmount the submitting editor before releasing it. Check that
-   pending and unknown work remains guarded while obsolete values, grants, caches and explicit observer reads retire.
-   Include newer successful reads during held writes, partially revoked fields, equal-JSON recovery, cancelled
-   navigation, fragments and Back/Forward visits. Include a successful read that narrows field authority, then return
-   to another language with its read held. Test an old cached projection appearing after a denial, recovery
-   through a new admitted read, and Retry becoming available as a server deadline elapses without another request.
-   Preserve local values, focus and original edit baselines.
-3. Distinguish known rejection, confirmed persistence and unknown response loss. Test confirmed write followed by
-   failed refresh, failed identity bootstrap and failed/cancelled lazy delivery independently. Retry must send only
-   the eligible read or navigation, never the original command. Check whole-page consent before deletion, detached
-   pending status, browser/update reload guards, reachable uncertainty Review and deliberate acknowledged exit.
-4. Cross the real startup boundary when it changes. Test the HTML-emitted bootstrap and module/style URLs through
-   the actual entry decoder and mounted app, including native denied and confirmed POST documents. A directly
-   constructed context or SSR string cannot prove hydration preserved those outcomes. Wait for an actual hydrated
-   control before testing SPA listeners; separately verify edits made before hydration through the shared mount.
-   The root hydration marker does not mean a progressively loaded feature has completed its first admitted read.
-   Before replacing/stopping a server or following a feature action, wait for that usable control/card and its region's
-   completed read; a visible shell cannot establish a cold-route import or permission precondition.
-   Exercise every draft control category the form renders: text/textarea, numeric values, checked/unchecked choices,
-   selects and files. Check the resulting draft and eventual submitted payload, not only retained DOM appearance.
-   Keep non-text restoration opt-in for draft controls and prove hidden admission fields and immediate-command
-   controls are excluded. Hydration must not replay a command or initiate a file upload.
-   Run the normal source workflow when development integration changes and the built workflow for release behavior.
-   Assert the same document survives early editing and hydration; evidence HTML must not trigger a development
-   reload. Follow the [Testing Guide](TESTING_GUIDE.md#frontend-pilot-coverage) for the separate watcher checks.
-5. Compare presentation and behavior independently at desktop and mobile sizes. Load the actual fonts, icons and
-   styles; inspect significant roles, empty/error states, dialogs, selectors, narrow wrapping and focus. Include the
-   complete ten-second transient lifetime and durable recovery states, not just the first screenshot. Use exact
-   native text, native no-op/validation availability, inline Close/focus/placement and stable measured geometry where
-   that boundary matters. Preserve native wrapper/text-node placement and the gaps that follow from it. Compare
-   horizontal-scroll ownership of ancillary hints and controls too; equal unscrolled dimensions do not prove that
-   they move, clip or remain keyboard-reachable with the same container. Check locale changes after expiry and
-   feedback delivery after its initiating host hides or
-   retires. Retain and individually inspect changed images. Record source/build identifiers, executed checks,
-   excluded failures and limits in the existing paired review. Do not describe an earlier build, missing provider
-   round trip or unrun journey as current verification.
+| Changed boundary | Minimum distinct proof |
+|---|---|
+| Native feature adapter or contract | Compare native GET and POST admission, fields/collection, labels, permissions, no-op availability and destinations independently. Include actual length units, numeric/null/blank semantics and browser constraints where changed. Two new API consumers are not a native oracle. |
+| Shared read, authority or command lifecycle | Exercise the actual consumer with a held response and the relevant actor/resource/locale/permission/unmount transition. Distinguish validated rejection, confirmed persistence and unknown delivery; recovery must not replay a command. Preserve drafts, edit baselines, scoped receipts and applicable deadlines. |
+| Routing, bootstrap or hydration | Verify real emitted input and same-document behavior. Test prehydration edits only for rendered control categories that changed; hidden admission and immediate commands are excluded from restoration. Wait for an admitted usable control and completed region, not only the root hydration marker. |
+| Visual or accessible interaction | Compare affected native/pilot states at desktop and mobile sizes with actual shipped styles/fonts/icons. Check roles, focus, transient/durable feedback, wrapper/text-node gaps and horizontal-scroll ownership where changed. Individually inspect changed originals. |
+| Source workflow or installed update | Run the actual source/HMR/generated-input restart or complete installed-folder replacement/rollback when its loader/coordination boundary changes. Assert document/draft continuity and genuine retired-asset recovery; a built screenshot does not prove source operation. |
+| Persistence, destructive operations or money | Keep real locked/transactional state, authorization and affected financial invariants; rehearse schema changes on a verified disposable target. An ordinary UI check cannot replace these risks. |
 
-Choose the cheapest stable test layer for each distinct risk; broaden only when another boundary requires it.
-An independent source review checks ownership and approval against the original decisions as well as the assertions.
-Documentation reports remain optional and advisory. Maintained prose and images are never application-test or CI
-assertion inputs, and documentation reconciliation introduces no delivery gate.
+Synchronize fixtures with committed observable state: wait for the canonical URL, completed read and actual action
+rather than an arbitrary sleep. A conditional GET can succeed with 304. Keep native roles and labels even when a
+fixture assumed otherwise; establish whether a failure is an application difference or a broken fixture premise.
+For native transitions, visibility precedes readiness; wait for the public completion event or final rendered state
+before another command. Establish a stable geometry baseline by dismissing transient feedback through its actual
+controls before measuring; preserve the real focus, scroll and layout assertions.
+Prepare cold compilation in bounded setup, keeping the observable assertion's budget unchanged.
+
+Record the final source/build, executed checks, individually inspected originals, approvals and limits in the
+existing paired review. Earlier binaries, unrun external-provider journeys and capture completion alone do not
+establish acceptance. Documentation reports remain advisory; maintained prose and pictures are not application-test
+or CI assertion inputs.
 
 ### Progressive loading and shared placeholders
 
@@ -1329,6 +1283,10 @@ The integration suite rebuilds its selected MariaDB schema. The E2E initializer 
 
 ### Add or change a page workflow
 
+For a migrated page, follow [Implementing the next feature slice](#implementing-the-next-feature-slice) and reuse
+the existing Vue feature views, shared owners and generated v1 contracts. This recipe applies to native Pug/browser
+routes.
+
 1. Find the existing top-level mount in `src/app.ts`.
 2. Add or update the feature route under `src/routes/`.
 3. Add normalization/orchestration in the corresponding controller.
@@ -1365,7 +1323,8 @@ workflow. The following generated-module convention applies only to native Pug/b
 2. Update [Configuration Reference](../../CONFIGURATION.md).
 3. Check E2E-prefixed behavior when the setting affects E2E startup.
 4. Evaluate database, release, secret, and upgrade implications.
-5. Add a documentation-check or test assertion if future drift would be costly.
+5. For costly behavioral drift, add the cheapest stable test of the executable setting. Use optional documentation
+   reports for maintained prose; never assert against documentation in application tests.
 
 ## Git and automation
 

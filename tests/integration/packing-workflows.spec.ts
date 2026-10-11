@@ -140,12 +140,14 @@ describe('packing list user stories', () => {
         expect(await packingService.getPackingItemAssignees(listId)).toEqual({[item.id]: [expect.objectContaining({name: participant.name})]});
     });
 
-    it('removes a participant assignment', async () => {
+    it('removes a participant assignment while preserving the edited item', async () => {
         const [listId, item] = await createPackingListWithItem(owner.id);
 
         await assignPackingItem(item.id, participant.id);
+        await packingService.updatePackingItem(item.id, {title: 'Updated tent'});
         await unassignPackingItem(item.id, participant.id);
         expect(await packingService.getPackingAssignments(listId, participant.id)).toEqual([]);
+        expect(await packingService.getPackingItemById(item.id)).toMatchObject({title: 'Updated tent'});
     });
 
     it('marks an item as required by everyone', async () => {

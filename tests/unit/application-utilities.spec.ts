@@ -1,7 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {
     buildDateTotals,
-    coerceLimit,
     convertToSingleList,
     formatAmount,
     maskEmail,
@@ -211,16 +210,6 @@ describe('backend application behavior suite', () => {
         // Canary: protects a high-value production behavior while avoiding private implementation details.
         it('removes control characters from email text before sending messages', () => {
             expect(sanitizeForEmail('Hello\nBCC: attacker@example.com')).toBe('HelloBCC: attacker@example.com');
-        });
-
-        // Canary: protects API list endpoints from unbounded page sizes submitted by clients.
-        it('caps requested API limits to the supported maximum', () => {
-            expect(coerceLimit('250', 10, 50)).toBe(50);
-        });
-
-        // Canary: protects API list endpoints from unusable negative or zero page sizes.
-        it('raises non-positive API limits to the first valid page size', () => {
-            expect(coerceLimit('0', 10, 50)).toBe(1);
         });
     });
 });

@@ -79,6 +79,10 @@ test('keeps overview dropdowns usable at narrow viewport edges and leaves Delete
     await toggle.press('Escape');
     await owner.getByRole('button', {name: /^Archived and hidden/}).click();
     await expect(archived).not.toBeVisible();
+    // Closing retires the cards before the height transition finishes. Bootstrap ignores
+    // reopening until that transition completes; the next collapsing state must be opening.
+    await expect(archivedContainer).toHaveClass(/(?:^|\s)collapse(?:\s|$)/);
+    await expect(archivedContainer).not.toHaveClass(/(?:^|\s)show(?:\s|$)/);
     await page.addStyleTag({content: '.entity-overview .collapsing { transition-duration: 2s !important; }'});
     await owner.getByRole('button', {name: /^Archived and hidden/}).click();
     await expect(archivedContainer).toHaveClass(/\bcollapsing\b/);

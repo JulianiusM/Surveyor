@@ -235,13 +235,21 @@ describe('invoice calculation preview', () => {
     });
 });
 
-/** Render the production mixin with explicit feature data, without an application, session, or database. */
+const invoiceRenderers = new Map<string, ReturnType<typeof pug.compile>>();
+
+/** Render the production mixin with fresh feature data, without an application, session, or database. */
 function renderInvoiceFragment(fragment: string, pool: Record<string, unknown>, savedShare?: Preview['shares'][number]): string {
-    const filename = resolve('src/views/modules/module_invoice_pool.pug');
-    // Append only a fixed test-owned mixin invocation. The filename preserves production relative includes.
-    const source = readFileSync(filename, 'utf8') + '\n' + fragment;
+    let renderer = invoiceRenderers.get(fragment);
+    if (!renderer) {
+        const filename = resolve('src/views/modules/module_invoice_pool.pug');
+        // Append only a fixed test-owned invocation and preserve production relative includes.
+        // Neither this suite nor its fixtures edit these templates. Compile each invocation
+        // once; every assertion still renders independent locals through the real Pug code.
+        renderer = pug.compile(readFileSync(filename, 'utf8') + '\n' + fragment, {filename});
+        invoiceRenderers.set(fragment, renderer);
+    }
     // The same presentation owner supplies optional columns and wording to real renderer calls.
-    return pug.render(source, {filename, pool, share: savedShare, ui: invoicePresentation});
+    return renderer({pool, share: savedShare, ui: invoicePresentation});
 }
 
 describe('rendered invoice overviews', () => {

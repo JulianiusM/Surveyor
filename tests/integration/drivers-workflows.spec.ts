@@ -62,7 +62,9 @@ describe('drivers list user stories', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Drivers event');
         const listId = await driverService.createDriversList(owner.id, 'Camp drivers', 'Shared rides', eventId);
 
-        expect(await driverService.getDriversListById(listId)).toMatchObject({event: {id: eventId}});
+        expect(await driverService.getDriversListById(listId)).toMatchObject({
+            title: 'Camp drivers', ownerId: owner.id, event: {id: eventId, title: 'Drivers event'},
+        });
     });
 
     it('updates list title, description, and header image', async () => {
@@ -90,12 +92,12 @@ describe('drivers list user stories', () => {
     });
 
     it('updates journey details and capacity', async () => {
-        const [, item] = await createDriversListWithItem(owner.id);
+        const [listId, item] = await createDriversListWithItem(owner.id);
 
         await driversController.updateItemAttr(item.id, {field: 'title', value: 'Changed journey'});
         await driversController.updateItemDescription(item.id, {description: 'Changed pickup'});
         await driversController.updateItemAttr(item.id, {field: 'maxAssignees', value: 5});
-        expect(await driverService.getDriversItemById(item.id)).toMatchObject({title: 'Changed journey', description: 'Changed pickup', maxAssignees: 5});
+        expect(await driverService.getDriversItemById(item.id)).toMatchObject({title: 'Changed journey', description: 'Changed pickup', maxAssignees: 5, entityId: listId});
     });
 
     it('reorders journeys for the shared list', async () => {
@@ -137,7 +139,8 @@ describe('drivers list user stories', () => {
         const [listId, item] = await createDriversListWithItem(owner.id);
 
         await assignDriversItem(item.id, participant.id);
-        expect(await driverService.getDriversItemAssignees(listId)).toEqual({[item.id]: [expect.objectContaining({name: participant.name})]});
+        expect(await driverService.getDriversAssignments(listId, participant.id)).toEqual([item.id]);
+        expect(await driverService.getDriversItemAssignees(listId)).toEqual({[item.id]: [expect.objectContaining({profileId: participant.id, name: participant.name})]});
     });
 
     it('removes a volunteer from a journey', async () => {

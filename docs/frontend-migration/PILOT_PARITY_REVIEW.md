@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: current
 last-verified: 2026-10-11
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: 2026-10-11 original decisions and approved amendments traced against native executable contracts and actual consumers; final coherent fa5 build, affected presentation checks, fresh HTTP/browser/configuration journeys, all 472 native/pilot originals and 15 behavioral comparisons, supplemental read-warning/scroll originals, genuine complete-package replacement/rollback in Chromium/Firefox and normal source/HMR/regeneration/restoration verified; whole quick/integration results explicitly precede only the two final presentation-template corrections; all 491 current inspected-image hashes reconciled; final source/build/native-file/type-contract checks and advisory documentation findings reviewed; prior failed or superseded checkpoints preserved; no production cutover or external-provider/email proof claimed
+verification-scope: 2026-10-11 bounded migration-guideline, duplicate-risk and test/build/CI source review added; execution and reporting limits are explicit in the test-cost section; original decisions and approved amendments traced against native executable contracts and actual consumers; final coherent fa5 build, affected presentation checks, fresh HTTP/browser/configuration journeys, all 472 native/pilot originals and 15 behavioral comparisons, supplemental read-warning/scroll originals, genuine complete-package replacement/rollback in Chromium/Firefox and normal source/HMR/regeneration/restoration verified; whole quick/integration results explicitly precede only the two final presentation-template corrections; all 491 current inspected-image hashes reconciled; final source/build/native-file/type-contract checks and advisory documentation findings reviewed; prior failed or superseded checkpoints preserved; no production cutover or external-provider/email proof claimed
 source-anchors: src/frontend/components/LoadingSkeleton.vue; src/frontend/styles/pilot.css; tests/frontend/frontend-loading-shell.spec.ts; tests/frontend/frontend-content-loading.spec.ts; src/frontend/composables/pageTitle.ts; tests/frontend/frontend-refresh-navigation.spec.ts; scripts/capture-frontend-rectification-readonly.cjs; docs/frontend-migration/staged/DEVELOPMENT.md; src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/frontend/frontend-route-recovery.spec.ts; tests/e2e/frontend-development.spec.ts; scripts/watch-frontend-inputs.mjs; scripts/capture-frontend-baseline.cjs; src/frontend/; src/routes/frontendPilot.ts; src/routes/api/v1/; src/modules/packing/api.ts; src/controller/entityAdminController.ts; src/views/modules/module_entity_header.pug; src/views/packing/packing-view.pug; contracts/api/v1/; src/locales/; docs/user-guide/de/; tests/frontend/packing-management-ui.spec.ts; tests/frontend/packing-view.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/integration/packing-management-api.spec.ts; tests/e2e/frontend-pilot.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; docs/FRONTEND_PILOT.md; vite.config.mts
 next-review: pilot-UI-behavior-change-or-feature-cutover
 -->
@@ -1321,3 +1321,158 @@ in the existing [remediation backlog](../documentation-remediation.yml). Its obs
 the guide, which supplies current written guidance. That unrelated native visual follow-up remains open; it is not
 a new pilot defect or completed work. No baseline, checker exception, guide embedding or native asset was changed
 to suppress these findings, and the report remains advisory.
+
+### Migration guideline and test-cost review (2026-10-11)
+
+This increment starts from committed correction `f45dad7`. It changes test fixtures, runner/build/CI orchestration
+and existing maintainer documents; application source, dependencies, contracts, catalogs, user help and pictures are
+unchanged. The coherent build remains `fa5dc669f33da4c75bb81ddd`; all ten runtime/content directory hashes match the
+accepted binary. Its prior inspected originals and development/deployment evidence remain applicable to those
+unchanged boundaries; they were not recaptured or rerun in this increment.
+
+The [single migration guideline](staged/DEVELOPMENT.md#implementing-the-next-feature-slice) is now eight steps and
+one review table. Its linked [risk procedure](staged/TESTING_GUIDE.md#risk-and-test-cost) selects distinct observable
+risks, with conditional source/schema/deployment/visual checks. It replaces repetitive blanket verification
+instructions; no maintained file, alternate checklist, controller, service or application adapter is introduced.
+
+All 97 original application spec files were inspected across unit, frontend, integration and E2E. The optimization
+removes 131 expanded cases: 91 repeated frontend rows, four unit duplicates and 36 integration duplicates. The
+24-case generic service suite is removed only after transferring its meaningful assertions to existing feature
+workflows. One Activity smoke called an unused exported DBAL helper; its replacement protects the actual locked
+controller path and persisted assignment identity, not that unused helper's source-function coverage. All 15 E2E
+files retain their cases and assertions, including 1,926 unchanged expectation nodes in the four transport-edited
+files. Twenty-five expanded cases omit an unused owner page; thirteen need no browser fixture. This is not a claim
+of thirteen avoided browser-process launches, because Playwright reuses workers.
+
+Compiled Pug functions are reused with fresh locals; neither rendered results nor mutable feature state is cached.
+All eight invoice layout cases consume the shipped CSS instead of compiling identical Sass repeatedly. UTC is
+explicit, database-free files remain isolated with two workers, and integration keeps one schema-owning worker.
+The full build prepares contracts/catalogs once while retaining both Vue type checks and bundles; standalone
+commands still prepare fresh inputs. Explicit configuration paths and the existing output-shadow guard prevent
+adjacent emitted runner copies from silently changing execution. Two observed root copies were quarantined in
+ignored evidence; their emitter was not established and no IDE setting was changed.
+
+The three CI stages run whole database-free, integration and built-browser projects on independent runners.
+The browser command fixes two workers instead of varying session/database pressure with half the host CPU count.
+Built-in Vitest blobs replay all tasks and merge coverage into the original JUnit/LCOV paths. Successful collection
+requires both project reports; separate stage copies preserve failed diagnostics. Any failed stage or merge still
+blocks release/Sonar. No distinct consequential application risk or configured coverage scope was removed, and documentation
+reports remain advisory. The ten-minute target is provisional; the twenty-minute stage ceiling is not a measured
+hosted result.
+
+Risk estimates have no incident-frequency dataset, so the following ordinal judgments are prioritization scores,
+not numerical defect probabilities. Expected incremental harm remains likelihood × impact × unique detection
+probability; exact duplicate protection is assessed against named surviving inputs/boundaries/assertions.
+
+| Class | Likelihood × impact | Decision and cost tradeoff |
+|---|---|---|
+| Repeated cosmetic/identical serializer inputs | 1 × 1 = 1 | Keep representatives and distinct boundaries; remove redundant matrix execution. |
+| Ordinary relationship/persistence controls | 2 × 3 = 6 | Consolidate fixtures only after transferring unique persisted fields and actor isolation. |
+| Authorization, privacy, hard deletion and locked writes | 2 × 4 = 8 | Keep independent route/session/DB/race checks; duplicated names do not prove equivalent risk. |
+| Invoice/money, durable settlement and widespread data loss | 2 × 5 = 10 | Keep consequential calculations, transactions, migrations and actual browser controls. |
+| Previously observed pilot lifecycle/consumer failures | 3 × 4 = 12 | Keep actual consumer and retired-response assertions; timer/transport presence is insufficient. |
+
+Independent final review caught a consolidation error before acceptance: the transferred event metadata assertions
+covered disabling dietary flags but missed enabling them. The same existing fixture now verifies false→true for
+both fields, without another case or schema reset. The raw-email privacy assertion had also compared against the
+mailer object instead of the account email; it now checks the real private value. Newly orphaned test wrappers and
+imports were removed. These findings demonstrate why test-name/function matching and an aggregate green result
+cannot establish equivalent coverage: compare original input branches and observable assertions, then independently
+review the finished diff. Earlier corrective-action failures and native-layout/consumer causes remain documented
+above, rather than replaced by a claim that case reduction alone prevents defects.
+
+The first whole built-browser execution ended with 98 passes, six failures and four explicit skips. Five failures
+came from this run's ignored fixture placing uploads under a hidden directory: the unchanged production file-serving
+policy rejected those paths despite the files existing. The final fixture uses ordinary ignored, test-owned upload
+directories. The sixth exposed an existing invoice fixture closing its breakdown during the opening transition.
+Both affected openings now await the public `shown.bs.modal` event, with no delay, timeout increase, private-state
+access or production change. Independent comparison confirms all four declared cases and 273 expectation
+expressions in that file are retained; the actual named helpers pass strict installed Playwright type checking.
+Failed diagnostics remain intact and the whole suite is rerun, rather than removing the failing assertions.
+
+That rerun reached the financial steps previously blocked by download failures, completing with 100 passes,
+four failures and four skips in 671.97 seconds. The long invoice settlement workflow now passed. Traces established
+three further missing fixture premises: the touch setup clicked inside an expanding pool; the archival fixture
+reopened during the prior closing transition; and the overview's exact scroll baseline included two expiring
+success alerts, whose removal changed page height by 74 pixels each. Existing helpers now wait for completed public
+collapse state, and the scroll fixture uses the actual **Dismiss notification** controls before measuring. The
+deliberate keyboard-during-opening checks, financial/deletion assertions, exact focus/scroll tolerance and timeouts
+remain. A fourth failure was an `ECONNRESET` during Drivers creation, with no response; its underlying cause was not
+established and no mutation retry was added. All original assertions remain; only bounded fixture readiness checks
+are added. The final whole execution below uses the actual package command with two workers and fresh guarded data.
+
+The third execution passed all 104 ordinary cases in 439.39 seconds, but still failed overall: a session probe
+received `ECONNRESET` before reaching its configuration-dependent skip, leaving three skips and one failure.
+Neither reset has a proven application-level cause. An isolated probe of the installed client demonstrated API
+socket reuse after the server's advertised idle deadline; the shared public Playwright header now requests
+`Connection: close` for browser and API contexts, including additional actor contexts. The same probe observed
+six original requests exactly once, with no reuse for consecutive requests using that header. A separate actual
+Chromium check confirmed that the WebSocket handshake still upgrades and exchanges data. These bounded checks
+support the transport choice without claiming that they establish the reset's exact cause. No write is retried,
+and routes, cookies, payloads, cases, assertions and timeouts remain unchanged. The final whole execution uses
+this setting from the start, with its own preserved report and input snapshot. This intentionally excludes pooled
+idle-connection reuse from application E2E; product owners do not branch on that transport header, and independent
+comparison found no lost application authorization, session, financial or browser assertion.
+
+The fourth execution had no connection reset, but ended with 103 passes, four skips and a 120-second invoice
+lifecycle timeout; overall wall time was 517.34 seconds. The retained final page shows previous credit `40.00`,
+balance `30.00` and **Payment due**, following successful recalculation and page loading. Its final close waits
+indefinitely for `hidden.bs.modal`; the missing/corrupt trace prevents proving the precise opening/click timing.
+The strongest supported explanation is the same premature-close premise previously corrected in the pool fixture.
+The already reviewed opening wait and identical closing waits now share the existing E2E keyword owner across
+the affected pool, lifecycle and organizer-expense consumers. Every original financial assertion and timeout remains;
+independent comparison retains all nine declarations and 869 original expectation nodes. The named browser callbacks
+also pass strict installed Playwright type checking after correcting the inferred event literals.
+The guideline explicitly requires reviewing peer consumers of a corrected behavior: repairing one observed call
+site does not establish that the same premise is sound elsewhere. This failed execution is preserved separately
+from the focused correction check and final whole run below.
+
+The final independent documentation review also corrected directly affected login/privacy references in the older
+coverage map and two inherited recipe conflicts: migrated pages use the existing Vue/v1 owners, and setting tests
+exercise executable behavior while maintained prose receives optional reports. These were corrected in the existing
+owners. The guideline now makes native transition completion and production-valid upload fixtures explicit.
+
+| Final review criterion | Result and bounded evidence |
+|---|---|
+| Vision, original design and technological choices | Completed pilot scope remains Help/Packing and necessary foundation; future modules/cutover remain explicit. Original decisions and approved amendments are unchanged. |
+| Designed/implemented architecture; DRY and modularity | Existing owners, controller/DBAL separation, declaration contracts and renderer-data boundaries are unchanged; test/report reuse adds no application abstraction. |
+| Human readability, comments and formatting | New nontrivial cache, runner, SSR preparation and report behavior has purposeful comments; named helpers, logical blank lines and adjacent style retained. |
+| New debt and repository cleanliness | Newly orphaned helpers/imports removed; proven duplicate fixtures retired; no new maintained document or finished execution plan. Necessary original decisions and future cutover drafts retained. |
+| Documentation and staged currency | Existing Development/Testing/Architecture owners updated; the older coverage map identifies its historical scope and routes current runner details to the Testing Guide. |
+| Test adequacy and performance | Distinct consequential risks retained; whole execution plus final bounded corrections/merge/E2E evidence follows. No hosted timing or impossible guarantee of absent bugs is inferred. |
+
+| Executed check | Result and limits |
+|---|---|
+| Full `npm run build` | Passed in 66.17 seconds; generation occurs once, both Vue type checks and client/SSR builds remain. |
+| Whole `npm run test:ci` with coverage | 1,649 cases passed in 81 files: 1,312 database-free and 337 integration. Wrapper wall time 795.31 seconds; Vitest reported 774.50 seconds. This precedes the bounded final corrections described below. |
+| Final affected projects with coverage | 47 unit cases and 31 integration cases passed in four files after the assertion/helper cleanup; 110.24 and 164.69 seconds including preparation/reporting. |
+| Real built-in report replay | Both actual project blobs merge in 28.60 seconds without rerunning tests; all 78 cases and 267 coverage files retained. Exact coverage-map union, Vue/TypeScript LCOV and combined JUnit verified. |
+| Failed report replay | One synthetic failed task in ignored copies returns the expected exit 1, retains 78 cases/one failure and the exact coverage map. Genuine task inputs/results are unchanged; the synthetic report is retained only in ignored evidence. |
+| Focused invoice lifecycle and helper compatibility | The previously timed-out financial workflow passed: 29.5 seconds for its case, 51.35 seconds including preparation. Final shared helpers pass strict installed Playwright type checking; the type-only event literals do not change browser behavior. |
+| Final whole Chromium E2E | Passed with 104 cases and four explicit configuration-dependent skips; zero failures or flaky cases. Wrapper wall time 442.28 seconds, Playwright 440.25 seconds. This actual package execution covers all final modal consumers and the shared transport setting against fresh guarded data. |
+| Source, artifact and independent reviews | All 399 application inputs, ten runtime/content hashes, 29 captured executable/style/chunk hashes, 192 native static files and 24 declaration contracts match accepted evidence. All 536 final test/build inputs remain frozen during execution. Independent source/criteria reviews and whitespace checks pass. |
+
+Exact removed-to-retained mappings, immutable input hashes, failed diagnostics, build/test timings and report
+integrity evidence remain ignored under `.temp/frontend-foundation/test-cost-*`. The full coverage execution
+preceded four bounded test/helper cleanup files and the CI collection change; final focused executions and
+report verification cover those changes. The later invoice modal synchronization and keyword reuse are covered by
+the focused lifecycle check, strict helper typing and final whole E2E execution. Application artifacts remain identical,
+so another full visual or installed-folder replay would repeat unchanged-boundary evidence. Coverage instrumentation,
+reporting, fixtures and machines differ from earlier
+non-coverage runs; no percentage wall-time improvement or hosted ten-minute result is inferred from case reduction.
+GitHub Actions/Sonar, live OIDC/SMTP and application-wide cutover were not executed in this increment. The source-only
+development cases and disabled-authentication configuration case retain their explicit separate fixtures; their
+unchanged prior verification remains distinct from the ordinary built suite.
+
+The optional strict documentation report reviews 78 Markdown files and 1,516 internal links with no broken links,
+metadata errors, missing package scripts, stale terms or reference-count mismatches. Four findings retain their
+existing disposition: the historical source baseline, two historical references to quarantined JavaScript copies,
+and the intentionally retained native controls illustration under `DOC-ENTITY-PROPERTIES-VISUAL`. Neither a clean
+baseline nor completed native visual remediation is claimed. The three expected-reference counts were reconciled
+only for references removed from the guides; no new exception, baseline replacement or checker-logic change was
+introduced. Reports remain advisory. Existing ignored artifact logs were preserved, and the owned synthetic JUnit
+failure report was moved into ignored evidence without altering it.
+
+Automatic approval review rejected an initial permission-test consolidation because it stated that high-risk
+authorization coverage could be removed. No rejected edit was applied; narrower edits preserved those assertions
+and the independent review/execution above checks their retained boundaries.

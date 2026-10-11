@@ -3,8 +3,23 @@ import type {Page, Route, TestInfo} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import * as pug from 'pug';
-import * as sass from 'sass';
 import {invoicePresentation} from '../../src/modules/invoice/presentation';
+
+/**
+ * Use the same shipped stylesheet as the built browser module below. Compiling
+ * Sass separately for each viewport both repeats build work and can hide stale
+ * distribution assets. E2E requires a coherent build; do not substitute source
+ * styles when that build is absent.
+ */
+function loadInvoiceStyles(): string {
+    try {
+        return readFileSync(resolve('dist/public/style/style.css'), 'utf8');
+    } catch (error) {
+        throw new Error('Invoice layout tests require the built stylesheet; run npm run build before E2E.', {cause: error});
+    }
+}
+
+const invoiceStyles = loadInvoiceStyles();
 
 // This layout test uses shipped templates and styles without an application, session, or database.
 test.use({viewport: {width: 1280, height: 900}, deviceScaleFactor: 1.25});
@@ -22,9 +37,8 @@ test('scrolling preview rows cannot paint through the three-pixel header seam at
             sendCalculationEmails: true,
         },
     });
-    const css = sass.compile(resolve('src/public/style/style.sass'), {logger: sass.Logger.silent}).css;
     await page.setContent(`<html data-bs-theme="dark"><body>${content}</body></html>`);
-    await page.addStyleTag({content: css + '.modal.fade .modal-dialog { transition: none !important; }'});
+    await page.addStyleTag({content: invoiceStyles + '.modal.fade .modal-dialog { transition: none !important; }'});
     await page.evaluate(labels => {
         document.body.style.zoom = '1.25';
         const modal = document.getElementById('pool-seam-calculation')!;
@@ -84,12 +98,11 @@ test('scrolling preview rows cannot paint through the three-pixel header seam at
 
 /** Load the shipped ledger module and Bootstrap into a database-free production-template fixture. */
 async function openInvoiceLayoutFixture(page: Page, content: string, initialization = ''): Promise<void> {
-    const css = sass.compile(resolve('src/public/style/style.sass'), {logger: sass.Logger.silent}).css;
     // Serve a real-origin document so the built browser module resolves its production imports.
     // All fixture data is test-owned; names and saved notes still pass through production escaping.
     async function serveFixture(route: Route) {
         await route.fulfill({contentType: 'text/html', body:
-            `<html data-bs-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style></head>
+            `<html data-bs-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${invoiceStyles}</style></head>
             <body>${content}<script id="invoiceLabelsData" type="application/json">${JSON.stringify(invoicePresentation.labels)}</script>
             <script type="module">
             import {initShareLedgers, renderPoolCalculationPreview} from '/js/events.gen.js';

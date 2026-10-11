@@ -1,6 +1,6 @@
 import {expect, request as playwrightRequest, test, type Locator, type Page} from '@playwright/test';
 import {createE2EEvent, createE2ELogin} from '../factories/e2eCoreFactory';
-import {confirmInvoiceCommand, createResourceViaForm, loginForE2E} from '../keywords/e2eCoreKeywords';
+import {closeModalForE2E, confirmInvoiceCommand, createResourceViaForm, loginForE2E, openModalForE2E} from '../keywords/e2eCoreKeywords';
 
 async function reloadAfterAction(page: Page, action: () => Promise<void>): Promise<void> {
     await Promise.all([page.waitForEvent('load'), action()]);
@@ -9,13 +9,12 @@ async function reloadAfterAction(page: Page, action: () => Promise<void>): Promi
 async function openPool(pool: Locator): Promise<void> {
     const toggle = pool.locator('.accordion-button').first();
     if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
-}
 
-async function closeModal(modal: Locator): Promise<void> {
-    await Promise.all([
-        modal.evaluate(element => new Promise<void>(resolve => element.addEventListener('hidden.bs.modal', () => resolve(), {once: true}))),
-        modal.locator('.modal-header .btn-close').click(),
-    ]);
+    // The toggle becomes expanded before its body stops moving and releases overflow clipping.
+    // Wait for the public rendered state even when a previous action already began expansion.
+    const body = pool.locator('.accordion-collapse').first();
+    await expect(body).toHaveClass(/(?:^|\s)collapse(?:\s|$)/);
+    await expect(body).toHaveClass(/(?:^|\s)show(?:\s|$)/);
 }
 
 async function paidPositions(pool: Locator) {
@@ -464,8 +463,8 @@ test('previews invoice settlements, carries payments forward, and restores saved
         // Gross shares 85 : 45 become 25 : 45 calculated balances after the organizer's previously paid 60.
         await organizerShare.locator('.share-details-open').scrollIntoViewIfNeeded();
         const beforeBreakdown = await paidPositions(pool);
-        await organizerShare.getByText('View breakdown', {exact: true}).click();
         const shareBreakdown = page.locator(`#pool-${poolId}-share-breakdown`);
+        await openModalForE2E(shareBreakdown, organizerShare.getByText('View breakdown', {exact: true}));
         await expect(shareBreakdown).toBeVisible();
         // Components adapt to the saved features; labels identify amounts independently of omitted rows.
         const breakdownTerms = shareBreakdown.locator('dl').first().locator('dt');
@@ -477,7 +476,7 @@ test('previews invoice settlements, carries payments forward, and restores saved
         await expect(breakdownTerms.filter({hasText: /^Calculated balance$/}).locator('xpath=following-sibling::dd[1]')).toHaveText('25.00');
         await expect(breakdownStatus).toHaveText('Payment due');
         await expectPaidPositions(pool, beforeBreakdown);
-        await closeModal(shareBreakdown);
+        await closeModalForE2E(shareBreakdown);
         await expectPaidPositions(pool, beforeBreakdown);
         await expect(calculatedBalance).toHaveText('25.00');
         await expect(guestShare.locator('[data-share-balance]')).toHaveText('45.00');
@@ -525,10 +524,10 @@ test('previews invoice settlements, carries payments forward, and restores saved
         expect(await paid.getAttribute('data-id')).toBe(calculatedShareId);
         await expect(paid).toHaveAttribute('data-paid', 'true');
         await expect(calculatedBalance).toHaveText('25.00');
-        await organizerShare.getByText('View breakdown', {exact: true}).click();
+        await openModalForE2E(shareBreakdown, organizerShare.getByText('View breakdown', {exact: true}));
         await expect(carriedSettlement).toHaveText('60.00');
         await expect(breakdownStatus).toHaveText('Paid');
-        await closeModal(shareBreakdown);
+        await closeModalForE2E(shareBreakdown);
         const ledger = pool.locator('[data-share-ledger]');
         await ledger.getByLabel('Filter share status').selectOption('settled');
         await expect(organizerShare).toBeVisible();
@@ -852,7 +851,7 @@ test('keeps a 28-participant takeover dialog usable and changes pool rounding th
     await expect(takeovers.getByLabel('Payer', {exact: true})).toHaveValue(String(organizer.id));
     await expect(takeovers.locator('.takeover-beneficiaries input:checked')).toHaveCount(27);
     await expect(takeovers.getByRole('button', {name: 'Save changes', exact: true})).toBeInViewport();
-    await closeModal(takeovers);
+    await closeModalForE2E(takeovers);
 
     // Only the reviewed recalculation replaces applied coverage and the saved payer rows.
     await pool.getByRole('button', {name: 'Recalculate pool', exact: true}).click();

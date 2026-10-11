@@ -91,10 +91,10 @@ test('edits each root through one modal and supports survey header images', asyn
     }
 });
 
-test('authorizes the submitted creation destination independently of query context and account identity', async ({page, browser, baseURL}) => {
+test('authorizes the submitted creation destination independently of query context and account identity', async ({request, browser, baseURL}) => {
     test.setTimeout(60_000);
-    await loginForE2E(page.request, createE2ELogin());
-    const ownEvent = await createResourceViaForm(page.request, createE2EEvent());
+    await loginForE2E(request, createE2ELogin());
+    const ownEvent = await createResourceViaForm(request, createE2EEvent());
     const otherContext = await browser.newContext({baseURL});
     try {
         await loginForE2E(otherContext.request, createE2ELogin());
@@ -110,15 +110,15 @@ test('authorizes the submitted creation destination independently of query conte
         const cases: E2ECreateCase<E2ECreateForm>[] = [createE2EActivityPlan(), createE2EPackingList(), createE2EDriversList()];
         for (const input of cases) {
             const form = {...input.form, event_id: privateEvent.id} as Record<string, string>;
-            expect((await page.request.post(`${input.createPath}?eventId=${ownEvent.id}`, {form, maxRedirects: 0})).status()).toBe(403);
-            expect((await page.request.post(input.createPath, {form, maxRedirects: 0})).status()).toBe(403);
+            expect((await request.post(`${input.createPath}?eventId=${ownEvent.id}`, {form, maxRedirects: 0})).status()).toBe(403);
+            expect((await request.post(input.createPath, {form, maxRedirects: 0})).status()).toBe(403);
         }
         // A legitimately selected body event can replace an old unauthorized URL preselection.
         const valid = createE2EPackingList();
         valid.createPath += `?eventId=${privateEvent.id}`;
         Object.assign(valid.form, {event_id: ownEvent.id});
-        const linked = await createResourceViaForm(page.request, valid);
-        expect((await page.request.get(linked.path)).ok()).toBe(true);
+        const linked = await createResourceViaForm(request, valid);
+        expect((await request.get(linked.path)).ok()).toBe(true);
     } finally {
         await otherContext.close();
     }
@@ -180,31 +180,31 @@ test('resolves other drafts before linking an archived event and preserves conte
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
 
-test('omits forbidden controls, retains rejected drafts, and recomputes admission after relinking', async ({page, browser, baseURL}) => {
+test('omits forbidden controls, retains rejected drafts, and recomputes admission after relinking', async ({request, browser, baseURL}) => {
     test.setTimeout(120_000);
-    await loginForE2E(page.request, createE2ELogin());
+    await loginForE2E(request, createE2ELogin());
     const guestContext = await browser.newContext({baseURL});
     const guestPage = await guestContext.newPage();
     try {
         const eventInput = createE2EEvent();
         eventInput.title = eventInput.form.title = `Permission modal source ${randomUUID()}`;
         Object.assign(eventInput.form, {'defaultPerms[public][0]': 'ACCESS_VIEW', 'defaultPerms[public][1]': 'ACCESS_REGISTRATION'});
-        const event = await createResourceViaForm(page.request, eventInput);
+        const event = await createResourceViaForm(request, eventInput);
         const guestName = `Property guest ${randomUUID().slice(0, 8)}`;
         expect((await guestContext.request.post(`${event.path}/guest`, {form: {username: guestName}, maxRedirects: 0})).status()).toBe(302);
         expect((await guestContext.request.post(`/api/event/${event.id}/register`, {data: {
             arrivalDate: eventInput.form.startDate, departureDate: eventInput.form.endDate, dietary: ['MEAT'],
         }})).ok()).toBe(true);
-        const people = (await (await page.request.get(`/api/event/${event.id}/participants`)).json()).data.participants;
+        const people = (await (await request.get(`/api/event/${event.id}/participants`)).json()).data.participants;
         const profileId = people.find((person: {name: string}) => person.name === guestName).profileId;
         await guestPage.goto(event.path);
         await expect(guestPage.getByRole('button', {name: 'Entity settings', exact: true})).toHaveCount(0);
-        expect((await page.request.post(`/api/event/${event.id}/archive`, {data: {}})).ok()).toBe(true);
+        expect((await request.post(`/api/event/${event.id}/archive`, {data: {}})).ok()).toBe(true);
         await guestPage.reload();
         await expect(guestPage.locator('[data-archive-notice]')).toHaveText('This entity is archived.');
         await expect(guestPage.locator('#entityPropertiesModal')).toHaveCount(0);
 
-        expect((await page.request.post(`/api/event/${event.id}/admins`, {data: {profileId, perms: ['EDIT_TITLE']}})).ok()).toBe(true);
+        expect((await request.post(`/api/event/${event.id}/admins`, {data: {profileId, perms: ['EDIT_TITLE']}})).ok()).toBe(true);
         await guestPage.reload();
         const modal = await openSettings(guestPage);
         await expect(modal.locator('[name="title"]')).toHaveCount(1);
@@ -214,7 +214,7 @@ test('omits forbidden controls, retains rejected drafts, and recomputes admissio
             expect((await guestContext.request.post(`/api/event/${event.id}/update`, {data: {[field]: 'on'}})).status()).toBe(403);
         }
         await modal.getByLabel('Title', {exact: true}).fill('Retained denied draft');
-        expect((await page.request.patch(`/api/event/${event.id}/admins/${profileId}`, {data: {perms: []}})).ok()).toBe(true);
+        expect((await request.patch(`/api/event/${event.id}/admins/${profileId}`, {data: {perms: []}})).ok()).toBe(true);
         // Hold a real forbidden response at the browser boundary to inspect the pending state.
         // Draft controls and dismissal remain frozen until the server's result is handled.
         let releaseRequest!: () => void;
@@ -241,7 +241,7 @@ test('omits forbidden controls, retains rejected drafts, and recomputes admissio
         await modal.locator('.modal-footer').getByRole('button', {name: 'Close', exact: true}).click();
         await expect(modal).not.toBeVisible();
 
-        expect((await page.request.patch(`/api/event/${event.id}/admins/${profileId}`, {data: {perms: ['MANAGE_REQUIREMENTS']}})).ok()).toBe(true);
+        expect((await request.patch(`/api/event/${event.id}/admins/${profileId}`, {data: {perms: ['MANAGE_REQUIREMENTS']}})).ok()).toBe(true);
         await guestPage.reload();
         await openSettings(guestPage);
         await expect(modal.locator('[name="title"], [name="description"], [name="location"]')).toHaveCount(0);
@@ -252,13 +252,13 @@ test('omits forbidden controls, retains rejected drafts, and recomputes admissio
 
         const targetInput = createE2EEvent();
         targetInput.title = targetInput.form.title = `Permission modal target ${randomUUID()}`;
-        const target = await createResourceViaForm(page.request, targetInput);
-        expect((await page.request.post(`/api/event/${target.id}/admins`, {data: {profileId, perms: ['MANAGE_ASSIGNMENTS']}})).ok()).toBe(true);
+        const target = await createResourceViaForm(request, targetInput);
+        expect((await request.post(`/api/event/${target.id}/admins`, {data: {profileId, perms: ['MANAGE_ASSIGNMENTS']}})).ok()).toBe(true);
         const childInput = createE2EPackingList();
         childInput.createPath += `?eventId=${event.id}`;
         Object.assign(childInput.form, {event_id: event.id});
-        const child = await createResourceViaForm(page.request, childInput);
-        expect((await page.request.post(`/api/packing/${child.id}/settings`, {data: {
+        const child = await createResourceViaForm(request, childInput);
+        expect((await request.post(`/api/packing/${child.id}/settings`, {data: {
             defaultPerms: {public: [], authenticated: [], guest: [], participant: ['EDIT_META']},
         }})).ok()).toBe(true);
         await guestPage.goto(child.path);
@@ -272,7 +272,7 @@ test('omits forbidden controls, retains rejected drafts, and recomputes admissio
             modal.getByRole('button', {name: 'Save event link', exact: true}).click(),
         ]);
         expect((await guestContext.request.post(`/api/packing/${child.id}/event`, {data: {eventId: null, expectedEventId: target.id}})).status()).toBe(403);
-        expect((await page.request.get(child.path)).ok()).toBe(true);
+        expect((await request.get(child.path)).ok()).toBe(true);
     } finally {
         await guestContext.close();
     }

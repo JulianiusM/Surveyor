@@ -31,6 +31,10 @@ export default defineConfig({
     reporter: reporters,
     use: {
         baseURL: BASE_URL,
+        // Playwright pools API sockets across actor contexts without an idle deadline.
+        // Close transports to avoid server idle-expiry races, keeping commands single attempts.
+        // The runner supplies these headers to both fixtures and additional actor contexts.
+        extraHTTPHeaders: {Connection: 'close'},
         trace: 'on-first-retry',
         screenshot: 'only-on-failure',
         video: 'off',

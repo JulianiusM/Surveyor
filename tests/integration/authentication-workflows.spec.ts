@@ -2,22 +2,14 @@ import type {Request} from 'express';
 import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 import * as userController from '../../src/controller/userController';
 import {AppDataSource} from '../../src/modules/database/dataSource';
-import {Profile} from '../../src/modules/database/entities/user/Profile';
 import {User} from '../../src/modules/database/entities/user/User';
 import * as userService from '../../src/modules/database/services/UserService';
 import email from "../../src/modules/email";
 import {persistIntegrationProfile, registerLocalAccount,} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 
-let owner: Profile;
-let participant: Profile;
-let secondParticipant: Profile;
-
 beforeAll(async () => {
     await initializeIntegrationDatabase();
-    owner = await persistIntegrationProfile();
-    participant = await persistIntegrationProfile();
-    secondParticipant = await persistIntegrationProfile();
 });
 
 afterAll(async () => {
@@ -142,30 +134,23 @@ describe('authentication user stories', () => {
         }
     });
 
-    it('registers an inactive account with a usable profile', async () => {
-        const {id: userId, username} = await registerLocalAccount('registration');
+    it('registers an inactive account with a usable profile, email lookup, and verified password', async () => {
+        // These reads exercise the same newly committed account/profile transaction.
+        // Reusing that account keeps each persistence and password assertion without
+        // repeating registration and its deliberately expensive password hashing.
+        const {id: userId, username, email: accountEmail} = await registerLocalAccount('registration');
 
         const account = await userService.getUserByUsername(username);
         expect(account?.id).toBe(userId);
         expect(Boolean(account?.isActive)).toBe(false);
         expect(account?.profiles).toHaveLength(1);
-    });
-
-    it('finds a newly registered account by email', async () => {
-        const {email, id: userId, username} = await registerLocalAccount('email-lookup');
-
-        expect(await userService.getUserByEmail(email)).toMatchObject({id: userId, username});
-    });
-
-    it('accepts the registered password and rejects a wrong password', async () => {
-        const {id: userId} = await registerLocalAccount('password-check');
-
+        expect(await userService.getUserByEmail(accountEmail)).toMatchObject({id: userId, username});
         await expect(userService.verifyPassword(userId, 'initial-secret')).resolves.toBe(true);
         await expect(userService.verifyPassword(userId, 'wrong-secret')).resolves.toBe(false);
     });
 
-    it('logs in an active local account with its username', async () => {
-        const {id: userId, username} = await registerLocalAccount('username-login');
+    it('logs in an active local account with its username and email in independent sessions', async () => {
+        const {id: userId, username, email: accountEmail} = await registerLocalAccount('local-login');
         await userService.activateUser(userId);
         const session = {} as Request['session'];
 
@@ -174,38 +159,27 @@ describe('authentication user stories', () => {
         // Canary: the existing username credential must continue to establish the user and default-profile session.
         expect(session.auth?.user?.id).toBe(userId);
         expect(session.profile?.id).toBe(session.auth?.user?.profiles[0].id);
-    });
-
-    it('logs in an active local account with its email address', async () => {
-        const {email, id: userId} = await registerLocalAccount('email-login');
-        await userService.activateUser(userId);
-        const session = {} as Request['session'];
-
-        await userController.loginUser({username: email, password: 'initial-secret'}, session);
+        // A fresh session proves email login establishes its own identity rather
+        // than accidentally retaining the preceding username login's state.
+        const emailSession = {} as Request['session'];
+        await userController.loginUser({username: accountEmail, password: 'initial-secret'}, emailSession);
 
         // Regression: local users who enter their email must receive the same authenticated session as username users.
-        expect(session.auth?.user?.id).toBe(userId);
-        expect(session.profile?.id).toBe(session.auth?.user?.profiles[0].id);
+        expect(emailSession.auth?.user?.id).toBe(userId);
+        expect(emailSession.profile?.id).toBe(emailSession.auth?.user?.profiles[0].id);
     });
 
-    it('activates an account with its persisted activation token', async () => {
+    it('activates an account with its persisted token and consumes the token', async () => {
         const {id: userId} = await registerLocalAccount('activation');
 
         const token = await userService.generateActivationToken(userId);
         expect((await userService.verifyActivationToken(token))?.id).toBe(userId);
         await userController.activateAccount(token);
         expect(Boolean((await userService.getUserById(userId))?.isActive)).toBe(true);
-    });
-
-    it('rejects an activation token after activation consumes it', async () => {
-        const {id: userId} = await registerLocalAccount('activation-consumption');
-
-        const token = await userService.generateActivationToken(userId);
-        await userController.activateAccount(token);
         expect(await userService.verifyActivationToken(token)).toBeNull();
     });
 
-    it('resets a password through the recovery-token workflow', async () => {
+    it('resets a password through the recovery-token workflow and consumes the token', async () => {
         const {id: userId, username} = await registerLocalAccount('password-reset');
 
         const token = await userService.generatePasswordResetToken(username);
@@ -218,16 +192,6 @@ describe('authentication user stories', () => {
             confirmPassword: 'replacement-secret'
         });
         await expect(userService.verifyPassword(userId, 'replacement-secret')).resolves.toBe(true);
-    });
-
-    it('rejects a reset token after the password is changed', async () => {
-        const {username} = await registerLocalAccount('reset-consumption');
-
-        const token = await userService.generatePasswordResetToken(username);
-        await userController.resetPassword(token, {
-            password: 'replacement-secret',
-            confirmPassword: 'replacement-secret'
-        });
         expect(await userService.verifyPasswordResetToken(token)).toBeNull();
         await expect(userController.checkPasswordForgotToken(token)).rejects.toMatchObject({status: 401, cause: 'TOKEN_INVALID'});
     });
@@ -263,19 +227,13 @@ describe('authentication user stories', () => {
         expect((await userService.getGuestByEmail(guestEmail)).map((match) => match.id)).toContain(guest.id);
     });
 
-    it('links an existing local account to an OIDC identity', async () => {
+    it('links and unlinks OIDC without deleting the existing local account', async () => {
         const {id: userId} = await registerLocalAccount('oidc-link');
 
         await userService.linkUserToOidc(userId, 'https://identity.example', 'linked-subject');
         expect(await userService.getUserByOidc('https://identity.example', 'linked-subject')).toMatchObject({id: userId});
-    });
-
-    it('unlinks OIDC without deleting the local account', async () => {
-        const {id: userId} = await registerLocalAccount('oidc-unlink');
-
-        await userService.linkUserToOidc(userId, 'https://identity.example', 'unlinked-subject');
         await userService.unlinkOidc(userId);
-        expect(await userService.getUserByOidc('https://identity.example', 'unlinked-subject')).toBeNull();
+        expect(await userService.getUserByOidc('https://identity.example', 'linked-subject')).toBeNull();
         expect(await userService.getUserById(userId)).not.toBeNull();
     });
 
@@ -307,7 +265,7 @@ describe('authentication user stories', () => {
 
         const [result] = await userService.searchUsersSecure(user.username, 5);
         expect(result).toMatchObject({id: profile.id, name: profile.name, username: user.username});
-        expect(result.email).not.toBe(email);
+        expect(result.email).not.toBe(user.email);
     });
 
 });

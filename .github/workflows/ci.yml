@@ -10,7 +10,16 @@ on:
 
 jobs:
   test:
+    # Each stage retains its existing checks but runs on a separate runner and
+    # disposable MariaDB service. This removes serial project/build/browser tails
+    # without allowing integration files to reset one another's database.
+    name: Verify (${{ matrix.stage }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        stage: [database-free, integration, browser]
 
     services:
       mariadb:
@@ -113,18 +122,32 @@ jobs:
           EOF
           echo "Wrote .env.e2e"
 
-      - name: Run Vitest unit, frontend, and MariaDB integration suites with reports
+      - name: Run selected Vitest project with coverage and mergeable reports
+        if: matrix.stage != 'browser'
         run: |
           mkdir -p artifacts
-          npm run test:ci
+          npm run test:ci -- --project=${{ matrix.stage }} --reporter=blob --outputFile.blob=artifacts/vitest-blobs/${{ matrix.stage }}.json
+
+      - name: Preserve each Vitest stage's diagnostics
+        if: always() && matrix.stage != 'browser'
+        run: |
+          destination="artifacts/vitest-stages/${{ matrix.stage }}"
+          mkdir -p "$destination"
+          for report in artifacts/junit-vitest.xml coverage/lcov.info coverage/coverage-final.json; do
+            if [ -f "$report" ]; then
+              cp --parents "$report" "$destination/"
+            fi
+          done
 
       - name: Build application
+        if: matrix.stage == 'browser'
         run: npm run build
 
       # =========================
       # Playwright E2E
       # =========================
       - name: Cache Playwright browsers
+        if: matrix.stage == 'browser'
         id: playwright-cache
         uses: actions/cache@v4
         with:
@@ -132,19 +155,85 @@ jobs:
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        if: matrix.stage == 'browser' && steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
 
       - name: Run focused Playwright E2E suite with JUnit report
+        if: matrix.stage == 'browser'
         env:
           CI: true
           PLAYWRIGHT_JUNIT_OUTPUT: artifacts/junit-playwright.xml
           PLAYWRIGHT_HTML_OUTPUT_DIR: artifacts/playwright-report
         run: |
           mkdir -p artifacts
-          npm run e2e
+          # Match the bounded browser execution used for verification instead of
+          # varying session/database pressure with half the runner's CPU count.
+          npm run e2e -- --workers=2
 
       - name: Upload test reports (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ matrix.stage }}
+          path: |
+            artifacts/junit-vitest.xml
+            artifacts/junit-playwright.xml
+            artifacts/playwright-report/
+            coverage/lcov.info
+            coverage/coverage-final.json
+            artifacts/vitest-blobs/
+            artifacts/vitest-stages/
+          retention-days: 7
+          compression-level: 9
+          if-no-files-found: warn
+
+  reports:
+    name: Collect reports and analyze
+    needs: test
+    # Preserve all stages' diagnostics even when a check fails. The reusable
+    # release workflow still fails when any required matrix stage fails.
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+
+      - name: Install matching report tooling
+        run: npm ci
+
+      - name: Collect all verification stages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-reports-*
+          merge-multiple: true
+          path: .
+
+      - name: Require both successful Vitest project reports
+        if: needs.test.result == 'success'
+        # A successful verification must never publish only one project's coverage
+        # after an incomplete artifact transfer. Failed stages may still replay
+        # whichever diagnostics exist; their failure already blocks release.
+        run: |
+          test -f artifacts/vitest-blobs/database-free.json
+          test -f artifacts/vitest-blobs/integration.json
+
+      - name: Merge Vitest results and coverage without rerunning tests
+        if: always() && hashFiles('artifacts/vitest-blobs/*.json') != ''
+        # Built-in replay retains failed tasks and merges both coverage maps. The
+        # normal package hook prepares fresh inputs for uncovered/source mapping;
+        # --merge-reports executes reporters only. Stage copies retain diagnostics
+        # if startup or merging fails, and release/Sonar still require full success.
+        run: npm run test:ci -- --merge-reports=artifacts/vitest-blobs
+
+      - name: Upload combined test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -155,18 +244,20 @@ jobs:
             artifacts/playwright-report/
             coverage/lcov.info
             coverage/coverage-final.json
+            artifacts/vitest-stages/
           retention-days: 7
           compression-level: 9
           if-no-files-found: warn
 
       - name: Read package version
+        if: needs.test.result == 'success'
         id: package
         run: |
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
           echo "version=${PACKAGE_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: SonarQube Scan
-        if: ${{ github.event_name == 'workflow_call' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/ts-migration' }}
+        if: ${{ needs.test.result == 'success' && (github.event_name == 'workflow_call' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/ts-migration') }}
         uses: SonarSource/sonarqube-scan-action@master
         with:
           args: >

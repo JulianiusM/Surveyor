@@ -7,11 +7,19 @@ import {invoicePresentation} from '../../src/modules/invoice/presentation';
 const participants = [{id: 1, name: 'Participant who paid', email: 'paid@example.com'},
     {id: 2, name: 'Other participant', email: 'other@example.com'}];
 
-/** Render only fixed test-owned invocations against the production mixins and explicit feature data. */
+const attributionRenderers = new Map<string, ReturnType<typeof pug.compile>>();
+
+/** Render fixed test-owned invocations against the production mixins and independent feature data. */
 function renderAttribution(fragment: string, pool: Record<string, unknown>): string {
-    const filename = resolve('src/views/modules/module_invoice_pool.pug');
-    return pug.render(readFileSync(filename, 'utf8') + '\n' + fragment,
-        {filename, pool, participants, ev: {id: 'event'}, ui: invoicePresentation});
+    let renderer = attributionRenderers.get(fragment);
+    if (!renderer) {
+        const filename = resolve('src/views/modules/module_invoice_pool.pug');
+        // Templates remain unchanged throughout this suite. Reuse only compilation,
+        // never rendered output or locals, so all pool states still exercise real Pug.
+        renderer = pug.compile(readFileSync(filename, 'utf8') + '\n' + fragment, {filename});
+        attributionRenderers.set(fragment, renderer);
+    }
+    return renderer({pool, participants, ev: {id: 'event'}, ui: invoicePresentation});
 }
 
 /** Supply ordinary pool inputs so the real management modal also renders its neighboring existing forms. */

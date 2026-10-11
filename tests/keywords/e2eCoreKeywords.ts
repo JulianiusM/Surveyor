@@ -26,6 +26,30 @@ function pilotMounted(): boolean {
     return container?.getAttribute('data-pilot-hydrated') === 'true';
 }
 
+/** Complete the native opening transition before assertions can lead to another modal command. */
+export async function openModalForE2E(modal: Locator, opener: Locator): Promise<void> {
+    // Visibility begins before Bootstrap accepts a hide command. Its public lifecycle event,
+    // rather than a fixed delay or private state, establishes when the dialog is ready to close.
+    await Promise.all([modal.evaluate(waitForModalTransition, 'shown.bs.modal' as const), opener.click()]);
+}
+
+/** Close an already opened native modal and wait until its lifecycle releases the next interaction. */
+export async function closeModalForE2E(modal: Locator): Promise<void> {
+    // Register before clicking: the next interaction must follow the completed transition,
+    // not merely a disappearing dialog whose backdrop or transition still owns the page.
+    await Promise.all([
+        modal.evaluate(waitForModalTransition, 'hidden.bs.modal' as const),
+        modal.locator('.modal-header .btn-close').click(),
+    ]);
+}
+
+/** Playwright executes this listener in the browser; it cannot reference test-process state. */
+function waitForModalTransition(element: HTMLElement, event: 'shown.bs.modal' | 'hidden.bs.modal'): Promise<void> {
+    return new Promise(function awaitTransition(resolve) {
+        element.addEventListener(event, function resolveCompleted() { resolve(); }, {once: true});
+    });
+}
+
 /** Review a frontend invoice gate before the existing action sends its original API payload. */
 export async function confirmInvoiceCommand(page: Page, opener: Locator): Promise<void> {
     const review = page.locator('#invoiceCommandConfirmModal');

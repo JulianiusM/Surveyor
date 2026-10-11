@@ -63,6 +63,10 @@ describe('survey user stories', () => {
 
         expect(await surveyService.getSurveyById(surveyId)).toMatchObject({title: 'Camp date survey', ownerId: owner.id});
         expect(combinations).toHaveLength(2);
+        expect(combinations).toMatchObject([
+            {weekday: 'MON', nthWeek: '1'},
+            {weekday: 'FRI', nthWeek: 'LAST'},
+        ]);
     });
 
     it('rejects a survey without a participant-visible date choice', async () => {
@@ -71,26 +75,16 @@ describe('survey user stories', () => {
         })).toThrow('combinations');
     });
 
-    it('orders persisted choices predictably', async () => {
-        const [, combinations] = await createSurveyWithCombinations(owner.id);
-
-        expect(combinations.map((combination) => combination.weekday)).toEqual(['MON', 'FRI']);
-    });
-
-    it('stores a yes response from a participant', async () => {
+    it('stores yes and maybe responses for their respective persisted choices', async () => {
         const [surveyId, combinations] = await createSurveyWithCombinations(owner.id);
 
-        const answer = 'yes';
-        await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: answer});
-        expect(await surveyService.getResponsesByProfileId(participant.id)).toContainEqual(expect.objectContaining({entityId: surveyId, answer}));
-    });
-
-    it('stores a maybe response from a participant', async () => {
-        const [surveyId, combinations] = await createSurveyWithCombinations(owner.id);
-
-        const answer = 'maybe';
-        await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: answer});
-        expect(await surveyService.getResponsesByProfileId(participant.id)).toContainEqual(expect.objectContaining({entityId: surveyId, answer}));
+        await submitSurveyResponses(surveyId, participant, {
+            [combinations[0].id]: 'yes', [combinations[1].id]: 'maybe',
+        });
+        expect(await surveyService.getResponsesByProfileId(participant.id)).toEqual(expect.arrayContaining([
+            expect.objectContaining({entityId: surveyId, itemId: combinations[0].id, answer: 'yes'}),
+            expect.objectContaining({entityId: surveyId, itemId: combinations[1].id, answer: 'maybe'}),
+        ]));
     });
 
     it('rejects a date choice taken from another survey', async () => {
@@ -113,20 +107,14 @@ describe('survey user stories', () => {
         expect(await surveyService.getResponsesByProfileId(participant.id)).toContainEqual(expect.objectContaining({entityId: surveyId, answer: 'no'}));
     });
 
-    it('stores answers from multiple participants', async () => {
+    it('groups multiple participant results with their names, choices, and answers', async () => {
         const [surveyId, combinations] = await createSurveyWithCombinations(owner.id);
 
         await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: 'yes'});
         await submitSurveyResponses(surveyId, secondParticipant, {[combinations[1].id]: 'maybe'});
-        expect(Object.keys(await surveyService.getResponsesSorted(surveyId))).toEqual(expect.arrayContaining([participant.id, secondParticipant.id]));
-    });
-
-    it('groups results by participant with names and choices', async () => {
-        const [surveyId, combinations] = await createSurveyWithCombinations(owner.id);
-
-        await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: 'yes'});
         expect(await surveyService.getResponsesSorted(surveyId)).toEqual({
-            [participant.id]: [expect.objectContaining({name: participant.name, combinationId: combinations[0].id, answer: 'yes'})],
+            [participant.id]: [expect.objectContaining({profileId: participant.id, name: participant.name, combinationId: combinations[0].id, answer: 'yes'})],
+            [secondParticipant.id]: [expect.objectContaining({profileId: secondParticipant.id, name: secondParticipant.name, combinationId: combinations[1].id, answer: 'maybe'})],
         });
     });
 
@@ -137,13 +125,18 @@ describe('survey user stories', () => {
         expect((await surveyService.getSurveysByParticipant(participant.id)).map((survey) => survey.id)).toContain(surveyId);
     });
 
-    it('replaces a submitted ballot without stale answers', async () => {
+    it('replaces a submitted ballot without stale answers and deletes the remaining ballot', async () => {
         const [surveyId, combinations] = await createSurveyWithCombinations(owner.id);
 
-        await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: 'yes'});
-        await surveyService.deleteResponsesByProfileId(participant.id, surveyId);
+        // A complete first ballot ensures replacement removes an omitted choice,
+        // rather than merely overwriting one answer. Deletion then clears the result.
+        await submitSurveyResponses(surveyId, participant, {
+            [combinations[0].id]: 'yes', [combinations[1].id]: 'yes',
+        });
         await submitSurveyResponses(surveyId, participant, {[combinations[1].id]: 'maybe'});
         expect((await surveyService.getResponsesSorted(surveyId))[participant.id]).toMatchObject([{combinationId: combinations[1].id, answer: 'maybe'}]);
+        await surveyService.deleteResponsesByProfileId(participant.id, surveyId);
+        expect(await surveyService.getResponsesSorted(surveyId)).toEqual({});
     });
 
     it('keeps one participant ballot isolated from another', async () => {
@@ -171,15 +164,6 @@ describe('survey user stories', () => {
         expect(await surveyService.getSurveyById(surveyId)).toMatchObject({headerImg: 'survey.jpg'});
         await surveyService.updateHeaderImage(surveyId, null);
         expect(await surveyService.getSurveyById(surveyId)).toMatchObject({headerImg: null});
-    });
-
-    it('deletes all responses for one participant', async () => {
-        const [surveyId, combinations] = await createSurveyWithCombinations(owner.id);
-
-        await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: 'yes'});
-        await submitSurveyResponses(surveyId, participant, {[combinations[1].id]: 'maybe'});
-        await surveyService.deleteResponsesByProfileId(participant.id, surveyId);
-        expect(await surveyService.getResponsesSorted(surveyId)).toEqual({});
     });
 
     it('deletes a survey from the owner dashboard', async () => {
