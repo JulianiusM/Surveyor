@@ -4,6 +4,8 @@
  * data. Explanatory diagrams are deliberately separate from application screenshots.
  * Run after npm run build: node scripts/generate-help-visuals.mjs --locale=de --figure=navigation
  * Omit --figure to reproduce all three figures; selecting one leaves other PNGs untouched.
+ * During frontend migration, add --staged to write prospective figures beside the staged
+ * guides. The default canonical output is never suitable for a Vue navigation draft.
  * Each language owns visual-labels.json beside its guides; UI labels come from the
  * same application catalog used by the actual Vue header. Inspect every PNG export.
  */
@@ -22,7 +24,11 @@ const catalogPath = `src/locales/${locale}.json`;
 const catalog = JSON.parse(await fs.readFile(path.join(root, catalogPath), 'utf8'));
 const labelsPath = path.join('docs/user-guide', catalog.help.directory, 'visual-labels.json');
 const labels = JSON.parse(await fs.readFile(path.join(root, labelsPath), 'utf8'));
-const output = path.join(root, path.dirname(labelsPath), 'assets');
+// The source labels remain language-owned. Only the destination changes for prospective
+// migration figures, so regeneration cannot overwrite the preserved native help images.
+const staged = process.argv.includes('--staged');
+const outputRoot = staged ? 'docs/frontend-migration/staged/user-guide' : 'docs/user-guide';
+const output = path.join(root, outputRoot, catalog.help.directory, 'assets');
 const evidence = path.join(root, `.temp/help-visuals-${locale}`);
 const ui = catalog.resources.ui;
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');

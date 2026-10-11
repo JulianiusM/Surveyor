@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend and backend developers; translators; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-08
+last-verified: 2026-10-11
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: FPR-07 explicitly authorized 2026-10-08 scope/fallback/documentation amendments and staging; original choices/D1-D5 retained; no new runtime verification claimed; approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; step-three shared English/German UI/API catalogs and independent help articles and figures, locale-owned stable fragments without cross-corpus reads, generated message contracts, request-fixed translation, native help and Vue SSR/SPA; focused synthetic help and locale tests; invoice, other Pug, email, PDF, principal preference persistence and full-application localization remain planned
+verification-scope: 2026-10-11 existing shared explicit-UTC read receipt/deadline formatter and selected Vue resource binding reviewed and verified at actual consumers; original choices, D1–D5 and approved 2026-10-08 scope/fallback/documentation amendments retained; English/German shared catalogs and independent fixed-source help implemented with current final paired runtime/visual evidence; full regional formatting, invoice, other Pug, email, PDF, principal preference persistence and application-wide localization remain planned; bounded actual execution and unrun external-service limits belong to the paired review
 source-anchors: src/locales/en.json; src/locales/de.json; scripts/generate-locales.mjs; src/modules/localization/translator.ts; src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/routes/api/v1.ts; src/modules/api/problem.ts; tests/unit/frontend-localization.spec.ts; tests/unit/frontend-generation.spec.ts; tests/fixtures/frontend-contracts.mts; src/modules/invoice/locales/en.ts; src/modules/invoice/wording.ts; src/modules/invoice/presentation.ts; src/modules/invoice/settlementEmail.ts; src/modules/invoice/exports.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/modules/email.ts; src/modules/lib/pdf.ts; src/modules/renderer.ts; src/controller/helpController.ts; src/modules/database/entities/user/User.ts; src/modules/database/entities/user/Guest.ts; tests/unit/invoice-presentation.spec.ts; docs/DOCUMENTATION_POLICY.md
 next-review: invoice-catalog-migration-or-localization-scope-expansion
 -->
@@ -43,8 +43,11 @@ cardinal-plural consistency, derives API parameter types from OpenAPI, and emits
 with generated key/parameter types, runtime argument checks and plain-text output. Each call owns an initialized
 i18next instance, or wraps the supplied request/application instance. The [Vue context](../../src/frontend/app/context.ts) exposes it through the
 [application provider](../../src/frontend/app/createApp.ts); [API problems](../../src/modules/api/problem.ts) use the
-same catalogs. The pilot implements plain text and cardinal plurals. Rich slots, grammatical context/ordinal forms,
-shared regional/date formatters and additional script/font support remain work for later slices.
+same catalogs. The pilot implements plain text and cardinal plurals. Temporary-read warnings use one shared
+`formatReadTime` formatter in the translator module: successful-read receipts and server Retry deadlines are instants
+displayed with the selected language and an explicit UTC zone, identically in SSR and the browser. It does not reinterpret
+entity civil dates or event deadlines. Rich slots, grammatical context/ordinal forms, the remaining regional/date
+formatters and additional script/font support remain work for later slices.
 
 The [locale command](../../src/routes/api/v1.ts), `PUT /api/v1/locale`, issues a browser-scoped HttpOnly preference
 cookie and returns the resolved session view. It does not persist a User/Guest preference or change the active

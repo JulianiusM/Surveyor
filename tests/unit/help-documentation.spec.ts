@@ -4,10 +4,10 @@ import {
     fetchHelpDoc,
     getHelpDocsBasePath,
     renderTrustedHelpMarkdown,
-    resolveContextualHelpUrl,
     resolveHelpAssetPath,
     validateTrustedHelpMarkdown,
 } from '../../src/controller/helpController';
+import {pilotHelpUrl, resolveContextualHelpUrl, resolvePilotHelpQuery} from '../../src/modules/lib/helpNavigation';
 
 // Application behavior only: these tests also run with docs/ entirely absent.
 // Real guide wording, examples, links and images belong to tests/documentation/.
@@ -79,5 +79,49 @@ describe('help renderer and source boundaries (synthetic fixtures)', () => {
         expect(resolveContextualHelpUrl('/survey/123')).toBe('/help/surveys');
         expect(resolveContextualHelpUrl('/packing/123')).toBe('/help/packing_lists');
         expect(resolveContextualHelpUrl('/')).toBe('/help');
+    });
+
+    it.each([
+        ['search', {}, {q: ''}],
+        ['SEARCH', {doc: 'packing_lists'}, {q: ''}],
+        ['search', {q: '  packing\n\t list  ', doc: 'events'}, {q: 'packing list'}],
+        ['search', {q: ['first', 'second']}, {q: ''}],
+        ['packing_lists', {q: 'ignored', doc: 'events'}, {doc: 'packing_lists'}],
+        [undefined, {q: 'packing', doc: 'events'}, {q: 'packing'}],
+        [undefined, {q: '', doc: 'events'}, {q: ''}],
+        [undefined, {doc: 'packing_lists'}, {doc: 'packing_lists'}],
+        [undefined, {}, {}],
+    ] as const)('shares native path precedence and canonical pilot query selection (%s)', (pathDoc, query, expected) => {
+        expect(resolvePilotHelpQuery(pathDoc, query)).toEqual(expected);
+    });
+
+    it('bounds enhanced search without changing the native selected article', () => {
+        expect(resolvePilotHelpQuery('search', {q: 'x'.repeat(150)})).toEqual({q: 'x'.repeat(100)});
+        expect(resolvePilotHelpQuery('packing_lists', {q: 'x'.repeat(150)})).toEqual({doc: 'packing_lists'});
+    });
+
+    it.each([
+        ['/help/search?doc=events&source=fixture#prompt', '/frontend-pilot/help/search', {q: ''}],
+        ['/help/search?q=packing&doc=events#results', '/frontend-pilot/help/search', {q: 'packing'}],
+        ['/help/packing_lists?q=ignored&doc=events&source=fixture#task', '/frontend-pilot/help/packing_lists', {doc: 'packing_lists'}],
+        ['/help?q=ignored&doc=events&source=fixture#home', '/frontend-pilot/help/readme', {doc: 'readme'}],
+    ] as const)('keeps native ignored parameters and fragments inert when adapting %s', (href, pathname, selected) => {
+        const source = new URL(href, 'https://fixture.test');
+        const target = new URL(pilotHelpUrl(href, 'de'), 'https://fixture.test');
+        expect(target.pathname).toBe(pathname);
+        expect(target.hash).toBe(source.hash);
+        for (const [key, value] of source.searchParams) expect(target.searchParams.get(key)).toBe(value);
+        expect(target.searchParams.get('locale')).toBe('de');
+        expect(target.searchParams.has('list')).toBe(false);
+        const pathDoc = /^\/frontend-pilot\/help\/([^/]+)$/u.exec(target.pathname)?.[1];
+        expect(resolvePilotHelpQuery(pathDoc, Object.fromEntries(target.searchParams))).toEqual(selected);
+    });
+
+    it('retains ordinary pilot article query links and leaves separate assets/external URLs native', () => {
+        expect(pilotHelpUrl('/help/packing_lists?source=fixture#task', 'en'))
+            .toBe('/frontend-pilot/help?source=fixture&doc=packing_lists&locale=en#task');
+        expect(pilotHelpUrl('/help#home', 'en')).toBe('/frontend-pilot/help?locale=en#home');
+        expect(pilotHelpUrl('/help/assets/figure.png?locale=de', 'en')).toBe('/help/assets/figure.png?locale=de');
+        expect(pilotHelpUrl('https://example.org/help?q=packing', 'en')).toBe('https://example.org/help?q=packing');
     });
 });

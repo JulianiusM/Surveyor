@@ -26,8 +26,9 @@ import mailer, {resolveEmailRecipientName} from "../modules/email";
 import {APIError, ExpectedError, ValidationError} from "../modules/lib/errors";
 import {persistSession, requireSessionProfileId} from "../modules/lib/session";
 import {rotateFrontendSessionContext} from '../modules/lib/frontendSession';
-import {safeFrontendReturn} from '../modules/lib/frontendIdentity';
-import type {IdentityLinkOptions, IdentityTransitionOptions} from '../types/IdentityTypes';
+import {frontendIdentityProblemKey, safeFrontendReturn} from '../modules/lib/frontendIdentity';
+import {createTranslator} from '../modules/localization/translator';
+import type {FrontendIdentityOperation, IdentityLinkOptions, IdentityTransitionOptions} from '../types/IdentityTypes';
 import {buildGuestLink, ENTITIES} from "../modules/lib/util";
 import * as oidc from "../modules/oidc";
 import settings from "../modules/settings";
@@ -58,6 +59,17 @@ export function getAccountPageEntry(session: SessionLike, loginUrl: string, retu
 }
 const LOGIN_TEMPLATE = 'users/login';
 
+/**
+ * Native identity handlers retain their established English presentation. Known
+ * controller outcomes and the pilot now use one operation-specific catalog owner;
+ * exceptions retain their original causes, statuses and validation renderer data.
+ */
+function nativeIdentityProblemMessage(operation: FrontendIdentityOperation, code: components['schemas']['Problem']['code']): string {
+    const key = frontendIdentityProblemKey(operation, code);
+    if (!key) throw new Error('Missing native identity presentation');
+    return createTranslator('en').t(key);
+}
+
 /** Native and SPA mail use the same controller; only the trusted application route differs. */
 function identityLink(path: string, options?: IdentityLinkOptions): string {
     const prefix = options?.frontend ? '/frontend-pilot' : '';
@@ -75,12 +87,12 @@ export async function registerUser(body: any, next?: string, options?: IdentityL
     }
 
     if (password !== password_repeat) {
-        throw new ValidationError(CREATE_TEMPLATE, 'Passwords do not match.', returnInfo, {cause: 'PASSWORD_MISMATCH'});
+        throw new ValidationError(CREATE_TEMPLATE, nativeIdentityProblemMessage('register', 'PASSWORD_MISMATCH'), returnInfo, {cause: 'PASSWORD_MISMATCH'});
     }
 
     const existingUser = await userService.getUserByUsername(username);
     if (existingUser) {
-        throw new ValidationError(CREATE_TEMPLATE, 'This username is already taken.', returnInfo, {cause: 'USERNAME_TAKEN'});
+        throw new ValidationError(CREATE_TEMPLATE, nativeIdentityProblemMessage('register', 'USERNAME_TAKEN'), returnInfo, {cause: 'USERNAME_TAKEN'});
     }
 
     // Benutzer registrieren
@@ -98,32 +110,30 @@ export async function loginUser(body: any, session: Request["session"], options?
     const returnInfo = {username};
 
     if (!username || !password) {
-        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo, {cause: 'INVALID_CREDENTIALS'});
+        throw new ValidationError(LOGIN_TEMPLATE, nativeIdentityProblemMessage('login', 'INVALID_CREDENTIALS'), returnInfo, {cause: 'INVALID_CREDENTIALS'});
     }
 
     const user = (await userService.getUserByUsername(username)) ?? (await userService.getUserByEmail(username));
     if (!user) {
-        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo, {cause: 'INVALID_CREDENTIALS'});
+        throw new ValidationError(LOGIN_TEMPLATE, nativeIdentityProblemMessage('login', 'INVALID_CREDENTIALS'), returnInfo, {cause: 'INVALID_CREDENTIALS'});
     }
 
     const isValidPassword = await userService.verifyPassword(user.id, password);
     if (!isValidPassword) {
-        throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo, {cause: 'INVALID_CREDENTIALS'});
+        throw new ValidationError(LOGIN_TEMPLATE, nativeIdentityProblemMessage('login', 'INVALID_CREDENTIALS'), returnInfo, {cause: 'INVALID_CREDENTIALS'});
     }
 
     if (!user.isActive) {
-        let errorMsg = "User not activated.";
-        let cause = 'ACCOUNT_INACTIVE';
+        let cause: 'ACCOUNT_INACTIVE' | 'ACTIVATION_RESENT' = 'ACCOUNT_INACTIVE';
         if ((user.activationTokenExpiration ?? new Date(0)) < new Date()) {
             // Generiere den Aktivierungs-Token und sende ihn per E-Mail
             const token = await userService.generateActivationToken(user.id);
             const activationLink = identityLink(`/users/activate/${encodeURIComponent(token)}`, options);
 
             await mailer.sendActivationEmail({name: resolveEmailRecipientName(user.name, user.username), address: user.email}, activationLink);
-            errorMsg += " The activation link has expired. A new one has been sent to your email account.";
             cause = 'ACTIVATION_RESENT';
         }
-        throw new ValidationError(LOGIN_TEMPLATE, errorMsg, returnInfo, {cause});
+        throw new ValidationError(LOGIN_TEMPLATE, nativeIdentityProblemMessage('login', cause), returnInfo, {cause});
     }
 
     // Credential verification may have waited while another tab changed identity. The API
@@ -456,7 +466,7 @@ export async function checkPasswordForgotToken(token: string) {
     // Überprüfe, ob der Token gültig ist
     const user = await userService.verifyPasswordResetToken(token);
     if (!user) {
-        throw new ExpectedError('Invalid or expired token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
+        throw new ExpectedError(nativeIdentityProblemMessage('reset', 'TOKEN_INVALID'), 'error', 401, {}, {cause: 'TOKEN_INVALID'});
     }
 }
 
@@ -464,13 +474,13 @@ export async function resetPassword(token: string, body: any) {
     const {password, confirmPassword} = body;
 
     if (password !== confirmPassword) {
-        throw new ValidationError('users/reset-password', 'Passwords do not match!', {token}, {cause: 'PASSWORD_MISMATCH'})
+        throw new ValidationError('users/reset-password', nativeIdentityProblemMessage('reset', 'PASSWORD_MISMATCH'), {token}, {cause: 'PASSWORD_MISMATCH'})
     }
 
     // Überprüfe den Token und setze das Passwort zurück
     const user = await userService.verifyPasswordResetToken(token);
     if (!user) {
-        throw new ExpectedError('Invalid or expired token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
+        throw new ExpectedError(nativeIdentityProblemMessage('reset', 'TOKEN_INVALID'), 'error', 401, {}, {cause: 'TOKEN_INVALID'});
     }
 
     // Setze das Passwort zurück
@@ -481,7 +491,7 @@ export async function activateAccount(token: string) {
     // Überprüfe, ob der Aktivierungs-Token gültig ist
     const user = await userService.verifyActivationToken(token);
     if (!user) {
-        throw new ExpectedError('Invalid or expired token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
+        throw new ExpectedError(nativeIdentityProblemMessage('activate', 'TOKEN_INVALID'), 'error', 401, {}, {cause: 'TOKEN_INVALID'});
     }
 
     // Aktiviere den Benutzer

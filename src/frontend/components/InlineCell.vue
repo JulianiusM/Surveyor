@@ -9,6 +9,8 @@ const props = defineProps<{
     editable: boolean;
     label: string;
     numeric?: boolean;
+    // Input presentation does not define a feature's accepted values. Callers opt
+    // into constraints only where their native editor already enforces them.
     required?: boolean;
     maxLength?: number;
     disabled?: boolean;
@@ -22,11 +24,15 @@ const input = ref<HTMLInputElement | null>(null);
 // Keep the DOM's string value even for number inputs. Vue's numeric v-model coercion
 // otherwise changes this draft to a number before its trim/validation/save boundary.
 const local = ref('');
+// The raw snapshot remains the concurrency authority. Native editing presents trimmed
+// text, so its no-change baseline must be separate: merely opening padded stored text
+// must neither normalize persistence nor mark the enclosing page dirty.
 const original = ref('');
+const editableOriginal = ref('');
 const token = ref('');
 const pending = ref(false);
 const remoteChanged = computed(() => editing.value && String(props.value ?? '') !== original.value);
-const dirty = computed(() => editing.value && local.value.trim() !== original.value);
+const dirty = computed(() => editing.value && local.value.trim() !== editableOriginal.value);
 watch(() => props.token, latest => {
     // An item's other field can change while this one is being edited. The server compares
     // only this PATCH field, and an unchanged displayed value can adopt the new token safely.
@@ -49,13 +55,15 @@ watch(
 async function begin(): Promise<void> {
     if (!props.editable || props.disabled || editing.value) return;
     original.value = String(props.value ?? '');
-    local.value = original.value;
+    editableOriginal.value = original.value.trim();
+    local.value = editableOriginal.value;
     token.value = props.token;
     editing.value = true;
     emit('editing', true);
     await nextTick();
+    // Native editing focuses the existing value without selecting it. Selecting
+    // here changes the first typed character from an insertion into a replacement.
     input.value?.focus();
-    input.value?.select();
 }
 function cancel(): void {
     if (pending.value || !editing.value) return;
@@ -65,6 +73,9 @@ function cancel(): void {
 function review(): void {
     token.value = props.token;
     original.value = String(props.value ?? '');
+    // Reviewing new authority retains the user's draft, while no-change detection
+    // adopts the same normalized baseline as a newly opened native editor.
+    editableOriginal.value = original.value.trim();
     void nextTick(() => input.value?.focus());
 }
 async function commit(): Promise<void> {
@@ -73,7 +84,10 @@ async function commit(): Promise<void> {
         cancel();
         return;
     }
-    if (!input.value?.reportValidity()) return;
+    // Native inline editors submit on blur/Enter without validating a containing
+    // form. A number input's implicit step must not add a new rejection policy;
+    // validate only constraints explicitly supplied by the field's owner.
+    if ((props.required || props.maxLength !== undefined) && !input.value?.reportValidity()) return;
     pending.value = true;
     try {
         if (await props.save(local.value.trim(), token.value)) {
@@ -106,8 +120,7 @@ onBeforeUnmount(() => {
                 :type="numeric ? 'number' : 'text'"
                 :aria-label="label"
                 :disabled="pending || disabled || !editable"
-                :required="numeric || required"
-                :min="numeric ? 1 : undefined"
+                :required="required"
                 :maxlength="maxLength"
                 @input="local = ($event.target as HTMLInputElement).value"
                 @blur="commit"

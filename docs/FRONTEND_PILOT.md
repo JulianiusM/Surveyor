@@ -4,11 +4,11 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: current
-last-verified: 2026-10-08
+last-verified: 2026-10-11
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: authorized native-parity and shared-ownership rectification implementation, exact duplicate return amendment and retired execution plan; runtime checks and limits belong to the paired review; previous progressive loading and D1–D5 records retained
+verification-scope: 2026-10-11 original approved vision, choices and amendments reviewed against native executable behavior and actual consumers; transport/command/read/image, native controls/focus/geometry, validated denial, successful-read receipt, Retry timing, safe diagnostics, manual recovery and localization ownership reconciled; final coherent build, affected checks, fresh built journeys, complete matrix and supplemental original-image inspection, installed-folder replacement/rollback in Chromium/Firefox and normal source/HMR/regeneration/restoration verified in the paired review; whole quick/integration evidence explicitly precedes only two final presentation-template corrections; earlier checkpoints preserved; no production cutover or external-service proof claimed
 source-anchors: src/middleware/guestFlowFactory.ts; src/middleware/permissionMiddleware.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/controller/packingController.ts; src/routes/packing.ts; src/routes/guests.ts; src/app.ts; src/modules/oidc.ts; src/views/users/register-guest.pug; src/views/packing/packing-create.pug; src/public/js/packing-create.ts; src/public/js/register-guest.ts; src/frontend/components/LoadingSkeleton.vue; tests/frontend/frontend-loading-shell.spec.ts; tests/frontend/frontend-content-loading.spec.ts; docs/documentation-remediation.yml; src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/e2e/frontend-development.spec.ts; contracts/api/v1/; scripts/generate-api.mjs; scripts/generate-locales.mjs; src/frontend/; src/routes/api/v1.ts; src/routes/frontendPilot.ts; src/modules/api/; src/modules/packing/api.ts; src/modules/frontendPilotRenderer.ts; src/modules/localization/translator.ts; package.json; vite.config.mts; tests/unit/frontend-contracts.spec.ts; tests/unit/frontend-generation.spec.ts; tests/unit/frontend-localization.spec.ts; tests/frontend/frontend-pilot.spec.ts; tests/integration/packing-api.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-pilot.spec.ts
-next-review: frontend-pilot-parity-rectification
+next-review: pilot-UI-behavior-change-or-feature-cutover
 -->
 
 ## Migration boundary and current iteration (2026-10-08)
@@ -47,18 +47,21 @@ preserves that original behavior and approval. No approved technology or D1–D5
 | Implemented boundary | Existing or shared owner |
 |---|---|
 | Native and API admission | `userController.hasAccountProfile`, `entityAdminController.getEntityViewAdmission`, existing permission middleware and Packing business operations; generated common entry outcomes. DBAL remains persistence only. |
-| Canonical entry navigation | Shared `usePageEntry` scopes admission by identity, epoch, route and locale, retires pending-destination responses, and applies one-time notice severity only after committed replacement navigation. |
+| Canonical entry navigation | Shared `usePageEntry` scopes admission by identity, epoch, route and locale, retires pending-destination responses, and applies one-time notice severity only after committed replacement navigation. Authoritative denial retires older admission variants and feature-selected private projections; only a fresh admitted read restores them. Initial seeds check live document eligibility instead of replaying a captured SSR response. |
 | Account-only creation and duplicate return | Existing guest-flow factory supplies explicit renderer form actions to every native consumer. The SPA consumes creation admission with its exact requested return; existing survey exceptions remain. |
-| Native values and validation | One authored contract owns native decoded structure and strict JSON structure. Named native scalar decoders preserve established coercion, while browser item collection preserves trimming/empty-row semantics and root text remains unchanged. |
-| Stored identity and guest outcomes | Existing session/document owners preserve provider logout evidence, native expiry feedback and invalid guest-token status. A confirmed identity receipt survives a temporary session read only for its matching actor. Shared completion resumes the exact captured destination once; recovery ends at the native message URL, whose GET still redirects to login. |
+| Native values and validation | One authored contract owns operation-specific native decoded structure and strict JSON structure. Named native scalar decoders preserve established coercion, while browser item collection preserves trimming/empty-row semantics and root text remains unchanged. Password criteria retain UTF-16 units and no invented maximum; existing inline capacity retains raw scalar/SQL semantics. Native-unbounded controls acquire no additional HTML length limit. |
+| Stored identity and guest outcomes | Existing session/document owners preserve provider logout evidence, native expiry feedback and invalid guest-token status. The context retains a confirmed private identity result through a temporary session-read failure only for its matching actor. Shared completion separately retains the canonical destination through failed/cancelled delivery and actor remount, without replaying the command; recovery ends at the native message URL, whose GET still redirects to login. |
 | Locale/session ordering | Existing context owner fences captured locale generations while still accepting genuine identity changes from older session reads. |
-| Command and draft recovery | Existing command composable adds typed confirmation/refresh outcomes and a nested draft tree. Root owners register global guards once; dialogs check their own subtree. Settings keeps confirmed values separate from authoritative revisions and tokens. |
-| Maintainability and source verification | Named operations, comments, expanded templates and logical spacing explain admission and recovery. Source-browser coverage uses the shell before hydration and exercises real Packing controls. |
+| Command and draft recovery | Existing command composable adds typed confirmation/refresh outcomes and one application-root draft tree; dialogs check their own subtree. Captured pending/unknown status can outlive retired editors. Irreversible deletion obtains whole-page consent before writing; confirmed delivery retains it through failed navigation. Settings keeps confirmed values separate from authoritative revisions and tokens. |
+| Native form and feedback behavior | A validated, confirmed server rejection clears password fields as native forms do; unusable delivery and local validation retain mounted input. Pristine metadata Save remains available and reports the native informational outcome without writing. Configuration-denied identity journeys use the native full Error page. Shared controls retain native focus styling and freeze Settings tabs while work is pending. |
+| Native operation feedback | Features select existing operation-specific success/no-op messages through the generic command feedback contract. Inline feedback retains native placement, Close and focus; full flashes keep their native presentation. A detached or hidden initiating host uses the same live fallback receipt. Receipt-owned expiry survives reactive translation without renewing or reviving the message. Confirmed creation/deletion delivery retains its canonical one-time notice. |
+| Reusable reads and navigation | Existing read owners provide deliberate read-only recovery, including Help, session, guest title, token checks and cold admission. A deadline timer updates Retry availability without starting a GET; the enabled user action sends the eligible read. Failure warnings show the current readable projection's successful-read receipt and applicable server deadline in explicit UTC, with validated safe diagnostics. Same-document fragments retain admission, drafts and confirmed receipts. Validated denial retires private authority, and retained cache data cannot restore it. Authorized images use an injected feature-owned read; shared image lifetime and Help navigation contain no Packing-specific policy. |
+| Maintainability and source verification | Named operations, comments, expanded templates and logical spacing explain admission and recovery. Shared hydration restores opted-in control categories without commands or uploads; machine-state queries retain one authority across languages. Source-browser coverage asserts the original document and real Packing controls; normal HMR and authored-input restart are checked separately. |
 
 The staged [development recipe](frontend-migration/staged/DEVELOPMENT.md#implementing-the-next-feature-slice) is the
 single contribution guideline for these shared patterns. It covers server admission, canonical destinations, field
-semantics, locale ordering, confirmed-versus-refreshed state, nested departure ownership, progressive loading and
-test selection. Remaining Overview/header/card boundaries retain their existing scaffold obligations. A later
+semantics, locale ordering, startup decoding, confirmed persistence versus refresh/delivery, retained command status,
+whole-page departure ownership, progressive loading and independent native verification. Remaining Overview/header/card boundaries retain their existing scaffold obligations. A later
 module reuses these owners rather than duplicating Packing behavior or creating thin controllers/services.
 
 ### Native journey contract
@@ -173,9 +176,17 @@ features' [recorded exceptions](frontend-migration/EDGE_CASES.md) when migrating
 
 ## Ownership and normal development
 
-Vue pages compose shared action, dialog, feedback, tabs, permission matrices and event pickers. Reka supplies focus/keyboard behavior; existing
-Bootstrap styling supplies the visual baseline. TanStack Query owns server snapshots; form drafts own their original,
-local and latest remote values separately. There is no additional server-data store.
+Vue pages compose shared action, dialog, feedback, tabs, permission matrices and event pickers. Reka supplies the
+dialog and tab focus/keyboard primitives. Navigation and overview disclosures reuse `AppNavigationDropdown`, which
+owns native `details`, ordinary Tab and embedded form-control behavior, outside-pointer/focus dismissal, Escape
+focus return, arrows and shared placement. The installed public Reka menu requires registered menu items and
+roving/hover focus; its Popover adds dialog, autofocus and positioning semantics. Those primitives do not preserve
+these mixed native controls unchanged, and `DismissableLayer` is internal-only. This bounded fit assessment follows
+the framework's original conditional choice; it does not amend the primary stack or authorize future substitutions.
+Existing Bootstrap styling supplies the visual baseline. TanStack Query owns server snapshots; form drafts own
+their original, local and latest remote values separately. There is no additional server-data store. Profile
+management and switching remain at the native **Your profiles** destination; the pilot header does not add a direct
+active-profile selector.
 
 | Authored owner | Generated consumer or responsibility |
 |---|---|
@@ -185,9 +196,13 @@ local and latest remote values separately. There is no additional server-data st
 | `src/modules/packing/api.ts` | Authorized projections and commands; existing packing controller/service owners retain native operations and persistence |
 | `src/frontend/app/` | Common transport, session/context boundary, named query keys, update coordination, routing and app setup |
 | `src/frontend/features/<feature>/api.ts` | Feature-owned API operations and validators; overview owns the mixed collection independently of packing |
-| `src/frontend/composables/` | Explicit metadata reconciliation and legacy checklist persistence |
+| `src/frontend/composables/` | Generic metadata reconciliation, page admission/confirmed delivery, retained command/draft protection, feedback/read lifecycle and injected authorized-image lifetime |
 | `src/frontend/components/` | Shared application controls |
 | `src/modules/frontendPilotRenderer.ts` | Express manifest loading and request-isolated Vue rendering |
+
+Feature-owned behavior stays with its consumer. Packing's `features/packing/packed.ts` retains the native checklist
+key/value contract; it is not generic persistence policy. Shared cache eviction accepts the caller's affected query
+families instead of choosing Packing or Overview projections itself.
 
 Import contracts directly from their owner. Do not copy wire interfaces into components, validators or controllers,
 or add forwarding modules. Runtime validators are generated from the contract with strict requests/server outputs;
@@ -262,6 +277,14 @@ Visible pages refresh on a roughly 30-second jittered interval and on focus/reco
 Hidden pages pause reads. Scope and locale guards discard obsolete responses. Reads use bounded retry/backoff and
 respect `Retry-After`; mutations do not retry automatically. A successful command followed by a failed read reports
 that it was saved. A lost mutation response reports uncertainty and requires a fresh read instead of replay.
+
+Temporary read warnings show the last successful read only for the current actor's still-readable projection,
+the applicable Retry deadline and a validated query issue or safe future error detail. Read receipts and deadlines
+use the existing locale formatter with an explicit UTC zone; they do not change entity/event civil dates or claim
+the future application-wide regional-formatting migration is complete. Recoverable nonpolling reads expose a
+deliberate action too. Only a validated confirmed denial removes protected read authority; an HTML, malformed or
+status-mismatched error keeps permitted drafts and ordinary recovery. A retained denial barrier still displays the
+latest recovery error/deadline, and only a fresh admitted success restores its private projections.
 
 Metadata reads return a scoped comparison token. Saves require `If-Match`: missing review returns 428; a changed
 submitted field returns 412. Disjoint current-value changes can proceed without overwriting one another.

@@ -7,6 +7,9 @@ import {usePilot} from '../../src/frontend/app/context';
 import {usePackingApi} from '../../src/frontend/features/packing/api';
 import {useOverviewApi} from '../../src/frontend/features/overview/api';
 import {useHelpApi} from '../../src/frontend/features/help/api';
+import StatusNotice from '../../src/frontend/components/StatusNotice.vue';
+import {ApiFailure} from '../../src/frontend/app/transport';
+import {validateProblem} from '../../.generated/api/v1/browser/validateProblem.mjs';
 import type {components} from '../../src/types/api/v1';
 import type {PilotContext} from '../../src/types/FrontendPilotUiTypes';
 
@@ -20,7 +23,17 @@ const Fixture = defineComponent({
     setup() {
         const {messages} = usePilot();
         const draft = ref('');
+        // This must be a complete known Problem: an invalid envelope deliberately
+        // keeps its safe text rather than gaining a catalog/message identity.
+        const problem: components['schemas']['Problem'] = {type: 'about:blank', title: 'Rejected', status: 400,
+            code: 'VALIDATION_FAILED', detail: 'Review the request.', requestId: 'binding-read-validation',
+            messageKey: 'api:errors.VALIDATION_FAILED', params: {}};
+        if (!validateProblem(problem)) throw new Error('The binding fixture requires a validated known Problem.');
+        const readError = new ApiFailure(400, problem);
         return () => h('section', [h('span', {id: 'binding-message'}, messages.value.t('common.save')),
+            h(StatusNotice, {id: 'binding-read-notice', kind: 'warning', readError,
+                lastUpdatedAt: Date.UTC(2026, 9, 11, 6), retryAt: Date.UTC(2026, 9, 11, 6, 1)},
+                () => messages.value.t('state.stale')),
             h('input', {id: 'binding-draft', value: draft.value,
                 onInput: (event: Event) => { draft.value = (event.target as HTMLInputElement).value; }})]);
     },
@@ -79,12 +92,14 @@ describe('typed i18next-vue binding', () => {
             await browser.router.push(path);
             await browser.router.isReady();
             browser.app.mount('#binding-app');
-            const nativeSubmit = document.querySelector<HTMLButtonElement>('form[action="/frontend-pilot/users/profile"] button')!;
+            const nativeSubmit = document.querySelector<HTMLButtonElement>('form[action="/frontend-pilot/users/logout"] button')!;
             expect(nativeSubmit).not.toBeNull();
             expect(nativeSubmit.parentElement?.tagName).toBe('FORM');
             browser.context.hydrated.value = true;
             await nextTick();
-            expect(nativeSubmit.style.display).toBe('none');
+            expect(document.querySelector('form[action="/frontend-pilot/users/logout"] button')).toBe(nativeSubmit);
+            expect(document.querySelector('a[href="/users/profile/manage"]')).not.toBeNull();
+            expect(document.querySelector('#pilot-profile')).toBeNull();
             const input = document.getElementById('binding-draft') as HTMLInputElement;
             input.value = 'My unfinished edit';
             input.dispatchEvent(new Event('input', {bubbles: true}));
@@ -92,9 +107,15 @@ describe('typed i18next-vue binding', () => {
             expect(document.getElementById('binding-message')?.textContent).toBe('Save');
             // This event belongs to the actual selected library binding, rather than our locale ref.
             browser.context.i18next.addResource('en', 'ui', 'common.save', 'Save edited translation');
+            browser.context.i18next.addResource('en', 'ui', 'state.lastSuccessfulRefresh', 'Freshness edited: {{time}}');
+            browser.context.i18next.addResource('en', 'ui', 'state.retryAvailableAt', 'Retry edited: {{time}}');
+            browser.context.i18next.addResource('en', 'api', 'errors.VALIDATION_FAILED', 'Query issue edited translation');
             await nextTick();
             await nextTick();
             expect(document.getElementById('binding-message')?.textContent).toBe('Save edited translation');
+            expect(document.querySelector('#binding-read-notice [data-last-successful-refresh]')?.textContent).toContain('Freshness edited:');
+            expect(document.querySelector('#binding-read-notice [data-read-retry-at]')?.textContent).toContain('Retry edited:');
+            expect(document.querySelector('#binding-read-notice [data-read-issue]')?.textContent).toBe('Query issue edited translation');
             browser.context.locale.value = 'de';
             await nextTick();
             await nextTick();

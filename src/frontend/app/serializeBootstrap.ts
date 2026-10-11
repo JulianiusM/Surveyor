@@ -1,4 +1,4 @@
-import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
+import type {FrontendPilotBootstrap, PackingPageError} from '../../types/FrontendPilotTypes';
 import {validateSessionView} from '../../../.generated/api/v1/browser/validateSessionView.mjs';
 import {validateProblem} from '../../../.generated/api/v1/browser/validateProblem.mjs';
 import {validatePageEntryOutcome} from '../../../.generated/api/v1/browser/validatePageEntryOutcome.mjs';
@@ -24,6 +24,7 @@ const bootstrapValidators = {
     guestEntry: validateGuest,
     packingError: validatePackingError,
     packingCreateContext: validatePackingCreate,
+    packingSelectedEvent: validatePackingSelectedEvent,
     packingDuplicate: validatePackingDuplicate,
     personalLink: validateString,
     overview: validateOverview,
@@ -75,9 +76,16 @@ function validateIdentityFeedback(value: unknown): boolean {
     return typeof value === 'string' && frontendIdentityFeedback.includes(value as typeof frontendIdentityFeedback[number]);
 }
 
+// Require every declared native admission label at the browser boundary. An added
+// server outcome must update this owner too, instead of silently failing hydration.
+const packingPageErrors = {
+    'packing.notFound': true,
+    'packing.eventRegistrationRequired': true,
+    'common.notAllowed': true,
+} satisfies Record<PackingPageError, true>;
+
 function validatePackingError(value: unknown): boolean {
-    return typeof value === 'string'
-        && ['packing.notFound', 'packing.eventRegistrationRequired', 'api:errors.FORBIDDEN'].includes(value);
+    return typeof value === 'string' && Object.hasOwn(packingPageErrors, value);
 }
 
 async function validateHelp(value: unknown): Promise<boolean> {
@@ -98,6 +106,14 @@ async function validateGuest(value: unknown): Promise<boolean> {
 async function validatePackingCreate(value: unknown): Promise<boolean> {
     const {validatePackingCreateContext} = await import('../../../.generated/api/v1/browser/validatePackingCreateContext.mjs');
     return validatePackingCreateContext(value);
+}
+
+/** Initial selection uses the same generated option contract as API discovery.
+ * Null is a confirmed absence, including a rejected contextual URL selection. */
+async function validatePackingSelectedEvent(value: unknown): Promise<boolean> {
+    if (value === null) return true;
+    const {validatePackingEventOption} = await import('../../../.generated/api/v1/browser/validatePackingEventOption.mjs');
+    return validatePackingEventOption(value);
 }
 
 async function validatePackingDuplicate(value: unknown): Promise<boolean> {

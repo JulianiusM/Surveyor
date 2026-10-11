@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; developers; AI agents
 owner: architecture maintainers
 status: migration-pending
-last-verified: 2026-10-08
+last-verified: 2026-10-09
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: FPR-07 documentation staging and source corrections; prospective frontend replacement, not production cutover or new runtime execution evidence
+verification-scope: explicitly authorized source-reviewed language-independent machine-state authority, guarded opt-in draft hydration and bounded native input-contract additions, alongside language-owned help, generic image/read/cache ownership and admission/initial-seed retirement; final executed correction evidence and qualified earlier snapshots remain in the paired review; FPR-07 documentation staging and source corrections retained; prospective frontend replacement, not production cutover
 source-anchors: src/routes/frontendPilot.ts; src/routes/api/v1.ts; src/modules/api/; src/modules/packing/api.ts; src/modules/frontendPilotRenderer.ts; src/frontend/; contracts/api/v1/; src/locales/; vite.config.mts; tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/modules/archive/policy.ts; src/modules/entityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoice/retention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
 next-review: frontend-production-cutover
 production-reference: 2dfa257 native frontend documentation; reference only, not evidence of an installed production commit
@@ -444,7 +444,26 @@ after hydration under the approved progressive-delivery amendment. Identity form
 Packing item/settings data loads through v1 after hydration. Packing controls are independent of the legacy frontend.
 Each server render owns its query state and never performs an HTTP request to its own server.
 
+Shared browser lifecycle owners remain independent of feature endpoints. Authorized image reads use
+`src/frontend/composables/authorizedImage.ts` with a feature-owned injected binary operation; it owns retirement,
+abort and object-URL cleanup. Shared feedback owns reactive server-deadline Retry availability, and the feature
+owns the eligible explicit GET. A denied region cannot be restored by retained cache data alone; restoration
+requires a new admitted read under the current actor, locale and read generation.
+Shared page admission applies the same rule to its render decision and cached locale/route variants; features
+select additional retired projections through the existing callback. Initial query seeds consult live actor/document
+eligibility at seeding time, so eviction or Back cannot replay a superseded SSR response.
+Packing detail, metadata, settings and event options keep one current projection across languages because their
+values are machine state or user-authored content; narrower field authority cannot be restored from a prior language
+cache. Help and Overview retain localized keys for their language-owned representations. The shared mount preserves
+text drafts and explicitly opted-in non-text/file drafts on their original editable nodes before ordinary reads start.
+
 `contracts/api/v1/` is the authored OpenAPI source for wire shapes. Generation creates ignored declaration files under `src/types/api/` and Ajv standalone validators for server and browser use. Server request validation and safe DTO projection are strict; browser response validation permits additive fields. `src/locales/` supplies the shared pilot UI/API catalog, with generated typed keys and parameter checks. Existing feature catalogs retain their current scope.
+
+Native input policy remains owned by its operation. The existing generator supports the authored UTF-16 password
+minimum in both standalone runtimes; ordinary string bounds retain their standard units. Existing inline capacity
+passes its raw scalar draft through the locked operation to the existing SQL column, while creation policy stays
+separate. The [API design](../API_CONTRACT_DESIGN.md#the-supported-schema-and-transport-subset) records these bounded
+subset additions alongside the original preference and unchanged toolchain.
 
 After session bootstrap, resource API requests capture session/profile context before admission and require a matching `X-Surveyor-Context`; mutations also require CSRF validation. Packing reads project only permitted metadata and public display fields. Metadata/item/setup writes compare touched current fields under locks, preserving unrelated changes. Native and v1 writers share controller operations; capacity-sensitive assignments and capacity edits use the same coordination, preserving captured self-membership and historical exceptions. Controller-owned checks remain inside DBAL-managed transactions. Feature API/query owners, shared components, i18next-vue and the typed shared catalog prevent repeated infrastructure. Lazy feature/validator chunks keep routing modular. Express-hosted Vite HMR and authored-input regeneration serve development; production requires only current release artifacts. Ordinary session checks allow compatible edits to finish before a clean view reloads after replacement. See [Frontend Pilot](../../FRONTEND_PILOT.md) for limits and refresh/conflict behavior.
 
@@ -611,11 +630,17 @@ Before merging a change, trace it across the boundaries it affects:
 
 The in-app help subsystem is intentionally separate from mutable application data:
 
-1. `src/controller/helpController.ts` discovers Markdown only in `docs/user-guide/` and images only in `docs/user-guide/assets/`.
+1. `src/controller/helpController.ts` discovers Markdown in the fixed corpus selected by the language catalog's
+   `help.directory`, beneath `docs/user-guide/`, and images in that corpus's own `assets/` directory. English uses
+   the root corpus; German uses `de/`. Missing translated articles or assets never borrow another language's content.
 2. A fixed task-group map orders the guides. The same catalog drives the sidebar and server-side search.
 3. Markdown is checked against the DEC-004 authoring contract, converted with Marked, given stable heading IDs, and returned with a level-two/level-three table of contents.
-4. Internal guide links become `/help/<guide>` routes, and maintained images become `/help/assets/<file>` routes. Path-containment and filename checks prevent request-controlled traversal.
-5. Application requests receive a contextual `helpUrl`; the navbar therefore opens the guide for the current feature while retaining `/help` as the fallback.
+4. Internal guide links become `/help/<guide>` routes, and maintained images become `/help/assets/<file>` routes with
+   the selected locale. Path-containment and filename checks prevent request-controlled traversal. The shared
+   browser-safe `src/modules/lib/helpNavigation.ts` adapts pilot routes while preserving query/fragment semantics;
+   it does not load documents or duplicate the renderer's trust checks.
+5. The same shared navigation owner supplies contextual Help for native and pilot pages, with `/help` as the native
+   fallback. The controller retains discovery, trusted Markdown validation, search and rendered article ownership.
 6. The release workflow attempts to copy and compare the entire user-guide tree, including images, in a separate advisory step. A mismatch or missing documentation is reported without blocking release.
 
 The renderer inserts validated, release-shipped HTML into the Pug view. This is a trusted-content boundary rather than a generic sanitization service. Changing the source model requires reopening DEC-004.

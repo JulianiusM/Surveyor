@@ -1,19 +1,24 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, ref, watch} from 'vue';
-import {useRoute, useRouter} from 'vue-router';
-import type {RouteLocationNormalized} from 'vue-router';
+import {computed, nextTick, onBeforeUnmount, ref, shallowRef, watch} from 'vue';
+import {isNavigationFailure, useRoute, useRouter} from 'vue-router';
+import type {LocationQuery, NavigationFailure, RouteLocationNormalized} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components, paths} from '../../../types/api/v1';
+import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {useOverviewApi} from './api';
 import {usePackingApi} from '../packing/api';
 import {usePilot, refreshInterval} from '../../app/context';
 import {useCommand} from '../../composables/command';
+import {isOrdinaryNavigation, useConfirmedNavigation} from '../../composables/pageEntry';
 import {useDebouncedValue} from '../../composables/debounced';
-import {ObsoleteRequestError} from '../../app/transport';
+import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
+import {ApiFailure, isReadDenial, ObsoleteRequestError} from '../../app/transport';
 import {overviewKeys} from '../../app/queryKeys';
+import {retireQueryFamily} from '../../app/queryCache';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
+import AppNavigationDropdown from '../../components/AppNavigationDropdown.vue';
 import OverviewCard from './OverviewCard.vue';
 import OverviewItems from './OverviewItems.vue';
 
@@ -30,15 +35,21 @@ const {messages} = context;
 const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
 const route = useRoute();
 const router = useRouter();
+// Visible/hidden regions coexist, including across collections. Keep confirmed
+// delivery scoped to this logical region through any actor-driven remount.
+const destination = useConfirmedNavigation(props.collection + ':' + props.region);
 // TODO (docs/FRONTEND_PILOT.md): Complete the remaining Overview migration before its
 // default-route cutover; non-packing administration stays with its native feature owner meanwhile.
 let pendingNavigation: RouteLocationNormalized | undefined;
 let readGeneration = 0;
+let mounted = true;
+const element = ref<HTMLElement | null>(null);
 const searchPending = ref(false);
 const removeNavigationStart = router.beforeEach(rememberNavigation);
 const removeNavigationFinish = router.afterEach(finishNavigation);
 const removeNavigationError = router.onError((_error, to) => finishNavigation(to));
 onBeforeUnmount(() => {
+    mounted = false;
     readGeneration++;
     removeNavigationStart();
     removeNavigationFinish();
@@ -48,20 +59,39 @@ const title = computed(() =>
     messages.value.t(props.collection === 'participant' ? 'overview.participation' : 'overview.managed'),
 );
 const prefix = computed(() => props.collection + '_' + props.region + '_');
+const regionId = computed(() => 'overview-' + props.collection + '-' + props.region);
 type Query = NonNullable<paths['/overview']['get']['parameters']['query']>;
-function parameter(name: string): string | undefined {
-    const value = route.query[prefix.value + name];
+type NavigationAction = 'filter' | 'page' | 'expand' | 'back';
+interface NavigationRead {
+    parameters: Query;
+    scope: PilotRequestScope;
+    generation: number;
+    action: NavigationAction;
+    history: 'push' | 'replace';
+}
+const pendingRead = shallowRef<NavigationRead | null>(null);
+const failedRead = shallowRef<NavigationRead | null>(null);
+const navigationError = shallowRef<Error | null>(null);
+let preparedRead: NavigationRead | undefined;
+let pendingFocus: {key: string; scope: PilotRequestScope; action: NavigationAction} | undefined;
+let returnPosition: {eventId: string; filters: string; scrollY: number} | undefined;
+const lastConfirmed = shallowRef<{
+    scope: PilotRequestScope;
+    data: components['schemas']['OverviewRegion'];
+    updatedAt: number;
+} | null>(null);
+const deniedRead = shallowRef<{scope: PilotRequestScope; error: ApiFailure} | null>(null);
+
+function parameter(name: string, values = route.query): string | undefined {
+    const value = values[prefix.value + name];
     return typeof value === 'string' ? value : undefined;
 }
-const query = computed<Query>(() => ({
-    collection: props.collection,
-    region: props.region,
-    q: parameter('q'),
-    type: parameter('type') as Query['type'],
-    page: parameter('page'),
-    childPage: parameter('childPage'),
-    eventId: parameter('event'),
-}));
+function regionParameters(values: LocationQuery): Query {
+    return {collection: props.collection, region: props.region, q: parameter('q', values),
+        type: parameter('type', values) as Query['type'], page: parameter('page', values),
+        childPage: parameter('childPage', values), eventId: parameter('event', values)};
+}
+const query = computed<Query>(() => regionParameters(route.query));
 const search = ref(query.value.q ?? '');
 useDebouncedValue(search, 300, finishTypedSearch);
 watch(
@@ -83,20 +113,70 @@ const overview = useQuery({
         props.active !== false && context.visible.value
             ? refreshInterval(value.state.error, value.state.fetchFailureCount, jitter) : false,
 });
+// A navigation failure retains readable cards, never new edit authority. Keep only this
+// region's confirmed projection, fenced by actor/locale and discarded on a known denial.
+const currentDenial = computed(() => deniedRead.value && context.isCurrent(deniedRead.value.scope, true)
+    ? deniedRead.value : undefined);
+// A later failed recovery owns its current diagnostic and server deadline. The
+// original denial remains an authority barrier, including while another key has
+// no error, until an actual successful read restores this region's projection.
+const readError = computed(() => overview.error.value ?? currentDenial.value?.error ?? null);
+const displayed = computed(() => {
+    if (currentDenial.value || isReadDenial(readError.value)) return;
+    if (overview.data.value) return overview.data.value;
+    return lastConfirmed.value && context.isCurrent(lastConfirmed.value.scope, true) ? lastConfirmed.value.data : undefined;
+});
+// A failed target can have no query timestamp of its own. Keep the last successful
+// receipt with its scoped projection, never borrow a date from unrelated or denied data.
+const lastUpdatedAt = computed(() => {
+    const confirmed = lastConfirmed.value;
+    return confirmed && displayed.value === confirmed.data && context.isCurrent(confirmed.scope, true)
+        ? confirmed.updatedAt : undefined;
+});
 // Every mounted region resolves independently. Keep confirmed cards and focused filters
 // during background refreshes; only missing, pending authority receives card shapes.
-const initialLoading = computed(() => props.active !== false && !overview.data.value
+const initialLoading = computed(() => props.active !== false && !displayed.value
     && overview.isPending.value && !overview.error.value);
 const filterTypes = computed(() => {
-    const types = overview.data.value?.availableTypes ?? [];
-    const selected = overview.data.value?.type;
+    const types = displayed.value?.availableTypes ?? [];
+    const selected = displayed.value?.type;
     // A saved filter can outlive its last visible member after another client's edit or a
     // personal hide. Retain the validated choice so an empty result does not claim All types.
     return selected && selected !== 'all' && !types.includes(selected) ? [...types, selected] : types;
 });
+// Cards retain their identity when an equal JSON result is structurally shared.
+// A settled readable projection supplies its successful-read timestamp and an
+// explicit presentation-recovery hint. Neither grants command authority; healthy
+// card images ignore the hint and failed reads advance neither observation.
+const imageReadRevision = ref(0);
+watch([overview.dataUpdatedAt, overview.isFetching, overview.error], finishOverviewRead);
+
+function finishOverviewRead(): void {
+    if (props.active === false || !overview.data.value || overview.isFetching.value
+        || overview.error.value || deniedRead.value) return;
+    // Equal JSON can retain the same object, so the data watcher alone cannot
+    // record a later successful refresh. Count emissions still belong to that watcher.
+    if (lastConfirmed.value?.data === overview.data.value && context.isCurrent(lastConfirmed.value.scope, true))
+        lastConfirmed.value = {...lastConfirmed.value, updatedAt: overview.dataUpdatedAt.value};
+    imageReadRevision.value++;
+}
+
 watch(overview.data, (value) => {
-    if (value) emit('counts', value.totalEntities, value.hiddenEntities);
+    if (value && !deniedRead.value) {
+        // Native bookmarked reads render the server's normalized query. Adopt it
+        // only while this field still represents the route's unchanged input;
+        // a newer typed draft or target navigation owns its separate confirmation.
+        // Equal text leaves the focused input and its selection untouched.
+        if (!searchPending.value && !pendingRead.value && search.value === (query.value.q ?? '')
+            && search.value !== value.q) search.value = value.q;
+        lastConfirmed.value = {scope: context.capture(), data: value, updatedAt: overview.dataUpdatedAt.value};
+        emit('counts', value.totalEntities, value.hiddenEntities);
+    }
 }, {immediate: true});
+watch([overview.dataUpdatedAt, overview.isFetching, overview.error], restoreCommittedFocus, {flush: 'post'});
+const retryAvailable = useReadRetry(() => navigationError.value ?? readError.value);
+const retryAt = useReadRetryAt(() => navigationError.value ?? readError.value, retryAvailable);
+watch([context.epoch, context.locale], retirePresentation, {flush: 'sync'});
 // A private preference can change both collection appearances. Refresh all mounted regions
 // together; server-owned placement remains separate from authoritative archival.
 async function refresh(): Promise<void> {
@@ -109,16 +189,64 @@ async function refresh(): Promise<void> {
     );
 }
 const command = useCommand(refresh);
-const blocked = computed(() => command.pending.value || command.uncertain.value);
+const blocked = computed(() => command.pending.value || command.recovering.value || command.uncertain.value
+    || !!destination.target.value);
+const actionsBlocked = computed(() => blocked.value || !!pendingRead.value || !overview.data.value || !displayed.value);
+
+/** A failed explicit read is already represented by its region's query warning.
+ * Keep that read-owned recovery surface without leaking a rejected Vue event promise
+ * or replacing another region's command feedback with duplicate error state. */
+async function refreshOverview(): Promise<void> {
+    if (!retryAvailable.value) return;
+    if (failedRead.value) { await retryNavigation(); return; }
+    try { await command.reconcile(); }
+    catch { /* Each failed query retains its durable warning and last confirmed cards. */ }
+}
 
 /** Capture a read before awaiting its response. Input retires the generation immediately,
  * so even a transport that finishes after cancellation cannot publish obsolete results. */
 async function loadOverview(signal: AbortSignal): Promise<components['schemas']['OverviewRegion']> {
-    const generation = readGeneration;
-    const requested = {...query.value};
-    const result = await api.overview(requested, context.capture(), signal);
-    if (generation !== readGeneration) throw new ObsoleteRequestError();
-    return result;
+    return readRegion({...query.value}, context.capture(), readGeneration, signal);
+}
+
+/** Both route-owned refreshes and enhanced navigation share the same captured read fence. */
+async function readRegion(requested: Query, scope: PilotRequestScope, generation: number,
+                          signal: AbortSignal): Promise<components['schemas']['OverviewRegion']> {
+    try {
+        const result = await api.overview(requested, scope, signal);
+        if (!mayPresentRead(scope, generation)) throw new ObsoleteRequestError();
+
+        // Only a newer, admitted read can restore this region after a denial. Cached
+        // variants and a temporary recovery failure cannot restore its old authority.
+        deniedRead.value = null;
+        return result;
+    } catch (failure) {
+        if (isReadDenial(failure) && mayPresentRead(scope, generation)) retireDeniedRegion(scope, failure);
+        throw failure;
+    }
+}
+
+/** A current denial retires this region's fallback and every cached filter/page variant.
+ * Advance the generation before cache cancellation so a held target response cannot
+ * publish cards, a canonical cache alias or history after access has been withdrawn. */
+function retireDeniedRegion(scope: PilotRequestScope, error: ApiFailure): void {
+    readGeneration++;
+    pendingRead.value = null;
+    failedRead.value = null;
+    navigationError.value = null;
+    pendingFocus = undefined;
+    lastConfirmed.value = null;
+    returnPosition = undefined;
+    deniedRead.value = {scope, error};
+
+    // Preserve unrelated collection/region observations and their independent reads.
+    void retireQueryFamily(context.queryClient,
+        overviewKeys.regionAuthority(scope.context, props.collection, props.region), error);
+}
+
+function mayPresentRead(scope: PilotRequestScope, generation: number): boolean {
+    return mounted && props.active !== false && generation === readGeneration && context.isCurrent(scope, true)
+        && route.path === '/frontend-pilot' && (!pendingNavigation || pendingNavigation.path === '/frontend-pilot');
 }
 
 function rememberNavigation(to: RouteLocationNormalized): void {
@@ -127,18 +255,28 @@ function rememberNavigation(to: RouteLocationNormalized): void {
     // region retire its requests; another region's navigation must leave them running.
     const parameters = ['q', 'type', 'page', 'childPage', 'event'];
     if (parameters.some(name => to.query[prefix.value + name] !== route.query[prefix.value + name])) {
+        if (preparedRead && navigationKey(preparedRead.parameters) === navigationKey(regionParameters(to.query))) return;
+        const action = parameter('event') && !parameter('event', to.query) ? 'back' : 'page';
         retireReads();
+        if (to.path === '/frontend-pilot') {
+            pendingFocus = {key: navigationKey(regionParameters(to.query)), scope: context.capture(), action};
+        }
     }
 }
 
-function finishNavigation(to: RouteLocationNormalized): void {
+function finishNavigation(to: RouteLocationNormalized, _from?: RouteLocationNormalized, failure?: NavigationFailure | void): void {
     if (pendingNavigation === to) pendingNavigation = undefined;
+    if (failure && pendingFocus?.key === navigationKey(regionParameters(to.query))) pendingFocus = undefined;
 }
 
 /** Cancel this region's previous reads before the native debounce expires. Other regions
  * retain their independent requests, and the last confirmed cards stay readable. */
 function retireReads(): void {
     readGeneration++;
+    pendingRead.value = null;
+    failedRead.value = null;
+    navigationError.value = null;
+    pendingFocus = undefined;
     void context.queryClient.cancelQueries({queryKey: overviewKeys.regionFamily(
         context.session.value?.context, context.locale.value, props.collection, props.region,
     )});
@@ -173,38 +311,167 @@ function navigationQuery(values: Record<string, string | undefined>) {
         if (value === undefined) delete next[prefix.value + key];
         else next[prefix.value + key] = value;
     }
+    // Native region URLs explicitly retain disclosure even when entered through a
+    // selected-event deep link that did not originally include the open parameter.
+    if (props.region === 'hidden') next[prefix.value + 'open'] = '1';
     return next;
 }
 function navigationHref(values: Record<string, string | undefined>): string {
-    return router.resolve({path: '/frontend-pilot', query: navigationQuery(values)}).href;
+    return router.resolve({path: '/frontend-pilot', query: navigationQuery(values), hash: '#' + regionId.value}).href;
 }
-/** Filters replace the current history entry; page/event navigation creates an entry.
- * The shared command guard retains pending controls while Vue Router owns navigation. */
-async function navigate(values: Record<string, string | undefined>, history: 'push' | 'replace' = 'push'): Promise<void> {
-    if (blocked.value) return;
+
+/** Locale/actor replacement cannot reuse private cards, scroll origins or a failed request. */
+function retirePresentation(): void {
+    retireReads();
+    lastConfirmed.value = null;
+    deniedRead.value = null;
+    returnPosition = undefined;
+}
+
+/** Keep saved-link/new-tab semantics before the shared region navigation owns an ordinary click. */
+function followNavigation(event: MouseEvent, values: Record<string, string | undefined>,
+                          history: 'push' | 'replace' = 'push', action: NavigationAction = 'filter'): void {
+    if (!isOrdinaryNavigation(event)) return;
+    event.preventDefault();
+    void navigate(values, history, action);
+}
+
+function navigationKey(parameters: Query): string {
+    return JSON.stringify([parameters.q || '', parameters.type || 'all', parameters.page || '1',
+        parameters.childPage || '1', parameters.eventId || '']);
+}
+
+function filterKey(parameters: Query): string {
+    return JSON.stringify([parameters.q || '', parameters.type || 'all']);
+}
+
+/** Read the target first, then commit only this region's URL parameters. A failed Next
+ * leaves its cards, focus and browser history unchanged; Retry retains the exact target. */
+async function navigate(values: Record<string, string | undefined>, history: 'push' | 'replace' = 'push',
+                        action: NavigationAction = 'filter'): Promise<void> {
+    if (blocked.value || props.active === false || !context.ready.value || !retryAvailable.value) return;
+    const parameters = regionParameters(navigationQuery(values));
     searchPending.value = false;
     retireReads();
-    const destination = {path: '/frontend-pilot', query: navigationQuery(values)};
-    if (router.resolve(destination).fullPath === route.fullPath) {
-        // Enter/Search remains an explicit read even when the filter URL is unchanged.
-        await overview.refetch();
-        return;
+    await deliverNavigation({parameters, history, action, scope: context.capture(), generation: readGeneration});
+}
+
+/** A retry is another authorized GET, never a replay of an entity mutation. The query
+ * client retains server cooldown/retry policy; the descriptor holds request data and delivery policy only. */
+async function retryNavigation(): Promise<void> {
+    const failed = failedRead.value;
+    if (!failed || blocked.value || !context.isCurrent(failed.scope, true) || !retryAvailable.value) return;
+    retireReads();
+    await deliverNavigation({...failed, generation: readGeneration});
+}
+
+/** The cache remains the read authority. Prefetch forces an explicit fresh read, while
+ * the route observer adopts that validated result without requesting it a second time. */
+async function deliverNavigation(read: NavigationRead): Promise<void> {
+    pendingRead.value = read;
+    try {
+        const result = await context.queryClient.fetchQuery({
+            queryKey: overviewKeys.region(read.scope.context, read.scope.locale, read.parameters),
+            queryFn: readTarget,
+            staleTime: 0,
+        });
+        if (!mayPresentRead(read.scope, read.generation)) return;
+
+        // The server clamps pages and clears an event that no longer qualifies. Adopt
+        // that authoritative navigation state before publishing its URL; alias the same
+        // validated projection under its canonical key so the observer needs no extra GET.
+        const canonical = {...read.parameters, q: result.q || undefined, type: result.type === 'all' ? undefined : result.type,
+            page: result.page > 1 ? String(result.page) : undefined,
+            childPage: result.childPage > 1 ? String(result.childPage) : undefined, eventId: result.eventId || undefined};
+        if (JSON.stringify(canonical) !== JSON.stringify(read.parameters))
+            context.queryClient.setQueryData(overviewKeys.region(read.scope.context, read.scope.locale, canonical), result);
+        read.parameters = canonical;
+
+        // Another region may have committed while this GET was pending. Merge the captured
+        // region only into the latest route/pending history target, never its old whole URL.
+        preparedRead = read;
+        const destination = {path: '/frontend-pilot', query: targetQuery(read.parameters), hash: '#' + regionId.value};
+        const failure = read.history === 'replace' ? await router.replace(destination) : await router.push(destination);
+        if (isNavigationFailure(failure) && router.currentRoute.value.fullPath !== router.resolve(destination).fullPath) return;
+        if (!mayPresentRead(read.scope, read.generation)) return;
+
+        // A successful response also canonicalizes the submitted search text. The
+        // route watcher cannot do this when trimming leaves the same q parameter;
+        // this admitted generation still excludes any newer local input.
+        search.value = result.q;
+        failedRead.value = null;
+        pendingFocus = {key: navigationKey(read.parameters), scope: read.scope, action: read.action};
+        await restoreCommittedFocus();
+    } catch (error) {
+        if (mayPresentRead(read.scope, read.generation)) {
+            failedRead.value = read;
+            navigationError.value = error instanceof Error ? error : new Error(String(error));
+        }
+    } finally {
+        if (preparedRead === read) preparedRead = undefined;
+        if (pendingRead.value === read) pendingRead.value = null;
     }
-    if (history === 'replace') await router.replace(destination);
-    else await router.push(destination);
+
+    function readTarget({signal}: {signal: AbortSignal}): Promise<components['schemas']['OverviewRegion']> {
+        return readRegion(read.parameters, read.scope, read.generation, signal);
+    }
+}
+
+function targetQuery(parameters: Query): LocationQuery {
+    const result = navigationQuery({});
+    const values = {q: parameters.q, type: parameters.type, page: parameters.page,
+        childPage: parameters.childPage, event: parameters.eventId};
+    for (const [name, value] of Object.entries(values)) {
+        if (value === undefined) delete result[prefix.value + name];
+        else result[prefix.value + name] = String(value);
+    }
+    return result;
+}
+
+/** Native event expansion remembers its originating card and scroll position. Filter
+ * changes retain that origin so Back can reveal the card instead of restoring an obsolete offset. */
+function expand(card: components['schemas']['OverviewCard']): void {
+    if (blocked.value) return;
+    returnPosition = {eventId: card.id, filters: filterKey(query.value), scrollY: window.scrollY};
+    void navigate({event: card.id, childPage: undefined}, 'push', 'expand');
+}
+
+/** Restore focus only after a matching successful read renders. Focused search controls
+ * take precedence; failed/obsolete/background and other-region reads move neither focus nor scroll. */
+async function restoreCommittedFocus(): Promise<void> {
+    const intent = pendingFocus;
+    if (!intent || !overview.data.value || overview.isFetching.value || overview.error.value
+        || intent.key !== navigationKey(query.value) || !context.isCurrent(intent.scope, true)) return;
+    await nextTick();
+    if (pendingFocus !== intent || !mounted || props.active === false || intent.key !== navigationKey(query.value)
+        || !context.isCurrent(intent.scope, true) || overview.isFetching.value || overview.error.value) return;
+    pendingFocus = undefined;
+
+    const active = document.activeElement;
+    if (active instanceof HTMLInputElement && element.value?.contains(active) && active.type === 'search') return;
+    if (intent.action === 'back' && returnPosition) {
+        const origin = [...(element.value?.querySelectorAll<HTMLAnchorElement>('[data-overview-event]') ?? [])]
+            .find(link => link.dataset.overviewEvent === returnPosition?.eventId);
+        if (origin) {
+            origin.focus({preventScroll: true});
+            if (returnPosition.filters === filterKey(query.value)) window.scrollTo({top: returnPosition.scrollY, behavior: 'instant'});
+            else origin.scrollIntoView({block: 'nearest'});
+            return;
+        }
+    }
+    element.value?.querySelector<HTMLElement>('.js-overview-heading')?.focus();
 }
 // GET search submits this region's controls, preserves other regions and the selected
 // event, and drops both old pagers. Navigation needs no server-held per-tab state.
 const nativeSearchFields = computed(() => Object.entries(route.query).filter(([key, value]) => typeof value === 'string'
     && !['q', 'type', 'page', 'childPage'].some(name => key === prefix.value + name)) as Array<[string, string]>);
 function pageHref(next: number): string {
-    return navigationHref({[overview.data.value?.parent ? 'childPage' : 'page']: String(next)});
+    return navigationHref({[displayed.value?.parent ? 'childPage' : 'page']: String(next)});
 }
 function expandHref(card: components['schemas']['OverviewCard']): string {
     return navigationHref({event: card.id, childPage: undefined});
 }
-function filterType(event: Event): void {
-    const type = (event.target as HTMLSelectElement).value;
+function filterType(type: string): void {
     // Native type buttons submit the search field's current draft as well. Preserve that
     // behavior and reset both pagers without disturbing the selected event or other regions.
     void navigate({q: search.value || undefined, type: type === 'all' ? undefined : type,
@@ -214,9 +481,14 @@ async function setVisibility(
     card: components['schemas']['OverviewCard'],
     value: components['schemas']['OverviewVisibilityInput']['visibility'],
 ): Promise<void> {
-    await command.run((scope) => api.visibility(card.type, card.id, value, scope));
+    if (actionsBlocked.value) return;
+    const success = value === 'hidden' ? 'overview.visibilityHidden'
+        : value === 'shown' ? 'overview.visibilityShown' : 'overview.visibilityDefault';
+    await command.run((scope) => api.visibility(card.type, card.id, value, scope), true, false,
+        {presentation: 'inline', success});
 }
 async function archive(card: components['schemas']['OverviewCard'], restore: boolean): Promise<void> {
+    if (actionsBlocked.value) return;
     if (
         window.confirm(
             messages.value.t(
@@ -228,29 +500,63 @@ async function archive(card: components['schemas']['OverviewCard'], restore: boo
             ),
         )
     )
-        await command.run((scope) => packingApi.archive(card.id, restore, scope));
+        await command.run((scope) => packingApi.archive(card.id, restore, scope), true, false,
+            {presentation: 'inline', success: restore ? 'overview.restored' : 'overview.archived'});
 }
 async function remove(card: components['schemas']['OverviewCard']): Promise<void> {
-    if (window.confirm(messages.value.t('packing.confirmDelete')))
-        await command.run((scope) => packingApi.deletePacking(card.id, scope));
+    if (actionsBlocked.value) return;
+    if (!window.confirm(messages.value.t('overview.confirmDelete'))) return;
+    const scope = context.capture();
+    const origin = route.fullPath;
+    // Native permanent deletion returns to the canonical Overview with a flash.
+    // Retain that confirmed destination on failed delivery; Retry can navigate only.
+    const result = await command.run(deleteCard, false, false, {success: 'packing.deleted'});
+    if (result) await destination.navigate('/frontend-pilot', scope, origin,
+        {kind: 'success', messageKey: 'packing.deleted'});
+
+    async function deleteCard(commandScope: PilotRequestScope): Promise<boolean> {
+        await packingApi.deletePacking(card.id, commandScope);
+        return true;
+    }
 }
 function page(next: number): void {
-    void navigate({[overview.data.value?.parent ? 'childPage' : 'page']: String(next)});
+    void navigate({[displayed.value?.parent ? 'childPage' : 'page']: String(next)}, 'push', 'page');
 }
 </script>
 <template>
     <!-- Keep initial skeleton status unsuppressed; only confirmed content is busy
          during background reads, which leave cards and focused controls mounted. -->
-    <section class="js-overview-region" :data-collection="collection" :data-region="region"
-        :aria-busy="!!overview.data.value && overview.isFetching.value">
-        <StatusNotice v-if="command.error.value" kind="danger">{{ command.error.value }}</StatusNotice
-        ><StatusNotice v-if="command.notice.value" kind="warning">{{
+    <section ref="element" :id="regionId" class="js-overview-region" :data-collection="collection" :data-region="region"
+        :aria-busy="!!displayed && (overview.isFetching.value || !!pendingRead)">
+        <h3 class="visually-hidden js-overview-heading" tabindex="-1">{{ title }}</h3>
+        <StatusNotice v-if="destination.target.value" kind="success">
+            {{ messages.t('packing.deleted') }}<ActionButton class="ms-2" variant="outline-light"
+                :pending="destination.pending.value" @click="destination.retry">{{ messages.t('common.retry') }}</ActionButton>
+        </StatusNotice>
+        <!-- Lifecycle/visibility commands use native global inline feedback. Read
+             failures and unknown outcomes retain this region's recovery surface. -->
+        <StatusNotice v-if="command.error.value" :inline="command.errorPresentation.value === 'inline'"
+            :target="command.feedbackTarget.value" :kind="command.feedbackKind.value"
+            :disabled="command.pending.value || command.recovering.value"
+            :transient="command.transientError.value" :renewal="command.errorRenewal.value"
+            @dismiss="command.setError(null)">{{ command.error.value }}</StatusNotice
+        ><StatusNotice v-if="command.notice.value" :inline="command.noticeInline.value" :target="command.feedbackTarget.value"
+            :disabled="command.pending.value || command.recovering.value" :kind="command.noticeKind.value"
+            :transient="command.transientNotice.value" :notice="command.notice.value"
+            :renewal="command.noticeRenewal.value" @dismiss="command.notice.value = null">{{
             messages.t(command.notice.value)
         }}</StatusNotice>
-        <StatusNotice v-if="overview.error.value" kind="warning">{{
-            messages.t('state.loadFailed')
-        }}</StatusNotice>
+        <StatusNotice v-if="readError || failedRead" kind="warning" :last-updated-at="lastUpdatedAt" :retry-at="retryAt"
+            :read-error="navigationError ?? readError">{{
+            messages.t(displayed ? 'state.stale' : 'state.loadFailed')
+        }}<ActionButton class="ms-2" variant="outline-light" :pending="overview.isFetching.value || !!pendingRead"
+            :disabled="!retryAvailable"
+            @click="refreshOverview">{{ messages.t('common.retry') }}</ActionButton></StatusNotice>
+        <!-- Pending authority and an unsent local search draft keep the
+             progressive controls mounted. Once an empty unfiltered region is confirmed
+             without a local draft, omit the toolbar as the native presentation does. -->
         <form
+            v-if="!displayed || displayed.regionEntities || displayed.q || displayed.type !== 'all' || searchPending || search"
             class="d-flex flex-wrap gap-2 mb-3 align-items-center"
             method="get" action="/frontend-pilot"
             @submit.prevent="submitSearch"
@@ -277,67 +583,65 @@ function page(next: number): void {
                     "
                 />
             </div>
-            <ActionButton type="submit" class="btn-sm" variant="outline-secondary">{{
+            <ActionButton type="submit" class="btn-sm" variant="outline-secondary"
+                :name="prefix + 'type'" :value="query.type ?? 'all'">{{
                 messages.t('overview.search')
             }}</ActionButton>
-            <!-- Type selection uses the server's region membership, independent of search.
-                 Changing either filter restarts both pagers and preserves other regions. -->
-            <label class="visually-hidden" :for="prefix + 'type'">{{
-                messages.t('overview.filterByType')
-            }}</label>
-            <select
-                :id="prefix + 'type'"
-                :name="prefix + 'type'"
-                class="form-select form-select-sm"
-                style="width: auto"
-                :value="query.type ?? 'all'"
-                @change="filterType"
-            >
-                <option value="all">{{ messages.t('overview.allTypes') }}</option>
-                <option v-for="type in filterTypes" :key="type" :value="type">{{
-                    messages.t(`overview.types.${type}`)
-                }}</option>
-            </select>
-            <span v-if="overview.data.value" class="small text-body-secondary" aria-live="polite">{{
-                messages.t('overview.matching', {count: overview.data.value.matchingEntities})
+            <!-- Preserve the native Filter disclosure and ordinary type submit buttons.
+                 Search stays first in DOM order so Enter retains the current type. The
+                 shared disclosure owns dismissal/focus; this region owns URL selection. -->
+            <AppNavigationDropdown :navigation="false" menu-tag="ul"
+                :label="messages.t('overview.filter')"
+                trigger-class="btn btn-outline-secondary btn-sm dropdown-toggle">
+                <li>
+                    <button class="dropdown-item" type="submit" :name="prefix + 'type'"
+                        value="all" data-type="all" :aria-pressed="(query.type ?? 'all') === 'all'"
+                        @click.prevent="filterType('all')">{{ messages.t('overview.allTypes') }}</button>
+                </li>
+                <li><hr class="dropdown-divider" /></li>
+                <li v-for="type in filterTypes" :key="type">
+                    <button class="dropdown-item" type="submit" :name="prefix + 'type'"
+                        :value="type" :data-type="type" :aria-pressed="query.type === type"
+                        @click.prevent="filterType(type)">{{ messages.t(`overview.types.${type}`) }}</button>
+                </li>
+            </AppNavigationDropdown>
+            <span v-if="displayed" class="small text-body-secondary" aria-live="polite">{{
+                messages.t('overview.matching', {count: displayed.matchingEntities})
             }}</span>
-            <a
-                v-if="query.q || (query.type && query.type !== 'all')"
-                class="btn btn-sm btn-outline-secondary"
-                :href="navigationHref({q: undefined, type: undefined, page: undefined, childPage: undefined})"
-                @click.prevent="navigate({q: undefined, type: undefined, page: undefined, childPage: undefined}, 'replace')"
-                >{{ messages.t('overview.clear') }}</a
-            ><ActionButton
+            <ActionButton
                 class="btn-sm ms-auto"
                 variant="outline-secondary"
-                :pending="overview.isFetching.value"
-                @click="command.reconcile()"
+                :pending="overview.isFetching.value || !!pendingRead"
+                :disabled="!retryAvailable"
+                @click="refreshOverview"
                 >{{ messages.t('common.refresh') }}</ActionButton
             >
         </form>
         <LoadingSkeleton v-if="initialLoading" variant="cards" />
-        <template v-if="overview.data.value">
-            <template v-if="overview.data.value.parent">
+        <template v-if="displayed">
+            <template v-if="displayed.parent">
                 <a
                     class="btn btn-sm mb-3 btn-outline-secondary"
                     :href="navigationHref({event: undefined, childPage: undefined})"
-                    @click.prevent="navigate({event: undefined, childPage: undefined})"
+                    @click="followNavigation($event, {event: undefined, childPage: undefined}, 'push', 'back')"
                 >
                     <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>{{ messages.t('overview.back') }}
                 </a>
                 <OverviewCard
-                    :card="overview.data.value.parent"
-                    :disabled="blocked"
-                    @visibility="setVisibility(overview.data.value.parent, $event)"
-                    @archive="archive(overview.data.value.parent, $event)"
-                    @remove="remove(overview.data.value.parent)"
+                    :card="displayed.parent"
+                    :disabled="actionsBlocked"
+                    :read-revision="imageReadRevision"
+                    :active="active"
+                    @visibility="setVisibility(displayed.parent, $event)"
+                    @archive="archive(displayed.parent, $event)"
+                    @remove="remove(displayed.parent)"
                 >
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                         <h4 class="h5 mb-0">
                             {{
                                 messages.t('overview.linkedHeading', {
                                     title,
-                                    count: overview.data.value.totalChildren,
+                                    count: displayed.totalChildren,
                                 })
                             }}
                         </h4>
@@ -345,13 +649,15 @@ function page(next: number): void {
                             v-if="query.q || (query.type && query.type !== 'all')"
                             class="btn btn-sm btn-outline-secondary"
                             :href="navigationHref({q: undefined, type: undefined, page: undefined, childPage: undefined})"
-                            @click.prevent="navigate({q: undefined, type: undefined, page: undefined, childPage: undefined}, 'replace')"
+                            @click="followNavigation($event, {q: undefined, type: undefined, page: undefined, childPage: undefined}, 'replace')"
                             >{{ messages.t('overview.showAllLinked') }}</a
                         >
                     </div>
                     <OverviewItems
-                        :view="overview.data.value"
-                        :disabled="blocked"
+                        :view="displayed"
+                        :disabled="actionsBlocked"
+                        :read-revision="imageReadRevision"
+                        :active="active"
                         :page-href="pageHref"
                         :expand-href="expandHref"
                         @visibility="setVisibility"
@@ -363,14 +669,16 @@ function page(next: number): void {
             </template>
             <OverviewItems
                 v-else
-                :view="overview.data.value"
-                :disabled="blocked"
+                :view="displayed"
+                :disabled="actionsBlocked"
+                :read-revision="imageReadRevision"
+                :active="active"
                 :page-href="pageHref"
                 :expand-href="expandHref"
                 @visibility="setVisibility"
                 @archive="archive"
                 @remove="remove"
-                @expand="navigate({event: $event.id, childPage: undefined})"
+                @expand="expand"
                 @page="page"
             />
         </template>

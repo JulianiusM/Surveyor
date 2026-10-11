@@ -29,7 +29,9 @@ describe('shared request-bound localization', () => {
         expect(createTranslator('zz-ZZ').t('packing.placeCount', {count: 21})).toBe('21 places');
         expect(createTranslator('de').t('overview.matching', {count: 1})).toBe('1 passender Eintrag');
         expect(createTranslator('de').t('overview.matching', {count: 2})).toBe('2 passende Einträge');
-        expect(createTranslator('en').t('overview.matching', {count: 1})).toBe('1 matching entity');
+        // Preserve the native English overview caption while other localized messages
+        // continue selecting their complete cardinal forms from the same catalog owner.
+        expect(createTranslator('en').t('overview.matching', {count: 1})).toBe('1 matching entities');
     });
 
     it('leaves user text uninterpreted and never returns HTML-escaped plain text', () => {

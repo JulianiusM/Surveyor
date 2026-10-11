@@ -3,6 +3,7 @@ import {ref, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
 import {usePilot} from '../../app/context';
 import {usePageTitle} from '../../composables/pageTitle';
+import {isOrdinaryNavigation} from '../../composables/pageEntry';
 import OverviewRegion from './OverviewRegion.vue';
 const context = usePilot();
 const {messages} = context;
@@ -28,28 +29,37 @@ watch(
 function updateCounts(collection: string, total: number, hiddenCount: number): void {
     counts.value[collection] = {total, hidden: hiddenCount};
 }
-async function toggleHidden(collection: string): Promise<void> {
+/** A disclosed region has an ordinary saved URL as well as an enhanced current-tab action. */
+async function toggleHidden(event: MouseEvent, collection: string): Promise<void> {
+    if (!isOrdinaryNavigation(event)) return;
+    event.preventDefault();
+    await router.push({query: hiddenQuery(collection)});
+}
+
+/** Saved hrefs and enhanced toggles share the native hidden-region reset. Filters remain
+ * usable on reopening, while the selected parent and its obsolete child pager are discarded. */
+function hiddenQuery(collection: string) {
     const query = {...route.query};
     const prefix = collection + '_hidden_';
     if (hidden.value[collection]) {
         delete query[prefix + 'open'];
         delete query[prefix + 'event'];
+        delete query[prefix + 'childPage'];
     } else query[prefix + 'open'] = '1';
-    await router.push({query});
+    return query;
 }
 function hiddenHref(collection: string): string {
-    const query = {...route.query};
-    const prefix = collection + '_hidden_';
-    if (hidden.value[collection]) { delete query[prefix + 'open']; delete query[prefix + 'event']; }
-    else query[prefix + 'open'] = '1';
-    return router.resolve({path: '/frontend-pilot', query}).href;
+    return router.resolve({path: '/frontend-pilot', query: hiddenQuery(collection)}).href;
 }
 </script>
 <template>
     <section class="card bg-dark text-white mb-3">
-        <h1 class="card-header text-center fst-italic">
-            <i class="bi bi-house-door-fill me-2" aria-hidden="true"></i
-            >{{ messages.t('overview.title', {name: context.session.value?.activeProfile?.name ?? ''}) }}
+        <!-- Native dashboard.pug keeps the greeting inside this italic wrapper. Its
+             trailing margin belongs after the greeting, rather than between icon/text. -->
+        <h1 class="card-header text-center">
+            <i class="bi bi-house-door-fill me-2">{{
+                messages.t('overview.title', {name: context.session.value?.activeProfile?.name ?? ''})
+            }}</i>
         </h1>
         <div class="card-body">
             <p v-if="!context.session.value?.activeProfile" class="text-center">
@@ -64,8 +74,9 @@ function hiddenHref(collection: string): string {
                 <section
                     v-for="collection in ['participant', 'owner'] as const"
                     :key="collection"
-                    class="mb-4"
                 >
+                    <!-- The shared accordion owns the native collection spacing; adding
+                         another section margin would change the dashboard layout rhythm. -->
                     <h2 class="text-center">
                         <i
                             class="bi me-2"
@@ -147,7 +158,7 @@ function hiddenHref(collection: string): string {
                                                 :aria-expanded="!!hidden[collection]"
                                                 :aria-controls="'overview-' + collection + '-hidden'"
                                                 :href="hiddenHref(collection)"
-                                                @click.prevent="toggleHidden(collection)"
+                                                @click="toggleHidden($event, collection)"
                                             >
                                                 <i class="bi bi-archive me-2" aria-hidden="true"></i
                                                 >{{ messages.t('overview.hidden') }}

@@ -6,6 +6,9 @@ import type {PackingItem} from '../../src/modules/database/entities/packing/Pack
 import type {PackingList} from '../../src/modules/database/entities/packing/PackingList';
 import type {Survey} from '../../src/modules/database/entities/surveys/Survey';
 import type {SurveyCombination} from '../../src/modules/database/entities/surveys/SurveyCombination';
+import type {User} from '../../src/modules/database/entities/user/User';
+import type {Profile} from '../../src/modules/database/entities/user/Profile';
+import {randomUUID} from 'node:crypto';
 
 export interface E2ECreateCase<TForm extends E2ECreateForm> {
     title: string;
@@ -49,6 +52,17 @@ export function createE2ELogin(): E2ELoginCredentials {
     return {
         username: process.env.E2E_ADMIN_USERNAME ?? 'tester',
         password: process.env.E2E_ADMIN_PASSWORD ?? 'passw0rd!',
+    };
+}
+
+/** An isolated password-reset account uses no shared seed identity or external mailbox.
+ * The keyword persists these inputs through the built application's TypeORM metadata. */
+export function createE2EPasswordResetAccount(passwordHash: string): {user: Partial<User>; profile: Partial<Profile>} {
+    const username = `reset-${randomUUID().slice(0, 12)}`;
+    return {
+        user: {username, name: username, email: `${username}@example.invalid`, password: passwordHash,
+            isActive: true, resetToken: randomUUID(), resetTokenExpiration: new Date(Date.now() + 3_600_000)},
+        profile: {name: username, defaultForOwner: true},
     };
 }
 

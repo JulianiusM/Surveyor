@@ -24,7 +24,8 @@ const uploadHeader = prepareFileUploader(settings.value.headerImgDir).single('im
 router.get('/create-entry', asyncHandler(async function getPackingCreateEntry(req, res) {
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'getPackingCreateEntry');
-    sendValidatedJson(req, res, 'getPackingCreateEntry', 200, packingApi.readPackingCreateEntry(actor, req.query.returnTo));
+    sendValidatedJson(req, res, 'getPackingCreateEntry', 200,
+        await packingApi.readPackingCreateEntry(actor, req.query.returnTo, req.query.eventId));
 }));
 
 router.get('/:listId/entry', asyncHandler(async function getPackingResourceEntry(req, res) {
@@ -127,7 +128,8 @@ router.get('/:listId/duplicate', asyncHandler(async function getPackingDuplicate
     // Native duplicate GET can be granted publicly; only the later creation POST needs an account.
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'getPackingDuplicate');
-    sendValidatedJson(req, res, 'getPackingDuplicate', 200, await packingApi.readPackingDuplicate(String(req.params.listId), actor));
+    sendValidatedJson(req, res, 'getPackingDuplicate', 200,
+        await packingApi.readPackingDuplicate(String(req.params.listId), actor, req.query.eventId));
 }));
 
 router.post('/:listId/items', asyncHandler(async function createPackingItem(req, res) {

@@ -4,9 +4,9 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: developer-experience maintainers
 status: migration-pending
-last-verified: 2026-10-08
+last-verified: 2026-10-11
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved native-parity rectification and reusable page-entry, command-confirmation, draft-tree, locale-ordering and native-form adapter guidance; shared skeleton/progressive-loading contribution rules; prospective frontend replacement, not production cutover; execution evidence belongs to the paired review
+verification-scope: 2026-10-11 contribution recipe reconciled with actual native-oracle/decision evidence, shared command/read authority, silent image recovery, validated admission retirement, scoped successful-read receipts, Retry timing, safe diagnostics, deliberate read-only recovery and selected localization binding; semantic first-read premises, accessible controls/focus, geometry/scroll ownership and actual normal source/HMR/regeneration lessons verified; original decisions/progressive-loading rules retained; exact bounded execution and current image/deployment evidence belongs to the paired review; prospective frontend replacement, not production cutover
 source-anchors: src/frontend/components/LoadingSkeleton.vue; src/frontend/features/help/HelpPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/features/overview/OverviewRegion.vue; tests/frontend/frontend-content-loading.spec.ts; src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/e2e/frontend-development.spec.ts; src/controller/helpController.ts; docs/user-guide/de/; tests/unit/help-localization.spec.ts; contracts/api/v1/; src/locales/; src/frontend/; src/routes/frontendPilot.ts; src/routes/api/v1.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; vite.config.mts; tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/views/modules/module_entity_archive.pug; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
 next-review: frontend-production-cutover
 production-reference: 2dfa257 native frontend documentation; reference only, not evidence of an installed production commit
@@ -182,6 +182,11 @@ docs/                              maintainer and operator documentation
 ```
 
 `dist/`, generated browser modules, compiled CSS, uploads, local environment files, `settings.csv`, reports, and the generated outputs listed below are ignored build/runtime files.
+Do not retain adjacent same-name `.js` copies of `.ts` modules under `src/`, including generated TypeScript
+registries. Extensionless imports can select such a copy before the maintained source even when type checks pass;
+inspect the actual resolved inputs when checks disagree. The existing generation suite checks this collision across
+all of `src/`; differently named legacy `.gen.js` outputs retain their established build ownership. Retain an
+unexpected copy outside the source tree while establishing its provenance instead of assuming its creator.
 
 ## Build and run commands
 
@@ -253,6 +258,23 @@ describes the paired capture workflow; default route cutover requires the comple
 Primary design choices are binding. An alternative listed in a design record requires active, explicit user approval
 before substitution; record the original choice, reason and approved amendment. A later rewrite does not authorize it.
 The [foundation decision ledger](../../FRONTEND_FOUNDATION_DESIGN.md#authorized-rectification-2026-10-07) records D1–D5.
+Keep the native comparison separate from that authorization record: identify each observed difference, its native
+executable owner and the specific approved amendment, if any, in the existing paired review. Approval of the general
+migration does not approve changed labels, focus, validation, no-op actions or permission-dependent visibility.
+
+For a conditional library choice, explain why its primitive fits or does not fit the required native interaction.
+The framework decision selects Reka for dialog, confirmation, menu and combobox wrappers where its primitives fit;
+native inputs remain appropriate. A fit assessment is not authorization to replace a primary choice. Resolve a
+departure with the maintainer before implementation, retaining the original decision and dated amendment. Neither
+passing tests nor implementation prose can supply that approval.
+
+The pilot's mixed navigation and overview menus share `AppNavigationDropdown` and native disclosure semantics.
+The installed public Reka menu introduces registered items and roving/hover focus; Popover introduces dialog,
+autofocus and positioning behavior. Neither preserves these native links and form controls unchanged;
+`DismissableLayer` is not a stable public export. Keep the wrapper's ordinary Tab, embedded-control keys,
+outside-pointer/focus dismissal, Escape focus return and arrow policy together, with shared placement. Dialogs
+and tabs continue using the selected Reka primitives. Reassess a future wrapper's fit instead of copying this
+bounded assessment to a different interaction.
 
 Use this recipe when implementing the next authorized feature increment. The completed pilot review is not a
 prerequisite to repeat before fixing its known findings. For a future module, use the existing baseline and
@@ -274,8 +296,9 @@ feature-specific edge cases to constrain the requested increment:
    authentication, authorization, legacy race and lock redesign remain separate native work. The native remediation
    backlog never tracks migration or pilot work.
 4. Reuse the application transport, context gate, query-key/invalidation owners, debounce helper and read scheduler.
-   Keep authoritative snapshots, original edit baselines and local input separate. Scope reads by actor, resource
-   and locale; reject late results. Use `usePageEntry` for server-owned render, redirect and denied decisions, including
+   Keep authoritative snapshots, original edit baselines and local input separate. Scope reads by actor and resource;
+   include locale in the query identity only when the server representation varies by language. Reject late results.
+   Use `usePageEntry` for server-owned render, redirect and denied decisions, including
    canonical redirects and one-time notice severity. It also retires results when a lazy destination is pending.
    A confirmed locale preference advances its own generation; an older session read can still report a real actor
    change without reverting that preference. Healthy visible reads retain the 30-second cadence and recover toward roughly
@@ -283,7 +306,7 @@ feature-specific edge cases to constrain the requested increment:
    Closed selectors consume their owner's current authority; they do not invent continuous hidden search polling.
 5. Compose the shared form, dialog, command, draft, feedback and departure owners. Use complete dirty predicates
    and established empty/null equivalence. `useDraftProtection` composes nested editors into their nearest owner;
-   only the root registers global departure guards, and a dialog can still check its own subtree on Close. Preserve drafts through refresh
+   the application shell owns the whole-page root, and a dialog can still check its own subtree on Close. Preserve drafts through refresh
    and cancellation, and release them only after accepted navigation commits. A confirmed write stays saved even
    when its follow-up read fails. The additive typed command outcome separates confirmation from refresh; accepted
    submitted values are distinct from the last authoritative revision and cannot supply a new write token. Unknown commands remain explicit until reconciliation or acknowledged exit;
@@ -312,18 +335,178 @@ feature-specific edge cases to constrain the requested increment:
 
 The shared client mount preserves text entered or autofilled into native forms while modules download. Future SSR
 forms use that boundary rather than introducing their own input replay. Hidden admission fields, identity selectors
-and submissions are never replayed; secrets remain only in the mounted form and temporary synchronous snapshot.
+and submissions are never replayed; secrets remain only in the mounted form and temporary mount-local snapshot.
 Navigation-related asynchronous work must also account for a pending lazy destination, before `currentRoute` changes.
 
-Confirmed identity receipts remain in the existing context only while an authoritative session read is unavailable.
-A successful Retry delivers a personal link only to its matching actor; a mismatching identity retires it. The shared
-entry owner resumes the captured canonical destination once, while an intervening committed visit retires that
-continuation. Never repeat a confirmed registration or sign-in to recover a failed session read.
+The context retains a confirmed identity result while its authoritative session read is unavailable. A successful
+Retry delivers its personal link only to the matching actor; a mismatching identity retires it. This private result
+is separate from the shared entry owner's confirmed destination. `useConfirmedNavigation` retains delivery after a
+healthy bootstrap too: cancelled or failed lazy navigation, an identity remount, or retirement of the submitting
+editor must not make the confirmed command available again. Retry repeats navigation only. The shell supplies
+recovery when that editor is gone; a different committed document or authoritative actor retires the destination.
+Pending delivery blocks departure, and an undelivered confirmed result prevents silent browser or update reload.
+Keep these receipts application-local; never persist secrets, drafts or a second copy of server resources.
+Repeated consumers supply a stable logical identity to `useConfirmedNavigation`; its component-type namespace
+isolates simultaneous regions while retaining the same owner across an actor-driven remount.
 
 Confirmed message destinations use the shared entry completion operation and an actor-scoped, memory-only presentation
 receipt. Guest recovery from every entry form finishes at the same recovery URL and existing message card. Its direct
 GET retains the native login redirect; neither an arbitrary URL nor reload reconstructs a prior success. Native form
 POSTs use the same destination and existing controller operation.
+
+Draft preservation does not authorize a different rejected-form contract. Known server-rejected identity submissions
+clear password fields exactly as native POST-rendered forms do; local validation and unknown delivery retain mounted
+input. Keep non-secret values according to the native form. Configuration-denied identity routes use the native full
+Error page, including when configuration changes before a submitted command is rejected. Preserve native no-op
+actions too: pristine metadata Save remains available, displays its informational message and sends no mutation.
+Use native focus styling unless a specific observable departure has been approved.
+
+Check response compatibility against the actual validator used by an already mounted client, not only regenerated
+consumers. A new required or always-emitted field can break a strict older client within the same compatibility
+family. Preserve ordinary read shapes and use an explicit opt-in request for additional contextual data where
+needed; the pilot's `selectedEvent` is optional and emitted only when `eventId` was requested. This does not require
+old-asset hosting or another API version. Test old request shapes alongside the new context before claiming a safe
+folder replacement.
+
+Use `useDraftProtection.retainCommand` for admitted pending or unknown work that can outlive its editor. Retain only
+the captured actor/epoch, visit and status; denied controls and private query data must still retire. The lease covers
+a required conflict read and releases after known settlement, obsolete authority or deliberate acknowledgement of
+uncertainty. Unmount alone cannot release an unresolved operation. Before irreversible deletion, obtain the whole
+page's draft decision through `prepareDeparture`, before sending the write. Retain accepted consent through failed
+delivery and later private-editor retirement, without bypassing another pending command or repeating the prompt.
+
+Use `useCommand.recover` and its shared `recovering` status for authority recovery after an unknown identity or mail
+command. Its retained lease protects the full read, including session bootstrap and an eligible feature read.
+Pass the recovery callback's actor/document/mount predicate into any follow-up read; a retired form must not start
+another query or publish feedback. An unchanged session does not prove that creation or mail failed. Release the
+read's busy lease when it settles while retaining uncertainty until a genuine actor transition or acknowledgement.
+Desired-state `reconcile` uses that protection while a command is unknown; ordinary resource Refresh remains
+navigable. Capture the reviewed command as well as its actor/document/mount so an earlier read cannot acknowledge
+or replace feedback for a later mutation. Check `reconcile`'s boolean eligibility before opening a Review prompt
+or clearing feedback; a retired read must not trigger those follow-up actions.
+
+Keep late-result presentation separate from operation settlement. A held command must not repopulate an evicted
+private cache, trigger a retired observer's explicit refetch, or restore fields revoked by a newer read. A current
+recovery read can still offer deliberate Review of the remaining authorized fields after an unknown write. Use the
+generic `MetadataDraft` comparison/review algorithm with caller-owned field policies; Packing's empty-description
+equivalence belongs to its consumer. Preserve omitted values, explicit nulls, zero and false. Confirmed submitted
+values acknowledge a save; only current authoritative reads provide the next values, grants and write token.
+Denied read authority must also retire retained region snapshots: an old cache object cannot restore cards that
+the same actor's denial already removed; restoration requires a new admitted read under the current scope.
+Apply that rule at the shared admission owner too. `PilotPageEntrySource.key` identifies a language-independent
+admission family; `usePageEntry` applies the same barrier to typed denials and validated HTTP read denials. A typed
+denial retains its producing response; a transport denial retires that query's old private payload too. Its
+`onDenied` callback selects additional feature projections, preserving independent public-entry policy and
+already-copied drafts. A fresh scoped render read supersedes old denials; cache hits and captured SSR seeds cannot.
+Retained denial authority must not conceal the current recovery read's diagnostic or Retry deadline. Keep the
+projection blocked until admission succeeds while presenting the latest scoped failed-read outcome and cooldown.
+Every `initialData` evaluation checks live `initialDocumentFor` eligibility, including after eviction and a return
+visit. Recheck actor, document and admission generation after asynchronous cancellation before publishing a result.
+After creation-context denial, keep only an already initialized local form's recovery fields and its original file
+input mounted, with the fieldset and command handlers disabled. Retire server-owned event names, pickers, audience
+definitions and presets. A fresh admitted GET restores those capabilities; a cold denied context mounts no form.
+Do not hide an input and later replace its FileList, or create a second file store to preserve this recovery boundary.
+Pending writes and protected recovery freeze Settings tab selection as well as the controls inside the current panel.
+Pass pending interaction separately from mutation-disabled state. An unknown parent blocks another write while
+read/Review recovery remains reachable; an actual pending parent freezes those recovery controls too. Do not use
+one disabled flag for both policies or allow a programmatic event to bypass the pending owner.
+
+Shared read lifetimes accept feature-owned operations rather than importing a feature API. `useAuthorizedImage`
+owns actor/resource/version retirement, abort and object-URL cleanup; its injected binary read owns the endpoint.
+Optional image failures remain silent. The shared image owner respects `canRetryRead` and the common read interval,
+with a bounded timer only while the current image is missing; a successful ordinary/manual JSON read can recover
+that same-version image, including equal JSON. It retains a healthy blob and adds no image warning or visible Retry.
+A cancelled image response must retire before decoding its error or recording a cooldown, so a late response cannot
+disable a newer image read. JSON consumers' deliberate Retry uses the separate existing `useReadRetry` control owner.
+Shared cache eviction likewise accepts caller-selected query families. Feature-specific key formats and containing
+projections remain feature-owned; Packing's legacy checklist helper lives beside its view, without a forwarding layer.
+Classify successful representations before choosing a key. Packing detail, metadata, settings and event options
+contain machine state or user-authored content, so they share one current actor/resource projection across languages.
+A newer successful read with fewer editable fields must remain authoritative when language changes; returning to
+an older language must not revive cached grants. Locale changes still cancel and invalidate reads. Help and Overview
+contain language-owned content and keep locale in their keys; a future localized picker provider may do so too.
+Help's browser-safe navigation policy likewise preserves native paths, queries and fragments without adding a
+feature-specific return control or injecting Packing context into generic links.
+
+Native initial data uses `initialDocumentFor` and the shared bootstrap codec. Every declared bootstrap field has a
+validation owner, and decoding retains the complete validated object rather than maintaining another reconstruction
+whitelist. A later actor, different document visit or reused token route must obtain fresh admission; going Back
+cannot revive consumed initial feedback or a used token. Same-document fragments do not discard drafts or receipts.
+The shared mount preserves existing text/autofill drafts and restores non-text drafts only when their owner marks
+the actual control `data-hydration-draft`. Number, checkbox, select and file inputs use that opt-in; shared permission
+components expose `hydration-draft` for their checkbox masks, leaving audience navigation unmarked. Restore only
+the same connected, editable node with unchanged type, marker, ID and name. Checkbox choices retain their value;
+selects retain their multiple flag, option nodes/values and selected-option admission. Keep selected files local as
+their original ephemeral `FileList`; never serialize them or transfer values by field name to another view.
+The asynchronous mount first settles mounted admission, then each restored draft through Vue's next tick before
+the next composite edit. After draft restoration,
+the entry client starts ordinary reads and publishes its hydration-complete marker. Hidden admission fields,
+identity/locale selectors and immediate-command controls never opt in; no submission or upload is replayed.
+Read admission fences actor, epoch, resource, document and locale, including a pending lazy destination before the
+router commits. A confirmed business result remains valid across a locale-only change; delivery uses the current
+presentation language while retaining its captured actor and origin.
+
+Keep command confirmation and read causality separate. Confirming submitted values acknowledges that operation;
+it does not authorize an older read to overwrite a newer snapshot or restore its grants. Retire a response whose
+read admission became obsolete even when the command that triggered it was confirmed. Preserve the shared command
+owner's pending, confirmed and unknown outcomes in each consumer instead of translating them into local booleans.
+
+JSON and binary failures share the application's validated Problem envelope boundary. Preserve a structurally valid
+future error's safe detail without treating its unfamiliar code as a known authentication or permission transition.
+Malformed envelopes do not supply trustworthy machine decisions. Keep status, media and retry handling in the shared
+transport; feature presenters choose native wording only after the Problem has been validated. Test actual image
+and command consumers as well as the transport, since a shared helper passing does not prove correct integration.
+Use the transport's shared `isReadDenial` predicate for terminal read authority too. A raw HTTP 401/403/404 with an
+unusable envelope does not authorize unmounting a private editor or discarding its local draft. A validated confirmed
+read rejection follows the terminal-status policy; unfamiliar detail alone does not grant a known machine code.
+Ordinary session/query freshness applies that envelope validation before making a client error terminal too.
+Unusable 400/403 reads retain the approved ordinary recovery bound; 429 and server Retry-After keep their separate
+deadline behavior. Test the real mounted observer's recovery, without replaying a command or merely checking a timer.
+Temporary-read warnings also show the original approved last-successful-refresh information through the shared
+StatusNotice and translator formatter. Pass the query owner's update time only for a readable current-scope
+projection; do not create another timestamp store or add it to healthy native views. Keep the existing read warning
+and Refresh reachable while a metadata draft remains mounted.
+Display the owning server Retry deadline too, using `useReadRetryAt` with the same availability owner that disables
+the control. A disabled button alone does not explain when recovery is available. The shared StatusNotice and
+`readFailureMessage` present validated query issues and safe future details; arbitrary network or malformed payload
+text stays hidden. Keep a successful-read receipt inside an existing scoped presentation owner when pagination or
+a localized query can replace its cache key, and remove it with that owner rather than borrowing another query's
+time. Session bootstrap owns its actual successful-read receipt separately from resource-query freshness.
+
+Provide deliberate read-only recovery for recoverable Help, selector, guest-title and cold-admission failures too;
+static or token-checking reads need not poll to expose Retry. A genuinely typed denial preserves its native error
+surface, and a token-consuming action or command is never repeated by a read-recovery control. Reuse the context's
+bounded jittered retry policy instead of adding another scheduler. Contextual notices use `usePilot().messages`
+so the selected i18next-vue binding also observes same-language resource updates; standalone no-context notices
+retain their fixed fallback. Test that actual contextual component with the real plugin and retained draft node.
+
+Preserve native transport projection alongside strict v1 validation. Shared normalization and the existing locked
+business operation must retain native optional-field/no-op behavior and established validation diagnostics. A narrow
+adapter may restore the legacy error data expected by its browser consumer; typed v1 codes, statuses and parameters
+remain unchanged. Compare those native consumers directly rather than changing global error handling.
+Compare HTML response status separately from its embedded Problem and the v1 response. A native validation failure
+may render Error 500 while its approved wire cause is 401; preserve both owning contracts instead of applying the
+API classifier's status to the document. Typed security and admission failures retain their established status.
+Native metadata maximum diagnostics retain UTF-16 counting using authored bounds through the existing
+[contract helper](../../../src/modules/api/contracts.ts); ordinary v1 metadata string bounds retain JSON Schema's
+code-point meaning. Registration/reset instead author the native eight-unit password minimum through the bounded
+UTF-16 extension described in the [API design](../API_CONTRACT_DESIGN.md#the-supported-schema-and-transport-subset).
+Keep that explicit selection separate from standard bounds; do not copy limits or change all string semantics.
+The native creation adapter acquires no additional text validation limits.
+Derive authored request constraints and browser field attributes from the accepted native input policy, not a
+generic preferred bound. Native password fields have no maximum length; the generated password schemas and Vue
+controls must preserve that acceptance. Registration/reset criteria and login admission remain separate policies.
+Forgotten-username and standalone guest-recovery inputs likewise retain their native unbounded acceptance; guest
+registration's email lookup keeps its own bounded authored variant. A reused field name does not make those
+operation-specific input policies interchangeable.
+
+Browser constraints and submission validation are operation-specific too. Retain native metadata `maxlength`, while
+creation, quick-add and inline title/description controls acquire no extra length attribute. Compare required,
+minimum and validation triggers separately for creation/new-item controls and existing-item edits. Native inline
+capacity admits zero, negative, nullable and raw decimal drafts; preserve the raw transport through the existing
+locked operation and let its parameterized database update own coercion and failure. The authored finite scalar
+union describes that transport. Do not add a browser minimum, implicit `reportValidity`, JavaScript rounding or a
+second SQL-limit policy. An unbounded native control is not proof that every value can be persisted.
 
 Route wrappers relinquish page-title ownership to their mounted feature except when presenting an admission error.
 The existing `usePageTitle` helper accepts an undefined title for that handover. Reactive effects calculate output
@@ -334,6 +517,125 @@ message-page spacing without changing ordinary pages or hiding real notices. Sha
 existing margin own its text spacing; extra template whitespace changes narrow-screen wrapping. The shared footer
 preserves native icon adjacency and nonbreaking separators through translated text. Correct shared
 presentation in these owners rather than adding feature-specific layout overrides.
+Shared dialogs initially focus their native container. A feature can supply a body-field target when its native
+workflow does so, as the event picker does; the wrapper still owns the trap and returns focus to the actual invoker.
+Keep that opening policy separate from inline command feedback's native Close focus and region-navigation focus.
+
+Feedback policy is explicit at the shared owner. Native full message pages and ordinary transient outcomes expire
+their alert body after the shared ten-second dismissal interval once visible; expiry leaves the message page,
+Home action and confirmed receipt intact.
+Keep that default flash presentation distinct from native inline feedback. An operation opts into inline presentation
+through `PilotCommandFeedback`, supplying its native plain-message key and initiating event or element. Capture the
+initiator before awaiting a command, because `currentTarget` expires after dispatch. The shared feedback owner finds
+the native section, modal fallback or page live-alert host; `StatusNotice` supplies inline Close, focus and scrolling
+only for that presentation. If the target detaches or becomes hidden, retain the same receipt in its live fallback
+instead of preserving revoked controls or displaying an invisible confirmation. Do not add Close or focus behavior
+to ordinary full-page flashes.
+Native no-op branches precede confirmation, cross-form discard and writes where the existing form does. Keep their
+actions available and use the corresponding informational or successful receipt without an empty PATCH. Likewise,
+retain native local validation for enabled Upload/Add actions and existing confirmation boundaries. Feature-selected
+success keys distinguish properties, images, event links, permissions, named administrators and lifecycle commands;
+a generic Saved message does not establish parity with each native outcome. Canonical creation/deletion delivery
+retains its typed one-time native notice through the shared confirmed-navigation owner.
+Pending work, uncertainty and unresolved read/refresh warnings remain durable until their corresponding recovery or
+acknowledgement. A successful read clears only its own warning, including an equal-JSON response. Retain typed message
+keys and parameters for reactive translation, and keep one-time notices through their intended committed redirect.
+Use `useReadRetry` for every explicit Retry that depends on a server deadline, including creation, metadata, detail
+reads, selectors and failed Overview targets. A reactive computed cannot observe time passing on its own, and an
+inactive observer cannot supply that wakeup. The helper delegates to `canRetryRead` and wakes only to update
+availability at the server deadline; it never starts a GET on its own. Guard the handler with the same availability.
+Do not derive lifetime from translated text, let unrelated mutations renew an alert, or report a saved command as
+failed because its dependent read or destination failed.
+Repeated identical validation or no-op outcomes are new receipts. Use the shared feedback owner's `errorRenewal`
+so each receives its full native dismissal interval; locale changes and unrelated renders do not renew it.
+Check the binding in each actual consumer, including shell actions: Header logout uses the command's receipt,
+not translated error text, to renew its notice. A shared helper test alone does not prove that adoption.
+Success receipts and full `PageMessage` outcomes follow the same rule. Renew by document/outcome identity, never by
+translated text; a locale change must neither revive an expired body nor steal inline focus. The Vue timer delegates
+to the shared native alert implementation with receipt-owned renewal, leaving native content-renewal behavior intact.
+When native wording depends on the operation, pass a named `problemKey` presenter to the existing command/feedback
+owner. Select only from validated known Problems; keep their wire code/status and unknown safe-detail handling.
+Do not rewrite a generic API error globally to imitate one form's message.
+
+Read-driven region navigation follows the native URL contract: read the target before committing history, merge
+only that region into the latest query, and adopt server-clamped pages or a removed parent. Failed/obsolete target reads
+retain the current URL, cards and focus. Preserve modified-click hrefs and independent filters; closing a hidden
+region clears its open, parent and child-page parameters together. Reuse the existing query/delivery owners rather
+than adding per-tab server navigation state.
+Adopt the server's native normalized search text on ordinary initial/bookmarked reads as well as confirmed target
+navigation, only while the field still represents its unchanged route input. A newer typed draft or pending target
+keeps its own confirmation and focus. Pending authority and local drafts keep progressive controls mounted; only a
+confirmed empty unfiltered region without a draft may remove its toolbar. Exercise equal-JSON Refresh and Back
+against actual query/cache behavior without assuming object identity across different query keys.
+
+### Baseline-to-observable verification
+
+Use the existing baseline, feature edge cases and paired review as the review owners; do not introduce another plan
+or registry. For each changed journey, connect its relevant behavior/edge-case IDs to the native executable owner,
+the implemented consumer, the observable assertion and any explicit approved exception or remaining limit.
+
+1. Establish the native oracle independently. Trace its routes, middleware, controller, Pug and browser collector,
+   then compare native and pilot using the same records, actors, grants and entered values. Verify GET and POST
+   admission separately, exact statuses/destinations/query context, validation order, payload semantics, visible
+   labels and available actions, including pristine submits and controls that remain present without a write.
+   Compare accessible names, roles, expanded/selected state, keyboard behavior and focus against native markup as
+   well as the actual browser tree. A visually equivalent wrapper does not authorize different button semantics.
+   Compare field types, required/min/max/step/length attributes, browser validation and authored wire constraints;
+   a new client or schema limit is an observable change requiring approval, even when ordinary fixtures fit within it.
+   Check the actual submission trigger and accepted operation domain, including supplementary-character length
+   units and raw numeric/null/blank/decimal edits where native persistence supplies their interpretation.
+   Distinguish known server rejection from local validation and unknown delivery when comparing retained secrets.
+   Two consumers of the same new API do not independently prove native parity.
+   Resolve each observed difference against the original approved decisions before changing either implementation
+   or expected output. Keep unexplained failures visible in the paired review rather than editing the design or a
+   capture expectation to make the new behavior its own oracle.
+   Synchronize a fixture with committed observable state before its next action: a debounced search can replace
+   its native disclosure after a premature click. Wait for the canonical URL and completed region read rather than
+   extending arbitrary delays or weakening selectors. Check the current generated label and native accessible role;
+   a valid conditional GET may finish with 304 instead of 200. Preserve failed diagnostic runs and distinguish a
+   demonstrated harness assumption from an actual application difference before correcting either.
+2. Exercise lifetime transitions at the production boundary. Hold an actual or synthetic HTTP response, then change
+   actor, resource, document, locale or permission, or unmount the submitting editor before releasing it. Check that
+   pending and unknown work remains guarded while obsolete values, grants, caches and explicit observer reads retire.
+   Include newer successful reads during held writes, partially revoked fields, equal-JSON recovery, cancelled
+   navigation, fragments and Back/Forward visits. Include a successful read that narrows field authority, then return
+   to another language with its read held. Test an old cached projection appearing after a denial, recovery
+   through a new admitted read, and Retry becoming available as a server deadline elapses without another request.
+   Preserve local values, focus and original edit baselines.
+3. Distinguish known rejection, confirmed persistence and unknown response loss. Test confirmed write followed by
+   failed refresh, failed identity bootstrap and failed/cancelled lazy delivery independently. Retry must send only
+   the eligible read or navigation, never the original command. Check whole-page consent before deletion, detached
+   pending status, browser/update reload guards, reachable uncertainty Review and deliberate acknowledged exit.
+4. Cross the real startup boundary when it changes. Test the HTML-emitted bootstrap and module/style URLs through
+   the actual entry decoder and mounted app, including native denied and confirmed POST documents. A directly
+   constructed context or SSR string cannot prove hydration preserved those outcomes. Wait for an actual hydrated
+   control before testing SPA listeners; separately verify edits made before hydration through the shared mount.
+   The root hydration marker does not mean a progressively loaded feature has completed its first admitted read.
+   Before replacing/stopping a server or following a feature action, wait for that usable control/card and its region's
+   completed read; a visible shell cannot establish a cold-route import or permission precondition.
+   Exercise every draft control category the form renders: text/textarea, numeric values, checked/unchecked choices,
+   selects and files. Check the resulting draft and eventual submitted payload, not only retained DOM appearance.
+   Keep non-text restoration opt-in for draft controls and prove hidden admission fields and immediate-command
+   controls are excluded. Hydration must not replay a command or initiate a file upload.
+   Run the normal source workflow when development integration changes and the built workflow for release behavior.
+   Assert the same document survives early editing and hydration; evidence HTML must not trigger a development
+   reload. Follow the [Testing Guide](TESTING_GUIDE.md#frontend-pilot-coverage) for the separate watcher checks.
+5. Compare presentation and behavior independently at desktop and mobile sizes. Load the actual fonts, icons and
+   styles; inspect significant roles, empty/error states, dialogs, selectors, narrow wrapping and focus. Include the
+   complete ten-second transient lifetime and durable recovery states, not just the first screenshot. Use exact
+   native text, native no-op/validation availability, inline Close/focus/placement and stable measured geometry where
+   that boundary matters. Preserve native wrapper/text-node placement and the gaps that follow from it. Compare
+   horizontal-scroll ownership of ancillary hints and controls too; equal unscrolled dimensions do not prove that
+   they move, clip or remain keyboard-reachable with the same container. Check locale changes after expiry and
+   feedback delivery after its initiating host hides or
+   retires. Retain and individually inspect changed images. Record source/build identifiers, executed checks,
+   excluded failures and limits in the existing paired review. Do not describe an earlier build, missing provider
+   round trip or unrun journey as current verification.
+
+Choose the cheapest stable test layer for each distinct risk; broaden only when another boundary requires it.
+An independent source review checks ownership and approval against the original decisions as well as the assertions.
+Documentation reports remain optional and advisory. Maintained prose and images are never application-test or CI
+assertion inputs, and documentation reconciliation introduces no delivery gate.
 
 ### Progressive loading and shared placeholders
 
@@ -1035,7 +1337,11 @@ The integration suite rebuilds its selected MariaDB schema. The E2E initializer 
 6. Add tests at the lowest useful layer and an integration/E2E check when the change crosses those boundaries.
 7. Update the relevant user or maintainer document in the same change.
 
-### Add or change an API action
+### Add or change a legacy API action
+
+For a migrated action, follow [Implementing the next feature slice](#implementing-the-next-feature-slice): author its
+v1 operation/schema and extend the existing `src/routes/api/v1.ts` feature mount and owning controller/module. The
+following route recipe applies to native legacy APIs, not to the migration's generated v1 contract.
 
 1. Add the feature route under `src/routes/api/`.
 2. Confirm it is mounted by `src/routes/api.ts`.
@@ -1043,7 +1349,10 @@ The integration suite rebuilds its selected MariaDB schema. The E2E initializer 
 4. Return through the established structured JSON and API error chain.
 5. Cover invalid input, unauthorized input, success, and state persistence.
 
-### Add a client-side module
+### Add a legacy client-side module
+
+For Vue components or feature views, use the pilot contribution recipe and the existing Express/Vite development
+workflow. The following generated-module convention applies only to native Pug/browser TypeScript.
 
 1. Add the `.ts` source under `src/public/js/` in the appropriate existing directory.
 2. Import it from the relevant Pug page or client module using the existing generated-module convention.
@@ -1070,13 +1379,11 @@ dev
 ts-migration
 ```
 
-Before requesting review, run the checks appropriate to the change. A broad application change normally warrants:
-
-```bash
-npm test
-npm run build
-npm run e2e
-```
+Before requesting review, select the cheapest stable checks protecting the changed observable behavior using the
+[Testing Guide](TESTING_GUIDE.md#choosing-the-layer). A broader change may cross persistence, release-build or real-browser
+boundaries and justify checks at those layers; it does not require every suite. Follow the guide and executable
+package scripts for the selected commands and preparation. Database-backed integration and E2E checks require a
+verified disposable target and restricted credentials; do not infer database preparation from a command name.
 
 Documentation reports are optional, not review or delivery prerequisites. Use `npm run docs:check` for maintainer
 feedback; findings, metadata, baseline changes, or unavailable documentation tools must not block application work.

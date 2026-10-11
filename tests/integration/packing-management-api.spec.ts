@@ -11,6 +11,8 @@ import * as packing from '../../src/modules/packing/api';
 import {readOverview, setOverviewVisibility} from '../../src/modules/overview/api';
 import packingController from '../../src/controller/packingController';
 import {archiveEntity} from '../../src/controller/entityAdminController';
+import {readEventLinkSelection} from '../../src/controller/eventController';
+import {randomUUID} from 'node:crypto';
 import {contractValidator} from '../../src/modules/api/contracts';
 import {DEFAULT_PERM, PERM} from '../../src/modules/lib/permissions';
 import type {components} from '../../src/types/api/v1';
@@ -37,6 +39,36 @@ beforeAll(async () => {
 afterAll(closeIntegrationDatabase);
 
 describe('complete versioned packing management', () => {
+    it('shares native initial event admission for create and duplicate while rechecking grants after revocation', async () => {
+        const allowed = await createIntegrationEvent(owner.id, 'Allowed initial selection');
+        const forbidden = await createIntegrationEvent(editor.id, 'Private initial selection');
+        const id = await fixture();
+        const currentActor = actor(owner);
+
+        for (const eventId of [undefined, '', 'invalid-initial-selection', randomUUID(), forbidden, allowed]) {
+            const native = await readEventLinkSelection(eventId, currentActor);
+            const entry = await packing.readPackingCreateEntry(currentActor, undefined, eventId);
+            const duplicate = await packing.readPackingDuplicate(id, currentActor, eventId);
+            const expectedId = eventId === allowed ? allowed : null;
+            expect(native?.id ?? null).toBe(expectedId);
+            expect(entry.selectedEvent?.id ?? null).toBe(expectedId);
+            expect(duplicate.selectedEvent?.id ?? null).toBe(expectedId);
+            expect(duplicate.eventId).toBeNull();
+            expect(contractValidator('PackingCreateEntry')(entry)).toBe(true);
+            expect(contractValidator('PackingDuplicate')(duplicate)).toBe(true);
+            expect(Object.hasOwn(entry, 'selectedEvent')).toBe(eventId !== undefined);
+            expect(Object.hasOwn(duplicate, 'selectedEvent')).toBe(eventId !== undefined);
+        }
+
+        // Discovery/admission is a current read, never a lasting attachment grant.
+        // A later revocation removes the new URL seed without changing the source.
+        await adminService.addAdmin('event', forbidden, owner.id, PERM.MANAGE_ASSIGNMENTS);
+        expect((await packing.readPackingCreateEntry(currentActor, undefined, forbidden)).selectedEvent?.id).toBe(forbidden);
+        await adminService.removeAdmin('event', forbidden, owner.id);
+        expect((await packing.readPackingDuplicate(id, currentActor, forbidden)).selectedEvent).toBeNull();
+        expect((await packing.readPackingCreateEntry({}, undefined, allowed)).selectedEvent).toBeNull();
+    });
+
     it('preserves cleared item titles through detail and duplicate reads without weakening creation or root metadata', async () => {
         const id = await fixture();
         const original = (await packing.readPackingList(id, actor(owner))).data.items[0];
@@ -239,6 +271,17 @@ describe('complete versioned packing management', () => {
             .rejects.toMatchObject({status: 412});
         await packingController.updateProperties(entity, {description: 'Independent native setup', expectedValues: {description: entity.description ?? ''}}, actor(owner));
         expect(await packingService.getPackingListById(id)).toMatchObject({title: 'Pilot setup edit', description: 'Independent native setup'});
+
+        // A relink after native route discovery supersedes that route's permission
+        // context. Both adapters reject it under the shared parent/root transaction;
+        // the independent literal also protects the original native conflict wording.
+        const eventId = await createIntegrationEvent(owner.id, 'Relinked metadata parent');
+        const settings = await packing.readPackingSettings(id, actor(owner));
+        await packing.changePackingEvent(id, {eventId, expectedEventId: null}, actor(owner), settings.settingsToken);
+        const conflict = {status: 409, message: 'The linked event changed. Reload and try again.'};
+        await expect(packingController.updateProperties(entity, {title: 'Retired native context'}, actor(owner))).rejects.toMatchObject(conflict);
+        await expect(packing.patchPackingMetadata(id, {title: 'Retired pilot context'}, undefined, actor(owner), false, null)).rejects.toMatchObject(conflict);
+        expect(await packingService.getPackingListById(id)).toMatchObject({title: 'Pilot setup edit', eventId});
     });
 
     it('retains native field-only write grants independently of linked-page admission', async () => {
@@ -355,6 +398,41 @@ describe('complete versioned packing management', () => {
 });
 
 describe('pilot mixed overview projection', () => {
+    it.each(['account', 'guest'] as const)('keeps native owner-card actions for a persisted %s profile while administrators remain nonowners', async identity => {
+        let session: SessionLike;
+        if (identity === 'guest') {
+            const guest = await userService.createGuest('Overview guest owner');
+            session = {auth: {guest}, profile: guest.profile};
+        } else {
+            session = actor(await persistIntegrationProfile({name: 'Overview account owner'}));
+        }
+
+        // Existing guest-owned content is a legitimate persistence fixture, independently
+        // of today's account-only creation POST. Keep Overview and Settings' intentionally
+        // different duplicate controls separate while sharing the actual ownership rule.
+        const [id] = await createPackingListWithItem(session.profile!.id);
+        const title = `Native ${identity} overview ownership`;
+        await packingService.updatePackingListTitle(id, title);
+        const overview = await readOverview({collection: 'owner', region: 'main'}, session);
+        expect(contractValidator('OverviewRegion')(overview)).toBe(true);
+        expect(overview.items).toHaveLength(1);
+        expect(overview.items[0]).toMatchObject({id, capabilities: {duplicate: true, remove: true}});
+        expect((await packing.readPackingSettings(id, session)).capabilities)
+            .toMatchObject({duplicate: identity === 'account', remove: true});
+
+        // Delegated administration includes the card in the owner's collection but does
+        // not transfer the profile ownership that native Duplicate/Delete controls require.
+        const administrator = actor(await persistIntegrationProfile({name: 'Overview nonowner administrator'}));
+        await adminService.addAdmin('packing', id, administrator.profile!.id, DEFAULT_PERM.ADMIN);
+        const delegated = await readOverview({collection: 'owner', region: 'main', q: title}, administrator);
+        expect(delegated.items).toHaveLength(1);
+        expect(delegated.items[0]).toMatchObject({id, capabilities: {duplicate: false, remove: false}});
+
+        await setOverviewVisibility('packing', id, {visibility: 'hidden'}, session);
+        const hidden = await readOverview({collection: 'owner', region: 'hidden'}, session);
+        expect(hidden.items[0]).toMatchObject({id, capabilities: {duplicate: true, remove: true}});
+    });
+
     it('keeps event containers, private placement and actor membership in the shared overview path', async () => {
         const isolatedOwner = await persistIntegrationProfile({name: 'Scoped overview owner'});
         const isolatedParticipant = await persistIntegrationProfile({name: 'Scoped overview participant'});

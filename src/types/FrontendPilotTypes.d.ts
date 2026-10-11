@@ -2,7 +2,7 @@ import type {components} from './api/v1';
 import type {MessageKey} from './LocalizationTypes';
 
 /** Native packing admission has its own HTTP outcomes, independently of API problem statuses. */
-export type PackingPageError = 'packing.notFound' | 'packing.eventRegistrationRequired' | 'api:errors.FORBIDDEN';
+export type PackingPageError = 'packing.notFound' | 'packing.eventRegistrationRequired' | 'common.notAllowed';
 
 /** A confirmed message result belongs to one actor and canonical destination. The same
  * declaration seeds native POST rendering and scopes in-memory SPA completion receipts. */
@@ -35,6 +35,8 @@ export interface FrontendPilotBootstrap {
     packingError?: PackingPageError;
     /** Only admitted creation/duplication forms receive these public form definitions and copied values. */
     packingCreateContext?: components['schemas']['PackingCreateContext'];
+    /** An initial event query is resolved by the shared native selection owner before drafting. */
+    packingSelectedEvent?: components['schemas']['PackingEventOption'] | null;
     packingDuplicate?: components['schemas']['PackingDuplicate'];
     personalLink?: string;
     /** Controller-projected native regions hydrate under their ordinary identity-scoped query keys. */

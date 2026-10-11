@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import YAML from 'yaml';
 import openapiTS, {astToString} from 'openapi-typescript';
-import Ajv2020 from 'ajv/dist/2020.js';
+import Ajv2020, {_, str} from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import standaloneCode from 'ajv/dist/standalone/index.js';
 import {build} from 'esbuild';
@@ -74,6 +74,27 @@ function schemaName(schema) {
 }
 
 function upperFirst(value) { return value[0].toUpperCase() + value.slice(1); }
+
+/**
+ * Native HTML/password checks count UTF-16 units, while JSON Schema minLength counts
+ * code points. Only an explicitly authored extension selects the native unit; other
+ * string constraints retain their standard meaning. Inline Ajv code generation keeps
+ * this check in both standalone runtimes without a runtime compiler or another validator.
+ */
+function compileUtf16Minimum(context) {
+    const {data, schemaCode} = context;
+    // Ajv's string type rule guards this expression. The authored threshold is emitted
+    // directly, so no feature field names or copied password limits enter the generator.
+    context.fail(_`${data}.length < ${schemaCode}`);
+}
+
+function utf16MinimumMessage({schemaCode}) {
+    return str`must NOT have fewer than ${schemaCode} UTF-16 code units`;
+}
+
+function utf16MinimumParameters({schemaCode}) {
+    return _`{limit: ${schemaCode}}`;
+}
 
 /** Parameter containers are derived transport shapes, not separately authored DTOs. */
 function parameterSchema(parameters) {
@@ -241,6 +262,9 @@ for (const browser of [false, true]) {
     const ajv = new Ajv2020({strict: true, allErrors: true, coerceTypes: false, useDefaults: false,
         removeAdditional: false, validateFormats: true, code: {source: true, esm: browser}});
     addFormats(ajv);
+    ajv.addKeyword({keyword: 'x-surveyor-min-length-utf16', type: 'string', schemaType: 'number',
+        metaSchema: {type: 'integer', minimum: 0}, code: compileUtf16Minimum,
+        error: {message: utf16MinimumMessage, params: utf16MinimumParameters}});
     // Binary is a transport marker; the upload owner checks file presence, media and size.
     ajv.addFormat('binary', true);
     for (const graphId of browser ? [id, requestId] : [id]) {

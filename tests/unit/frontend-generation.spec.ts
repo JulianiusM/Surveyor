@@ -12,7 +12,7 @@ const artifacts = ['.generated/api/v1/openapi.json', '.generated/api/v1/operatio
     'src/types/api/v1.d.ts', 'src/types/api/validation-v1.d.ts', 'src/types/LocalizationTypes.d.ts',
     'src/modules/localization/generated/resources.json', 'src/modules/localization/generated/manifest.json',
     'src/modules/localization/generated/permissions.ts', '.generated/api/v1/policy.mjs',
-    '.generated/api/v1/browser/validatePackingListView.mjs'];
+    '.generated/api/v1/browser/validatePackingListView.mjs', '.generated/api/v1/browser/validateRegistrationInput.mjs'];
 
 /** Run the real generators in an empty output tree; never substitute hand-authored validators. */
 function generate(script: string, arguments_: string[]): void {
@@ -29,6 +29,24 @@ async function removeTemporary(directory: string): Promise<void> {
 }
 
 describe('contract and catalog generation', () => {
+    it('keeps emitted JavaScript from shadowing maintained TypeScript modules', async () => {
+        // Extensionless imports can resolve an adjacent emitted .js before
+        // the maintained .ts source. Such a copy can make both tests and production
+        // bundles consume stale behavior despite a successful TypeScript check.
+        // Build output belongs outside this authored tree; report every collision
+        // together so another external emitter cannot silently invalidate review.
+        // Include shared browser/server helpers and the generated permission registry,
+        // which are frontend inputs even though they live outside the Vue directory.
+        const files = new Set(await fs.readdir(path.join(root, 'src'), {recursive: true}));
+        const collisions: string[] = [];
+        for (const file of files) {
+            if (!file.endsWith('.ts') || file.endsWith('.d.ts')) continue;
+            const emitted = file.slice(0, -3) + '.js';
+            if (files.has(emitted)) collisions.push(emitted);
+        }
+        expect(collisions.sort()).toEqual([]);
+    });
+
     it('generates identical artifacts from two clean trees and verifies them without rewriting', async () => {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
         try {
@@ -46,12 +64,22 @@ describe('contract and catalog generation', () => {
             // Unicode length exercises a helper that standalone Ajv output otherwise imports.
             const browserUrl = pathToFileURL(path.join(first, '.generated/api/v1/browser.mjs')).href;
             const serverUrl = pathToFileURL(path.join(first, '.generated/api/v1/server.cjs')).href;
+            const registrationUrl = pathToFileURL(path.join(first, '.generated/api/v1/browser/validateRegistrationInput.mjs')).href;
             const verifyStandalone = `globalThis.Function = function () { throw new Error('Runtime compilation is forbidden'); };
                 const browser = await import(${JSON.stringify(browserUrl)});
                 const server = (await import(${JSON.stringify(serverUrl)})).default;
+                const registration = await import(${JSON.stringify(registrationUrl)});
                 for (const validators of [browser, server]) {
                     if (!validators.validatePackingMetadataPatch({title: '💡'.repeat(255)})) throw new Error('Unicode boundary rejected');
                     if (validators.validatePackingMetadataPatch({title: '💡'.repeat(256)})) throw new Error('Unicode bound ignored');
+                    const password = 'A1' + '💡'.repeat(3);
+                    if (!validators.validateResetInput({token: 'Current-token', password, confirmPassword: password})) throw new Error('Native UTF-16 minimum rejected');
+                    if (validators.validateResetInput({token: 'Current-token', password: 'A1💡💡x', confirmPassword: password})) throw new Error('Native UTF-16 minimum ignored');
+                }
+                for (const validators of [browser, server, registration]) {
+                    const input = {username: 'Account', displayname: 'Account', email: 'account@example.invalid', password: 'A1💡💡💡', password_repeat: 'A1💡💡💡'};
+                    if (!validators.validateRegistrationInput(input)) throw new Error('Standalone native UTF-16 registration rejected');
+                    if (validators.validateRegistrationInput({...input, password_repeat: 'A1💡💡x'})) throw new Error('Standalone native UTF-16 repetition accepted');
                 }`;
             execFileSync(process.execPath, ['--input-type=module', '--eval', verifyStandalone], {cwd: temporary, stdio: 'pipe'});
             generate('generate-api.mjs', ['--output-root', first, '--check']);

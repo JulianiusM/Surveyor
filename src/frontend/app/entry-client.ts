@@ -14,12 +14,15 @@ async function start(): Promise<void> {
     await router.isReady();
     const container = document.getElementById('surveyor-pilot');
     if (!container) throw new Error('The pilot application container is missing.');
-    mountPreservingDrafts(app, container);
+    await mountPreservingDrafts(app, container);
     watch(context.locale, locale => {
         document.documentElement.lang = locale;
         document.documentElement.dir = localeManifest.find(entry => entry.locale === locale)?.direction ?? 'ltr';
     }, {immediate: true});
     const stop = context.start();
+    // Mount installs listeners before draft restoration finishes. Publish readiness only
+    // after restored models and the ordinary request/identity lifecycle are both active.
+    container.setAttribute('data-pilot-hydrated', 'true');
     // A bfcache restore resumes this same application; disposing it on a persisted pagehide would
     // leave a visible page whose transport permanently rejects every response as obsolete.
     window.addEventListener('pagehide', event => { if (!event.persisted) stop(); });

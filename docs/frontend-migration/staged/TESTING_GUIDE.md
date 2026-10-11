@@ -4,10 +4,10 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: test maintainers
 status: migration-pending
-last-verified: 2026-10-08
+last-verified: 2026-10-11
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: shared and feature loading-test inventory and built-browser held-read checkpoints; FPR-07 documentation staging and source corrections; prospective frontend replacement, not production cutover or new runtime execution evidence
-source-anchors: tests/frontend/frontend-loading-shell.spec.ts; tests/frontend/frontend-content-loading.spec.ts; src/frontend/components/LoadingSkeleton.vue; src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/e2e/frontend-development.spec.ts; tests/unit/frontend-contracts.spec.ts; tests/unit/frontend-localization.spec.ts; tests/unit/frontend-api-problems.spec.ts; tests/frontend/frontend-pilot.spec.ts; tests/integration/packing-api.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-pilot.spec.ts; tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs
+verification-scope: 2026-10-11 isolated tooling, bounded output cleanup and application/evidence watcher separation reviewed; actual startup control categories, independent native operation/input comparisons, semantic feature first-read premises, genuine normal source/HMR/regeneration and separate built/package boundaries verified; exact bounded final runtime evidence remains in the paired review; shared/feature loading and FPR-07 staging retained; prospective frontend replacement, not production cutover
+source-anchors: tests/frontend/frontend-loading-shell.spec.ts; tests/frontend/frontend-content-loading.spec.ts; src/frontend/components/LoadingSkeleton.vue; src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/e2e/frontend-development.spec.ts; tests/unit/frontend-contracts.spec.ts; tests/unit/frontend-localization.spec.ts; tests/unit/frontend-api-problems.spec.ts; tests/frontend/frontend-pilot.spec.ts; tests/integration/packing-api.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-pilot.spec.ts; tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs; vite.config.mts
 next-review: frontend-production-cutover
 production-reference: 2dfa257 native frontend documentation; reference only, not evidence of an installed production commit
 canonical-merge-target: docs/TESTING_GUIDE.md
@@ -127,7 +127,10 @@ Coverage uses V8 and includes TypeScript and Vue components under `src/`, exclud
 
 ### Unit tests
 
-Use `tests/unit/` when the subject can be exercised without MariaDB, an Express application, filesystem mutation, SMTP, OIDC discovery, or a real browser.
+Use `tests/unit/` for isolated production logic or tooling that can be exercised without MariaDB, an Express
+application, SMTP, OIDC discovery, or a real browser. Tooling tests may read maintained sources and write isolated
+temporary outputs; verify cleanup stays within the test-owned directory, as in the
+[production-generator checks](../../../tests/unit/frontend-generation.spec.ts).
 
 Good subjects include:
 
@@ -387,6 +390,15 @@ still require individual inspection. The helper performs no fixture creation, sc
 Built browser tests do not exercise Vite middleware or source-module hydration. For changes to frontend bootstrap,
 development integration or routing, run an actual `npm run server` against explicitly isolated development settings,
 then test document-emitted module/style URLs, same-document controls/navigation, HMR and generated-input restart.
+Vite watches application inputs, excluding generated inputs published through the authored-input watcher and the
+evidence/build directories listed in its configuration. Test traces and reports can contain HTML; writing them
+under `.temp`, `test-results`, `playwright-report`, `coverage` or `dist` must not replace the live document. Assert
+a retained document marker as well as the early draft and its submitted/result values. For controlled CSS HMR,
+observe application and restoration as separate completed saves, allowing the installed watcher to settle between
+them. Check generated-input restart independently of that same-document HMR proof.
+Before a deployment handover or feature action, establish the feature's admitted usable control and completed first
+read as described in the [contribution recipe](DEVELOPMENT.md#baseline-to-observable-verification). A root hydration marker or
+visible progressive shell alone does not establish a card, action or cold-module-import precondition.
 Development settings use ordinary `DB_*` names; an `E2E_DB_*` file alone does not select the source server's database.
 Never reuse the default reset hook to attach to an existing development server. A separate Playwright configuration
 with `webServer` disabled can target a verified disposable source server without initializing its schema.

@@ -4,9 +4,9 @@ documentation-metadata
 audience: frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-08
+last-verified: 2026-10-09
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: FPR-07 explicitly authorized 2026-10-08 scope/fallback/documentation amendments and staging; original choices/D1-D5 retained; no new runtime verification claimed; approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; source review of expanded packing metadata/item/order/settings tokens, overview refresh, identity transitions and command recovery; distinguishes implemented behavior from remaining cross-feature targets; no application, database or browser checks run for this documentation update
+verification-scope: source-reviewed generic cache retirement mechanics and feature-owned Packing admission/dependency policy; FPR-07 explicitly authorized 2026-10-08 scope/fallback/documentation amendments and staging; original choices/D1-D5 retained; no new runtime verification claimed; approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; source review of expanded packing metadata/item/order/settings tokens, overview refresh, identity transitions and command recovery; distinguishes implemented behavior from remaining cross-feature targets; no application, database or browser checks run for this documentation update
 source-anchors: docs/frontend-migration/EDGE_CASES.md; docs/frontend-migration/IDENTITY_LIFECYCLE_EDGE_CASES.md; docs/frontend-migration/PARTICIPATION_EDGE_CASES.md; docs/frontend-migration/INVOICE_EDGE_CASES.md; src/frontend/app/context.ts; src/frontend/app/api.ts; src/frontend/app/queryCache.ts; src/frontend/composables/command.ts; src/frontend/components/InlineCell.vue; src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/PackingSettings.vue; src/frontend/features/overview/OverviewRegion.vue; src/frontend/features/overview/OverviewPage.vue; src/modules/packing/api.ts; src/routes/api/v1/auth.ts; tests/frontend/frontend-pilot.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/frontend/packing-management-ui.spec.ts; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-select.ts; src/public/js/modules/entity-properties.ts; src/public/js/modules/invoice-submission.ts; src/modules/activity/recommendationJobs.ts; src/modules/invoice/poolOperations.ts; src/controller/entityAdminController.ts
 next-review: packing-invalidation-or-next-feature-migration
 -->
@@ -63,6 +63,11 @@ and [API design](API_CONTRACT_DESIGN.md) define the exact coverage and 428/412 v
 Use feature-owned query functions and keys, not fetch calls scattered through components. Multiple components reading
 the same key share one cached query. Do not mirror those DTOs into another global store. A detail query must not
 silently prefetch every item, participant, proof, historical ledger or linked feature behind an unopened section.
+
+Packing detail, metadata, settings and event options contain machine state or user-authored content; their keys
+therefore keep one current projection across languages. A successful read that removes editable fields remains
+authoritative during language changes. Help and Overview include language-owned content and retain localized keys.
+Locale changes still cancel and invalidate reads; they must not select an older cached grant for an unchanged resource.
 
 ## Authorized refresh clarification (2026-10-08)
 
@@ -140,12 +145,17 @@ data cannot reappear. Do not merely mark those copies stale until the next inter
 ID does not by itself establish loss of read access to the whole parent: keep that narrower outcome distinct and
 revalidate the affected capabilities. Preserve each endpoint's disclosure policy.
 
-The current [packing eviction helper](../../src/frontend/app/queryCache.ts) cancels/removes that list's scoped detail,
-metadata, settings, profile-search and guest-entry keys, plus the current actor's mixed overview and event
-picker query families. Removing these bounded collections avoids manufacturing partially redacted DTOs. Other lists'
-detail entries, other features and other actor scopes are retained. The transport/context tests exercise a delayed
-overview read so its earlier result cannot restore the evicted card. Future features need their own dependency owners.
-Current HTTP responses are private/no-store; application query caching is separate from browser-cache policy.
+[The generic cache owner](../../src/frontend/app/queryCache.ts) cancels and retires caller-selected families; it imports
+no feature policy. [PackingPage](../../src/frontend/features/packing/PackingPage.vue) selects the resource, event-picker
+and mixed-overview projections after detail access is lost. [PackingEntry](../../src/frontend/features/packing/PackingEntry.vue)
+owns the related typed admission policy. Its participant denial retires private detail/editor projections and their
+containing collections while preserving independent public guest admission. A 404 retires both detail/guest intents
+and guest data, plus inactive duplicate-source reads; an observed copied duplicate draft remains independent.
+The shared [page-entry owner](../../src/frontend/composables/pageEntry.ts) retires older admission variants while
+retaining the typed query that produced the denial. A fresh admitted read is required for restoration.
+Other resources, actor scopes and deliberate endpoint exceptions remain separate. Future features select their own
+dependencies through these shared owners. Current HTTP responses are private/no-store; application query caching
+is separate from browser-cache policy.
 
 Mutation retries default to zero even where a query library offers retry options. A command may expose a deliberate
 retry only through its endpoint-specific contract. Transport abort is not server transaction rollback.

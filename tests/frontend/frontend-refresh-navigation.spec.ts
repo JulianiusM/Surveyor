@@ -5,13 +5,21 @@ import {defineComponent, nextTick, reactive, type Component} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
+import {readFileSync} from 'node:fs';
+import {resolve} from 'node:path';
+import * as pug from 'pug';
 import {createPilotContext, pilotContextKey, refreshInterval} from '../../src/frontend/app/context';
 import {overviewKeys} from '../../src/frontend/app/queryKeys';
 import {ApiFailure} from '../../src/frontend/app/transport';
 import EventPicker from '../../src/frontend/components/EventPicker.vue';
 import OverviewRegion from '../../src/frontend/features/overview/OverviewRegion.vue';
+import OverviewPage from '../../src/frontend/features/overview/OverviewPage.vue';
+import OverviewCard from '../../src/frontend/features/overview/OverviewCard.vue';
+import AppNavigationDropdown from '../../src/frontend/components/AppNavigationDropdown.vue';
+import App from '../../src/frontend/app/App.vue';
 import type {components} from '../../src/types/api/v1';
 import type {PilotEventPickerSource} from '../../src/types/FrontendPilotUiTypes';
+import type {Entity, OverviewRegionView} from '../../src/types/UserTypes';
 
 const profileId = '11111111-1111-4111-8111-111111111111';
 const eventId = '22222222-2222-4222-8222-222222222222';
@@ -66,11 +74,61 @@ function region(request: Request): components['schemas']['OverviewRegion'] {
         hasPrevious: page > 1, hasNext: page < 2, parent: null, items: [card]};
 }
 
+/** Exercise the real transport envelope boundary rather than manufacturing a query
+ * error. A safe future response can establish denial without granting a known code. */
+function readFailure(status: number, representation: 'html' | 'malformed' | 'mismatched' | 'future'): Response {
+    const headers = {'Content-Type': representation === 'html' ? 'text/html' : 'application/json',
+        'X-Surveyor-Context': session.context};
+    if (representation === 'html') return new Response('<html><body>Temporary proxy failure</body></html>', {status, headers});
+    const body = representation === 'malformed' ? {code: 'FORBIDDEN'}
+        : {type: 'urn:surveyor:problem:future-read-denial', title: 'Unavailable',
+            status: representation === 'mismatched' ? (status === 404 ? 403 : 404) : status,
+            detail: 'Read access is unavailable.', requestId: 'future-overview-read', code: 'FUTURE_READ_DENIAL'};
+    return new Response(JSON.stringify(body), {status, headers});
+}
+
+function eventRegion(request: Request): components['schemas']['OverviewRegion'] {
+    const view = region(request);
+    const parent = {...card, id: eventId, type: 'event' as const, title: 'Camp', url: '/event/' + eventId,
+        children: {matching: 1, total: 1}};
+    return {...view, availableTypes: ['event', 'survey'], parent: view.eventId ? parent : null,
+        totalChildren: view.eventId ? 1 : 0, items: view.eventId ? [card] : [parent]};
+}
+
+/** Render the retained native presentation as the independent toolbar oracle. The
+ * DTO supplies the same bounded fixture membership, without replacing either view's
+ * rendering or inferring new expected labels from the migrated implementation. */
+function nativeOverviewRegion(value: components['schemas']['OverviewRegion']): HTMLElement {
+    function nativeCard(item: components['schemas']['OverviewCard']): Entity {
+        return {id: item.id, title: item.title, ownerId: 'another-profile', type: item.type,
+            description: item.description, url: item.url, visibility: item.visibility};
+    }
+    const view: OverviewRegionView = {...value, id: 'overview-' + value.collection + '-' + value.region,
+        title: 'Administrable entities', queryPrefix: value.collection + '_' + value.region + '_',
+        eventId: value.eventId ?? undefined, parent: value.parent ? nativeCard(value.parent) : undefined,
+        items: value.items.map(nativeCard), canonicalUrl: '/users/dashboard', backUrl: '/users/dashboard',
+        clearUrl: '/users/dashboard', loaded: true, searchFields: []};
+    const element = document.createElement('section');
+    const filename = resolve('src/views/modules/module_unified_entity_cards.pug');
+    const archive = readFileSync(resolve('src/views/modules/module_entity_archive.pug'), 'utf8');
+    element.innerHTML = pug.render(archive + '\n' + readFileSync(filename, 'utf8') + '\n+pagedEntityRegion(view)',
+        {filename, view, profile: session.activeProfile});
+    return element;
+}
+
+/** Compare the native HTML submit contract, including selected type and menu order. */
+function filterChoices(element: ParentNode) {
+    const buttons = [...element.querySelectorAll<HTMLButtonElement>('button.dropdown-item[data-type]')];
+    return buttons.map(button => ({label: button.textContent?.trim(), classes: button.className,
+        type: button.type, name: button.name, value: button.value, dataType: button.dataset.type,
+        selected: button.getAttribute('aria-pressed')}));
+}
+
 /** Replace the external HTTP/discovery boundary only. Router, query cancellation, command
  * lifecycle and rendered controls remain their production implementations. */
 async function mounted(component: Component, props: Record<string, unknown>,
     handler: (request: Request) => Promise<Response> = async request => json(region(request)),
-    path = '/frontend-pilot', previous = '/before') {
+    path = '/frontend-pilot', previous = '/before', shell?: Component) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
     const context = createPilotContext({session}, true, request);
     context.hydrated.value = true;
@@ -81,7 +139,7 @@ async function mounted(component: Component, props: Record<string, unknown>,
     ]});
     await router.push(previous);
     await router.push(path);
-    const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
+    const root = mount(shell ?? defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}],
             [I18NextVue, {i18next: context.i18next}]],
         provide: {[pilotContextKey as symbol]: context},
@@ -101,6 +159,288 @@ async function mounted(component: Component, props: Record<string, unknown>,
 }
 
 describe('visible resource recovery', () => {
+    it('keeps the real shell draft mounted through failed session Retry and healthy recovery', async () => {
+        vi.useFakeTimers({toFake: ['Date']});
+        const successfulTime = new Date('2026-10-11T08:20:00Z');
+        vi.setSystemTime(successfulTime);
+        let unavailable = false;
+        const draft = defineComponent({template: '<input data-session-draft value="Initial draft" />'});
+        const {root, context} = await mounted(draft, {}, async () => {
+            if (unavailable) throw new TypeError('The session connection failed.');
+            return json(session);
+        }, '/frontend-pilot', '/before', App);
+        const input = root.get<HTMLInputElement>('[data-session-draft]');
+        await input.setValue('Unsaved session recovery draft');
+        input.element.focus();
+        input.element.setSelectionRange(2, 9);
+        unavailable = true;
+        vi.setSystemTime(new Date('2026-10-11T08:20:30Z'));
+        await context.refreshSession().catch(() => {});
+        await flushPromises();
+        const warning = root.get('.pilot-page-notices .status-notice.alert-warning');
+        const retry = warning.get('button');
+        expect(retry.text()).toBe(context.messages.value.t('common.retry'));
+        expect(warning.text()).toContain(context.messages.value.t('state.stale'));
+        expect(warning.get('[data-last-successful-refresh] time').attributes('datetime')).toBe(successfulTime.toISOString());
+        expect(context.ready.value).toBe(true);
+
+        // The control invokes the actual shell/bootstrap owner. A second failure
+        // keeps one warning and the same successful receipt, draft and focus.
+        await retry.trigger('click');
+        await flushPromises();
+        expect(root.findAll('.pilot-page-notices .status-notice.alert-warning')).toHaveLength(1);
+        expect(warning.get('[data-last-successful-refresh] time').attributes('datetime')).toBe(successfulTime.toISOString());
+        expect(root.get('[data-session-draft]').element).toBe(input.element);
+        expect(input.element.value).toBe('Unsaved session recovery draft');
+        expect([input.element.selectionStart, input.element.selectionEnd]).toEqual([2, 9]);
+        expect(document.activeElement).toBe(input.element);
+
+        unavailable = false;
+        await retry.trigger('click');
+        await flushPromises();
+        expect(root.find('.pilot-page-notices .status-notice.alert-warning').exists()).toBe(false);
+        expect(root.get('[data-session-draft]').element).toBe(input.element);
+        expect(document.activeElement).toBe(input.element);
+    });
+
+    it('presents the real shell session deadline and prevents focus, timer and manual bypass', async () => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
+        vi.setSystemTime(new Date('2026-10-11T08:30:00Z'));
+        let limited = false;
+        let reads = 0;
+        const draft = defineComponent({template: '<input data-session-draft value="Retained draft" />'});
+        const {root, context} = await mounted(draft, {}, async () => {
+            reads++;
+            return limited ? new Response(JSON.stringify({type: 'urn:surveyor:problem:future-unavailable', title: 'Unavailable',
+                status: 503, detail: 'The session read is temporarily unavailable.', requestId: 'shell-session-deadline'}),
+                {status: 503, headers: {'Content-Type': 'application/json', 'Retry-After': '91'}}) : json(session);
+        }, '/frontend-pilot', '/before', App);
+        const stop = context.start();
+        cleanups.push(stop);
+        await context.refreshSession();
+        limited = true;
+        await context.refreshSession().catch(() => {});
+        await flushPromises();
+        const warning = root.get('.pilot-page-notices .status-notice.alert-warning');
+        const retry = warning.get('button');
+        const deadline = new Date(Date.now() + 91_000);
+        expect(warning.get('[data-read-retry-at] time').attributes('datetime')).toBe(deadline.toISOString());
+        expect(warning.text()).toContain('The session read is temporarily unavailable.');
+        expect(retry.attributes('disabled')).toBeDefined();
+        await retry.trigger('click');
+        window.dispatchEvent(new Event('focus'));
+        await vi.advanceTimersByTimeAsync(90_999);
+        await flushPromises();
+        expect(reads).toBe(2);
+        expect(context.ready.value).toBe(true);
+        expect(root.get('[data-session-draft]').element).toBeDefined();
+
+        limited = false;
+        await vi.advanceTimersByTimeAsync(2);
+        await flushPromises();
+        expect(warning.find('[data-read-retry-at]').exists()).toBe(false);
+        expect(retry.attributes('disabled')).toBeUndefined();
+        await retry.trigger('click');
+        await flushPromises();
+        expect(reads).toBe(3);
+        expect(root.find('.pilot-page-notices .status-notice.alert-warning').exists()).toBe(false);
+    });
+
+    it('preserves the native Filter disclosure, submit choices and English count caption', async () => {
+        const projection = {...region(new Request('http://localhost/overview')), q: 'fixture',
+            matchingEntities: 1, totalCards: 1, hasNext: false};
+        const native = nativeOverviewRegion(projection);
+        const nativeForm = native.querySelector<HTMLFormElement>('.js-overview-search')!;
+        const {wrapper} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+            async () => json(projection), '/frontend-pilot?owner_main_q=fixture');
+        const form = wrapper.get('form');
+        const trigger = form.get('summary');
+        const nativeTrigger = nativeForm.querySelector<HTMLElement>('.dropdown-toggle')!;
+        expect(trigger.attributes('role')).toBe(nativeTrigger.getAttribute('role') ?? nativeTrigger.tagName.toLowerCase());
+        expect(trigger.text()).toBe(nativeTrigger.textContent);
+        expect([...trigger.element.classList].sort()).toEqual([...nativeTrigger.classList].sort());
+        expect(trigger.find('i, .badge').exists()).toBe(false);
+        expect(form.find('ul.dropdown-menu > li > hr.dropdown-divider').exists()).toBe(true);
+        expect(filterChoices(form.element)).toEqual(filterChoices(nativeForm));
+        expect(form.get('[aria-live="polite"]').text()).toBe(nativeForm.querySelector('[aria-live="polite"]')!.textContent);
+        const search = form.get<HTMLButtonElement>('button[type="submit"]');
+        const nativeSearch = nativeForm.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+        expect([search.element.name, search.element.value]).toEqual([nativeSearch.name, nativeSearch.value]);
+        // No general clear action existed in the native toolbar. Selected-event recovery
+        // keeps its separate Show all my linked entities link below this form.
+        expect(form.find('a, select').exists()).toBe(false);
+
+        await trigger.trigger('keydown', {key: 'ArrowDown'});
+        expect(form.get<HTMLDetailsElement>('details').element.open).toBe(true);
+        await form.get('button[data-type="survey"]').trigger('click');
+        await flushPromises();
+        expect(form.get<HTMLDetailsElement>('details').element.open).toBe(false);
+    });
+
+    it.each([0, 2])('omits the native toolbar after confirming an unfiltered empty region (%s total entities)', async total => {
+        const projection = {...region(new Request('http://localhost/overview')), availableTypes: [], items: [],
+            totalEntities: total, hiddenEntities: total, regionEntities: 0, matchingEntities: 0,
+            totalCards: 0, hasNext: false};
+        const native = nativeOverviewRegion(projection);
+        const {wrapper} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async () => json(projection));
+        expect(native.querySelector('.js-overview-search')).toBeNull();
+        expect(wrapper.find('form').exists()).toBe(false);
+        const nativeNotice = native.querySelector('.status-notice')!.textContent;
+        expect(wrapper.text()).toContain(nativeNotice);
+    });
+
+    it.each([
+        {query: '   ', canonical: ''},
+        {query: ' fixture ', canonical: 'fixture'},
+    ])('renders the native canonical search from a bookmarked initial query $query', async value => {
+        const projection = {...region(new Request('http://localhost/overview')), q: value.canonical};
+        if (!projection.q) Object.assign(projection, {availableTypes: [], items: [], totalEntities: 0,
+            hiddenEntities: 0, regionEntities: 0, matchingEntities: 0, totalCards: 0, hasNext: false});
+        const native = nativeOverviewRegion(projection);
+        const {wrapper} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+            async () => json(projection), '/frontend-pilot?owner_main_q=' + encodeURIComponent(value.query));
+        expect(wrapper.find('form').exists()).toBe(!!native.querySelector('.js-overview-search'));
+        if (value.canonical) {
+            expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value)
+                .toBe(native.querySelector<HTMLInputElement>('input[type="search"]')!.value);
+        }
+    });
+
+    it('retains the focused search draft when its current manual Refresh confirms empty membership', async () => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'Date']});
+        const projection = {...region(new Request('http://localhost/overview')), availableTypes: [], items: [],
+            totalEntities: 0, hiddenEntities: 0, regionEntities: 0, matchingEntities: 0,
+            totalCards: 0, hasNext: false};
+        const authority = deferred<Response>();
+        let reads = 0;
+        async function read(request: Request): Promise<Response> {
+            reads++;
+            if (reads === 1) return json(region(request));
+            if (reads === 2) return authority.promise;
+            return json({...projection, q: new URL(request.url).searchParams.get('q') ?? ''});
+        }
+        const {wrapper, router, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, read);
+        const input = wrapper.get<HTMLInputElement>('input[type="search"]');
+        input.element.focus();
+        await input.setValue('early search');
+        input.element.setSelectionRange(1, 4);
+        // Input retires reads that started before this draft. The real Refresh
+        // starts afterward, so its empty projection is admitted by the same query
+        // observer rather than merely exercising cancellation of an obsolete GET.
+        await wrapper.findAll('button').find(button => button.text() === 'Refresh')!.trigger('click');
+        await flushPromises();
+        expect(reads).toBe(2);
+        authority.resolve(json(projection));
+        await flushPromises();
+        expect(context.queryClient.getQueryData(overviewKeys.region(session.context, 'en',
+            {collection: 'owner', region: 'main', q: undefined, type: undefined, page: undefined,
+                childPage: undefined, eventId: undefined}))).toEqual(projection);
+        expect(wrapper.get('[aria-live="polite"]').text()).toBe('0 matching entities');
+        expect(wrapper.get('input[type="search"]').element).toBe(input.element);
+        expect(input.element.value).toBe('early search');
+        expect(document.activeElement).toBe(input.element);
+        expect([input.element.selectionStart, input.element.selectionEnd]).toEqual([1, 4]);
+        await vi.advanceTimersByTimeAsync(300);
+        await flushPromises();
+        expect(router.currentRoute.value.query.owner_main_q).toBe('early search');
+        expect(wrapper.get('input[type="search"]').element).toBe(input.element);
+    });
+
+    it.each([
+        {query: '', draft: '   ', canonical: ''},
+        {query: 'fixture', draft: ' fixture ', canonical: 'fixture'},
+    ])('adopts the native canonical search after successful submission when the URL q remains $query', async value => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'Date']});
+        let initial = true;
+        let confirmed!: components['schemas']['OverviewRegion'];
+        async function read(request: Request): Promise<Response> {
+            const result = region(request);
+            if (initial) { initial = false; return json(result); }
+            confirmed = {...result, q: new URL(request.url).searchParams.get('q')?.trim() ?? ''};
+            if (!confirmed.q) confirmed = {...confirmed, availableTypes: [], items: [], totalEntities: 0,
+                hiddenEntities: 0, regionEntities: 0, matchingEntities: 0, totalCards: 0, hasNext: false};
+            return json(confirmed);
+        }
+        const path = '/frontend-pilot' + (value.query ? '?owner_main_q=' + value.query : '');
+        const {wrapper, router} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, read, path);
+        await wrapper.get('input[type="search"]').setValue(value.draft);
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(router.currentRoute.value.query.owner_main_q).toBe(value.canonical || undefined);
+        const native = nativeOverviewRegion(confirmed);
+        expect(wrapper.find('form').exists()).toBe(!!native.querySelector('.js-overview-search'));
+        if (value.canonical) {
+            expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value)
+                .toBe(native.querySelector<HTMLInputElement>('input[type="search"]')!.value);
+        }
+    });
+
+    it('keeps newer focused input when an older canonical search response finishes', async () => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'Date']});
+        const submitted = deferred<Response>();
+        let heldRequest!: Request;
+        async function read(request: Request): Promise<Response> {
+            if (new URL(request.url).searchParams.get('q') === ' fixture ') {
+                heldRequest = request;
+                return submitted.promise;
+            }
+            return json(region(request));
+        }
+        const {wrapper, router} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, read,
+            '/frontend-pilot?owner_main_q=fixture');
+        const input = wrapper.get<HTMLInputElement>('input[type="search"]');
+        input.element.focus();
+        await input.setValue(' fixture ');
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        await input.setValue('newer search');
+        input.element.setSelectionRange(1, 4);
+        submitted.resolve(json({...region(heldRequest), q: 'fixture'}));
+        await flushPromises();
+        expect(input.element.value).toBe('newer search');
+        expect(document.activeElement).toBe(input.element);
+        expect([input.element.selectionStart, input.element.selectionEnd]).toEqual([1, 4]);
+        await vi.advanceTimersByTimeAsync(300);
+        await flushPromises();
+        expect(router.currentRoute.value.query.owner_main_q).toBe('newer search');
+        expect(input.element.value).toBe('newer search');
+    });
+
+    it('renders the native canonical search after Back reuses equal raw and canonical cached projections', async () => {
+        const rawQuery = ' fixture ';
+        const previous = '/frontend-pilot?owner_main_q=' + encodeURIComponent(rawQuery);
+        async function read(request: Request): Promise<Response> {
+            const projection = region(request);
+            return json({...projection, q: projection.q.trim()});
+        }
+        const {wrapper, router, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, read,
+            previous + '&participant_main_q=other', previous);
+        const input = wrapper.get<HTMLInputElement>('input[type="search"]');
+        await input.setValue(rawQuery);
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(router.currentRoute.value.query.owner_main_q).toBe('fixture');
+        const parameters = {collection: 'owner' as const, region: 'main' as const, q: rawQuery,
+            type: undefined, page: undefined, childPage: undefined, eventId: undefined};
+        const rawKey = overviewKeys.region(session.context, 'en', parameters);
+        const canonicalKey = overviewKeys.region(session.context, 'en', {...parameters, q: 'fixture'});
+        const projection = context.queryClient.getQueryData<components['schemas']['OverviewRegion']>(rawKey)!;
+        // Normal navigation writes these equivalent observations. Exercise the
+        // actual cache transition without assuming cross-key object identity or
+        // injecting either entry into the production query lifecycle.
+        expect(context.queryClient.getQueryData(canonicalKey)).toEqual(projection);
+
+        router.back();
+        await flushPromises();
+        expect(router.currentRoute.value.query.owner_main_q).toBe(rawQuery);
+        await wrapper.findAll('button').find(button => button.text() === 'Refresh')!.trigger('click');
+        await flushPromises();
+        expect(context.queryClient.getQueryData(rawKey)).toBe(projection);
+        const native = nativeOverviewRegion(projection);
+        expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value)
+            .toBe(native.querySelector<HTMLInputElement>('input[type="search"]')!.value);
+    });
+
     it('renders event filters before discovery finishes and replaces only its loading rows', async () => {
         const authority = deferred<{items: typeof event[]; selected: typeof event; nextCursor: null}>();
         const search = vi.fn(() => authority.promise);
@@ -203,6 +543,642 @@ describe('selected-event authority', () => {
 });
 
 describe('native overview search and history', () => {
+    it('adopts clamped page and revoked-parent navigation before publishing history without another GET', async () => {
+        let reads = 0;
+        const {wrapper, router} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async request => {
+            reads++;
+            const desired = new URL(request.url).searchParams;
+            // A collection can shrink or revoke a grouped parent after its original cards
+            // rendered. The returned bounded state is the sole navigation authority.
+            if (desired.has('eventId')) return json({...eventRegion(request), eventId: null, parent: null,
+                items: [card], page: 1, childPage: 1});
+            if (desired.get('page') === '2') return json({...eventRegion(request), page: 1, hasNext: false});
+            return json(eventRegion(request));
+        });
+        await wrapper.get(`a[data-overview-event="${eventId}"]`).trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.query.owner_main_event).toBeUndefined();
+        expect(wrapper.text()).toContain(card.title);
+        expect(reads).toBe(2);
+        await wrapper.findAll('a').find(link => link.text() === 'Next')!.trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.query.owner_main_page).toBeUndefined();
+        expect(reads).toBe(3);
+    });
+
+    it('discards cached cards and their actions when an authoritative background refresh denies access', async () => {
+        let denied = false;
+        const {wrapper, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async request => {
+            if (denied) return new Response(JSON.stringify({type: 'about:blank', title: 'Not allowed', status: 403,
+                detail: 'Access changed.', requestId: 'overview-denial', code: 'FORBIDDEN',
+                messageKey: 'api:errors.FORBIDDEN', params: {}}), {status: 403,
+                headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context}});
+            return json(region(request));
+        });
+        expect(wrapper.text()).toContain(card.title);
+        denied = true;
+        await context.queryClient.refetchQueries({queryKey: overviewKeys.all(session.context), type: 'active'});
+        await flushPromises();
+        // A denied observer keeps its recoverable error, but no previously admitted
+        // data remains available to this or a later filter's presentation.
+        expect(context.queryClient.getQueryData(overviewKeys.region(session.context, 'en',
+            {collection: 'owner', region: 'main', q: undefined, type: undefined, page: undefined,
+                childPage: undefined, eventId: undefined}))).toBeUndefined();
+        expect(wrapper.text()).not.toContain(card.title);
+        expect(wrapper.findComponent(OverviewCard).exists()).toBe(false);
+        expect(wrapper.find('[data-last-successful-refresh]').exists()).toBe(false);
+    });
+
+    it.each([
+        {status: 401, representation: 'html'},
+        {status: 401, representation: 'malformed'},
+        {status: 401, representation: 'mismatched'},
+        {status: 403, representation: 'html'},
+        {status: 403, representation: 'malformed'},
+        {status: 403, representation: 'mismatched'},
+        {status: 404, representation: 'html'},
+        {status: 404, representation: 'malformed'},
+        {status: 404, representation: 'mismatched'},
+    ] as const)('retains confirmed cards and focused input after an unusable $status $representation read', async value => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
+        let unavailable = false;
+        const {wrapper, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async request => {
+            return unavailable ? readFailure(value.status, value.representation) : json(region(request));
+        });
+        const currentCard = wrapper.findComponent(OverviewCard).element;
+        const observedAt = new Date().toISOString();
+        const input = wrapper.get<HTMLInputElement>('input[type="search"]');
+        await input.setValue('Unsubmitted overview draft');
+        input.element.focus();
+        input.element.setSelectionRange(5, 12);
+
+        unavailable = true;
+        await context.queryClient.refetchQueries({queryKey: overviewKeys.all(session.context), type: 'active'});
+        await flushPromises();
+        expect(wrapper.findComponent(OverviewCard).element).toBe(currentCard);
+        expect(wrapper.text()).toContain(context.messages.value.t('state.stale'));
+        expect(wrapper.get('[data-last-successful-refresh] time').attributes('datetime')).toBe(observedAt);
+        expect(wrapper.get<HTMLInputElement>('input[type="search"]').element).toBe(input.element);
+        expect(input.element.value).toBe('Unsubmitted overview draft');
+        expect([input.element.selectionStart, input.element.selectionEnd]).toEqual([5, 12]);
+        expect(document.activeElement).toBe(input.element);
+        expect(context.ready.value).toBe(true);
+        expect(context.queryClient.getQueryData(overviewKeys.region(session.context, 'en',
+            {collection: 'owner', region: 'main', q: undefined, type: undefined, page: undefined,
+                childPage: undefined, eventId: undefined}))).toBeDefined();
+    });
+
+    it.each([401, 403, 404])('retires protected cards after a validated safe future denial and presents the next recovery deadline (%s)', async status => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
+        let stage: 'healthy' | 'denied' | 'limited' | 'recovering' = 'healthy';
+        const recovery = deferred<Response>();
+        let recoveryRequest!: Request;
+        const limitedStatus = status === 401 ? 429 : 503;
+        const detail = 'The next Overview read is temporarily unavailable.';
+        const {wrapper, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async current => {
+            if (stage === 'denied') return readFailure(status, 'future');
+            if (stage === 'limited') return new Response(JSON.stringify({type: 'about:blank', title: 'Unavailable',
+                status: limitedStatus, detail, requestId: 'overview-recovery-deadline'}), {status: limitedStatus,
+                headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context, 'Retry-After': '90'}});
+            if (stage === 'recovering') { recoveryRequest = current; return recovery.promise; }
+            return json(region(current));
+        });
+        expect(wrapper.findComponent(OverviewCard).exists()).toBe(true);
+        stage = 'denied';
+        await context.queryClient.refetchQueries({queryKey: overviewKeys.all(session.context), type: 'active'});
+        await flushPromises();
+        expect(wrapper.findComponent(OverviewCard).exists()).toBe(false);
+        expect(wrapper.find('[data-last-successful-refresh]').exists()).toBe(false);
+        expect(context.queryClient.getQueryData(overviewKeys.region(session.context, 'en',
+            {collection: 'owner', region: 'main', q: undefined, type: undefined, page: undefined,
+                childPage: undefined, eventId: undefined}))).toBeUndefined();
+        // Unknown machine codes retire the denied resource, never actor identity.
+        expect(context.ready.value).toBe(true);
+
+        // The barrier must not replace a newer failed GET's safe issue/deadline.
+        // Neither temporary failure nor its queued recovery restores private data.
+        stage = 'limited';
+        const retry = wrapper.findAll('button').find(button => button.text() === context.messages.value.t('common.retry'))!;
+        await retry.trigger('click');
+        await flushPromises();
+        expect(request).toHaveBeenCalledTimes(3);
+        expect(wrapper.get('[data-read-issue]').text()).toBe(detail);
+        expect(wrapper.get('[data-read-retry-at] time').attributes('datetime')).toBe(new Date(Date.now() + 90_000).toISOString());
+        expect(retry.attributes('disabled')).toBeDefined();
+        expect(wrapper.findComponent(OverviewCard).exists()).toBe(false);
+        expect(wrapper.find('[data-last-successful-refresh]').exists()).toBe(false);
+        await retry.trigger('click');
+        await vi.advanceTimersByTimeAsync(89_999);
+        await flushPromises();
+        expect(request).toHaveBeenCalledTimes(3);
+        expect(wrapper.findComponent(OverviewCard).exists()).toBe(false);
+
+        // The ordinary read observer can converge after the shared deadline. Its
+        // successful body, rather than expiry alone, releases the authority barrier.
+        stage = 'recovering';
+        await vi.advanceTimersByTimeAsync(2);
+        await flushPromises();
+        expect(request).toHaveBeenCalledTimes(4);
+        expect(wrapper.findComponent(OverviewCard).exists()).toBe(false);
+        recovery.resolve(json(region(recoveryRequest)));
+        await flushPromises();
+        expect(wrapper.findComponent(OverviewCard).exists()).toBe(true);
+        expect(wrapper.find('[data-read-issue]').exists()).toBe(false);
+        expect(wrapper.find('[data-read-retry-at]').exists()).toBe(false);
+        expect(request.mock.calls.every(([current]) => (current as Request).method === 'GET')).toBe(true);
+    });
+
+    it('retains the matching successful refresh time through equal reads and failed route fallback', async () => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
+        const initialTime = new Date('2026-10-11T07:00:00Z');
+        vi.setSystemTime(initialTime);
+        let unavailable = false;
+        const {wrapper, router, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async request => {
+            return unavailable ? readFailure(403, 'html') : json(region(request));
+        });
+        const initialKey = overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main',
+            q: undefined, type: undefined, page: undefined, childPage: undefined, eventId: undefined});
+        const snapshot = context.queryClient.getQueryData(initialKey);
+        const counts = wrapper.emitted('counts')?.length;
+        vi.setSystemTime(new Date('2026-10-11T07:00:20Z'));
+        unavailable = true;
+        await context.queryClient.refetchQueries({queryKey: overviewKeys.all(session.context), type: 'active'});
+        await flushPromises();
+        expect(wrapper.text()).toContain(context.messages.value.t('state.stale'));
+        expect(wrapper.get('[data-last-successful-refresh] time').attributes('datetime')).toBe(initialTime.toISOString());
+
+        // Structural sharing retains the data object. A later successful read still
+        // advances its receipt time without manufacturing another membership count.
+        const recoveredTime = new Date('2026-10-11T07:00:40Z');
+        vi.setSystemTime(recoveredTime);
+        unavailable = false;
+        await context.queryClient.refetchQueries({queryKey: overviewKeys.all(session.context), type: 'active'});
+        await flushPromises();
+        expect(context.queryClient.getQueryData(initialKey)).toBe(snapshot);
+        expect(wrapper.emitted('counts')?.length).toBe(counts);
+        expect(wrapper.find('[data-last-successful-refresh]').exists()).toBe(false);
+
+        // A committed history/header destination has no admitted data when its own
+        // read fails. The visible fallback and its date remain one scoped observation.
+        vi.setSystemTime(new Date('2026-10-11T07:01:00Z'));
+        unavailable = true;
+        await router.push('/frontend-pilot?owner_main_page=2');
+        await flushPromises();
+        expect(context.queryClient.getQueryData(overviewKeys.region(session.context, 'en',
+            {collection: 'owner', region: 'main', q: undefined, type: undefined, page: '2',
+                childPage: undefined, eventId: undefined}))).toBeUndefined();
+        expect(wrapper.findComponent(OverviewCard).exists()).toBe(true);
+        expect(wrapper.text()).toContain(context.messages.value.t('state.stale'));
+        expect(wrapper.get('[data-last-successful-refresh] time').attributes('datetime')).toBe(recoveredTime.toISOString());
+    });
+
+    it('shows no successful refresh time when the initial read never supplied a projection', async () => {
+        const {wrapper, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+            async () => readFailure(403, 'html'));
+        expect(wrapper.text()).toContain(context.messages.value.t('state.loadFailed'));
+        expect(wrapper.findComponent(OverviewCard).exists()).toBe(false);
+        expect(wrapper.find('[data-last-successful-refresh]').exists()).toBe(false);
+    });
+
+    it.each([400, 403])('recovers an unusable %s read through the mounted observer within the approved interval', async status => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
+        let unavailable = false;
+        const {wrapper, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async current => {
+            return unavailable ? readFailure(status, 'html') : json(region(current));
+        });
+        unavailable = true;
+        await context.queryClient.refetchQueries({queryKey: overviewKeys.all(session.context), type: 'active'});
+        await flushPromises();
+        expect(wrapper.text()).toContain(context.messages.value.t('state.stale'));
+        expect(request).toHaveBeenCalledTimes(2);
+        unavailable = false;
+
+        // No manual/focus request supplies recovery. The production observer's
+        // one interval must accept a fresh result and clear its own warning.
+        await vi.advanceTimersByTimeAsync(60_000);
+        await flushPromises();
+        expect(request.mock.calls.length).toBeGreaterThan(2);
+        expect(wrapper.text()).not.toContain(context.messages.value.t('state.stale'));
+        expect(wrapper.findComponent(OverviewCard).exists()).toBe(true);
+    });
+
+    it('stops automatic recovery for a validated input rejection while retaining readable cards', async () => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
+        let rejected = false;
+        const {wrapper, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async current => {
+            return rejected ? readFailure(400, 'future') : json(region(current));
+        });
+        rejected = true;
+        await context.queryClient.refetchQueries({queryKey: overviewKeys.all(session.context), type: 'active'});
+        await flushPromises();
+        expect(wrapper.text()).toContain(context.messages.value.t('state.stale'));
+        expect(wrapper.text()).toContain('Read access is unavailable.');
+        expect(wrapper.findComponent(OverviewCard).exists()).toBe(true);
+
+        await vi.advanceTimersByTimeAsync(60_000);
+        await flushPromises();
+        expect(request).toHaveBeenCalledTimes(2);
+    });
+
+    it('presents the validated query issue beside retained cards without an automatic retry loop', async () => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
+        let rejected = false;
+        const {wrapper, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async current => {
+            if (!rejected) return json(region(current));
+            return new Response(JSON.stringify({type: 'urn:surveyor:problem:validation-failed', title: 'Invalid query', status: 400,
+                detail: 'The filter was rejected.', requestId: 'overview-query-rejection', code: 'VALIDATION_FAILED',
+                messageKey: 'api:errors.VALIDATION_FAILED', params: {}}), {status: 400,
+                headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context}});
+        });
+        rejected = true;
+        await context.queryClient.refetchQueries({queryKey: overviewKeys.all(session.context), type: 'active'});
+        await flushPromises();
+        expect(wrapper.text()).toContain(context.messages.value.t('state.stale'));
+        expect(wrapper.text()).toContain(context.messages.value.t('api:errors.VALIDATION_FAILED'));
+        expect(wrapper.text()).not.toContain('The filter was rejected.');
+        expect(wrapper.findComponent(OverviewCard).exists()).toBe(true);
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(request).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([403, 404] as const)('retires denied region filter variants before a later navigation read (%s)', async status => {
+        const held = deferred<Response>();
+        let denied = false;
+        let destination!: Request;
+        const {wrapper, router, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async request => {
+            if (new URL(request.url).searchParams.get('q') !== 'initial') {
+                destination = request;
+                return held.promise;
+            }
+            if (denied) return new Response(JSON.stringify({type: 'about:blank', title: 'Unavailable', status,
+                detail: 'Access changed.', requestId: 'overview-region-denial',
+                code: status === 403 ? 'FORBIDDEN' : 'NOT_FOUND',
+                messageKey: status === 403 ? 'api:errors.FORBIDDEN' : 'api:errors.NOT_FOUND', params: {}}),
+                {status, headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context}});
+            return json(region(request));
+        }, '/frontend-pilot?owner_main_q=initial');
+        const oldVariant = overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main', q: 'older'});
+        const translated = overviewKeys.region(session.context, 'de', {collection: 'owner', region: 'main', q: 'older'});
+        const unrelated = overviewKeys.region(session.context, 'en', {collection: 'participant', region: 'hidden'});
+        const otherActor = overviewKeys.region('another-overview-actor-1234567890', 'en', {collection: 'owner', region: 'main', q: 'older'});
+        const snapshot = region(new Request('http://localhost/api/v1/overview'));
+        context.queryClient.setQueryData(oldVariant, {...snapshot, q: 'older', items: [{...card, title: 'Older private card'}]});
+        context.queryClient.setQueryData(translated, {...snapshot, q: 'older', items: [{...card, title: 'Translated private card'}]});
+        context.queryClient.setQueryData(unrelated, {...snapshot, collection: 'participant', region: 'hidden'});
+        context.queryClient.setQueryData(otherActor, snapshot);
+
+        denied = true;
+        await context.queryClient.refetchQueries({queryKey: overviewKeys.regionFamily(session.context, 'en', 'owner', 'main'), type: 'active'});
+        await flushPromises();
+        expect(context.queryClient.getQueryData(oldVariant)).toBeUndefined();
+        expect(context.queryClient.getQueryData(translated)).toBeUndefined();
+        expect(context.queryClient.getQueryData(unrelated)).toBeDefined();
+        expect(context.queryClient.getQueryData(otherActor)).toBeDefined();
+        expect(wrapper.text()).not.toContain(card.title);
+
+        await router.push('/frontend-pilot');
+        await flushPromises();
+        try {
+            // A Header/Back-owned route change starts a fresh read. Its empty error
+            // state must not resurrect lastConfirmed or another cached filter's cards.
+            expect(wrapper.text()).not.toContain(card.title);
+            expect(wrapper.text()).not.toContain('Older private card');
+            expect(wrapper.findComponent(OverviewCard).exists()).toBe(false);
+        } finally {
+            held.resolve(json({...region(destination), items: [{...card, title: 'Newly admitted card'}]}));
+            await flushPromises();
+        }
+        expect(wrapper.text()).toContain('Newly admitted card');
+        expect(context.queryClient.getQueryData(unrelated)).toBeDefined();
+        expect(context.queryClient.getQueryData(otherActor)).toBeDefined();
+    });
+
+    it('cancels a held region target on denial and restores the current observer only through a fresh read', async () => {
+        const held = deferred<Response>();
+        const unrelatedRead = deferred<components['schemas']['OverviewRegion']>();
+        const translatedRead = deferred<components['schemas']['OverviewRegion']>();
+        let target!: Request;
+        let denied = false;
+        const {wrapper, context, router} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async request => {
+            if (new URL(request.url).searchParams.get('page') === '2') { target = request; return held.promise; }
+            if (denied) return new Response(JSON.stringify({type: 'about:blank', title: 'Not allowed', status: 403,
+                detail: 'Access changed.', requestId: 'overview-held-denial', code: 'FORBIDDEN',
+                messageKey: 'api:errors.FORBIDDEN', params: {}}), {status: 403,
+                headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context}});
+            return json(region(request));
+        });
+        const independentKey = overviewKeys.region(session.context, 'en', {collection: 'participant', region: 'main'});
+        const independent = context.queryClient.fetchQuery({queryKey: independentKey,
+            queryFn: () => unrelatedRead.promise});
+        const translatedKey = overviewKeys.region(session.context, 'de', {collection: 'owner', region: 'main', q: 'older'});
+        // This response deliberately ignores cancellation, like the held HTTP target.
+        // Its retired query must still never regain a cache entry after it settles.
+        const translated = context.queryClient.fetchQuery({queryKey: translatedKey,
+            queryFn: () => translatedRead.promise}).catch(() => undefined);
+        await wrapper.findAll('a').find(link => link.text() === 'Next')!.trigger('click');
+        await flushPromises();
+        denied = true;
+        await context.queryClient.refetchQueries({queryKey: overviewKeys.regionFamily(session.context, 'en', 'owner', 'main'), type: 'active'});
+        await flushPromises();
+        expect(target.signal.aborted).toBe(true);
+        held.resolve(json({...region(target), items: [{...card, title: 'Obsolete target card'}]}));
+        unrelatedRead.resolve({...region(target), collection: 'participant'});
+        translatedRead.resolve({...region(target), items: [{...card, title: 'Obsolete translated card'}]});
+        await independent;
+        await translated;
+        await flushPromises();
+        expect(router.currentRoute.value.query.owner_main_page).toBeUndefined();
+        expect(wrapper.text()).not.toContain(card.title);
+        expect(wrapper.text()).not.toContain('Obsolete target card');
+        expect(context.queryClient.getQueryData(overviewKeys.region(session.context, 'en',
+            {collection: 'owner', region: 'main', q: undefined, type: undefined, page: '2',
+                childPage: undefined, eventId: undefined}))).toBeUndefined();
+        expect(context.queryClient.getQueryData(independentKey)).toBeDefined();
+        expect(context.queryClient.getQueryData(translatedKey)).toBeUndefined();
+
+        denied = false;
+        await wrapper.findAll('button').find(button => button.text() === context.messages.value.t('common.retry'))!.trigger('click');
+        await flushPromises();
+        expect(wrapper.text()).toContain(card.title);
+        expect(context.queryClient.getQueryData(overviewKeys.region(session.context, 'en',
+            {collection: 'owner', region: 'main', q: undefined, type: undefined, page: undefined,
+                childPage: undefined, eventId: undefined}))).toBeDefined();
+        expect(wrapper.text()).not.toContain(context.messages.value.t('state.loadFailed'));
+        expect(wrapper.text()).not.toContain(context.messages.value.t('state.stale'));
+    });
+
+    it.each(['closed', 'locale', 'departure'] as const)('retires a held Next on %s before cache/URL/focus publication', async retirement => {
+        const held = deferred<Response>();
+        let original!: Request;
+        const {wrapper, root, router, context, update} = await mounted(OverviewRegion,
+            {collection: 'owner', region: 'main', active: true}, async request => {
+                if (new URL(request.url).searchParams.get('page') === '2') { original = request; return held.promise; }
+                return json(region(request));
+            });
+        await wrapper.findAll('a').find(link => link.text() === 'Next')!.trigger('click');
+        await flushPromises();
+        if (retirement === 'closed') await update({active: false});
+        else if (retirement === 'locale') context.locale.value = 'de';
+        else await router.push('/before');
+        held.resolve(json({...region(original), items: [{...card, title: 'Retired target'}]}));
+        await flushPromises();
+        expect(router.currentRoute.value.query.owner_main_page).toBeUndefined();
+        expect(root.text()).not.toContain('Retired target');
+        expect(context.queryClient.getQueryData(overviewKeys.region(session.context, 'en',
+            {collection: 'owner', region: 'main', q: undefined, type: undefined, page: '2', childPage: undefined, eventId: undefined}))).toBeUndefined();
+    });
+
+    it('keeps Retry inside the shared server cooldown without issuing another requested-page read', async () => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
+        let nextReads = 0;
+        const {wrapper, context, router} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async request => {
+            if (new URL(request.url).searchParams.get('page') === '2') {
+                nextReads++;
+                if (nextReads === 1) return new Response('{}', {status: 429,
+                    headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context, 'Retry-After': '60'}});
+            }
+            return json(region(request));
+        });
+        await wrapper.findAll('a').find(link => link.text() === 'Next')!.trigger('click');
+        await flushPromises();
+        const retry = wrapper.findAll('button').find(button => button.text() === context.messages.value.t('common.retry'))!;
+        const deadline = new Date(Date.now() + 60_000).toISOString();
+        expect(wrapper.get('[data-read-retry-at] time').attributes('datetime')).toBe(deadline);
+        expect(retry.attributes('disabled')).toBeDefined();
+        await retry.trigger('click');
+        await wrapper.findAll('a').find(link => link.text() === 'Next')!.trigger('click');
+        await flushPromises();
+        expect(nextReads).toBe(1);
+        expect(router.currentRoute.value.query.owner_main_page).toBeUndefined();
+        await vi.advanceTimersByTimeAsync(60_001);
+        await flushPromises();
+        expect(wrapper.find('[data-read-retry-at]').exists()).toBe(false);
+        expect(retry.attributes('disabled')).toBeUndefined();
+        await retry.trigger('click');
+        await flushPromises();
+        expect(nextReads).toBe(2);
+        expect(router.currentRoute.value.query.owner_main_page).toBe('2');
+    });
+
+    it('keeps readable cards after failed Back-owned reads and admits no actions from that retained projection', async () => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
+        let failing = true;
+        const {wrapper, router, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async request => {
+            if (new URL(request.url).searchParams.get('page') === '2' && failing) throw new TypeError('Page unavailable');
+            return json(region(request));
+        });
+        const outside = document.createElement('button');
+        document.body.append(outside);
+        outside.focus();
+        await router.push('/frontend-pilot?owner_main_page=2');
+        await flushPromises();
+        expect(wrapper.text()).toContain(card.title);
+        expect(document.activeElement).toBe(outside);
+        await vi.advanceTimersByTimeAsync(3100);
+        await flushPromises();
+        expect(router.currentRoute.value.query.owner_main_page).toBe('2');
+        expect(wrapper.text()).toContain(card.title);
+        expect(wrapper.text()).toContain(context.messages.value.t('state.stale'));
+        const cardActions = wrapper.findComponent(OverviewCard).findAll('.dropdown-item');
+        expect(cardActions.length).toBeGreaterThan(0);
+        expect(cardActions.every(button => button.attributes('disabled') !== undefined)).toBe(true);
+        expect(document.activeElement).toBe(outside);
+
+        failing = false;
+        await wrapper.findAll('button').find(button => button.text() === context.messages.value.t('common.retry'))!.trigger('click');
+        await flushPromises();
+        expect(wrapper.text()).not.toContain(context.messages.value.t('state.stale'));
+        expect(document.activeElement).toBe(wrapper.get('.js-overview-heading').element);
+    });
+
+    it('keeps failed Next cards/URL/focus and retries its target once before creating a history entry', async () => {
+        const held = deferred<Response>();
+        let nextReads = 0;
+        let target!: Request;
+        const {wrapper, router, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async request => {
+            if (new URL(request.url).searchParams.get('page') === '2') {
+                target = request;
+                nextReads++;
+                if (nextReads === 1) return held.promise;
+            }
+            return json(region(request));
+        });
+        const original = router.currentRoute.value.fullPath;
+        const next = wrapper.findAll('a').find(link => link.text() === 'Next')!;
+        (next.element as HTMLElement).focus();
+        await next.trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.fullPath).toBe(original);
+        expect(wrapper.text()).toContain(card.title);
+        expect(document.activeElement).toBe(next.element);
+        expect(wrapper.find('[data-loading-skeleton]').exists()).toBe(false);
+
+        // A temporary read failure retains cards. A confirmed 403/404 instead retires
+        // the region's private projections, covered by the denial cases above.
+        held.resolve(new Response('{}', {status: 429,
+            headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context}}));
+        await flushPromises();
+        expect(router.currentRoute.value.fullPath).toBe(original);
+        expect(wrapper.text()).toContain(card.title);
+        expect(wrapper.text()).toContain(context.messages.value.t('state.stale'));
+        expect(document.activeElement).toBe(next.element);
+        expect(new URL(target.url).searchParams.get('page')).toBe('2');
+
+        await wrapper.findAll('button').find(button => button.text() === context.messages.value.t('common.retry'))!.trigger('click');
+        await flushPromises();
+        expect(nextReads).toBe(2);
+        expect(router.currentRoute.value.query.owner_main_page).toBe('2');
+        expect(document.activeElement).toBe(wrapper.get('.js-overview-heading').element);
+        expect(wrapper.text()).not.toContain(context.messages.value.t('state.stale'));
+        router.back();
+        await flushPromises();
+        expect(router.currentRoute.value.fullPath).toBe(original);
+        router.back();
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/before');
+    });
+
+    it('keeps the captured event href for modified clicks and restores origin focus/scroll after its Back read', async () => {
+        const scroll = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+        vi.spyOn(window, 'scrollY', 'get').mockReturnValue(640);
+        const {wrapper, router} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+            async request => json(eventRegion(request)));
+        const origin = wrapper.get<HTMLAnchorElement>(`a[data-overview-event="${eventId}"]`);
+        const modified = new MouseEvent('click', {bubbles: true, cancelable: true, metaKey: true});
+        origin.element.dispatchEvent(modified);
+        expect(modified.defaultPrevented).toBe(false);
+        await flushPromises();
+        expect(router.currentRoute.value.query.owner_main_event).toBeUndefined();
+
+        await origin.trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.query.owner_main_event).toBe(eventId);
+        expect(document.activeElement).toBe(wrapper.get('.js-overview-heading').element);
+        const back = wrapper.findAll('a').find(link => link.text() === 'Back to overview')!;
+        const ctrlBack = new MouseEvent('click', {bubbles: true, cancelable: true, ctrlKey: true});
+        back.element.dispatchEvent(ctrlBack);
+        expect(ctrlBack.defaultPrevented).toBe(false);
+        await back.trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.query.owner_main_event).toBeUndefined();
+        expect(document.activeElement).toBe(wrapper.get(`a[data-overview-event="${eventId}"]`).element);
+        expect(scroll).toHaveBeenCalledWith({top: 640, behavior: 'instant'});
+    });
+
+    it('retires a held Next before input debounce and merges only its successful region into the latest route', async () => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
+        const held = deferred<Response>();
+        let stale!: Request;
+        const {wrapper, router, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async request => {
+            if (new URL(request.url).searchParams.get('page') === '2') { stale = request; return held.promise; }
+            return json(region(request));
+        });
+        await wrapper.findAll('a').find(link => link.text() === 'Next')!.trigger('click');
+        await flushPromises();
+        await router.replace({query: {participant_main_q: 'another region'}});
+        const input = wrapper.get<HTMLInputElement>('input[type="search"]');
+        input.element.focus();
+        await input.setValue('latest');
+        input.element.setSelectionRange(1, 3);
+        held.resolve(json({...region(stale), items: [{...card, title: 'Obsolete page'}]}));
+        await flushPromises();
+        expect(router.currentRoute.value.query.owner_main_page).toBeUndefined();
+        expect(wrapper.text()).not.toContain('Obsolete page');
+        await vi.advanceTimersByTimeAsync(300);
+        await flushPromises();
+        expect(router.currentRoute.value.query).toEqual({participant_main_q: 'another region', owner_main_q: 'latest'});
+        expect(document.activeElement).toBe(input.element);
+        expect([input.element.selectionStart, input.element.selectionEnd]).toEqual([1, 3]);
+        expect(context.queryClient.getQueryData(overviewKeys.region(session.context, 'en',
+            {collection: 'owner', region: 'main', q: undefined, type: undefined, page: '2', childPage: undefined, eventId: undefined}))).toBeUndefined();
+    });
+
+    it('preserves native modified-click destinations without changing the current region or reading another page', async () => {
+        const {wrapper, router, request, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+            async request => json(eventRegion(request)), '/frontend-pilot?owner_main_q=fixture&owner_main_event=' + eventId);
+        const original = router.currentRoute.value.fullPath;
+        const labels = [context.messages.value.t('overview.next'), context.messages.value.t('overview.showAllLinked')];
+        const links = wrapper.findAll('a').filter(link => labels.includes(link.text()));
+        expect(links).toHaveLength(2);
+
+        for (const link of links) {
+            for (const modifier of ['ctrlKey', 'metaKey', 'shiftKey', 'altKey']) {
+                const click = new MouseEvent('click', {bubbles: true, cancelable: true, [modifier]: true});
+                link.element.dispatchEvent(click);
+                expect(click.defaultPrevented).toBe(false);
+                await flushPromises();
+                expect(router.currentRoute.value.fullPath).toBe(original);
+            }
+        }
+        expect(request).toHaveBeenCalledOnce();
+    });
+
+    it('preserves a modified Archived and hidden link and opens it only on an ordinary click', async () => {
+        const {wrapper, router, context} = await mounted(OverviewPage, {});
+        const toggle = wrapper.findAll('a').find(link => link.text().startsWith(context.messages.value.t('overview.hidden')))!;
+        const click = new MouseEvent('click', {bubbles: true, cancelable: true, ctrlKey: true});
+        toggle.element.dispatchEvent(click);
+        expect(click.defaultPrevented).toBe(false);
+        await flushPromises();
+        expect(router.currentRoute.value.query.owner_hidden_open).toBeUndefined();
+
+        await toggle.trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.query.owner_hidden_open ?? router.currentRoute.value.query.participant_hidden_open).toBe('1');
+    });
+
+    it('uses one native close target that clears hidden parent/child paging and preserves independent filters', async () => {
+        const {wrapper, router, context} = await mounted(OverviewPage, {}, undefined,
+            `/frontend-pilot?owner_hidden_open=1&owner_hidden_event=${eventId}&owner_hidden_childPage=3&owner_hidden_q=saved&owner_main_page=2&participant_main_q=other`);
+        const toggle = wrapper.findAll('a').find(link => link.text().startsWith(context.messages.value.t('overview.hidden'))
+            && link.attributes('aria-controls') === 'overview-owner-hidden')!;
+        const href = new URL(toggle.attributes('href')!, 'https://surveyor.invalid');
+        expect(href.searchParams.has('owner_hidden_open')).toBe(false);
+        expect(href.searchParams.has('owner_hidden_event')).toBe(false);
+        expect(href.searchParams.has('owner_hidden_childPage')).toBe(false);
+        await toggle.trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.query).toEqual({owner_hidden_q: 'saved', owner_main_page: '2', participant_main_q: 'other'});
+    });
+
+    it('retains native hidden disclosure in saved and committed navigation from a selected-event deep link', async () => {
+        const {wrapper, router, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'hidden'},
+            async request => json({...eventRegion(request), region: 'hidden', hiddenEntities: 2}),
+            `/frontend-pilot?owner_hidden_event=${eventId}&participant_main_q=other`);
+        const back = wrapper.findAll('a').find(link => link.text() === 'Back to overview')!;
+        const href = new URL(back.attributes('href')!, 'https://surveyor.invalid');
+        expect(href.searchParams.get('owner_hidden_open')).toBe('1');
+        expect(href.searchParams.has('owner_hidden_event')).toBe(false);
+        await back.trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.query).toEqual({participant_main_q: 'other', owner_hidden_open: '1'});
+        expect(request).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps read recovery in its region after failed manual Refresh and clears it after success', async () => {
+        vi.useFakeTimers();
+        let failRead = false;
+        const {wrapper, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async request => {
+            if (failRead) throw new TypeError('Fixture overview connection failed');
+            return json(region(request));
+        });
+        const refresh = wrapper.findAll('button').find(button => button.text() === 'Refresh')!;
+        failRead = true;
+        await refresh.trigger('click');
+        await flushPromises();
+        // Exercise the production bounded network retry interval before its final
+        // failure becomes authoritative; do not replace the query's retry policy.
+        await vi.advanceTimersByTimeAsync(3100);
+        expect(wrapper.text()).toContain(card.title);
+        expect(wrapper.text()).toContain(context.messages.value.t('state.stale'));
+
+        failRead = false;
+        await refresh.trigger('click');
+        await flushPromises();
+        expect(wrapper.text()).toContain(card.title);
+        expect(wrapper.text()).not.toContain(context.messages.value.t('state.stale'));
+    });
+
     it('resumes a cancelled read when quick typing returns to the original search', async () => {
         vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
         const {wrapper, router, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'});
@@ -212,7 +1188,7 @@ describe('native overview search and history', () => {
         await input.setValue('');
         await vi.advanceTimersByTimeAsync(300);
         await flushPromises();
-        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot');
+        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot#overview-owner-main');
         expect(request).toHaveBeenCalledTimes(2);
         expect(wrapper.text()).toContain('Latest survey');
     });
@@ -301,5 +1277,80 @@ describe('native overview search and history', () => {
         await flushPromises();
         expect(router.currentRoute.value.query.owner_main_event).toBeUndefined();
         expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value).toBe('during Back');
+    });
+});
+
+describe('shared native disclosure interaction', () => {
+    it('dismisses outside Tab/focus and pointer actions without stealing focus, and keeps native fields mounted', async () => {
+        const host = defineComponent({components: {AppNavigationDropdown}, template: `
+            <div><AppNavigationDropdown label="First" icon="bi-plus">
+                <li><a class="dropdown-item" href="/first">First action</a></li>
+                <li><form><input aria-label="Menu draft" value="preserved" />
+                    <select aria-label="Profile"><option>One</option><option>Two</option></select></form></li>
+                </AppNavigationDropdown><AppNavigationDropdown label="Second" icon="bi-plus">
+                <li><a class="dropdown-item" href="/second">Second action</a></li>
+                </AppNavigationDropdown><button id="outside">Outside</button></div>`});
+        const {wrapper} = await mounted(host, {});
+        const menus = wrapper.findAll('details');
+        const first = menus[0]!;
+        const field = first.get<HTMLInputElement>('input');
+        await first.get('summary').trigger('keydown', {key: 'ArrowDown'});
+        expect((first.element as HTMLDetailsElement).open).toBe(true);
+        field.element.focus();
+        await field.setValue('retained draft');
+        const nativeArrow = new KeyboardEvent('keydown', {bubbles: true, cancelable: true, key: 'ArrowDown'});
+        first.get('select').element.dispatchEvent(nativeArrow);
+        expect(nativeArrow.defaultPrevented).toBe(false);
+
+        const outside = wrapper.get<HTMLButtonElement>('#outside');
+        outside.element.focus();
+        await outside.trigger('keyup', {key: 'Tab'});
+        expect((first.element as HTMLDetailsElement).open).toBe(false);
+        expect(document.activeElement).toBe(outside.element);
+        expect(first.get('input').element).toBe(field.element);
+        expect(field.element.value).toBe('retained draft');
+
+        await first.get('summary').trigger('keydown', {key: 'ArrowDown'});
+        menus[1]!.get<HTMLElement>('summary').element.focus();
+        await menus[1]!.get('summary').trigger('keydown', {key: 'ArrowDown'});
+        expect((first.element as HTMLDetailsElement).open).toBe(false);
+        expect((menus[1]!.element as HTMLDetailsElement).open).toBe(true);
+        await outside.trigger('pointerdown');
+        expect((menus[1]!.element as HTMLDetailsElement).open).toBe(false);
+        // Closed disclosures do not consume Escape belonging to another interaction.
+        const escape = new KeyboardEvent('keydown', {bubbles: true, cancelable: true, key: 'Escape'});
+        outside.element.dispatchEvent(escape);
+        expect(escape.defaultPrevented).toBe(false);
+    });
+
+    it('uses the same disclosure owner for Overview actions and restores the actual trigger on Escape', async () => {
+        const {wrapper, update} = await mounted(OverviewCard, {card});
+        const menu = wrapper.get('details');
+        const trigger = menu.get<HTMLElement>('summary');
+        const nativeTrigger = nativeOverviewRegion(region(new Request('http://localhost/overview')))
+            .querySelector<HTMLElement>('.js-item .dropdown-toggle')!;
+        expect(trigger.attributes('role')).toBe(nativeTrigger.getAttribute('role') ?? nativeTrigger.tagName.toLowerCase());
+        expect(trigger.attributes('aria-label')).toBe(nativeTrigger.getAttribute('aria-label'));
+        await trigger.trigger('keydown', {key: 'ArrowDown'});
+        expect(document.activeElement).toBe(menu.findAll('button')[0]!.element);
+        await menu.trigger('keydown', {key: 'Escape'});
+        expect((menu.element as HTMLDetailsElement).open).toBe(false);
+        expect(document.activeElement).toBe(trigger.element);
+        expect(wrapper.findComponent(AppNavigationDropdown).exists()).toBe(true);
+
+        // Bootstrap's native card menu also closes after an ordinary action button.
+        // The shared disclosure changes presentation only; the card still emits one
+        // feature action and disabled controls retain the enclosing command guard.
+        await trigger.trigger('keydown', {key: 'ArrowDown'});
+        const action = menu.findAll<HTMLButtonElement>('button')[0]!;
+        action.element.click();
+        await nextTick();
+        expect((menu.element as HTMLDetailsElement).open).toBe(false);
+        expect(wrapper.emitted('visibility')).toEqual([['hidden']]);
+        await update({disabled: true});
+        await trigger.trigger('keydown', {key: 'ArrowDown'});
+        action.element.click();
+        await nextTick();
+        expect(wrapper.emitted('visibility')).toEqual([['hidden']]);
     });
 });

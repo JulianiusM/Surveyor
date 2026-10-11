@@ -4,6 +4,9 @@ import {ApiProblem, handleApiProblem, requestLocale} from '../../src/modules/api
 import {contractValidator} from '../../src/modules/api/contracts';
 import {createTranslator} from '../../src/modules/localization/translator';
 import {ExpectedError, ValidationError} from '../../src/modules/lib/errors';
+import {frontendIdentityProblemKey} from '../../src/modules/lib/frontendIdentity';
+import {loginUser, registerUser, resetPassword} from '../../src/controller/userController';
+import {preparePackingMetadataPatch} from '../../src/modules/packing/api';
 
 /** Only request data used by the pure negotiation/error boundary is present; no application or database starts. */
 function request(options: {header?: string; cookie?: unknown; languages?: string[]; context?: string} = {}): Request {
@@ -52,6 +55,89 @@ describe('API request locale negotiation', () => {
 });
 
 describe('validated API problem output', () => {
+    it('retains the original capacity wording while keeping the versioned parameter envelope', () => {
+        const itemId = 'd506d78a-e2d7-4be9-bc95-04d83bbd22ec';
+        const result = respond(new ApiProblem('PACKING_ITEM_FULL', {itemId}), request({header: 'en'}));
+        expect(result.body).toMatchObject({code: 'PACKING_ITEM_FULL', status: 409,
+            messageKey: 'api:errors.PACKING_ITEM_FULL', params: {itemId},
+            detail: 'This packing item is already fully assigned'});
+        expect(contractValidator('Problem')(result.body)).toBe(true);
+    });
+
+    it('retains the original parent-change wording without changing its typed conflict', () => {
+        const result = respond(new ApiProblem('ENTITY_CONTEXT_CHANGED'), request({header: 'en'}));
+        expect(result.body).toMatchObject({code: 'ENTITY_CONTEXT_CHANGED', status: 409,
+            messageKey: 'api:errors.ENTITY_CONTEXT_CHANGED', params: {},
+            detail: 'The linked event changed. Reload and try again.'});
+        expect(contractValidator('Problem')(result.body)).toBe(true);
+    });
+
+    it('keeps versioned metadata validation bounded instead of publishing native structural prose', () => {
+        try {
+            preparePackingMetadataPatch({description: 'D'.repeat(16001)});
+            throw new Error('Invalid versioned metadata was accepted');
+        } catch (error) {
+            const result = respond(error, request({header: 'en'}));
+            expect(result.body).toMatchObject({code: 'VALIDATION_FAILED', status: 400,
+                detail: 'Check the submitted values.', fieldErrors: [{pointer: '/description', code: 'invalid'}]});
+            expect(contractValidator('Problem')(result.body)).toBe(true);
+            expect(JSON.stringify(result.body)).not.toContain('16000 characters');
+        }
+    });
+
+    it('keeps the versioned sparse-patch rule closed to undefined-only internal inputs', () => {
+        // JSON cannot encode undefined; the versioned wrapper treats it as omitted.
+        // Native's distinct optional own-key tracking update must never weaken this boundary.
+        expect(() => preparePackingMetadataPatch({description: undefined}))
+            .toThrow(expect.objectContaining({code: 'VALIDATION_FAILED', status: 400}));
+    });
+
+    it('retains native controller validation wording, cause and renderer data from the shared catalog', async () => {
+        // These production early-rejection paths require no persistence or mail.
+        // Literal expectations remain independent of the catalog implementation.
+        await expect(loginUser({username: '', password: ''}, {} as Request['session'])).rejects.toMatchObject({
+            message: 'Invalid username/email or password', cause: 'INVALID_CREDENTIALS', template: 'users/login', data: {username: ''},
+        });
+        await expect(registerUser({username: 'entered', displayname: 'Entered name', email: 'entered@example.invalid',
+            password: 'First-password!A1', password_repeat: 'Second-password!A1'})).rejects.toMatchObject({
+            message: 'Passwords do not match.', cause: 'PASSWORD_MISMATCH', template: 'users/register',
+            data: {username: 'entered', email: 'entered@example.invalid'},
+        });
+        await expect(resetPassword('unread-token', {password: 'first', confirmPassword: 'second'})).rejects.toMatchObject({
+            message: 'Passwords do not match!', cause: 'PASSWORD_MISMATCH', template: 'users/reset-password', data: {token: 'unread-token'},
+        });
+    });
+
+    it.each([
+        ['login', 'INVALID_CREDENTIALS', 'Invalid username/email or password'],
+        ['login', 'ACCOUNT_INACTIVE', 'User not activated.'],
+        ['login', 'ACTIVATION_RESENT', 'User not activated. The activation link has expired. A new one has been sent to your email account.'],
+        ['register', 'PASSWORD_MISMATCH', 'Passwords do not match.'],
+        ['register', 'USERNAME_TAKEN', 'This username is already taken.'],
+        ['reset', 'PASSWORD_MISMATCH', 'Passwords do not match!'],
+        ['reset', 'TOKEN_INVALID', 'Invalid or expired token'],
+        ['activate', 'TOKEN_INVALID', 'Invalid or expired token'],
+        ['login', 'LOCAL_LOGIN_DISABLED', 'Login is not enabled!'],
+        ['register', 'LOCAL_LOGIN_DISABLED', 'Login is not enabled!'],
+        ['forgot', 'LOCAL_LOGIN_DISABLED', 'Login is not enabled!'],
+        ['reset', 'LOCAL_LOGIN_DISABLED', 'Login is not enabled!'],
+        ['activate', 'LOCAL_LOGIN_DISABLED', 'Login is not enabled!'],
+    ] as const)('retains native %s/%s presentation independently of its API transport message', (operation, code, nativeMessage) => {
+        const key = frontendIdentityProblemKey(operation, code);
+        expect(key).toBeDefined();
+        expect(createTranslator('en').t(key!)).toBe(nativeMessage);
+        // The presentation owner never alters stable status/code or emits private
+        // renderer values. German remains catalog-owned rather than raw exception prose.
+        expect(respond(new ApiProblem(code), request()).body).toMatchObject({code});
+        expect(createTranslator('de').t(key!)).not.toBe(nativeMessage);
+    });
+
+    it('leaves unrelated and future operation/code pairs to their ordinary problem projection', () => {
+        expect(frontendIdentityProblemKey('forgot', 'TOKEN_INVALID')).toBeUndefined();
+        expect(frontendIdentityProblemKey('login', 'INTERNAL_ERROR')).toBeUndefined();
+        expect(frontendIdentityProblemKey('reset', 'FORBIDDEN')).toBeUndefined();
+    });
+
     it.each([
         ['INVALID_CREDENTIALS', 401], ['ACCOUNT_INACTIVE', 403], ['ACTIVATION_RESENT', 403],
         ['USERNAME_TAKEN', 409], ['PASSWORD_MISMATCH', 400], ['TOKEN_INVALID', 401],

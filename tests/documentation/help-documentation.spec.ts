@@ -22,11 +22,11 @@ import {
     fetchHelpIndex,
     getHelpDocsBasePath,
     renderTrustedHelpMarkdown,
-    resolveContextualHelpUrl,
     resolveHelpAssetPath,
     searchHelpDocuments,
     validateTrustedHelpMarkdown,
 } from '../../src/controller/helpController';
+import {resolveContextualHelpUrl} from '../../src/modules/lib/helpNavigation';
 
 const repositoryRoot = process.cwd();
 

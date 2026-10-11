@@ -37,6 +37,7 @@ afterEach(async () => {
     for (const cleanup of cleanups.splice(0)) await cleanup();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
     document.body.innerHTML = '';
 });
 
@@ -92,6 +93,60 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
 }
 
 describe('help and overview progressive content', () => {
+    it.each([429, 503])('shows Help read timing and recovers the retained article without navigation or draft loss (%s)', async status => {
+        vi.useFakeTimers();
+        vi.setSystemTime(Date.UTC(2026, 9, 11, 6, 0, 0));
+        let unavailable = true;
+        const issue = {type: 'urn:future:read', title: 'Temporary read failure', status,
+            detail: 'Please wait before reading this guide again.', requestId: 'help-read-retry'};
+        const {wrapper, context, request} = await mounted('/frontend-pilot/help', async () => unavailable
+            ? new Response(JSON.stringify(issue), {status, headers: {'Content-Type': 'application/problem+json',
+                'X-Surveyor-Context': session.context, 'Retry-After': '5'}})
+            : json(article()), {initialUrl: '/frontend-pilot/help', help: article()});
+        const content = wrapper.get('.help-content').element;
+        const input = wrapper.get<HTMLInputElement>('#pilot-help-search');
+        await input.setValue('Help recovery draft');
+        input.element.focus();
+        await context.queryClient.refetchQueries({type: 'active'});
+        await flushPromises();
+        const retry = wrapper.findAll('button').find(button => button.text() === context.messages.value.t('common.retry'))!;
+        expect(retry.attributes('disabled')).toBeDefined();
+        expect(wrapper.get('[data-read-retry-at] time').attributes('datetime')).toBe('2026-10-11T06:00:05.000Z');
+        expect(wrapper.get('[data-read-issue]').text()).toBe(issue.detail);
+        expect(wrapper.get('[data-last-successful-refresh] time').attributes('datetime')).toBe('2026-10-11T06:00:00.000Z');
+        await retry.trigger('click');
+        expect(request).toHaveBeenCalledOnce();
+        await vi.advanceTimersByTimeAsync(5001);
+        await flushPromises();
+        expect(retry.attributes('disabled')).toBeUndefined();
+        expect(wrapper.find('[data-read-retry-at]').exists()).toBe(false);
+        unavailable = false;
+        await retry.trigger('click');
+        await flushPromises();
+        expect(request).toHaveBeenCalledTimes(2);
+        expect(request.mock.calls.every(([read]) => (read as Request).method === 'GET')).toBe(true);
+        expect(wrapper.find('[data-read-issue]').exists()).toBe(false);
+        expect(wrapper.get('.help-content').element).toBe(content);
+        expect(input.element.value).toBe('Help recovery draft');
+        expect(document.activeElement).toBe(input.element);
+    });
+
+    it('explains a validated Help query rejection and offers deliberate recovery without an automatic loop', async () => {
+        const issue = {type: 'urn:future:read', title: 'Query rejected', status: 400,
+            detail: '<em>Use a supported query.</em>', requestId: 'help-validation'};
+        let rejected = true;
+        const {wrapper, context, request} = await mounted('/frontend-pilot/help', async () => json(rejected ? issue : article(), rejected ? 400 : 200));
+        expect(wrapper.get('[data-read-issue]').text()).toBe(issue.detail);
+        expect(wrapper.find('[data-read-issue] em').exists()).toBe(false);
+        expect(wrapper.find('[data-last-successful-refresh]').exists()).toBe(false);
+        expect(request).toHaveBeenCalledOnce();
+        rejected = false;
+        await wrapper.findAll('button').find(button => button.text() === context.messages.value.t('common.retry'))!.trigger('click');
+        await flushPromises();
+        expect(request).toHaveBeenCalledTimes(2);
+        expect(wrapper.get('.help-content').text()).toContain('English article authority');
+    });
+
     it('keeps complete help readable in SSR and renders only missing overview regions as placeholders', async () => {
         const request = vi.fn(() => { throw new Error('SSR must not call its own HTTP server'); });
         vi.stubGlobal('fetch', request);
@@ -129,6 +184,8 @@ describe('help and overview progressive content', () => {
     });
 
     it('keeps confirmed help and its draft visible during a failed background read', async () => {
+        const confirmedAt = Date.UTC(2026, 9, 11, 6, 0, 0);
+        const clock = vi.spyOn(Date, 'now').mockReturnValue(confirmedAt);
         const pending = deferred<Response>();
         const {wrapper, context} = await mounted('/frontend-pilot/help', () => pending.promise,
             {initialUrl: '/frontend-pilot/help', help: article()});
@@ -142,11 +199,15 @@ describe('help and overview progressive content', () => {
         expect(wrapper.find('[data-loading-skeleton]').exists()).toBe(false);
         expect(wrapper.get('.col-lg-9').attributes('aria-busy')).toBe('true');
 
+        // The failed retry's clock cannot make retained article data look newer.
+        clock.mockReturnValue(confirmedAt + 10_000);
         pending.resolve(json(problem, 400));
         await refresh;
         await flushPromises();
         expect(wrapper.get('.help-content').element).toBe(content);
-        expect(wrapper.text()).toContain(context.messages.value.t('state.loadFailed'));
+        expect(wrapper.text()).toContain(context.messages.value.t('state.stale'));
+        expect(wrapper.get('[data-last-successful-refresh] time').attributes('datetime'))
+            .toBe('2026-10-11T06:00:00.000Z');
         expect(wrapper.find('[data-loading-skeleton]').exists()).toBe(false);
         expect(input.element.value).toBe('Retained draft');
         expect(document.activeElement).toBe(input.element);
@@ -198,14 +259,19 @@ describe('help and overview progressive content', () => {
         expect(ownerView.find('[data-loading-skeleton]').exists()).toBe(false);
         expect(participantView.find('[data-loading-skeleton="cards"]').exists()).toBe(true);
         expect(wrapper.findAll('.accordion-button .badge').map(badge => badge.text())).toEqual(['…', '1']);
+        expect(participantView.get<HTMLInputElement>('input[type="search"]').element).toBe(input.element);
+        expect(document.activeElement).toBe(input.element);
 
         participant.resolve(json(region('participant')));
         await flushPromises();
         expect(participantView.find('[data-loading-skeleton]').exists()).toBe(false);
         expect(participantView.text()).toContain(context.messages.value.t('overview.emptyParticipant'));
         expect(wrapper.findAll('.accordion-button .badge').map(badge => badge.text())).toEqual(['0', '1']);
-        expect(participantView.get<HTMLInputElement>('input[type="search"]').element).toBe(input.element);
-        expect(document.activeElement).toBe(input.element);
+        // Initial authority now confirms the native empty region. This untouched
+        // field is no local draft; its toolbar disappears only after its own read.
+        expect(participantView.find('form').exists()).toBe(false);
+        expect(input.element.isConnected).toBe(false);
+        expect(ownerView.find('form').exists()).toBe(true);
     });
 
     it('loads an explicitly opened hidden overview region before main-region counts arrive', async () => {

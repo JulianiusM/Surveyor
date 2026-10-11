@@ -1,4 +1,4 @@
-import {expect, test, type APIRequestContext, type Locator, type Page, type Route, type TestInfo} from '@playwright/test';
+import {expect, test, type APIRequestContext, type Locator, type Page, type Request, type Route, type TestInfo} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
@@ -91,6 +91,46 @@ async function bootstrap(request: APIRequestContext): Promise<Session> {
 function headers(session: Session) {
     return {'X-Surveyor-Context': session.context, 'X-CSRF-Token': session.csrfToken, 'X-Surveyor-Locale': session.locale};
 }
+
+/** Compare rendered label/count and sibling badge gaps independently of markup.
+ * A literal template space adds to Bootstrap's existing badge margin even when the
+ * class names match. The range excludes trailing whitespace but keeps the label. */
+async function counterBadgeGaps(surface: Locator): Promise<number[]> {
+    return surface.locator('[data-packing-counters] > span').evaluateAll(function measureCounterBadgeGaps(groups) {
+        const gaps: number[] = [];
+        for (const group of groups) {
+            let label: ChildNode | undefined;
+            for (const node of group.childNodes) {
+                if (node.nodeType === Node.TEXT_NODE && node.textContent?.trimEnd().endsWith(':')) {
+                    label = node;
+                    break;
+                }
+            }
+            const badges = group.querySelectorAll('.badge');
+            const badge = badges[0];
+            if (!label || !badge) throw new Error('Expected the rendered native counter label and badge.');
+            const range = document.createRange();
+            range.setStart(label, 0);
+            range.setEnd(label, label.textContent!.trimEnd().length);
+            gaps.push(Math.round((badge.getBoundingClientRect().left - range.getBoundingClientRect().right) * 1000) / 1000);
+            for (let index = 1; index < badges.length; index++) {
+                gaps.push(Math.round((badges[index]!.getBoundingClientRect().left
+                    - badges[index - 1]!.getBoundingClientRect().right) * 1000) / 1000);
+            }
+        }
+        return gaps;
+    });
+}
+
+/** Access keeps its nested native tab spacing even though Reka owns interaction. */
+async function accessTabGap(surface: Locator): Promise<string> {
+    await surface.getByRole('tab', {name: 'Access', exact: true}).click();
+    return surface.getByRole('tab', {name: 'Group Permissions', exact: true}).evaluate(function readTabGap(tab) {
+        const tabs = tab.closest('[role="tablist"]');
+        if (!tabs) throw new Error('Expected the existing Access tablist.');
+        return getComputedStyle(tabs).columnGap;
+    });
+}
 /** Fixture creation and browser delivery are separate so loading checks can hold a real read. */
 async function packingFixture(request: APIRequestContext, publicView = false) {
     await loginForE2E(request, createE2ELogin());
@@ -117,6 +157,108 @@ function readGate() {
     return {promise, release};
 }
 
+for (const intent of ['create', 'duplicate'] as const) {
+    test(`preserves native creation controls and the selected upload before ${intent} hydration`, async ({page}) => {
+        await loginForE2E(page.request, createE2ELogin());
+        const sourceInput = createE2EPackingList();
+        const sourceRows = JSON.parse(sourceInput.form.items) as components['schemas']['PackingDuplicateItem'][];
+        sourceRows[0]!.requiredByAll = true;
+        sourceInput.form.items = JSON.stringify(sourceRows);
+        const source = intent === 'duplicate'
+            ? await createResourceViaForm(page.request, sourceInput) : null;
+        const destination = source ? `/frontend-pilot/packing/${source.id}/duplicate` : '/frontend-pilot/packing/create';
+        const entry = readGate();
+        const started = readGate();
+        const pattern = /\/app\/assets\/entry-client-[^/]+\.js(?:\?|$)/u;
+        let commands = 0;
+        const png = readFileSync('src/public/img/logo.png');
+        const title = `Early ${intent} ${randomUUID()}`;
+        const changedPermissions: {key: string; checked: boolean}[] = [];
+
+        async function holdClient(route: Route): Promise<void> {
+            started.release();
+            await entry.promise;
+            await route.continue();
+        }
+        function countCreation(request: Request): void {
+            if (new URL(request.url()).pathname === '/api/v1/packing-lists' && request.method() === 'POST') commands++;
+        }
+        await page.route(pattern, holdClient);
+        page.on('request', countCreation);
+        try {
+            // Commit allows interaction with genuine SSR while module execution is held.
+            await page.goto(destination, {waitUntil: 'commit'});
+            await started.promise;
+            await page.locator('#create-title').fill(title);
+            const row = page.locator('main tbody tr').first();
+            await row.locator('input[type="text"], input:not([type])').first().fill('Early equipment');
+            await row.locator('input[type="number"]').fill('9');
+            const requiredByAll = intent === 'create';
+            expect(await row.locator('input[type="checkbox"]').isChecked()).toBe(!requiredByAll);
+            await row.locator('input[type="checkbox"]').setChecked(requiredByAll);
+            const permissions = page.locator('.perm-matrix input[type="checkbox"]');
+            for (const checkbox of (await permissions.all()).slice(0, 2)) {
+                const checked = !(await checkbox.isChecked());
+                const key = (await checkbox.getAttribute('id'))!.split('-').at(-1)!;
+                changedPermissions.push({key, checked});
+                await checkbox.setChecked(checked);
+            }
+            expect(changedPermissions).toHaveLength(2);
+            await page.locator('#create-header').setInputFiles({name: 'early.png', mimeType: 'image/png', buffer: png});
+            expect(commands).toBe(0);
+            entry.release();
+            await waitForPilotHydration(page);
+            await expect(row.locator('input[type="number"]')).toHaveValue('9');
+            await expect(row.locator('input[type="checkbox"]')).toBeChecked({checked: requiredByAll});
+            expect(commands).toBe(0);
+
+            const created = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/packing-lists'
+                && response.request().method() === 'POST');
+            await page.locator('main form').getByRole('button', {name: 'Create list', exact: true}).click();
+            const response = await created;
+            expect(response.status()).toBe(201);
+            const result = await response.json() as components['schemas']['PackingCreated'];
+            const persisted = await readPacking(page.request, result.id);
+            expect(persisted.title).toBe(title);
+            expect(persisted.items[0]).toMatchObject({title: 'Early equipment', maxAssignees: 9, requiredByAll});
+            expect(commands).toBe(1);
+
+            const actor = await bootstrap(page.request);
+            const settingsRead = await page.request.get(`/api/v1/packing-lists/${result.id}/settings`, {headers: headers(actor)});
+            expect(settingsRead.status()).toBe(200);
+            const saved = await settingsRead.json() as components['schemas']['PackingSettings'];
+            for (const changed of changedPermissions) {
+                const bit = saved.access!.permissions.find(permission => permission.key === changed.key)!.bit;
+                expect(Boolean(saved.access!.defaults.participant & bit)).toBe(changed.checked);
+            }
+            expect(persisted.headerUrl).not.toBeNull();
+            const upload = await page.request.get(persisted.headerUrl!, {headers: headers(actor)});
+            expect(upload.status()).toBe(200);
+            expect(await upload.body()).toEqual(png);
+        } finally {
+            entry.release();
+            page.off('request', countCreation);
+            await page.unroute(pattern, holdClient);
+        }
+    });
+}
+
+/** Measure the real initial flash and the following form in the same browser. */
+function createAdmissionPresentation() {
+    const notice = document.querySelector<HTMLElement>('main .alert-info')!;
+    const card = document.querySelector<HTMLElement>('main .card')!;
+    const noticeBounds = notice.getBoundingClientRect();
+    const cardBounds = card.getBoundingClientRect();
+    const style = getComputedStyle(notice);
+
+    return {
+        text: notice.textContent!.trim(),
+        typography: {fontFamily: style.fontFamily, fontSize: style.fontSize, lineHeight: style.lineHeight},
+        notice: {x: noticeBounds.x, y: noticeBounds.y, width: noticeBounds.width, height: noticeBounds.height},
+        card: {x: cardBounds.x, y: cardBounds.y, width: cardBounds.width, height: cardBounds.height},
+    };
+}
+
 async function readPacking(request: APIRequestContext, id: string): Promise<components['schemas']['PackingListView']> {
     const session = await bootstrap(request);
     const response = await request.get(`/api/v1/packing-lists/${id}`, {headers: headers(session)});
@@ -133,6 +275,145 @@ async function packingCommand(page: Page, id: string, suffix: string, method: st
     expect((await response).status()).toBe(status);
 }
 
+test('preserves native existing-capacity edits through the real browser and persistence', async ({page}) => {
+    const resource = await packing(page);
+    await waitForPilotHydration(page);
+    const original = (await readPacking(page.request, resource.id)).items[0]!;
+    const row = page.locator(`tr[data-item-id="${original.id}"]`);
+    const cases = [{draft: '0', saved: 0}, {draft: '-1', saved: -1},
+        {draft: '1.5', saved: 2}, {draft: '-1.5', saved: -2}];
+
+    const native = await page.context().newPage();
+    try {
+        await native.goto(resource.path, {waitUntil: 'domcontentloaded'});
+        // Number inputs do not expose selectionStart/End. Compare the actual first
+        // keystroke in both text and number editors instead of inferring caret state.
+        // Escape discards these drafts; the persistence assertions below retain the
+        // original fixture and continue through the real command boundary.
+        for (const field of [
+            {nativeName: 'title', column: 2, original: original.title.trim()},
+            {nativeName: 'maxAssignees', column: 4, original: String(original.maxAssignees)},
+        ]) {
+            const nativeCell = native.locator(`td[data-id="${original.id}"][data-edit="${field.nativeName}"]`);
+            await nativeCell.dblclick();
+            const nativeInput = nativeCell.locator('input');
+            await expect(nativeInput).toBeFocused();
+            await nativeInput.press('2');
+            const nativeDraft = await nativeInput.inputValue();
+            await nativeInput.fill(field.original);
+            await nativeInput.press('Escape');
+            await expect(nativeCell.locator('input')).toHaveCount(0);
+
+            const pilotCell = row.locator('td').nth(field.column);
+            await pilotCell.dblclick();
+            const pilotInput = pilotCell.locator('input');
+            await expect(pilotInput).toBeFocused();
+            await pilotInput.press('2');
+            await expect(pilotInput).toHaveValue(nativeDraft);
+            await pilotInput.fill(field.original);
+            await pilotInput.press('Escape');
+            await expect(pilotCell.locator('input')).toHaveCount(0);
+        }
+    } finally { await native.close(); }
+
+    // Native sends each raw number-control draft on Enter without form validation.
+    // The real command and follow-up read must retain SQL rounding, including a
+    // decimal that the browser would reject if implicit step=1 were enforced.
+    for (const example of cases) {
+        await row.locator('td').nth(4).dblclick();
+        const input = row.getByRole('spinbutton', {name: 'Assigned / Max', exact: true});
+        expect(await input.getAttribute('min')).toBeNull();
+        expect(await input.getAttribute('required')).toBeNull();
+        await input.fill(example.draft);
+        await packingCommand(page, resource.id, `/items/${original.id}`, 'PATCH', () => input.press('Enter'));
+        await expect(row.locator('td').nth(4)).toHaveText(`0 / ${example.saved}`);
+        expect((await readPacking(page.request, resource.id)).items[0]!.maxAssignees).toBe(example.saved);
+    }
+
+    // Clearing an existing numeric value is a failed native write, not Number('')
+    // becoming a successful zero. Observe the real safe API failure and unchanged row.
+    await row.locator('td').nth(4).dblclick();
+    const empty = row.getByRole('spinbutton', {name: 'Assigned / Max', exact: true});
+    await empty.fill('');
+    await packingCommand(page, resource.id, `/items/${original.id}`, 'PATCH', () => empty.press('Enter'), 500);
+    expect((await readPacking(page.request, resource.id)).items[0]!.maxAssignees).toBe(-2);
+});
+
+test('accepts native Unicode titles without imposing a new browser length policy', async ({page}) => {
+    await loginForE2E(page.request, createE2ELogin());
+    const title = '\u{1f600}'.repeat(128);
+    const itemTitle = '\u{1f680}'.repeat(128);
+    expect(title.length).toBe(256);
+    expect([...title]).toHaveLength(128);
+    await page.goto('/frontend-pilot/packing/create?locale=en', {waitUntil: 'domcontentloaded'});
+    await waitForPilotHydration(page);
+    const rootTitle = page.locator('#create-title');
+    const firstRow = page.locator('main tbody tr').first();
+    const rowTitle = firstRow.getByRole('textbox', {name: 'Item 1', exact: true});
+    expect(await rootTitle.getAttribute('maxlength')).toBeNull();
+    expect(await rowTitle.getAttribute('maxlength')).toBeNull();
+    await rootTitle.fill(title);
+    await rowTitle.fill(itemTitle);
+    const creation = page.waitForResponse(response => response.request().method() === 'POST'
+        && new URL(response.url()).pathname === '/api/v1/packing-lists');
+    await page.getByRole('button', {name: 'Create list', exact: true}).click();
+    const created = await creation;
+    expect(created.status()).toBe(201);
+    const {id} = await created.json() as components['schemas']['PackingCreated'];
+    await expect(page).toHaveURL(new RegExp(`/frontend-pilot/packing/${id}(?:\\?|$)`, 'u'));
+    await expect(page.locator('tr[data-item-id]').first()).toBeVisible();
+    const projection = await readPacking(page.request, id);
+    expect(projection.title).toBe(title);
+    expect(projection.items[0]!.title).toBe(itemTitle);
+
+    const quickTitle = page.locator('#quick-title');
+    expect(await quickTitle.getAttribute('maxlength')).toBeNull();
+    await quickTitle.fill(title);
+    await packingCommand(page, id, '/items', 'POST', () => page.getByRole('button', {name: 'Add', exact: true}).click(), 201);
+    // The command response precedes its authoritative list refresh. The native
+    // quick-add reset is the observable completion boundary for opening an editor.
+    await expect(quickTitle).toHaveValue('');
+    const row = page.locator(`tr[data-item-id="${projection.items[0]!.id}"]`);
+    await row.locator('td').nth(2).dblclick();
+    const inlineTitle = row.getByRole('textbox', {name: 'Title', exact: true});
+    expect(await inlineTitle.getAttribute('maxlength')).toBeNull();
+    await inlineTitle.fill(title);
+    await packingCommand(page, id, `/items/${projection.items[0]!.id}`, 'PATCH', () => inlineTitle.press('Enter'));
+    await expect(row.locator('td').nth(2)).toHaveText(title);
+});
+
+/** Exercise identical native keyboard/pointer disclosure semantics in each delivered shell.
+ * Keep ordinary links/native fields rather than testing a replacement menu fixture. */
+async function navigationDisclosure(page: Page): Promise<void> {
+    const create = page.locator('header .dropdown-toggle').filter({hasText: /^\s*New\s*$/});
+    const menu = create.locator('..').locator('.dropdown-menu');
+    const overview = page.locator('header .dropdown-toggle').filter({hasText: /^\s*Overview\s*$/});
+    await create.focus();
+    await page.keyboard.press('ArrowDown');
+    // Native icon fonts contribute their glyph to the accessible name; the pilot
+    // hides decorative icons. Match the same visible label suffix on both shells.
+    await expect(menu.getByRole('link', {name: /Survey$/u})).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
+    await expect(create).toBeFocused();
+
+    await page.keyboard.press('ArrowDown');
+    await menu.getByRole('link', {name: /Drivers list$/u}).focus();
+    await page.keyboard.press('Tab');
+    await expect(menu).toBeHidden();
+    await expect(overview).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    const second = overview.locator('..').locator('.dropdown-menu');
+    await expect(second.getByRole('link', {name: /Your overview$/u})).toBeFocused();
+    await expect(menu).toBeHidden();
+    await page.keyboard.press('Escape');
+    await expect(overview).toBeFocused();
+    await create.click();
+    await expect(menu).toBeVisible();
+    await page.locator('main').click({position: {x: 2, y: 2}});
+    await expect(menu).toBeHidden();
+}
+
 test('shared entry preserves header creation admission, exact duplicate login return and canonical guest completion', async ({page, browser, baseURL}, testInfo) => {
     test.setTimeout(60_000);
     const credentials = createE2ELogin();
@@ -141,6 +422,9 @@ test('shared entry preserves header creation admission, exact duplicate login re
     Object.assign(input.form, {'defaultPerms[public][0]': 'DATA_DUPLICATE'});
     const list = await createResourceViaForm(page.request, input);
     const anonymous = await browser.newContext({baseURL});
+    // The native oracle owns an independent cookie session, so another live
+    // application's activity cannot affect the flash being compared at redirect.
+    const nativeAnonymous = await browser.newContext({baseURL});
     const guest = await browser.newContext({baseURL});
     try {
         const visitor = await anonymous.newPage();
@@ -152,6 +436,49 @@ test('shared entry preserves header creation admission, exact duplicate login re
         expect(new URL(visitor.url()).searchParams.get('next')).toBe('/frontend-pilot/packing/create');
         await expect(visitor.locator('.alert-info')).toContainText('You must be logged in as user');
         expect(await visitor.evaluate(() => document.documentElement.dataset.entryDocument)).toBe('original');
+
+        // Compare the native redirect's real initial flash with the hydrated SPA
+        // admission result. An empty live-alert margin belongs after native flashes;
+        // putting the flash inside it would shift the entire form down by four pixels.
+        const nativeLogin = await nativeAnonymous.newPage();
+        // Native redirect headers can arrive before the session store finishes its
+        // flash write, including in native-only navigation. Complete the real 302
+        // response before following its exact Location to obtain a stable visual
+        // oracle; retain all route, session, wording and geometry assertions.
+        const nativeAdmission = await nativeAnonymous.request.get('/packing/create', {maxRedirects: 0});
+        expect(nativeAdmission.status()).toBe(302);
+        await nativeAdmission.body();
+        const nativeDestination = new URL(nativeAdmission.headers().location, baseURL);
+        expect(nativeDestination.pathname).toBe('/users/login');
+        expect(nativeDestination.searchParams.get('next')).toBe('/packing/create');
+        await nativeLogin.goto(nativeDestination.href, {waitUntil: 'domcontentloaded'});
+        await expect(nativeLogin.locator('main .alert-info')).toBeVisible();
+        const entryViewport = visitor.viewportSize();
+        const presentations = [];
+        for (const [size, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]] as const) {
+            await nativeLogin.setViewportSize({width, height});
+            await visitor.setViewportSize({width, height});
+            await nativeLogin.evaluate(() => document.fonts.ready);
+            await visitor.evaluate(() => document.fonts.ready);
+            const native = await nativeLogin.evaluate(createAdmissionPresentation);
+            const pilot = await visitor.evaluate(createAdmissionPresentation);
+            presentations.push({size, native, pilot});
+        }
+        await testInfo.attach('account-required-create-presentation', {
+            body: JSON.stringify(presentations, null, 2), contentType: 'application/json',
+        });
+        await captureState(nativeLogin, testInfo, 'native-account-required-create');
+        await captureState(visitor, testInfo, 'pilot-account-required-create');
+        for (const {native, pilot} of presentations) {
+            expect(pilot.text).toBe(native.text);
+            expect(pilot.typography).toEqual(native.typography);
+            for (const dimension of ['x', 'y', 'width', 'height'] as const) {
+                expect(Math.abs(pilot.notice[dimension] - native.notice[dimension])).toBeLessThanOrEqual(1);
+                expect(Math.abs(pilot.card[dimension] - native.card[dimension])).toBeLessThanOrEqual(1);
+            }
+        }
+        if (entryViewport) await visitor.setViewportSize(entryViewport);
+        await nativeLogin.close();
 
         // Duplicate GET has its own public grant. Submission uses account admission,
         // then the shared login completion returns to this precise source and query.
@@ -184,12 +511,16 @@ test('shared entry preserves header creation admission, exact duplicate login re
         await guestPage.getByRole('button', {name: 'Continue as guest', exact: true}).click();
         await expect(guestPage).toHaveURL(new URL(`/frontend-pilot/packing/${list.id}`, baseURL).href);
         await expect(guestPage.getByRole('heading', {name: list.title, exact: true})).toBeVisible();
-        const privateLink = await guestPage.locator('.alert-success a').innerText();
-        await expect(guestPage.locator('.alert-success')).toContainText(`Login successful. Use ${privateLink} to edit later.`);
+        const flash = guestPage.locator('.alert-success');
+        const privateLink = (await flash.innerText()).match(/^Login successful\. Use (\S+) to edit later\.$/)?.[1];
+        expect(privateLink).toBeDefined();
+        await expect(flash.locator('a, button')).toHaveCount(0);
+        await expect(flash).toHaveText(`Login successful. Use ${privateLink} to edit later.`);
         expect((await bootstrap(guestPage.request)).activeProfile?.name).toBe(name);
         expect(await guestPage.evaluate(() => document.documentElement.dataset.entryDocument)).toBe('guest');
     } finally {
         await anonymous.close();
+        await nativeAnonymous.close();
         await guest.close();
     }
 });
@@ -265,8 +596,9 @@ test('pilot navigates without replacing the document and preserves the legacy Pa
     if (process.env.E2E_PILOT_STATE_SCREENSHOTS === 'true') await testInfo.attach('native-discard-confirmations', {
         body: JSON.stringify(confirmations, null, 2), contentType: 'application/json',
     });
-    // Verify interaction/rendering structure, not the wording of the maintained help corpus.
-    await page.getByRole('link', {name: 'Back to packing list', exact: true}).click();
+    // Native Help has no resource-specific return link. Browser Back restores the
+    // previous visit while preserving the enhanced document and personal Packed state.
+    await page.goBack();
     await expect(page.getByRole('heading', {name: list.title, exact: true})).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('original');
     await expect(page.locator('tr[data-item-id]').first().getByRole('checkbox')).toBeChecked();
@@ -352,7 +684,7 @@ test('loading packing and settings reveals available sections without replacing 
         listGate.release();
         await expect(page.getByRole('heading', {name: list.title, exact: true})).toBeVisible();
         await expect(page.locator('tr[data-item-id]').first()).toBeVisible();
-        await expect(page.locator('main [data-loading-skeleton]')).toHaveCount(0);
+        await expect(page.locator('main [data-loading-skeleton]:visible')).toHaveCount(0);
         await captureState(page, testInfo, 'loading-packing-loaded');
 
         await page.getByRole('button', {name: 'Entity settings', exact: true}).click();
@@ -361,12 +693,14 @@ test('loading packing and settings reveals available sections without replacing 
         // The genuine metadata read completes while the independent settings read
         // is held. Its authorized form can already accept a local draft.
         await expect(title).toBeVisible();
-        await expect(dialog.locator('[data-loading-skeleton]')).toBeVisible();
+        await expect(dialog.locator('[data-loading-skeleton]:visible')).toBeVisible();
         await title.fill('Draft entered before access and header arrive');
         await expect(title).toBeFocused();
         await captureState(page, testInfo, 'loading-settings-metadata-ready', dialog, {viewportOnly: true});
         settingsGate.release();
-        await expect(dialog.locator('[data-loading-skeleton]')).toHaveCount(0);
+        // Inactive panels preserve their mounted drafts. Their undisclosed picker
+        // may retain a placeholder until discovery is enabled by opening that panel.
+        await expect(dialog.locator('[data-loading-skeleton]:visible')).toHaveCount(0);
         await expect(title).toHaveValue('Draft entered before access and header arrive');
         await expect(title).toBeFocused();
         await captureState(page, testInfo, 'loading-settings-loaded-draft', dialog, {viewportOnly: true});
@@ -419,11 +753,15 @@ test('JavaScript-disabled identity pages remain message-only while native login 
 test('pilot owner keyboard dialog and mobile guest assignment retain readable, reachable controls', async ({page, browser, baseURL}, testInfo) => {
     await page.setViewportSize({width: 1280, height: 900});
     const list = await packing(page, true);
+    const pilotBadgeGaps = await counterBadgeGaps(page.locator('main'));
+    expect(pilotBadgeGaps).toHaveLength(4);
     const edit = page.getByRole('button', {name: 'Entity settings', exact: true});
     await edit.focus();
     await page.keyboard.press('Enter');
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
+    await expect(dialog).toBeFocused();
+    const pilotAccessGap = await accessTabGap(dialog);
     // Both implementations retain native roving tab focus and panel activation.
     // This crosses the real keyboard/Bootstrap boundary that happy-dom cannot prove.
     async function checkTabs(surface: ReturnType<Page['locator']>): Promise<void> {
@@ -455,9 +793,23 @@ test('pilot owner keyboard dialog and mobile guest assignment retain readable, r
     const native = await page.context().newPage();
     try {
         await native.goto(list.path, {waitUntil: 'domcontentloaded'});
-        await native.locator('button[data-bs-target="#entityPropertiesModal"]').click();
-        await expect(native.locator('#entityPropertiesModal')).toBeVisible();
-        await checkTabs(native.locator('#entityPropertiesModal'));
+        expect(await counterBadgeGaps(native.locator('main'))).toEqual(pilotBadgeGaps);
+        const nativeDialog = native.locator('#entityPropertiesModal');
+        // Bootstrap reveals the modal before its transition and focus trap finish.
+        // Start keyboard assertions only after the same native shown event used by
+        // the existing modal workflows, rather than racing its final autofocus.
+        await Promise.all([
+            nativeDialog.evaluate(function waitForNativeModalShown(element) {
+                return new Promise<void>(function awaitShown(resolve) {
+                    element.addEventListener('shown.bs.modal', function modalShown() { resolve(); }, {once: true});
+                });
+            }),
+            native.locator('button[data-bs-target="#entityPropertiesModal"]').click(),
+        ]);
+        await expect(nativeDialog).toBeVisible();
+        await expect(nativeDialog).toBeFocused();
+        expect(await accessTabGap(nativeDialog)).toBe(pilotAccessGap);
+        await checkTabs(nativeDialog);
     } finally { await native.close(); }
     await page.screenshot({path: testInfo.outputPath('packing-owner-desktop.png'), fullPage: true});
 
@@ -492,6 +844,173 @@ test('pilot owner keyboard dialog and mobile guest assignment retain readable, r
         await expect(row).not.toContainText(guestName);
         expect(await mobile.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
     } finally { await guestContext.close(); }
+});
+
+test('native and pilot pristine properties Save has identical feedback and pilot pending work freezes Settings', async ({page}, testInfo) => {
+    test.setTimeout(60_000);
+    const list = await packingFixture(page.request);
+    const noChanges = 'There are no property changes to save.';
+    let nativeWrites = 0;
+
+    // Compare the real native no-op first. Its form URL identifies the established
+    // mutation boundary; counting it also catches a mistaken native POST, not only PATCH.
+    await page.goto(list.path + '?locale=en', {waitUntil: 'domcontentloaded'});
+    await page.locator('button[data-bs-target="#entityPropertiesModal"]').click();
+    const nativeDialog = page.locator('#entityPropertiesModal');
+    const nativeForm = nativeDialog.locator('[data-property-form]');
+    const nativeUrl = await nativeForm.getAttribute('data-api');
+    expect(nativeUrl).toBeTruthy();
+    const nativePattern = '**' + nativeUrl!;
+    async function observeNativeProperties(route: Route): Promise<void> {
+        if (route.request().method() !== 'GET') nativeWrites++;
+        await route.continue();
+    }
+    await page.route(nativePattern, observeNativeProperties);
+    try {
+        await nativeDialog.getByRole('button', {name: 'Save properties', exact: true}).click();
+        await expect(nativeDialog.locator('.alert-info')).toHaveText(noChanges);
+        await expect(nativeDialog.locator('.alert-info')).toHaveAttribute('role', 'alert');
+        await expect(nativeDialog.locator('.alert-info').getByRole('button', {name: 'Dismiss notification', exact: true})).toBeVisible();
+        expect(nativeWrites).toBe(0);
+        await captureState(page, testInfo, 'native-pristine-properties', nativeDialog, {viewportOnly: true});
+    } finally { await page.unroute(nativePattern, observeNativeProperties); }
+
+    const metadataPattern = '**/api/v1/packing-lists/' + list.id + '/metadata';
+    const settingsPattern = '**/api/v1/packing-lists/' + list.id + '/settings';
+    const writeStarted = readGate();
+    const writeGate = readGate();
+    const settingsStarted = readGate();
+    const settingsGate = readGate();
+    let pilotWrites = 0;
+
+    /** Commit the real PATCH, holding only its response. The component still owns
+     * a pending command until that delivery and its genuine dependent read finish. */
+    async function holdPropertiesResponse(route: Route): Promise<void> {
+        if (route.request().method() !== 'PATCH') { await route.continue(); return; }
+        pilotWrites++;
+        const committed = await route.fetch();
+        expect(committed.status()).toBe(200);
+        writeStarted.release();
+        await writeGate.promise;
+        await route.fulfill({response: committed});
+    }
+    async function holdDependentSettings(route: Route): Promise<void> {
+        if (pilotWrites) { settingsStarted.release(); await settingsGate.promise; }
+        await route.continue();
+    }
+    await page.route(metadataPattern, holdPropertiesResponse);
+    await page.route(settingsPattern, holdDependentSettings);
+    try {
+        await page.goto('/frontend-pilot/packing/' + list.id + '?locale=en', {waitUntil: 'domcontentloaded'});
+        await page.getByRole('button', {name: 'Entity settings', exact: true}).click();
+        const dialog = page.getByRole('dialog');
+        await expect(dialog.locator('.entity-settings-nav [role="tab"]')).toHaveCount(4);
+        const save = dialog.getByRole('button', {name: 'Save properties', exact: true});
+        await expect(save).toBeEnabled();
+        await save.click();
+        await expect(dialog.locator('.alert-info')).toHaveText(noChanges);
+        await expect(dialog.locator('.alert-info')).toHaveAttribute('role', 'alert');
+        await expect(dialog.locator('.alert-info').getByRole('button', {name: 'Dismiss notification', exact: true})).toBeVisible();
+        expect(pilotWrites).toBe(0);
+        await captureState(page, testInfo, 'pilot-pristine-properties', dialog, {viewportOnly: true});
+
+        // Make Review a real rendered control rather than an empty selector. Keep a
+        // local audience draft while a second HTTP client changes that same mask.
+        // The normal focus refresh discovers its conflict without replacing any UI.
+        const actor = await bootstrap(page.request);
+        const settingsRead = await page.request.get(`/api/v1/packing-lists/${list.id}/settings`, {headers: headers(actor)});
+        expect(settingsRead.status()).toBe(200);
+        const snapshot = await settingsRead.json() as components['schemas']['PackingSettings'];
+        expect(snapshot.access).not.toBeNull();
+        const accessPermission = snapshot.access!.permissions.find(permission => permission.key === 'ACCESS_VIEW')!;
+        const titlePermission = snapshot.access!.permissions.find(permission => permission.key === 'EDIT_TITLE')!;
+        expect(accessPermission).toBeDefined();
+        expect(titlePermission).toBeDefined();
+        await dialog.getByRole('tab', {name: 'Access', exact: true}).click();
+        await dialog.getByLabel('Permission audience', {exact: true}).selectOption('guest');
+        await dialog.locator('#settings-defaults-guest-ACCESS_VIEW').setChecked(!(snapshot.access!.defaults.guest & accessPermission.bit));
+        expect((await page.request.put(`/api/v1/packing-lists/${list.id}/default-permissions`, {
+            headers: {...headers(actor), 'If-Match': snapshot.settingsToken},
+            data: {guest: snapshot.access!.defaults.guest ^ titlePermission.bit},
+        })).status()).toBe(200);
+        const refreshedSettings = page.waitForResponse(response =>
+            new URL(response.url()).pathname === `/api/v1/packing-lists/${list.id}/settings`
+            && response.request().method() === 'GET' && response.status() === 200);
+        await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+        await refreshedSettings;
+        const review = dialog.locator('#pilot-access-defaults').getByRole('button', {name: 'Review changes', exact: true, includeHidden: true});
+        await expect(review).toBeVisible();
+        await expect(review).toBeEnabled();
+        await dialog.getByRole('tab', {name: 'General', exact: true}).click();
+
+        const submitted = 'Pending browser save ' + list.title;
+        await dialog.locator('[name="title"]').fill(submitted);
+        await save.click();
+        await writeStarted.promise;
+
+        /** Native pending locks include hidden tab groups and every currently
+         * rendered form/disclosure/review control. Use effective HTML disabled state
+         * so fieldset inheritance is tested rather than requiring a decorative attribute. */
+        async function expectFrozenSettings(): Promise<void> {
+            const unlocked = await dialog.locator('button, input, select, textarea').evaluateAll(function unlockedControls(controls) {
+                return controls.filter(control => !control.matches(':disabled')).map(control => ({
+                    tag: control.tagName.toLowerCase(), id: control.id, name: control.getAttribute('name'),
+                    type: control.getAttribute('type'), label: control.getAttribute('aria-label') ?? control.textContent?.trim(),
+                    panel: control.closest('[role="tabpanel"]')?.id,
+                    visible: !!control.getClientRects().length,
+                }));
+            });
+            expect(unlocked, 'Every rendered Settings control must stay locked during the held command/read').toEqual([]);
+            // Native disabled tabs retain their last tabindex. Test effective
+            // keyboard/programmatic focus rather than Reka's decorative attribute.
+            expect(await dialog.locator('[role="tab"]').evaluateAll(function tabsRejectFocus(tabs) {
+                for (const tab of tabs) (tab as HTMLElement).focus();
+                return tabs.every(tab => tab.matches(':disabled') && tab !== document.activeElement);
+            })).toBe(true);
+            await expect(review).toBeDisabled();
+            await page.keyboard.press('Tab');
+            expect(await dialog.locator('[role="tab"]').evaluateAll(function tabsRejectKeyboardFocus(tabs) {
+                return tabs.every(tab => tab !== document.activeElement);
+            })).toBe(true);
+            await page.keyboard.press('ArrowRight');
+            await page.keyboard.press('ArrowDown');
+            await expect(dialog.locator('#pilot-settings-tab-general')).toHaveAttribute('aria-selected', 'true');
+            await expect(dialog.locator('#pilot-access-defaults-tab')).toHaveAttribute('aria-selected', 'true');
+            await page.keyboard.press('Escape');
+            await expect(dialog).toBeVisible();
+        }
+        await expectFrozenSettings();
+        await expect(dialog.locator('[name="title"]')).toHaveValue(submitted);
+        await captureState(page, testInfo, 'pilot-properties-command-pending', dialog, {viewportOnly: true});
+
+        writeGate.release();
+        await settingsStarted.promise;
+        await expectFrozenSettings();
+        await captureState(page, testInfo, 'pilot-properties-dependent-read-pending', dialog, {viewportOnly: true});
+        settingsGate.release();
+        await expect(save).toBeEnabled();
+        await expect(dialog.getByRole('button', {name: 'Close', exact: true}).last()).toBeEnabled();
+        expect(pilotWrites).toBe(1);
+        expect((await readPacking(page.request, list.id)).title).toBe(submitted);
+
+        // Both tab groups and their disclosure recover after the same operation;
+        // keyboard navigation must not remain detached after its disabled interval.
+        await dialog.getByRole('tab', {name: 'General', exact: true}).focus();
+        await page.keyboard.press('ArrowRight');
+        await expect(dialog.getByRole('tab', {name: 'Linked event', exact: true})).toBeFocused();
+        await dialog.getByRole('tab', {name: 'Access', exact: true}).click();
+        await expect(review).toBeEnabled();
+        await dialog.getByRole('tab', {name: 'Administrators', exact: true}).click();
+        const admins = dialog.locator('#pilot-access-admins');
+        await expect(admins.getByRole('button', {name: 'Add', exact: true}).first()).toBeEnabled();
+        await admins.getByRole('button', {name: 'Add', exact: true}).first().click();
+        await expect(admins.getByLabel('User (name or email)', {exact: true})).toBeVisible();
+    } finally {
+        writeGate.release();
+        settingsGate.release();
+        await page.unroute(metadataPattern, holdPropertiesResponse);
+        await page.unroute(settingsPattern, holdDependentSettings);
+    }
 });
 
 test('pilot retains a dirty draft across a locale refresh and requires review after a stale save', async ({page}, testInfo) => {
@@ -545,7 +1064,7 @@ test('pilot retains a dirty draft across a locale refresh and requires review af
     await expect(dialog.locator('[name="title"]')).toHaveValue(`Remote ${list.title}`);
     await expect(dialog.getByRole('button', {name: 'Save properties', exact: true})).toBeEnabled();
     await dialog.getByRole('button', {name: 'Save properties', exact: true}).click();
-    await expect(dialog.getByRole('button', {name: 'Save properties', exact: true})).toBeDisabled();
+    await expect(dialog.getByRole('button', {name: 'Save properties', exact: true})).toBeEnabled();
     await dialog.getByRole('button', {name: 'Close', exact: true}).last().click();
     await expect(dialog).not.toBeVisible();
     const final = await page.request.get(`/api/v1/packing-lists/${list.id}/metadata`, {headers: headers(freshSession)});
@@ -661,7 +1180,8 @@ test('pilot edits items with conflict review, quick-adds, reorders and removes a
         await page.getByRole('button', {name: 'Refresh', exact: true}).click();
         await expect(row.locator('td').nth(1)).toContainText(name);
         const assigned = (await readPacking(page.request, resource.id)).items.find(item => item.id === original.id)!.assignees[0]!;
-        page.once('dialog', dialog => dialog.accept());
+        // Native manager assignment removal submits immediately. Register a confirm
+        // handler only for the later item deletion, which actually asks for consent.
         await packingCommand(page, resource.id, `/assignments/${assigned.assignmentId}`, 'DELETE',
             () => row.locator('td').nth(1).getByRole('button', {name: 'Remove', exact: true}).click());
         await expect(row.locator('td').nth(1)).not.toContainText(name);
@@ -698,7 +1218,7 @@ test('pilot settings manage delegated access, header images, event links and arc
         await dialog.locator('[name="description"]').fill('Saved before changing another settings panel');
         await packingCommand(page, resource.id, '/metadata', 'PATCH',
             () => dialog.getByRole('button', {name: 'Save properties', exact: true}).click());
-        await expect(dialog.getByRole('button', {name: 'Save properties', exact: true})).toBeDisabled();
+        await expect(dialog.getByRole('button', {name: 'Save properties', exact: true})).toBeEnabled();
         await dialog.getByRole('tab', {name: 'Access', exact: true}).click();
         await dialog.getByRole('tab', {name: 'Group Permissions', exact: true}).click();
         await dialog.getByLabel('Permission audience', {exact: true}).selectOption('guest');
@@ -765,17 +1285,20 @@ test('pilot settings manage delegated access, header images, event links and arc
         await expect(dialog.locator('[name="description"]')).toHaveValue('Preserved while visiting other settings');
         await packingCommand(page, resource.id, '/metadata', 'PATCH',
             () => dialog.getByRole('button', {name: 'Save properties', exact: true}).click());
-        await expect(dialog.getByRole('button', {name: 'Save properties', exact: true})).toBeDisabled();
+        await expect(dialog.getByRole('button', {name: 'Save properties', exact: true})).toBeEnabled();
         await dialog.getByRole('button', {name: 'Close', exact: true}).last().click();
         await expect(page.getByRole('link', {name: 'Go to event', exact: true})).toHaveAttribute('href', event.path);
         expect((await readPacking(page.request, resource.id)).description).toBe('Preserved while visiting other settings');
     } finally { await delegate.close(); }
 });
 
-test('pilot creates and duplicates complete lists through the SPA forms with row and Everyone controls', async ({page}) => {
+test('pilot creates and duplicates complete lists through the SPA forms with row and Everyone controls', async ({page}, testInfo) => {
     test.setTimeout(60_000);
     await loginForE2E(page.request, createE2ELogin());
-    await page.goto('/frontend-pilot/packing/create', {waitUntil: 'domcontentloaded'});
+    // Repeated contextual values remain a native no-selection URL. Fragment movement
+    // must not mistake the router's new query-array objects for a new creation draft.
+    const contextualIds = [randomUUID(), randomUUID()];
+    await page.goto('/frontend-pilot/packing/create?eventId=' + contextualIds.join('&eventId='), {waitUntil: 'domcontentloaded'});
     await expect(page.getByRole('heading', {name: 'Create packing list', exact: true})).toBeVisible();
     await page.setViewportSize({width: 390, height: 844});
     const nativeCreation = await page.context().newPage();
@@ -809,15 +1332,57 @@ test('pilot creates and duplicates complete lists through the SPA forms with row
     await page.getByRole('button', {name: 'Add row', exact: true}).click();
     await page.getByRole('textbox', {name: 'Item 2', exact: true}).fill('Bottle');
     await page.locator('tbody tr').nth(1).getByRole('checkbox').check();
+    const admissionPattern = '**/api/v1/packing-lists/create-entry**';
+    const creationPattern = '**/api/v1/packing-lists';
+    const admissionStarted = readGate();
+    const admissionGate = readGate();
+    let creations = 0;
+    async function holdSubmissionAdmission(route: Route): Promise<void> {
+        const admitted = await route.fetch();
+        expect(admitted.status()).toBe(200);
+        admissionStarted.release();
+        await admissionGate.promise;
+        await route.fulfill({response: admitted});
+    }
+    async function observeCreation(route: Route): Promise<void> {
+        if (route.request().method() === 'POST') creations++;
+        await route.continue();
+    }
+    await page.route(admissionPattern, holdSubmissionAdmission);
+    await page.route(creationPattern, observeCreation);
     const created = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/packing-lists'
         && response.request().method() === 'POST');
-    await page.getByRole('button', {name: 'Create list', exact: true}).click();
-    const createResponse = await created;
-    expect(createResponse.status()).toBe(201);
-    const originalId = (await createResponse.json()).id as string;
+    let originalId: string;
+    try {
+        await page.getByRole('button', {name: 'Create list', exact: true}).click();
+        await admissionStarted.promise;
+        expect(creations).toBe(0);
+
+        // Use the browser's real same-document navigation, retaining the submitted
+        // title, row collection and repeated query values while the server read is held.
+        await page.evaluate(() => { window.location.hash = 'create-title'; });
+        await expect(page).toHaveURL(/#create-title$/);
+        expect(new URL(page.url()).searchParams.getAll('eventId')).toEqual(contextualIds);
+        await expect(page.getByLabel('Title *', {exact: true})).toHaveValue(title);
+        await expect(page.getByRole('textbox', {name: 'Item 1', exact: true})).toHaveValue('Tent');
+        await expect(page.getByRole('textbox', {name: 'Item 2', exact: true})).toHaveValue('Bottle');
+        await expect(page.locator('tbody tr').nth(1).getByRole('checkbox')).toBeChecked();
+        await captureState(page, testInfo, 'creation-admission-fragment-draft');
+        admissionGate.release();
+
+        const createResponse = await created;
+        expect(createResponse.status()).toBe(201);
+        originalId = (await createResponse.json()).id as string;
+        expect(creations).toBe(1);
+    } finally {
+        admissionGate.release();
+        await page.unroute(admissionPattern, holdSubmissionAdmission);
+        await page.unroute(creationPattern, observeCreation);
+    }
     await expect(page).toHaveURL(new RegExp('/frontend-pilot/packing/' + originalId + '$'));
     await expect(page.getByRole('heading', {name: title, exact: true})).toBeVisible();
     const original = await readPacking(page.request, originalId);
+    expect(original.currentEventId).toBeNull();
     expect(original.items.sort((a, b) => a.position - b.position).map(item => [item.title, item.requiredByAll, item.maxAssignees]))
         .toEqual([['Tent', false, 2], ['Bottle', true, 1]]);
     await page.getByRole('button', {name: 'Entity settings', exact: true}).click();
@@ -882,11 +1447,11 @@ test('pilot overview preserves personal visibility, shared archive state and lin
     await owner.getByRole('searchbox').fill(marker + ' standalone');
     await owner.getByRole('button', {name: 'Search', exact: true}).click();
     await expect(owner.locator(`[data-id="${event.id}"]`)).toHaveCount(0);
-    await expect(owner).toContainText('1 matching entity');
+    await expect(owner).toContainText('1 matching entities');
 
     // A near-bottom card menu must stay reachable without scrolling after it opens,
     // including when the keyboard selects its first action.
-    const archiveTrigger = ownedCard.locator('summary');
+    const archiveTrigger = ownedCard.getByRole('button', {name: 'Archival and visibility for ' + input.title, exact: true});
     await archiveTrigger.evaluate(element => element.scrollIntoView({block: 'end'}));
     await archiveTrigger.focus();
     await page.keyboard.press('ArrowDown');
@@ -938,20 +1503,211 @@ test('pilot overview preserves personal visibility, shared archive state and lin
     await expect(ownedCard).toBeVisible();
     expect((await readPacking(page.request, standalone.id)).archived).toBe(false);
 
-    await owner.getByRole('link', {name: 'Clear filters', exact: true}).click();
+    await owner.getByRole('searchbox').fill('');
+    // Native search commits after 300 ms and replaces/closes its old disclosure.
+    // Open Filter only after that observable region refresh has settled.
+    await expect(page).not.toHaveURL(/[?&]owner_main_q=/);
+    await expect(owner).toHaveAttribute('aria-busy', 'false');
+    await owner.getByRole('button', {name: 'Filter', exact: true}).click();
+    await owner.getByRole('button', {name: 'All types', exact: true}).click();
     const eventCard = owner.locator(`[data-id="${event.id}"]`);
     await expect(eventCard).toContainText('Show linked entities (1)');
-    await eventCard.getByRole('link', {name: 'Show linked entities for ' + event.title, exact: true}).click();
+    const expansion = eventCard.getByRole('link', {name: 'Show linked entities for ' + event.title, exact: true});
+    const originalUrl = page.url();
+    const popupOpened = page.context().waitForEvent('page');
+    await expansion.click({modifiers: ['Control']});
+    const popup = await popupOpened;
+    try { await expect(popup).toHaveURL(new RegExp('owner_main_event=' + event.id)); }
+    finally { await popup.close(); }
+    expect(page.url()).toBe(originalUrl);
+    await page.evaluate(() => document.fonts.ready);
+    await expansion.scrollIntoViewIfNeeded();
+    const originalScroll = await page.evaluate(() => window.scrollY);
+    await expansion.click();
     await expect(page).toHaveURL(new RegExp('owner_main_event=' + event.id));
     await expect(owner.locator('.entity-overview-children')).toContainText(linked.title);
     await expect(owner.locator('.entity-overview-children')).toContainText('Linked entities 1–1 of 1');
     await owner.getByRole('link', {name: 'Back to overview', exact: true}).click();
     await expect(owner.locator('.entity-overview-children')).toHaveCount(0);
+    await expect(expansion).toBeFocused();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(originalScroll, 0);
     await eventCard.getByRole('link', {name: 'Show linked entities for ' + event.title, exact: true}).click();
     await owner.locator(`[data-id="${linked.id}"] > a.card-body`).click();
     await expect(page).toHaveURL(new RegExp('/frontend-pilot/packing/' + linked.id + '$'));
     await expect(page.getByRole('heading', {name: linked.title, exact: true})).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('overview');
+});
+
+test('native and pilot disclosures keep link semantics and pilot failed pagination retains its confirmed region', async ({page}) => {
+    test.setTimeout(90_000);
+    await loginForE2E(page.request, createE2ELogin());
+    const marker = `Navigation ${randomUUID().slice(0, 8)}`;
+    expect((await page.request.post('/users/profile/create', {form: {name: marker}, maxRedirects: 0})).status()).toBe(302);
+    const actor = (await bootstrap(page.request)).profiles.find(profile => profile.name === marker)!;
+    expect((await page.request.get('/users/profile/change/' + actor.id, {maxRedirects: 0})).status()).toBe(302);
+    const scope = await bootstrap(page.request);
+    const empty = await page.request.get('/api/v1/overview?collection=owner&region=main', {headers: headers(scope)});
+    expect(empty.status()).toBe(200);
+    const pageSize = (await empty.json() as components['schemas']['OverviewRegion']).pageSize;
+    // Supply exactly one bounded overflow page using ordinary persisted creation.
+    // This retains real grouping, membership, paging, authorization and HTML/API delivery.
+    for (let index = 0; index <= pageSize; index++) {
+        const input = createE2EPackingList();
+        input.title = input.form.title = `${marker} list ${String(index).padStart(2, '0')}`;
+        await createResourceViaForm(page.request, input);
+    }
+
+    for (const destination of ['/users/dashboard', '/frontend-pilot']) {
+        await page.goto(destination, {waitUntil: 'domcontentloaded'});
+        if (destination === '/frontend-pilot') await waitForPilotHydration(page);
+        await navigationDisclosure(page);
+        const region = page.locator('[data-collection="owner"][data-region="main"]');
+        const next = region.getByRole('link', {name: 'Next', exact: true});
+        await expect(next).toBeVisible();
+        const original = page.url();
+        const popupOpened = page.context().waitForEvent('page');
+        await next.click({modifiers: ['Control']});
+        const popup = await popupOpened;
+        try { await expect(popup).toHaveURL(/owner_main_page=2/u); }
+        finally { await popup.close(); }
+        expect(page.url()).toBe(original);
+    }
+
+    const owner = page.locator('[data-collection="owner"][data-region="main"]');
+    const originalUrl = page.url();
+    const originalCards = await owner.locator('article[data-id]').evaluateAll(cards => cards.map(card => card.getAttribute('data-id')));
+    const pattern = '**/api/v1/overview?**';
+    let pageUnavailable = true;
+    let pageReads = 0;
+    let failedReads = 0;
+    async function rejectUnavailablePage(route: Route): Promise<void> {
+        const query = new URL(route.request().url()).searchParams;
+        if (query.get('collection') !== 'owner' || query.get('region') !== 'main' || query.get('page') !== '2') {
+            await route.continue();
+            return;
+        }
+        pageReads++;
+        if (!pageUnavailable) { await route.continue(); return; }
+        failedReads++;
+        // A temporary server failure retains confirmed cards. Known 401/403/404
+        // admission denials deliberately retire them and are covered separately.
+        // Keep the outage through the initial read and its two automatic retries;
+        // only the explicit recovery below restores the real endpoint.
+        await route.fulfill({status: 500, contentType: 'application/json',
+            headers: {'X-Surveyor-Context': scope.context}, body: JSON.stringify({type: 'about:blank',
+                title: 'Page temporarily unavailable', status: 500, code: 'INTERNAL_ERROR',
+                detail: 'Retry this bounded page.', messageKey: 'api:errors.INTERNAL_ERROR', params: {}, requestId: 'overview-failed-next'})});
+    }
+    await page.route(pattern, rejectUnavailablePage);
+    try {
+        await owner.getByRole('link', {name: 'Next', exact: true}).click();
+        await expect(owner.getByRole('button', {name: 'Try again', exact: true})).toBeVisible({timeout: 10_000});
+        expect(failedReads).toBe(3);
+        expect(page.url()).toBe(originalUrl);
+        expect(await owner.locator('article[data-id]').evaluateAll(cards => cards.map(card => card.getAttribute('data-id')))).toEqual(originalCards);
+        pageUnavailable = false;
+        await owner.getByRole('button', {name: 'Try again', exact: true}).click();
+        await expect(page).toHaveURL(/owner_main_page=2/u);
+        await expect(owner.locator('article[data-id]')).toHaveCount(1);
+        await expect(owner.locator('.js-overview-heading')).toBeFocused();
+        expect(pageReads).toBe(failedReads + 1);
+        await page.goBack();
+        await expect(page).toHaveURL(originalUrl);
+        await expect(owner.locator('article[data-id]')).toHaveCount(pageSize);
+    } finally { await page.unroute(pattern, rejectUnavailablePage); }
+});
+
+/** The existing-email lookup is advisory. Closing its choice must preserve input without
+ * creating an identity; deliberately continuing creates a distinct guest, not a recovery. */
+test('existing guest email choice preserves cancelled input and explicitly creates a new guest', async ({page, browser, baseURL}, testInfo) => {
+    const list = await packingFixture(page.request, true);
+    const existing = await browser.newContext({baseURL});
+    const visitor = await browser.newContext({baseURL});
+    const email = `guest-choice-${randomUUID()}@example.invalid`;
+    try {
+        const original = await bootstrap(existing.request);
+        const seeded = await existing.request.post(`/api/v1/packing-lists/${list.id}/guest`, {
+            headers: headers(original), data: {username: 'Existing guest identity', email},
+        });
+        expect(seeded.status()).toBe(200);
+        const firstIdentity = (await seeded.json()).session as Session;
+
+        const guestPage = await visitor.newPage();
+        const commands: Request[] = [];
+        guestPage.on('request', function rememberIdentityCommand(request) {
+            if (request.method() === 'POST') commands.push(request);
+        });
+        await guestPage.goto(`/frontend-pilot/packing/${list.id}/guest?locale=en`, {waitUntil: 'domcontentloaded'});
+        await waitForPilotHydration(guestPage);
+        const name = `  New guest ${randomUUID().slice(0, 8)}  `;
+        await guestPage.locator('#guest-name').fill(name);
+        await guestPage.locator('#guest-email').fill(email);
+        await guestPage.getByRole('button', {name: 'Continue as guest', exact: true}).click();
+        const choice = guestPage.getByRole('dialog', {name: 'Guest account found!', exact: true});
+        await expect(choice).toBeVisible();
+        await captureState(guestPage, testInfo, 'existing-email-choice', choice);
+        await choice.getByRole('button', {name: 'Close', exact: true}).click();
+        await expect(choice).toHaveCount(0);
+        await expect(guestPage.locator('#guest-name')).toHaveValue(name);
+        await expect(guestPage.locator('#guest-email')).toHaveValue(email);
+        expect((await bootstrap(visitor.request)).kind).toBe('anonymous');
+        expect(commands.map(request => new URL(request.url()).pathname)).toEqual(['/api/v1/auth/guest-email-exists']);
+
+        await guestPage.getByRole('button', {name: 'Continue as guest', exact: true}).click();
+        await expect(choice).toBeVisible();
+        await choice.getByRole('button', {name: 'Continue as new guest', exact: true}).click();
+        await expect(guestPage).toHaveURL(new URL(`/frontend-pilot/packing/${list.id}`, baseURL).href);
+        await expect(guestPage.getByRole('heading', {name: list.title, exact: true})).toBeVisible();
+        const created = await bootstrap(visitor.request);
+        expect(created).toMatchObject({kind: 'guest', activeProfile: {name}});
+        expect(created.activeProfile!.id).not.toBe(firstIdentity.activeProfile!.id);
+        expect(commands.map(request => new URL(request.url()).pathname)).toEqual([
+            '/api/v1/auth/guest-email-exists', '/api/v1/auth/guest-email-exists', `/api/v1/packing-lists/${list.id}/guest`,
+        ]);
+    } finally {
+        await existing.close();
+        await visitor.close();
+    }
+});
+
+/** Reject malformed uploads at the actual multipart boundary. Neither rejection may
+ * replace the persisted image reference or lose the previously authorized image bytes. */
+test('rejected header MIME and oversized uploads retain the existing header and settings token', async ({page}) => {
+    const list = await packingFixture(page.request);
+    const session = await bootstrap(page.request);
+    const root = `/api/v1/packing-lists/${list.id}`;
+    const png = readFileSync('src/public/img/logo.png');
+    const settings = await page.request.get(`${root}/settings`, {headers: headers(session)});
+    expect(settings.status()).toBe(200);
+    const initial = await settings.json() as components['schemas']['PackingSettings'];
+    const uploaded = await page.request.put(`${root}/header`, {
+        headers: {...headers(session), 'If-Match': initial.settingsToken},
+        multipart: {image: {name: 'existing-header.png', mimeType: 'image/png', buffer: png}},
+    });
+    expect(uploaded.status()).toBe(200);
+    const before = await readPacking(page.request, list.id);
+    const currentSettings = await page.request.get(`${root}/settings`, {headers: headers(session)});
+    expect(currentSettings.status()).toBe(200);
+    const reviewed = await currentSettings.json() as components['schemas']['PackingSettings'];
+
+    for (const rejected of [
+        {name: 'wrong-type.png', mimeType: 'text/plain', buffer: Buffer.from('Rejected MIME'), status: 400, code: 'UPLOAD_INVALID'},
+        {name: 'oversized.png', mimeType: 'image/png', buffer: Buffer.alloc(10 * 1024 * 1024 + 1), status: 413, code: 'PAYLOAD_TOO_LARGE'},
+    ]) {
+        const response = await page.request.put(`${root}/header`, {
+            headers: {...headers(session), 'If-Match': reviewed.settingsToken},
+            multipart: {image: {name: rejected.name, mimeType: rejected.mimeType, buffer: rejected.buffer}},
+        });
+        expect(response.status()).toBe(rejected.status);
+        expect(await response.json()).toMatchObject({status: rejected.status, code: rejected.code});
+        expect((await readPacking(page.request, list.id)).headerVersion).toBe(before.headerVersion);
+        const after = await page.request.get(`${root}/settings`, {headers: headers(session)});
+        expect(after.status()).toBe(200);
+        expect((await after.json()).settingsToken).toBe(reviewed.settingsToken);
+        const retained = await page.request.get(`${root}/header`, {headers: headers(session)});
+        expect(retained.status()).toBe(200);
+        expect(await retained.body()).toEqual(png);
+    }
 });
 
 test('pilot help supports native search and isolates SSR locale and hostile profile text', async ({browser, baseURL}) => {

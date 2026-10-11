@@ -5,9 +5,9 @@ documentation-metadata
 audience: maintainers; frontend and backend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-08
+last-verified: 2026-10-09
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: FPR-07 explicitly authorized 2026-10-08 scope/fallback/documentation amendments and staging; original choices/D1-D5 retained; no new runtime verification claimed; approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; source review of expanded packing management, overview, identity, multipart/binary and generated contract boundaries; original step-two cross-feature design retained and distinguished from implemented scope; this documentation update runs no application, database or browser checks and makes no complete-parity claim
+verification-scope: native-identical operation-specific input/status reconciliation and explained bounded UTF-16 minimum/primitive-union additions, preserving the original supported-subset preference and selected toolchain; source-reviewed profile-owner deletion, including guest owners; FPR-07 explicitly authorized scope/fallback/documentation staging and original choices/D1–D5 retained; final runtime execution and its limits remain in the paired review; original step-two cross-feature design remains distinguished from implemented scope and production cutover
 source-anchors: contracts/api/v1/openapi.yaml; contracts/api/v1/common.yaml; contracts/api/v1/packing.yaml; contracts/api/v1/overview.yaml; contracts/api/v1/auth.yaml; scripts/generate-api.mjs; src/modules/api/contracts.ts; src/modules/api/session.ts; src/modules/api/transport.ts; src/modules/api/problem.ts; src/types/ApiTypes.d.ts; src/routes/api/v1.ts; src/routes/api/v1/packing.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; src/modules/packing/api.ts; tests/unit/frontend-contracts.spec.ts; tests/unit/frontend-generation.spec.ts; tests/integration/packing-management-api.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; tests/fixtures/frontend-contracts.mts; docs/FRONTEND_MIGRATION_BASELINE.md; docs/ARCHITECTURE.md; src/controller/packingController.ts; src/modules/database/services/PackingService.ts; src/modules/database/services/EntityLifecycleService.ts; package.json
 next-review: pilot-contract-expansion-or-transport-subset-change
 -->
@@ -115,6 +115,25 @@ Use distinct create/update/read schemas where semantics differ, referencing comm
 polymorphism, arbitrary maps, deeply composed `allOf`, remote references, custom validation keywords, and schemas
 that rely on readOnly/writeOnly to remove privileged fields. The projection controls disclosure.
 
+The original avoidance preference remains recorded above. The native-identical rectification requires two bounded
+additions to that preferred subset. The implementation mechanism preserves accepted native input; a later design
+edit does not authorize a new input policy:
+
+- Four registration/reset password properties author `x-surveyor-min-length-utf16: 8`. Native HTML and password
+  criteria count UTF-16 units, so ordinary JSON Schema `minLength: 8` would reject an accepted supplementary-character
+  password. The existing generator emits the authored comparison into both standalone runtimes. Other standard
+  string bounds retain their code-point meaning; native metadata maximum diagnostics use the existing schema-derived
+  UTF-16 adapter. Passwords acquire no maximum length.
+- Existing-item capacity uses a finite primitive `anyOf` for number, string and null. The native inline editor sends
+  its raw number-control draft; the existing locked operation passes it to the existing signed nullable integer
+  column. The configured database owns rounding, range and invalid-value outcomes. Creation/new-item policy remains
+  separate. Strict Ajv stays enabled, without `allowUnionTypes`, JavaScript conversion or copied SQL bounds.
+
+These additions preserve OpenAPI, the selected Ajv configuration, standalone/eval-free delivery and one authored
+constraint owner. They permit neither arbitrary custom vocabulary nor general schema composition. Contract and
+generation fixtures exercise server/browser UTF-16 minima and standalone loading; actual native/pilot input and
+persistence comparisons are recorded in the [paired review](PILOT_PARITY_REVIEW.md).
+
 Configure one strict Ajv 2020 instance with format validation, `coerceTypes: false`, `useDefaults: false`, and
 `removeAdditional: false`; use bounded validation errors rather than echoing entire payloads. Register supported
 annotation vocabulary explicitly or strip only a documented allowlist of annotations during extraction. Never
@@ -220,6 +239,12 @@ The v1 mount precedes the global HTML/OIDC redirect in [app.ts](../../src/app.ts
 before transitions and bind successful `IdentityResult` responses to their **new** context. Slow credential/profile
 work checks the stored context again before changing the session; a final comparison prevents attaching a private
 guest link to an intervening actor's session projection. This is not an atomic session-store compare-and-swap.
+
+Native HTML retains its owning renderer status independently of the embedded Problem: a native validation failure
+can produce Error 500 while v1 returns the authored 401 cause. Typed admission/security errors keep their established
+status. Identity request constraints also preserve native accepted input: passwords, forgotten usernames and
+standalone guest-recovery email have no maximum, while guest registration's email lookup keeps its bounded authored
+variant. Do not infer a shared limit from the field name or introduce one through a client attribute.
 
 Local login, registration, recovery, activation/reset and profile selection now have v1 commands and Vue pages.
 Emailed activation/reset URLs enter those pages. Guest capability links retain native GET authentication through
@@ -444,7 +469,8 @@ table are relative to `/api/v1`; [OpenAPI](../../contracts/api/v1/openapi.yaml) 
 | Methods and paths | Result and policy owner |
 |---|---|
 | `GET /packing-lists/create-context`; `POST /packing-lists` | Initial permission definitions/defaults; full-account multipart creation with `data` JSON and optional `image`, saving root/items/defaults in one DB transaction |
-| `GET /packing-lists/{listId}/duplicate` | Authorized copy draft including item order/Everyone/default permissions; no assignments, file, event, admins or archival copied; submission uses the same creation command |
+| `GET /packing-lists/create-entry`; `GET /packing-lists/{listId}/entry` | Existing account/entity admission owners project render, redirect or denial with typed one-time notice; creation retains the requested return and detail/explicit guest entry remain distinct |
+| `GET /packing-lists/{listId}/duplicate` | Authorized copy draft including item order/Everyone/default permissions; no assignments, file, event, admins or archival copied; independently authorized URL context can seed a destination event, and submission uses the same creation command |
 | `POST /packing-lists/{listId}/items`; `PATCH`/`DELETE /packing-lists/{listId}/items/{itemId}` | Quick add, field-specific conditional edit, scoped removal; retain direct item grants and creator ownership |
 | `PUT /packing-lists/{listId}/item-order` | Complete reviewed item order with `If-Match: orderToken` and exact current membership |
 | `DELETE /packing-lists/{listId}/assignments/{assignmentId}` | Authorized removal of another assignment; canonical positive decimal-string handle is disclosed only to actors with the removal capability |
@@ -453,10 +479,14 @@ table are relative to `/api/v1`; [OpenAPI](../../contracts/api/v1/openapi.yaml) 
 | `GET /packing-lists/{listId}/profiles`; `GET /packing-lists/events` | Authorized profile/event selection through existing discovery owners; event query retains its declared filters/cursor/selected reference |
 | `PUT /packing-lists/{listId}/event` | Expected-parent and reviewed settings checks; preserve independent parent disclosure and current admission after relinking |
 | `PUT`/`DELETE`/`GET /packing-lists/{listId}/header` | Conditional multipart replacement/removal; context-authorized binary read, opaque version and safe file cleanup |
-| `POST /packing-lists/{listId}/archive`; `POST /packing-lists/{listId}/restore`; `DELETE /packing-lists/{listId}` | Shared archive owner and inherited restrictions; separate full-account owner-only permanent deletion |
+| `POST /packing-lists/{listId}/archive`; `POST /packing-lists/{listId}/restore`; `DELETE /packing-lists/{listId}` | Shared archive owner and inherited restrictions; separate profile-owner permanent deletion, including established guest owners; administrator grants alone do not authorize deletion |
 | `GET /overview`; `PUT /overview/{entityType}/{entityId}/visibility` | Existing bounded overview reader retains all five authorized types; four participant/owner × main/hidden regions, eligible event containers, private desired visibility |
 | `POST /auth/login`, `/auth/logout`, `/auth/register`, `/auth/forgot-password`, `/auth/reset-password`, `/auth/activate`, `/auth/guest-login`, `/auth/guest-recovery`, `/auth/guest-email-exists`; `PUT /auth/profile` | Generated identity shapes mapped onto the owning account/guest checks; session-changing results explicitly confirm their new context |
 | `GET`/`POST /packing-lists/{listId}/guest` | Public guest-entry title projection and scoped guest registration, including the deliberately private personal access link in the transition result |
+
+Creation-entry and duplicate reads include optional `selectedEvent` only when the caller supplies `eventId` context.
+The existing event-selection controller omits missing or rejected targets from the initial draft; the duplicate's
+source parent remains excluded. Ordinary requests retain their earlier response shape for already mounted clients.
 
 The overview wraps [the existing user controller](../../src/controller/userController.ts); it does not replace its
 membership/grouping queries with raw ORM reads. Region totals retain their existing pre-type-filter meanings,

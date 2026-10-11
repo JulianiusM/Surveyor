@@ -1,16 +1,18 @@
 /* Keep the rendered Bootstrap theme while giving Vue exclusive ownership of interactive state. */
 .pilot-app { color: var(--bs-body-color); }
-/* Native message pages move their live-alert region into the card. An empty outer
-   region therefore reserves no space here. Ordinary pages retain their native mt-1
-   region, and actual shell notices stay visible above every kind of page. */
-#pilot-main:has(> .pilot-page-message) > .pilot-page-notices:empty { display: none; }
+/* Full message pages move native alerts into their card. Ordinary pages retain
+   the separate mt-1 live-alert host after any initial, non-sticky flash messages. */
+#pilot-main:has(> .pilot-page-message) > .pilot-page-notices:has(> #liveAlerts:only-child:empty) { display: none; }
+/* A mounted form's rejected POST owns its ordinary flash above the card. The
+   empty inline host precedes that component in Vue, so it contributes no extra
+   pre-flash gap; disclosed inline messages still retain their native mt-1. */
+#pilot-main > .pilot-page-notices:has(> #liveAlerts:only-child:empty):has(+ .alert) { display: none; }
 .pilot-nav-dropdown > summary { list-style: none; cursor: pointer; }
 .pilot-nav-dropdown > summary::-webkit-details-marker { display: none; }
 .pilot-nav-dropdown > .dropdown-menu { top: 100%; left: 0; margin-top: var(--bs-dropdown-spacer); }
 .pilot-nav-dropdown[open] > .dropdown-menu { display: block; }
 .pilot-nav-dropdown .dropdown-menu-end { right: 0; left: auto; }
 .pilot-locale { width: auto; }
-.pilot-app .nav-link:focus-visible, .pilot-app a:focus-visible { outline: 2px solid var(--bs-info); outline-offset: 3px; }
 .pilot-dialog-backdrop { position: fixed; inset: 0; z-index: 1050; background: rgb(0 0 0 / 50%); }
 .pilot-dialog { position: fixed; z-index: 1055; inset: 1.75rem auto auto 50%; transform: translateX(-50%);
     --bs-modal-header-padding-x: 1rem; --bs-modal-header-padding-y: 1rem; --bs-modal-title-line-height: 1.5;
@@ -18,7 +20,9 @@
     width: min(500px, calc(100vw - 1rem)); max-height: calc(100dvh - 3.5rem); overflow: hidden;
     border: 1px solid var(--bs-border-color-translucent); border-radius: var(--bs-border-radius-lg); }
 .pilot-dialog .modal-header, .pilot-dialog .modal-body, .pilot-dialog .modal-footer { padding: 1rem; }
-.pilot-dialog .modal-header, .pilot-dialog .modal-footer { display: flex; align-items: center; gap: .75rem; }
+/* Bootstrap's native header has no flex gap. Extra spacing would narrow the
+   subtitle on mobile and move every following panel below its native position. */
+.pilot-dialog .modal-header, .pilot-dialog .modal-footer { display: flex; align-items: center; }
 .pilot-dialog .modal-header { justify-content: space-between; border-bottom: 1px solid var(--bs-border-color); }
 .pilot-dialog .modal-body { overflow-y: auto; }
 .pilot-dialog .modal-header, .pilot-dialog .modal-footer { flex-shrink: 0; }

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import {afterEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {render} from '../../src/frontend/app/entry-server';
 import type {components} from '../../src/types/api/v1';
 
@@ -24,8 +24,35 @@ function region(collection: 'owner' | 'participant', visibility: 'main' | 'hidde
 afterEach(() => { vi.unstubAllGlobals(); document.body.innerHTML = ''; });
 
 describe('same-component native fallback', () => {
-    // The cold full-suite run compiles both complete lazy packing view graphs inside this
-    // multi-locale SSR case. Budget that startup work without weakening admission assertions.
+    // Cold Vitest compilation belongs to preparation, not the timed observable
+    // SSR contract. Resolve each lazy route graph with one bounded startup budget;
+    // the actual render/assertion bodies retain the ordinary five-second budget.
+    beforeAll(async function prepareSsrRouteModules(): Promise<void> {
+        await Promise.all([
+            import('../../src/frontend/features/packing/PackingCreatePage.vue'),
+            import('../../src/frontend/features/packing/PackingEntry.vue'),
+            import('../../src/frontend/features/identity/IdentityPage.vue'),
+            import('../../src/frontend/features/overview/OverviewPage.vue'),
+        ]);
+    }, 60_000);
+
+    it('uses the server-admitted initial event instead of the creation URL during SSR', async () => {
+        const fetch = vi.fn(() => {throw new Error('SSR must retain server-owned initial selection');});
+        vi.stubGlobal('fetch', fetch);
+        const option: components['schemas']['PackingEventOption'] = {id: entityId, title: 'Admitted initial event',
+            description: null, startDate: '2026-10-07', endDate: '2026-10-08', archived: false, deadlinePassed: false};
+        for (const selectedEvent of [option, null]) {
+            const result = await render(`/frontend-pilot/packing/create?eventId=${entityId}`, {
+                session: {...session, kind: 'account', activeProfile: {id: profileId, name: 'Account owner'}},
+                pageEntry: {kind: 'render'}, packingSelectedEvent: selectedEvent,
+                packingCreateContext: {defaults: {public: 0, guest: 0, authenticated: 0, participant: 0}, permissions: [], presets: []},
+            });
+            const document = new DOMParser().parseFromString(result.html, 'text/html');
+            expect(document.querySelector('#create-event-button')?.textContent).toBe(selectedEvent?.title ?? 'No event');
+        }
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
     it('renders localized packing admission errors without private views or unsupported-page fallback', async () => {
         const fetch = vi.fn(() => {throw new Error('An admission error must not request private packing data');});
         vi.stubGlobal('fetch', fetch);
@@ -36,7 +63,7 @@ describe('same-component native fallback', () => {
                 });
                 const document = new DOMParser().parseFromString(result.html, 'text/html');
                 expect(document.querySelector('main [role="alert"]')?.textContent).toContain(
-                    locale === 'de' ? 'Packliste nicht gefunden.' : 'Packing list not found.',
+                    locale === 'de' ? 'Packliste nicht gefunden.' : 'packing not found',
                 );
                 const card = document.querySelector('main section.card')!;
                 expect(card.querySelector('h1.card-header')?.textContent).toBe(locale === 'de' ? 'Fehler' : 'Error');
@@ -48,7 +75,7 @@ describe('same-component native fallback', () => {
             }
         }
         expect(fetch).not.toHaveBeenCalled();
-    }, 60_000);
+    });
 
     it('initializes an admitted public duplicate form without granting account creation or calling HTTP during SSR', async () => {
         const fetch = vi.fn(() => {throw new Error('SSR must use its admitted copy projection');});
@@ -115,7 +142,7 @@ describe('same-component native fallback', () => {
         expect(form.querySelector('input[name="email"]')).not.toBeNull();
         expect(form.querySelector('button[type="submit"]')?.hasAttribute('disabled')).toBe(false);
         expect(guest.javascriptRequired).toBe(true);
-    }, 20_000); // The first lazy packing route compiles its complete view graph under Vitest.
+    });
 
     it('renders authorized overview cards, badges and independent native search/hidden navigation without HTTP', async () => {
         const fetch = vi.fn(() => { throw new Error('SSR must not call its own API'); });
@@ -133,7 +160,14 @@ describe('same-component native fallback', () => {
         expect(form.getAttribute('method')).toBe('get');
         expect(form.getAttribute('action')).toBe('/frontend-pilot');
         expect(form.querySelector('input[name="participant_main_q"]')).not.toBeNull();
-        expect(form.querySelector('select[name="participant_main_type"]')).not.toBeNull();
+        const search = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+        expect([search.textContent, search.name, search.value]).toEqual(['Search', 'participant_main_type', 'all']);
+        const filter = form.querySelector('summary[role="button"]')!;
+        expect(filter.textContent).toBe('Filter');
+        const choices = [...filter.parentElement!.querySelectorAll<HTMLButtonElement>('ul.dropdown-menu button[type="submit"]')];
+        expect(choices.map(button => [button.textContent, button.name, button.value, button.getAttribute('aria-pressed')]))
+            .toEqual([['All types', 'participant_main_type', 'all', 'true'],
+                ['packing', 'participant_main_type', 'packing', 'false']]);
         expect(form.querySelector('input[name="owner_main_q"]')?.getAttribute('value')).toBe('equipment');
         const hiddenLink = document.querySelector('a[aria-controls="overview-owner-hidden"]')!;
         expect(hiddenLink.getAttribute('href')).toContain('owner_hidden_open=1');

@@ -8,20 +8,20 @@ import {renderFrontendPilot} from '../modules/frontendPilotRenderer';
 import {fetchHelpDoc, fetchHelpIndex, fetchHelpSearch} from '../controller/helpController';
 import type {FrontendPilotBootstrap} from '../types/FrontendPilotTypes';
 import * as userController from '../controller/userController';
-import {frontendIdentityFeedback, safeFrontendReturn} from '../modules/lib/frontendIdentity';
+import {frontendIdentityFeedback, frontendIdentityPageEntry, safeFrontendReturn} from '../modules/lib/frontendIdentity';
+import type {FrontendIdentityOperation} from '../types/IdentityTypes';
 import {persistSession} from '../modules/lib/session';
-import {ExpectedError} from '../modules/lib/errors';
+import {APIError, ExpectedError, ValidationError} from '../modules/lib/errors';
 import settings from '../modules/settings';
 import {validateApiInput} from '../modules/api/transport';
 import * as packingService from '../modules/database/services/PackingService';
 import type {components} from '../types/api/v1';
 import type {ApiOperationId} from '../types/ApiTransportTypes';
 import {paramHandler} from '../middleware/paramHandler';
-import {requirePermission} from '../middleware/permissionMiddleware';
-import {getPermFct, getResource} from '../modules/lib/util';
-import {PERM} from '../modules/lib/permissions';
+import {getResource} from '../modules/lib/util';
 import type {PackingList} from '../modules/database/entities/packing/PackingList';
 import {readPackingCreateEntry, readPackingDuplicate, readPackingResourceEntry} from '../modules/packing/api';
+import {resolvePilotHelpQuery} from '../modules/lib/helpNavigation';
 
 const router = Router();
 
@@ -53,12 +53,12 @@ function packingResource(req: Request): PackingList {
     return getResource(req, 'packing') as PackingList;
 }
 
-const packingPermissionSubject = getPermFct(packingResource, 'packing');
-
 function applyNativePresentationLocale(req: Request): void {
-    // Native GET language selection changes only presentation, never business state or authority.
-    if (typeof req.query.locale === 'string' && localeManifest.some(locale => locale.locale === req.query.locale)) {
-        req.headers['x-surveyor-locale'] = req.query.locale;
+    // Native form and GET language hints select presentation before a configuration
+    // denial, never business state or authority. POST retains its existing body precedence.
+    const locale = req.method === 'POST' && typeof req.body?.locale === 'string' ? req.body.locale : req.query.locale;
+    if (typeof locale === 'string' && localeManifest.some(entry => entry.locale === locale)) {
+        req.headers['x-surveyor-locale'] = locale;
     }
 }
 
@@ -122,36 +122,32 @@ router.get('/', asyncHandler(async function renderOverviewPilot(req, res) {
     await renderFrontendPilot(res, req.originalUrl, state);
 }));
 
-/** Refresh the ordinary session before native permission middleware reads it. */
-async function admitPackingSession(req: Request, _res: Response, next: NextFunction): Promise<void> {
-    await captureApiActor(req);
-    next();
-}
-
 router.get('/packing/create', asyncHandler(async function renderPackingCreatePilot(req, res) {
     const state = await bootstrap(req);
-    const result = readPackingCreateEntry(await captureApiActor(req), req.originalUrl);
+    const result = await readPackingCreateEntry(await captureApiActor(req), req.originalUrl, req.query.eventId);
     if (await applyPageEntry(req, res, state, result.entry)) return;
     state.packingCreateContext = result.context ?? undefined;
+    state.packingSelectedEvent = result.selectedEvent ?? null;
     await renderFrontendPilot(res, req.originalUrl, state);
 }));
 
-router.get('/packing/:listId/duplicate', asyncHandler(admitPackingSession),
-    requirePermission(packingPermissionSubject, PERM.DATA_DUPLICATE),
-    asyncHandler(async function renderPackingDuplicatePilot(req, res) {
-        const state = await bootstrap(req);
-        try {
-            state.packingDuplicate = await readPackingDuplicate(packingResource(req).id, await captureApiActor(req));
-        } catch (error) {
-            // The snapshot repeats native duplication admission. If the source
-            // disappeared or its grant changed, preserve the same HTML outcome.
-            if (error instanceof ApiProblem && ['NOT_FOUND', 'FORBIDDEN'].includes(error.code)) {
-                throw new ExpectedError(error.code, 'error', error.status);
-            }
-            throw error;
+router.get('/packing/:listId/duplicate', asyncHandler(async function renderPackingDuplicatePilot(req, res) {
+    const state = await bootstrap(req);
+    try {
+        // HTML and SPA entry use this same snapshot and freshly admitted actor. A
+        // serialized session profile need not contain inverse account/guest relations;
+        // repeating native middleware here would evaluate different audience evidence.
+        state.packingDuplicate = await readPackingDuplicate(packingResource(req).id, await captureApiActor(req), req.query.eventId);
+    } catch (error) {
+        // The snapshot owns DATA_DUPLICATE admission. A missing source or denied
+        // grant retains the established HTML error presentation and status.
+        if (error instanceof ApiProblem && ['NOT_FOUND', 'FORBIDDEN'].includes(error.code)) {
+            throw new ExpectedError(error.code === 'FORBIDDEN' ? 'Not allowed' : error.code, 'error', error.status);
         }
-        await renderFrontendPilot(res, req.originalUrl, state);
-    }));
+        throw error;
+    }
+    await renderFrontendPilot(res, req.originalUrl, state);
+}));
 
 router.get('/packing/:listId', asyncHandler(async function renderPackingPilot(req, res) {
     const state = await bootstrap(req);
@@ -178,9 +174,7 @@ router.get('/packing/:listId/guest', asyncHandler(async function renderGuestPilo
 /** Native forms carry the same context/CSRF/compatibility values as fetch headers. Preserve
  * browser origin checks and validate only the operation input, excluding transport controls. */
 async function admitNativeIdentity(req: Request, res: Response, operation: ApiOperationId, input?: unknown): Promise<void> {
-    if (typeof req.body.locale === 'string' && localeManifest.some(locale => locale.locale === req.body.locale)) {
-        req.headers['x-surveyor-locale'] = req.body.locale;
-    }
+    applyNativePresentationLocale(req);
     for (const [field, header] of [['_context', 'x-surveyor-context'], ['_csrf', 'x-csrf-token'],
         ['_compatibility', 'x-surveyor-api-compatibility']] as const) {
         const value = req.body[field];
@@ -193,8 +187,13 @@ async function admitNativeIdentity(req: Request, res: Response, operation: ApiOp
     if (input !== undefined) validateApiInput(operation, input);
 }
 
-function requireLocalLogin(): void {
-    if (!settings.value.localLoginEnabled) throw new ApiProblem('LOCAL_LOGIN_DISABLED');
+/** Resolve only the native form URLs registered below; token-bearing reset has its own prefix. */
+function nativeIdentityOperation(req: Request): FrontendIdentityOperation {
+    if (req.path === '/guest/recovery') return 'recovery';
+    if (req.path === '/users/login') return 'login';
+    if (req.path === '/users/register') return 'register';
+    if (req.path === '/users/forgot-password') return 'forgot';
+    return 'reset';
 }
 
 /** A native redirect carries the selected presentation language without mutating identity
@@ -213,6 +212,34 @@ function safeIdentityFields(body: Record<string, unknown>): FrontendPilotBootstr
     return fields;
 }
 
+/**
+ * A document retains the status of its owning native renderer error. ValidationError
+ * has no explicit status and the native generic handler renders it as Error 500; its
+ * stable API cause may independently classify as 400, 401, 403 or 409. The embedded
+ * Problem remains that authored wire projection, while the HTML response preserves
+ * native behavior. Security/admission errors already own their typed status and pass
+ * through unchanged; this never turns a CSRF or generated-input rejection into 500.
+ */
+function nativeDocumentErrorStatus(error: unknown, problem: ApiProblem): number {
+    if (error instanceof ValidationError) return 500;
+    if (error instanceof ExpectedError || error instanceof APIError) return error.status;
+    return problem.status;
+}
+
+/**
+ * Render a confirmed native POST at its submitted message destination. The shared page
+ * owner consumes this actor/URL receipt once and retires it on departure. A later GET
+ * performs its normal admission again; a consumed password token cannot be reopened
+ * merely because the earlier POST completed successfully.
+ */
+async function renderNativeIdentityCompletion(req: Request, res: Response,
+    messageKey: typeof frontendIdentityFeedback[number]): Promise<void> {
+    const state = await bootstrap(req);
+    state.pageCompletion = {context: state.session.context, destination: req.originalUrl,
+        messageKey, kind: 'success'};
+    await renderFrontendPilot(res, req.originalUrl, state);
+}
+
 /** Native and enhanced identity share the owning controllers and generated schemas. Public
  * values survive a rejected submit; credentials stay out of rendered JSON and redisplayed input. */
 async function submitNativeIdentity(req: Request, res: Response): Promise<void> {
@@ -221,26 +248,23 @@ async function submitNativeIdentity(req: Request, res: Response): Promise<void> 
     const inputNext = {next};
     let feedback: typeof frontendIdentityFeedback[number] | undefined;
     try {
-        if (req.path === '/guest/recovery' || req.path === '/users/login' && body._recovery === '1') {
+        // Native routes check local-login configuration before credential admission.
+        // The document Error 500 is presentation only: enhanced commands retain the
+        // authored LOCAL_LOGIN_DISABLED 403 without changing its public wire contract.
+        const entry = frontendIdentityPageEntry(nativeIdentityOperation(req), settings.value, next, 'POST');
+        if (entry.kind === 'denied') {
+            const state = await bootstrap(req);
+            await applyPageEntry(req, res, state, entry);
+            return renderFrontendPilot(res, req.originalUrl, state);
+        }
+        if (req.path === '/guest/recovery') {
             const input = {email: body.email, ...inputNext};
             await admitNativeIdentity(req, res, 'recoverGuestIdentity', input);
             await userController.recoverGuestAccount(String(input.email).trim().toLowerCase(), {frontend: true, next});
-            feedback = 'auth.recoverySent';
-            if (req.path === '/guest/recovery') {
-                // Native recovery POST renders its full Success card at the submitted
-                // /guest/recovery URL. Its generic actor/destination receipt is retired
-                // by the shared page owner on departure; bootstrap feedback alone must
-                // not recreate confirmed mail delivery when this URL is revisited.
-                const state = await bootstrap(req);
-                state.pageCompletion = {context: state.session.context, destination: req.originalUrl,
-                    messageKey: feedback, kind: 'success'};
-                await renderFrontendPilot(res, req.originalUrl, state);
-                return;
-            }
+            return renderNativeIdentityCompletion(req, res, 'auth.recoverySent');
         } else if (req.path === '/users/login') {
             const input = {username: body.username, password: body.password, ...inputNext};
             await admitNativeIdentity(req, res, 'loginIdentity', input);
-            requireLocalLogin();
             await userController.loginUser(input, req.session, {frontend: true, next, beforeTransition: identityTransitionGuard(req)});
             flashPageNotice(req, {kind: 'success', messageKey: 'auth.loginDone'});
             await persistSession(req.session);
@@ -249,26 +273,22 @@ async function submitNativeIdentity(req: Request, res: Response): Promise<void> 
             const input = {username: body.username, displayname: body.displayname, email: body.email,
                 password: body.password, password_repeat: body.password_repeat, ...inputNext};
             await admitNativeIdentity(req, res, 'registerAccount', input);
-            requireLocalLogin();
             await userController.registerUser(input, undefined, {frontend: true, next});
             feedback = 'auth.registered';
         } else if (req.path === '/users/forgot-password') {
             const input = {username: body.username, ...inputNext};
             await admitNativeIdentity(req, res, 'requestPasswordReset', input);
-            requireLocalLogin();
             await userController.sendPasswordForgotMail(String(input.username), {frontend: true, next});
             feedback = 'auth.resetSent';
         } else {
             const input = {token: String(req.params.token), password: body.password, confirmPassword: body.confirmPassword};
             await admitNativeIdentity(req, res, 'resetAccountPassword', input);
-            requireLocalLogin();
             await userController.resetPassword(input.token, input);
-            feedback = 'auth.resetDone';
+            return renderNativeIdentityCompletion(req, res, 'auth.resetDone');
         }
         req.flash('frontend-pilot', feedback);
         await persistSession(req.session);
-        const destination = req.path.startsWith('/users/reset-password/') ? '/users/login' : req.path;
-        res.redirect(303, `/frontend-pilot${destination}?next=${encodeURIComponent(next)}&locale=${requestLocale(req)}`);
+        res.redirect(303, `/frontend-pilot${req.path}?next=${encodeURIComponent(next)}&locale=${requestLocale(req)}`);
     } catch (error) {
         const problem = classifyApiError(error);
         req.apiActor = undefined;
@@ -285,7 +305,7 @@ async function submitNativeIdentity(req: Request, res: Response): Promise<void> 
         if (req.path.startsWith('/users/reset-password/')) {
             state.passwordReset = problem.code === 'TOKEN_INVALID' ? state.identityFormProblem : {valid: true};
         }
-        res.status(problem.status);
+        res.status(nativeDocumentErrorStatus(error, problem));
         await renderFrontendPilot(res, req.originalUrl, state);
     }
 }
@@ -316,7 +336,7 @@ router.post('/packing/:listId/guest', asyncHandler(async function submitNativeGu
         const state = await guestBootstrap(req);
         state.identityFields = safeIdentityFields(req.body);
         state.identityFormProblem = validatedProblemBody(problem, state.session.locale);
-        res.status(problem.status);
+        res.status(nativeDocumentErrorStatus(error, problem));
         await renderFrontendPilot(res, req.originalUrl, state);
     }
 }));
@@ -327,7 +347,9 @@ router.post(['/users/profile', '/users/logout'], asyncHandler(async function sub
             const input = {profileId: req.body.profileId};
             await admitNativeIdentity(req, res, 'switchIdentityProfile', input);
             await userController.changeActiveProfile(req.session, input.profileId, identityTransitionGuard(req));
-            return res.redirect(303, nativeFrontendReturn(req, req.body.next));
+            // Native profile activation returns to Overview rather than reopening the
+            // previous profile's feature page. Its legacy profile screens remain native.
+            return res.redirect(303, nativeFrontendReturn(req, '/frontend-pilot'));
         }
         await admitNativeIdentity(req, res, 'logoutIdentity');
         const destination = await userController.logoutUserOidc(req.session);
@@ -346,13 +368,18 @@ router.post(['/users/profile', '/users/logout'], asyncHandler(async function sub
         req.apiActor = undefined;
         const state = await bootstrap(req);
         state.identityProblem = validatedProblemBody(problem, state.session.locale);
-        res.status(problem.status);
+        res.status(nativeDocumentErrorStatus(error, problem));
         await renderFrontendPilot(res, req.originalUrl, state);
     }
 }));
 
 router.get('/users/oidc/login', asyncHandler(async function startPilotOidc(req, res) {
-    if (!settings.value.oidcEnabled) return res.redirect('/frontend-pilot/users/login');
+    const entry = frontendIdentityPageEntry('oidc', settings.value, req.query.next);
+    if (entry.kind === 'denied') {
+        const state = await bootstrap(req);
+        await applyPageEntry(req, res, state, entry);
+        return renderFrontendPilot(res, req.originalUrl, state);
+    }
     // Preserve the configured callback and PKCE/state handling; only the final application
     // destination differs. It belongs to the session and is never supplied by the provider.
     req.session.frontendAuthReturn = safeFrontendReturn(req.query.next);
@@ -381,8 +408,10 @@ router.get('/guest/:guestId/login/:token', asyncHandler(async function enterPilo
 
 router.get('/users/reset-password/:token', asyncHandler(async function renderPasswordResetPilot(req, res) {
     const state = await bootstrap(req);
+    const entry = frontendIdentityPageEntry('reset', settings.value);
+    if (await applyPageEntry(req, res, state, entry)) return;
+    if (entry.kind === 'denied') return renderFrontendPilot(res, req.originalUrl, state);
     try {
-        if (!settings.value.localLoginEnabled) throw new ApiProblem('LOCAL_LOGIN_DISABLED');
         // Initial requests and SPA navigation use the same native controller admission.
         // Render a truthful localized denial before hydration, with no password form; the
         // later POST independently checks expiry/consumption rather than trusting this read.
@@ -391,15 +420,20 @@ router.get('/users/reset-password/:token', asyncHandler(async function renderPas
     } catch (error) {
         const problem = classifyApiError(error);
         state.passwordReset = validatedProblemBody(problem, state.session.locale);
-        res.status(problem.status);
+        res.status(nativeDocumentErrorStatus(error, problem));
     }
     await renderFrontendPilot(res, req.originalUrl, state);
 }));
 
 router.get('/users/activate/:token', asyncHandler(async function activateNativeIdentity(req, res) {
     applyNativePresentationLocale(req);
+    const entry = frontendIdentityPageEntry('activate', settings.value);
+    if (entry.kind === 'denied') {
+        const state = await bootstrap(req);
+        await applyPageEntry(req, res, state, entry);
+        return renderFrontendPilot(res, req.originalUrl, state);
+    }
     try {
-        requireLocalLogin();
         await userController.activateAccount(String(req.params.token));
         req.flash('frontend-pilot', 'auth.activated');
         await persistSession(req.session);
@@ -408,7 +442,7 @@ router.get('/users/activate/:token', asyncHandler(async function activateNativeI
         const state = await bootstrap(req);
         const problem = classifyApiError(error);
         state.identityProblem = validatedProblemBody(problem, state.session.locale);
-        res.status(problem.status);
+        res.status(nativeDocumentErrorStatus(error, problem));
         await renderFrontendPilot(res, req.originalUrl, state);
     }
 }));
@@ -416,26 +450,19 @@ router.get('/users/activate/:token', asyncHandler(async function activateNativeI
 router.get(['/users/login', '/users/register', '/users/forgot-password'],
     asyncHandler(async function renderIdentityPilot(req, res) {
         const state = await bootstrap(req);
-        if (!settings.value.localLoginEnabled) {
-            const entryPage = req.path === '/users/login' || req.path === '/users/register';
-            if (entryPage && settings.value.oidcEnabled) {
-                // Match native OIDC-only entry, while retaining the pilot's bounded return
-                // destination through the owning OIDC start/callback instead of a form detour.
-                return res.redirect(`/frontend-pilot/users/oidc/login?next=${encodeURIComponent(safeFrontendReturn(req.query.next))}`);
-            }
-            const problem = new ApiProblem('LOCAL_LOGIN_DISABLED');
-            state.identityProblem = validatedProblemBody(problem, state.session.locale);
-            res.status(problem.status);
-        }
+        const entry = frontendIdentityPageEntry(nativeIdentityOperation(req), settings.value, req.query.next);
+        if (await applyPageEntry(req, res, state, entry)) return;
         await renderFrontendPilot(res, req.originalUrl, state);
     }));
 
 /** GET forms remain usable with JavaScript disabled and hydrate into the same search page. */
 async function renderHelpPilot(req: Request, res: Response): Promise<void> {
-    const doc = typeof req.query.doc === 'string' ? req.query.doc : req.params.doc;
+    const query = resolvePilotHelpQuery(req.params.doc, req.query);
     const state = await bootstrap(req);
-    const data = typeof req.query.q === 'string' ? fetchHelpSearch(req.query.q, state.session.locale)
-        : typeof doc === 'string' ? fetchHelpDoc(doc, state.session.locale) : fetchHelpIndex(state.session.locale);
+    // The browser uses this exact path/query selection. In particular, native search
+    // without q is its prompt, and article aliases ignore conflicting query selectors.
+    const data = query.q !== undefined ? fetchHelpSearch(query.q, state.session.locale)
+        : query.doc !== undefined ? fetchHelpDoc(query.doc, state.session.locale) : fetchHelpIndex(state.session.locale);
     state.help = data;
     await renderFrontendPilot(res, req.originalUrl, state);
 }
@@ -446,7 +473,7 @@ router.get('/help/:doc', asyncHandler(renderHelpPilot));
 router.use(async function renderPackingAdmissionError(error: unknown, req: Request, res: Response, next: NextFunction) {
     if (!req.path.startsWith('/packing/') || !(error instanceof ExpectedError)) return next(error);
     const packingError = error.status === 404 ? 'packing.notFound'
-        : error.status === 403 ? 'api:errors.FORBIDDEN'
+        : error.status === 403 ? 'common.notAllowed'
             : error.message === 'You must be registered for the event to access this resource' ? 'packing.eventRegistrationRequired' : null;
     if (!packingError) return next(error);
     try {

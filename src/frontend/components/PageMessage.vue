@@ -1,13 +1,38 @@
 <script setup lang="ts">
-import {computed} from 'vue';
-import {RouterLink} from 'vue-router';
+import {computed, ref, watch} from 'vue';
+import {RouterLink, useRoute} from 'vue-router';
 import {usePilot} from '../app/context';
+import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
 import StatusNotice from './StatusNotice.vue';
 
-const props = defineProps<{kind: 'info' | 'success' | 'error'; message: string}>();
+const props = withDefaults(defineProps<{
+    kind: 'info' | 'success' | 'error';
+    message: string;
+    transient?: boolean;
+    renewal?: unknown;
+    // Recoverable admission reads can keep this native Error/Home layout while
+    // the same notice owns their safe diagnostic and server retry deadline.
+    retryAt?: number;
+    readError?: Error | null;
+}>(), {transient: true});
 const {messages} = usePilot();
+const route = useRoute();
+const documentUrl = computed(() => frontendDocumentUrl(route.fullPath));
+// Document visits and explicit outcome receipts own renewal. Translated message
+// text never resurrects an expired body or extends an already visible outcome.
+const messageReceipt = computed(() => ({document: documentUrl.value, kind: props.kind,
+    transient: props.transient, renewal: props.renewal}));
+const messageVisible = ref(true);
 const title = computed(() => messages.value.t(props.kind === 'info' ? 'common.infoTitle'
     : props.kind === 'success' ? 'common.successTitle' : 'common.errorTitle'));
+
+// Native full message pages expire their alert body, while the heading and Home remain.
+// Expiry is presentation only: never clear a command receipt or restart token admission.
+// Callers explicitly preserve unresolved read warnings; no translated key determines policy.
+watch(messageReceipt, revealMessage);
+
+function revealMessage(): void { messageVisible.value = true; }
+function dismissMessage(): void { messageVisible.value = false; }
 </script>
 
 <template>
@@ -19,7 +44,9 @@ const title = computed(() => messages.value.t(props.kind === 'info' ? 'common.in
                 : kind === 'success' ? 'bi-check-circle-fill' : 'bi-info-circle-fill'" aria-hidden="true"></i>{{ title }}
         </h1>
         <div class="card-body">
-            <StatusNotice :kind="kind === 'error' ? 'danger' : kind">{{ message }}</StatusNotice>
+            <StatusNotice v-if="messageVisible" :kind="kind === 'error' ? 'danger' : kind"
+                :retry-at="retryAt" :read-error="readError"
+                :transient="transient" :renewal="messageReceipt" @dismiss="dismissMessage">{{ message }}</StatusNotice>
             <slot />
             <div class="d-flex justify-content-center gap-3 mt-4">
                 <RouterLink class="btn btn-primary" to="/frontend-pilot">

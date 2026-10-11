@@ -10,13 +10,14 @@ import type {EntityManager} from 'typeorm';
 import type {components} from '../../types/api/v1';
 import type {PermissionFieldRule, PermEngineCaches, PermView, SessionLike} from '../../types/PermissionTypes';
 import type {LockedArchiveContext} from '../../types/ArchiveTypes';
+import type {EventLinkOption} from '../../types/EventTypes';
 import type {PackingList} from '../database/entities/packing/PackingList';
 import type {Event} from '../database/entities/event/Event';
 import type {PackingItem} from '../database/entities/packing/PackingItem';
 import type {PackingAssignment} from '../database/entities/packing/PackingAssignment';
 import {archiveEntity, restoreEntity, changeEntityEvent, entityPropertyPermission, getAuthorizedEventUrl, getEntityViewAdmission} from '../../controller/entityAdminController';
 import {getAccountPageEntry, hasAccountProfile} from '../../controller/userController';
-import {getEventLinkOptions} from '../../controller/eventController';
+import {getEventLinkOptions, readEventLinkSelection} from '../../controller/eventController';
 import {ApiProblem} from '../api/problem';
 import {validateApiInput} from '../api/transport';
 import * as packingService from '../database/services/PackingService';
@@ -237,18 +238,28 @@ export async function readPackingMetadata(id: string, session: SessionLike) {
     return packingService.withPackingReadSnapshot(id, readSnapshot);
 }
 
-/** Preserve existing trim/clear behavior before applying the one generated structural validator. */
-export function preparePackingMetadataPatch(body: unknown): components['schemas']['PackingMetadataPatch'] {
+/**
+ * Normalize the existing native trim/clear semantics independently of transport errors.
+ * Native and v1 adapters consume this same value, then validate the same generated schema;
+ * their different error envelopes never require a second field declaration or normalizer.
+ */
+export function normalizePackingMetadataPatch(body: unknown): unknown {
     let normalized = body;
     if (body && typeof body === 'object' && !Array.isArray(body)) {
         const fields = {...body} as Record<string, unknown>;
-        // Native/legacy adapters may construct optional keys with undefined. JSON cannot carry
-        // those values; treat them as omitted so an empty adapter payload still fails minProperties.
+        // JSON cannot carry undefined. The v1 input therefore treats these values as omitted;
+        // the native adapter separately preserves its original optional own-key semantics.
         for (const [key, value] of Object.entries(fields)) if (value === undefined) delete fields[key];
         if (typeof fields.title === 'string') fields.title = fields.title.trim();
         if (fields.description === '') fields.description = null;
         normalized = fields;
     }
+    return normalized;
+}
+
+/** The versioned adapter retains bounded structural diagnostics and its authored Problem envelope. */
+export function preparePackingMetadataPatch(body: unknown): components['schemas']['PackingMetadataPatch'] {
+    const normalized = normalizePackingMetadataPatch(body);
     validateApiInput('updatePackingMetadata', normalized);
     return normalized as components['schemas']['PackingMetadataPatch'];
 }
@@ -263,12 +274,25 @@ function assertLockedContext(context: LockedArchiveContext): void {
 }
 
 /**
- * Save a narrow, reviewed metadata patch. Authorization is re-evaluated inside the root transaction
- * before comparing touched fields, and the same transaction returns the new current-value baseline.
+ * Validate the versioned transport before entering the common locked metadata operation.
+ * Its minProperties rule remains strict even though a native optional-description request can
+ * represent a validated timestamp-only update with an explicitly undefined own property.
  */
 export async function patchPackingMetadata(id: string, body: unknown, ifMatch: string | undefined, session: SessionLike, compare = true, expectedEventId?: string | null,
     expectedValues?: components['schemas']['PackingMetadataPatch']) {
     const patch = preparePackingMetadataPatch(body);
+    return savePackingMetadata(id, patch, ifMatch, session, compare, expectedEventId, expectedValues);
+}
+
+/**
+ * Persist an adapter-validated sparse patch with fresh field authority and parent checks under
+ * the existing root transaction. Native and v1 callers own their transport validation, while
+ * this operation owns every business check and the returned current-value baseline. An optional
+ * native own key with undefined remains present for authorization and TypeORM's tracking update;
+ * it never clears the stored field or bypasses the lock. Versioned JSON cannot supply that value.
+ */
+export async function savePackingMetadata(id: string, patch: components['schemas']['PackingMetadataPatch'], ifMatch: string | undefined, session: SessionLike, compare = true, expectedEventId?: string | null,
+    expectedValues?: components['schemas']['PackingMetadataPatch']) {
     async function updateLocked(manager: EntityManager, context: LockedArchiveContext) {
         assertLockedContext(context);
         const list = requireList(await packingService.getPackingSnapshotRoot(manager, id));
@@ -330,8 +354,21 @@ export async function applyPackingMembership(manager: EntityManager, item: Packi
 /** Persist a sparse approved item patch under the caller's item lock; capacity reductions retain assignments. */
 export async function applyPackingItemPatch(manager: EntityManager, item: PackingItem, body: components['schemas']['PackingItemPatch']): Promise<boolean> {
     const changed = Object.entries(body).some(([key, value]) => (item[key as keyof PackingItem] ?? null) !== value);
-    if (changed) await packingService.updatePackingItem(item.id, body, manager);
+    if (changed) await packingService.updatePackingItem(item.id, packingItemPersistenceFields(body), manager);
     return changed;
+}
+
+/**
+ * Retain the established native number-control transport at the persistence boundary.
+ * TypeORM's entity describes the integer after retrieval, while its parameterized update
+ * also accepts the native raw numeric string. Passing that draft unchanged preserves
+ * MariaDB's half-away rounding, signed bounds and invalid-blank failure; there is no
+ * competing JavaScript converter or copied SQL range. The generated closed request
+ * shape and locked field authorization have already constrained the supplied fields.
+ * Keep this one transport-to-persistence assertion private to the operation owner.
+ */
+function packingItemPersistenceFields(body: components['schemas']['PackingItemPatch']): Partial<PackingItem> {
+    return {...body} as Partial<PackingItem>;
 }
 
 /**
@@ -429,10 +466,17 @@ export function requirePackingCreation(session: SessionLike): void {
  * transport boundary. Public duplicate GET deliberately remains independently grantable;
  * its later submission asks this operation with the exact duplicate URL as returnTo.
  */
-export function readPackingCreateEntry(session: SessionLike, returnTo?: unknown): components['schemas']['PackingCreateEntry'] {
+export async function readPackingCreateEntry(session: SessionLike, returnTo?: unknown, eventId?: unknown): Promise<components['schemas']['PackingCreateEntry']> {
     const target = safeFrontendReturn(returnTo ?? '/frontend-pilot/packing/create');
     const entry = getAccountPageEntry(session, '/frontend-pilot/users/login', target);
-    return {entry, context: entry.kind === 'render' ? packingFormContext() : null};
+    // An initial URL is context, not a draft selection. Match the native form by
+    // omitting missing/forbidden events before the client captures its baseline.
+    const selected = entry.kind === 'render' ? await readEventLinkSelection(eventId, session) : null;
+    const selectedEvent = selected ? projectPackingEventOption(selected) : null;
+    // Ordinary reads retain their previous wire shape so a mounted compatible
+    // client can still admit and finish an existing draft after folder replacement.
+    return {entry, context: entry.kind === 'render' ? packingFormContext() : null,
+        ...(eventId !== undefined ? {selectedEvent} : {})};
 }
 
 /**
@@ -488,7 +532,7 @@ export async function createPackingList(body: components['schemas']['PackingCrea
 }
 
 /** Native duplicate GET depends only on DATA_DUPLICATE, independently of detail admission and creation POST. */
-export async function readPackingDuplicate(id: string, session: SessionLike): Promise<components['schemas']['PackingDuplicate']> {
+export async function readPackingDuplicate(id: string, session: SessionLike, eventId?: unknown): Promise<components['schemas']['PackingDuplicate']> {
     return packingService.withPackingReadSnapshot(id, async function readDuplicate(manager, row) {
         const list = requireList(row);
         const permissions = await evaluateSubject({kind: 'entity', entity: {
@@ -499,10 +543,14 @@ export async function readPackingDuplicate(id: string, session: SessionLike): Pr
         // Copy the native form surface only. Assignments, administrators, header,
         // archive state and event membership remain associated with the source.
         const {items} = await packingService.getPackingSnapshotRows(manager, id);
+        const selected = await readEventLinkSelection(eventId, session);
         return {title: list.title, description: list.description ?? null, eventId: null,
             items: items.map(item => ({title: item.title, description: item.description ?? null, maxAssignees: item.maxAssignees ?? null, requiredByAll: Boolean(item.requiredByAll)})),
             defaultPermissions: completeDefaults(await adminService.getDefaultPerms('packing', id, manager)),
-            formContext: packingFormContext()};
+            // The source's parent is deliberately excluded. Only a separately
+            // admitted URL selection may seed the destination creation draft.
+            formContext: packingFormContext(),
+            ...(eventId !== undefined ? {selectedEvent: selected ? projectPackingEventOption(selected) : null} : {})};
     });
 }
 
@@ -625,8 +673,9 @@ export async function reorderPackingItems(id: string, body: components['schemas'
         if (compare) requireEditToken(token, orderEditToken(list, items, session));
         // Native transport predates edit tokens, but still submits every row once. Verify this
         // after locking so an addition/deletion or a duplicate/foreign ID cannot yield a partial order.
+        const currentItemIds = new Set(items.map(item => item.id));
         if (body.itemIds.length !== items.length || new Set(body.itemIds).size !== items.length
-            || body.itemIds.some(itemId => !items.some(item => item.id === itemId))) throw new ApiProblem('RESOURCE_CONFLICT');
+            || body.itemIds.some(itemId => !currentItemIds.has(itemId))) throw new ApiProblem('RESOURCE_CONFLICT');
         const changed = body.itemIds.some((itemId, position) => items[position]?.id !== itemId);
         if (changed) await packingService.reorderPackingItems(id, body.itemIds.map((itemId, position) => ({itemId, position})), manager);
         return {changed};
@@ -656,8 +705,15 @@ export async function updatePackingDefaults(id: string, body: components['schema
     }, compare);
 }
 
+/**
+ * Create, update or remove one administrator grant after rechecking the admitted actor
+ * under the parent/root locks. Existing grants compare their own mask; absent grants
+ * compare the settings baseline. A null mask removes the grant and reports a missing
+ * grant as an unchanged result. The DBAL owns only the selected persistence operation.
+ */
 export async function setPackingAdmin(id: string, profileId: string, mask: number | null, session: SessionLike, token?: string): Promise<components['schemas']['MutationResult']> {
     return withPackingManagement(id, session, async function saveAdmin(manager, list, permissions) {
+        // Require permission before disclosing profile or administrator evidence.
         if (!permissions.has('MANAGE_PERMISSIONS')) throw new ApiProblem('FORBIDDEN');
         if (!await userService.getProfileById(profileId, manager)) throw new ApiProblem('NOT_FOUND');
         const admins = await adminService.listAdmins('packing', id, manager);
@@ -666,6 +722,9 @@ export async function setPackingAdmin(id: string, profileId: string, mask: numbe
         // absent marker; discovering a grant created by another client requires explicit review.
         if (current) requireFieldComparison(token, comparisonToken('packing-admin', `${id}:${profileId}`, session, {mask: current.perms}), ['mask']);
         else requireFieldComparison(token, await settingsEditToken(manager, list, session, true), ['newAdmin']);
+
+        // Persist only after the relevant reviewed baseline matched. Removal remains
+        // distinct from an explicit zero mask, which is still a stored named grant.
         if (mask === null) {
             await adminService.removeAdmin('packing', id, profileId, manager);
             return {changed: Boolean(current)};
@@ -684,12 +743,16 @@ export async function searchPackingProfiles(id: string, query: string, session: 
     return (await userService.searchUsersSecure(query)).map(profile => ({profileId: profile.id, name: profile.name, username: profile.username, isGuest: false}));
 }
 
+/** The native option omits absent descriptions; the JSON contract represents them
+ * explicitly as null. Discovery and initial form admission share that projection. */
+function projectPackingEventOption(event: EventLinkOption): components['schemas']['PackingEventOption'] {
+    return {...event, description: event.description ?? null};
+}
+
 export async function searchPackingEvents(query: unknown, session: SessionLike): Promise<components['schemas']['PackingEventOptions']> {
     const result = await getEventLinkOptions(query, session);
-    function project(event: NonNullable<typeof result.selected>): components['schemas']['PackingEventOption'] {
-        return {...event, description: event.description ?? null};
-    }
-    return {items: result.items.map(project), selected: result.selected ? project(result.selected) : null, nextCursor: result.nextCursor};
+    return {items: result.items.map(projectPackingEventOption),
+        selected: result.selected ? projectPackingEventOption(result.selected) : null, nextCursor: result.nextCursor};
 }
 
 /** Shared lifecycle/controller owners remain authoritative; adapt only their conflict into the stable contract. */
@@ -709,8 +772,15 @@ export async function changePackingEvent(id: string, body: components['schemas']
     }
 }
 
+/**
+ * Adapt Packing's archive/restore command to the existing lifecycle controller, keeping
+ * its locked authorization and persistence authoritative. The response acknowledges the
+ * completed command as the native workflow does; parent changes and inherited archival
+ * retain their separate recovery codes. This operation never performs hard deletion.
+ */
 export async function setPackingArchived(id: string, archived: boolean, session: SessionLike): Promise<components['schemas']['MutationResult']> {
     try {
+        // The shared owner performs the action and its business checks in one transaction.
         if (archived) await archiveEntity({type: 'packing', id}, {}, session);
         else await restoreEntity({type: 'packing', id}, {}, session);
         return {changed: true};

@@ -31,15 +31,17 @@ watch(
     {immediate: true, flush: 'sync'},
 );
 
-/** Feature focus targets are scoped to the body; the default remains Reka's first control. */
+/** Native Bootstrap dialogs initially focus their container, without highlighting Close.
+ * A feature may instead request a body field, as the native event picker does. Keep
+ * Reka's trap and focus return, but do not let its first-control default change that
+ * observable native entry behavior when no usable feature target is present. */
 function focusInitial(event: Event): void {
-    if (!props.initialFocus || !(event.target instanceof HTMLElement)) return;
-    const target = event.target
+    if (!(event.target instanceof HTMLElement)) return;
+    const target = props.initialFocus ? event.target
         .querySelector<HTMLElement>('.modal-body')
-        ?.querySelector<HTMLElement>(props.initialFocus);
-    if (!target) return;
+        ?.querySelector<HTMLElement>(props.initialFocus) : null;
     event.preventDefault();
-    target.focus({preventScroll: true});
+    (target ?? event.target).focus({preventScroll: true});
 }
 
 /** The feature owns discard decisions. This wrapper only prevents dismissal while its command is pending. */

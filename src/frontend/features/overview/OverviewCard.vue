@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, ref} from 'vue';
+import {computed, watch} from 'vue';
 import {RouterLink} from 'vue-router';
 import type {components} from '../../../types/api/v1';
 import {usePilot} from '../../app/context';
-import {usePackingHeader} from '../../composables/packingHeader';
-import {useDropdownPlacement} from '../../composables/dropdownPlacement';
+import {useAuthorizedImage} from '../../composables/authorizedImage';
+import {usePackingApi} from '../packing/api';
+import {isOrdinaryNavigation} from '../../composables/pageEntry';
 import ActionButton from '../../components/ActionButton.vue';
+import AppNavigationDropdown from '../../components/AppNavigationDropdown.vue';
 
 // TODO (docs/FRONTEND_PILOT.md): Migrate non-packing detail/administration destinations
 // with their feature owners. These mixed Overview cards deliberately keep working native
@@ -16,6 +18,8 @@ const props = defineProps<{
     expansion?: boolean;
     expansionHref?: string;
     filtered?: boolean;
+    readRevision?: number;
+    active?: boolean;
 }>();
 const emit = defineEmits<{
     visibility: [value: components['schemas']['OverviewVisibilityInput']['visibility']];
@@ -23,39 +27,30 @@ const emit = defineEmits<{
     archive: [restore: boolean];
     remove: [];
 }>();
-const {messages} = usePilot();
-const packingHeader = usePackingHeader(
+const context = usePilot();
+const {messages} = context;
+const packingApi = usePackingApi(context);
+const packingHeader = useAuthorizedImage(
     computed(() => props.card.id),
     computed(() => (props.card.type === 'packing' ? props.card.headerVersion : null)),
+    packingApi.header.bind(packingApi),
+    computed(() => props.active !== false),
 );
-const image = computed(() => (props.card.type === 'packing' ? packingHeader.value : props.card.headerUrl));
-const menu = ref<HTMLDetailsElement | null>(null);
-const {dropdownStyle, updatePlacement} = useDropdownPlacement(menu);
-function closeMenu(restoreFocus = false): void {
-    if (!menu.value) return;
-    menu.value.open = false;
-    if (restoreFocus) menu.value.querySelector('summary')?.focus();
+const image = computed(() => (props.card.type === 'packing' ? packingHeader.source.value : props.card.headerUrl));
+// The region owns JSON delivery. Its completion marker also advances for equal
+// responses, allowing a missing binary image to recover while healthy URLs stay.
+watch(() => props.readRevision, recoverHeaderAfterRead);
+
+function recoverHeaderAfterRead(): void {
+    if (props.card.type === 'packing') void packingHeader.refresh();
 }
-function outside(event: PointerEvent): void {
-    if (menu.value && !menu.value.contains(event.target as Node)) closeMenu();
-}
-function navigateMenu(event: KeyboardEvent): void {
-    if (!menu.value || !['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+
+/** The href remains usable for a separate document; only ordinary clicks expand this region. */
+function expand(event: MouseEvent): void {
+    if (!isOrdinaryNavigation(event)) return;
     event.preventDefault();
-    menu.value.open = true;
-    updatePlacement();
-    const options = [...menu.value.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
-    const current = options.indexOf(document.activeElement as HTMLButtonElement);
-    const next =
-        current < 0
-            ? event.key === 'ArrowDown'
-                ? 0
-                : options.length - 1
-            : Math.max(0, Math.min(options.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)));
-    options[next]?.focus({preventScroll: true});
+    if (!props.disabled) emit('expand');
 }
-onMounted(() => document.addEventListener('pointerdown', outside));
-onBeforeUnmount(() => document.removeEventListener('pointerdown', outside));
 </script>
 <template>
     <article
@@ -102,19 +97,9 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside));
                 }}</span>
             </div>
             <div class="d-flex flex-wrap gap-2">
-                <details
-                    ref="menu"
-                    class="position-relative"
-                    @keydown.esc.prevent="closeMenu(true)"
-                    @keydown="navigateMenu"
-                >
-                    <summary
-                        class="btn btn-sm btn-outline-light dropdown-toggle"
-                        :aria-label="messages.t('overview.archiveMenu', {title: card.title})"
-                    >
-                        {{ messages.t('packing.archival') }}
-                    </summary>
-                    <div class="dropdown-menu show position-absolute" :style="dropdownStyle" @click="closeMenu()">
+                <AppNavigationDropdown :navigation="false" :label="messages.t('packing.archival')"
+                    trigger-class="btn btn-sm btn-outline-light dropdown-toggle"
+                    :trigger-label="messages.t('overview.archiveMenu', {title: card.title})">
                         <template
                             v-if="
                                 card.type === 'packing' &&
@@ -167,8 +152,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside));
                         >
                             {{ messages.t('overview.follow') }}
                         </button>
-                    </div>
-                </details>
+                </AppNavigationDropdown>
                 <div
                     v-if="card.capabilities.duplicate || card.capabilities.remove"
                     class="d-inline btn-group"
@@ -196,7 +180,8 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside));
                 class="btn btn-sm mt-2 btn-outline-primary"
                 :aria-label="messages.t('overview.showLinked', {title: card.title})"
                 :href="expansionHref"
-                @click.prevent="emit('expand')"
+                :data-overview-event="card.id"
+                @click="expand"
                 ><i class="bi bi-collection me-1" aria-hidden="true"></i
                 >{{
                     filtered

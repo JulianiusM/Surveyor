@@ -5,8 +5,14 @@ import {useQuery} from '@tanstack/vue-query';
 import {usePilot} from '../../app/context';
 import {useHelpApi} from './api';
 import {usePageTitle} from '../../composables/pageTitle';
+import {isOrdinaryNavigation} from '../../composables/pageEntry';
+import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {helpKeys} from '../../app/queryKeys';
+import {ApiFailure} from '../../app/transport';
+import {pilotHelpUrl, resolvePilotHelpQuery} from '../../../modules/lib/helpNavigation';
+import PageMessage from '../../components/PageMessage.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import ActionButton from '../../components/ActionButton.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 
 const context = usePilot();
@@ -14,12 +20,9 @@ const api = useHelpApi(context);
 const {messages, locale} = context;
 const route = useRoute();
 const router = useRouter();
-const query = computed(() => ({
-    // Native help normalizes before searching. Match that behavior for an enhanced deep link too.
-    ...(typeof route.query.q === 'string' ? {q: route.query.q.trim().replace(/\s+/gu, ' ').slice(0, 100)} : {}),
-    ...(typeof route.query.doc === 'string' ? {doc: route.query.doc}
-        : typeof route.params.doc === 'string' ? {doc: route.params.doc} : {}),
-}));
+// Explicit native path aliases and ordinary pilot query links share the SSR resolver.
+// Ignored native parameters must never become a different article/search after hydration.
+const query = computed(() => resolvePilotHelpQuery(route.params.doc, route.query));
 const search = ref(query.value.q ?? '');
 watch(() => query.value.q, value => { search.value = value ?? ''; });
 const help = useQuery({
@@ -32,25 +35,24 @@ const help = useQuery({
 });
 // A language switch must never display an old translated body under the new interface language.
 const page = computed(() => help.data.value?.locale === locale.value ? help.data.value : undefined);
+// A validated missing-document rejection owns the native complete Error page. An
+// unconfirmed transport/read failure instead retains the warning and confirmed article.
+const notFound = computed(() => help.error.value instanceof ApiFailure && help.error.value.problem?.code === 'NOT_FOUND');
 // Skeletons describe missing authority only. Complete SSR/cached articles remain mounted
 // during reads, and a terminal read error must never be accompanied by indefinite loading.
 const initialLoading = computed(() => !page.value && help.isPending.value && !help.error.value);
-const listId = computed(() => typeof route.query.list === 'string' ? route.query.list.toLowerCase() : null);
-const pageTitle = computed(() => page.value?.searchResults !== undefined ? messages.value.t('help.searchTitle')
-    : page.value?.title ?? messages.value.t('help.title'));
+const pageTitle = computed(() => {
+    if (notFound.value) return messages.value.t('common.errorTitle');
+    return page.value?.searchResults !== undefined ? messages.value.t('help.searchTitle')
+        : page.value?.title ?? messages.value.t('help.title');
+});
+const retryAvailable = useReadRetry(() => help.error.value);
+const retryAt = useReadRetryAt(() => help.error.value, retryAvailable);
 usePageTitle(pageTitle);
 
 /** Only release-shipped help links become SPA destinations. Files and external links stay native. */
 function helpRoute(href: string): string {
-    if (!href.startsWith('/help')) return href;
-    const source = new URL(href, 'https://help.invalid');
-    const match = /^\/help(?:\/([a-z0-9_-]+))?$/iu.exec(source.pathname);
-    if (!match || match[1] === 'assets') return href;
-    const params = new URLSearchParams();
-    if (match[1]) params.set('doc', match[1]);
-    if (listId.value) params.set('list', listId.value);
-    params.set('locale', locale.value);
-    return `/frontend-pilot/help?${params.toString()}${source.hash}`;
+    return pilotHelpUrl(href, locale.value);
 }
 
 // Rewrite only already validated, fixed-source anchors. SSR and enhanced navigation share the same
@@ -59,13 +61,19 @@ const content = computed(() => (page.value?.content ?? '').replace(/href="(\/hel
     (_match, href: string) => `href="${helpRoute(href.replaceAll('&amp;', '&')).replaceAll('&', '&amp;')}"`));
 function submitSearch(): void {
     void router.push({path: '/frontend-pilot/help', query: {
-        q: search.value, locale: locale.value, ...(listId.value ? {list: listId.value} : {}),
+        q: search.value, locale: locale.value,
     }});
 }
+/** Static help does not poll. A failed read therefore always offers a deliberate
+ * read-only recovery using the same server cooldown and current article/locale key.
+ * Refetch retains the mounted search draft and never navigates or replays a command. */
+async function retryHelp(): Promise<void> {
+    if (!context.ready.value || !context.hydrated.value || !retryAvailable.value || help.isFetching.value) return;
+    await help.refetch();
+}
 function followContentLink(event: MouseEvent): void {
-    if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     const anchor = (event.target as Element | null)?.closest('a');
-    if (!anchor || anchor.target || anchor.hasAttribute('download')) return;
+    if (!anchor || !isOrdinaryNavigation(event, anchor)) return;
     const href = anchor.getAttribute('href') ?? '';
     const target = helpRoute(href);
     if (!target.startsWith('/frontend-pilot/help')) return;
@@ -83,7 +91,8 @@ watch(() => [pageTitle.value, route.hash], async () => {
 </script>
 
 <template>
-    <section class="card bg-dark text-white mb-3">
+    <PageMessage v-if="notFound" kind="error" renewal="help.notFound" :message="messages.t('help.notFound')" />
+    <section v-else class="card bg-dark text-white mb-3">
         <div class="card-header d-flex justify-content-between align-items-center gap-2">
             <h1 class="card-title mb-0"><i class="bi bi-question-circle me-2" aria-hidden="true"></i>{{ pageTitle }}</h1>
             <RouterLink :to="helpRoute('/help')" class="btn btn-sm btn-outline-light">
@@ -99,7 +108,6 @@ watch(() => [pageTitle.value, route.hash], async () => {
                             <form action="/frontend-pilot/help" method="get" role="search" @submit.prevent="submitSearch">
                                 <label class="form-label visually-hidden" for="pilot-help-search">{{ messages.t('help.searchLabel') }}</label>
                                 <input type="hidden" name="locale" :value="locale" />
-                                <input v-if="listId" type="hidden" name="list" :value="listId" />
                                 <div class="input-group">
                                     <input id="pilot-help-search" v-model="search" class="form-control text-bg-dark" type="search" name="q"
                                            maxlength="100" required :placeholder="messages.t('help.searchPlaceholder')" />
@@ -128,14 +136,18 @@ watch(() => [pageTitle.value, route.hash], async () => {
                         <div class="card-header"><h2 class="h5 mb-0">{{ messages.t('help.topics') }}</h2></div>
                         <div class="card-body"><LoadingSkeleton :rows="6" /></div>
                     </section>
-                    <RouterLink v-if="listId" :to="`/frontend-pilot/packing/${listId}`" class="d-inline-block mt-3">
-                        <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>{{ messages.t('app.returnToPacking') }}
-                    </RouterLink>
                 </aside>
                 <!-- Initial skeleton status stays outside a busy subtree so its announcement
                      is delivered while loading. Confirmed content may be busy during refresh. -->
                 <div class="col-lg-9" :aria-busy="!!page && help.isFetching.value">
-                    <StatusNotice v-if="help.error.value" kind="danger">{{ messages.t('state.loadFailed') }}</StatusNotice>
+                    <StatusNotice v-if="help.error.value" kind="danger"
+                        :read-error="help.error.value" :retry-at="retryAt"
+                        :last-updated-at="page ? help.dataUpdatedAt.value : undefined">{{
+                        messages.t(page ? 'state.stale' : 'state.loadFailed')
+                    }}<ActionButton class="btn-sm ms-2" variant="outline-light"
+                        :pending="help.isFetching.value" :disabled="!retryAvailable" @click="retryHelp">{{
+                        messages.t('common.retry')
+                    }}</ActionButton></StatusNotice>
                     <LoadingSkeleton v-if="initialLoading" variant="article" />
                     <div v-else-if="page && page.searchResults !== undefined" class="card bg-dark text-white">
                         <div class="card-body help-search-results">

@@ -11,6 +11,7 @@ import type {SessionLike} from '../../types/PermissionTypes';
 import {getOverviewRegion, setPersonalVisibility} from '../../controller/userController';
 import {APIError} from '../lib/errors';
 import {ApiProblem} from '../api/problem';
+import {isOwner} from '../permissionEngine';
 
 /** Project the native mixed overview independently of any one migrated feature's command API. */
 export async function readOverview(query: operations['getOverview']['parameters']['query'], session: SessionLike): Promise<components['schemas']['OverviewRegion']> {
@@ -23,7 +24,10 @@ export async function readOverview(query: operations['getOverview']['parameters'
     const region = await getOverviewRegion(session, navigation);
     function projectCard(card: Entity): components['schemas']['OverviewCard'] {
         const packingCard = card.type === 'packing';
-        const ownerActions = packingCard && region.collection === 'owner' && Boolean(session.auth?.user) && card.ownerId === session.profile?.id;
+        // Native owner cards expose Duplicate/Delete for the owning profile, including
+        // existing guest-owned content. Account-only creation remains a later POST check;
+        // neither audience grants nor administrator permissions imply these owner actions.
+        const ownerActions = packingCard && region.collection === 'owner' && isOwner(session, card.ownerId);
         return {id: card.id, type: card.type, title: card.title, description: card.description ?? null,
             url: packingCard ? `/frontend-pilot/packing/${encodeURIComponent(card.id)}` : card.url,
             headerUrl: card.imageUrl ? packingCard ? `/api/v1/packing-lists/${encodeURIComponent(card.id)}/header` : card.imageUrl : null,

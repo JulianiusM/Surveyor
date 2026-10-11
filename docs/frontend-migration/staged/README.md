@@ -4,9 +4,9 @@ documentation-metadata
 audience: users; developers; operators
 owner: project maintainers
 status: migration-pending
-last-verified: 2026-10-08
+last-verified: 2026-10-09
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: FPR-07 documentation staging and source corrections; prospective frontend replacement, not production cutover or new runtime execution evidence
+verification-scope: explicitly authorized source-reviewed startup and staged-reference reconciliation; FPR-07 documentation staging and source corrections; prospective frontend replacement, not production cutover or new runtime execution evidence
 source-anchors: src/routes/frontendPilot.ts; src/routes/api/v1.ts; src/frontend/; contracts/api/v1/; src/locales/; vite.config.mts; package.json; package-lock.json; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/oidc.ts; migrationDataSource.ts; scripts/runMigration.ts; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts
 next-review: frontend-production-cutover
 production-reference: 2dfa257 native frontend documentation; reference only, not evidence of an installed production commit
@@ -46,7 +46,7 @@ The expanding Vue frontend pilot migrates existing workflows under `/frontend-pi
 |---|---|
 | Use Surveyor | [In-app user guides](../../user-guide/README.md) |
 | Develop or review the application | [Development Guide](DEVELOPMENT.md) |
-| Understand the design | [Architecture](../../ARCHITECTURE.md) |
+| Understand the migration checkout | [Staged Architecture](ARCHITECTURE.md) |
 | Run tests | [Testing Guide](TESTING_GUIDE.md) |
 | Configure a deployment | [Configuration Reference](../../CONFIGURATION.md) |
 | Prepare or migrate the database | [Database and Migrations](../../DATABASE.md) |
@@ -139,7 +139,9 @@ Do not run schema synchronization or destructive TypeORM commands against a prod
 npm run server
 ```
 
-This performs a full build, starts the TypeScript server under Nodemon, and starts the legacy esbuild and Vue client/server build watchers. Confirm startup with:
+This performs a full build, starts the TypeScript server under Nodemon with Express-hosted Vite middleware/HMR,
+and starts the legacy esbuild watcher and serialized authored contract/catalog watcher. The latter publishes its
+completion marker before Express restarts. It is not a separate Vue client/server build-watch process. Confirm startup with:
 
 ```bash
 curl http://localhost:3000/healthz

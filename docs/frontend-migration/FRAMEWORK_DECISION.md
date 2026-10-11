@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-08
+last-verified: 2026-10-09
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: FPR-07 explicitly authorized 2026-10-08 scope/fallback/documentation amendments and staging; original choices/D1-D5 retained; no new runtime verification claimed; approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; framework selection from step two, with the Vue/Vite packing and help SSR proof now implemented in step three; benchmarks and broader route cutover remain pending
+verification-scope: clarified historical rendering policy and current verification of native-reference behavior versus the approved migrated JavaScript-required/read-only contract; FPR-07 explicitly authorized 2026-10-08 scope/fallback/documentation amendments and staging; original choices/D1-D5 retained; no new runtime verification claimed; approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; framework selection from step two, with the Vue/Vite packing and help SSR proof now implemented in step three; benchmarks and broader route cutover remain pending
 source-anchors: package.json; esbuild.client.js; tsconfig.json; tsconfig.server.json; tsconfig.test.json; vitest.config.mts; playwright.config.ts; .github/workflows/ci.yml; .github/workflows/release.yml; src/app.ts; src/views/layout.pug; src/public/style/; src/public/js/; docs/frontend-migration/EDGE_CASES.md; docs/frontend-migration/BEHAVIOR_INVENTORY.md
 next-review: broader-feature-migration-or-measured-framework-limitation
 -->
@@ -84,9 +84,10 @@ The choice is about composition and integration cost, not a framework benchmark.
 | **Solid** | Typed component development, signal-based reactivity, JSX and a router can support the same interaction model. [Solid reactivity](https://docs.solidjs.com/concepts/intro-to-reactivity), [Solid Router](https://docs.solidjs.com/solid-router/getting-started/installation-and-setup) | **Viable, not selected.** Requires another JSX/reactivity integration and equivalent SSR, component and testing decisions. The baseline identifies no requirement for which those differences provide a concrete advantage over Vue. No popularity or performance assumption is used. |
 | **Keep Pug plus an enhancement library** | Reuses current native routes and initially changes less markup. | **Rejected as the target.** It retains separate server templates and dynamic client presentation for the same interactive feature, leaving the principal maintenance problem unresolved. Existing Pug remains useful only during feature migration and for separately owned output formats. |
 
-SvelteKit's static SPA mode explicitly disables SSR for client-rendered pages. That configuration cannot serve the
-personalized native fallback pages required here; dynamic rendering would still be needed. This is a constraint on
-the configuration, not a limitation of Svelte. [SvelteKit SPA documentation](https://svelte.dev/docs/kit/single-page-apps)
+SvelteKit's static SPA mode explicitly disables SSR for client-rendered pages. Under the original fallback obligation,
+that configuration could not serve the required personalized native pages; dynamic rendering would still be needed.
+This preserves the original comparison rationale, not a current interactive fallback obligation or a limitation of
+Svelte. [SvelteKit SPA documentation](https://svelte.dev/docs/kit/single-page-apps)
 
 Do not introduce Nuxt merely to obtain Vue SSR. Express already owns authentication, controllers, sessions and
 deployment, and the proposed renderer has a narrow compatibility purpose. Nuxt could reduce custom application
@@ -100,7 +101,13 @@ Vue can render components on the server and hydrate the resulting markup in the 
 identifies request isolation, browser-only APIs and hydration consistency as implementation concerns.
 [Vue SSR](https://vuejs.org/guide/scaling-up/ssr.html)
 
-Use one route definition and one feature component tree, with an explicit delivery policy for initial requests:
+The list below retains the original delivery policy as historical design. The
+[approved amendment](#authorized-fallback-and-scope-amendment-2026-10-08) supersedes its mandatory interactive
+no-JavaScript examples: migrated interactive pages now present the shared JavaScript-required message or a genuinely
+read-only result. Help retains readable/searchable no-JavaScript delivery. One component owner, same-component
+SSR/hydration and preservation of native JavaScript-enabled journeys remain the current boundaries.
+
+The original policy used one route definition and one feature component tree, with explicit delivery for initial requests:
 
 1. **Native-capable routes:** Express authorizes and prepares a contract-shaped snapshot, then the Vue server entry
    renders the page. The same controls have real links and form `action`/`method`/`name` attributes. Without JavaScript,
@@ -280,9 +287,12 @@ Use focused application checks for the new boundaries:
   desktop/mobile visual parity, and same-document navigation inside a migrated route family.
 - Two browser contexts verify profile/cache isolation, another client's edit or permission revocation, capacity
   conflicts and financial stale-review handling at their real server boundary.
-- Native-mode browser checks verify the explicit overview fallback, survey voting and help search, plus other
-  established native flows when their route family migrates. Check rendered SSR output and successful hydration
-  separately, including consistent locale and absence of cross-request private data.
+- Native-reference browser checks establish existing Overview fallback, survey voting, Help search and other
+  observable flows for comparison as their route families migrate. For migrated interactive pages, verify the
+  approved JavaScript-required message or genuinely read-only result; Help retains its readable/searchable
+  no-JavaScript contract. Check rendered SSR output and successful hydration separately, including consistent
+  locale and absence of cross-request private data. This does not restore the superseded interactive fallback
+  obligation or remove native behavior from unmigrated routes.
 
 Accessible primitives are a foundation, not an accessibility certification. Preserve meaningful labels, native form
 semantics, keyboard operation, focus restoration, headings and route-change announcements; verify zoom, long

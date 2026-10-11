@@ -16,7 +16,11 @@ export default defineConfig(({isSsrBuild}) => ({
             // authored-input watcher, then its ready marker restarts Express/Vite.
             // Do not hydrate against intermediate generator writes; ordinary Vue
             // and stylesheet source edits still use Vite's normal HMR boundary.
-            ignored: ['**/.generated/**', '**/src/modules/localization/generated/**', '**/src/types/**'],
+            // Test traces and review/coverage reports contain HTML, but they are
+            // runtime evidence rather than application inputs. Watching them would
+            // replace a live document and discard drafts while a browser test runs.
+            ignored: ['**/.generated/**', '**/src/modules/localization/generated/**', '**/src/types/**',
+                '**/.temp/**', '**/test-results/**', '**/playwright-report/**', '**/coverage/**', '**/dist/**'],
         },
     },
     build: {

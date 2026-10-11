@@ -1,4 +1,4 @@
-/** Preserve the established browser-local checklist across both frontend implementations. */
+/** Packing owns its established browser-local checklist across both frontend implementations. */
 export function packedStorageKey(listId: string, itemId: string): string {
     return `packed_${listId}_${itemId}`;
 }

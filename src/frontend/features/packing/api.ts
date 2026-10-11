@@ -2,7 +2,7 @@ import type {components} from '../../../types/api/v1';
 import type {PilotContext, PilotEventPickerQuery, PilotEventPickerSource, PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {PilotApi} from '../../app/api';
 import {packingKeys} from '../../app/queryKeys';
-import {InvalidInputError, UnconfirmedResponseError} from '../../app/transport';
+import {InvalidInputError, ObsoleteRequestError, UnconfirmedResponseError} from '../../app/transport';
 import {validatePackingListView} from '../../../../.generated/api/v1/browser/validatePackingListView.mjs';
 import {validatePackingMetadata} from '../../../../.generated/api/v1/browser/validatePackingMetadata.mjs';
 import {validatePackingMetadataPatch} from '../../../../.generated/api/v1/browser/validatePackingMetadataPatch.mjs';
@@ -107,15 +107,15 @@ export class PackingApi {
     /** Creation admission is distinct from the public duplication projection. The caller supplies
      * its exact return destination; the server owns account admission and bounded destination policy. */
     async createEntry(scope: PilotRequestScope, signal?: AbortSignal,
-                      returnTo?: string): Promise<components['schemas']['PackingCreateEntry']> {
+                      returnTo?: string, eventId?: string): Promise<components['schemas']['PackingCreateEntry']> {
         const transport = this.transport;
         async function readCreationEntry(): Promise<components['schemas']['PackingCreateEntry']> {
             const response = await transport.client.GET('/packing-lists/create-entry', {
-                params: {query: {returnTo}, header: transport.headers(scope)}, signal, cache: 'no-store',
+                params: {query: {returnTo, eventId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
             return transport.read('getPackingCreateEntry', response, validatePackingCreateEntry, scope).data;
         }
-        return transport.allowedRead('packing/create-entry/' + (returnTo ?? ''), scope, readCreationEntry);
+        return transport.allowedRead('packing/create-entry/' + (returnTo ?? '') + '/' + (eventId ?? ''), scope, readCreationEntry);
     }
 
     /** Detail and explicit guest routes deliberately have different native admission. Never
@@ -132,15 +132,16 @@ export class PackingApi {
         return transport.allowedRead(`packing/${listId}/entry/${view}`, scope, readResourceEntry);
     }
 
-    async duplicate(listId: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['PackingDuplicate']> {
+    async duplicate(listId: string, scope: PilotRequestScope, signal?: AbortSignal,
+                    eventId?: string): Promise<components['schemas']['PackingDuplicate']> {
         const transport = this.transport;
         async function readDuplicate(): Promise<components['schemas']['PackingDuplicate']> {
             const response = await transport.client.GET('/packing-lists/{listId}/duplicate', {
-                params: {path: {listId}, header: transport.headers(scope)}, signal, cache: 'no-store',
+                params: {path: {listId}, query: {eventId}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
             return transport.read('getPackingDuplicate', response, validatePackingDuplicate, scope).data;
         }
-        return transport.allowedRead(`packing/${listId}/duplicate`, scope, readDuplicate);
+        return transport.allowedRead(`packing/${listId}/duplicate/${eventId ?? ''}`, scope, readDuplicate);
     }
 
     async createPacking(input: components['schemas']['PackingCreateInput'], image: File | null,
@@ -241,14 +242,30 @@ export class PackingApi {
     }
 
     async header(listId: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<Blob> {
-        const result = await this.transport.client.GET('/packing-lists/{listId}/header', {
-            params: {path: {listId}, header: this.transport.headers(scope)}, signal, cache: 'no-store', parseAs: 'blob',
-        });
-        this.transport.checkScope(result.response, scope);
-        if (!result.response.ok) this.transport.read('getPackingHeader', result, validatePackingSettings, scope);
-        if (result.response.status !== 200 || !(result.data instanceof Blob)
-            || !['application/octet-stream', 'image/jpeg', 'image/png', 'image/gif'].includes(result.data.type)) throw new UnconfirmedResponseError();
-        return result.data;
+        const transport = this.transport;
+
+        /** openapi-fetch uses blob decoding only for success. Error bodies retain its
+         * ordinary JSON/text decoder and the shared validated rejection policy.
+         * Binary recovery therefore observes the same actor and Retry-After owner
+         * as JSON reads instead of introducing a second error parser or deadline. */
+        async function readHeader(): Promise<Blob> {
+            const result = await transport.client.GET('/packing-lists/{listId}/header', {
+                params: {path: {listId}, header: transport.headers(scope)}, signal, cache: 'no-store', parseAs: 'blob',
+            });
+            // An adapter can finish despite cancellation. Retire its response before
+            // error decoding, so an old version/hidden owner's Retry-After cannot
+            // publish a transport deadline over this resource's newer image read.
+            if (signal?.aborted) throw new ObsoleteRequestError();
+            if (!result.response.ok) transport.reject(result.response, result.error, scope);
+            transport.checkScope(result.response, scope);
+            if (result.response.status !== 200 || !(result.data instanceof Blob)
+                || !['application/octet-stream', 'image/jpeg', 'image/png', 'image/gif'].includes(result.data.type)) {
+                throw new UnconfirmedResponseError();
+            }
+            return result.data;
+        }
+
+        return transport.allowedRead(`packing/${listId}/header`, scope, readHeader);
     }
 
     async uploadHeader(listId: string, image: File, token: string, scope: PilotRequestScope) {

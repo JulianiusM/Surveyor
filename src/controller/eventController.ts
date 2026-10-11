@@ -107,6 +107,22 @@ export async function authorizeEventLink(eventId: string | null | undefined, ses
     return event;
 }
 
+/**
+ * Resolve an optional initial selection without disclosing a rejected event. Native
+ * forms and migrating features share this read projection; submitting an event still
+ * performs its own mandatory authorization. Operational failures must remain errors.
+ */
+export async function readEventLinkSelection(input: unknown, session: SessionLike): Promise<EventLinkOption | null> {
+    if (typeof input !== 'string' || input === '') return null;
+    try {
+        const event = await authorizeEventLink(input, session);
+        return event ? projectEventLinkOption(event) : null;
+    } catch (error) {
+        if (!(error instanceof APIError)) throw error;
+        return null;
+    }
+}
+
 /** Search all historical states without turning candidate discovery into an ACL implementation. */
 export async function getEventLinkOptions(query: unknown, session: SessionLike): Promise<EventLinkOptionsResult> {
     const profileId = requireSessionProfileId(session);
@@ -127,11 +143,7 @@ export async function getEventLinkOptions(query: unknown, session: SessionLike):
     const result: EventLinkOptionsResult = {items: [], nextCursor: null};
     if (selectedId) {
         // An unauthorized formerly selected event is omitted, never echoed with a title.
-        try { result.selected = projectEventLinkOption((await authorizeEventLink(selectedId, session))!); }
-        catch (error) {
-            if (!(error instanceof APIError)) throw error;
-            result.selected = null;
-        }
+        result.selected = await readEventLinkSelection(selectedId, session);
     }
     // SQL prefilters the engine's exact one-bit eligibility inputs before LIMIT. Thousands
     // of denied rows therefore do not become empty user-facing pages. A final evaluation is

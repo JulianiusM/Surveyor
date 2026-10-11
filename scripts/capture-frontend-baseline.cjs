@@ -990,28 +990,33 @@ async function comparePilotBehavior(guest) {
     const f = manifest.fixtures;
     const page = await guest.newPage();
     try {
-        await page.goto(f.packing.path, {waitUntil: 'networkidle'});
+        // German layout scenes use this same actor and retain its locale cookie.
+        // Select the English oracle explicitly for each behavioral destination;
+        // a translated Take label is not an assignment or admission failure.
+        await page.goto(`${f.packing.path}?locale=en`, {waitUntil: 'networkidle'});
+        await expect(page.locator('html')).toHaveAttribute('lang', 'en');
         const legacyRow = page.locator(`tr[data-itemid="${f.tentItemId}"]`);
         await legacyRow.getByRole('button', {name: labelName('Remove')}).click();
         await expect(legacyRow.getByRole('button', {name: labelName('Take')})).toBeVisible();
-        await page.goto(`/frontend-pilot${f.packing.path}`, {waitUntil: 'networkidle'});
+        await page.goto(`/frontend-pilot${f.packing.path}?locale=en`, {waitUntil: 'networkidle'});
+        await expect(page.locator('html')).toHaveAttribute('lang', 'en');
         const pilotRow = page.locator(`tr[data-item-id="${f.tentItemId}"]`);
         await expect(pilotRow.getByRole('button', {name: labelName('Take')})).toBeVisible();
         await pilotRow.getByRole('button', {name: labelName('Take')}).click();
         await expect(pilotRow.getByRole('button', {name: labelName('Remove')})).toBeVisible();
         await pilotRow.getByRole('checkbox').check();
-        await page.goto(f.packing.path, {waitUntil: 'networkidle'});
+        await page.goto(`${f.packing.path}?locale=en`, {waitUntil: 'networkidle'});
         await expect(legacyRow.getByRole('button', {name: labelName('Remove')})).toBeVisible();
         await expect(legacyRow.getByRole('checkbox')).toBeChecked();
         await legacyRow.getByRole('checkbox').uncheck();
-        await page.goto(`/frontend-pilot${f.packing.path}`, {waitUntil: 'networkidle'});
+        await page.goto(`/frontend-pilot${f.packing.path}?locale=en`, {waitUntil: 'networkidle'});
         await expect(pilotRow.getByRole('checkbox')).not.toBeChecked();
         manifest.checks.push({name: 'same guest membership and canonical Packed state across current/pilot routes', passed: true});
 
         // An Everyone item with existing membership is removable in both UIs. Recreate the
         // fixture through the real endpoint between checks; the UI intentionally offers no Take.
         for (const [implementation, listPath] of [['current', f.everyone.path], ['pilot', `/frontend-pilot${f.everyone.path}`]]) {
-            await page.goto(listPath, {waitUntil: 'networkidle'});
+            await page.goto(`${listPath}?locale=en`, {waitUntil: 'networkidle'});
             const row = page.locator('tbody tr').filter({hasText: 'Personal water bottle'});
             await row.getByRole('button', {name: labelName('Remove')}).click();
             await expect(row.getByRole('button', {name: labelName('Remove')})).toHaveCount(0);
@@ -1120,8 +1125,7 @@ async function captureIdentityFeedback(browser, phase) {
                     // Both initial routes deny a real consumed capability before revealing
                     // a password form. SPA admission uses the same controller read.
                     await expect(page.locator('#password')).toHaveCount(0);
-                    await expect(page.getByText(implementation === 'pilot'
-                        ? 'This link is invalid, expired, or already used.' : 'Invalid or expired token', {exact: true})).toBeVisible();
+                    await expect(page.getByText('Invalid or expired token', {exact: true})).toBeVisible();
                 }, 401);
                 await scene('login-error', `${prefix}/users/login`, async () => {
                     await page.locator('#username').fill(username);

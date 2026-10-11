@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises} from '@vue/test-utils';
-import {createSSRApp, defineComponent, h, nextTick, ref} from 'vue';
+import {createSSRApp, defineComponent, h, nextTick, onMounted, ref} from 'vue';
 import {renderToString} from 'vue/server-renderer';
 import {render} from '../../src/frontend/app/entry-server';
 import {createPilotApp} from '../../src/frontend/app/createApp';
@@ -19,6 +19,12 @@ const session: components['schemas']['SessionView'] = {kind: 'anonymous', contex
 const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Synthetic help',
     content: '<h2 id="task">A synthetic task</h2>', currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};
 const cleanups: (() => void)[] = [];
+const account: components['schemas']['SessionView'] = {...session, kind: 'account',
+    activeProfile: {id: profileId, name: 'Fixture'}, profiles: [{id: profileId, name: 'Fixture'}], logoutUrl: '/users/logout'};
+const creation: components['schemas']['PackingCreateContext'] = {
+    defaults: {participant: 0, guest: 0, authenticated: 0, public: 0},
+    permissions: [{key: 'ACCESS_VIEW', bit: 1}, {key: 'ITEM_ADD', bit: 2}], presets: [],
+};
 
 afterEach(() => {
     for (const cleanup of cleanups.splice(0)) cleanup();
@@ -26,6 +32,19 @@ afterEach(() => {
     vi.unstubAllGlobals();
     document.body.innerHTML = '';
 });
+
+/** Keep production transport/validators intact while replacing only the external HTTP boundary. */
+function creationResponse(value: unknown, status = 200): Response {
+    return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
+        'X-Surveyor-Context': account.context}});
+}
+
+/** Use a real FileList, matching a browser file choice instead of a test-only array property. */
+function selectEarlyImage(input: HTMLInputElement): void {
+    const selection = new DataTransfer();
+    selection.items.add(new File(['synthetic image'], 'early.png', {type: 'image/png'}));
+    input.files = selection.files;
+}
 
 /** Use the actual native render and client component tree, leaving an editing window before mount. */
 async function nativeApplication(url: string, bootstrap: FrontendPilotBootstrap) {
@@ -37,13 +56,13 @@ async function nativeApplication(url: string, bootstrap: FrontendPilotBootstrap)
     cleanups.push(() => { browser.app.unmount(); browser.context.start()(); });
     const container = document.getElementById('surveyor-pilot')!;
     async function hydrate() {
-        mountPreservingDrafts(browser.app, container);
+        await mountPreservingDrafts(browser.app, container);
         await nextTick();
     }
     return {...browser, container, hydrate};
 }
 
-describe('text drafts entered before hydration', () => {
+describe('drafts entered before hydration', () => {
     it('keeps an early help search and submits its edited value through client navigation', async () => {
         const request = vi.fn(() => { throw new Error('Hydration must not submit or read'); });
         vi.stubGlobal('fetch', request);
@@ -64,7 +83,21 @@ describe('text drafts entered before hydration', () => {
     }, 30_000); // The first real lazy route may compile its view/validator graph under Vitest.
 
     it('keeps independent overview search drafts and preserves the other region when submitted', async () => {
-        const request = vi.fn(() => { throw new Error('Hydration must not submit or read'); });
+        // Hydration itself remains read-free. An explicit enhanced search now validates
+        // its region before committing history, matching native failed-navigation behavior.
+        const request = vi.fn(async (input: RequestInfo | URL) => {
+            const url = new URL((input as Request).url);
+            if (url.pathname !== '/api/v1/overview') throw new Error('Unexpected hydration request');
+            const view: components['schemas']['OverviewRegion'] = {
+                collection: url.searchParams.get('collection') as 'owner' | 'participant', region: 'main',
+                q: url.searchParams.get('q') ?? '', type: 'all', availableTypes: [], page: 1, childPage: 1,
+                eventId: null, pageSize: 24, totalEntities: 0, hiddenEntities: 0, regionEntities: 0,
+                matchingEntities: 0, totalCards: 0, totalChildren: 0, hasPrevious: false, hasNext: false,
+                parent: null, items: [],
+            };
+            return new Response(JSON.stringify(view), {headers: {'Content-Type': 'application/json',
+                'X-Surveyor-Context': session.context}});
+        });
         vi.stubGlobal('fetch', request);
         const account: components['schemas']['SessionView'] = {...session, kind: 'account',
             activeProfile: {id: profileId, name: 'Fixture'}, profiles: [{id: profileId, name: 'Fixture'}], logoutUrl: '/users/logout'};
@@ -82,6 +115,8 @@ describe('text drafts entered before hydration', () => {
         participant.form!.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
         await flushPromises();
         expect(router.currentRoute.value.query).toEqual({owner_main_q: 'initial', participant_main_q: 'Participant early search'});
+        expect(request).toHaveBeenCalledOnce();
+        expect(owner.value).toBe('Owner early search');
     }, 30_000); // Each initially visited lazy feature can compile during its first SSR render.
 
     it('preserves early/autofilled identity fields without submitting until the user requests it', async () => {
@@ -116,6 +151,135 @@ describe('text drafts entered before hydration', () => {
         expect(context.bootstrap).not.toHaveProperty('password');
     }, 30_000);
 
+    it.each(['create', 'duplicate'] as const)(
+        'keeps all early %s draft controls in the actual multipart command without replaying HTTP',
+        async mode => {
+            let submitted: components['schemas']['PackingCreateInput'] | undefined;
+            let upload: FormDataEntryValue | null = null;
+            let posts = 0;
+            const request = vi.fn(async (input: RequestInfo | URL) => {
+                const captured = input as Request;
+                const path = new URL(captured.url).pathname;
+                if (path === '/api/v1/packing-lists/create-entry') {
+                    return creationResponse({entry: {kind: 'render'}, context: creation, selectedEvent: null});
+                }
+                if (path !== '/api/v1/packing-lists' || captured.method !== 'POST') {
+                    throw new Error('Unexpected creation request: ' + captured.method + ' ' + path);
+                }
+                posts++;
+                const body = await captured.formData();
+                submitted = JSON.parse(String(body.get('data'))) as components['schemas']['PackingCreateInput'];
+                upload = body.get('image');
+                // A known validated rejection keeps this production form mounted for observation.
+                // Its command has crossed the real generated serializer; no destination stub is needed.
+                return creationResponse({type: 'about:blank', title: 'Rejected', status: 400,
+                    code: 'VALIDATION_FAILED', requestId: 'hydration-creation', detail: 'Review the request.',
+                    messageKey: 'api:errors.VALIDATION_FAILED', params: {}}, 400);
+            });
+            vi.stubGlobal('fetch', request);
+            const duplicate: components['schemas']['PackingDuplicate'] = {
+                title: 'Copied list', description: 'Copied description', eventId: null,
+                items: [{title: 'Copied tent', description: '', maxAssignees: 2, requiredByAll: true}],
+                defaultPermissions: {...creation.defaults, participant: 3}, formContext: creation, selectedEvent: null,
+            };
+            const url = mode === 'create' ? '/frontend-pilot/packing/create'
+                : `/frontend-pilot/packing/${profileId}/duplicate`;
+            const bootstrap: FrontendPilotBootstrap = mode === 'create'
+                ? {session: account, packingCreateContext: creation}
+                : {session: account, packingDuplicate: duplicate};
+            const {container, hydrate, context} = await nativeApplication(url, bootstrap);
+            const form = container.querySelector<HTMLFormElement>('main form')!;
+            const capacity = form.querySelector<HTMLInputElement>('input[type="number"]')!;
+            const everyone = form.querySelector<HTMLInputElement>('tbody input[type="checkbox"]')!;
+            const permissions = form.querySelectorAll<HTMLInputElement>('input[id^="create-defaults-participant-"]');
+            const image = form.querySelector<HTMLInputElement>('#create-header')!;
+            form.querySelector<HTMLInputElement>('#create-title')!.value = 'Early list';
+            form.querySelector<HTMLInputElement>('input[aria-label="Item 1"]')!.value = 'Early tent';
+            capacity.value = '9';
+            everyone.checked = mode === 'create';
+            for (const permission of permissions) permission.checked = mode === 'create';
+            selectEarlyImage(image);
+
+            // Before the awaited mount completes, Vue may be installed but restored models
+            // are not ready. Neither hydration nor a model restoration may send an HTTP call.
+            let restored = false;
+            const restoring = hydrate().then(() => { restored = true; });
+            expect((container as Element & {__vue_app__?: unknown}).__vue_app__).toBeDefined();
+            expect(restored).toBe(false);
+            expect(request).not.toHaveBeenCalled();
+            await restoring;
+            expect(restored).toBe(true);
+            expect(request).not.toHaveBeenCalled();
+            expect(context.hydrated.value).toBe(false);
+            expect(form.querySelector('input[type="number"]')).toBe(capacity);
+            expect(capacity.value).toBe('9');
+            expect(everyone.checked).toBe(mode === 'create');
+            expect(Array.from(permissions, permission => permission.checked)).toEqual([mode === 'create', mode === 'create']);
+            expect(image.files?.[0]?.name).toBe('early.png');
+
+            form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
+            await flushPromises();
+            await flushPromises();
+            expect(posts).toBe(1);
+            expect(submitted).toMatchObject({title: 'Early list',
+                defaultPermissions: {...creation.defaults, participant: mode === 'create' ? 3 : 0},
+                items: [{title: 'Early tent', maxAssignees: 9, requiredByAll: mode === 'create'}]});
+            expect(upload).not.toBeNull();
+            expect(typeof upload).not.toBe('string');
+            expect((upload as File).name).toBe('early.png');
+            expect(await (upload as File).text()).toBe('synthetic image');
+            expect(request).toHaveBeenCalledTimes(2); // One explicit admission read and one explicit POST.
+        }, 30_000,
+    );
+
+    it('restores opted-in select drafts while excluding selectors and action controls', async () => {
+        const action = vi.fn();
+        let draftValue = 'first';
+        let draftValues = ['first'];
+        const Fixture = defineComponent({
+            setup() {
+                const choice = ref('first');
+                const choices = ref(['first']);
+                function updateChoice(event: Event): void {
+                    choice.value = (event.target as HTMLSelectElement).value;
+                    draftValue = choice.value;
+                }
+                function updateChoices(event: Event): void {
+                    choices.value = Array.from((event.target as HTMLSelectElement).selectedOptions, option => option.value);
+                    draftValues = choices.value;
+                }
+                function options(selected: string[]) {
+                    return ['first', 'second', 'third'].map(value => h('option', {value, selected: selected.includes(value)}, value));
+                }
+                return () => h('form', {onSubmit: action}, [
+                    h('select', {id: 'draft-select', 'data-hydration-draft': '', onChange: updateChoice}, options([choice.value])),
+                    h('select', {id: 'draft-multiple', multiple: true, 'data-hydration-draft': '', onChange: updateChoices}, options(choices.value)),
+                    h('select', {id: 'identity-select', onChange: action}, options(['first'])),
+                    h('input', {id: 'action-checkbox', type: 'checkbox', checked: false, onChange: action}),
+                    h('input', {id: 'hidden-admission', type: 'hidden', 'data-hydration-draft': '', value: 'Server admission', onInput: action}),
+                    h('input', {id: 'action-file', type: 'file', onChange: action}),
+                    h('button', {type: 'submit', onClick: action}, 'Submit'),
+                ]);
+            },
+        });
+        document.body.innerHTML = `<div id="select-fixture">${await renderToString(createSSRApp(Fixture))}</div>`;
+        const container = document.getElementById('select-fixture')!;
+        container.querySelector<HTMLSelectElement>('#draft-select')!.value = 'second';
+        const multiple = container.querySelector<HTMLSelectElement>('#draft-multiple')!;
+        for (const option of multiple.options) option.selected = option.value !== 'first';
+        container.querySelector<HTMLSelectElement>('#identity-select')!.value = 'third';
+        container.querySelector<HTMLInputElement>('#action-checkbox')!.checked = true;
+        container.querySelector<HTMLInputElement>('#hidden-admission')!.value = 'Edited admission';
+        selectEarlyImage(container.querySelector<HTMLInputElement>('#action-file')!);
+        const application = createSSRApp(Fixture);
+        await mountPreservingDrafts(application, container);
+        cleanups.push(() => application.unmount());
+        expect(draftValue).toBe('second');
+        expect(draftValues).toEqual(['second', 'third']);
+        expect(container.querySelector<HTMLInputElement>('#hidden-admission')!.value).toBe('Server admission');
+        expect(action).not.toHaveBeenCalled();
+    });
+
     it('leaves untouched, disabled and read-only fields at their authored values', async () => {
         const Fixture = defineComponent({
             setup() {
@@ -138,10 +302,72 @@ describe('text drafts entered before hydration', () => {
         const events = vi.fn();
         for (const input of inputs) input.addEventListener('input', events);
         const application = createSSRApp(Fixture);
-        mountPreservingDrafts(application, container);
+        await mountPreservingDrafts(application, container);
         cleanups.push(() => application.unmount());
         await nextTick();
         expect(inputs.map(input => input.value)).toEqual(['Server value', 'Disabled value', 'Read-only value', 'Admission value']);
+        expect(events).not.toHaveBeenCalled();
+    });
+
+    it('does not transfer captured edits to replaced, newly disabled, read-only or no-longer-opted-in controls', async () => {
+        const events = vi.fn();
+        const Fixture = defineComponent({
+            setup() {
+                const admitted = ref(true);
+                function retireAdmission(): void { admitted.value = false; }
+                onMounted(retireAdmission);
+                return () => h('form', [
+                    h('fieldset', {disabled: !admitted.value}, [
+                        h('input', {id: 'retired-number', type: 'number', disabled: !admitted.value,
+                            'data-hydration-draft': '', value: '1', onInput: events}),
+                        h('input', {id: 'retired-checkbox', type: 'checkbox', disabled: !admitted.value,
+                            'data-hydration-draft': '', checked: false, onChange: events}),
+                        h('input', {id: 'retired-file', type: 'file', disabled: !admitted.value,
+                            'data-hydration-draft': '', onChange: events}),
+                        h('select', {id: 'retired-select', disabled: !admitted.value,
+                            'data-hydration-draft': '', onChange: events}, [
+                            h('option', {value: 'first', selected: true}, 'First'),
+                            h('option', {value: 'second'}, 'Second'),
+                        ]),
+                    ]),
+                    h('input', {id: 'new-readonly', readonly: !admitted.value, value: 'Server value', onInput: events}),
+                    h('input', {id: 'new-optout', type: 'number', value: '1',
+                        'data-hydration-draft': admitted.value ? '' : undefined, onInput: events}),
+                    h('input', {id: 'new-kind', type: admitted.value ? 'number' : 'text', value: '1',
+                        'data-hydration-draft': '', onInput: events}),
+                    h('input', {id: 'new-choice', type: 'checkbox', checked: false,
+                        value: admitted.value ? 'first-choice' : 'different-choice',
+                        'data-hydration-draft': '', onChange: events}),
+                    h('select', {id: 'new-options', 'data-hydration-draft': '', onChange: events}, [
+                        h('option', {value: 'first', selected: true}, 'First'),
+                        h('option', {value: admitted.value ? 'second' : 'different'}, 'Changed authority'),
+                    ]),
+                    admitted.value
+                        ? h('input', {id: 'replacement', value: 'Original field', onInput: events})
+                        : h('textarea', {id: 'replacement', value: 'Different owner', onInput: events}),
+                ]);
+            },
+        });
+        document.body.innerHTML = `<div id="admission-fixture">${await renderToString(createSSRApp(Fixture))}</div>`;
+        const container = document.getElementById('admission-fixture')!;
+        const original = container.querySelector<HTMLInputElement>('#replacement')!;
+        for (const id of ['retired-number', 'new-optout', 'new-kind']) container.querySelector<HTMLInputElement>('#' + id)!.value = '9';
+        for (const id of ['new-readonly', 'replacement']) container.querySelector<HTMLInputElement>('#' + id)!.value = 'Private draft';
+        container.querySelector<HTMLInputElement>('#retired-checkbox')!.checked = true;
+        container.querySelector<HTMLInputElement>('#new-choice')!.checked = true;
+        container.querySelector<HTMLSelectElement>('#retired-select')!.value = 'second';
+        container.querySelector<HTMLSelectElement>('#new-options')!.value = 'second';
+        selectEarlyImage(container.querySelector<HTMLInputElement>('#retired-file')!);
+        // The actual mounted owner retires admission before restoration completes.
+        // The updated original controls and replacement must not receive captured edits.
+        const application = createSSRApp(Fixture);
+        await mountPreservingDrafts(application, container);
+        cleanups.push(() => application.unmount());
+        expect(original.isConnected).toBe(false);
+        expect(container.querySelector<HTMLTextAreaElement>('#replacement')!.value).toBe('Different owner');
+        expect(container.querySelector<HTMLInputElement>('#new-readonly')!.readOnly).toBe(true);
+        expect(container.querySelector<HTMLInputElement>('#new-optout')!.hasAttribute('data-hydration-draft')).toBe(false);
+        expect(container.querySelector<HTMLInputElement>('#new-kind')!.type).toBe('text');
         expect(events).not.toHaveBeenCalled();
     });
 });

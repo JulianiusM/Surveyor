@@ -1,14 +1,26 @@
 import {computed, getCurrentInstance, onBeforeUnmount, ref, shallowRef, watch} from 'vue';
 import {isNavigationFailure, useRoute, useRouter} from 'vue-router';
 import type {RouteLocationNormalized, Router} from 'vue-router';
-import {useQuery} from '@tanstack/vue-query';
+import {hashKey, useQuery} from '@tanstack/vue-query';
 import type {components} from '../../types/api/v1';
-import type {PilotConfirmedNavigation, PilotContext, PilotPageEntrySource, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
+import type {PilotConfirmedNavigation, PilotContext, PilotPageEntryDenial, PilotPageEntrySource, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {MessageKey} from '../../types/LocalizationTypes';
-import {safeFrontendReturn} from '../../modules/lib/frontendIdentity';
+import {frontendDocumentUrl, safeFrontendReturn} from '../../modules/lib/frontendIdentity';
 import {isPlainMessageKey} from '../../modules/localization/translator';
-import {usePilot} from '../app/context';
-import {ObsoleteRequestError} from '../app/transport';
+import {canRetryRead, usePilot} from '../app/context';
+import {ApiFailure, isReadDenial, ObsoleteRequestError} from '../app/transport';
+import {retireQueryFamily} from '../app/queryCache';
+
+/** Admit SPA navigation only for an ordinary primary click. Modified clicks, downloads
+ * and explicit targets retain their captured href and native tab/window behavior. */
+export function isOrdinaryNavigation(event: MouseEvent, anchor?: HTMLAnchorElement): boolean {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+        return false;
+    // Delegated content handlers supply the actual anchor; direct handlers use
+    // currentTarget. Both retain one policy for modifiers, downloads and targets.
+    const link = anchor ?? event.currentTarget as HTMLAnchorElement | null;
+    return !link?.hasAttribute('download') && (!link?.target || link.target === '_self');
+}
 
 /** Normalize the existing safe return boundary through the router's query serializer. */
 function pageDestination(router: Router, url: string): string {
@@ -26,8 +38,8 @@ function observePageNavigation(router: Router, onFinish?: () => void) {
     const removeFinish = router.afterEach(finishDestination);
     const removeError = router.onError(failDestination);
 
-    function rememberDestination(to: RouteLocationNormalized): void {
-        destination = to;
+    function rememberDestination(to: RouteLocationNormalized, from: RouteLocationNormalized): void {
+        destination = frontendDocumentUrl(to.fullPath) !== frontendDocumentUrl(from.fullPath) ? to : undefined;
     }
 
     function finishDestination(to: RouteLocationNormalized): void {
@@ -59,7 +71,8 @@ export async function navigatePageEntry(context: PilotContext, router: Router,
                                         outcome: components['schemas']['PageEntryOutcome'],
                                         scope: PilotRequestScope = context.capture(),
                                         expectedRoute: string = router.currentRoute.value.fullPath): Promise<boolean> {
-    if (!context.isCurrent(scope, true) || router.currentRoute.value.fullPath !== expectedRoute) return false;
+    if (!context.isCurrent(scope, true)
+        || frontendDocumentUrl(router.currentRoute.value.fullPath) !== frontendDocumentUrl(expectedRoute)) return false;
     if (outcome.kind === 'denied') return false;
     if (outcome.kind === 'render') return true;
 
@@ -69,7 +82,8 @@ export async function navigatePageEntry(context: PilotContext, router: Router,
     // A server-owned canonical redirect can follow an identity redirect before a page is
     // shown. Keep that transition's feedback until its rendered destination; ordinary user
     // departures still clear it in the shell, and identity retirement removes old notices.
-    const notice = outcome.notice ?? context.pageNotice.value;
+    let notice = outcome.notice ?? context.pageNotice.value;
+    let personalLink: string | null = null;
     // Native header transitions can return to their current URL after changing identity.
     // That destination is already committed; a duplicated router replacement is not a
     // failed completion and must still publish its one-time feedback without new history.
@@ -77,6 +91,16 @@ export async function navigatePageEntry(context: PilotContext, router: Router,
         context.pageNotice.value = notice;
         return true;
     }
+    // The shell retires document flashes on accepted departure. A canonical server
+    // redirect carries those same flashes into its rendered destination. Capture at
+    // the final commitment phase, so expiration/dismissal during lazy delivery cannot
+    // revive an old message or private link when the destination eventually arrives.
+    const stopCarry = router.beforeResolve(function carryDestinationFeedback(to, from): void {
+        if (to.fullPath !== destination || frontendDocumentUrl(from.fullPath) !== frontendDocumentUrl(expectedRoute)
+            || !context.isCurrent(scope)) return;
+        notice = outcome.notice ?? context.pageNotice.value;
+        personalLink = context.personalLink.value;
+    });
     try {
         const result = await router.replace(destination);
         if (isNavigationFailure(result) || !context.isCurrent(scope)
@@ -85,11 +109,14 @@ export async function navigatePageEntry(context: PilotContext, router: Router,
         // Apply one-time feedback after commitment. A cancelled dirty-form guard leaves its input
         // and earlier notice untouched; the shell dismisses this notice on the next committed visit.
         context.pageNotice.value = notice;
+        context.personalLink.value = personalLink;
         return true;
     } catch {
         // Failed lazy delivery is already reported by the router's application-owned error
         // handler. Admission must leave this visit intact rather than reject a watch callback.
         return false;
+    } finally {
+        stopCarry();
     }
 }
 
@@ -102,7 +129,7 @@ export async function completePageEntry(context: PilotContext, router: Router, d
                                         scope: PilotRequestScope = context.capture(),
                                         origin: string = router.currentRoute.value.fullPath,
                                         navigation?: PilotConfirmedNavigation): Promise<boolean> {
-    if (!context.isCurrent(scope) || router.currentRoute.value.fullPath !== origin
+    if (!context.isCurrent(scope) || frontendDocumentUrl(router.currentRoute.value.fullPath) !== frontendDocumentUrl(origin)
         || !isPlainMessageKey(messageKey)) return false;
     const previous = context.pageCompletion.value;
     const receipt = {context: scope.context, destination: pageDestination(router, destination), messageKey, kind};
@@ -141,7 +168,7 @@ function retainIdentityNavigation(context: PilotContext, router: Router, confirm
     }
 
     function resumeNavigation(): void {
-        if (router.currentRoute.value.fullPath !== origin) {
+        if (frontendDocumentUrl(router.currentRoute.value.fullPath) !== frontendDocumentUrl(origin)) {
             retireNavigation();
             return;
         }
@@ -167,7 +194,7 @@ export async function completeIdentityEntry(context: PilotContext, router: Route
     try {
         await context.acceptIdentity(result);
     } catch {
-        if (!context.ready.value && router.currentRoute.value.fullPath === origin) {
+        if (!context.ready.value && frontendDocumentUrl(router.currentRoute.value.fullPath) === frontendDocumentUrl(origin)) {
             retainIdentityNavigation(context, router, result.session.context, outcome, origin, navigation);
             return false;
         }
@@ -194,15 +221,33 @@ function navigateConfirmedEntry(context: PilotContext, router: Router,
 const confirmedNavigations = new WeakMap<PilotContext['session'], ReturnType<typeof createConfirmedNavigation>>();
 
 /** One application-owned delivery state, observed by mounted command owners. Component
- * type identifies the receipt's logical owner through an identity remount; the header and
- * unrelated feature editors cannot expose each other's Retry or command confirmation. */
+ * type and an optional logical identity survive actor remounts while keeping simultaneous
+ * instances independent. Unrelated editors cannot expose another owner's confirmed Retry. */
 function createConfirmedNavigation(context: PilotContext, router: Router) {
     const receipt = shallowRef<{destination: string; scope: PilotRequestScope; origin: string;
         notice: components['schemas']['EntryNotice'] | null; owner: unknown}>();
     const pending = ref(false);
     const mountedOwners = shallowRef(new Map<unknown, number>());
+    const logicalOwners = new Map<unknown, Map<string, object>>();
     let owners = 0;
     let disposed = false;
+
+    /** Repeated regions provide their stable caller-owned identity. Namespace it by
+     * component type inside this application, without exposing fields or feature policy. */
+    function identifyOwner(component: unknown, identity?: string): unknown {
+        if (identity === undefined) return component;
+        let identities = logicalOwners.get(component);
+        if (!identities) {
+            identities = new Map();
+            logicalOwners.set(component, identities);
+        }
+        let owner = identities.get(identity);
+        if (!owner) {
+            owner = {};
+            identities.set(identity, owner);
+        }
+        return owner;
+    }
 
     // A release update must not silently reload the old creation form while its confirmed
     // entity's destination is still awaiting delivery. No receipt is persisted or replayed.
@@ -221,8 +266,9 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
         return !pending.value;
     }
 
-    function admitNavigation(to: RouteLocationNormalized): boolean {
-        return !pending.value || to.fullPath === receipt.value?.destination;
+    function admitNavigation(to: RouteLocationNormalized, from: RouteLocationNormalized): boolean {
+        return !pending.value || to.fullPath === receipt.value?.destination
+            || frontendDocumentUrl(to.fullPath) === frontendDocumentUrl(from.fullPath);
     }
 
     function protectPendingDeparture(event: BeforeUnloadEvent): void {
@@ -235,7 +281,10 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
 
     function retireDepartedReceipt(_to: RouteLocationNormalized, _from: RouteLocationNormalized,
                                    failure?: unknown): void {
-        if (!failure && router.currentRoute.value.fullPath !== receipt.value?.origin) receipt.value = undefined;
+        if (!failure && receipt.value
+            && frontendDocumentUrl(router.currentRoute.value.fullPath) !== frontendDocumentUrl(receipt.value.origin)) {
+            receipt.value = undefined;
+        }
     }
 
     function retireObsoleteReceipt(): void {
@@ -247,7 +296,8 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
     async function retry(owner: unknown): Promise<boolean> {
         const confirmed = receipt.value;
         if (disposed || pending.value || !confirmed || confirmed.owner !== owner) return false;
-        if (!context.isCurrent(confirmed.scope) || router.currentRoute.value.fullPath !== confirmed.origin) {
+        if (!context.isCurrent(confirmed.scope)
+            || frontendDocumentUrl(router.currentRoute.value.fullPath) !== frontendDocumentUrl(confirmed.origin)) {
             receipt.value = undefined;
             return false;
         }
@@ -267,7 +317,7 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
                             origin: string = router.currentRoute.value.fullPath,
                             notice: components['schemas']['EntryNotice'] | null = null): Promise<boolean> {
         if (disposed || pending.value || receipt.value || !context.isCurrent(scope)
-            || router.currentRoute.value.fullPath !== origin) return false;
+            || frontendDocumentUrl(router.currentRoute.value.fullPath) !== frontendDocumentUrl(origin)) return false;
         receipt.value = {destination: pageDestination(router, destination), scope, origin, notice, owner};
         return retry(owner);
     }
@@ -309,6 +359,7 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
         if (--owners > 0) return;
         disposed = true;
         receipt.value = undefined;
+        logicalOwners.clear();
         removeUpdateGuard();
         removeIdentityGuard();
         removeNavigationGuard();
@@ -317,7 +368,7 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
         if (context.browser) window.removeEventListener('beforeunload', protectPendingDeparture);
         if (confirmedNavigations.get(context.session) === navigation) confirmedNavigations.delete(context.session);
     }
-    const navigation = {pending, target, fallbackTarget, navigate, retry, retryFallback, retain};
+    const navigation = {pending, target, fallbackTarget, navigate, retry, retryFallback, retain, identifyOwner};
     return navigation;
 }
 
@@ -326,16 +377,17 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
  * Retry to repeat this navigation, never the command. An identity remount observes this same
  * application's receipt; another committed visit or authoritative actor retires it.
  */
-export function useConfirmedNavigation(): PilotConfirmedNavigation {
+export function useConfirmedNavigation(identity?: string): PilotConfirmedNavigation {
     const context = usePilot();
     const router = useRouter();
-    const owner = getCurrentInstance()?.type ?? {};
+    const component = getCurrentInstance()?.type ?? {};
     let shared = confirmedNavigations.get(context.session);
     if (!shared) {
         shared = createConfirmedNavigation(context, router);
         confirmedNavigations.set(context.session, shared);
     }
     const navigation = shared;
+    const owner = navigation.identifyOwner(component, identity);
     onBeforeUnmount(navigation.retain(owner));
     const target = computed(() => navigation.target(owner));
     const fallbackTarget = computed(navigation.fallbackTarget);
@@ -360,60 +412,164 @@ export function usePageEntry<T extends {entry: components['schemas']['PageEntryO
     const route = useRoute();
     const router = useRouter();
     let active = true;
-    const initialRoute = route.fullPath;
+    const documentRoute = computed(() => frontendDocumentUrl(route.fullPath));
+    const initialRoute = documentRoute.value;
     const initialContext = context.session.value?.context;
     const initialLocale = context.locale.value;
+    let admissionGeneration = 0;
+    // A validated transport denial removes admission too, without inventing a
+    // server-owned page outcome or message key. Retain either original descriptor
+    // until a fresh admitted read restores this actor/resource's authority.
+    const deniedEntry = shallowRef<PilotPageEntryDenial | ApiFailure>();
+    const renderedScope = shallowRef<{context: string | undefined; epoch: number; route: string; updatedAt?: number}>();
     let followed: components['schemas']['PageEntryOutcome'] | undefined;
     const navigation = observePageNavigation(router);
+    const queryKey = computed(() => [...source.key.value, {context: context.session.value?.context,
+        epoch: context.epoch.value, route: documentRoute.value, locale: context.locale.value}]);
+
+    /** Language changes do not grant authority. Only another admission family or actor
+     * starts an independent decision; an old response may not cross that generation. */
+    function admissionIdentity(): string {
+        return hashKey([...source.key.value, {context: context.session.value?.context, epoch: context.epoch.value}]);
+    }
+    function retireAdmission(): void {
+        admissionGeneration++;
+        deniedEntry.value = undefined;
+        renderedScope.value = undefined;
+        followed = undefined;
+    }
+    watch(admissionIdentity, retireAdmission, {flush: 'sync'});
 
     onBeforeUnmount(() => {
         active = false;
         navigation.dispose();
     });
 
+    /** Apply the same lifetime check before admission and after asynchronous retirement.
+     * A held cancellation must not publish a decision into a later visit or generation. */
+    function isCurrentEntry(scope: PilotRequestScope, expectedRoute: string, generation: number): boolean {
+        return active && !navigation.pending() && generation === admissionGeneration
+            && documentRoute.value === expectedRoute && context.isCurrent(scope, true);
+    }
+
     /** A pending lazy destination retires the old page before currentRoute changes. A late
      * response must neither redirect the new visit nor restore another locale/resource's data. */
-    async function readCurrentEntry({signal}: {signal: AbortSignal}): Promise<T> {
-        const expectedRoute = route.fullPath;
+    async function readCurrentEntry({signal, queryKey: capturedKey}: {signal: AbortSignal; queryKey: readonly unknown[]}): Promise<T> {
+        const expectedRoute = documentRoute.value;
         const scope = context.capture();
-        const value = await source.read(scope, signal);
-        if (!active || navigation.pending() || route.fullPath !== expectedRoute || !context.isCurrent(scope, true)) {
-            throw new ObsoleteRequestError();
+        const generation = admissionGeneration;
+        const family = source.key.value;
+        let value: T;
+        try {
+            value = await source.read(scope, signal);
+        } catch (failure) {
+            // Failed old reads must not publish into a departed document any more
+            // than successful ones. Only a current, validated read denial retires
+            // the admission family and invokes its feature-owned dependencies.
+            if (!isCurrentEntry(scope, expectedRoute, generation)) throw new ObsoleteRequestError();
+            if (isReadDenial(failure)) {
+                await denyAdmission(failure, scope, family, capturedKey);
+                if (!isCurrentEntry(scope, expectedRoute, generation + 1)) throw new ObsoleteRequestError();
+            }
+            throw failure;
+        }
+        if (!isCurrentEntry(scope, expectedRoute, generation)) throw new ObsoleteRequestError();
+        if (value.entry.kind === 'denied') {
+            await denyAdmission(value.entry, scope, family, capturedKey);
+            if (!isCurrentEntry(scope, expectedRoute, generation + 1)) throw new ObsoleteRequestError();
+        } else if (value.entry.kind === 'render') {
+            // Only a newly validated server read restores admission after denial. A
+            // locale cache hit or captured SSR seed cannot clear this authority barrier.
+            if (deniedEntry.value) {
+                admissionGeneration++;
+                deniedEntry.value = undefined;
+                // Fresh restoration supersedes cached denials too. Returning to that
+                // language must read new admission rather than reinstate an old denial.
+                await retireQueryFamily(context.queryClient, family, new ObsoleteRequestError(), capturedKey);
+                if (!isCurrentEntry(scope, expectedRoute, generation + 1)) throw new ObsoleteRequestError();
+            }
         }
         return value;
     }
 
+    /** Retire presentation before awaiting cache cancellation. A successful typed
+     * denial replaces its producing query's payload; a thrown transport denial has
+     * no replacement body, so that query must lose its previous private data too.
+     * The original barrier descriptor remains readable through either retirement.
+     * Feature policy is invoked in this turn, capturing its resource before navigation. */
+    async function denyAdmission(entry: PilotPageEntryDenial | ApiFailure, scope: PilotRequestScope,
+                                 family: readonly unknown[], capturedKey: readonly unknown[]): Promise<void> {
+        admissionGeneration++;
+        deniedEntry.value = entry;
+        renderedScope.value = undefined;
+        context.retireInitialDocument();
+        const preservedKey = entry instanceof ApiFailure ? undefined : capturedKey;
+        const error = entry instanceof ApiFailure ? entry : new ObsoleteRequestError();
+        await Promise.all([retireQueryFamily(context.queryClient, family, error, preservedKey),
+            source.onDenied?.(entry, scope)]);
+    }
+
+    /** Initial document eligibility is evaluated at seeding time, not captured forever
+     * by this component. Back after eviction/GC must obtain a new GET-style admission. */
+    function initialData(): T | undefined {
+        return context.initialDocumentFor(initialRoute) && documentRoute.value === initialRoute
+            && context.session.value?.context === initialContext && context.locale.value === initialLocale ? source.initial : undefined;
+    }
+
     const query = useQuery<T>({
-        queryKey: computed(() => [...source.key.value, {context: context.session.value?.context,
-            epoch: context.epoch.value, route: route.fullPath, locale: context.locale.value}]),
+        queryKey,
         enabled: computed(() => context.ready.value && context.hydrated.value && source.enabled?.value !== false),
         queryFn: readCurrentEntry,
-        initialData: () => route.fullPath === initialRoute && context.session.value?.context === initialContext
-            && context.locale.value === initialLocale ? source.initial : undefined,
+        initialData,
     });
-    const renderedScope = shallowRef<{context: string | undefined; epoch: number; route: string}>();
 
     /** Admission keys vary with locale, but a language read must not unmount an admitted
      * editor. Keep an admitted subtree mounted while a redirect asks its departure guards;
      * otherwise the redirect itself would remove the guard before it can protect the draft.
      * Denials retire controls immediately. This retains only the render decision within its
-     * actor generation/resource route, never another payload or localized body. */
-    function rememberRender(entry: components['schemas']['PageEntryOutcome'] | undefined): void {
-        if (entry?.kind === 'render') {
-            renderedScope.value = {context: context.session.value?.context, epoch: context.epoch.value, route: route.fullPath};
+     * actor generation/resource route, never another payload or localized body. The
+     * receipt records the actual successful query time; a failed locale key cannot
+     * manufacture a new receipt or erase that admitted decision's previous one. */
+    function rememberRender(): void {
+        const entry = query.data.value?.entry;
+        if (entry?.kind === 'render' && !deniedEntry.value) {
+            const previous = currentRenderedScope.value;
+            const updatedAt = !query.isFetching.value && !query.error.value
+                ? query.dataUpdatedAt.value : previous?.updatedAt;
+            renderedScope.value = {context: context.session.value?.context, epoch: context.epoch.value,
+                route: documentRoute.value, updatedAt};
         } else if (entry?.kind === 'denied') {
-            renderedScope.value = undefined;
+            // Initial or retained typed denials follow the same retirement rule as
+            // network decisions. Do not repeat cleanup for the response just handled.
+            if (!(deniedEntry.value instanceof ApiFailure) && entry !== deniedEntry.value)
+                void denyAdmission(entry, context.capture(), source.key.value, queryKey.value);
         }
     }
-    watch(() => query.data.value?.entry, rememberRender, {immediate: true});
-    const outcome = computed<components['schemas']['PageEntryOutcome'] | undefined>(() => {
-        const entry = query.data.value?.entry;
-        if (entry?.kind === 'denied' || entry?.kind === 'render') return entry;
+    const currentRenderedScope = computed(() => {
         const rendered = renderedScope.value;
         return rendered && rendered.context === context.session.value?.context && rendered.epoch === context.epoch.value
-            && rendered.route === route.fullPath ? {kind: 'render'} : entry;
+            && rendered.route === documentRoute.value ? rendered : undefined;
     });
-    const pending = computed(() => !outcome.value && !query.error.value && query.isPending.value);
+    // Structural sharing can retain the exact entry object after a successful
+    // equal read. Observe its completed query state as well as its payload so
+    // retained admission reports the latest real receipt after a later failure.
+    watch([query.data, query.dataUpdatedAt, query.isFetching, query.error], rememberRender, {immediate: true});
+    const outcome = computed<components['schemas']['PageEntryOutcome'] | undefined>(() => {
+        if (deniedEntry.value) return deniedEntry.value instanceof ApiFailure ? undefined : deniedEntry.value;
+        const entry = query.data.value?.entry;
+        if (entry?.kind === 'denied' || entry?.kind === 'render') return entry;
+        return currentRenderedScope.value ? {kind: 'render'} : entry;
+    });
+    // The denial barrier keeps authority retired independently of presentation.
+    // A newer failed recovery owns its diagnostic/deadline; an empty locale key
+    // falls back to the original denial without reviving an old render snapshot.
+    const error = computed(() => query.error.value
+        ?? (deniedEntry.value instanceof ApiFailure ? deniedEntry.value : null));
+    // A denied resource/actor may not present an earlier successful read as its
+    // current authority. No command confirmation or copied form value is a receipt.
+    const admittedAt = computed(() => context.ready.value && !deniedEntry.value && !isReadDenial(error.value)
+        ? currentRenderedScope.value?.updatedAt : undefined);
+    const pending = computed(() => !outcome.value && !error.value && query.isPending.value);
 
     /** Only read-owned redirects are automatic. Denials stay rendered by the feature's ordinary
      * message surface; render decisions reveal that feature's own controls and projections. */
@@ -430,5 +586,16 @@ export function usePageEntry<T extends {entry: components['schemas']['PageEntryO
                       expectedRoute?: string): Promise<boolean> {
         return navigatePageEntry(context, router, entry, scope, expectedRoute);
     }
-    return {data: query.data, error: query.error, pending, outcome, navigate};
+    /** Retry admission itself, without replaying navigation or any form command.
+     * The ordinary query owns errors and the existing read operation fences its
+     * captured actor/route/generation. An explicit retry must still honor enabled
+     * state and the transport's server deadline even though refetch bypasses it. */
+    async function retry(): Promise<void> {
+        if (!active || navigation.pending() || !context.ready.value || !context.hydrated.value
+            || source.enabled?.value === false || query.isFetching.value || !canRetryRead(error.value)) return;
+        await query.refetch();
+    }
+
+    return {data: query.data, dataUpdatedAt: query.dataUpdatedAt, error,
+        pending, reading: query.isFetching, outcome, admittedAt, navigate, retry};
 }

@@ -1,7 +1,7 @@
 import {expect, test, type Page} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, loginForE2E} from '../keywords/e2eCoreKeywords';
+import {createResourceViaForm, loginForE2E, waitForPilotHydration} from '../keywords/e2eCoreKeywords';
 import type {components} from '../../src/types/api/v1';
 
 type SessionView = components['schemas']['SessionView'];
@@ -124,18 +124,20 @@ test.describe('actual frontend development runtime', () => {
             await expect(owner.locator('[data-loading-skeleton="cards"]')).toBeVisible();
             await expect(owner.locator(`[data-id="${event.id}"]`)).toHaveCount(0);
             const input = owner.getByRole('searchbox');
+            await page.evaluate(() => { document.documentElement.dataset.developmentDocument = 'overview-original'; });
             await input.fill(`${marker} standalone`);
             releaseEntry();
-            // The native profile submit is hidden only after successful enhancement.
-            // Region data arrives after hydration. The replayed input must survive that
+            // Wait for the current entry's completed draft restoration. Region data
+            // arrives after hydration. The replayed input must survive that
             // authoritative read rather than being restored from the original URL filter.
-            await expect(page.locator('header form[action="/frontend-pilot/users/profile"] button[type="submit"]'))
-                .toHaveAttribute('style', /display:\s*none/);
+            await waitForPilotHydration(page);
+            expect(await documentMarker(page)).toBe('overview-original');
             await expect(input).toHaveValue(`${marker} standalone`);
             await owner.getByRole('button', {name: 'Search', exact: true}).click();
             await expect(owner.locator(`[data-id="${event.id}"]`)).toHaveCount(0);
             await expect(owner.locator(`[data-id="${packing.id}"]`)).toBeVisible();
-            await expect(owner).toContainText('1 matching entity');
+            await expect(owner).toContainText('1 matching entities');
+            expect(await documentMarker(page)).toBe('overview-original');
         } finally {
             releaseEntry();
             await page.unroute('**/app/src/frontend/app/entry-client.ts*');

@@ -2,7 +2,7 @@ import type {ComputedRef, Ref, ShallowRef} from 'vue';
 import type {QueryClient} from '@tanstack/vue-query';
 import type {i18n} from 'i18next';
 import type {components, paths} from './api/v1';
-import type {LocalizationContext, Locale, MessageKey} from './LocalizationTypes';
+import type {LocalizationContext, Locale, MessageKey, MessageParameters} from './LocalizationTypes';
 import type {FrontendPageCompletion, FrontendPilotBootstrap} from './FrontendPilotTypes';
 import type {PilotApi} from '../frontend/app/api';
 
@@ -16,6 +16,39 @@ export interface PilotRequestScope {
 
 export interface PilotRead<T> { data: T; etag: string | null; }
 
+/** Features supply their own authorized binary endpoint; the shared image owner
+ * manages only actor/version lifetime, cancellation and object URL disposal. */
+export type PilotImageRead = (id: string, scope: PilotRequestScope, signal: AbortSignal) => Promise<Blob>;
+
+/** Ordinary successful resource reads can recover a missing authorized image even when
+ * its version is unchanged. Healthy URLs and in-flight reads remain owned by the helper. */
+export interface PilotAuthorizedImage {
+    source: Ref<string | null>;
+    refresh(): Promise<void>;
+}
+
+/** Recovery reads never replay a write. Their owner checks the captured actor, document
+ * and mounted lifetime before starting a resource follow-up or publishing feedback. */
+export type PilotRecoveryRead = (scope: PilotRequestScope, isCurrent: () => boolean) => Promise<unknown>;
+
+/** An operation may project a validated known problem onto its native presentation.
+ * Future safe details and unrelated API messages retain their existing fallback. */
+export type PilotProblemPresentation = (problem: components['schemas']['Problem']) => MessageKey | undefined;
+
+/** The feature owns its generated snapshot and wire values. Shared reconciliation needs
+ * only the allowed field names and their values, never a particular feature's DTO. */
+export type PilotMetadataField<TValues extends object> = Extract<keyof TValues, string>;
+export interface PilotMetadataSnapshot<TValues extends object> {
+    values: TValues;
+    editableFields: PilotMetadataField<TValues>[];
+}
+
+/** Optional field normalization defines comparison and sparse PATCH meaning together.
+ * Omitted policies use identity comparison; each supplied policy retains that field's type. */
+export type PilotMetadataFieldPolicy<TValues extends object> = {
+    readonly [TField in keyof TValues]?: (value: TValues[TField]) => TValues[TField];
+};
+
 /** A confirmed command retries only its canonical navigation. The shared owner retains the
  * actor/route receipt across identity remounts without persisting inputs or replaying writes. */
 export interface PilotConfirmedNavigation {
@@ -28,13 +61,19 @@ export interface PilotConfirmedNavigation {
     retryFallback(): Promise<boolean>;
 }
 
-/** An entry owner supplies its existing API read and cache family; the shared navigation
- * helper retires outcomes when that route or identity is no longer current. */
+export type PilotPageEntryDenial = Extract<components['schemas']['PageEntryOutcome'], {kind: 'denied'}>;
+
+/** An entry owner supplies its existing API read and language-independent admission family.
+ * The shared owner scopes routes/actors/locales and retires superseded admission snapshots.
+ * Feature policy selects any additional projections invalidated by an authoritative denial.
+ * Only the confirmed status crosses that boundary; a typed entry and a validated read
+ * failure retain their different presentation owners instead of forging a wire outcome. */
 export interface PilotPageEntrySource<T extends {entry: components['schemas']['PageEntryOutcome']}> {
     key: ComputedRef<readonly unknown[]>;
     enabled?: ComputedRef<boolean>;
     read(scope: PilotRequestScope, signal: AbortSignal): Promise<T>;
     initial?: T;
+    onDenied?(entry: {readonly status: number}, scope: PilotRequestScope): Promise<void>;
 }
 
 /** Optional form state joins the command owner's route, identity, update and unload guards.
@@ -44,6 +83,15 @@ export interface PilotCommandDraft {
     busy?(): boolean;
     uncertain?(): boolean;
     unknownMessage: MessageKey;
+    problemKey?: PilotProblemPresentation;
+}
+
+/** A retained command exposes status only after its private editor retires. The root
+ * departure owner aggregates this state without retaining submitted fields or authority. */
+export interface PilotDraftState {
+    busy: boolean;
+    dirty: boolean;
+    unknownMessage: MessageKey | null;
 }
 
 /** Command confirmation and its following read are independent outcomes. The result returned
@@ -51,6 +99,18 @@ export interface PilotCommandDraft {
 export interface PilotCommandOutcome {
     confirmation: 'pending' | 'confirmed' | 'rejected' | 'unknown' | 'obsolete';
     refresh: 'not-requested' | 'pending' | 'succeeded' | 'failed';
+}
+
+/** Features select native command feedback without putting feature names or policies
+ * in the shared owner. The initiating DOM boundary is captured before dispatch ends. */
+export type PilotPlainMessageKey = {
+    [TKey in MessageKey]: {} extends MessageParameters[TKey] ? TKey : never;
+}[MessageKey];
+
+export interface PilotCommandFeedback {
+    initiator?: Event | Element;
+    presentation?: 'flash' | 'inline';
+    success?: PilotPlainMessageKey;
 }
 
 /** Reuse the authored wire shapes while the caller owns its discovery endpoint and cache family.
@@ -65,7 +125,8 @@ export interface PilotEventPickerSource {
     filterKey(context: string | undefined, locale: string, filters: string): readonly unknown[];
 }
 
-/** Guards describe mounted drafts only. No recovery data or old release assets are persisted. */
+/** Guards cover mounted drafts and unresolved operation status after an editor retires.
+ * No recovery data or old release assets are persisted. */
 export interface PilotUpdateCoordinator {
     available: Ref<boolean>;
     incompatible: Ref<boolean>;
@@ -88,6 +149,9 @@ export interface PilotContext {
     visible: Ref<boolean>;
     hydrated: Ref<boolean>;
     ready: Ref<boolean>;
+    /** The existing bootstrap owner keeps one current read receipt. Actor retirement
+     * clears its error, deadline and successful timestamp together. */
+    sessionRead: Readonly<ShallowRef<{error: Error | null; updatedAt?: number; pending: boolean}>>;
     notice: Ref<MessageKey | null>;
     pageNotice: Ref<components['schemas']['EntryNotice'] | null>;
     pageCompletion: Ref<FrontendPageCompletion | null>;
@@ -99,7 +163,7 @@ export interface PilotContext {
     capture(): PilotRequestScope;
     /** Initial native presentation belongs to one actor and one committed visit. */
     initialDocumentFor(url: string): FrontendPilotBootstrap | undefined;
-    retireInitialDocument(destination: string): void;
+    retireInitialDocument(destination?: string): void;
     isCurrent(scope: PilotRequestScope, checkLocale?: boolean): boolean;
     refreshSession(): Promise<void>;
     acceptIdentity(result: components['schemas']['IdentityResult']): Promise<void>;

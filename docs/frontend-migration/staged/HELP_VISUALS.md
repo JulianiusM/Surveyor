@@ -5,9 +5,9 @@ documentation-metadata
 audience: documentation contributors; feature maintainers
 owner: product documentation maintainers
 status: migration-pending
-last-verified: 2026-10-08
+last-verified: 2026-10-09
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: FPR-07 staging of prospective navigation guidance and exact previously accepted images; no new inspection of unchanged future figures or production cutover
+verification-scope: source-reviewed staged generator destination and native-asset preservation; FPR-07 prospective navigation guidance and exact previously accepted images retained; no new image generation, visual acceptance or production cutover
 source-anchors: scripts/generate-help-visuals.mjs; src/locales/; docs/user-guide/visual-labels.json; docs/user-guide/de/visual-labels.json; docs/user-guide/de/assets/; docs/user-guide/de/README.md; docs/user-guide/de/SURVEYS.md; docs/user-guide/de/PACKING_LISTS.md; docs/user-guide/assets/; docs/user-guide/README.md; docs/user-guide/SURVEYS.md; docs/user-guide/PACKING_LISTS.md; src/views/layout.pug; src/frontend/components/AppHeader.vue; src/views/surveyor/survey-vote.pug; src/views/packing/packing-view.pug; .github/workflows/release.yml; tests/unit/help-documentation.spec.ts
 next-review: frontend-production-cutover
 canonical-merge-target: docs/HELP_VISUALS.md
@@ -96,17 +96,32 @@ Removing a visual requires removing its Markdown reference and either deleting t
 
 ## Reproducing localized figures
 
-After the normal application build, run `node scripts/generate-help-visuals.mjs --locale=de`. To change only a
-navigation figure, add `--figure=navigation`; `--locale=en` selects the independent English definition. The shared authoring
-script reads explanatory copy from the selected language's `visual-labels.json`; actual UI labels come from its
-central application catalog. Adding equivalent figures for a language means adding its own definition file beside
-its guides, then generating and inspecting its raster assets. The script does not connect to a database or start
-an application server. It imports the built Vue renderer with a fictional session and captures the real header.
-Pinned Bootstrap 5.3.3 and Bootstrap Icons 1.11.3 styling is cached in ignored authoring evidence, and used unchanged.
+After the normal application build, generate prospective navigation figures with the existing script's staged
+destination:
+
+```powershell
+node scripts/generate-help-visuals.mjs --staged --locale=en --figure=navigation
+node scripts/generate-help-visuals.mjs --staged --locale=de --figure=navigation
+```
+
+`--staged` writes English to `docs/frontend-migration/staged/user-guide/assets/` and German to the corresponding
+`de/assets/` directory. Omitting it writes to the canonical `docs/user-guide/` language directories: never use that
+default destination for a Vue navigation draft during migration. Preserve the native production images and their
+existing authoring guidance until an explicitly approved cutover. `--figure=navigation` leaves other exports untouched;
+omitting `--figure` generates all three figures and requires inspecting every changed export.
+
+The shared authoring script reads explanatory copy from the selected language's canonical `visual-labels.json`;
+actual UI labels come from its central application catalog. The staged option changes only the output destination,
+not definition selection. If prospective copy differs, resolve its language-owned authoring input before generation;
+do not assume that this option reads a staged definition or permits replacing a native production image.
+The script does not connect to a database or start an application server. It imports the built Vue renderer with
+a fictional session and captures the real header. Pinned Bootstrap 5.3.3 and Bootstrap Icons 1.11.3 styling is cached
+in ignored authoring evidence, and used unchanged.
 
 The source-header crop, source/style fingerprints, PNG dimensions, SHA-256 hashes and reduced previews are written
 to `.temp/help-visuals-<locale>/`. This evidence is local authoring state, not an additional release dependency.
-Reviewed PNGs under each language's `assets/` directory are intentional release-managed documentation assets.
+Reviewed canonical PNGs are intentional release-managed documentation assets. Staged PNGs remain prospective
+cutover material; generating them does not install or accept them for production.
 
 ## Accepted exports, 2026-10-07
 

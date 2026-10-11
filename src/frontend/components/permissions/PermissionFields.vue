@@ -11,6 +11,8 @@ const props = defineProps<{
     presets: components['schemas']['PermissionPreset'][];
     prefix: string;
     disabled?: boolean;
+    /** Opt-in applies to local mask inputs, never preset/select-all action buttons. */
+    hydrationDraft?: boolean;
 }>();
 const emit = defineEmits<{'update:modelValue': [mask: number]}>();
 const {messages} = usePilot();
@@ -107,6 +109,7 @@ function toggle(bit: number, event: Event): void {
                             :id="`${prefix}-${permission.key}`"
                             class="form-check-input bg-dark border-secondary"
                             type="checkbox"
+                            :data-hydration-draft="hydrationDraft ? '' : undefined"
                             :checked="!!(modelValue & permission.bit)"
                             @change="toggle(permission.bit, $event)"
                         />

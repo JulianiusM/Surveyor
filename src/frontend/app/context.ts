@@ -11,6 +11,7 @@ import {createLocalizationInstance, createTranslator, resolveLocale} from '../..
 import {PilotApi} from './api';
 import {ApiFailure, ObsoleteRequestError} from './transport';
 import {createUpdateCoordinator} from './updateCoordinator';
+import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
 
 // Development SSR can invalidate the context module between app construction and a lazy route
 // import. A stable key spans those module generations; the provided value remains app/request-local.
@@ -26,6 +27,14 @@ export function usePilot(): PilotContext {
     return {...context, messages};
 }
 
+/** Spread temporary read retries without another scheduler or an unbounded delay.
+ * The existing two-retry limit uses 750–1000 ms, then 1500–2000 ms. The shared
+ * exponential policy retains its eight-second ceiling if that limit later changes. */
+function retryDelay(attempt: number): number {
+    const delay = Math.min(1000 * 2 ** attempt, 8000);
+    return Math.round(delay * (0.75 + Math.random() * 0.25));
+}
+
 /** Request-local on the server, application-local in the browser; never a module singleton. */
 export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: boolean,
                                    requestFetch?: typeof fetch): PilotContext {
@@ -36,12 +45,17 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     const stopLanguage = watch(locale, next => { void i18next.changeLanguage(next); }, {flush: 'sync'});
     const visible = ref(browser && document.visibilityState !== 'hidden');
     const ready = ref(true);
+    // Construction accepts the validated initial document's session receipt,
+    // matching query initialData. A failed later GET must retain that observation.
+    const sessionRead = shallowRef<PilotContext['sessionRead']['value']>({error: null, updatedAt: Date.now(), pending: false});
     const initialDocumentActive = ref(true);
+    const initialDocumentUrl = bootstrap.initialUrl === undefined ? undefined : frontendDocumentUrl(bootstrap.initialUrl);
     const hydrated = ref(false);
     const notice = ref<MessageKey | null>(bootstrap.identityFeedback === 'auth.logoutDone' ? bootstrap.identityFeedback : null);
     // Entry feedback is a typed one-time page notice. Session/read conditions keep their
     // existing independent lifetime and must not replace an admission notice's severity.
-    const pageNotice = ref<components['schemas']['EntryNotice'] | null>(bootstrap.pageNotice ?? null);
+    const pageNotice = ref<components['schemas']['EntryNotice'] | null>(bootstrap.pageNotice
+        ?? (bootstrap.identityFeedback === 'auth.activated' ? {kind: 'success', messageKey: 'auth.activated'} : null));
     // A confirmed command can finish on a native message destination without another
     // write. This presentation receipt is memory-only and belongs to the current actor.
     const pageCompletion = ref<PilotContext['pageCompletion']['value']>(
@@ -59,7 +73,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
             refetchOnReconnect: false,
             retry: (failures, error) => !(error instanceof ObsoleteRequestError)
                 && (!(error instanceof ApiFailure) || (error.status >= 500 && !error.retryAfter)) && failures < 2,
-            retryDelay: attempt => Math.min(1000 * 2 ** attempt, 8000),
+            retryDelay,
         },
         mutations: {retry: false},
     }});
@@ -98,15 +112,16 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     function initialDocumentFor(url: string): FrontendPilotBootstrap | undefined {
         // A fragment selects content within the same document; it is not sent to Express.
         // Path and query still identify the original request and may never revive on return.
-        if (!initialDocumentActive.value || !ready.value || bootstrap.initialUrl?.split('#')[0] !== url.split('#')[0]
+        if (!initialDocumentActive.value || !ready.value || initialDocumentUrl !== frontendDocumentUrl(url)
             || bootstrap.session.context !== session.value.context) return;
         return bootstrap;
     }
 
-    /** Only committed departure retires native presentation; canceled navigation retains it.
+    /** Committed departure retires native presentation; canceled navigation retains it.
+     * Omit the destination when fresh admission explicitly supersedes the initial response.
      * Identity retirement independently revokes eligibility even if the URL stays unchanged. */
-    function retireInitialDocument(destination: string): void {
-        if (destination.split('#')[0] !== bootstrap.initialUrl?.split('#')[0]) initialDocumentActive.value = false;
+    function retireInitialDocument(destination?: string): void {
+        if (destination === undefined || frontendDocumentUrl(destination) !== initialDocumentUrl) initialDocumentActive.value = false;
     }
 
     function isCurrent(scope: PilotRequestScope, checkLocale = false): boolean {
@@ -120,6 +135,9 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         personalLink.value = null;
         pageNotice.value = null;
         pageCompletion.value = null;
+        // A previous actor's successful read and cooldown cannot describe the new
+        // identity. The bootstrap promise is still drained by its existing owner.
+        sessionRead.value = {error: null, pending: false};
         ready.value = false;
         epoch.value++;
         void queryClient.cancelQueries();
@@ -146,8 +164,12 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     /** One bootstrap gate precedes focus/reconnect reads, preventing automatic fetches with an old cookie scope. */
     function refreshSession(): Promise<void> {
         if (bootstrapRequest) return bootstrapRequest;
+        // Every session caller shares the existing server deadline. Reject with
+        // the retained failure rather than implying that a skipped GET succeeded.
+        if (!canRetryRead(sessionRead.value.error)) return Promise.reject(sessionRead.value.error);
         const generation = epoch.value;
         const capturedLocaleGeneration = localeGeneration;
+        sessionRead.value = {...sessionRead.value, pending: true};
 
         function receiveBootstrap(current: components['schemas']['SessionView']): void {
             if (disposed || generation !== epoch.value) return;
@@ -162,6 +184,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
                 ? resolveLocale(current.locale) : locale.value;
             receiveSession(current, selectedLocale);
             ready.value = true;
+            sessionRead.value = {error: null, updatedAt: Date.now(), pending: false};
             pendingIdentity = undefined;
 
             if (confirmedIdentity) {
@@ -175,6 +198,17 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
             if (notice.value === 'state.stale') notice.value = null;
         }
 
+        function rejectBootstrap(failure: unknown): never {
+            // Obsolete responses cannot replace the current actor's read notice or
+            // revive a retired receipt. Ordinary failures preserve readable state.
+            if (!disposed && generation === epoch.value) {
+                const error = failure instanceof Error ? failure : new Error('The session read failed.');
+                sessionRead.value = {...sessionRead.value, error, pending: false};
+                notice.value = 'state.stale';
+            }
+            throw failure;
+        }
+
         function finishBootstrap(): void {
             bootstrapRequest = undefined;
             // An identity hint can obsolete an already pending bootstrap. Its result is ignored,
@@ -184,7 +218,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
             }
         }
 
-        bootstrapRequest = api.bootstrap().then(receiveBootstrap).finally(finishBootstrap);
+        bootstrapRequest = api.bootstrap().then(receiveBootstrap).catch(rejectBootstrap).finally(finishBootstrap);
         return bootstrapRequest;
     }
 
@@ -236,7 +270,13 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     }
 
     function start(): () => void {
-        if (!browser) return () => { stopLanguage(); updates.dispose(); queryClient.clear(); };
+        if (!browser) return () => {
+            disposed = true;
+            epoch.value++;
+            stopLanguage();
+            updates.dispose();
+            queryClient.clear();
+        };
         hydrated.value = true;
         let checking = false;
         async function revalidate(refreshReads = true): Promise<void> {
@@ -247,9 +287,8 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
                 if (ready.value && refreshReads) await queryClient.refetchQueries({type: 'active',
                     predicate: query => canRetryRead(query.state.error)});
             } catch {
-                // Last confirmed data stays visible on a temporary read failure. A known context loss
-                // already set ready=false and cleared private state before reaching this branch.
-                notice.value = 'state.stale';
+                // The bootstrap owner records only a current failure. A retired
+                // request must never create another actor's warning here.
             } finally { checking = false; }
         }
         function visibilityChanged(): void {
@@ -271,6 +310,10 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         const timer = window.setInterval(() => { void revalidate(false); }, 30_000);
         return () => {
             disposed = true;
+            // Retained operation statuses observe actor generations. Retire every
+            // scope on application disposal too, so detached guards release even
+            // when an unresolved HTTP operation never settles after page departure.
+            epoch.value++;
             window.clearInterval(timer);
             document.removeEventListener('visibilitychange', visibilityChanged);
             window.removeEventListener('focus', onFocus);
@@ -284,7 +327,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         };
     }
 
-    return {api, bootstrap, browser, queryClient, session, epoch, locale, i18next, visible, hydrated, ready, notice, pageNotice, pageCompletion, personalLink, messages, pageTitle, updates,
+    return {api, bootstrap, browser, queryClient, session, epoch, locale, i18next, visible, hydrated, ready, sessionRead, notice, pageNotice, pageCompletion, personalLink, messages, pageTitle, updates,
         capture, initialDocumentFor, retireInitialDocument, isCurrent, refreshSession, acceptIdentity, registerIdentityGuard, mayChangeIdentity,
         changeLocale, invalidateIdentity, start};
 }
@@ -304,7 +347,10 @@ export function refreshInterval(error: Error | null, failures: number, jitter: n
     if (error instanceof ObsoleteRequestError) return false;
     if (error instanceof ApiFailure) {
         if (error.retryAt !== null) return Math.max(error.retryAt - Date.now(), 30_000);
-        if (error.status < 500 && error.status !== 429) return false;
+        // Only a validated rejection can make a client/input error terminal. An
+        // unusable proxy response retains ordinary bounded read recovery instead
+        // of leaving a visible shared view permanently stale after its raw 4xx.
+        if (error.confirmedRejection && error.status < 500 && error.status !== 429) return false;
     }
     return error ? Math.min(30_000 * 2 ** Math.min(failures, 1), 60_000) : 30_000 + jitter;
 }

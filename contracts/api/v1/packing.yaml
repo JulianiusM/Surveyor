@@ -10,6 +10,11 @@ schemas:
         anyOf:
           - $ref: '#/schemas/PackingCreateContext'
           - type: 'null'
+      selectedEvent:
+        description: Present only when eventId context was requested. Authorized initial URL selection; a missing or rejected selection is omitted from the creation draft.
+        anyOf:
+          - $ref: '#/schemas/PackingEventOption'
+          - type: 'null'
   PackingResourceEntry:
     type: object
     additionalProperties: false
@@ -474,9 +479,11 @@ schemas:
           - "null"
         maxLength: 65535
       maxAssignees:
-        type: integer
-        minimum: 1
-        maximum: 2147483647
+        description: Existing native inline edits carry a numeric value, the number control's raw string draft, or null. The existing signed nullable integer column retains native rounding and rejects invalid/overflow values. New-item creation has its separate positive integer policy.
+        anyOf:
+          - type: number
+          - type: string
+          - type: "null"
       requiredByAll:
         type: boolean
     minProperties: 1
@@ -834,6 +841,11 @@ schemas:
         $ref: "#/schemas/PermissionDefaults"
       formContext:
         $ref: "#/schemas/PackingCreateContext"
+      selectedEvent:
+        description: Present only when eventId context was requested. Authorized initial URL selection, independently of the duplicated source's parent event.
+        anyOf:
+          - $ref: '#/schemas/PackingEventOption'
+          - type: 'null'
     description: Draft copied from persisted rows, including cleared titles and historical invalid capacity. Creation validates the edited
       draft independently.
   PackingDuplicateItem:

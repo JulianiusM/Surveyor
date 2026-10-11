@@ -14,14 +14,33 @@ export class ObsoleteRequestError extends Error {
     constructor() { super('The request belongs to an obsolete view context.'); }
 }
 
-/** A validated API problem is a confirmed rejection; an invalid/absent mutation response is not. */
+/** Only a validated error representation confirms a rejection. A newer Problem can use
+ * the generated common-details contract, while unusable responses retain uncertainty. */
 export class ApiFailure extends Error {
     readonly retryAt: number | null;
+    readonly confirmedRejection: boolean;
+    // Presentation can expose validated future text without granting it known-code
+    // behavior or claiming that a temporary server error definitively rejected a write.
+    readonly safeDetail: string | null;
     constructor(readonly status: number, readonly problem: Problem | null, readonly retryAfter: number | null = null,
-                detail?: string) {
+                detail?: string, validatedDetails = false) {
         super(problem?.detail ?? detail ?? problem?.title ?? `HTTP ${status}`);
         this.retryAt = retryAfter === null ? null : Date.now() + retryAfter;
+        this.safeDetail = problem?.detail ?? (validatedDetails ? detail ?? null : null);
+        // HTTP status alone does not establish which operation produced a proxy/HTML
+        // response. Keep safe future errors compatible without trusting arbitrary text;
+        // an internal server error remains uncertain even when its envelope is valid.
+        this.confirmedRejection = status < 500 && (problem !== null || validatedDetails);
     }
+}
+
+/** Only a validated rejection can retire a read's protected projection or editor.
+ * A proxy/HTML response or mismatched Problem may carry the same HTTP status, but
+ * it does not establish lost access or disappearance. Keep the admitted content
+ * and local draft available for ordinary recovery in that case. Feature callers
+ * still select the affected resources; known codes alone own actor transitions. */
+export function isReadDenial(error: unknown): error is ApiFailure {
+    return error instanceof ApiFailure && error.confirmedRejection && [401, 403, 404].includes(error.status);
 }
 
 export class UnconfirmedResponseError extends Error {
@@ -68,21 +87,35 @@ export class PilotTransport {
         if (!admitted && (response.ok || response.status === 304)) throw new UnconfirmedResponseError();
     }
 
+    /** JSON and binary operations share this error boundary. Check actor/locale before
+     * granting known machine-code behavior or retaining a safe future explanation;
+     * the generated client's decoded error stays unknown until these checks pass. */
+    reject(response: Response, error: unknown, scope?: PilotRequestScope, checkLocale = false): never {
+        this.checkScope(response, scope, checkLocale);
+        const problem = validateProblem(error) && error.status === response.status ? error : null;
+        const validatedDetails = validateSafeProblemDetails(error) && error.status === response.status;
+        const detail = validatedDetails ? error.detail : undefined;
+        // Known codes own identity transitions. A malformed or future error may
+        // describe a rejection, but it cannot expire an otherwise current actor.
+        if (problem?.code === 'AUTH_REQUIRED' || problem?.code === 'SESSION_CONTEXT_CHANGED') this.identityLost();
+        const rawDelay = response.headers.get('Retry-After');
+        const parsedDelay = rawDelay && /^\d+$/u.test(rawDelay) ? Number(rawDelay) * 1000
+            : rawDelay ? Math.max(0, Date.parse(rawDelay) - Date.now()) : null;
+        throw new ApiFailure(response.status, problem, Number.isFinite(parsedDelay) ? parsedDelay : null,
+            detail, validatedDetails);
+    }
+
     read<T>(operationId: ApiOperationId, result: {data?: unknown; error?: unknown; response: Response}, validate: Validator<T>,
                     scope?: PilotRequestScope, previous?: PilotRead<T>, checkLocale = false): PilotRead<T> {
         const {response, data, error} = result;
-        this.checkScope(response, scope, checkLocale);
-        if (response.status === 304 && previous) return previous;
-        if (!response.ok) {
-            const problem = validateProblem(error) && error.status === response.status ? error : null;
-            const detail = validateSafeProblemDetails(error) && error.status === response.status ? error.detail : undefined;
-            if (response.status === 401 && (!problem || problem.code === 'AUTH_REQUIRED')
-                || problem?.code === 'SESSION_CONTEXT_CHANGED') this.identityLost();
-            const rawDelay = response.headers.get('Retry-After');
-            const parsedDelay = rawDelay && /^\d+$/u.test(rawDelay) ? Number(rawDelay) * 1000
-                : rawDelay ? Math.max(0, Date.parse(rawDelay) - Date.now()) : null;
-            throw new ApiFailure(response.status, problem, Number.isFinite(parsedDelay) ? parsedDelay : null, detail);
+        // A conditional read has no error body. Its retained snapshot still requires
+        // positive actor confirmation before it can bypass ordinary success validation.
+        if (response.status === 304 && previous) {
+            this.checkScope(response, scope, checkLocale);
+            return previous;
         }
+        if (!response.ok) this.reject(response, error, scope, checkLocale);
+        this.checkScope(response, scope, checkLocale);
         // A 204 is a valid empty HTTP response, but no pilot read/write declares an empty success body.
         // Never turn that absence (or redirected login HTML) into a successful typed command.
         if (!operationPolicies[operationId].successStatuses.includes(response.status) || response.status === 204 || !response.headers.get('content-type')?.includes('application/json') || !validate(data)) {

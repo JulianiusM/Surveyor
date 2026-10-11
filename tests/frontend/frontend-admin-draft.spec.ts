@@ -65,7 +65,7 @@ async function mountSettings() {
     await wrapper.get('.accordion-button').trigger('click');
     async function removeRemoteAdmin() {
         settings = {...settings, settingsToken: '"edit-settingsAfterRemoval"', access: {...settings.access!, admins: []}};
-        await context.queryClient.refetchQueries({queryKey: packingKeys.settings(session.context, listId, 'en')});
+        await context.queryClient.refetchQueries({queryKey: packingKeys.settings(session.context, listId)});
         await flushPromises();
     }
     async function dispose() {

@@ -10,16 +10,20 @@ import {User} from '../../src/modules/database/entities/user/User';
 import {Guest} from '../../src/modules/database/entities/user/Guest';
 
 describe('shared server-owned page admission', () => {
-    it('admits account creation and sends guests/anonymous users to login with the exact duplicate return', () => {
+    it('admits account creation and sends guests/anonymous users to login with the exact duplicate return', async () => {
         const destination = '/frontend-pilot/packing/84305c09-5386-47bc-b62d-520b8a8edbb2/duplicate';
-        const result = readPackingCreateEntry({}, destination);
+        const result = await readPackingCreateEntry({}, destination);
         expect(result).toEqual({entry: {kind: 'redirect', url: `/frontend-pilot/users/login?next=${encodeURIComponent(destination)}`,
             notice: {kind: 'info', messageKey: 'auth.accountRequired'}}, context: null});
         expect(contractValidator('PackingCreateEntry')(result)).toBe(true);
         expect(getAccountPageEntry({auth: {guest: new Guest()}, profile: new Profile()}, '/users/login', '/activity/source/duplicate').kind)
             .toBe('redirect');
-        expect(readPackingCreateEntry({auth: {user: new User()}, profile: new Profile()}).entry).toEqual({kind: 'render'});
-        expect(readPackingCreateEntry({auth: {user: new User()}}).context).toBeNull();
+        expect((await readPackingCreateEntry({auth: {user: new User()}, profile: new Profile()})).entry).toEqual({kind: 'render'});
+        expect((await readPackingCreateEntry({auth: {user: new User()}})).context).toBeNull();
+        expect(Object.hasOwn(result, 'selectedEvent')).toBe(false);
+        const contextual = await readPackingCreateEntry({}, destination, 'unadmitted-context');
+        expect(contextual.selectedEvent).toBeNull();
+        expect(contractValidator('PackingCreateEntry')(contextual)).toBe(true);
     });
 
     it('preserves standalone guest entry and attached anonymous denial before any DB-dependent checks', async () => {

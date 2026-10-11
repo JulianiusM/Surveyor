@@ -9,6 +9,8 @@ const props = defineProps<{
     presets: components['schemas']['PermissionPreset'][];
     prefix: string;
     disabled?: boolean;
+    /** Only a local SSR draft owner may synchronize pre-hydration mask edits. */
+    hydrationDraft?: boolean;
 }>();
 const emit = defineEmits<{'update:modelValue': [value: components['schemas']['PermissionDefaults']]}>();
 const {messages} = usePilot();
@@ -22,18 +24,23 @@ function update(mask: number): void {
     <div class="perm-matrix text-bg-dark">
         <div class="mb-3">
             <label class="form-label" :for="prefix + '-audience'">{{ messages.t('packing.audience') }}</label>
-            <select :id="prefix + '-audience'" v-model="audience" class="form-select text-bg-dark">
+            <!-- The owning command locks audience navigation as well as its masks,
+                 including a mounted permission matrix behind an inactive Settings tab. -->
+            <select :id="prefix + '-audience'" v-model="audience" class="form-select text-bg-dark" :disabled="disabled">
                 <option v-for="value in audiences" :key="value" :value="value">
                     {{ messages.t(('audiences.' + value) as 'audiences.public') }}
                 </option>
             </select>
         </div>
+        <!-- Audience navigation is not opted in: restoring it would reinterpret the
+             already-rendered checkboxes as another audience's permission draft. -->
         <PermissionFields
             :model-value="modelValue[audience]"
             :permissions="permissions"
             :presets="presets"
             :prefix="prefix + '-' + audience"
             :disabled="disabled"
+            :hydration-draft="hydrationDraft"
             @update:model-value="update"
         />
     </div>

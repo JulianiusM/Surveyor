@@ -2,11 +2,14 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
 import {defineComponent} from 'vue';
+import type {Component} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
-import {VueQueryPlugin} from '@tanstack/vue-query';
+import {QueryObserver, VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import type {components} from '../../src/types/api/v1';
-import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
+import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
+import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
+import {packingKeys} from '../../src/frontend/app/queryKeys';
 import PackingEntry from '../../src/frontend/features/packing/PackingEntry.vue';
 import IdentityPage from '../../src/frontend/features/identity/IdentityPage.vue';
 import App from '../../src/frontend/app/App.vue';
@@ -17,11 +20,25 @@ const secondId = '22222222-2222-4222-8222-222222222222';
 const session: components['schemas']['SessionView'] = {
     kind: 'anonymous', deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'},
     context: 'page-entry-context-1234567890', csrfToken: 'page-entry-csrf-1234567890', locale: 'en',
-    activeProfile: null, profiles: [], loginUrl: '/users/login', logoutUrl: '/users/logout',
+    activeProfile: null, profiles: [], loginUrl: '/users/login', logoutUrl: null,
     shell: {version: 'fixture', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy', localLoginEnabled: true,
         oidcEnabled: false, oidcName: 'Provider'},
 };
 const cleanups: Array<() => Promise<void>> = [];
+const privateList: components['schemas']['PackingListView'] = {
+    entityType: 'packing', id: firstId, title: 'Confidential list', description: 'Protected description',
+    headerUrl: null, headerVersion: null, orderToken: '"order"', currentEventId: null, currentEventUrl: null,
+    archived: false, inheritedArchived: false,
+    capabilities: {editTitle: false, editDescription: false, selfAssign: false, addItem: false,
+        reorder: false, manageSettings: false},
+    counters: {participants: 0, open: 0, empty: 0}, items: [],
+};
+
+function deferredResponse() {
+    let resolveResponse!: (response: Response) => void;
+    const response = new Promise<Response>(function captureResponse(resolve) { resolveResponse = resolve; });
+    return {response, resolve: resolveResponse};
+}
 
 function json(value: unknown, status = 200, responseContext = session.context): Response {
     return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
@@ -37,9 +54,10 @@ afterEach(async () => {
 
 /** The production wrapper, generated response validators, query owner and real router remain
  * intact. Only HTTP delivery is replaced; fixtures carry server-owned entry decisions. */
-async function mounted(path: string, handler: (request: Request) => Promise<Response>, detailIsDestination = false) {
+async function mounted(path: string, handler: (request: Request) => Promise<Response>, detailIsDestination = false,
+                       initial: Omit<FrontendPilotBootstrap, 'session'> = {}) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
-    const context = createPilotContext({session}, true, request);
+    const context = createPilotContext({...initial, session}, true, request);
     context.hydrated.value = true;
     const Destination = defineComponent({template: '<p>Admitted destination</p>'});
     const router = createRouter({history: createMemoryHistory(), routes: [
@@ -54,12 +72,14 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
     ]});
     await router.push(path);
     await router.isReady();
+    const stopInitialDocument = observeInitialDocument(context, router);
     const wrapper = mount(App, {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
         provide: {[pilotContextKey as symbol]: context},
     }});
     cleanups.push(async () => {
         wrapper.unmount();
+        stopInitialDocument();
         await context.queryClient.cancelQueries();
         context.queryClient.clear();
     });
@@ -68,6 +88,144 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
 }
 
 describe('server-owned page entry and canonical navigation', () => {
+    it.each([400, 404])('keeps private cached locales retired after typed %s denial and admits only a fresh restoration', async status => {
+        let denied = false;
+        let holdEnglish = false;
+        const heldEnglish = deferredResponse();
+        const deniedEntry = {kind: 'denied' as const, status,
+            messageKey: status === 400 ? 'packing.eventRegistrationRequired' : 'packing.notFound'};
+        const {wrapper, context, request} = await mounted(`/frontend-pilot/packing/${firstId}`, async request => {
+            const url = new URL(request.url);
+            if (url.pathname === '/api/v1/locale') {
+                const {locale} = await request.json();
+                return json({...session, locale});
+            }
+            if (url.pathname.endsWith('/entry')) {
+                if (holdEnglish && request.headers.get('X-Surveyor-Locale') === 'en') return heldEnglish.response;
+                return json({entry: denied ? deniedEntry : {kind: 'render'}, guest: null});
+            }
+            // Keep the separate detail denial path out of the assertion: typed entry
+            // admission must retire its old private DTO without that fallback firing.
+            if (denied) return new Promise<Response>(function holdDetail() {});
+            return json(privateList);
+        }, false, {initialUrl: `/frontend-pilot/packing/${firstId}`, pageEntry: {kind: 'render'}});
+        expect(wrapper.text()).toContain(privateList.title);
+        const actor = session.context;
+        const otherDetail = packingKeys.detail(actor, secondId);
+        const copiedDuplicate = packingKeys.duplicate(actor, firstId);
+        const admittedCopy = packingKeys.duplicate(actor, firstId, secondId);
+        const publicGuest = packingKeys.guest(actor, firstId);
+        context.queryClient.setQueryData(otherDetail, {data: {...privateList, id: secondId}});
+        context.queryClient.setQueryData(copiedDuplicate, {title: 'Independent copied draft'});
+        context.queryClient.setQueryData(admittedCopy, {title: 'Already admitted copy'});
+        // An observed copy represents its independent creation owner. Missing source
+        // retirement evicts only cold future admissions, never that owner's snapshot.
+        const copyObserver = new QueryObserver(context.queryClient, {queryKey: admittedCopy, staleTime: Infinity,
+            queryFn: async function readCopiedDraft() { return {title: 'Already admitted copy'}; }});
+        const stopCopy = copyObserver.subscribe(function retainCopiedDraft() {});
+        cleanups.push(async () => { stopCopy(); });
+        context.queryClient.setQueryData(publicGuest, {id: firstId, title: 'Public guest title'});
+
+        denied = true;
+        await context.changeLocale('de');
+        await flushPromises();
+        expect(wrapper.text()).not.toContain(privateList.title);
+        expect(wrapper.text()).not.toContain(privateList.description);
+        expect(context.queryClient.getQueryData(packingKeys.detail(actor, firstId))).toBeUndefined();
+        expect(context.queryClient.getQueryData(otherDetail)).toBeDefined();
+        expect(context.queryClient.getQueryData(copiedDuplicate) !== undefined).toBe(status === 400);
+        expect(context.queryClient.getQueryData(admittedCopy)).toBeDefined();
+        expect(context.queryClient.getQueryData(publicGuest) !== undefined).toBe(status === 400);
+
+        holdEnglish = true;
+        const returning = context.changeLocale('en');
+        await flushPromises();
+        expect(context.locale.value).toBe('en');
+        expect(wrapper.text()).not.toContain(privateList.title);
+        expect(wrapper.findComponent(PackingEntry).find('table').exists()).toBe(false);
+        heldEnglish.resolve(json({entry: deniedEntry, guest: null}));
+        await returning;
+        await flushPromises();
+
+        denied = false;
+        holdEnglish = false;
+        await context.queryClient.invalidateQueries({queryKey: packingKeys.entry(actor, firstId, 'detail')});
+        await flushPromises();
+        expect(wrapper.text()).toContain(privateList.title);
+        const reads = request.mock.calls.length;
+        await context.changeLocale('de');
+        await flushPromises();
+        expect(request.mock.calls.length).toBeGreaterThan(reads);
+        expect(wrapper.text()).toContain(privateList.title);
+    });
+
+    it('does not reseed the initial document when a reused resource wrapper returns after cache eviction', async () => {
+        const path = `/frontend-pilot/packing/${firstId}/guest`;
+        const heldReturn = deferredResponse();
+        const {wrapper, context, router} = await mounted(path, async request => {
+            return request.url.includes(firstId) ? heldReturn.response
+                : json({entry: {kind: 'render'}, guest: {id: secondId, title: 'Second guest title'}});
+        }, false, {initialUrl: path, pageEntry: {kind: 'render'}, guestEntry: {id: firstId, title: 'Initial guest title'}});
+        expect(wrapper.text()).toContain('Initial guest title');
+        await router.push(path + '#registration');
+        expect(context.initialDocumentFor(path)).toBeDefined();
+        await router.push(`/frontend-pilot/packing/${secondId}/guest`);
+        await flushPromises();
+        context.queryClient.removeQueries({queryKey: packingKeys.entry(session.context, firstId, 'guest')});
+        await router.push(path);
+        await flushPromises();
+        expect(context.initialDocumentFor(path)).toBeUndefined();
+        expect(wrapper.text()).not.toContain('Initial guest title');
+        expect(wrapper.find('#guest-name').exists()).toBe(false);
+        heldReturn.resolve(json({entry: {kind: 'denied', status: 404, messageKey: 'packing.notFound'}, guest: null}));
+        await flushPromises();
+        expect(wrapper.get('h1').text()).toBe('Error');
+    });
+
+    it('retains admitted input and read authority during native-style fragment movement', async () => {
+        const path = `/frontend-pilot/packing/${firstId}/guest`;
+        const {wrapper, router, request} = await mounted(path, async () => json({
+            entry: {kind: 'render'}, guest: {id: firstId, title: 'Guest fixture'},
+        }));
+        const name = wrapper.get<HTMLInputElement>('#guest-name');
+        await name.setValue('Unfinished guest name');
+        name.element.focus();
+        const reads = request.mock.calls.length;
+        const confirm = vi.fn(() => false);
+        vi.stubGlobal('confirm', confirm);
+        await router.push(path + '#registration');
+        await flushPromises();
+        expect(router.currentRoute.value.hash).toBe('#registration');
+        expect(wrapper.get('#guest-name').element).toBe(name.element);
+        expect(name.element.value).toBe('Unfinished guest name');
+        expect(document.activeElement).toBe(name.element);
+        expect(request).toHaveBeenCalledTimes(reads);
+        expect(confirm).not.toHaveBeenCalled();
+    });
+
+    it('does not revive expired document feedback after slow canonical delivery', async () => {
+        const {context, router} = await mounted(`/frontend-pilot/packing/${firstId}/guest`, async () => json({
+            entry: {kind: 'render'}, guest: {id: firstId, title: 'Guest fixture'},
+        }));
+        let finishDelivery!: (component: Component) => void;
+        router.addRoute({path: '/frontend-pilot/slow-destination', component: function loadDestination() {
+            return new Promise<Component>(resolve => { finishDelivery = resolve; });
+        }});
+        context.pageNotice.value = {kind: 'success', messageKey: 'auth.loginDone'};
+        context.personalLink.value = 'https://fixture.test/guest/private-token';
+        const delivery = navigatePageEntry(context, router, {kind: 'redirect', url: '/frontend-pilot/slow-destination'});
+        await flushPromises();
+
+        // Expiry or explicit dismissal belongs to the live owner while its current
+        // document remains displayed. The later canonical redirect must respect it.
+        context.pageNotice.value = null;
+        context.personalLink.value = null;
+        finishDelivery(defineComponent({template: '<p>Delivered destination</p>'}));
+        expect(await delivery).toBe(true);
+        expect(context.pageNotice.value).toBeNull();
+        expect(context.personalLink.value).toBeNull();
+    });
+
     it('retains a confirmed destination after lazy delivery fails and retries only navigation', async () => {
         const {context, router} = await mounted(`/frontend-pilot/packing/${firstId}/guest`, async () => json({
             entry: {kind: 'render'}, guest: {id: firstId, title: 'Guest fixture'},
@@ -95,6 +253,9 @@ describe('server-owned page entry and canonical navigation', () => {
         expect(completion.target.value).toBe('/frontend-pilot/confirmed-destination');
         expect(completion.pending.value).toBe(false);
         expect(router.currentRoute.value.fullPath).toBe(origin);
+
+        await router.push(origin + '#confirmed-command');
+        expect(completion.target.value).toBe('/frontend-pilot/confirmed-destination');
 
         const unload = new Event('beforeunload', {cancelable: true});
         window.dispatchEvent(unload);
@@ -155,6 +316,34 @@ describe('server-owned page entry and canonical navigation', () => {
         expect(completion.target.value).toBeNull();
         expect(await completion.retry()).toBe(false);
         expect(router.currentRoute.value.fullPath).toBe(origin);
+    });
+
+    it('shows a retained delivery Retry only in the same-type instance that confirmed its command', async () => {
+        const {router, wrapper} = await mounted(`/frontend-pilot/packing/${firstId}/guest`, async () => json({
+            entry: {kind: 'render'}, guest: {id: firstId, title: 'Guest fixture'},
+        }));
+        const ConfirmedOwner = defineComponent({
+            props: {identity: {type: String, required: true}},
+            template: '<section><button @click="complete">Confirm command</button><p v-if="completion.target.value">Retry confirmed delivery</p></section>',
+            setup(props) {
+                const completion = useConfirmedNavigation(props.identity);
+                function complete(): Promise<boolean> { return completion.navigate('/frontend-pilot/help'); }
+                return {completion, complete};
+            },
+        });
+        const SameTypeOwners = defineComponent({components: {ConfirmedOwner},
+            template: '<div><ConfirmedOwner identity="first" /><ConfirmedOwner identity="second" /></div>'});
+        router.addRoute({path: '/frontend-pilot/parallel-command-fixture', component: SameTypeOwners});
+        await router.push('/frontend-pilot/parallel-command-fixture');
+        await flushPromises();
+        const cancelDelivery = router.beforeEach(to => to.path === '/frontend-pilot/help' ? false : undefined);
+        try {
+            const owners = wrapper.findAllComponents(ConfirmedOwner);
+            await owners[0]!.get('button').trigger('click');
+            await flushPromises();
+            expect(owners[0]!.text()).toContain('Retry confirmed delivery');
+            expect(owners[1]!.text()).not.toContain('Retry confirmed delivery');
+        } finally { cancelDelivery(); }
     });
 
     it('redirects standalone anonymous detail to its canonical guest form, with the real title', async () => {

@@ -25,6 +25,10 @@ paths:
         - name: returnTo
           in: query
           schema: {type: string, maxLength: 2048}
+        - name: eventId
+          in: query
+          description: Optional contextual selection; the native selection owner omits rejected targets.
+          schema: {type: string}
       responses:
         '200':
           description: Server-owned page admission
@@ -462,6 +466,10 @@ paths:
         - $ref: "#/components/parameters/Context"
         - $ref: "#/components/parameters/Locale"
         - $ref: "#/components/parameters/ListId"
+        - name: eventId
+          in: query
+          description: Optional destination selection, independently authorized rather than copied from the source.
+          schema: {type: string}
       responses:
         "200":
           description: Authorized operation result
@@ -984,6 +992,8 @@ components:
       $ref: ./auth.yaml#/schemas/UsernameInput
     EmailInput:
       $ref: ./auth.yaml#/schemas/EmailInput
+    GuestEmailLookupInput:
+      $ref: ./auth.yaml#/schemas/GuestEmailLookupInput
     ResetInput:
       $ref: ./auth.yaml#/schemas/ResetInput
     PasswordResetCheck:

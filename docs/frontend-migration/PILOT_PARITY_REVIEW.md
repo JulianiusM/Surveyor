@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: current
-last-verified: 2026-10-08
+last-verified: 2026-10-11
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: authorized native-parity and shared-ownership implementation, 1013 database-free cases, 46 guarded integration cases, 46 distinct built HTTP/browser cases across broad and focused runs, three normal development-source journeys, full build and final shared-presentation frontend build, eight individually inspected final guest/recovery originals and advisory tooling checks; exact execution ordering and limits recorded below; preceding progressive loading, FPR-01–07, D1–D5, 472-image role/state and deployment evidence retained as historical records
-source-anchors: src/frontend/components/LoadingSkeleton.vue; src/frontend/styles/pilot.css; tests/frontend/frontend-loading-shell.spec.ts; tests/frontend/frontend-content-loading.spec.ts; src/frontend/composables/pageTitle.ts; tests/frontend/frontend-refresh-navigation.spec.ts; scripts/capture-frontend-rectification-readonly.cjs; docs/frontend-migration/staged/DEVELOPMENT.md; src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/frontend/frontend-route-recovery.spec.ts; tests/e2e/frontend-development.spec.ts; scripts/watch-frontend-inputs.mjs; scripts/capture-frontend-baseline.cjs; src/frontend/; src/routes/frontendPilot.ts; src/routes/api/v1/; src/modules/packing/api.ts; src/controller/entityAdminController.ts; src/views/modules/module_entity_header.pug; src/views/packing/packing-view.pug; contracts/api/v1/; src/locales/; docs/user-guide/de/; tests/frontend/packing-management-ui.spec.ts; tests/frontend/packing-view.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/integration/packing-management-api.spec.ts; tests/e2e/frontend-pilot.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; docs/FRONTEND_PILOT.md
+verification-scope: 2026-10-11 original decisions and approved amendments traced against native executable contracts and actual consumers; final coherent fa5 build, affected presentation checks, fresh HTTP/browser/configuration journeys, all 472 native/pilot originals and 15 behavioral comparisons, supplemental read-warning/scroll originals, genuine complete-package replacement/rollback in Chromium/Firefox and normal source/HMR/regeneration/restoration verified; whole quick/integration results explicitly precede only the two final presentation-template corrections; all 491 current inspected-image hashes reconciled; final source/build/native-file/type-contract checks and advisory documentation findings reviewed; prior failed or superseded checkpoints preserved; no production cutover or external-provider/email proof claimed
+source-anchors: src/frontend/components/LoadingSkeleton.vue; src/frontend/styles/pilot.css; tests/frontend/frontend-loading-shell.spec.ts; tests/frontend/frontend-content-loading.spec.ts; src/frontend/composables/pageTitle.ts; tests/frontend/frontend-refresh-navigation.spec.ts; scripts/capture-frontend-rectification-readonly.cjs; docs/frontend-migration/staged/DEVELOPMENT.md; src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/frontend/frontend-route-recovery.spec.ts; tests/e2e/frontend-development.spec.ts; scripts/watch-frontend-inputs.mjs; scripts/capture-frontend-baseline.cjs; src/frontend/; src/routes/frontendPilot.ts; src/routes/api/v1/; src/modules/packing/api.ts; src/controller/entityAdminController.ts; src/views/modules/module_entity_header.pug; src/views/packing/packing-view.pug; contracts/api/v1/; src/locales/; docs/user-guide/de/; tests/frontend/packing-management-ui.spec.ts; tests/frontend/packing-view.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/integration/packing-management-api.spec.ts; tests/e2e/frontend-pilot.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; docs/FRONTEND_PILOT.md; vite.config.mts
 next-review: pilot-UI-behavior-change-or-feature-cutover
 -->
 
@@ -27,12 +27,17 @@ The [pilot guide](../FRONTEND_PILOT.md) defines ownership, commands and the rema
 | Settings | Details, Header image, Event, group permissions, named administrators and Actions are present when authorized. Account/guest duplication differences, owner-only deletion and direct/inherited archival remain distinct. |
 | Creation and duplication | Own SPA routes preserve initial items, row controls, audience defaults, optional image/event and existing duplication copy boundaries. Historical empty titles and nullable capacities can be displayed for review; submitted creation keeps its existing requirements. |
 | Overview | All five authorized entity types appear in unfiltered participation/ownership regions. Visible/hidden regions, explicit type filters, bounded search/pagination, mixed event containers and personal visibility preserve the native membership/count contract. Packing destinations and commands remain inside the pilot. |
-| Identity | Own login, guest entry, registration, recovery, activation/reset, profile switching and logout use typed commands. Emailed guest links authenticate on their initial GET. OIDC retains its configured protocol callback and returns to the pilot. |
+| Identity | Login, guest entry, registration, recovery, activation/reset and logout use typed commands. **Your profiles** retains native profile management/switching; the pilot header has no added direct-profile selector. Emailed guest links authenticate on their initial GET. OIDC retains its configured protocol callback and returns to the pilot. |
+| Initial document and confirmed delivery | The real browser bootstrap decoder retains typed admission, notice and completion fields. Initial document state belongs to its actor and visit. Confirmed commands retain navigation-only Retry through failed bootstrap, lazy navigation, actor remount or editor retirement; obsolete work cannot restore private controls or replay a command. |
 | Help localization | All ten English and ten German articles have complete instructions, equivalent language-owned figures, recovery/privacy and advanced sections. The same locale definition selects API, native help, Vue SSR, SPA, search and TOC content. Each corpus owns its stable anchors and assets without reading another language. |
 | Shared presentation | Bootstrap styling and reusable Vue controls preserve native shell/table/dialog composition. The administrator picker uses the native single searchable input, not an extra selection field. |
 | Dialog layout and focus | Settings use the native small-screen fullscreen layout; event selection retains its floating margins. Event search receives initial focus and Escape restores the actual invoking control on each opening. |
-| Disclosure menus | Overview and navigation menus account for space above/below their trigger. Mobile collapsed navigation remains in document flow; keyboard navigation and Escape restore the trigger. |
+| Disclosure menus | Overview and navigation reuse one native disclosure wrapper and shared placement. Ordinary Tab and embedded controls keep native behavior; outside pointer/focus dismisses without stealing focus, while Escape restores the trigger. Mobile collapsed navigation remains in document flow. This is the documented conditional primitive-fit assessment, not a primary stack amendment. |
 | Stale review | Metadata Save and submit wait for explicit Review, including same-field choices. Inline conflict feedback has enough width to read within the existing mobile table scroll. |
+| Native form and configuration behavior | Known server rejection clears password fields; unknown delivery and local validation retain mounted input. Pristine metadata Save reports the existing informational message without a PATCH. Disabled identity configuration uses the same full Error surface. Focus styling and pending Settings-tab behavior follow native controls. |
+| Native command feedback | Operation-specific success/no-op messages retain native action availability and confirmation boundaries. Opted-in inline receipts have native Close/focus/placement and use a live fallback when the initiating host retires or hides. Full flashes retain their own presentation; locale-only changes neither renew expiry nor revive a dismissed body. Canonical creation/deletion navigation retains the native one-time notice. |
+| Recovery and read authority | Unknown-outcome recovery retains pending protection through its authoritative read. Ordinary Refresh remains navigable. Late reads and accepted writes cannot clear newer command feedback, repopulate retired private caches or replace newer field authority. Creation, metadata, detail, selector and Overview read recovery shares reactive deadline-based Retry without starting a GET. |
+| Generic image and Help ownership | Authorized image lifecycle accepts a feature-owned binary read and knows no Packing endpoint. Shared Help links preserve native topic/query/fragment behavior without an added Packing-return control or feature-context injection. |
 
 ## Permission and view matrix
 
@@ -75,12 +80,14 @@ replace or remove packing actions. Help article content uses a complete locale-s
 through the centralized catalog, rather than duplicating frontend/backend strings. Default application routes remain
 unchanged. Other business features and complete account/profile administration still have outward links pending their
 own migration; packing operations do not depend on their frontend implementations.
-Invalid login/reset submissions retain masked password drafts for correction in the SPA; the native POST-rendered
-forms clear those inputs. A pristine metadata form disables Save until an editable value changes. Visible focus
-outlines identify the active keyboard target. These differences preserve the underlying actions and validation.
-Localized API problems can state recovery conditions more explicitly: a consumed reset link says that it is invalid,
-expired or already used, while the native page says "Invalid or expired token". Both reject the link before showing
-a password form. User-entered fixture text remains unchanged; file chooser wording follows the browser's locale.
+Known server-rejected login/register/reset submissions clear secret inputs as the native POST-rendered forms do.
+Local validation and unknown delivery retain mounted input under the shared draft protection. A pristine metadata
+form retains native Save and its informational no-change outcome without sending a mutation. Keyboard focus uses
+the existing native styling. Earlier records accepted these presentation/interaction differences without specific
+approval; that assessment is superseded by this restoration of native observable behavior.
+Known identity failures use the same operation-specific message projection as the native page, including the
+existing reset-link denial. Unknown future Problems retain generic safe feedback rather than being assigned an
+unverified native meaning. User-entered fixture text remains unchanged; file chooser wording follows the browser's locale.
 An implicit packing-only filter previously suppressed otherwise valid membership despite nonzero indicators. That
 was a defect: unfiltered overview regions now include activity, drivers, event, packing and survey records, with an
 explicit type filter. Event-container administration belongs to the subsequent event slice; packing child actions
@@ -547,9 +554,9 @@ individually at 1440 × 1000 and 390 × 844. Native/pilot 404s share the Error c
 404 and pilot localization. Unchanged-authority review no longer claims another edit. Scrolled Review controls fit
 above the fixed footer; clicking Review removes uncertainty, retains the unsent draft and enables Save. Both
 complete manifests report zero application/asset errors and horizontal overflow. Each run's two failed requests
-are exactly its two deliberately intercepted PATCHes. The correction run records two real GET304 recovery reads
+are exactly its two deliberately intercepted PATCHes. The correction run records two real GET 304 recovery reads
 and exactly one intercepted PATCH per journey, with no replay after Review. The earlier capture also proves two
-hydrated packing Refresh interactions returning GET304.
+hydrated packing Refresh interactions returning GET 304.
 
 The tracked optional capture helper blocks browser mutations before dispatch. Its only session-establishment
 exception is one native login of an existing fictional account; credentials/cookies remain in memory. It creates
@@ -735,3 +742,582 @@ source fingerprints. Optional documentation reporting retains the existing basel
 already recorded unused illustration finding; historical baselines and that illustration were not rewritten.
 The final advisory report inspected 78 maintained Markdown files with no broken links, metadata errors, missing
 scripts, missing documented paths or stale terms. Its two findings remain visible in the ignored review output.
+
+## Source and documentation reconciliation, 2026-10-09
+
+The maintainer authorized the remaining parity corrections and reconciliation of existing migration guidance.
+This increment retains the primary design, D1–D5, native module boundaries and the explicit amendments already
+recorded above. It adds no migration backlog, documentation file, required documentation gate, schema change or
+new framework. The current summary describes the corrected implementation; earlier dated execution records,
+counts, fingerprints and capture sets remain historical evidence for their own source snapshots.
+
+The repeated corrections exposed gaps in the review method as well as defects in the implementation. Some tests
+used the new API or a manually constructed frontend context as their own oracle, bypassing native behavior or
+the actual emitted-bootstrap/browser-decoder boundary. Success and sequential cases missed held reads,
+unmounted forms, newer authority, actor transitions and confirmed commands whose destination failed to load.
+Shared protections were adopted inconsistently by adjacent consumers. Later corrections also introduced drift,
+while the migration recipe continued describing older ownership. Passing those narrower checks did not establish
+the full original contract.
+
+The corrected existing owners now cover those boundaries:
+
+- Initial document admission, feedback and completion pass through the shared bootstrap codec and belong to the
+  current actor and document visit. Ordinary departures retire consumed state; fragment navigation remains in
+  the same document. Confirmed identity and business commands retain their destination through failed delivery,
+  with navigation-only Retry and a shell fallback after the owning editor retires.
+- Whole-page draft consent precedes irreversible deletion. Pending and unknown command status can outlive a
+  retired form without retaining unauthorized controls or private query data. Recovery protects its matching
+  actor/document/mounted lifetime; desired-state reconciliation adds this protection only for an unknown outcome.
+  An older ordinary read cannot acknowledge a newer uncertain command or replace its feedback.
+- Metadata publication checks the current field and read authority separately from command settlement. Late
+  accepted writes and conflict reads do not recreate retired caches. Known command errors preserve the native
+  operation-specific wording; future Problems retain the generic fallback. Local registration feedback keeps
+  the native exclamation mark, while the controller's remote rejection keeps its period.
+- Help uses one browser-safe navigation-policy owner. Contextual event selection is admitted by the existing
+  controller, remains optional, and is emitted only when the corresponding query requests it; ordinary responses
+  retain their earlier shape. Native navigation disclosures share one interaction/placement owner under the
+  original conditional primitive-fit decision. Overview reads its requested region before committing navigation,
+  preserves other regions' newer query state and normalizes only authoritative clamped results.
+
+The [existing contribution recipe](staged/DEVELOPMENT.md#baseline-to-observable-verification) now requires an
+independent native observable oracle, explicit actor/resource/document/locale/unmount ordering, actual startup
+decoding, known-versus-unknown command outcomes and failed destination delivery. It distinguishes ordinary refresh
+from protected unknown-outcome recovery and records approved choices separately from primitive-fit assessments.
+Help visual generation has an explicit staged-output option; these corrections did not regenerate or overwrite
+release-shipped illustrations. Maintained prose remains advisory rather than an application-test or CI dependency.
+
+| Final executed check | Result and boundary |
+|---|---|
+| `npm run build` | Passed server, browser and SSR type checks, client/SSR builds and asset/view copies. |
+| `npm run test:quick` with `TZ=UTC` | Passed all **1,176 cases in 60 files**, 291.36 seconds, on the frozen source with no concurrent Playwright or artifact writer. |
+| Guarded Packing management integration | `packing-management-api.spec.ts` passed **22 of 22**, 60.90 seconds, against the verified dedicated disposable schema and real persistence. |
+| Built HTTP, `backend-parity-playwright` configuration | Passed **23 of 23**, 59.4 seconds, including independent native/pilot admission and identity feedback assertions. |
+| Built browser, `backend-browser` configuration | The final clean run passed **17 of 17**, 1.1 minutes, after the bounded selector correction described below. Native/pilot label, focus and geometry assertions passed. |
+| Retained browser pictures | Four final originals were opened individually: packing owner desktop, owner dialog desktop, guest mobile and guest Actions mobile. Controls, dialog/footer and the existing mobile table scroll remained readable and usable. |
+
+The final runtime has build identifier `82e4fb92eae68bc435f63289`, client entry
+`assets/entry-client-hkhfpXia.js`, API identifier `9e49b37b539d` and catalog identifier `a5205db5a13d`.
+The compatibility family remains `v1-pilot-2026-10-07`; no revision-retention protocol was added. The HTTP and
+browser results above use this same build. Integration and both E2E runners verified `127.0.0.1:33318` and
+credentials restricted to their selected disposable schema. Built HTTP/browser startup ran no initializer;
+ordinary fixture writes used the existing HTTP workflows. The integration runner used its existing disposable
+schema procedure. No production or default-port database operation is claimed. The final port check found no
+listener on 3189; the pre-existing isolated database was retained.
+
+Correction-stage failures are retained as diagnostic evidence, not counted as passing final executions:
+
+- Held identity-recovery checks initially failed **three cases**, with **one passing**; they demonstrated that
+  recovery needed the same retained status and lifetime fencing as the adjacent command consumers.
+- Cross-review rejected unconditional `selectedEvent` response emission because an older strict mounted client
+  could reject it within the unchanged compatibility family. The final optional, query-triggered projection keeps
+  no-query responses unchanged. Cross-review also caught conflation of the two native registration punctuation
+  variants; the final operation-specific messages preserve each literal independently.
+- An earlier full quick run without UTC passed 1,147 cases and failed 17: fifteen runner timezone assumptions,
+  one mid-edit cooldown state and one affected hydration fixture missing return data. The final UTC run above
+  supersedes that diagnostic; the earlier run was not a passing suite.
+- The first built-browser run passed sixteen cases and failed one label selector. A native font glyph preceded
+  the accessible Survey label, while the screenshot showed correct focus. The helper now matches the visible
+  label suffix without changing application behavior; the isolated case then passed, followed by the clean
+  seventeen-case run above.
+
+Repository inspection also found an untracked compiled `frontendIdentity.js` duplicate created during this
+increment. It was removed through its verified literal path; its creation mechanism is unknown. No native
+remediation backlog, DBAL service, entity, migration, package, CI, user-guide or tracked generated-output change
+was introduced by this reconciliation. The authorized pure Help navigation source remains part of the correction.
+
+This increment did **not** rerun the full 472-image role/state comparison, normal development startup/HMR,
+deployment replacement or another browser engine. It performed no production cutover, live OIDC-provider round
+trip or external SMTP/mail-delivery verification. The four inspected pictures and current paired assertions are
+bounded visual evidence, not a replacement for the historical full matrix. The original design and approval
+records, completed plans with unique contractual evidence, native production guidance and staged prospective
+documents remain intentionally retained; cutover reconciliation is still separate work.
+
+## Native observable parity rectification, 2026-10-09
+
+The next independent review found remaining differences that the preceding accepted comparisons had not resolved.
+Known server rejection retained masked passwords, pristine metadata Save was disabled, and custom focus styling
+had been treated as acceptable without specific approval. Configuration-denied identity pages, same-document
+fragments, denied Overview cache restoration and pending Settings controls also needed correction. The existing
+owners now restore native behavior; no additional observable exception or primary technology change is approved.
+
+Source review and independent native comparisons then exposed adjacent gaps: reactive read Retry was not adopted
+by every affected resource consumer; image/cache lifecycle and Help navigation still contained Packing policy;
+generic Saved messages and invented punctuation differed from native operation outcomes; inline notices lacked
+native Close/focus/placement; translation and target relocation could renew an old receipt. Later review caught
+missing alert attribute forwarding, concurrent-region delivery ownership and an audience selector that remained
+enabled during pending modal work. These corrections stay within the existing shared or feature owners. Explicit
+Retry availability is shared by creation, metadata, detail, selector and Overview reads; identity/session transport
+still enforces deadlines without claiming those buttons use the same reactive availability helper.
+
+Repeated corrections failed to close the original contract because the evidence was too narrow. Tests using two
+consumers of the same new API did not establish native behavior. Helper-level checks did not prove adoption by
+every consumer. Success-only and sequential journeys missed inactive deadlines, hash changes, revoked caches,
+retired editors and hidden feedback hosts. Immediate screenshots missed dismissal and reactive renewal. Later
+corrections also introduced integration gaps, while the contribution recipe and current acceptance prose lagged
+the implementation. Restoring the native oracle required comparing its actual routes, rendered controls, collectors,
+messages and keyboard behavior, including disabled controls rather than decorative `tabindex` alone.
+
+The [existing development recipe](staged/DEVELOPMENT.md#baseline-to-observable-verification) now covers these failure
+modes: independent native observables, per-consumer shared-owner adoption, actor/resource/document/locale/unmount
+ordering, known versus unknown outcomes, pre-write consent and navigation-only delivery Retry. It also distinguishes
+ordinary flashes from opted-in inline feedback, requires native no-op/validation availability and operation wording,
+and tests expiry after translation or host retirement. Shared image reads and cache-family selection remain
+caller-owned. Original decisions, D1–D5, approved amendments and earlier execution records are preserved.
+
+The next independent review first passed the existing 150-case regression collection in three files, then failed
+two added actual-consumer diagnostics. Packing's English private cache reappeared after a German 400 admission
+denial when the English return read was held. A rejected Header logout (`CSRF_INVALID`, 403) renewed its notice when
+language changed at nine seconds; the body remained after 10.001 seconds. These failures exposed missed consumer
+adoption and cached admission authority despite the earlier passing helper and component coverage.
+
+The shared entry owner now retires prior render authority and locale/route snapshots while preserving the producing
+typed denial. Initial seeds consult live document eligibility; a fresh scoped read is required for restoration.
+Packing's callback retires related private projections, preserves independent public guest admission and copied
+drafts, and retires inactive duplicate-source caches after 404. Header logout uses its command receipt for renewal.
+The native adapters retain established metadata diagnostics/omissions and capacity error data while strict v1
+validation and typed Problems remain unchanged; malformed item omissions retain their distinct native outcome.
+Schema-derived native metadata maximum checks preserve Joi/HTML UTF-16 counting, including supplementary characters;
+ordinary v1 metadata bounds retain standard code-point counting. Native creation acquires no additional text limits.
+The existing Testing Guide now permits bounded temporary-output tooling tests, and Framework verification separates
+native-reference checks from the approved migrated fallback contract. No primary choice or new exception changed.
+
+Correction-stage verification then passed 236 of 238 cases in five files; two held-item checks exposed an empty
+observed query recreated during synchronous cache eviction. The corrected retirement order passed the subsequent
+143-case, two-file check. The first full build reported two `TS2345` diagnostics in the new native error-body
+contract; the body type was aligned before the coherent passing build below. Neither diagnostic execution is
+counted as a passing final check.
+
+A further independent review reproduced four failures in actual prehydration creation controls and one successful-read
+authority regression. Non-text drafts and file state were lost at the real mount boundary; helper coverage had only
+protected text. A newer metadata 200 response narrowed editable fields, but returning to an older cached language
+with its read held restored earlier grants. Explicit field-constraint comparison also found an invented 1000-character
+password maximum, and actual invalid-login HTML returned pilot 401 instead of native 500; the approved v1 401 remains
+a separate transport contract. These are defects to rectify, not newly approved observable exceptions.
+The preceding 1,268-case passing collection did not exercise those complete startup-control, partial-200 authority,
+accepted-credential and HTML-versus-wire boundaries. The existing recipe now requires those comparisons and separates
+generic cache mechanics from feature admission policy.
+
+Further accepted-input review found an eight-unit native password that standard code-point `minLength: 8` rejected.
+The existing generator now supports an explicitly authored UTF-16 minimum on the four registration/reset properties,
+preserving the original subset preference and explaining its bounded adjustment in the API design. Native existing-item
+capacity also accepts zero, negative, null and raw decimal drafts; the generic positive-number editor/patch policy
+had narrowed it. A guarded native SQL oracle established the configured database's rounding, signed-range and
+invalid-value outcomes. The finite scalar `anyOf` carries the original draft through the existing locked operation
+without another converter or copied limits. Creation/new-item policy stays separate. Native-unbounded creation,
+quick-add and inline title/description controls acquire no added HTML length limit, while metadata keeps its actual
+native bounds. No additional observable exception or primary stack change is approved.
+
+The preceding completed snapshot used deployment `c49d9c969de6e7462d460c16`, client
+`assets/entry-client-CAi66sjC.js` and catalog `ab107c6326c8`. Its isolated quick run passed 1,246 cases in 60 files,
+314.71 seconds, starting at 08:11:36 UTC; rebuilt-SSR HTTP passed 23 with one conditional skip in 1.1 minutes.
+Browser passed eighteen cases in 1.5 minutes, with disabled/provider-enabled configuration cases passing in
+16.6/13.8 seconds. Those earlier executions did not close the findings above. Their retained pictures and runtime
+identifiers remain historical; the table below records the corrected source separately.
+
+| Preceding executed check, before the further review | Result and boundary |
+|---|---|
+| `npm run build` | Passed the coherent server/browser/SSR build and type checks after the latest admission, Header receipt and native validation/error corrections. |
+| Isolated `npm run test:quick`, `TZ=UTC` | Passed **1,268 of 1,268 cases in all 60 files**, 318.94 seconds; started at 10:12:41 UTC. Owned browser/artifact writers and documentation writes were stopped during the run. |
+| Guarded Packing management integration | Passed **22 of 22**, 64.30 seconds, starting at 10:19:25 UTC. The existing real-transaction case now checks captured reparenting and exact native/v1 409 wording. |
+| Built HTTP | **23 passed, one conditional skip**, 1.0 minute, against the rebuilt current SSR. Independent native/v1 assertions cover metadata diagnostics, supplementary-character length interpretation, omitted root/item outcomes, capacity 409 wording/data and identity/guest admission. The separately executed variants below cover the configuration-dependent boundary. |
+| Built browser | Passed **18 of 18**, 1.3 minutes, against the current deployment fingerprint below. |
+| Disabled local-login/OIDC configuration variant | **One of one passed**, 14.9 seconds. |
+| Local-login-disabled/provider-enabled configuration variant | **One of one passed**, 13.1 seconds; this checks configured application admission, not an external provider round trip. |
+| Preceding visual inspection | The twelve follow-up originals, six desktop and six mobile, were opened individually by independent reviewers at their recorded earlier snapshot. Native/pilot 404 geometry and Metadata Review/acknowledgement were inspected there; no new capture set is claimed for the latest source corrections. |
+
+That preceding deployment identifier is `40b0cf829e24113c98c77975`, with client entry
+`assets/entry-client-C7OZGtN_.js`, stylesheet `assets/entry-client-OxDIC55R.css`, API identifier `9e49b37b539d`
+and catalog identifier `957ef4a24e8b` containing 460 messages in two locales. Those HTTP, browser and both
+configuration executions passed against that build. The API compatibility family remains `v1-pilot-2026-10-07`.
+
+The eight pending-control originals and thirty-two earlier read-only originals were also individually inspected.
+The earlier read-only inspection exposed English admission drift: native `packing not found` and the native
+event-registration message had different wording or punctuation. Those sources were corrected before the final
+build; the twelve fresh follow-ups supersede the affected older pictures. These 52 inspected originals are evidence
+for their respective snapshots, not a claim that all were captured from the final runtime or that the full 472-image
+matrix was repeated.
+
+Diagnostic failures remain distinct from the final passing executions. Earlier browser runs passed 15 of 18 and
+then 16 of 18; review corrected obsolete focus expectations and timing assumptions, while actual native comparisons
+also revealed the mobile modal-header gap and admission wording defects. An isolated two-case browser check passed
+before that preceding clean eighteen-case run. An earlier whole quick execution passed 1,245 of 1,246 and timed out in
+one cold development SSR startup case at its existing 30-second budget. Concurrent watched-workspace browser HTML
+trace writes correlated with Vite reloads; they are not established as the sole cause. No assertion or timeout was
+weakened. An isolated full run started at 07:54:58 UTC passed 1,246 cases in 316.69 seconds before the source-input
+guard expanded beyond the frontend directory. The latest isolated run above passed again after the owned writers
+stopped. The preceding HTTP run passed 23 cases with one conditional skip in 1.2 minutes, then its source-clean
+rerun passed the same count in 1.1 minutes. The table separates current execution after the latest admission and
+native transport corrections. Earlier passing executions do not substitute for that verification.
+
+Two unexpected adjacent copies, `src/frontend/composables/feedback.js` and
+`src/modules/localization/generated/permissions.js`, were retained outside source under ignored `.temp` while
+their provenance remains unproven. The later inventory found the permission copy with a 06:59:09 UTC timestamp;
+independent in-memory imports compared both permission maps and found all 28 entries identical, so no permission
+behavior drift was demonstrated. Extensionless imports can select an adjacent copy before maintained TypeScript
+despite passing type checks. The existing generation suite now checks this collision across all of `src/`, including
+shared helpers and generated TypeScript registries. At that preceding snapshot, the post-quarantine build passed;
+the client artifact fingerprint remained `c49d9c969de6e7462d460c16` with the same entry and stylesheet. SSR was rebuilt and type-checked; no earlier SSR
+binary hash was retained, so byte identity is not claimed. The isolated whole quick-suite execution passed with the
+all-`src/` guard, and the HTTP rerun passed against that rebuilt SSR. Current execution above covers the subsequent
+source corrections separately.
+Neither artifact explains away the independently demonstrated native behavior and ownership defects.
+Nonfatal local connection warnings appear in current and earlier quick logs; no blanket absence of warnings is claimed.
+
+The latest integration runner verified `127.0.0.1:33318`, the dedicated disposable `surveyor_frontend_test` schema,
+and credentials limited to `USAGE` plus that schema's grants before its existing test reset. The separate E2E schema
+and initial default schema were not reset. Earlier integration results remain attached to their recorded snapshots.
+Built HTTP/browser and configuration startup used no persistence initializer or reset.
+That preceding follow-up did not rerun the full role/state matrix, normal development startup/HMR, deployment replacement
+or another browser engine, and it verified no external SMTP delivery, live OIDC-provider round trip or production
+cutover. Only existing documentation files were reconciled; no new documentation file, backlog entry or
+documentation CI/application-test gate was introduced.
+
+### Final correction verification (2026-10-09 checkpoint)
+
+The following execution superseded the preceding table for its recorded source. Earlier results and images remain
+evidence for their own snapshots. Passing helper checks had missed actual consumers, complete startup control kinds,
+successful partial-authority changes, accepted native input domains and HTML-versus-wire status. The contribution
+recipe now requires an independent native oracle and observable assertions at those affected boundaries; it does
+not infer parity from two consumers of the same new API or from an earlier binary.
+
+| Current executed check | Result and boundary |
+|---|---|
+| `npm run build` | Passed strict server/browser/SSR type checks, both Vue bundles and packaged runtime artifacts. The subsequent normal development build retained the recorded runtime-directory fingerprints. |
+| Isolated `npm run test:quick`, `TZ=UTC` | **1,287 of 1,287 cases in all 60 files**, 315.21 seconds; started at 13:31:50 UTC. Owned browser, artifact, source and documentation writers were stopped. |
+| Guarded Packing management integration | **22 of 22**, 69.33 seconds, starting at 12:43:06 UTC; verified the restricted disposable test schema before its existing reset. |
+| Built HTTP | **28 passed, one conditional configuration skip**, 1.3 minutes; includes seventeen native/v1 existing-capacity comparisons, credential/Unicode/HTML-status and accepted native-input checks. |
+| Built browser | **22 of 22**, 1.6 minutes, against deployment `9974402a51e2c9313108ac0d`. |
+| Disabled local-login/OIDC variant | **One of one**, 14.7 seconds. |
+| Local-login-disabled/provider-enabled variant | **One of one**, 13.0 seconds; configured first application hop only. |
+| Normal source development | Normal `npm run server` and **three of three** source-browser cases, 12.1 seconds; real CSS application/restoration retained the document, and authored-input generation completed before normal server restart. Original CSS bytes/locale modification time were restored and owned processes stopped. |
+| Current visual inspection | **50 originals, 25 desktop and 25 mobile**, individually opened by three reviewers; paired pristine/admission/guest/recovery and affected pending/draft/conflict states, plus bounded unpaired readability checks. No additional confirmed visual defect; no full 472-case matrix rerun. |
+
+The current deployment is `9974402a51e2c9313108ac0d`, client entry `assets/entry-client-CiX-q7kM.js`, stylesheet
+`assets/entry-client-OxDIC55R.css`, API identifier `440ce1250886` (47 operations and 78 schemas) and catalog identifier
+`a43cb929f7c0` (460 messages in two locales). API compatibility remains `v1-pilot-2026-10-07`. Fingerprints across ten
+recorded runtime/content directories are byte-identical before and after the built HTTP/browser, configuration and
+normal source-development executions. All 534 frozen source/configuration/test hashes still matched after the final
+isolated quick run. Older 52-picture and full-matrix records do not identify this runtime's current capture set.
+
+The first current whole quick invocation omitted the required `TZ=UTC`: 1,263 passed and fifteen failed of 1,278;
+all fifteen were unchanged date expectations under inherited Europe/Berlin time. The unchanged UTC rerun passed
+1,278 of 1,278 in 340.23 seconds before subsequent capacity corrections. A later 1,287-case pass in 326.62 seconds
+preceded the final Vite artifact-watch correction; the isolated table above covers that correction too. Assertions
+and timeouts were not weakened.
+
+The initial current browser run passed twenty of twenty-two. One fixture opened the editor before the preceding
+quick-add refresh settled; it now waits for existing observable completion. The comparative native flash also
+disappeared in native-only automatic-redirect probes. The controlled native oracle uses an independent cookie, a
+completed 302 body and exact asserted `Location`/`next` before the final GET; notice and geometry assertions remain.
+This inherited native session/redirect timing defect remains unchanged and outside the pilot rectification.
+
+Source-development diagnostics first used a retired header selector, then proved a real second document request
+caused by Vite observing Playwright trace HTML under `.temp`. The readiness oracle now uses the actual
+hydration-complete marker and asserts a retained document. Vite ignores evidence/build directories while preserving
+normal source HMR and authored-input regeneration. A rapid reverse CSS save fell inside the installed 50-millisecond
+watcher throttle; separate completed saves verified actual application and restoration without an application HMR
+change. The final normal-source proof passed; earlier failed runs remain diagnostic evidence.
+
+Current logs and fingerprints are retained under ignored `.temp/frontend-foundation/` as
+`third-rectification-final-isolated-quick.log`, `third-rectification-final-build.log`,
+`third-rectification-final-integration.log`, `third-rectification-final-http.log`,
+`third-rectification-final-browser-clean.log`, `third-rectification-final-auth-disabled.log`,
+`third-rectification-final-auth-provider.log`, `third-rectification-development-validated.log` and
+`third-rectification-final-fingerprint.json`. The fresh originals are in
+`backend-rectification-browser/`. Review evidence is neither a committed artifact nor a release requirement.
+
+Integration reset only the guarded `surveyor_frontend_test` schema. Built HTTP/browser, configuration and normal
+source startup used the separate restricted E2E schema without an initializer or reset. This correction did not
+rerun the full 472-image role/state matrix, deployment replacement, another browser engine, external SMTP delivery,
+a live OIDC-provider round trip or production cutover. Nonfatal localhost connection and npm configuration warnings
+remain recorded. Only existing documentation was reconciled; no native backlog entry, new documentation file,
+documentation CI gate or application assertion against maintained prose was introduced.
+
+The independent final source review found no additional confirmed ownership, authorization or formatting violation
+in the affected boundaries. All 21 files under `src/types/` are declaration files, and `git diff --check` passed.
+A read-only advisory documentation audit checked 26 maintained migration/baseline/design/pilot documents, 1,014
+local file/heading links and 653 source anchors with zero findings. That reference audit adds no application
+coverage or delivery gate and wrote no reports or extra files.
+
+## Full review and rectification (2026-10-11)
+
+The maintainer requested a complete review against the original approved vision, decisions, behavior and edge-case
+baselines, then explicitly authorized rectification within the existing migration boundary. The earlier completed
+checkpoints did not establish acceptance of the source reviewed on this date. This increment preserves the original
+decisions and their recorded amendments; it does not approve a new UI difference, operation store, persisted revision,
+domain policy or unrelated native refactoring.
+
+### Findings and their correction owners
+
+| Demonstrated gap | Correction within the existing owner |
+|---|---|
+| An HTTP rejection status could be treated as a known command failure without a trustworthy Problem. HTML, malformed bodies, mismatched HTTP/body statuses and server failures therefore could release uncertainty or clear secrets. | The shared transport admits confirmed rejection only from a validated known Problem or safe detail envelope with matching status below 500. Other outcomes retain unknown delivery. A structurally valid future rejection retains safe detail and native secret clearing, while only known validated codes authorize machine-state transitions. Features select native wording after that boundary rather than interpreting arbitrary status or payload fields. |
+| Binary image failure handling did not consistently use the shared transport's authority, cancellation and server-deadline rules. A cancelled response could install a cooldown for a newer read of the same resource. | The binary transport uses the same validated rejection owner and checks captured actor/epoch and cancellation before decoding an error or accepting Retry-After; its image consumer also owns resource/version authority. Applicable localized JSON reads retain their captured-locale policy. A locale-only change does not retire healthy same-version image bytes. The existing authorized-image owner respects the common read cooldown/policy and a bounded missing-image retry timer; it recovers a missing same-version image after a successful ordinary or manual JSON read, including equal JSON, while retaining a healthy blob. Optional image failures remain silent and add no visible Retry control. |
+| Metadata maintained a second command lifecycle, and confirmed submitted values could be confused with fresh read authority. A pre-command read could supply an obsolete token or grants, while an unchanged read could incorrectly settle an unknown operation. | The existing shared command owner now owns metadata too. Confirmation acknowledges submitted values while retaining their baseline, grants and token until a causally later authoritative GET. The operation cancels an older GET and owns its fresh read. Failed post-save reads preserve saved/blocked state, and unchanged unknown recovery still requires deliberate Review. Both Settings read deadlines remain visible to their respective controls. |
+| Read consumers still treated a raw 401/403/404 as authoritative after the write classifier was corrected. An unvalidated HTML or malformed read could retire the mounted metadata/settings editor and its local draft. Conversely, the warm admission owner handled typed denials but could retain the child after a genuine validated HTTP denial. | One `isReadDenial` predicate in the existing transport owner requires validated confirmed rejection before applying the terminal read-status policy. Packing, Overview, selectors and the shared admission barrier consume it. An unusable read preserves its existing projection and draft for read recovery; a genuine validated denial retires the admitted subtree and feature-selected private authority, preserving independent guest admission and observed copied drafts. |
+| Temporary-read warnings omitted the original design's last successful refresh information; metadata could also hide its background-read warning while a draft existed. | The existing shared StatusNotice accepts the query owner's last-successful update time and uses the existing translator's shared formatter. Features supply it only for a readable projection in the current scope and show their existing warning/Refresh while retaining a metadata draft. No separate timestamp state, feature formatter or normal healthy-view label is introduced. |
+| The original read policy was not traced through every current owner. A disabled cooldown control did not display retry timing; Help, cold resource admission, guest-title and ordinary session failures lacked applicable manual recovery. Generic read warnings also discarded validated input/future details, and initial query retries used deterministic delay. | The existing shared notice/read-recovery owners present the authoritative Retry deadline and safe validated explanation. Existing feature, selector, entry and session owners retain their successful-read receipts and expose read-only recovery; genuine typed denial retains its native presentation. The context's retry policy provides bounded jitter. Token checking remains a deliberate read, and no token-consuming action or command is polled or replayed. Optional-image failures retain the native silent presentation. |
+| The shared notice accessed the context's fixed translator directly. Locale changes worked, but its cached label/read-time/issue computations did not observe the selected Vue binding's same-language resource updates. | A notice within the pilot uses the existing `usePilot` binding; the no-context standalone path retains its fixed fallback. The real-application resource-update regression includes the actual notice alongside the retained draft. No parallel resource-event adapter or plugin substitution is introduced. |
+| Native toolbar, disclosure semantics, modal focus and literal form-label comparisons exposed differences that earlier bounded pictures had missed. | Overview reuses the existing disclosure owner and native Filter actions, including independent linked-entity visibility. Shared disclosure triggers retain the native button role. Dialogs retain the native initial focus policy; the form label and Settings spacing follow their native executable owners. No cosmetic or accessibility deviation is inferred from migration authorization. |
+| Browser verification omitted two existing user-observable branches. | The maintained built-browser suite now exercises existing-email Cancel/Continue as new guest and rejected MIME/oversize header uploads preserving the accepted image and authoritative version. Real session, persistence and binary reads remain in the journey; outbound email delivery alone is replaced. |
+| A dead Packing DBAL lookup and repeatedly reconstructed ordering membership added avoidable maintenance cost. | The unused service lookup is removed, and one named current-item membership set belongs to the existing locked Packing business operation. Authorization and validation remain controller-owned inside the service-managed transaction; no new controller or service is introduced. |
+
+The original persisted metadata revision was implemented in the initial spike. Its later removal is the explicitly
+approved D2 amendment, rather than an unauthorized omission discovered here. D4 already selected reconciliation
+without an operation store: preserving uncertainty after an unchanged read restores that contract. The previously
+recorded primary i18next-vue and normal development/HMR departures remain historical deviations with their original
+decisions and restoration evidence intact; a later design edit is not retrospective authorization.
+
+### Why earlier corrections did not close the review
+
+The retained commits, tests and review records support concrete coverage failures, rather than a conclusion about
+the authors' motives. Several corrections fixed their demonstrated cases, but the review then treated that bounded
+evidence as sufficient for a wider acceptance claim. New API/helper results were sometimes compared with another new
+consumer of the same source, leaving the native route, collector, form, focus or feedback contract untested. Successful
+and sequential journeys did not expose held responses, retired consumers, partially reduced authority, unchanged
+recovery reads or a cancellation arriving before binary error decoding. A helper passing also did not show that every
+actual consumer adopted its lifecycle and Retry rules.
+
+The checked-in Overview expectations themselves required select controls, the singular `1 matching entity` and an
+added **Clear filters** action, so passing them reinforced the implemented difference instead of the native oracle.
+Earlier safe-Problem and wrong-status cases ended at GET or the transport rather than a submitting consumer. One
+deferred initial-data case had already made its read obsolete; it did not exercise acceptance of a successful empty
+initial collection. The corrected checks use the actual native controls and labels, submitting consumers, ordinary
+Refresh, completed generation and live progressive initial reads, including local drafts during toolbar arrival.
+
+A follow-up native comparison also found that normalizing a submitted search did not cover an initially bookmarked
+query containing raw spaces: only the navigation-delivery path adopted the returned canonical query. The ordinary
+admitted-read path needs the same bounded adoption, without erasing an in-progress local search draft or disturbing
+another region's parameters. The `056b127f6e99bba5a7ec962f` build and its HTTP execution therefore remain a candidate
+checkpoint. Final acceptance evidence must come from the coherent source after that correction; the interrupted
+quick execution and candidate capture are not final passes.
+
+The next coherent candidate, `3d3c357e59476aff9fa9b3da`, passed its HTTP boundary but the full browser run passed
+23 of 24: the Filter role assertion could not find a button even though the visible disclosure was present. The
+first diagnostic explanation incorrectly classified that as a selector assumption after inspecting only the
+pilot's emitted summary and accessibility tree. Independent native-source inspection showed explicit button roles
+on navigation triggers and actual buttons on Overview Filter/card triggers. The pilot's missing shared button role
+was therefore an implementation difference. The native role assertion is retained, the shared owner is corrected,
+and this browser failure remains evidence for that superseded candidate. Visual similarity alone did not protect
+the accessible interaction contract.
+
+The same candidate's whole UTC quick run passed 1,338 of 1,341. Its three failures retained the old select-based SSR
+contract, a former four-input expectation after the native toolbar change, and a loading-stage focus expectation
+after the empty region had actually been confirmed. These diagnostics require assertions against the native control
+contract and distinct pending versus confirmed-empty state, rather than restoring obsolete UI or weakening native
+role checks. Dialog opening focus likewise follows the native container, with the event picker's explicit body-field
+exception; it is separate from inline-feedback Close focus and committed region-navigation focus.
+
+A further source and causal consumer review found the terminal-read gap above after the shared write classifier was
+already corrected. The write boundary's passing malformed-response tests did not protect consumers that classified
+GET failures directly by status. A red reproduction mounted the actual Packing page, dialog, Settings and metadata
+fields, then returned HTML 403 from their read. The assertion that the local editor remained mounted expected true
+and received false; the focused run failed that case with 26 unrelated cases skipped. This demonstrates the actual
+discard path rather than inferring it from a transport helper. The `bcf6e5bf496184153b690b0a` candidate passed 28 HTTP
+cases with one conditional skip,
+but its quick execution was stopped and its private package copy was not executed after that finding. It does not
+establish final acceptance. This is another concrete example of the missed integration boundary, rather than a reason
+to change the approved error/uncertainty contract or accept an unexplained difference.
+
+The ordinary-read policy test also explicitly expected `refreshInterval(new ApiFailure(403, null))` to return false.
+With no validated envelope, that expectation encoded the same raw-status terminal policy and missed automatic
+convergence after an unusable client response. The corrected control still checks genuine validated denial, while
+actual mounted-observer cases exercise recovery after malformed 400/403. Validation precedes terminal client-error
+classification; 429 and server Retry-After retain their existing separate deadline behavior and no command is replayed.
+
+Admission required the same trace in the other direction. Its ordinary endpoint represents denial as a typed 200
+response, but the approved read-denial policy also covers validated HTTP denial. Handling only the typed form left a
+warm admitted child mounted after a safe 403/404; removing only its refresh receipt did not remove private authority.
+The existing barrier now retires that subtree and its old producing payload before awaiting cancellation, and invokes
+the feature's existing dependency policy. Cache hits and captured SSR seeds cannot restore it; a fresh admitted read
+must do so. This does not change the independent guest-admission or already-copied duplicate-draft exceptions.
+
+Creation-context denial distinguishes protected server projections from permitted local recovery data. An already
+initialized form retains its entered fields and original file-input node, but its fieldset and named command handlers
+remain disabled without admitted form context. Server-owned event titles/pickers, audience definitions and presets
+are removed. A fresh actual GET can restore those capabilities around the same local input; a cold denied context
+mounts no form. This follows the original read-denial and permitted-recovery policy, rather than approving another
+UI difference. No FileList transfer helper or second file store is introduced.
+
+The denied-authority barrier must remain separate from its latest recovery-read result. Pinning the original denial
+as the displayed error could hide a subsequent 429/503 and its Retry deadline even though private data remained
+correctly blocked. The existing admission and Overview owners therefore present their current scoped read failure
+without restoring denied projections; only a fresh admitted success releases the authority barrier.
+
+A subsequent focused union started at 08:35:20 UTC and passed 496 of 499 in 186.68 seconds. One diagnostic fixture
+omitted the Problem contract's required `requestId`; explicit generated validation identified that invalid fixture,
+while the selected-binding correction remained necessary. Two Packing assertions compared Vue public-instance
+proxies despite the same component uid; their corrected identity checks use the retained real DOM/input boundary.
+That diagnostic is retained rather than reported as a pass or used to change application behavior. The barrier's
+latest-error/deadline regressions require the subsequent coherent source too.
+
+The bounded follow-up passed all 212 cases in three files in 101.76 seconds, starting at 08:41:46 UTC. It exercises
+the real selected-binding notice, admitted-entry receipt/draft/denial recovery and Overview's denied 503/429 cooldown
+and successful restoration. This focused pass does not replace the coherent full-build and runtime acceptance work.
+
+The last-successful-refresh requirement is explicit in the original approved `2dfa257`
+[temporary-read policy](REFRESH_CONFLICT_DESIGN.md#errors-and-cancellation), and remained unchanged in the spike and
+correction commits. The 2026-10-08 clarification changed the failed-read delay; it did not defer this display. The
+later native-parity amendment permits explicitly approved SPA differences, including this original temporary-read
+state. This rectification therefore implements the original requirement in the existing failure warning instead of
+silently rewriting it as future work. No new design amendment or timestamp-specific maintainer approval is claimed.
+Healthy views retain their native presentation; the query's admitted successful-read time remains the single source
+of truth, and a different actor or unavailable protected projection supplies no stale timestamp.
+
+The follow-up traced every original current-read clause to the actual view and owner, rather than checking that the
+new helper and its tests agreed. The original policy also explicitly requires visible Retry timing and manual
+recovery for recoverable reads; a correct cooldown timer or disabled button does not provide that information.
+Static Help's nonpolling policy did not exempt it from manual recovery. Cold resource admission, the independent
+guest title and an ordinary session failure likewise need their own read-only recovery instead of relying on an
+unrelated uncertain command, focus event or document reload. The reset-token check already had deliberate Retry,
+but its boolean failure state lost the server deadline and explanation. Creation/duplicate recovery already had
+a guarded action; its retained read warning needed the applicable receipt and deadline too.
+
+Validated input rejection must explain the query/validation issue, and the original localization design requires
+a future error's safe text detail. Generic stale/load-failed wording alone did neither. A current observer test
+even returned a validated future 400 while asserting only the generic stale text and stopped polling. This proved
+the schedule but missed the message. Likewise, at most two initial retries existed, but their deterministic delay
+did not fulfill the original jittered-backoff requirement. The approved one-minute convergence amendment changed
+the later failure-cycle bound, not these presentation, recovery or jitter obligations. These gaps explain another
+bounded review failure: implementation presence and timer tests were treated as realization of the complete
+approved read policy. The correction preserves that policy and reuses its existing owners; it does not silently
+defer the requirements or introduce an unrelated future-feature migration.
+
+The selected library's resource-event subscription also exposed a missed D1 consumer boundary. The existing
+real-application translation test changed a resource and observed a fixture using `usePilot`; it did not cover the
+notice's direct fixed-translator access. That path supported locale changes but its cached computed messages did
+not depend on same-language resource additions/removals. Inspecting the installed binding's subscription and
+translation proxy established the causal difference. The actual SSR/hydrated-application regression then failed:
+its ordinary fixture's **Save** text updated after `addResource`, while the notice retained its old last-successful
+refresh wording. That red run passed two cases and failed this one in 52.37 seconds. The existing binding is reused
+by contextual notices, with
+the standalone no-context fallback preserved; tests must install the actual plugin for contextual fixtures rather
+than making a second translation adapter pass in isolation.
+
+Earlier retained visual matrices belonged to older binaries. Later bounded follow-ups did not revisit the complete
+role/state surface, so native Filter, modal-focus and exact-label differences remained observable despite later green
+tests. Capturing a picture and checking its dimensions establish neither a visual inspection nor authorization for
+a difference. This review keeps each image set and test run attached to its source snapshot and requires individual
+inspection of the actual final originals before reporting visual acceptance.
+
+The `3d2ba62a6b457a2f086b8953` candidate completed its coherent build, all 1,407 quick cases in 60 files and all
+373 integration cases in 22 files. Its full browser journey first passed 23 of 24 because the fixture clicked the
+Filter disclosure while the preceding empty-search change was still awaiting the native 300-millisecond debounce.
+The committed collector then replaced the disclosure and focused its heading during the next click. Native source
+and the actual request trace established this sequencing cause. The bounded fixture correction waits for the
+committed canonical URL and the region's completed read before keeping the same exact Filter/All types actions,
+roles and assertions; the rerun passed all 24. This is distinct from the earlier genuine missing button-role defect.
+An ignored read-warning journey also first assumed **Retry** instead of the actual **Try again** label. Correcting
+only that harness assumption produced four passing read-only recovery journeys and eight separately inspected
+desktop/mobile warning originals. Both diagnostic runs remain retained; neither changed application behavior.
+
+That candidate's fresh full matrix completed all 472 normal native/pilot captures and its behavioral comparisons.
+Individual review then demonstrated an eight-pixel greeting gap and a twelve-pixel collection gap in Overview:
+the pilot's extra greeting wrapper and collection margin differed from the native executable composition. These
+were not approved differences. They required restoration in the existing template owners and another coherent
+build, full runtime replay and complete fresh matrix, now completed below. The candidate matrix remains diagnostic
+evidence rather than final visual acceptance. Passing functional journeys and a completed capture do not override
+a measured native-layout difference, and the earlier broad review's claimed parity did not cover this exact
+composition. At that checkpoint, package replacement and normal development verification were still pending for
+the corrected binary. The completed current evidence follows below.
+
+The existing [contribution recipe](staged/DEVELOPMENT.md#implementing-the-next-feature-slice) now connects each changed
+journey to its independent native executable oracle, actual consumer and observable assertion. It records differences
+and explicit approval in this review owner, preserves command confirmation separately from read causality, exercises
+retired-response and image-deadline integration, and routes test selection through the existing Testing Guide. This
+is a correction to the maintained guideline; no additional plan, report registry or required documentation gate is
+introduced.
+
+### Completed current verification (2026-10-11)
+
+The initial pilot reviewed on this date did not satisfy the approved contract. The corrections above restore its
+original requirements and native executable behavior within Help/Packing, their necessary foundation and identity
+journeys, and the implemented Overview scaffold. Independent source review found no further demonstrated
+unauthorized difference or ownership violation in those boundaries. The original choices and approved amendments
+remain recorded; this completion neither authorizes a new departure nor claims the remaining application-wide
+migration or production cutover is complete.
+
+The final coherent build is `fa5dc669f33da4c75bb81ddd`, with client `entry-client-D3C8kVeb.js`, API source prefix
+`440ce1250886` and catalog prefix `505538834507`. The full quick and integration executions belong to the preceding
+coherent source. Exactly two existing Vue presentation templates changed afterward to restore native greeting and
+collection spacing, and the table-scroll ownership of the Packing edit hint. Their affected frontend checks, the
+full build and every runtime/visual check below were then repeated against the final binary. The server, native
+browser code, contracts, catalog and the other eight runtime
+directory hashes remained unchanged; this is bounded combined evidence, not a claim that the full quick suite ran
+again against the later binary.
+
+| Executed boundary | Actual result and scope |
+|---|---|
+| Whole database-free quick suite, before the two presentation corrections | **1,407/1,407**, 60 files, 564.21 seconds, starting 08:46:01 UTC. Earlier interrupted or failing executions remain diagnostic. |
+| Whole guarded integration suite, before the same presentation corrections | **373/373**, 22 files, 455.55 seconds, starting 08:46:16 UTC, against the separate restricted disposable test schema. No shared/default database was reset. |
+| Affected final frontend checks | **209/209**, two files, 103.13 seconds, starting 09:25:24 UTC. Actual Overview/Packing presentation and native executable assertions passed. |
+| Final coherent release build | **Passed**, including server, frontend and SSR type/build checks. The final rebuild after development restoration also exited zero and reproduced the same deployment/API/catalog and all ten runtime directory hashes. |
+| Built HTTP | **28 passed, one configuration-dependent skip**. Real route, middleware, session and database boundaries remained in use. |
+| Built browser | **24/24**. Includes existing-email Cancel/Continue as new guest and rejected MIME/oversize header uploads retaining the accepted header/version. |
+| Authentication configurations | **1/1 local-login-disabled** and **1/1 application-owned provider first hop**. No external-provider round trip is claimed. |
+| Current temporary-read warnings | **4/4** real mounted read-only recovery journeys, with eight desktop/mobile originals individually inspected. Includes retained metadata draft after unusable 403, Help safe 400 explanation, and applicable 429/503 UTC receipts/deadlines. |
+| Native/pilot mobile table scroll | **1/1**. Actual scroll geometry and hint clipping match; Shift+Tab reaches the in-container Refresh and Enter completes a real conditional GET 304 with no writes after fixture setup. Three originals individually inspected. |
+| Complete final native/pilot matrix | **472 originals and 15/15 behavioral comparisons**, completed 09:53:36.238 UTC in `test-results/frontend-baseline/2026-10-11T09-36-41-526Z`; zero recorded browser errors, failed requests or asset failures. |
+| Complete original-image inspection | **491 current originals**, all opened individually at original resolution: 472 matrix, eight read warnings, three scroll and eight final deployment originals. Exclusive reviewer inventories 122/150/92/108 cover the matrix; every current filename/SHA matches, with no missing, duplicate or changed original. No new demonstrated unapproved visual difference remained. This does not certify word-by-word guide proofreading or a complete accessibility audit. |
+| Genuine installed-folder replacement and copy-back | **Chromium and Firefox passed all four checks each**. Complete A/B packages use matching production client/SSR; all 22 old hashed paths are absent in B. Dirty compatible edits survive and finish before reload; an actual retired lazy module 404 produces exactly one clean reload, subsequent SPA navigation uses B, and copy-back A retains both persisted rows. All 192 native static files retain exact bytes through each run. |
+| Normal source workflow | **3/3 browser cases**, 13.9 seconds, through actual root `npm run server`: executable source assets, prehydration draft and held-locale navigation, and a real Packing command in the same document. Genuine CSS HMR application/restoration preserved the original document; authored-input generation completed before the normal server restarted and hydrated Help. The harness exited zero, restored CSS bytes/locale times, and stopped only its owned process tree. |
+
+Final runtime transcripts, source snapshots, dependency provenance and per-original review inventories are ignored
+local evidence under `.temp/frontend-foundation/full-rectification-acceptance5-*`. The single ignored
+`full-rectification-acceptance5-visual-reconciliation.json` joins all 491 inspected originals to their actual current
+hashes. The `acceptance5-development-restored` fingerprint matches the predevelopment final runtime; all 544 frozen
+authored inputs remain unchanged. The final content check also verifies all ten runtime/content directory digests,
+29 captured executable/style/chunk hashes, the exact 192-file native static inventory with no extra files, and all
+24 actual type contracts as declaration files. The owned package, capture, built-browser and source-server
+listeners are stopped.
+
+The deployment fixture exposed additional verification failures and preserved them. An enabled IDE **Project Files**
+Sass watcher reacted to ignored copied authoring files and changed compiled CSS after the first copy. Actual Firefox
+image inspection found its error block despite the behavioral process exiting zero. The complete payload and its
+copy-back backups were therefore recreated in an owned OS-temp folder outside that IDE scope, without removing
+release files or changing IDE/application configuration; exact native-static hashes are asserted around replacement.
+An external Chromium attempt then let ordinary session observation update its clean document before the intended
+cold import. Another Firefox attempt had stopped A before its progressively loaded collector admitted a usable card:
+the module-response waiter failed while the click still awaited a missing action. The retained original and request
+history establish these distinct fixture premises. The final fixture waits the real card and completed regions,
+asserts the original A document immediately before navigation, and may hold only its actual external session reads
+until the real retired import recovers. It retains the genuine 404 and exact reload assertions and releases those
+reads; no application behavior was changed to satisfy the harness.
+
+Production-only dependencies were reused from an installation with the identical current lockfile and all 33 direct
+production versions verified. The private production startup forbids workspace dependency fallback and succeeds
+without development packages even when the development flag is set. A fresh `npm ci` is not claimed. Browser
+deployment journeys run the compiled production package in the established E2E mode against the restricted
+disposable schema; they do not constitute an actual production deployment. External SMTP delivery, a live OIDC
+round trip and production cutover remain unexecuted boundaries. Nonfatal localhost/npm/tool warnings stay in the
+transcripts and do not become unexplained passing assertions.
+
+### Documentation and migration follow-through
+
+No new maintained documentation file, report registry, checklist or delivery gate was introduced. The previous
+finished execution plans had already been retired into the existing pilot and paired-review records; this increment
+updates those owners rather than adding another plan. Original design/baseline and approved-history records remain
+necessary evidence of authorization. Prospective staged architecture/development/testing/operator replacements
+remain necessary for the next modules and eventual cutover, with their canonical merge targets preserved. Unrelated
+feature-design records and the exclusively native remediation backlog were not refactored or removed.
+
+The single existing contribution recipe now requires the independent native oracle and decision ledger, actual
+consumer and causal read/write boundaries, selected localization binding, semantic first-read premises, exact
+accessible controls/focus/labels, wrapper/text-node geometry and scroll ownership. It distinguishes silent optional
+image recovery from visible JSON Retry, a complete read receipt/deadline/explanation from timer presence, and a
+confirmed denial from an unusable response. Its linked Testing Guide retains cheapest-stable-layer selection and
+verified disposable database boundaries. These are the concrete changes to prevent the evidenced review failures;
+another feature must reuse the established owners rather than copy an already-passing implementation as its oracle.
+
+The final optional strict documentation report inspected 78 Markdown files and 1,505 internal links, finding no
+broken links, metadata errors, missing package scripts or configured stale terms. Its advisory exit zero is not a
+clean-report claim: four findings remain classified against their actual sources. The historical source baseline
+predates these implementation changes; the [documentation policy](../DOCUMENTATION_POLICY.md#source-fingerprints-and-baselines)
+requires retaining that history rather than replacing a hash to obtain a clean report. Two missing-path findings
+refer to the deliberately quarantined adjacent JavaScript copies recorded above, not current implementation paths
+or instructions to restore them. The unreferenced controls illustration is an intentional native authoring reference,
+documented in [Help Visuals](../HELP_VISUALS.md#ownership) and already contained under `DOC-ENTITY-PROPERTIES-VISUAL`
+in the existing [remediation backlog](../documentation-remediation.yml). Its obsolete picture remains excluded from
+the guide, which supplies current written guidance. That unrelated native visual follow-up remains open; it is not
+a new pilot defect or completed work. No baseline, checker exception, guide embedding or native asset was changed
+to suppress these findings, and the report remains advisory.

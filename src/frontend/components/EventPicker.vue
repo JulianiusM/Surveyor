@@ -1,39 +1,55 @@
 <script setup lang="ts">
-import {computed, reactive, ref, watch} from 'vue';
+import {computed, onBeforeUnmount, reactive, ref, shallowRef, watch} from 'vue';
 import {useQuery} from '@tanstack/vue-query';
+import type {QueryFunctionContext} from '@tanstack/vue-query';
 import type {PilotEventPickerOption, PilotEventPickerQuery, PilotEventPickerSelection, PilotEventPickerSource} from '../../types/FrontendPilotUiTypes';
 import {usePilot, refreshInterval} from '../app/context';
-import {belongsToQueryFamily} from '../app/queryKeys';
+import {isReadDenial, ObsoleteRequestError} from '../app/transport';
 import {useDebouncedValue} from '../composables/debounced';
+import {useReadRetry, useReadRetryAt} from '../composables/feedback';
 import ActionButton from './ActionButton.vue';
 import AppDialog from './AppDialog.vue';
 import LoadingSkeleton from './LoadingSkeleton.vue';
+import StatusNotice from './StatusNotice.vue';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     modelValue: string | null;
     current?: PilotEventPickerSelection | null;
     source: PilotEventPickerSource;
     disabled?: boolean;
     prefix: string;
     inline?: boolean;
-}>();
+    active?: boolean;
+}>(), {active: true});
 const emit = defineEmits<{'update:modelValue': [value: string | null]}>();
 const context = usePilot();
 const {messages} = context;
 const open = ref(false);
-const cursors = ref<(string | undefined)[]>([undefined]);
-const page = ref(0);
-const pageOffset = ref(0);
-const shownPage = ref(1);
+// Cursor history describes confirmed visits only. A failed Next/Previous request keeps
+// this page and its history intact; Retry repeats the requested read, never a selection.
+const history = ref<{cursor: string | undefined; number: number}[]>([]);
+const requestedCursor = ref<string>();
+const requestedPage = ref(1);
+const direction = ref<'reset' | 'next' | 'previous' | 'current'>('reset');
+const shownPage = computed(() => history.value.at(-1)?.number ?? 1);
 const filters = reactive({q: '', from: '', to: '', period: 'all', archive: 'all', deadline: 'all'});
-const search = useDebouncedValue(computed(() => filters.q));
+const searchPending = ref(false);
+const search = useDebouncedValue(computed(() => filters.q), 200, finishTypedSearch);
 const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
 const selected = ref<PilotEventPickerSelection | null>(
     props.current ?? null,
 );
+const resolvedSelection = ref(props.current?.id === props.modelValue ? props.modelValue : null);
 type Query = PilotEventPickerQuery;
+type Options = Awaited<ReturnType<PilotEventPickerSource['search']>>;
+let readGeneration = 0;
+let completedRead: {generation: number; direction: typeof direction.value; cursor: string | undefined; page: number} | undefined;
+const confirmedPage = shallowRef<{family: string; result: Options; updatedAt: number}>();
 const invalidDates = computed(() => !!filters.from && !!filters.to && filters.from > filters.to);
 const filterKey = computed(() => JSON.stringify({...filters, q: search.value}));
+const family = computed(() => JSON.stringify([
+    props.source.filterKey(context.session.value?.context, context.locale.value, filterKey.value), context.epoch.value,
+]));
 const query = computed<Query>(() => ({
     q: search.value.trim() || undefined,
     from: filters.from || undefined,
@@ -42,55 +58,149 @@ const query = computed<Query>(() => ({
     archive: filters.archive as Query['archive'],
     deadline: filters.deadline as Query['deadline'],
     selectedId: props.modelValue ?? undefined,
-    cursor: cursors.value[page.value],
+    cursor: requestedCursor.value,
 }));
-// Keep one displayed page and bounded cursor history. Searching never changes the submitted
-// selection: an explicitly chosen event survives filters, pagination and failed reads.
-watch(filterKey, () => {
-    cursors.value = [undefined];
-    page.value = 0;
-    pageOffset.value = 0;
-});
+const key = computed(() => props.source.pageKey(context.session.value?.context, context.locale.value, filterKey.value, query.value));
+const disclosed = computed(() => props.active !== false && (!!props.inline || open.value));
+const enabled = computed(() => context.hydrated.value && context.ready.value && context.visible.value
+    && props.active !== false && !props.disabled && !invalidDates.value && !searchPending.value
+    // A closed picker resolves an unknown selected ID once, including authoritative null.
+    // Its current parent projection can retire that resolution; hidden tabs never search.
+    && (disclosed.value || (!!props.modelValue && resolvedSelection.value !== props.modelValue)));
 const options = useQuery({
-    queryKey: computed(() => props.source.pageKey(context.session.value?.context, context.locale.value, filterKey.value, query.value)),
-    enabled: computed(
-        () =>
-            context.hydrated.value &&
-            context.ready.value &&
-            context.visible.value &&
-            !props.disabled &&
-            !invalidDates.value &&
-            // A closed picker may resolve its initial selection once. It does not keep reading
-            // selection results after that title is known, or poll while the dialog is hidden.
-            (!!props.inline || open.value || (!!props.modelValue && selected.value?.id !== props.modelValue)),
-    ),
-    queryFn: ({signal}) => props.source.search(query.value, context.capture(), signal),
+    queryKey: key,
+    enabled,
+    queryFn: readOptions,
     gcTime: 0,
-    refetchInterval: (state) => context.visible.value && (!!props.inline || open.value)
+    refetchInterval: (state) => enabled.value && disclosed.value
         ? refreshInterval(state.state.error, state.state.fetchFailureCount, jitter) : false,
-    placeholderData: (previous, previousQuery) =>
-        previousQuery && belongsToQueryFamily(previousQuery,
-            props.source.filterKey(context.session.value?.context, context.locale.value, filterKey.value))
-            ? previous : undefined,
 });
+const retryAvailable = useReadRetry(() => options.error.value);
+const retryAt = useReadRetryAt(() => options.error.value, retryAvailable);
+// TanStack placeholder data disappears on terminal pagination errors. Retain one confirmed
+// presentation explicitly, scoped to this actor/epoch/filter/locale; it is never edit authority.
+const displayed = computed(() => context.ready.value && !isReadDenial(options.error.value)
+    && confirmedPage.value?.family === family.value
+    ? confirmedPage.value.result : undefined);
+const visibleOptions = computed(uniqueOptions);
+watch(options.error, retireDeniedOptions);
+
+/** Confirmed denial retires discovery's protected options/label, not the user's
+ * selected draft ID. Retain its resolution guard so retirement cannot trigger
+ * another hidden discovery read. A matching current parent projection owns its
+ * readable title independently of discovery permission and remains authoritative. */
+function retireDeniedOptions(failure: Error | null): void {
+    if (!isReadDenial(failure)) return;
+    confirmedPage.value = undefined;
+    selected.value = props.current?.id === props.modelValue ? props.current : null;
+}
+
+/** Discovery can repeat an ID within a bounded batch. Render one choice per ID, matching
+ * native selection, without mutating the shared authoritative response in the query cache. */
+function uniqueOptions(): PilotEventPickerOption[] {
+    const result: PilotEventPickerOption[] = [];
+    const seen = new Set<string>();
+    for (const option of displayed.value?.items ?? []) {
+        if (seen.has(option.id)) continue;
+        seen.add(option.id);
+        result.push(option);
+    }
+    return result;
+}
+
+/** Snapshot the request before awaiting discovery. Typing, filters, disclosure and disposal
+ * retire it immediately, even if a caller's transport cannot interrupt the old response. */
+async function readOptions({signal}: QueryFunctionContext<readonly unknown[]>): Promise<Options> {
+    const generation = readGeneration;
+    const scope = context.capture();
+    const visit = {generation, direction: direction.value, cursor: requestedCursor.value, page: requestedPage.value};
+    const result = await props.source.search({...query.value}, scope, signal);
+    if (generation !== readGeneration || !context.isCurrent(scope) || !enabled.value) throw new ObsoleteRequestError();
+    completedRead = visit;
+    return result;
+}
+
+/** Cancellation is limited to this picker's current query. Other selectors and regions keep
+ * their own requests; the last confirmed page remains readable while a new read is pending. */
+function retireReads(): void {
+    readGeneration++;
+    completedRead = undefined;
+    void context.queryClient.cancelQueries({queryKey: key.value, exact: true});
+}
+
+/** New filters start bounded history again, without changing the independently selected ID. */
+function resetBrowsing(): void {
+    retireReads();
+    history.value = [];
+    requestedCursor.value = undefined;
+    requestedPage.value = 1;
+    direction.value = 'reset';
+    confirmedPage.value = undefined;
+}
+
+function editSearch(): void {
+    searchPending.value = true;
+    retireReads();
+}
+
+/** Returning to the original text also performs a fresh first-page read: the canceled query
+ * key may be unchanged, so re-enabling alone is not evidence that its read has resumed. */
+function finishTypedSearch(): void {
+    if (!searchPending.value) return;
+    resetBrowsing();
+    searchPending.value = false;
+    if (enabled.value) void options.refetch({cancelRefetch: false});
+}
+
+watch(() => filters.q, editSearch, {flush: 'sync'});
+watch(family, resetBrowsing, {flush: 'sync'});
+watch(enabled, pauseDiscovery, {flush: 'sync'});
+watch(() => props.modelValue, retireReads, {flush: 'sync'});
+watch([() => context.session.value?.context, context.epoch], retireIdentity, {flush: 'sync'});
+onBeforeUnmount(retireReads);
+
+function pauseDiscovery(value: boolean): void {
+    if (!value) retireReads();
+}
+
+/** A same-actor session refresh is not a new selection scope. Retire labels only when
+ * the actual actor/generation changes; future parent authority resolves that scope again. */
+function retireIdentity(): void {
+    selected.value = null;
+    resolvedSelection.value = null;
+}
+
 /** Discovery reauthorizes the selected ID independently of its result page. An explicit
  * null revokes its display projection, not the user's selected draft ID. Observe completed
  * fetches too: structural sharing and same-millisecond responses can retain the data/ref time. */
 function receiveOptions(): void {
     const result = options.data.value;
-    if (!result || options.isPlaceholderData.value || options.isFetching.value || options.isError.value) return;
-    shownPage.value = pageOffset.value + page.value + 1;
+    const visit = completedRead;
+    if (!result || !visit || visit.generation !== readGeneration || options.isFetching.value || options.isError.value) return;
+    completedRead = undefined;
+    if (visit.direction === 'previous') history.value = history.value.slice(0, -1);
+    else if (visit.direction !== 'current') {
+        history.value = [...history.value, {cursor: visit.cursor, number: visit.page}].slice(-100);
+    }
+    direction.value = 'current';
+    // The settled query supplies its actual successful receipt, including equal
+    // responses. Failed/pending pages never manufacture a new freshness timestamp.
+    confirmedPage.value = {family: family.value, result, updatedAt: options.dataUpdatedAt.value};
     selected.value = result.selected;
+    resolvedSelection.value = props.modelValue;
 }
 watch([options.data, options.dataUpdatedAt, options.isFetching], receiveOptions, {immediate: true});
 watch(
     () => props.current,
     (value, previous) => {
-        if (value?.id === props.modelValue) selected.value = value;
-        else if (previous?.id === props.modelValue && selected.value?.id === previous.id) {
+        if (value?.id === props.modelValue) {
+            selected.value = value;
+            resolvedSelection.value = props.modelValue;
+        } else if (previous?.id === props.modelValue && selected.value?.id === previous.id) {
             // A closed picker consumes its owner's refreshed authority. Resolve this
             // still-selected draft once through discovery instead of retaining an old label.
             selected.value = null;
+            resolvedSelection.value = null;
         }
     },
 );
@@ -105,23 +215,45 @@ const selectionTitle = computed(() =>
 function choose(value: PilotEventPickerOption | null): void {
     if (props.disabled) return;
     selected.value = value;
+    resolvedSelection.value = value?.id ?? null;
     emit('update:modelValue', value?.id ?? null);
     open.value = false;
 }
 function next(): void {
-    const cursor = options.data.value?.nextCursor;
-    if (!cursor || options.isFetching.value || options.error.value) return;
-    cursors.value = [...cursors.value.slice(0, page.value + 1), cursor];
-    if (cursors.value.length > 100) {
-        cursors.value.shift();
-        pageOffset.value++;
-    } else page.value++;
+    const cursor = displayed.value?.nextCursor;
+    if (!cursor || options.isFetching.value || !enabled.value || !retryAvailable.value) return;
+    requestPage('next', cursor, shownPage.value + 1);
 }
 function previous(): void {
-    if (page.value && !options.isFetching.value) page.value--;
+    const prior = history.value.at(-2);
+    if (!prior || options.isFetching.value || !enabled.value || !retryAvailable.value) return;
+    requestPage('previous', prior.cursor, prior.number);
+}
+
+/** Pagination starts a requested visit. History and page numbering commit only in receiveOptions. */
+function requestPage(nextDirection: 'next' | 'previous', cursor: string | undefined, number: number): void {
+    const previousKey = JSON.stringify(key.value);
+    retireReads();
+    direction.value = nextDirection;
+    requestedCursor.value = cursor;
+    requestedPage.value = number;
+    // Retrying Next/Previous can reuse the failed query key. Keep query-owned automatic
+    // delivery and this explicit retry on the same in-flight read rather than issuing twice.
+    if (enabled.value && JSON.stringify(key.value) === previousKey) void options.refetch({cancelRefetch: false});
+}
+
+function retry(): void {
+    if (enabled.value && !options.isFetching.value && retryAvailable.value) void options.refetch();
 }
 function reset(): void {
+    if (props.disabled) return;
     Object.assign(filters, {q: '', from: '', to: '', period: 'all', archive: 'all', deadline: 'all'});
+    // Clear filters is immediate. A queued typing timer may settle later, but cannot start
+    // another search once this explicit reset has consumed the pending input.
+    search.value = '';
+    searchPending.value = false;
+    resetBrowsing();
+    if (enabled.value) void options.refetch({cancelRefetch: false});
 }
 function details(event: PilotEventPickerOption): string {
     const today = new Date().toISOString().slice(0, 10);
@@ -183,6 +315,7 @@ function details(event: PilotEventPickerOption): string {
                             :placeholder="messages.t('packing.eventSearchPlaceholder')"
                             :disabled="disabled"
                             :aria-controls="prefix + '-list'"
+                            @keydown.enter.prevent
                         />
                     </div>
                     <div class="col-auto">
@@ -286,13 +419,20 @@ function details(event: PilotEventPickerOption): string {
                 <p v-if="selection?.archived" class="small text-info">
                     {{ messages.t('packing.archivedEventHint') }}
                 </p>
-                <p v-if="invalidDates || options.error.value" class="small text-danger" role="alert">
-                    {{ messages.t(invalidDates ? 'packing.invalidEventDates' : 'state.loadFailed') }}
+                <p v-if="invalidDates" class="small text-danger" role="alert">
+                    {{ messages.t('packing.invalidEventDates') }}
                 </p>
+                <!-- Retain only this admitted family's successful page/time after
+                     a temporary read failure; confirmed denial hides old choices. -->
+                <StatusNotice v-else-if="options.error.value" kind="warning" class="small"
+                    :last-updated-at="displayed ? confirmedPage?.updatedAt : undefined"
+                    :retry-at="retryAt" :read-error="options.error.value">{{
+                    messages.t(displayed ? 'state.stale' : 'state.loadFailed')
+                }}</StatusNotice>
                 <!-- Search/filter controls stay usable while the independently authorized
                      options load. Background reads retain the known choices and selection. -->
-                <LoadingSkeleton v-if="!invalidDates && !options.data.value && !options.error.value" :rows="4" />
-                <p v-if="options.isFetching.value && options.data.value" class="small text-secondary" role="status">
+                <LoadingSkeleton v-if="!invalidDates && !displayed && !options.error.value" :rows="4" />
+                <p v-if="options.isFetching.value && displayed" class="small text-secondary" role="status">
                     <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>{{ messages.t('common.loading') }}
                 </p>
                 <ul
@@ -304,7 +444,7 @@ function details(event: PilotEventPickerOption): string {
                     style="max-height: 22rem"
                 >
                     <li
-                        v-for="event in invalidDates ? [] : (options.data.value?.items ?? [])"
+                        v-for="event in invalidDates ? [] : visibleOptions"
                         :key="event.id"
                         class="list-group-item text-bg-dark px-0"
                     >
@@ -324,22 +464,22 @@ function details(event: PilotEventPickerOption): string {
                     </li>
                 </ul>
                 <p
-                    v-if="!invalidDates && options.data.value"
+                    v-if="!invalidDates && displayed"
                     :id="prefix + '-summary'"
                     class="small text-secondary mt-2 mb-2"
                     aria-live="polite"
                 >
-                    <template v-if="options.data.value.items.length"
+                    <template v-if="visibleOptions.length"
                         >{{
                             messages.t('packing.eventPage', {
                                 page: shownPage,
-                                count: options.data.value.items.length,
+                                count: visibleOptions.length,
                             })
                         }}
-                        {{ options.data.value.nextCursor ? messages.t('packing.moreEvents') : '' }}</template
+                        {{ displayed.nextCursor ? messages.t('packing.moreEvents') : '' }}</template
                     ><template v-else>{{
                         messages.t(
-                            options.data.value.nextCursor
+                            displayed.nextCursor
                                 ? 'packing.emptyEventBatch'
                                 : 'packing.noMatchingEvents',
                         )
@@ -347,25 +487,25 @@ function details(event: PilotEventPickerOption): string {
                 </p>
                 <div class="d-flex gap-2">
                     <ActionButton
-                        v-if="page"
+                        v-if="history.length > 1"
                         class="btn-sm"
                         variant="outline-light"
-                        :disabled="disabled || options.isFetching.value"
+                        :disabled="disabled || searchPending || options.isFetching.value || !retryAvailable"
                         @click="previous"
                         >{{ messages.t('packing.previousPage') }}</ActionButton
                     ><ActionButton
-                        v-if="options.data.value?.nextCursor"
+                        v-if="displayed?.nextCursor"
                         class="btn-sm"
                         variant="outline-light"
-                        :disabled="disabled || options.isFetching.value || !!options.error.value"
+                        :disabled="disabled || searchPending || options.isFetching.value || !retryAvailable"
                         @click="next"
                         >{{ messages.t('packing.nextPage') }}</ActionButton
                     ><ActionButton
                         v-if="options.error.value"
                         class="btn-sm"
                         variant="outline-secondary"
-                        :disabled="disabled || options.isFetching.value"
-                        @click="options.refetch()"
+                        :disabled="disabled || searchPending || options.isFetching.value || !retryAvailable"
+                        @click="retry"
                         >{{ messages.t('common.retry') }}</ActionButton
                     >
                 </div>

@@ -7,6 +7,7 @@ import {useQuery} from '@tanstack/vue-query';
 import {usePilot} from '../../app/context';
 import {usePackingApi} from '../packing/api';
 import {useCommand} from '../../composables/command';
+import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {packingKeys} from '../../app/queryKeys';
 import {usePageTitle} from '../../composables/pageTitle';
 import {completeIdentityEntry, completePageEntry, useConfirmedNavigation} from '../../composables/pageEntry';
@@ -16,7 +17,7 @@ import AppDialog from '../../components/AppDialog.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import NativeContextFields from '../../components/NativeContextFields.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
-import {ApiFailure} from '../../app/transport';
+import {ApiFailure, isReadDenial} from '../../app/transport';
 
 const props = defineProps<{entry?: components['schemas']['GuestEntry']}>();
 const context = usePilot();
@@ -31,19 +32,21 @@ const nativeInitial = context.initialDocumentFor(route.fullPath);
 const fields = reactive({name: nativeInitial?.identityFields?.username ?? '', email: nativeInitial?.identityFields?.email ?? ''});
 const choiceOpen = ref(false);
 const checkingEmail = ref(false);
-const reconciling = ref(false);
 const entry = useQuery({
     queryKey: computed(() => packingKeys.guest(context.session.value?.context, listId.value)),
     enabled: computed(() => context.ready.value && context.hydrated.value && !props.entry),
     queryFn: ({signal}) => api.guestEntry(listId.value, context.capture(), signal),
     initialData: () => props.entry ?? (nativeInitial?.guestEntry?.id === listId.value ? nativeInitial.guestEntry : undefined),
 });
-const guestEntry = computed(() => props.entry ?? entry.data.value);
+const guestEntry = computed(() => props.entry ?? (isReadDenial(entry.error.value) ? undefined : entry.data.value));
+const titleRetryAvailable = useReadRetry(() => entry.error.value);
+const titleRetryAt = useReadRetryAt(() => entry.error.value, titleRetryAvailable);
 const command = useCommand(context.refreshSession, true, {
     dirty: isDirty,
     busy: isCheckingEmail,
     unknownMessage: 'auth.leaveUnknown',
 });
+const reconciling = command.recovering;
 
 /** Name-only and email-only drafts receive the same protection as every other identity form. */
 function isDirty(): boolean {
@@ -65,23 +68,27 @@ if (nativeInitial?.identityFormProblem) {
     command.setError(new ApiFailure(nativeInitial.identityFormProblem.status, nativeInitial.identityFormProblem));
 }
 usePageTitle(() => guestEntry.value?.title || messages.value.t('app.packing'));
-const blocked = computed(() => checkingEmail.value || command.pending.value || command.uncertain.value
+const blocked = computed(() => checkingEmail.value || reconciling.value || command.pending.value || command.uncertain.value
     || completion.pending.value || completion.target.value !== null);
 /** Reconcile identity without assuming a successful title read proves guest creation failed. */
 async function refreshIdentityState(): Promise<void> {
-    if (reconciling.value) return;
-    reconciling.value = true;
-    const scope = context.capture();
-    try {
-        await context.refreshSession();
-        if (context.isCurrent(scope)) await entry.refetch({throwOnError: true});
-        // The identity-bearing command may still be completing. Only a changed authoritative
-        // session remounts this page; a title read does not prove guest creation failed.
-    } catch {
-        command.setError('state.loadFailed');
-    } finally {
-        reconciling.value = false;
-    }
+    await command.recover(readGuestAuthority);
+}
+
+/** The public title read is independent of guest identity commands. Recover only
+ * that current query, preserving the mounted name/email and any command receipt. */
+async function retryGuestTitle(): Promise<void> {
+    if (props.entry || !context.ready.value || !context.hydrated.value || !titleRetryAvailable.value || entry.isFetching.value) return;
+    await entry.refetch();
+}
+
+/** The shared recovery owner protects the full read. Its actor/document/mount predicate
+ * prevents a retired guest form from restarting a query after a held bootstrap completes. */
+async function readGuestAuthority(_scope: PilotRequestScope, isCurrent: () => boolean): Promise<void> {
+    await context.refreshSession();
+    if (isCurrent()) await entry.refetch({throwOnError: true});
+    // An unchanged session and title cannot identify the lost registration's outcome.
+    // The command remains unknown until an actor transition or acknowledged departure.
 }
 
 /** Submit once and release the draft only after the server confirms the guest identity. */
@@ -160,9 +167,16 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
             <!-- The entry title loads independently of the generic identity choices and
                  editable draft. Never replace those mounted fields during a title refresh. -->
             <LoadingSkeleton v-if="!guestEntry && !entry.error.value" :rows="1" />
-            <StatusNotice v-if="command.error.value || entry.error.value" kind="danger">{{
-                command.error.value ?? messages.t('state.loadFailed')
+            <StatusNotice v-if="command.error.value" kind="danger"
+                :transient="!!command.error.value && command.transientError.value" :renewal="command.errorRenewal.value" @dismiss="command.setError(null)">{{
+                command.error.value
             }}</StatusNotice>
+            <StatusNotice v-if="entry.error.value && !props.entry" kind="danger"
+                :read-error="entry.error.value" :retry-at="titleRetryAt"
+                :last-updated-at="guestEntry ? entry.dataUpdatedAt.value : undefined">{{
+                messages.t(guestEntry ? 'state.stale' : 'state.loadFailed')
+            }}<ActionButton class="btn-sm ms-2" variant="outline-light" :pending="entry.isFetching.value"
+                :disabled="!titleRetryAvailable" @click="retryGuestTitle">{{ messages.t('common.retry') }}</ActionButton></StatusNotice>
             <!-- A confirmed identity/mail result is never submitted again because a route
                  chunk failed. Keep delivery Retry with this mounted form when it owns it. -->
             <StatusNotice v-if="completion.target.value" kind="warning">

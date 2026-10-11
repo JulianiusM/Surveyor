@@ -18,7 +18,7 @@ import express, {NextFunction, Request, Response} from 'express';
 import fs from "node:fs";
 import path from "node:path";
 import {canAccessEntityView, getArchivePresentations, getEntityPropertyPresentation} from "../controller/entityAdminController";
-import {authorizeEventLink, projectEventLinkOption} from "../controller/eventController";
+import {authorizeEventLink, readEventLinkSelection} from "../controller/eventController";
 import {archiveKey} from "../modules/archive/policy";
 import * as userService from "../modules/database/services/UserService";
 import {registerGuest as registerGuestIdentity} from '../controller/userController';
@@ -125,16 +125,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         // choice is rendered here, including on validation recovery; historical state never
         // excludes a destination. A posted choice supersedes a contextual URL preselection.
         const submitted = req.body && Object.hasOwn(req.body, 'event_id') ? req.body.event_id : req.query.eventId;
-        const selectedId = typeof submitted === 'string' ? submitted : undefined;
-        let selected = null;
-        if (addToEvent && selectedId) {
-            try { selected = await authorizeEventLink(selectedId, req.session); }
-            catch (error) {
-                if (!(error instanceof APIError)) throw error;
-                // Do not leak a forbidden selection's label into recovery HTML. Submission
-                // performs its own mandatory check after feature field normalization.
-            }
-        }
+        const selected = addToEvent ? await readEventLinkSelection(submitted, req.session) : null;
         // All factory consumers use this explicit form action. A public/guest duplicate
         // draft must return to that exact source after account login, rather than losing
         // its copied content at /create. The submitted query retains it on validation recovery.
@@ -146,7 +137,7 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         if (!selected) return {eventId: undefined, events: [], archive: null, creationAction};
         const ref = {type: 'event' as const, id: selected.id};
         const archives = await getArchivePresentations([ref], req.session);
-        return {eventId: selected.id, events: [projectEventLinkOption(selected)], archive: archives.get(archiveKey(ref)) ?? null, creationAction};
+        return {eventId: selected.id, events: [selected], archive: archives.get(archiveKey(ref)) ?? null, creationAction};
     }
 
     /** Render the initial form through the same data path used after validation failures. */

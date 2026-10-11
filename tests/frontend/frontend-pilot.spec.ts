@@ -1,20 +1,26 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {MetadataDraft} from '../../src/frontend/composables/metadataDraft';
-import {readPacked, writePacked} from '../../src/frontend/composables/packed';
+import {readPacked, writePacked} from '../../src/frontend/features/packing/packed';
 import {PilotApi} from '../../src/frontend/app/api';
 import {ApiFailure, ObsoleteRequestError, UnconfirmedResponseError} from '../../src/frontend/app/transport';
 import {PackingApi} from '../../src/frontend/features/packing/api';
 import {useHelpApi} from '../../src/frontend/features/help/api';
 import {canRetryRead, createPilotContext, refreshInterval} from '../../src/frontend/app/context';
 import {decodeBootstrap, serializeBootstrap} from '../../src/frontend/app/serializeBootstrap';
-import {evictPackingResource} from '../../src/frontend/app/queryCache';
+import {evictQueryFamilies} from '../../src/frontend/app/queryCache';
 import {overviewKeys, packingKeys} from '../../src/frontend/app/queryKeys';
 import type {components} from '../../src/types/api/v1';
-import type {PilotRequestScope} from '../../src/types/FrontendPilotUiTypes';
+import type {PilotMetadataFieldPolicy, PilotMetadataSnapshot, PilotRequestScope} from '../../src/types/FrontendPilotUiTypes';
 
 const listId = '11111111-1111-4111-8111-111111111111';
 const itemId = '22222222-2222-4222-8222-222222222222';
 const scope: PilotRequestScope = {context: 'test-context-1234567890', csrfToken: 'csrf-token-1234567890', epoch: 0, locale: 'en'};
+type Metadata = components['schemas']['PackingMetadata'];
+const packingFieldPolicy: PilotMetadataFieldPolicy<Metadata['values']> = {description: normalizeNullableText};
+
+function normalizeNullableText(value: string | null | undefined): string | null | undefined {
+    return value === '' ? null : value;
+}
 
 function metadata(values: components['schemas']['PackingMetadata']['values'] = {title: 'Original', description: 'Old note'}): components['schemas']['PackingMetadata'] {
     return {entityType: 'packing', id: listId, values, editableFields: ['title', 'description'],
@@ -39,6 +45,13 @@ function deferred<T>() {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('complete frontend bootstrap boundary', () => {
+    it.each(['packing.notFound', 'packing.eventRegistrationRequired', 'common.notAllowed'] as const)(
+        'preserves native admission label %s across the actual browser decoder', async packingError => {
+            const bootstrap = {session: session(), initialUrl: `/frontend-pilot/packing/${listId}/duplicate`, packingError};
+            expect(await decodeBootstrap(JSON.parse(serializeBootstrap(bootstrap)))).toEqual(bootstrap);
+        },
+    );
+
     it('preserves server-owned entry, notice and completion together through the wire codec', async () => {
         const bootstrap = {session: session(), initialUrl: '/frontend-pilot/guest/recovery',
             pageEntry: {kind: 'denied' as const, status: 401, messageKey: 'auth.invalidGuestLink'},
@@ -48,11 +61,23 @@ describe('complete frontend bootstrap boundary', () => {
         expect(await decodeBootstrap(JSON.parse(serializeBootstrap(bootstrap)))).toEqual(bootstrap);
     });
 
+    it('preserves an admitted initial event through the real bootstrap codec and rejects malformed selection data', async () => {
+        const selectedEvent: components['schemas']['PackingEventOption'] = {id: listId, title: 'Admitted contextual event',
+            description: null, startDate: '2026-10-07', endDate: '2026-10-08', archived: false, deadlinePassed: false};
+        for (const packingSelectedEvent of [selectedEvent, null]) {
+            const bootstrap = {session: session(), packingSelectedEvent};
+            expect(await decodeBootstrap(JSON.parse(serializeBootstrap(bootstrap)))).toEqual(bootstrap);
+        }
+        await expect(decodeBootstrap({session: session(), packingSelectedEvent: {...selectedEvent, id: 'invalid'}}))
+            .rejects.toThrow('Invalid pilot bootstrap');
+    });
+
     it.each([
         {pageEntry: {kind: 'denied', status: '401', messageKey: 'auth.invalidGuestLink'}},
         {pageNotice: {kind: 'executable', messageKey: 'auth.sessionExpired'}},
         {pageCompletion: {context: scope.context, destination: '/frontend-pilot/guest/recovery', messageKey: 'unknown', kind: 'success'}},
         {identityFields: {password: 'must never enter bootstrap'}},
+        {packingError: 'api:errors.FORBIDDEN'},
         {undeclaredField: true},
     ])('rejects malformed or undeclared initial state %j before mounting', async invalid => {
         await expect(decodeBootstrap({session: session(), ...invalid})).rejects.toThrow('Invalid pilot bootstrap');
@@ -60,8 +85,28 @@ describe('complete frontend bootstrap boundary', () => {
 });
 
 describe('packing draft reconciliation', () => {
+    it('keeps confirmed values separate from the last read token and grants until fresh authority arrives', () => {
+        const original = {...metadata(), editableFields: ['title'] as const};
+        const draft = new MetadataDraft<Metadata['values'], Metadata>({...original, editableFields: ['title']}, '"original"');
+        draft.values.title = 'Submitted';
+        draft.confirm(metadata({title: 'Submitted', description: 'Accepted note'}));
+        expect(draft.values).toEqual({title: 'Submitted', description: 'Accepted note'});
+        expect(draft.baseline.values).toEqual(original.values);
+        expect(draft.baseline.editableFields).toEqual(['title']);
+        expect(draft.etag).toBe('"original"');
+        expect(draft.awaitingAuthority).toBe(true);
+        expect(draft.patch).toEqual({});
+        expect(draft.dirty).toBe(false);
+
+        draft.receive({...metadata({title: 'Submitted'}), editableFields: []}, '"fresh"');
+        expect(draft.awaitingAuthority).toBe(false);
+        expect(draft.etag).toBe('"fresh"');
+        expect(draft.baseline.editableFields).toEqual([]);
+        expect(draft.patch).toEqual({});
+    });
+
     it('adopts disjoint remote changes while keeping the sparse local draft', () => {
-        const draft = new MetadataDraft(metadata(), '"a"');
+        const draft = new MetadataDraft<Metadata['values'], Metadata>(metadata(), '"a"', packingFieldPolicy);
         draft.values.description = 'My note';
         draft.receive(metadata({title: 'Remote title', description: 'Old note'}), '"b"');
         expect(draft.etag).toBe('"b"');
@@ -72,7 +117,7 @@ describe('packing draft reconciliation', () => {
     });
 
     it('requires an explicit same-field choice and does not carry newly forbidden fields into reapply', () => {
-        const draft = new MetadataDraft(metadata(), '"a"');
+        const draft = new MetadataDraft<Metadata['values'], Metadata>(metadata(), '"a"', packingFieldPolicy);
         draft.values.title = 'Mine';
         draft.receive(metadata({title: 'Theirs', description: 'Old note'}), '"b"');
         expect(draft.conflicts).toEqual(['title']);
@@ -88,7 +133,8 @@ describe('packing draft reconciliation', () => {
     });
 
     it('submits an explicit cleared description but never invents an omitted title field', () => {
-        const draft = new MetadataDraft({...metadata({description: 'Old note'}), editableFields: ['description']}, '"a"');
+        const draft = new MetadataDraft<Metadata['values'], Metadata>(
+            {...metadata({description: 'Old note'}), editableFields: ['description']}, '"a"', packingFieldPolicy);
         draft.values.description = '';
         expect(draft.patch).toEqual({description: null});
         draft.accept({...metadata({description: null}), editableFields: ['description']}, '"b"');
@@ -96,7 +142,81 @@ describe('packing draft reconciliation', () => {
     });
 });
 
+describe('generic metadata draft reconciliation', () => {
+    it('preserves numeric/boolean edits, caller-owned nullable text and field revocation across review', () => {
+        type Values = {capacity?: number; enabled?: boolean; note?: string | null};
+        type Snapshot = PilotMetadataSnapshot<Values> & {entityType: 'fixture'};
+        const policy: PilotMetadataFieldPolicy<Values> = {note: normalizeNullableText};
+        const initial: Snapshot = {entityType: 'fixture', values: {capacity: 5, enabled: true, note: null},
+            editableFields: ['capacity', 'enabled', 'note']};
+        const draft = new MetadataDraft<Values, Snapshot>(initial, '"a"', policy);
+        draft.values.capacity = 0;
+        draft.values.enabled = false;
+        draft.values.note = '';
+        expect(draft.patch).toEqual({capacity: 0, enabled: false});
+        expect(initial.values).toEqual({capacity: 5, enabled: true, note: null});
+
+        // The same algorithm rebases untouched fields without flattening false/zero
+        // or depending on Packing's title/description names and wire declaration.
+        draft.receive({...initial, values: {capacity: 5, enabled: true, note: 'Remote note'}}, '"b"');
+        expect(draft.values).toEqual({capacity: 0, enabled: false, note: 'Remote note'});
+        expect(draft.etag).toBe('"b"');
+        draft.values.note = '';
+        expect(draft.patch).toEqual({capacity: 0, enabled: false, note: null});
+
+        draft.receive({entityType: 'fixture', values: {capacity: 8, note: 'Remote note'},
+            editableFields: ['capacity', 'note']}, '"c"');
+        expect(draft.conflicts).toEqual(['capacity']);
+        expect(draft.review()).toBe(false);
+        draft.choices.capacity = 'mine';
+        expect(draft.review()).toBe(true);
+        expect(draft.values).not.toHaveProperty('enabled');
+        expect(draft.patch).toEqual({capacity: 0, note: null});
+    });
+});
+
 describe('typed pilot transport', () => {
+    const rejection: components['schemas']['Problem'] = {type: 'about:blank', title: 'Rejected', status: 400,
+        detail: 'The request was rejected.', requestId: 'classification-request', code: 'VALIDATION_FAILED',
+        messageKey: 'api:errors.VALIDATION_FAILED', params: {}};
+
+    it.each([
+        {name: 'known rejection', body: rejection, status: 400, confirmed: true},
+        {name: 'safe future rejection', body: {...rejection, code: 'FUTURE_CODE', messageKey: 'api:errors.FUTURE_CODE'},
+            status: 400, confirmed: true},
+        {name: 'malformed rejection', body: {status: 400, detail: 'Missing the common Problem contract'},
+            status: 400, confirmed: false},
+        {name: 'mismatched rejection status', body: {...rejection, status: 401}, status: 400, confirmed: false},
+        {name: 'known server failure', body: {...rejection, status: 500, code: 'INTERNAL_ERROR',
+            messageKey: 'api:errors.INTERNAL_ERROR'}, status: 500, confirmed: false},
+    ])('classifies $name through the generated mutation client', async ({body, status, confirmed}) => {
+        const send = vi.fn(async () => response(body, status));
+        const api = new PackingApi(new PilotApi(() => true, vi.fn(), send));
+        await expect(api.addItem(listId, {title: 'Tent', description: null, maxAssignees: 1, requiredByAll: false}, scope))
+            .rejects.toMatchObject({status, confirmedRejection: confirmed});
+        expect(send).toHaveBeenCalledOnce();
+    });
+
+    it('keeps a non-JSON mutation rejection unconfirmed', async () => {
+        const api = new PackingApi(new PilotApi(() => true, vi.fn(), vi.fn(async () => new Response(
+            '<html>Proxy error</html>', {status: 400, headers: {'Content-Type': 'text/html'}}))));
+        await expect(api.addItem(listId, {title: 'Tent', description: null, maxAssignees: 1, requiredByAll: false}, scope))
+            .rejects.not.toMatchObject({confirmedRejection: true});
+    });
+
+    it.each([
+        {name: 'malformed unauthorized response', body: {}, invalidate: false},
+        {name: 'safe future unauthorized response', body: {...rejection, status: 401, code: 'FUTURE_CODE',
+            messageKey: 'api:errors.FUTURE_CODE'}, invalidate: false},
+        {name: 'known authentication rejection', body: {...rejection, status: 401, code: 'AUTH_REQUIRED',
+            messageKey: 'api:errors.AUTH_REQUIRED'}, invalidate: true},
+    ])('uses machine-code authority for $name', async ({body, invalidate: losesIdentity}) => {
+        const invalidate = vi.fn();
+        const api = new PilotApi(() => true, invalidate, vi.fn(async () => response(body, 401)));
+        await expect(api.login({username: 'A profile', password: 'incorrect password'}, scope)).rejects.toThrow();
+        expect(invalidate).toHaveBeenCalledTimes(losesIdentity ? 1 : 0);
+    });
+
     it('admits an identity transition only when the response confirms its new context', async () => {
         const current = session('new-context-1234567890');
         const result: components['schemas']['IdentityResult'] = {session: current, personalLink: null, redirect: null};
@@ -374,17 +494,18 @@ describe('identity, refresh and local state boundaries', () => {
 
     it('evicts denied-list projections and containing query families while retaining unrelated resources and actors', async () => {
         const context = createPilotContext({session: session()}, false);
-        const removed = [packingKeys.detail(scope.context, listId, 'en'),
-            packingKeys.metadata(scope.context, listId, 'de'), packingKeys.profiles(scope.context, listId, 'organizer'),
+        const removed = [packingKeys.detail(scope.context, listId),
+            packingKeys.metadata(scope.context, listId), packingKeys.profiles(scope.context, listId, 'organizer'),
             packingKeys.guest(scope.context, listId),
             overviewKeys.region(scope.context, 'en', {collection: 'owner', region: 'main'}),
             overviewKeys.region(scope.context, 'de', {collection: 'participant', region: 'hidden'}),
             packingKeys.eventPage(scope.context, 'en', '', {selectedId: listId})];
-        const retained = [packingKeys.detail(scope.context, itemId, 'en'),
-            packingKeys.detail('other-actor', listId, 'en'), overviewKeys.all('other-actor'),
+        const retained = [packingKeys.detail(scope.context, itemId),
+            packingKeys.detail('other-actor', listId), overviewKeys.all('other-actor'),
             ['v1', scope.context, 'en', 'help']];
         for (const key of [...removed, ...retained]) context.queryClient.setQueryData(key, 'private snapshot');
-        await evictPackingResource(context.queryClient, scope.context, listId);
+        await evictQueryFamilies(context.queryClient, [packingKeys.resource(scope.context, listId),
+            packingKeys.events(scope.context), overviewKeys.all(scope.context)]);
         for (const key of removed) expect(context.queryClient.getQueryData(key)).toBeUndefined();
         for (const key of retained) expect(context.queryClient.getQueryData(key)).toBe('private snapshot');
         context.queryClient.clear();
@@ -399,7 +520,8 @@ describe('identity, refresh and local state boundaries', () => {
             signal = query.signal;
             return result.promise;
         }}).catch(() => undefined);
-        await evictPackingResource(context.queryClient, scope.context, listId);
+        await evictQueryFamilies(context.queryClient, [packingKeys.resource(scope.context, listId),
+            packingKeys.events(scope.context), overviewKeys.all(scope.context)]);
         expect(signal.aborted).toBe(true);
         result.resolve({title: 'Private title from before revocation'});
         await pending;
@@ -421,6 +543,95 @@ describe('identity, refresh and local state boundaries', () => {
         first.queryClient.clear(); second.queryClient.clear();
     });
 
+    it('keeps one current session failure and successful read receipt until explicit recovery', async () => {
+        vi.useFakeTimers({toFake: ['Date']});
+        const successfulTime = new Date('2026-10-11T08:00:00Z');
+        vi.setSystemTime(successfulTime);
+        let unavailable = false;
+        const failure = new TypeError('The session connection failed.');
+        const request = vi.fn(async () => {
+            if (unavailable) throw failure;
+            return response(session());
+        });
+        const context = createPilotContext({session: session()}, false, request);
+        try {
+            await context.refreshSession();
+            expect(context.sessionRead.value.updatedAt).toBe(successfulTime.getTime());
+            unavailable = true;
+            vi.setSystemTime(new Date('2026-10-11T08:00:30Z'));
+            await expect(context.refreshSession()).rejects.toBe(failure);
+            expect(context.ready.value).toBe(true);
+            expect(context.session.value?.context).toBe(scope.context);
+            expect(context.sessionRead.value).toEqual({error: failure, updatedAt: successfulTime.getTime(), pending: false});
+            expect(context.notice.value).toBe('state.stale');
+
+            // Another failed manual attempt retains the original successful instant.
+            await expect(context.refreshSession()).rejects.toBe(failure);
+            expect(context.sessionRead.value.updatedAt).toBe(successfulTime.getTime());
+            unavailable = false;
+            await context.refreshSession();
+            expect(context.sessionRead.value).toEqual({error: null, updatedAt: Date.now(), pending: false});
+            expect(context.notice.value).toBeNull();
+        } finally { context.queryClient.clear(); vi.useRealTimers(); }
+    });
+
+    it('rejects a skipped session Retry as the retained server failure until its deadline', async () => {
+        vi.useFakeTimers({toFake: ['Date']});
+        vi.setSystemTime(new Date('2026-10-11T08:10:00Z'));
+        let limited = false;
+        const request = vi.fn(async () => limited ? response({type: 'urn:future:unavailable', title: 'Unavailable',
+            status: 503, detail: 'Temporarily unavailable.', requestId: 'session-read-cooldown'}, 503, {'Retry-After': '90'})
+            : response(session()));
+        const context = createPilotContext({session: session()}, false, request);
+        try {
+            await context.refreshSession();
+            limited = true;
+            const failure = await context.refreshSession().catch(error => error);
+            expect(failure).toBeInstanceOf(ApiFailure);
+            expect(context.sessionRead.value.error).toBe(failure);
+            const deadline = Date.now() + 90_000;
+            expect(failure.retryAt).toBe(deadline);
+            await expect(context.refreshSession()).rejects.toBe(failure);
+            expect(request).toHaveBeenCalledTimes(2);
+            expect(context.ready.value).toBe(true);
+            limited = false;
+            vi.setSystemTime(deadline + 1);
+            await context.refreshSession();
+            expect(request).toHaveBeenCalledTimes(3);
+            expect(context.sessionRead.value.error).toBeNull();
+        } finally { context.queryClient.clear(); vi.useRealTimers(); }
+    });
+
+    it('retires session read receipts and ignores an old actor failure before its replacement bootstrap', async () => {
+        const previous = deferred<Response>();
+        const current = deferred<Response>();
+        let reads = 0;
+        const context = createPilotContext({session: session()}, false, vi.fn(async () => {
+            reads++;
+            return reads === 1 ? response(session()) : reads === 2 ? previous.promise : current.promise;
+        }));
+        try {
+            await context.refreshSession();
+            expect(context.sessionRead.value.updatedAt).toBeDefined();
+            const obsolete = context.refreshSession().catch(error => error);
+            context.invalidateIdentity();
+            expect(context.ready.value).toBe(false);
+            expect(context.sessionRead.value).toEqual({error: null, pending: false});
+            previous.resolve(new Response('<html>Old proxy failure</html>', {status: 403,
+                headers: {'Content-Type': 'text/html'}}));
+            await obsolete;
+            await Promise.resolve();
+            expect(context.sessionRead.value.error).toBeNull();
+            expect(context.sessionRead.value.updatedAt).toBeUndefined();
+            expect(context.notice.value).toBe('state.sessionChanged');
+            current.resolve(response(session('replacement-session-context')));
+            await context.refreshSession();
+            expect(context.ready.value).toBe(true);
+            expect(context.session.value?.context).toBe('replacement-session-context');
+            expect(context.sessionRead.value.updatedAt).toBeDefined();
+        } finally { context.queryClient.clear(); }
+    });
+
     it('keeps the exact legacy local Packed key and tolerates unavailable storage', () => {
         const values = new Map([[`packed_${listId}_${itemId}`, '1']]);
         const storage = {getItem: (key: string) => values.get(key) ?? null,
@@ -434,13 +645,54 @@ describe('identity, refresh and local state boundaries', () => {
         expect(readPacked({getItem: () => { throw new Error('blocked'); }}, listId, itemId)).toBe(false);
     });
 
-    it('suppresses obsolete/forbidden polling and honors server retry delay', () => {
+    it('suppresses obsolete/confirmed-denial polling and honors server retry delay', () => {
         expect(refreshInterval(new ObsoleteRequestError(), 0, 1000)).toBe(false);
-        expect(refreshInterval(new ApiFailure(403, null), 0, 1000)).toBe(false);
+        const denial: components['schemas']['Problem'] = {type: 'urn:surveyor:problem:forbidden', title: 'Forbidden', status: 403,
+            detail: 'Read access changed.', requestId: 'polling-denial', code: 'FORBIDDEN', messageKey: 'api:errors.FORBIDDEN', params: {}};
+        expect(refreshInterval(new ApiFailure(403, denial), 0, 1000)).toBe(false);
+        expect(refreshInterval(new ApiFailure(403, null), 0, 1000)).toBe(30_000);
         const rateLimited = new ApiFailure(429, null, 90_000);
         expect(refreshInterval(rateLimited, 0, 1000)).toBeGreaterThanOrEqual(89_900);
         expect(canRetryRead(rateLimited)).toBe(false);
         expect(refreshInterval(new Error('offline'), 3, 1000)).toBe(60_000);
+    });
+
+    it.each([0, 1])('uses bounded jitter for exactly two temporary read retries at random boundary %s', async random => {
+        vi.useFakeTimers();
+        vi.spyOn(Math, 'random').mockReturnValue(random);
+        const context = createPilotContext({session: session()}, false);
+        const failure = random === 0 ? new TypeError('Temporary network failure') : new ApiFailure(503, null);
+        const read = vi.fn(async () => { throw failure; });
+        const result = context.queryClient.fetchQuery({queryKey: ['jittered-read'], queryFn: read}).catch(error => error);
+        try {
+            // Observe the real QueryClient scheduler, not a copied delay formula.
+            // Neither retry can run before its randomized boundary, and no fourth
+            // request follows after the existing two-retry budget is exhausted.
+            const firstDelay = random === 0 ? 750 : 1000;
+            const secondDelay = random === 0 ? 1500 : 2000;
+            await vi.advanceTimersByTimeAsync(firstDelay - 1);
+            expect(read).toHaveBeenCalledOnce();
+            await vi.advanceTimersByTimeAsync(1);
+            expect(read).toHaveBeenCalledTimes(2);
+            await vi.advanceTimersByTimeAsync(secondDelay - 1);
+            expect(read).toHaveBeenCalledTimes(2);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(await result).toBe(failure);
+            expect(read).toHaveBeenCalledTimes(3);
+            await vi.advanceTimersByTimeAsync(10_000);
+            expect(read).toHaveBeenCalledTimes(3);
+        } finally { context.queryClient.clear(); vi.useRealTimers(); }
+    });
+
+    it('keeps server cooldown and mutation replay outside the temporary read retry budget', async () => {
+        const context = createPilotContext({session: session()}, false);
+        const failure = new ApiFailure(503, null, 90_000);
+        const read = vi.fn(async () => { throw failure; });
+        try {
+            await expect(context.queryClient.fetchQuery({queryKey: ['server-delayed-read'], queryFn: read})).rejects.toBe(failure);
+            expect(read).toHaveBeenCalledOnce();
+            expect(context.queryClient.getDefaultOptions().mutations?.retry).toBe(false);
+        } finally { context.queryClient.clear(); }
     });
 
     it('serializes hostile text as inert bootstrap JSON without changing the decoded value', () => {

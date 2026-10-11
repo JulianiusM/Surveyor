@@ -3,6 +3,7 @@ import {createMemoryHistory, createRouter, createWebHistory} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
+import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
 import {createPilotContext, observeInitialDocument, pilotContextKey} from './context';
 import App from './App.vue';
 
@@ -45,6 +46,7 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
             {path: '/frontend-pilot/users/profile', component: IdentityPage, meta: {identityMode: 'error'}},
             {path: '/frontend-pilot/users/logout', component: IdentityPage, meta: {identityMode: 'error'}},
             {path: '/frontend-pilot/users/register', component: IdentityPage, meta: {...javascriptPage, identityMode: 'register'}},
+            {path: '/frontend-pilot/users/oidc/login', component: IdentityPage, meta: {identityMode: 'oidc'}},
             {path: '/frontend-pilot/users/forgot-password', component: IdentityPage, meta: {...javascriptPage, identityMode: 'forgot'}},
             {path: '/frontend-pilot/users/reset-password/:token', component: IdentityPage, meta: {...javascriptPage, identityMode: 'reset'}},
             {path: '/frontend-pilot/users/activate/:token', component: IdentityPage, meta: {...javascriptPage, identityMode: 'activate'}},
@@ -53,8 +55,12 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
             {path: '/frontend-pilot/help', component: HelpPage},
             {path: '/frontend-pilot/help/:doc', component: HelpPage},
         ],
-        scrollBehavior(to, _from, saved) {
+        scrollBehavior(to, from, saved) {
             if (saved) return saved;
+            // Overview's independent regions restore focus/scroll after their authorized
+            // read renders. A query transition must not jump to the top before that result.
+            if (to.path === '/frontend-pilot' && from.path === to.path
+                && frontendDocumentUrl(to.fullPath) !== frontendDocumentUrl(from.fullPath)) return false;
             if (to.hash) return {el: to.hash};
             return {top: 0};
         },

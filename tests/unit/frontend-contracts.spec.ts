@@ -2,6 +2,7 @@ import {describe, expect, it} from 'vitest';
 import * as server from '../../.generated/api/v1/server.cjs';
 import * as browser from '../../.generated/api/v1/browser.mjs';
 import type {components} from '../../src/types/api/v1';
+import {isRegistrationPasswordValid} from '../../src/public/js/core/password-policy';
 
 const listId = 'd506d78a-e2d7-4be9-bc95-04d83bbd22ec';
 const itemId = 'f092070d-07e3-461e-94bb-84b1d828dc38';
@@ -18,6 +19,83 @@ function packingView(): components['schemas']['PackingListView'] {
 }
 
 describe('generated v1 contract boundaries', () => {
+    it('preserves native password length acceptance without weakening other credential constraints', () => {
+        const password = 'A1'.repeat(501);
+        const registration = {username: 'Account', displayname: 'Account name', email: 'account@example.invalid',
+            password, password_repeat: password};
+        const reset = {token: 'Current-token', password, confirmPassword: password};
+
+        // Native forms have no password maximum. These independent long inputs catch
+        // an invented transport/DOM bound without changing bcrypt or registration policy.
+        for (const validators of [server, browser]) {
+            expect(validators.validateLoginInput({username: 'Account', password})).toBe(true);
+            expect(validators.validateRegistrationInput(registration)).toBe(true);
+            expect(validators.validateResetInput(reset)).toBe(true);
+            expect(validators.validateLoginInput({username: 'Account', password: ''})).toBe(false);
+            expect(validators.validateLoginInput({username: 'Account', password: 12345678})).toBe(false);
+            expect(validators.validateRegistrationInput({...registration, password: 'Abc1234'})).toBe(false);
+            expect(validators.validateResetInput({...reset, confirmPassword: 'Abc1234'})).toBe(false);
+            expect(validators.validateRegistrationInput({...registration, username: 'x'.repeat(101)})).toBe(false);
+            expect(validators.validateRegistrationInput({...registration, privileged: true})).toBe(false);
+        }
+    });
+
+    it('keeps standalone recovery unbounded while retaining native account and guest form field bounds', () => {
+        const username = `no-existing-account-${'x'.repeat(100)}`;
+        const email = `no-existing-guest@${'subdomain.'.repeat(9)}example.invalid`;
+
+        // Both standalone native recovery forms permit these values and intentionally
+        // complete normally when no account matches. Registration inputs remain bounded.
+        for (const validators of [server, browser]) {
+            expect(validators.validateUsernameInput({username})).toBe(true);
+            expect(validators.validateEmailInput({email})).toBe(true);
+            expect(validators.validateUsernameInput({username: ''})).toBe(false);
+            expect(validators.validateEmailInput({email: 'invalid-email'})).toBe(false);
+            expect(validators.validateGuestEmailLookupInput({email})).toBe(false);
+            expect(validators.validateGuestEmailLookupInput({email: 'guest@example.invalid'})).toBe(true);
+            expect(validators.validateGuestRegistrationInput({username: 'Guest', email})).toBe(false);
+            expect(validators.validateRegistrationInput({username: 'Account', displayname: 'Account',
+                email, password: 'Password1234', password_repeat: 'Password1234'})).toBe(false);
+            expect(validators.validateEmailInput({email, privateData: 'unrequested'})).toBe(false);
+        }
+    });
+
+    it('counts explicitly authored password minima in native UTF-16 units without changing standard string lengths', () => {
+        const valid = ['Abcd1234', 'A1😀😀😀', 'A😀1😀😀', '😀A1😀😀', 'Abc😀😀1'];
+        const invalid = ['', 'Abc1234', 'A1😀😀x', 'A😀1😀x', 'A1😀😀'];
+        const registration = {username: 'Account', displayname: 'Account', email: 'account@example.invalid',
+            password: 'Password1234', password_repeat: 'Password1234'};
+        const reset = {token: 'Current-token', password: 'Password1234', confirmPassword: 'Password1234'};
+
+        for (const password of valid) {
+            expect(password.length).toBe(8);
+            expect(isRegistrationPasswordValid(password)).toBe(true);
+            for (const validators of [server, browser]) {
+                expect(validators.validateRegistrationInput({...registration, password, password_repeat: password})).toBe(true);
+                expect(validators.validateResetInput({...reset, password, confirmPassword: password})).toBe(true);
+            }
+        }
+
+        // Test each repetition separately: a valid primary password must not hide an
+        // invalid confirmation. Non-string values still fail the ordinary type rule.
+        for (const password of [...invalid, 12345678, null, {}, []]) {
+            for (const validators of [server, browser]) {
+                expect(validators.validateRegistrationInput({...registration, password})).toBe(false);
+                expect(validators.validateRegistrationInput({...registration, password_repeat: password})).toBe(false);
+                expect(validators.validateResetInput({...reset, password})).toBe(false);
+                expect(validators.validateResetInput({...reset, confirmPassword: password})).toBe(false);
+            }
+        }
+        for (const validators of [server, browser]) {
+            expect(validators.validatePackingMetadataPatch({title: '😀'.repeat(255)})).toBe(true);
+            expect(validators.validatePackingMetadataPatch({title: '😀'.repeat(256)})).toBe(false);
+            expect(validators.validateRegistrationInput({...registration, password: 'A1😀😀x'})).toBe(false);
+            expect(validators.validateRegistrationInput.errors).toEqual(expect.arrayContaining([
+                expect.objectContaining({keyword: 'x-surveyor-min-length-utf16', instancePath: '/password', params: {limit: 8}}),
+            ]));
+        }
+    });
+
     it('keeps native optional non-null creation descriptions separate from nullable wire descriptions', () => {
         const native = {title: 'Native', items: [{title: 'Tent', maxAssignees: 1, requiredByAll: false}]};
         expect(server.validatePackingNativeCreateInput(native)).toBe(true);
@@ -86,17 +164,43 @@ describe('generated v1 contract boundaries', () => {
         expect(browser.validatePackingListView({...view, archived: 'false'})).toBe(false);
     });
 
+    it('preserves existing capacity edit transport without weakening the separate positive new-item policy', () => {
+        // These are native number-control drafts, not claimed persisted values. The
+        // actual signed integer column owns rounding and invalid/overflow failures;
+        // this isolated test protects the authored request distinction in both runtimes.
+        const drafts = [0, -1, 1.5, null, '0', '-1', '', '1.5', '-1.5',
+            '-2147483648.4', '2147483647.4', '-2147483649', '2147483648'];
+        const newItem = {title: 'Tent', description: null, maxAssignees: 1, requiredByAll: false};
+        for (const validators of [server, browser]) {
+            for (const maxAssignees of drafts) {
+                expect(validators.validatePackingItemPatch({maxAssignees})).toBe(true);
+            }
+            for (const maxAssignees of [true, false, {}, []]) {
+                expect(validators.validatePackingItemPatch({maxAssignees})).toBe(false);
+            }
+            expect(validators.validatePackingItemPatch({})).toBe(false);
+            expect(validators.validatePackingItemPatch({maxAssignees: '1.5', ownerId: listId})).toBe(false);
+            expect(validators.validatePackingNewItem(newItem)).toBe(true);
+            for (const maxAssignees of [0, -1, 1.5, null, '1', '']) {
+                expect(validators.validatePackingNewItem({...newItem, maxAssignees})).toBe(false);
+            }
+        }
+    });
+
     it('retains native cleared item titles in edits and duplicate reads while creation and root metadata stay required', () => {
         const item = {title: '', description: null, maxAssignees: 1, requiredByAll: false};
         const duplicate = {title: '', description: null, eventId: null, items: [item],
             defaultPermissions: {public: 0, guest: 0, authenticated: 0, participant: 0},
-            formContext: {defaults: {public: 0, guest: 0, authenticated: 0, participant: 0}, permissions: [], presets: []}};
+            formContext: {defaults: {public: 0, guest: 0, authenticated: 0, participant: 0}, permissions: [], presets: []}, selectedEvent: null};
         for (const validators of [server, browser]) {
             expect(validators.validatePackingItemPatch({title: ''})).toBe(true);
             expect(validators.validatePackingItemPatch({title: null})).toBe(false);
             expect(validators.validatePackingItemPatch({title: 'x'.repeat(256)})).toBe(false);
             expect(validators.validatePackingDuplicate(duplicate)).toBe(true);
             expect(validators.validatePackingDuplicate({...duplicate, formContext: undefined})).toBe(false);
+            // Context is additive and only requested by a new caller. Existing
+            // duplicate responses remain valid during a compatible release change.
+            expect(validators.validatePackingDuplicate({...duplicate, selectedEvent: undefined})).toBe(true);
             expect(validators.validatePackingNewItem(item)).toBe(false);
             expect(validators.validatePackingCreateInput({title: 'New list', description: null, eventId: null,
                 items: [item], defaultPermissions: duplicate.defaultPermissions})).toBe(false);

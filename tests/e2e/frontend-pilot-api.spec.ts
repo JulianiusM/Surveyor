@@ -1,6 +1,7 @@
 import {expect, test, type APIRequestContext, type APIResponse} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import type {components} from '../../src/types/api/v1';
+import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
 import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
 import {createResourceViaForm, loginForE2E, waitForPilotHydration} from '../keywords/e2eCoreKeywords';
 
@@ -21,6 +22,18 @@ function headersFor(session: components['schemas']['SessionView']): Record<strin
     return {'X-Surveyor-Context': session.context, 'X-CSRF-Token': session.csrfToken};
 }
 
+/** Run inside the browser against detached response documents. The native alert
+ * is the wording oracle, so localized pilot tests cannot silently bless an English
+ * paraphrase, capitalization change or additional punctuation on an admission page. */
+function readAdmissionMessages(documents: readonly string[]): (string | null)[] {
+    const messages: (string | null)[] = [];
+    for (const html of documents) {
+        const document = new DOMParser().parseFromString(html, 'text/html');
+        messages.push(document.querySelector('main .alert-danger[role="alert"]')?.textContent?.trim() ?? null);
+    }
+    return messages;
+}
+
 /** Submit the same public view/assignment checkbox as the normal creation form. */
 async function createApiPackingList(request: APIRequestContext) {
     const input = createE2EPackingList();
@@ -36,6 +49,38 @@ async function expectProblem(response: APIResponse, status: number, code: string
     expect(await response.json()).toMatchObject({status, code, requestId: expect.any(String), messageKey: expect.any(String)});
 }
 
+/** Inspect the actual document projection rather than manufacturing a successful
+ * creation bootstrap. Browser hydration is asserted separately in the same journey. */
+function pilotDocumentState(html: string): FrontendPilotBootstrap {
+    const serialized = html.match(/<script id="surveyor-pilot-state" type="application\/json">([^<]+)<\/script>/u)?.[1];
+    expect(serialized).toBeTruthy();
+    return JSON.parse(serialized!) as FrontendPilotBootstrap;
+}
+
+/** Compare the real document and API boundaries after serialized login/profile/guest transitions.
+ * Rich controller fixtures cannot prove that inverse owner relations survive session storage. */
+async function expectDuplicateEntry(request: APIRequestContext, id: string, title: string, allowed: boolean): Promise<void> {
+    const current = await bootstrap(request);
+    const document = await request.get(`/frontend-pilot/packing/${id}/duplicate?locale=en`, {maxRedirects: 0});
+    const api = await request.get(`/api/v1/packing-lists/${id}/duplicate`, {headers: headersFor(current)});
+    const status = allowed ? 200 : 403;
+    expect(document.status()).toBe(status);
+    expect(api.status()).toBe(status);
+    expect(document.headers().location).toBeUndefined();
+    const html = await document.text();
+    if (allowed) {
+        const projection = await api.json();
+        expect(projection).toMatchObject({title});
+        expect(Object.hasOwn(projection, 'selectedEvent')).toBe(false);
+        expect(html).toContain(`value="${title}"`);
+    } else {
+        await expectProblem(api, 403, 'FORBIDDEN');
+        expect(html).not.toContain(`value="${title}"`);
+        expect(html).toContain('>Not allowed<');
+        expect(html).not.toContain('You do not have permission for this action.');
+    }
+}
+
 test('preserves native packing HTML 404s, standalone guest entry and public duplicate GET admission', async ({page, browser, baseURL}) => {
     await loginForE2E(page.request, createE2ELogin());
     const input = createE2EPackingList();
@@ -48,8 +93,13 @@ test('preserves native packing HTML 404s, standalone guest entry and public dupl
             for (const suffix of ['', '/guest', '/duplicate']) {
                 const native = await request.get(`/packing/${id}${suffix}`, {maxRedirects: 0});
                 const pilot = await request.get(`/frontend-pilot/packing/${id}${suffix}?locale=de`, {maxRedirects: 0});
+                const english = await request.get(`/frontend-pilot/packing/${id}${suffix}?locale=en`, {maxRedirects: 0});
                 expect(native.status()).toBe(404);
                 expect(pilot.status()).toBe(native.status());
+                expect(english.status()).toBe(native.status());
+                const messages = await page.evaluate(readAdmissionMessages, [await native.text(), await english.text()]);
+                expect(messages[0]).toBeTruthy();
+                expect(messages[1]).toBe(messages[0]);
                 expect(pilot.headers()['content-type']).toContain('text/html');
                 const html = await pilot.text();
                 expect(html).toContain('Packliste nicht gefunden.');
@@ -108,6 +158,136 @@ test('preserves native packing HTML 404s, standalone guest entry and public dupl
     }
 });
 
+test('native and pilot creation/duplicate entries drop missing or forbidden initial events before standalone submission', async ({page}) => {
+    await loginForE2E(page.request, createE2ELogin());
+    const event = await createResourceViaForm(page.request, createE2EEvent());
+    const input = createE2EPackingList();
+    Object.assign(input.form, {'defaultPerms[public][0]': 'DATA_DUPLICATE'});
+    const list = await createResourceViaForm(page.request, input);
+
+    /** Both document adapters and the authored API read must seed the same admitted
+     * event. The duplicate source's own membership is never a destination default. */
+    async function expectSelection(eventId: string, expectedId: string | null): Promise<void> {
+        const current = await bootstrap(page.request);
+        for (const duplicate of [false, true]) {
+            const path = duplicate ? `/packing/${list.id}/duplicate` : '/packing/create';
+            const native = await page.request.get(`${path}?eventId=${eventId}`);
+            expect(native.status()).toBe(200);
+            const nativeInput = (await native.text()).match(/<input[^>]*name="event_id"[^>]*>/u)?.[0];
+            expect(nativeInput).toContain(`value="${expectedId ?? ''}"`);
+
+            const pilot = await page.request.get(`/frontend-pilot${path}?eventId=${eventId}&locale=en`);
+            expect(pilot.status()).toBe(native.status());
+            const state = pilotDocumentState(await pilot.text());
+            const selection = duplicate ? state.packingDuplicate?.selectedEvent : state.packingSelectedEvent;
+            expect(selection?.id ?? null).toBe(expectedId);
+            const apiPath = duplicate ? `/api/v1/packing-lists/${list.id}/duplicate` : '/api/v1/packing-lists/create-entry';
+            const api = await page.request.get(apiPath, {headers: headersFor(current), params: {eventId}});
+            expect(api.status()).toBe(200);
+            expect((await api.json()).selectedEvent?.id ?? null).toBe(expectedId);
+        }
+    }
+
+    await expectSelection(event.id, event.id);
+    // A different active profile has no attachment grant to the first profile's
+    // event. Public duplication of the source remains independently permitted.
+    const profileName = `Selection ${randomUUID().slice(0, 8)}`;
+    expect((await page.request.post('/users/profile/create', {form: {name: profileName}, maxRedirects: 0})).status()).toBe(302);
+    const profiles = await bootstrap(page.request);
+    const profile = profiles.profiles.find(candidate => candidate.name === profileName)!;
+    expect(profile).toBeTruthy();
+    expect((await page.request.get(`/users/profile/change/${profile.id}`, {maxRedirects: 0})).status()).toBe(302);
+    await expectSelection(event.id, null);
+    await expectSelection(randomUUID(), null);
+
+    const nativeEntry = await page.request.get(`/packing/create?eventId=${event.id}`);
+    const nativeAction = (await nativeEntry.text()).match(/<form[^>]*id="packingForm"[^>]*action="([^"]+)"/u)?.[1];
+    expect(nativeAction).toBe('/packing/create');
+    const nativeCreated = await page.request.post(nativeAction!, {
+        form: {...createE2EPackingList().form, title: `Native standalone ${randomUUID().slice(0, 8)}`, event_id: ''}, maxRedirects: 0,
+    });
+    expect(nativeCreated.status()).toBe(302);
+    const nativeId = new URL(nativeCreated.headers().location!, 'https://surveyor.invalid').pathname.split('/').at(-1)!;
+    const current = await bootstrap(page.request);
+    const nativeView = await page.request.get(`/api/v1/packing-lists/${nativeId}`, {headers: headersFor(current)});
+    expect((await nativeView.json()).currentEventId).toBeNull();
+
+    await page.goto(`/frontend-pilot/packing/create?eventId=${event.id}&locale=en`);
+    await waitForPilotHydration(page);
+    await expect(page.locator('#pilot-locale')).toBeEnabled();
+    await expect(page.locator('#create-event-button')).toHaveText('No event');
+    await page.locator('#create-title').fill(`Pilot standalone ${randomUUID().slice(0, 8)}`);
+    await page.locator('tbody tr').first().locator('input').first().fill('Tent');
+    const submitted = page.waitForResponse(response => response.request().method() === 'POST'
+        && new URL(response.url()).pathname === '/api/v1/packing-lists');
+    await page.getByRole('button', {name: 'Create list', exact: true}).click();
+    const created = await submitted;
+    expect(created.status()).toBe(201);
+    const pilotId = (await created.json()).id as string;
+    const pilotView = await page.request.get(`/api/v1/packing-lists/${pilotId}`, {headers: headersFor(current)});
+    expect((await pilotView.json()).currentEventId).toBeNull();
+});
+
+test('uses one duplicate admission for serialized account login, profile switch, guest return and anonymous audience grants', async ({page, browser, baseURL}) => {
+    await loginForE2E(page.request, createE2ELogin());
+    const suffix = randomUUID().slice(0, 8);
+    const ownerName = `Audience owner ${suffix}`;
+    expect((await page.request.post('/users/profile/create', {form: {name: ownerName}, maxRedirects: 0})).status()).toBe(302);
+    const ownerSession = await bootstrap(page.request);
+    const ownerProfile = ownerSession.profiles.find(profile => profile.name === ownerName)!;
+    expect(ownerProfile).toBeTruthy();
+    expect((await page.request.get(`/users/profile/change/${ownerProfile.id}`, {maxRedirects: 0})).status()).toBe(302);
+    const input = createE2EPackingList();
+    input.form.title = `Audience-only duplicate ${suffix}`;
+    const list = await createResourceViaForm(page.request, input);
+
+    const accountLogin = await browser.newContext({baseURL});
+    const accountSwitch = await browser.newContext({baseURL});
+    const guestReturn = await browser.newContext({baseURL});
+    const anonymous = await browser.newContext({baseURL});
+    try {
+        // Neither account reader owns this list: ordinary login selects the seeded
+        // default profile, and a native profile change reloads a distinct third profile.
+        await loginForE2E(accountLogin.request, createE2ELogin());
+        expect((await bootstrap(accountLogin.request)).activeProfile!.id).not.toBe(ownerProfile.id);
+        await loginForE2E(accountSwitch.request, createE2ELogin());
+        const readerName = `Audience reader ${suffix}`;
+        expect((await accountSwitch.request.post('/users/profile/create', {form: {name: readerName}, maxRedirects: 0})).status()).toBe(302);
+        const reader = (await bootstrap(accountSwitch.request)).profiles.find(profile => profile.name === readerName)!;
+        expect((await accountSwitch.request.get(`/users/profile/change/${reader.id}`, {maxRedirects: 0})).status()).toBe(302);
+
+        // The emailed capability path reloads a stored guest profile without relying
+        // on the richer object returned during initial registration. No mailbox is used.
+        const beforeGuest = await bootstrap(guestReturn.request);
+        const registered = await guestReturn.request.post(`/api/v1/packing-lists/${list.id}/guest`, {
+            headers: {...headersFor(beforeGuest), 'X-Surveyor-Api-Compatibility': beforeGuest.deployment.apiCompatibility},
+            data: {username: `Audience guest ${suffix}`, email: null},
+        });
+        expect(registered.status()).toBe(200);
+        const guestIdentity = await registered.json() as components['schemas']['IdentityResult'];
+        expect(guestIdentity.personalLink).toBeTruthy();
+        await guestReturn.clearCookies();
+        const personal = new URL(guestIdentity.personalLink!, baseURL);
+        expect((await guestReturn.request.get(personal.pathname + personal.search, {maxRedirects: 0})).status()).toBe(302);
+
+        for (const audience of ['authenticated', 'guest', 'public', 'none'] as const) {
+            const defaults: Record<string, string[]> = {public: [], guest: [], authenticated: [], participant: []};
+            if (audience !== 'none') defaults[audience] = ['DATA_DUPLICATE'];
+            expect((await page.request.post(`/api/packing/${list.id}/settings`, {data: {defaultPerms: defaults}})).ok()).toBe(true);
+
+            await expectDuplicateEntry(accountLogin.request, list.id, input.form.title, audience !== 'none');
+            await expectDuplicateEntry(accountSwitch.request, list.id, input.form.title, audience !== 'none');
+            await expectDuplicateEntry(guestReturn.request, list.id, input.form.title, audience === 'guest' || audience === 'public');
+            await expectDuplicateEntry(anonymous.request, list.id, input.form.title, audience === 'public');
+        }
+    } finally {
+        await accountLogin.close();
+        await accountSwitch.close();
+        await guestReturn.close();
+        await anonymous.close();
+    }
+});
+
 test('preserves attached packing HTML membership and explicit view alternatives independently of duplicate grants', async ({page, browser, baseURL}) => {
     await loginForE2E(page.request, createE2ELogin());
     const list = await createApiPackingList(page.request);
@@ -124,8 +304,13 @@ test('preserves attached packing HTML membership and explicit view alternatives 
         }})).ok()).toBe(true);
         const nativeDenied = await guestContext.request.get(list.path, {maxRedirects: 0});
         const pilotDenied = await guestContext.request.get(`/frontend-pilot/packing/${list.id}?locale=de`, {maxRedirects: 0});
+        const englishDenied = await guestContext.request.get(`/frontend-pilot/packing/${list.id}?locale=en`, {maxRedirects: 0});
         expect(nativeDenied.status()).toBe(400);
         expect(pilotDenied.status()).toBe(nativeDenied.status());
+        expect(englishDenied.status()).toBe(nativeDenied.status());
+        const messages = await page.evaluate(readAdmissionMessages, [await nativeDenied.text(), await englishDenied.text()]);
+        expect(messages[0]).toBeTruthy();
+        expect(messages[1]).toBe(messages[0]);
         const deniedHtml = await pilotDenied.text();
         expect(deniedHtml).toContain('Du musst für die Veranstaltung angemeldet sein');
         expect(deniedHtml).not.toContain(list.title);
@@ -232,7 +417,7 @@ test('keeps exact native and SPA duplicate destinations including query context 
         await nativePage.goto(logoutDestination.pathname + logoutDestination.search);
         await waitForPilotHydration(nativePage);
         await expect(nativePage.locator('#pilot-locale')).toBeEnabled();
-        await expect(nativePage.getByText('Logout successful.', {exact: true})).toBeVisible();
+        await expect(nativePage.getByText('Logout successful', {exact: true})).toBeVisible();
     } finally {
         await anonymous.close();
     }
@@ -320,6 +505,45 @@ test('shows the localized JavaScript fallback outside hidden interactive control
     }
 });
 
+test('keeps native Help path aliases authoritative while retaining authored pilot root query links', async ({page}) => {
+    // Assert selection metadata rather than maintained guide wording. The real SSR
+    // route must project the same search/article decision as the shared browser owner.
+    const cases = [
+        ['/frontend-pilot/help/search?doc=events', 'search', ''],
+        ['/frontend-pilot/help/search?q=packing&doc=events', 'search', 'packing'],
+        ['/frontend-pilot/help/packing_lists?q=ignored&doc=events', 'packing_lists', undefined],
+        ['/frontend-pilot/help/readme?q=ignored&doc=events', 'readme', undefined],
+        ['/frontend-pilot/help?q=packing&doc=events', 'search', 'packing'],
+        ['/frontend-pilot/help?doc=packing_lists', 'packing_lists', undefined],
+    ] as const;
+    for (const [path, currentDoc, searchQuery] of cases) {
+        const response = await page.request.get(path);
+        expect(response.status()).toBe(200);
+        const html = await response.text();
+        const serialized = html.match(/<script id="surveyor-pilot-state" type="application\/json">([^<]+)<\/script>/u)?.[1];
+        expect(serialized).toBeTruthy();
+        const state = JSON.parse(serialized!) as {help: components['schemas']['HelpPageData']};
+        expect(state.help.currentDoc).toBe(currentDoc);
+        expect(state.help.searchQuery).toBe(searchQuery);
+        expect(html).toContain(searchQuery === undefined ? 'card-body help-content' : 'card-body help-search-results');
+    }
+
+    // A nonexistent synthetic slug crosses the real controller/HTTP boundary without
+    // depending on maintained guide prose. Native and pilot documents retain their
+    // complete Error card, while the API reports its authored structured rejection.
+    const missing = `missing-${randomUUID()}`;
+    for (const path of [`/help/${missing}`, `/frontend-pilot/help/${missing}`, `/frontend-pilot/help?doc=${missing}`]) {
+        const response = await page.request.get(path);
+        expect(response.status()).toBe(404);
+        expect(response.headers()['content-type']).toContain('text/html');
+        const html = await response.text();
+        expect(html).toContain('card-header text-center bg-dark text-light');
+        expect(html).not.toContain('card-body help-content');
+    }
+    const current = await bootstrap(page.request);
+    await expectProblem(await page.request.get('/api/v1/help', {params: {doc: missing}, headers: headersFor(current)}), 404, 'NOT_FOUND');
+});
+
 test('bootstraps account and guest scopes while projecting only public session and packing fields', async ({page, browser, baseURL}) => {
     await loginForE2E(page.request, createE2ELogin());
     const list = await createApiPackingList(page.request);
@@ -390,6 +614,38 @@ test('enforces CSRF, media types, UUIDs and closed payloads before a conditional
     await expectProblem(await page.request.patch(path, {headers: patchHeaders, data: {title: 'Forged', profileId: session.activeProfile!.id}}), 400, 'VALIDATION_FAILED');
     await expectProblem(await page.request.patch(path, {headers: patchHeaders, form: {title: 'Wrong media'}}), 415, 'UNSUPPORTED_MEDIA_TYPE');
     await expectProblem(await page.request.patch(path, {headers: {...patchHeaders, 'Content-Type': 'application/json'}, data: '{invalid'}), 400, 'INVALID_JSON');
+
+    // The two HTTP generations share normalization and authored constraints, while the
+    // original native envelope keeps its precise field diagnostics. Literal oracles
+    // prevent a shared catalog/adapter regression from passing a native/pilot comparison.
+    const invalidNativeProperties = [
+        {body: {title: '   '}, message: '"title" is not allowed to be empty'},
+        {body: {description: 'D'.repeat(16001)}, message: '"description" length must be less than or equal to 16000 characters long'},
+        {body: {}, message: '"value" must have at least 1 key'},
+    ];
+    for (const invalid of invalidNativeProperties) {
+        const native = await page.request.post(`/api/packing/${list.id}/update`, {data: invalid.body});
+        expect(native.status()).toBe(400);
+        expect(await native.json()).toEqual({status: 'error', message: invalid.message, data: {}});
+        const versioned = await page.request.patch(path, {headers: patchHeaders, data: invalid.body});
+        await expectProblem(versioned, 400, 'VALIDATION_FAILED');
+        expect(await versioned.json()).toMatchObject({detail: 'Check the submitted values.'});
+    }
+    const nativeDescription = await page.request.post(`/api/packing/${list.id}/description`, {data: {description: 'D'.repeat(16001)}});
+    expect(nativeDescription.status()).toBe(400);
+    expect(await nativeDescription.json()).toEqual({status: 'error',
+        message: '"description" length must be less than or equal to 16000 characters long', data: {}});
+
+    // The original description adapter supplied an optional own key even when omitted.
+    // TypeORM performs its tracking-only update: the native operation succeeds without
+    // clearing either property. This accepted native input must not weaken v1's empty-patch rule.
+    const missingNativeDescription = await page.request.post(`/api/packing/${list.id}/description`, {data: {}});
+    expect(missingNativeDescription.status()).toBe(200);
+    expect(await missingNativeDescription.json()).toEqual({status: 'success', message: 'Description updated', data: null});
+    const afterNativeNoOp = await page.request.get(path, {headers});
+    expect((await afterNativeNoOp.json()).values).toEqual((await baseline.json()).values);
+    await expectProblem(await page.request.patch(path, {headers: patchHeaders, data: {}}), 400, 'VALIDATION_FAILED');
+
     await expectProblem(await page.request.patch(path, {headers, data: {title: 'Missing review'}}), 428, 'PRECONDITION_REQUIRED');
     await expectProblem(await page.request.patch(path, {headers: {...headers, 'If-Match': `W/${tag}`}, data: {title: 'Weak review'}}), 412, 'PRECONDITION_FAILED');
 
@@ -423,6 +679,29 @@ test('enforces CSRF, media types, UUIDs and closed payloads before a conditional
         data: {description: 'Stale native setup', expectedValues: {description: 'Shared equipment'}},
     });
     expect(staleSetup.status()).toBe(412);
+
+    // Native Joi and HTML maxlength count UTF-16 units; the authored v1 JSON Schema
+    // counts code points. Preserve both existing transport meanings instead of silently
+    // accepting longer native forms or tightening the compatible versioned contract.
+    const nativeUnicodeFailures = [
+        {body: {title: '\u{1F600}'.repeat(128)}, message: '"title" length must be less than or equal to 255 characters long'},
+        {body: {description: '\u{1F600}'.repeat(8001)}, message: '"description" length must be less than or equal to 16000 characters long'},
+    ];
+    for (const invalid of nativeUnicodeFailures) {
+        const native = await page.request.post(`/api/packing/${list.id}/update`, {data: invalid.body});
+        expect(native.status()).toBe(400);
+        expect(await native.json()).toEqual({status: 'error', message: invalid.message, data: {}});
+    }
+    const nativeUnicodeTitle = '\u{1F600}'.repeat(127);
+    expect((await page.request.post(`/api/packing/${list.id}/update`, {data: {title: nativeUnicodeTitle}})).status()).toBe(200);
+    const unicodeBaseline = await page.request.get(path, {headers});
+    expect((await unicodeBaseline.json()).values.title).toBe(nativeUnicodeTitle);
+    const codePointValues = {title: '\u{1F600}'.repeat(128), description: '\u{1F600}'.repeat(8001)};
+    const unicodeVersioned = await page.request.patch(path, {
+        headers: {...headers, 'If-Match': unicodeBaseline.headers().etag}, data: codePointValues,
+    });
+    expect(unicodeVersioned.status()).toBe(200);
+    expect((await unicodeVersioned.json()).values).toEqual(codePointValues);
 });
 
 test('rejects old profile scopes and returns structured authentication loss after the cookie disappears', async ({page, context}) => {
@@ -505,7 +784,13 @@ test('applies captured self-membership idempotently and reports capacity without
             expect(assigned.status()).toBe(200);
             expect(await assigned.json()).toEqual({listId: list.id, itemId: item.id, selfAssigned: true, assignedCount: 1, maxAssignees: 1});
         }
-        await expectProblem(await page.request.put(path, {headers: headersFor(owner)}), 409, 'PACKING_ITEM_FULL');
+        const versionedFull = await page.request.put(path, {headers: headersFor(owner)});
+        await expectProblem(versionedFull, 409, 'PACKING_ITEM_FULL');
+        expect(await versionedFull.json()).toMatchObject({detail: 'This packing item is already fully assigned', params: {itemId: item.id}});
+        const nativeFull = await page.request.post(`/api/packing/${list.id}/assign`, {data: {itemId: item.id}});
+        expect(nativeFull.status()).toBe(409);
+        expect(await nativeFull.json()).toEqual({status: 'error',
+            message: 'This packing item is already fully assigned', data: {itemId: item.id}});
         const ownView = await page.request.get(`/api/v1/packing-lists/${list.id}`, {headers: headersFor(owner)});
         expect((await ownView.json()).items[0]).toMatchObject({selfAssigned: false, assignedCount: 1, assignees: [{name: guest.activeProfile!.name}]});
         for (let retry = 0; retry < 2; retry++) {
@@ -515,6 +800,88 @@ test('applies captured self-membership idempotently and reports capacity without
         }
     } finally {
         await guestContext.close();
+    }
+});
+
+test('preserves native signed capacity edits and SQL rounding through the versioned locked operation', async ({page}) => {
+    await loginForE2E(page.request, createE2ELogin());
+    const input = createE2EPackingList();
+    const title = `Capacity transport ${randomUUID().slice(0, 8)}`;
+    Object.assign(input, {title, expectedViewText: title});
+    Object.assign(input.form, {title, items: JSON.stringify([
+        {title: 'Native capacity', maxAssignees: 1, requiredByAll: false},
+        {title: 'Versioned capacity', maxAssignees: 1, requiredByAll: false},
+    ])});
+    const list = await createResourceViaForm(page.request, input);
+    const session = await bootstrap(page.request);
+    const headers = headersFor(session);
+    const path = `/api/v1/packing-lists/${list.id}`;
+
+    async function readItems(): Promise<components['schemas']['PackingItemView'][]> {
+        const response = await page.request.get(path, {headers});
+        expect(response.status()).toBe(200);
+        const body = await response.json() as components['schemas']['PackingListView'];
+        return body.items;
+    }
+
+    // Literal persisted outcomes are the independent native/MariaDB oracle. Comparing
+    // two adapters alone would miss a shared JS conversion (blank -> zero or negative
+    // half rounding). Separate items start alike and retain the same value on failure.
+    const cases: {value: number | string | null; status: number; saved?: number | null}[] = [
+        {value: '0', status: 200, saved: 0},
+        {value: '-1', status: 200, saved: -1},
+        {value: null, status: 200, saved: null},
+        {value: '', status: 500},
+        {value: 'not-a-number', status: 500},
+        {value: '1.5', status: 200, saved: 2},
+        {value: '-1.5', status: 200, saved: -2},
+        {value: '2.499', status: 200, saved: 2},
+        {value: '2.5', status: 200, saved: 3},
+        {value: '-2147483648', status: 200, saved: -2147483648},
+        {value: '2147483647', status: 200, saved: 2147483647},
+        {value: '-2147483648.4', status: 200, saved: -2147483648},
+        {value: '2147483647.4', status: 200, saved: 2147483647},
+        {value: '-2147483649', status: 500},
+        {value: '2147483648', status: 500},
+        {value: 0, status: 200, saved: 0},
+        {value: -1.5, status: 200, saved: -2},
+    ];
+    try {
+        for (const scenario of cases) {
+            const before = await readItems();
+            expect(before).toHaveLength(2);
+            const nativeItem = before[0];
+            const versionedItem = before[1];
+            const native = await page.request.post(`/api/packing/${list.id}/item/${nativeItem.id}/attr`, {
+                data: {field: 'maxAssignees', value: scenario.value, expectedValue: nativeItem.maxAssignees},
+            });
+            const versioned = await page.request.patch(`${path}/items/${versionedItem.id}`, {
+                headers: {...headers, 'If-Match': versionedItem.editToken}, data: {maxAssignees: scenario.value},
+            });
+            expect(native.status()).toBe(scenario.status);
+            if (scenario.status === 200) {
+                expect(await native.json()).toEqual({status: 'success', message: 'Item updated', data: null});
+                expect(versioned.status()).toBe(200);
+                expect(await versioned.json()).toMatchObject({changed: expect.any(Boolean)});
+            } else {
+                expect(await native.json()).toMatchObject({status: 'error', message: expect.any(String)});
+                // Preserve native rejection without exposing its SQL message/schema in
+                // v1. A failed persistence attempt remains a safe typed 500, not a new
+                // browser/client validation rule or an automatic command replay.
+                await expectProblem(versioned, 500, 'INTERNAL_ERROR');
+                const problem = await versioned.json();
+                expect(problem.params).toEqual({});
+                expect(JSON.stringify(problem)).not.toMatch(/packing_items|max_assignees|integer value|Out of range/u);
+            }
+            const after = await readItems();
+            const expected = scenario.status === 200 ? scenario.saved : nativeItem.maxAssignees;
+            expect(after[0].maxAssignees).toBe(expected);
+            expect(after[1].maxAssignees).toBe(expected);
+            expect(after[0].assignedCount).toBe(0);
+            expect(after[1].assignedCount).toBe(0);
+        }
+    } finally {
+        expect((await page.request.delete(path, {headers})).status()).toBe(200);
     }
 });
 
@@ -560,6 +927,22 @@ test('uses typed multipart, item/settings drafts and scoped binary transport for
     expect(await binary.body()).toEqual(png);
     await expectProblem(await page.request.get(current.headerUrl!), 400, 'CONTEXT_REQUIRED');
     const first = current.items[0];
+    // Undefined-only native item edits historically report this exact known failure
+    // after admission; root-description omission above is a distinct accepted input.
+    // Exercise the real route and legacy data envelope without changing v1's closed patch.
+    const missingNativeItemValues = [
+        {suffix: 'description', body: {}},
+        {suffix: 'attr', body: {field: 'title'}},
+    ];
+    for (const missing of missingNativeItemValues) {
+        const native = await page.request.post(`/api/packing/${id}/item/${first.id}/${missing.suffix}`, {data: missing.body});
+        expect(native.status()).toBe(500);
+        expect(await native.json()).toEqual({status: 'error', message: 'Unknown error while saving', data: missing.body});
+    }
+    expect((await view()).items[0]).toEqual(first);
+    await expectProblem(await page.request.patch(`${root}/items/${first.id}`, {
+        headers: {...headers, 'If-Match': first.editToken}, data: {},
+    }), 400, 'VALIDATION_FAILED');
     await expectProblem(await page.request.patch(`${root}/items/${first.id}`, {headers, data: {title: 'No token'}}), 428, 'PRECONDITION_REQUIRED');
     expect((await page.request.patch(`${root}/items/${first.id}`, {headers: {...headers, 'If-Match': first.editToken}, data: {title: 'Updated tent'}})).status()).toBe(200);
     await expectProblem(await page.request.patch(`${root}/items/${first.id}`, {headers: {...headers, 'If-Match': first.editToken}, data: {title: 'Stale'}}), 412, 'PRECONDITION_FAILED');

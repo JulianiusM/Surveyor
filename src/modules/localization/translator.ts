@@ -43,6 +43,15 @@ export function resolveLocale(value?: string | null): Locale {
     return findSupportedLocale(value) ?? 'en';
 }
 
+/** Read receipts and server retry deadlines are instants, independent of an entity's civil date or deadline
+ * zone. Show its explicit UTC zone with the selected language so SSR and browser
+ * output do not depend on the host's local time zone. Read notices share this one
+ * format; feature consumers supply their query's confirmed time or transport deadline. */
+export function formatReadTime(timestamp: number, locale: Locale): string {
+    return new Intl.DateTimeFormat(locale, {year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC', timeZoneName: 'short'}).format(timestamp);
+}
+
 /** Negotiate all ordered hints before falling back; an unsupported first hint is not an English preference. */
 export function resolvePreferredLocale(values: readonly string[]): Locale {
     for (const value of values) {

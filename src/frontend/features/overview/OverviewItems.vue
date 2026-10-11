@@ -2,11 +2,12 @@
 import {computed} from 'vue';
 import type {components} from '../../../types/api/v1';
 import {usePilot} from '../../app/context';
+import {isOrdinaryNavigation} from '../../composables/pageEntry';
 import StatusNotice from '../../components/StatusNotice.vue';
 import OverviewCard from './OverviewCard.vue';
 
 type Card = components['schemas']['OverviewCard'];
-const props = defineProps<{view: components['schemas']['OverviewRegion']; disabled: boolean;
+const props = defineProps<{view: components['schemas']['OverviewRegion']; disabled: boolean; readRevision?: number; active?: boolean;
     pageHref: (page: number) => string; expandHref: (card: Card) => string}>();
 const emit = defineEmits<{
     visibility: [card: Card, value: components['schemas']['OverviewVisibilityInput']['visibility']];
@@ -37,6 +38,13 @@ const range = computed(() => ({
     last: Math.min(currentPage.value * props.view.pageSize, count.value),
     count: count.value,
 }));
+
+/** Disabled pagers remain inert; eligible modified clicks keep their native destination. */
+function followPage(event: MouseEvent, page: number, available: boolean): void {
+    if (!isOrdinaryNavigation(event)) return;
+    event.preventDefault();
+    if (available && !props.disabled) emit('page', page);
+}
 </script>
 <template>
     <div v-if="view.items.length" class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
@@ -46,6 +54,8 @@ const range = computed(() => ({
                 :disabled="disabled"
                 :expansion="!view.parent"
                 :filtered="filtered"
+                :read-revision="readRevision"
+                :active="active"
                 :expansion-href="expandHref(card)"
                 @visibility="emit('visibility', card, $event)"
                 @archive="emit('archive', card, $event)"
@@ -72,14 +82,14 @@ const range = computed(() => ({
                 class="btn btn-sm btn-outline-secondary" :class="{disabled: !view.hasPrevious || disabled}"
                 :aria-disabled="!view.hasPrevious || disabled"
                 :href="view.hasPrevious && !disabled ? pageHref(currentPage - 1) : undefined"
-                @click.prevent="view.hasPrevious && !disabled && emit('page', currentPage - 1)"
+                @click="followPage($event, currentPage - 1, view.hasPrevious)"
                 >{{ messages.t('overview.previous') }}</a
             >
             <a
                 class="btn btn-sm btn-outline-secondary" :class="{disabled: !view.hasNext || disabled}"
                 :aria-disabled="!view.hasNext || disabled"
                 :href="view.hasNext && !disabled ? pageHref(currentPage + 1) : undefined"
-                @click.prevent="view.hasNext && !disabled && emit('page', currentPage + 1)"
+                @click="followPage($event, currentPage + 1, view.hasNext)"
                 >{{ messages.t('overview.next') }}</a
             >
         </nav>

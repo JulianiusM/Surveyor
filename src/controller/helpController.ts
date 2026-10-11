@@ -19,6 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {ExpectedError} from '../modules/lib/errors';
 import {createTranslator, helpSourceDirectory, resolveLocale} from '../modules/localization/translator';
+import {localizedHelpUrl} from '../modules/lib/helpNavigation';
 import type {Locale} from '../types/LocalizationTypes';
 import type {HelpDocumentSummary, HelpNavigationGroup, HelpTocEntry, HelpSearchResult, HelpPageData} from '../types/HelpTypes';
 
@@ -246,13 +247,6 @@ export function rewriteDocHrefToHelpRoute(href: string, locale = 'en'): string {
     const extension = path.posix.extname(docName);
     const fileName = path.posix.basename(docName, extension);
     return localizedHelpUrl(`/help/${fileName.toLowerCase()}${suffix}`, locale);
-}
-
-/** Query state precedes fragments, so copied links and native GET navigation retain their language. */
-function localizedHelpUrl(href: string, locale: string): string {
-    const url = new URL(href, 'https://help.invalid');
-    url.searchParams.set('locale', resolveLocale(locale));
-    return `${url.pathname}${url.search}${url.hash}`;
 }
 
 function rewriteHelpAssetHref(href: string, locale: string): string {
@@ -501,24 +495,6 @@ export function searchHelpDocuments(rawQuery: string, requestedLocale = 'en'): H
         .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title))
         .slice(0, 20)
         .map(({score: _score, ...result}) => result);
-}
-
-/** Map an application page to the most relevant maintained help guide. */
-export function resolveContextualHelpUrl(requestPath: string, locale?: string): string {
-    const pathname = requestPath.split(/[?#]/u, 1)[0].toLowerCase();
-    const rules: Array<[RegExp, string]> = [
-        [/^\/users\/dashboard(?:\/|$)/u, '/help/dashboard'],
-        [/^\/users\/(?:profile|account)(?:\/|$)/u, '/help/getting_started#understand-accounts-and-profiles'],
-        [/^\/users(?:\/|$)/u, '/help/getting_started'],
-        [/^\/guest(?:\/|$)/u, '/help/getting_started#join-an-invitation-as-a-guest'],
-        [/^\/survey(?:\/|$)/u, '/help/surveys'],
-        [/^\/event(?:\/|$)/u, '/help/events'],
-        [/^\/packing(?:\/|$)/u, '/help/packing_lists'],
-        [/^\/activity(?:\/|$)/u, '/help/activity_plans'],
-        [/^\/drivers(?:\/|$)/u, '/help/drivers_lists'],
-    ];
-    const destination = rules.find(([pattern]) => pattern.test(pathname))?.[1] ?? '/help';
-    return locale ? localizedHelpUrl(destination, locale) : destination;
 }
 
 export function fetchHelpIndex(requestedLocale = 'en'): HelpPageData {

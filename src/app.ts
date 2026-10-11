@@ -25,7 +25,7 @@ import path from 'node:path';
 import {version} from '../package.json';
 import {logoutUserOidc, validateSession} from "./controller/userController";
 import {handleGenericError} from './middleware/genericErrorHandler';
-import {resolveContextualHelpUrl} from './controller/helpController';
+import {resolveContextualHelpUrl} from './modules/lib/helpNavigation';
 import {AppDataSource} from "./modules/database/dataSource";
 import {Session} from "./modules/database/entities/session/Session";
 import {asyncHandler} from "./modules/lib/asyncHandler";

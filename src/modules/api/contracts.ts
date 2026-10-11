@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type {ValidateFunction} from 'ajv';
+import type {ErrorObject, ValidateFunction} from 'ajv';
 import type {ApiOperationId, ApiOperationContract, ApiProblemContract, ApiContractManifest} from '../../types/ApiTransportTypes';
 
 // Source execution uses the normal generated artifacts; a release uses its packaged copy.
@@ -11,11 +11,12 @@ const contractDirectory = fs.existsSync(path.join(packagedDirectory, 'server.cjs
 export const apiContract: ApiContractManifest = JSON.parse(fs.readFileSync(path.join(contractDirectory, 'operations.json'), 'utf8'));
 const validators = require(path.join(contractDirectory, 'server.cjs')) as Record<string, ValidateFunction>;
 
-/** Only traversal metadata stays here; generated validators remain the sole validation implementation. */
+/** Authored constraint/traversal metadata stays private; generated validators own structural validation. */
 interface ContractSchema {
     $ref?: string;
     properties?: Record<string, ContractSchema>;
     items?: ContractSchema;
+    maxLength?: number;
 }
 
 const document = JSON.parse(fs.readFileSync(path.join(contractDirectory, 'openapi.json'), 'utf8')) as {
@@ -54,6 +55,48 @@ export function contractPathOrder(schemaName: string, pointer: string): number[]
         }
     }
     return order;
+}
+
+/**
+ * Preserve native Joi/HTML UTF-16 maximum-length interpretation using authored limits.
+ * Generated JSON Schema validation retains its standard code-point meaning for v1.
+ * Native adapters combine these diagnostics with generated structural errors, without
+ * copying fields, limits or schemas. Only declared properties/items/references are visited;
+ * type and unknown-field failures still belong to the generated validator.
+ */
+export function contractNativeStringLengthErrors(schemaName: string, input: unknown): ErrorObject[] {
+    const schema = document.components.schemas[schemaName];
+    if (!schema) throw new Error(`Missing generated API schema: ${schemaName}`);
+    const errors: ErrorObject[] = [];
+    collectNativeStringLengthErrors(schema, input, '', `#/components/schemas/${schemaName}`, errors);
+    return errors;
+}
+
+/** Walk authored structure rather than exposing mutable constraint metadata to adapters. */
+function collectNativeStringLengthErrors(schema: ContractSchema, input: unknown, pointer: string,
+                                        schemaPath: string, errors: ErrorObject[]): void {
+    const resolved = resolveSchema(schema);
+    if (typeof input === 'string') {
+        if (resolved.maxLength !== undefined && input.length > resolved.maxLength) {
+            errors.push({keyword: 'maxLength', instancePath: pointer, schemaPath: `${schemaPath}/maxLength`,
+                params: {limit: resolved.maxLength}});
+        }
+        return;
+    }
+    if (Array.isArray(input)) {
+        if (!resolved.items) return;
+        for (let index = 0; index < input.length; index++) {
+            collectNativeStringLengthErrors(resolved.items, input[index], `${pointer}/${index}`, `${schemaPath}/items`, errors);
+        }
+        return;
+    }
+    if (!input || typeof input !== 'object') return;
+    for (const [field, child] of Object.entries(resolved.properties ?? {})) {
+        if (!Object.hasOwn(input, field)) continue;
+        const escaped = field.replace(/~/g, '~0').replace(/\//g, '~1');
+        collectNativeStringLengthErrors(child, (input as Record<string, unknown>)[field], `${pointer}/${escaped}`,
+            `${schemaPath}/properties/${escaped}`, errors);
+    }
 }
 
 export function operationContract(operationId: ApiOperationId): ApiOperationContract {

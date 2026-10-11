@@ -17,11 +17,12 @@
 import {Request} from "express";
 import {assertEntityPropertyContext} from './entityAdminController';
 import {applyPackingItemPatch, applyPackingMembership, createPackingItem, createPackingList, deletePackingAssignment, deletePackingItem,
-    patchPackingMetadata, preparePackingMetadataPatch, reorderPackingItems, requirePackingFieldValues, setPackingHeader, setPackingSelfAssignment, updatePackingDefaults, updatePackingItem} from '../modules/packing/api';
+    normalizePackingMetadataPatch, reorderPackingItems, requirePackingFieldValues, savePackingMetadata, setPackingHeader, setPackingSelfAssignment, updatePackingDefaults, updatePackingItem} from '../modules/packing/api';
 import type {BasicEntityPropertyPatch} from '../types/EntityPropertyTypes';
 import Joi from 'joi';
 import type {ErrorObject} from 'ajv';
-import {contractPathOrder, contractValidator} from '../modules/api/contracts';
+import {contractNativeStringLengthErrors, contractPathOrder, contractValidator} from '../modules/api/contracts';
+import {ApiProblem} from '../modules/api/problem';
 import {PackingItem} from "../modules/database/entities/packing/PackingItem";
 import {PackingList} from "../modules/database/entities/packing/PackingList";
 
@@ -37,6 +38,7 @@ import {PERM, toMaskFromBodyValue} from '../modules/lib/permissions';
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'packing/packing-create';
+const METADATA_PATCH_SCHEMA = 'PackingMetadataPatch';
 
 // Joi remains only as the established native transport scalar converter. The generated
 // authored contract below owns object fields, optionality, types and domain constraints;
@@ -54,16 +56,29 @@ function nativeFieldLabel(pointer: string): string {
     return label || 'value';
 }
 
+/** Required and unknown fields need their own label instead of their containing object. */
+function nativeErrorPointer(error: ErrorObject): string {
+    if (error.keyword === 'required') return `${error.instancePath}/${String(error.params.missingProperty)}`;
+    if (error.keyword === 'additionalProperties') return `${error.instancePath}/${String(error.params.additionalProperty)}`;
+    return error.instancePath;
+}
+
 /** Preserve native field error wording while structural validation has one generated owner. */
 function nativeValidationMessage(error: ErrorObject): string {
-    const pointer = error.keyword === 'required' ? `${error.instancePath}/${String(error.params.missingProperty)}` : error.instancePath;
+    const pointer = nativeErrorPointer(error);
     const label = `"${nativeFieldLabel(pointer)}"`;
     if (error.keyword === 'required') return `${label} is required`;
     if (error.keyword === 'minLength') return `${label} is not allowed to be empty`;
+    if (error.keyword === 'maxLength') return `${label} length must be less than or equal to ${error.params.limit} characters long`;
+    if (error.keyword === 'minProperties') return `${label} must have at least ${error.params.limit} key${error.params.limit === 1 ? '' : 's'}`;
+    if (error.keyword === 'additionalProperties') return `${label} is not allowed`;
     if (error.keyword === 'minItems') return `${label} must contain at least ${error.params.limit} items`;
     if (error.keyword === 'minimum') return `${label} must be greater than or equal to ${error.params.limit}`;
     if (error.keyword === 'type') {
-        const type = String(error.params.type);
+        // The native string rule explicitly allows null for metadata descriptions.
+        // A rejected value still has the original "must be a string" diagnostic,
+        // rather than exposing the generated validator's nullable type syntax.
+        const type = String(error.params.type).split(',')[0]!;
         if (type === 'object') return `${label} must be of type object`;
         return `${label} must be ${type === 'integer' || type === 'array' || type === 'object' ? 'an' : 'a'} ${type}`;
     }
@@ -89,13 +104,59 @@ function normalizeNativeItem(input: unknown, index: number, errors: Map<string, 
 }
 
 /** Compare source-owned schema order, retaining each row's order and each field's rule sequence. */
-function compareNativeErrorPaths(left: string, right: string): number {
-    const leftOrder = contractPathOrder('PackingNativeCreateInput', left);
-    const rightOrder = contractPathOrder('PackingNativeCreateInput', right);
+function compareContractErrorPaths(schema: string, left: string, right: string): number {
+    const leftOrder = contractPathOrder(schema, left);
+    const rightOrder = contractPathOrder(schema, right);
     for (let index = 0; index < Math.min(leftOrder.length, rightOrder.length); index++) {
         if (leftOrder[index] !== rightOrder[index]) return leftOrder[index]! - rightOrder[index]!;
     }
     return leftOrder.length - rightOrder.length;
+}
+
+function compareNativeErrorPaths(left: string, right: string): number {
+    return compareContractErrorPaths('PackingNativeCreateInput', left, right);
+}
+
+function compareNativeMetadataErrorPaths(left: string, right: string): number {
+    return compareContractErrorPaths(METADATA_PATCH_SCHEMA, left, right);
+}
+
+/**
+ * Native property requests retain their established field diagnostics and APIError data.
+ * Normalization and field declarations still come from the same operation and authored/generated
+ * schema. Native strings retain Joi/HTML UTF-16 maximum counting; v1 keeps JSON Schema code-point
+ * counting. This compatibility projection declares no second threshold. No persistence runs here.
+ */
+function prepareNativeMetadataPatch(body: unknown): components['schemas']['PackingMetadataPatch'] {
+    const normalized = normalizePackingMetadataPatch(body);
+    if (body && typeof body === 'object' && !Array.isArray(body)) {
+        // Joi's optional native fields counted an explicitly supplied undefined own key.
+        // The legacy description adapter constructs that key even when JSON omits it.
+        // Preserve it for generated validation, field authority and TypeORM's tracking-only
+        // update; JSON v1 still rejects an empty patch through its separate input wrapper.
+        for (const [key, value] of Object.entries(body)) {
+            if (value === undefined) (normalized as Record<string, unknown>)[key] = value;
+        }
+    }
+    const validator = contractValidator(METADATA_PATCH_SCHEMA);
+    validator(normalized);
+    const errors = [...validator.errors ?? [], ...contractNativeStringLengthErrors(METADATA_PATCH_SCHEMA, normalized)];
+    if (!errors.length) return normalized as components['schemas']['PackingMetadataPatch'];
+
+    const messages = new Map<string, string>();
+    for (const error of errors) {
+        const pointer = nativeErrorPointer(error);
+        // Trimmed blank titles fail both minLength and the wire's nonblank pattern.
+        // A maximum may also fail both counting rules. Native Joi reported each field
+        // once; keep its first truthful diagnostic in the authored field order.
+        if (!messages.has(pointer)) {
+            // Undefined can reach trusted native callers even though JSON cannot
+            // carry it. The original required object reports absence separately.
+            messages.set(pointer, normalized === undefined ? '"value" is required' : nativeValidationMessage(error));
+        }
+    }
+    const ordered = [...messages.keys()].sort(compareNativeMetadataErrorPaths);
+    throw new APIError(ordered.map(pointer => messages.get(pointer)!).join('. '), {}, 400);
 }
 
 /** Decode native JSON rows, preserve form coercions/errors, then validate the authored native contract. */
@@ -126,7 +187,7 @@ function preprocessCreate(body: any): Omit<Partial<PackingList>, 'items' | 'even
         for (const error of validator.errors ?? []) {
             // Scalar conversion errors already preserve the original, more specific
             // wording (including unsafe numbers); anyOf's UUID branches describe one field.
-            const pointer = error.keyword === 'required' ? `${error.instancePath}/${String(error.params.missingProperty)}` : error.instancePath;
+            const pointer = nativeErrorPointer(error);
             if (errors.has(pointer)) continue;
             const message = nativeValidationMessage(error);
             const fieldMessages = messages.get(pointer) ?? [];
@@ -252,9 +313,9 @@ async function deleteEntity(list: PackingList, session: Request['session']) {
 // ---------- API ----------
 // API-specific controllers
 async function updateDescription(id: string, body: any, expectedEventId?: string | null, session?: SessionLike) {
-    const patch = preparePackingMetadataPatch({description: body.description});
+    const patch = prepareNativeMetadataPatch({description: body.description});
     const expectedValues = Object.hasOwn(body, 'expectedValue') ? {description: body.expectedValue} : undefined;
-    if (session) await patchPackingMetadata(id, patch, undefined, session, false, expectedEventId, expectedValues);
+    if (session) await savePackingMetadata(id, patch, undefined, session, false, expectedEventId, expectedValues);
     else await saveProperties(id, patch, expectedEventId, expectedValues);
     return 'Description updated';
 }
@@ -293,7 +354,7 @@ async function quickAddItem(list: PackingList, body: any, session: SessionLike) 
 }
 
 async function updateItemDescription(itemId: string, body: any, listId?: string, session?: SessionLike) {
-    await saveNativeItem(itemId, {description: body.description}, listId, session,
+    await saveNativeItem(itemId, {description: body.description}, body, listId, session,
         Object.hasOwn(body, 'expectedValue') ? {description: body.expectedValue} : undefined);
     return 'Description updated';
 }
@@ -304,14 +365,14 @@ async function updateItemAttr(itemId: string, body: any, listId?: string, sessio
 
     if (!allowed[field]) throw new APIError('Invalid field', body, 400);
 
-    await saveNativeItem(itemId, {[field]: value}, listId, session,
+    await saveNativeItem(itemId, {[field]: value}, body, listId, session,
         Object.hasOwn(body, 'expectedValue') ? {[field]: body.expectedValue} : undefined);
     return 'Item updated';
 }
 
 async function updateRequired(itemId: string, body: any, listId?: string, session?: SessionLike) {
     const {flag} = body;
-    await saveNativeItem(itemId, {requiredByAll: Boolean(flag)}, listId, session,
+    await saveNativeItem(itemId, {requiredByAll: Boolean(flag)}, body, listId, session,
         Object.hasOwn(body, 'expectedValue') ? {requiredByAll: body.expectedValue} : undefined);
     return 'Requirement updated';
 }
@@ -360,15 +421,34 @@ async function deleteHeaderImg(entity: EntityBase, session?: SessionLike) {
 
 function getAssignmentAccessMapping() {
     return {
-        assign: async (body: any, profileId: string, req?: Request) => {
-            if (req) await setPackingSelfAssignment(String(req.params.id), body.itemId, true, req.session);
-            else await assignItem(body.itemId, profileId, true);
-        },
-        unassign: async (body: any, profileId: string, req?: Request) => {
-            if (req) await setPackingSelfAssignment(String(req.params.id), body.itemId, false, req.session);
-            else await assignItem(body.itemId, profileId, false);
-        },
+        assign: assignNativeItem,
+        unassign: unassignNativeItem,
     };
+}
+
+async function assignNativeItem(body: any, profileId: string, req?: Request): Promise<void> {
+    await changeNativeMembership(body.itemId, profileId, true, req);
+}
+
+async function unassignNativeItem(body: any, profileId: string, req?: Request): Promise<void> {
+    await changeNativeMembership(body.itemId, profileId, false, req);
+}
+
+/**
+ * The locked operation owns capacity and identity. Only its legacy transport adapter
+ * restores the established data.itemId envelope; v1 keeps the typed params.itemId field.
+ * Use the shared English message unchanged and never parse prose to recognize the cause.
+ */
+async function changeNativeMembership(itemId: string, profileId: string, assigned: boolean, req?: Request): Promise<void> {
+    try {
+        if (req) await setPackingSelfAssignment(String(req.params.id), itemId, assigned, req.session);
+        else await assignItem(itemId, profileId, assigned);
+    } catch (error) {
+        if (error instanceof ApiProblem && error.code === 'PACKING_ITEM_FULL') {
+            throw new APIError(error.message, {itemId}, error.status);
+        }
+        throw error;
+    }
 }
 
 /**
@@ -383,20 +463,26 @@ async function assignItem(itemId: string, profileId: string, assigned: boolean):
     });
 }
 
-/** Native adapters share sparse persistence and item locking with v1, retaining their route-specific messages. */
-async function saveNativeItem(itemId: string, patch: components['schemas']['PackingItemPatch'], listId?: string, session?: SessionLike,
+/**
+ * Native adapters share sparse persistence and item locking with v1, retaining their route-specific
+ * outcomes. Unlike root properties, an undefined-only item patch never reached a DB update in the
+ * original service; its controller returned a known 500 with the submitted body. Project that
+ * outcome only after the common operation has rechecked current authority and comparison evidence.
+ */
+async function saveNativeItem(itemId: string, patch: components['schemas']['PackingItemPatch'], body: object, listId?: string, session?: SessionLike,
     expectedValues?: components['schemas']['PackingItemPatch']): Promise<void> {
     if (session && listId) {
         await updatePackingItem(listId, itemId, patch, undefined, session, false, expectedValues);
-        return;
+    } else {
+        // Internal native hooks have no request actor. They still use the common locked operation
+        // so a capacity change cannot race a membership insert or accidentally remove existing rows.
+        await packingService.withPackingAssignmentLock(itemId, '', async function saveLocked(manager, item) {
+            if (!item) throw new APIError('Unknown error while saving', body, 500);
+            if (expectedValues) requirePackingFieldValues(item, expectedValues);
+            await applyPackingItemPatch(manager, item, patch);
+        });
     }
-    // Internal native hooks have no request actor. They still use the common locked operation
-    // so a capacity change cannot race a membership insert or accidentally remove existing rows.
-    await packingService.withPackingAssignmentLock(itemId, '', async function saveLocked(manager, item) {
-        if (!item) throw new APIError('Unknown error while saving', {}, 500);
-        if (expectedValues) requirePackingFieldValues(item, expectedValues);
-        await applyPackingItemPatch(manager, item, patch);
-    });
+    if (Object.values(patch).every(value => value === undefined)) throw new APIError('Unknown error while saving', body, 500);
 }
 
 /**
@@ -419,10 +505,10 @@ async function updateProperties(entity: EntityBase, body: unknown, session?: Ses
     const expected = fields?.expectedValues;
     if (fields) delete fields.expectedValues;
     if (expected !== undefined && (!expected || typeof expected !== 'object' || Array.isArray(expected))) throw new APIError('Invalid original property values', {}, 400);
-    const patch = preparePackingMetadataPatch(fields ?? body);
+    const patch = prepareNativeMetadataPatch(fields ?? body);
     const expectedValues = expected as components['schemas']['PackingMetadataPatch'] | undefined;
     if (expectedValues && Object.keys(expectedValues).some(field => !Object.hasOwn(patch, field))) throw new APIError('Invalid original property fields', {}, 400);
-    if (session) await patchPackingMetadata(entity.id, patch, undefined, session, false, entity.eventId ?? null, expectedValues);
+    if (session) await savePackingMetadata(entity.id, patch, undefined, session, false, entity.eventId ?? null, expectedValues);
     else await saveProperties(entity.id, patch, entity.eventId ?? null, expectedValues);
     return 'Properties updated';
 }

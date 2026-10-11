@@ -22,7 +22,6 @@ import {AppDataSource} from '../dataSource';
 import {PackingAssignment} from '../entities/packing/PackingAssignment';
 import {PackingItem} from '../entities/packing/PackingItem';
 import {PackingList} from '../entities/packing/PackingList';
-import {EventRegistration} from '../entities/event/EventRegistration';
 import {Event} from '../entities/event/Event';
 import * as entityAdminService from "./EntityAdminService";
 
@@ -342,13 +341,6 @@ export async function withPackingReadSnapshot<T>(id: string, read: (manager: Ent
         return read(manager, await getPackingSnapshotRoot(manager, id));
     }
     return AppDataSource.transaction('REPEATABLE READ', readSnapshot);
-}
-
-/** Return only persistence evidence used by the controller's admission decision. */
-export async function getPackingEventRegistration(manager: EntityManager, eventId: string, profileId: string): Promise<EventRegistration | null> {
-    return manager.getRepository(EventRegistration).findOne({
-        where: {event: {id: eventId}, profile: {id: profileId}}, select: {id: true},
-    });
 }
 
 /** Load ordered items and their assignments without exposing the repositories to a DTO projector. */

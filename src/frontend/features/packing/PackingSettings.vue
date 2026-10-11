@@ -7,8 +7,9 @@ import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {permissionLabel as translatedPermissionLabel} from '../../../modules/localization/permissionLabels';
 import {usePackingApi} from './api';
 import {usePilot, refreshInterval} from '../../app/context';
-import {ApiFailure} from '../../app/transport';
+import {isReadDenial} from '../../app/transport';
 import {useCommand} from '../../composables/command';
+import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {useConfirmedNavigation} from '../../composables/pageEntry';
 import {useDebouncedValue} from '../../composables/debounced';
 import {packingKeys} from '../../app/queryKeys';
@@ -32,7 +33,15 @@ const {messages} = context;
 const router = useRouter();
 const destination = useConfirmedNavigation();
 let releaseDeparture: (() => void) | undefined;
-onBeforeUnmount(releaseUnconfirmedDeparture);
+let active = true;
+onBeforeUnmount(retireEditor);
+
+/** A denied read can retire this dialog before its admitted command settles.
+ * Keep that command's root status/confirmed consent, but start no new editor reads. */
+function retireEditor(): void {
+    active = false;
+    releaseUnconfirmedDeparture();
+}
 type Settings = components['schemas']['PackingSettings'];
 type Defaults = components['schemas']['PermissionDefaults'];
 const panel = ref(props.metadataAvailable === true ? 'general' : '');
@@ -57,13 +66,13 @@ const imageToken = ref<string | null>(null);
 const imageOriginal = ref<string | null>(null);
 const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
 const settings = useQuery({
-    queryKey: computed(() => packingKeys.settings(context.session.value?.context, props.listId, context.locale.value)),
+    queryKey: computed(() => packingKeys.settings(context.session.value?.context, props.listId)),
     enabled: computed(() => context.hydrated.value && context.ready.value && context.visible.value),
     queryFn: ({signal}) => api.settings(props.listId, context.capture(), signal),
     refetchInterval: (query) =>
         context.visible.value ? refreshInterval(query.state.error, query.state.fetchFailureCount, jitter) : false,
 });
-// Retain draft owners through locale-key reads, but remove authority immediately on a confirmed
+// Retain draft owners through same-key language refreshes, but remove authority immediately on a confirmed
 // denial. Each independently saved form keeps the token of the snapshot it actually edited.
 const last = ref<Settings | null>(null);
 let completedSettingsReads = 0;
@@ -149,7 +158,7 @@ function receiveAdmins(value: Settings): void {
     }
 }
 watch(settings.error, (failure) => {
-    if (failure instanceof ApiFailure && [401, 403, 404].includes(failure.status)) emit('accessLost');
+    if (isReadDenial(failure)) emit('accessLost');
 });
 const data = computed(() => settings.data.value ?? last.value);
 const initialLoading = computed(() => !data.value && settings.isPending.value);
@@ -204,13 +213,19 @@ watch(
 );
 /** Record a successful settings read independently of the optional related metadata read. */
 async function refreshAfterCommand(): Promise<void> {
+    // An explicit observer refetch bypasses query enabled state. The shared command
+    // still settles normally, while a retired private editor cannot recreate its cache.
+    if (!active || isReadDenial(settings.error.value)) return;
+    const scope = context.capture();
+    const resource = props.listId;
     const result = await settings.refetch({throwOnError: true});
+    if (!active || resource !== props.listId || !context.isCurrent(scope)) return;
     receiveSettings(result.data);
     completedSettingsReads++;
     // Refresh related snapshots after a confirmed settings write. Each dirty form compares
     // only its own edited fields; unrelated setup changes do not manufacture conflicts.
     await fields.value?.refreshAfterSettings(relinkingMetadata && command.outcome.value?.confirmation === 'confirmed');
-    emit('saved');
+    if (active && resource === props.listId && context.isCurrent(scope)) emit('saved');
 }
 const command = useCommand(refreshAfterCommand, false, {
     dirty: () => dirty.value || !!fields.value?.dirty,
@@ -218,13 +233,21 @@ const command = useCommand(refreshAfterCommand, false, {
     uncertain: () => !!fields.value?.unknown,
     unknownMessage: 'draft.leaveUnknown',
 });
+const settingsRetryAvailable = useReadRetry(() => settings.error.value);
+const retryAt = useReadRetryAt(() => settings.error.value, settingsRetryAvailable);
+// Refresh spans settings and the related metadata authority. Its visible control
+// must honor either owner's server deadline, just as their transports do.
+const retryAvailable = computed(() => settingsRetryAvailable.value && fields.value?.retryAvailable !== false);
 const refreshingSettings = ref(false);
 // Only an in-flight operation prevents dismissal outright. An unknown metadata command
 // blocks mutations but keeps recovery and deliberate departure acknowledgement reachable.
-const busy = computed(() => refreshingSettings.value || command.pending.value
+const busy = computed(() => refreshingSettings.value || command.pending.value || command.recovering.value
     || fields.value?.pending || fields.value?.refreshing);
+// Native commands lock the entire modal, including its navigation and nested tabs.
+// Uncertainty alone keeps those tabs reachable so another panel cannot hide recovery.
+const controlsPending = computed(() => !!busy.value || !!destination.target.value);
 const awaitingAuthority = computed(() => !!defaults.value?.confirmed || event.value?.confirmed !== undefined
-    || Object.values(admins.value).some(draft => draft.confirmed !== undefined));
+    || Object.values(admins.value).some(draft => draft.confirmed !== undefined) || !!fields.value?.awaitingAuthority);
 const blocked = computed(
     () => busy.value || command.uncertain.value || fields.value?.unknown || awaitingAuthority.value || !!destination.target.value,
 );
@@ -270,13 +293,18 @@ function adminConflict(id: string): boolean {
 
 /** Retry related reads explicitly; reconciliation never repeats the saved or uncertain write. */
 async function refreshSettings(): Promise<void> {
-    if (busy.value) return;
+    if (busy.value || !retryAvailable.value) return;
     refreshingSettings.value = true;
+    const scope = context.capture();
     try {
-        await command.reconcile();
-        command.notice.value = null;
+        const reconciled = await command.reconcile();
+        if (reconciled && context.isCurrent(scope)) {
+            command.clearRecoveredError('state.loadFailed');
+        }
     } catch {
-        command.setError('state.loadFailed');
+        // A dependent metadata read can fail while settings itself remains readable.
+        // Preserve that recovery warning until a matching read succeeds, not flash expiry.
+        if (context.isCurrent(scope)) command.setError('state.loadFailed', 'durable');
     } finally {
         refreshingSettings.value = false;
     }
@@ -292,6 +320,7 @@ function adminRemoved(id: string): boolean {
     return !data.value?.access?.admins.some(admin => admin.profileId === id);
 }
 function reviewHeader(): void {
+    if (controlsPending.value) return;
     imageToken.value = data.value?.settingsToken ?? null;
     imageOriginal.value = data.value?.headerVersion ?? null;
 }
@@ -342,26 +371,46 @@ function chooseImage(event: Event): void {
     imageToken.value = data.value?.settingsToken ?? null;
     imageOriginal.value = data.value?.headerVersion ?? null;
 }
-async function upload(): Promise<void> {
-    if (!image.value || !imageToken.value || headerConflict.value) return;
+async function upload(source?: Event): Promise<void> {
+    if (blocked.value || headerConflict.value) return;
+    if (!image.value) {
+        command.captureFeedback(source);
+        command.setError('metadata.chooseImage', 'transient', 'inline');
+        return;
+    }
+    if (!imageToken.value) return;
     const result = await command.run((scope) =>
         api.uploadHeader(props.listId, image.value!, imageToken.value!, scope),
+        true, false, {initiator: source, presentation: 'inline', success: 'metadata.imageUpdated'},
     );
     if (result) image.value = null;
 }
-async function removeImage(): Promise<void> {
+async function removeImage(source?: Event): Promise<void> {
     if (data.value && window.confirm(messages.value.t('packing.confirmRemoveImage'))) {
         await command.run((scope) =>
             api.removeHeader(props.listId, data.value!.settingsToken, scope),
+            true, false, {initiator: source, presentation: 'inline', success: 'metadata.imageRemoved'},
         );
     }
 }
-async function saveEvent(): Promise<void> {
+/** Relink one explicitly reviewed event choice through the existing command owner.
+ * The accepted value is presentation only; a completed settings read supplies any new
+ * comparison token. Relinking can revoke access and must preserve other editor drafts. */
+async function saveEvent(source?: Event): Promise<void> {
     if (!event.value || blocked.value || eventConflict.value) return;
+    // The native unchanged-link branch precedes confirmation and cross-form
+    // discard decisions. A no-op explains itself without sending an empty write.
+    if (event.value.value === event.value.original) {
+        command.setInformation('metadata.eventUnchanged', {initiator: source, presentation: 'inline'});
+        return;
+    }
     if (!window.confirm(messages.value.t('packing.confirmEvent'))) return;
     // Relinking changes inherited access/archive state. Never abandon a properties draft to
     // perform it; the existing dialog requires the same explicit discard decision first.
     if (!(fields.value?.mayLeave() ?? true)) return;
+
+    // Capture the reviewed choice before awaiting the write. Later settings reads must
+    // not change the submitted target or its original relationship precondition.
     const submitted = {value: event.value.value, original: event.value.original, token: event.value.token};
     const previousRead = completedSettingsReads;
     relinkingMetadata = true;
@@ -374,10 +423,14 @@ async function saveEvent(): Promise<void> {
                 submitted.token,
                 scope,
             ),
+            true, false, {initiator: source, presentation: 'inline', success: 'metadata.eventUpdated'},
         );
     } finally {
         relinkingMetadata = false;
     }
+
+    // The result may close this dialog entirely. Only a readable result can update
+    // local presentation; receiveSettings separately adopts freshly read authority.
     if (result && !result.canView) {
         emit('accessLost');
         return;
@@ -391,28 +444,39 @@ async function saveEvent(): Promise<void> {
     // keeps its existing recovery controls instead of throwing from this click handler.
 }
 function reviewEvent(): void {
-    if (!event.value || !data.value) return;
+    if (controlsPending.value || !event.value || !data.value) return;
     event.value.original = data.value.currentEvent?.id ?? null;
     event.value.token = data.value.settingsToken;
 }
 function reviewDefaults(): void {
-    if (!defaults.value || !data.value?.access) return;
+    if (controlsPending.value || !defaults.value || !data.value?.access) return;
     defaults.value.original = {...data.value.access.defaults};
     defaults.value.token = data.value.settingsToken;
 }
-async function saveDefaults(): Promise<void> {
+/** Save the sparse changed audience masks, retaining accepted presentation after a
+ * failed follow-up read. A confirmed mask never manufactures a replacement write token. */
+async function saveDefaults(source?: Event): Promise<void> {
     if (!defaults.value || blocked.value || defaultsConflict.value) return;
     if (!Object.keys(defaultsPatch.value).length) {
-        command.notice.value = 'state.saved';
+        // Sparse conditional commands preserve D5's no-empty-PATCH boundary.
+        // A pristine save retains native permission feedback and renews its receipt.
+        command.setNotice('permissions.updated', {initiator: source, presentation: 'inline'});
         return;
     }
+
+    // Values, sparse patch and token belong to the same reviewed submission. A read
+    // completing while the request waits cannot silently change that write's inputs.
     const submitted = {...defaults.value.values};
     const patch = {...defaultsPatch.value};
     const token = defaults.value.token;
     const previousRead = completedSettingsReads;
     const result = await command.run((scope) =>
         api.setDefaults(props.listId, patch, token, scope),
+        true, false, {initiator: source, presentation: 'inline', success: 'permissions.updated'},
     );
+
+    // Show the confirmed choice even when refresh failed. If a newer settings read
+    // did complete, reconcile its authoritative values and tokens through their owner.
     if (result && defaults.value) {
         defaults.value.values = submitted;
         defaults.value.confirmed = {...submitted};
@@ -420,6 +484,7 @@ async function saveDefaults(): Promise<void> {
     }
 }
 function reviewAdmin(id: string): void {
+    if (controlsPending.value) return;
     const current = data.value?.access?.admins.find((admin) => admin.profileId === id);
     if (current && admins.value[id] && data.value) {
         admins.value[id]!.original = current.mask;
@@ -432,16 +497,25 @@ function reviewAdmin(id: string): void {
         admins.value[id]!.regrantReviewed = true;
     }
 }
-async function saveAdmin(id: string): Promise<void> {
+/** Save an existing named grant, or deliberately recreate a removed grant after Review.
+ * Confirmation updates its local mask; only the newer settings projection admits later writes. */
+async function saveAdmin(id: string, source?: Event): Promise<void> {
     const draft = admins.value[id];
     if (!draft || blocked.value || adminConflict(id)) return;
+
+    // A removed row uses the reviewed root token; an existing row uses its own token.
+    // The conflict gate requires explicit regrant review before addAdmin is reachable.
     const submitted = draft.value;
     const previousRead = completedSettingsReads;
     const result = await command.run((scope) =>
         adminRemoved(id)
             ? api.addAdmin(props.listId, {profileId: id, mask: submitted}, draft.token, scope)
             : api.updateAdmin(props.listId, id, submitted, draft.token, scope),
+        true, false, {initiator: source, presentation: 'inline', success: 'permissions.updated'},
     );
+
+    // Preserve the accepted mask independently of refresh, then reconcile a completed
+    // newer read so concurrent grant changes cannot be hidden by the held write result.
     if (result && admins.value[id]) {
         admins.value[id]!.value = submitted;
         admins.value[id]!.confirmed = submitted;
@@ -449,7 +523,7 @@ async function saveAdmin(id: string): Promise<void> {
         if (completedSettingsReads > previousRead && last.value) receiveAdmins(last.value);
     }
 }
-async function removeAdmin(id: string): Promise<void> {
+async function removeAdmin(id: string, source?: Event): Promise<void> {
     if (adminRemoved(id)) {
         delete admins.value[id];
         if (openAdmin.value === id) openAdmin.value = null;
@@ -458,11 +532,17 @@ async function removeAdmin(id: string): Promise<void> {
     if (data.value && window.confirm(messages.value.t('packing.confirmRemoveAdmin'))) {
         await command.run((scope) =>
             api.removeAdmin(props.listId, id, data.value!.access!.admins.find(admin => admin.profileId === id)!.editToken, scope),
+            true, false, {initiator: source, presentation: 'inline', success: 'permissions.adminRemoved'},
         );
     }
 }
-async function addAdmin(): Promise<void> {
-    if (!data.value?.access || !selectedProfile.value) return;
+async function addAdmin(source?: Event): Promise<void> {
+    if (!data.value?.access || blocked.value) return;
+    if (!selectedProfile.value) {
+        command.captureFeedback(source);
+        command.setError('permissions.selectUser', 'transient', 'inline');
+        return;
+    }
     const mask = data.value.access.presets.find((value) => value.key === preset.value)?.mask ?? 0;
     if (
         await command.run((scope) =>
@@ -472,22 +552,24 @@ async function addAdmin(): Promise<void> {
                 data.value!.settingsToken,
                 scope,
             ),
+            true, false, {initiator: source, presentation: 'inline', success: 'permissions.adminAdded'},
         )
     ) {
         cancelAddAdmin();
     }
 }
-async function archive(restore: boolean): Promise<void> {
+async function archive(restore: boolean, source?: Event): Promise<void> {
     const confirmation = restore
         ? 'packing.confirmRestore'
         : data.value?.archive.inherited
           ? 'packing.confirmArchiveIndependent'
           : 'packing.confirmArchive';
     if (window.confirm(messages.value.t(confirmation))) {
-        await command.run((scope) => api.archive(props.listId, restore, scope));
+        await command.run((scope) => api.archive(props.listId, restore, scope), true, false,
+            {initiator: source, presentation: 'inline', success: restore ? 'overview.restored' : 'overview.archived'});
     }
 }
-async function remove(): Promise<void> {
+async function remove(source?: Event): Promise<void> {
     if (blocked.value) return;
     const approval = command.prepareDeparture();
     if (!approval) return;
@@ -502,8 +584,10 @@ async function remove(): Promise<void> {
     const scope = context.capture();
     const origin = router.currentRoute.value.fullPath;
     try {
-        const id = await command.run(deletePacking, false);
-        if (id) await destination.navigate('/frontend-pilot', scope, origin);
+        const id = await command.run(deletePacking, false, false,
+            {initiator: source, success: 'packing.deleted'});
+        if (id) await destination.navigate('/frontend-pilot', scope, origin,
+            {kind: 'success', messageKey: 'packing.deleted'});
     } finally {
         // A failed route delivery retains the confirmed destination and its approval.
         // Retry can only navigate; no DELETE or late discard prompt may run again.
@@ -535,6 +619,16 @@ function initials(name: string): string {
         .slice(0, 2)
         .toUpperCase();
 }
+/** Disclosure is local UI state, but native pending commands freeze it with the form.
+ * Keep the same mounted draft when activation arrives while delivery is still pending. */
+function toggleAddAdmin(): void {
+    if (!controlsPending.value) addOpen.value = !addOpen.value;
+}
+
+/** An administrator's panel cannot be collapsed or switched during a submitted operation. */
+function toggleAdmin(id: string): void {
+    if (!controlsPending.value) openAdmin.value = openAdmin.value === id ? null : id;
+}
 function permissionLabel(key: string): string {
     return translatedPermissionLabel(key, messages.value.t);
 }
@@ -545,12 +639,12 @@ function permissionLabel(key: string): string {
         :open="true"
         :title="messages.t('packing.edit')"
         :subtitle="data?.title ?? listTitle"
-        :pending="!!busy || !!destination.target.value"
+        :pending="controlsPending"
         @close="close"
     >
         <template #navigation
             ><div v-if="panels.length > 1" class="px-3 pt-3">
-                <AppTabList v-model="panel" :tabs="panelTabs"
+                <AppTabList v-model="panel" :tabs="panelTabs" :disabled="controlsPending"
                     class="nav-fill gap-1 entity-settings-nav" link-class="text-light" />
             </div>
             <span
@@ -560,14 +654,27 @@ function permissionLabel(key: string): string {
                 >{{ messages.t(panels[0]!.label) }}</span
             ></template
         >
-        <StatusNotice v-if="command.error.value" kind="danger">{{ command.error.value }}</StatusNotice>
-        <StatusNotice
-            v-if="command.notice.value"
-            :kind="command.notice.value === 'state.saved' ? 'success' : 'warning'"
-            >{{ messages.t(command.notice.value) }}</StatusNotice
-        >
-        <StatusNotice v-if="settings.error.value" kind="warning">{{
-            messages.t('state.loadFailed')
+        <!-- Native commands resolve their initiating section's feedback host. Keep
+             one receipt owner here; only transient inline messages move to that host.
+             Commands without a section use this same native modal fallback. -->
+        <div data-dialog-feedback aria-live="polite">
+            <StatusNotice v-if="command.error.value" :inline="command.errorPresentation.value === 'inline'"
+                :kind="command.feedbackKind.value" :target="command.feedbackTarget.value"
+                :disabled="controlsPending" :transient="command.transientError.value" :renewal="command.errorRenewal.value"
+                @dismiss="command.setError(null)">{{ command.error.value }}</StatusNotice>
+            <StatusNotice
+                v-if="command.notice.value" :inline="command.noticeInline.value" :target="command.feedbackTarget.value" :disabled="controlsPending"
+                :kind="command.noticeKind.value" :transient="command.transientNotice.value"
+                :retry-at="command.notice.value === 'state.savedRefreshFailed' ? retryAt : undefined"
+                :read-error="command.notice.value === 'state.savedRefreshFailed' ? settings.error.value : undefined"
+                :notice="command.notice.value" :renewal="command.noticeRenewal.value" @dismiss="command.notice.value = null"
+                >{{ messages.t(command.notice.value) }}</StatusNotice
+            >
+        </div>
+        <StatusNotice v-if="settings.error.value" kind="warning"
+            :last-updated-at="settings.data.value && !isReadDenial(settings.error.value) ? settings.dataUpdatedAt.value : undefined"
+            :retry-at="retryAt" :read-error="settings.error.value">{{
+            messages.t(settings.data.value ? 'state.stale' : 'state.loadFailed')
         }}</StatusNotice>
         <!-- Metadata can finish before settings (or vice versa). Neither read waits
              for the other's response, and each region keeps its own draft owner.
@@ -586,15 +693,17 @@ function permissionLabel(key: string): string {
                     :list-id="listId"
                     :list-title="data?.title ?? listTitle"
                     :disabled="!!blocked"
+                    :busy="controlsPending"
                     :active="panel === 'general'"
                     @saved="metadataSaved"
                     @access-lost="emit('accessLost')"
                 />
             </section>
-            <section v-if="data?.capabilities.editHeader" class="mb-4" :aria-busy="settings.isFetching.value">
+            <section v-if="data?.capabilities.editHeader" class="mb-4" data-entity-section="image" :aria-busy="settings.isFetching.value">
                 <details class="entity-property-group" :open="!data.editableFields.length">
                     <summary class="fw-semibold">{{ messages.t('packing.headerImage') }}</summary>
                     <div class="pt-3">
+                        <div data-command-feedback aria-live="polite"></div>
                         <label class="form-label" for="pilot-header-image">{{
                             messages.t('packing.chooseImage')
                         }}</label
@@ -619,7 +728,7 @@ function permissionLabel(key: string): string {
                         >
                         <div class="d-flex flex-wrap gap-2">
                             <ActionButton
-                                :disabled="blocked || !image || headerConflict"
+                                :disabled="blocked || headerConflict"
                                 @click="upload"
                                 >{{ messages.t('packing.upload') }}</ActionButton
                             ><ActionButton
@@ -643,8 +752,10 @@ function permissionLabel(key: string): string {
                 class="mb-4"
                 role="tabpanel"
                 aria-labelledby="pilot-settings-tab-event"
+                data-entity-section="event"
             >
                 <h3 class="fs-5">{{ messages.t('packing.linkedEvent') }}</h3>
+                <div data-command-feedback aria-live="polite"></div>
                 <form @submit.prevent="saveEvent">
                     <EventPicker
                         v-model="event.value"
@@ -652,6 +763,7 @@ function permissionLabel(key: string): string {
                         :current="data.currentEvent"
                         prefix="settings"
                         inline
+                        :active="panel === 'event'"
                         :disabled="blocked"
                     />
                     <p class="form-text">{{ messages.t('packing.eventHint') }}</p>
@@ -687,14 +799,16 @@ function permissionLabel(key: string): string {
                 role="tabpanel"
                 aria-labelledby="pilot-settings-tab-access"
             >
-                <AppTabList v-model="accessPanel" :tabs="accessTabs" class="gap-2 mb-3" />
+                <AppTabList v-model="accessPanel" :tabs="accessTabs" :disabled="controlsPending" class="gap-1 mb-3" />
                 <form
                     v-show="accessPanel === 'defaults'"
                     id="pilot-access-defaults"
                     role="tabpanel"
                     aria-labelledby="pilot-access-defaults-tab"
+                    data-entity-section="permissions"
                     @submit.prevent="saveDefaults"
                 >
+                    <div data-command-feedback aria-live="polite"></div>
                     <AudiencePermissions
                         v-model="defaults.values"
                         :permissions="data.access.permissions"
@@ -718,7 +832,7 @@ function permissionLabel(key: string): string {
                                 <dd>{{ data.access.defaults }}</dd>
                             </dl>
                         </div>
-                        <ActionButton variant="outline-warning" @click="reviewDefaults">{{
+                        <ActionButton variant="outline-warning" :disabled="controlsPending" @click="reviewDefaults">{{
                             messages.t('draft.review')
                         }}</ActionButton></StatusNotice
                     >
@@ -743,7 +857,7 @@ function permissionLabel(key: string): string {
                             ><strong>{{ messages.t('packing.administrators') }}</strong
                             ><span class="badge bg-secondary ms-1">{{ data.access.admins.length }}</span>
                         </div>
-                        <ActionButton class="btn-sm" @click="addOpen = !addOpen"
+                        <ActionButton class="btn-sm" :disabled="controlsPending" @click="toggleAddAdmin"
                             ><i class="bi bi-person-plus me-1" aria-hidden="true"></i
                             >{{ messages.t('packing.add') }}</ActionButton
                         >
@@ -756,6 +870,7 @@ function permissionLabel(key: string): string {
                             v-for="admin in displayedAdmins"
                             :key="admin.profileId"
                             class="accordion-item bg-dark border-secondary"
+                            data-entity-section="administrator"
                         >
                             <h2 class="accordion-header">
                                 <button
@@ -763,9 +878,8 @@ function permissionLabel(key: string): string {
                                     :class="{collapsed: openAdmin !== admin.profileId}"
                                     type="button"
                                     :aria-expanded="openAdmin === admin.profileId"
-                                    @click="
-                                        openAdmin = openAdmin === admin.profileId ? null : admin.profileId
-                                    "
+                                    :disabled="controlsPending"
+                                    @click="toggleAdmin(admin.profileId)"
                                 >
                                     <span
                                         class="rounded-circle bg-secondary text-dark d-inline-flex justify-content-center align-items-center me-2"
@@ -782,6 +896,7 @@ function permissionLabel(key: string): string {
                                 </button>
                             </h2>
                             <div v-show="openAdmin === admin.profileId" class="accordion-body bg-dark pt-2">
+                                <div data-command-feedback aria-live="polite"></div>
                                 <template v-if="admins[admin.profileId]">
                                     <PermissionFields
                                         v-model="admins[admin.profileId]!.value"
@@ -810,6 +925,7 @@ function permissionLabel(key: string): string {
                                         <ActionButton
                                             v-if="adminConflict(admin.profileId)"
                                             variant="outline-warning"
+                                            :disabled="controlsPending"
                                             @click="reviewAdmin(admin.profileId)"
                                             >{{ messages.t(adminRemoved(admin.profileId) ? 'packing.reviewAdminRegrant' : 'draft.review') }}</ActionButton
                                         ></StatusNotice
@@ -821,7 +937,7 @@ function permissionLabel(key: string): string {
                                             class="btn-sm"
                                             variant="outline-danger"
                                             :disabled="blocked"
-                                            @click="removeAdmin(admin.profileId)"
+                                            @click="removeAdmin(admin.profileId, $event)"
                                             ><i class="bi bi-trash me-1" aria-hidden="true"></i
                                             >{{ messages.t(adminRemoved(admin.profileId) ? 'packing.discardAdminDraft' : 'packing.removeAssignment') }}</ActionButton
                                         ><ActionButton
@@ -830,7 +946,7 @@ function permissionLabel(key: string): string {
                                                 blocked ||
                                                 adminConflict(admin.profileId)
                                             "
-                                            @click="saveAdmin(admin.profileId)"
+                                            @click="saveAdmin(admin.profileId, $event)"
                                             >{{ messages.t('common.save') }}</ActionButton
                                         >
                                     </div>
@@ -841,12 +957,14 @@ function permissionLabel(key: string): string {
                     <form
                         v-show="addOpen"
                         class="mt-3 bg-dark text-light border border-secondary rounded p-3"
+                        data-entity-section="administrator-add"
                         @submit.prevent="addAdmin"
                     >
                         <!-- Match the native inline form's title and field-group spacing. -->
                         <div class="mb-2">
                             <h5 class="modal-title">{{ messages.t('packing.addAdministrator') }}</h5>
                         </div>
+                        <div data-command-feedback aria-live="polite"></div>
                         <div class="mb-3">
                             <label class="form-label" for="profile-search"
                                 ><i class="bi bi-search me-1" aria-hidden="true" />{{
@@ -901,7 +1019,7 @@ function permissionLabel(key: string): string {
                                 :disabled="blocked"
                                 @click="cancelAddAdmin"
                                 >{{ messages.t('common.cancel') }}</ActionButton
-                            ><ActionButton type="submit" :disabled="blocked || !selectedProfile">{{
+                            ><ActionButton type="submit" :disabled="blocked">{{
                                 messages.t('packing.add')
                             }}</ActionButton>
                         </div>
@@ -914,8 +1032,9 @@ function permissionLabel(key: string): string {
                 role="tabpanel"
                 aria-labelledby="pilot-settings-tab-actions"
             >
-                <section v-if="data.capabilities.manageArchive" class="mb-4">
+                <section v-if="data.capabilities.manageArchive" class="mb-4" data-entity-section="archival">
                     <h3 class="fs-5">{{ messages.t('packing.archival') }}</h3>
+                    <div data-command-feedback aria-live="polite"></div>
                     <p>
                         {{
                             messages.t(
@@ -937,19 +1056,19 @@ function permissionLabel(key: string): string {
                             class="btn-sm"
                             variant="outline-light"
                             :disabled="blocked"
-                            @click="archive(false)"
+                            @click="archive(false, $event)"
                             >{{ messages.t('packing.archive') }}</ActionButton
                         ><ActionButton
                             v-if="data.capabilities.restore"
                             class="btn-sm"
                             variant="outline-light"
                             :disabled="blocked"
-                            @click="archive(true)"
+                            @click="archive(true, $event)"
                             >{{ messages.t('packing.restore') }}</ActionButton
                         >
                     </div>
                 </section>
-                <section v-if="data.capabilities.duplicate || data.capabilities.remove">
+                <section v-if="data.capabilities.duplicate || data.capabilities.remove" data-entity-section="actions">
                     <h3 class="fs-5">{{ messages.t('packing.otherActions') }}</h3>
                     <div class="d-flex flex-wrap gap-2">
                         <RouterLink
@@ -977,7 +1096,7 @@ function permissionLabel(key: string): string {
                 v-if="settings.error.value || command.uncertain.value || awaitingAuthority || command.notice.value === 'state.savedRefreshFailed'"
                 variant="outline-secondary"
                 :pending="refreshingSettings"
-                :disabled="busy"
+                :disabled="busy || !retryAvailable"
                 @click="refreshSettings"
                 >{{ messages.t('common.refresh') }}</ActionButton
             ><ActionButton variant="secondary" :disabled="busy || !!destination.target.value" @click="close">{{
